@@ -1,0 +1,8 @@
+config_version=5
+
+[application]
+config/name="Himegari (age-reimpl A2a)"
+run/main_scene="res://Main.tscn"
+
+[dotnet]
+project/assembly_name="Himegari"
