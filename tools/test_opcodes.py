@@ -58,8 +58,67 @@ def test_load():
     rev = M.dependents(m)
     check(rev.get(0x1f4) == [0x90], "dependents: 0x1f4 depended on by 0x90")
 
+DANGLING = '''
+[[opcode]]
+op = 0x10
+label = "x"
+argc = 0
+[opcode.semantics]
+name = "a"
+category = "compute"
+source = "inference"
+confidence = "low"
+depends_on = [0x99]
+'''
+
+CEILING = '''
+[[opcode]]
+op = 0x10
+label = "x"
+argc = 0
+[opcode.semantics]
+name = "low-op"
+category = "compute"
+source = "kelebek"
+confidence = "low"
+[[opcode]]
+op = 0x11
+label = "y"
+argc = 0
+[opcode.semantics]
+name = "high-op"
+category = "compute"
+source = "inference"
+confidence = "high"
+depends_on = [0x10]
+'''
+
+BADVOCAB = '''
+[[opcode]]
+op = 0x10
+label = "x"
+argc = 0
+[opcode.semantics]
+name = "a"
+category = "bogus"
+source = "inference"
+confidence = "low"
+'''
+
+def test_lint():
+    e, w = M.lint(M.load(write_tmp(DANGLING)))
+    check(any("0x99" in m for m in e), "dangling depends_on is an error")
+    e, w = M.lint(M.load(write_tmp(CEILING)))
+    check(any("0x11" in m for m in w), "confidence-ceiling violation is a warning")
+    check(e == [], "confidence-ceiling case has no errors")
+    e, w = M.lint(M.load(write_tmp(BADVOCAB)))
+    check(any("category" in m for m in e), "unknown category is an error")
+    e, w = M.lint(M.load(write_tmp(FIXTURE)))
+    check(e == [], "clean fixture has no lint errors")
+
 def main():
     test_load()
+    test_lint()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

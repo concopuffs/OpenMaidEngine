@@ -67,6 +67,35 @@ def load(path) -> Model:
         )
     return Model(meta=data.get("meta", {}), opcodes=ops)
 
+def lint(model: Model) -> tuple[list[str], list[str]]:
+    """Return (errors, warnings). Errors: bad vocabulary, dangling depends_on.
+    Warnings: confidence exceeds the minimum confidence among its dependencies."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    ops = model.opcodes
+    for op, oc in sorted(ops.items()):
+        s = oc.semantics
+        if not s:
+            continue
+        tag = f"0x{op:x}"
+        if s.category not in CATEGORIES:
+            errors.append(f"{tag}: bad category {s.category!r}")
+        if s.source not in SOURCES:
+            errors.append(f"{tag}: bad source {s.source!r}")
+        if s.confidence not in CONFIDENCE:
+            errors.append(f"{tag}: bad confidence {s.confidence!r}")
+        for dep in s.depends_on:
+            if dep not in ops:
+                errors.append(f"{tag}: depends_on missing opcode 0x{dep:x}")
+        if s.confidence in CONFIDENCE:
+            dep_confs = [CONFIDENCE[ops[d].semantics.confidence]
+                         for d in s.depends_on
+                         if d in ops and ops[d].semantics
+                         and ops[d].semantics.confidence in CONFIDENCE]
+            if dep_confs and CONFIDENCE[s.confidence] > min(dep_confs):
+                warnings.append(f"{tag}: confidence {s.confidence!r} exceeds dependency ceiling")
+    return errors, warnings
+
 def dependents(model: Model) -> dict[int, list[int]]:
     """Reverse of depends_on: op -> [ops whose semantics depend on it]."""
     rev: dict[int, list[int]] = {op: [] for op in model.opcodes}
