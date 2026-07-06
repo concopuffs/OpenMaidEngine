@@ -8,4 +8,7 @@ public sealed class CaptureHost : IHost
     public void CallScript(long id) => CallScriptCount++;
     public void OnStub(int opcode) { Stubs.TryGetValue(opcode, out var c); Stubs[opcode] = c + 1; }
     public void WaitForInput() { }
+    public void CreateTexture(int slot, int width, int height) { }
+    public void SetTexture(long resourceId, int slot) { }
+    public void DrawTexture(int slot, int x, int y, int width, int height) { }
 }

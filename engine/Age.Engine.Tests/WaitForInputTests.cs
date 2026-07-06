@@ -14,6 +14,9 @@ public class WaitForInputTests
         public void CallScript(long id) { }
         public void OnStub(int opcode) { }
         public void WaitForInput() => Waits++;
+        public void CreateTexture(int slot, int w, int h) { }
+        public void SetTexture(long resId, int slot) { }
+        public void DrawTexture(int slot, int x, int y, int w, int h) { }
     }
 
     [Fact]
