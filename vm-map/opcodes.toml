@@ -1,0 +1,6805 @@
+# vm-map/opcodes.toml -- CANONICAL living opcode reference (hand-edited).
+# Generated artifacts (age_opcodes_himegari.py, build/opcodes.json, docs/opcode-reference.md,
+# build/opcode-coverage.md) come from this file via tools/opcodes_build.py --build. Do not edit those.
+# Skeletons are appended by --bootstrap; enrich each [opcode.semantics] as we investigate.
+[meta]
+instruction_model = "code = seq of <opcode:u32> then argc*(<argtype:u32><value:u32>); len_dwords = 1 + 2*argc"
+opcodes_used_by_himegari = 248
+
+[meta.arg_types]
+"0x0" = "immediate"
+"0x1" = "float"
+"0x2" = "string"
+"0x3" = "global-int"
+"0x4" = "global-float"
+"0x5" = "global-string"
+"0x6" = "global-ptr"
+"0x8" = "global-string-ptr"
+"0x9" = "local-int"
+"0xa" = "local-float"
+"0xb" = "local-string"
+"0xc" = "local-ptr"
+"0xd" = "local-float-ptr"
+"0xe" = "local-string-ptr"
+
+[meta.header_fields]
+"F0" = "local_integer_1"
+"F1" = "local_floats"
+"F2" = "local_strings_1"
+"F3" = "local_integer_2"
+"F4" = "unknown_data"
+"F5" = "local_strings_2"
+"F6" = "sub_header_length(=0x1C)"
+"F7" = "table_1_length"
+"F8" = "table_1_offset(=code end)"
+"F9" = "table_2_length"
+"F10" = "table_2_offset"
+"F11" = "table_3_length"
+"F12" = "table_3_offset"
+
+[[opcode]]
+op = 0x1
+label = "u004149C0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004149C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x2
+label = "exit"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "exit"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x3
+label = "call-script"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "call-script"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5
+label = "ret"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "ret"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x6
+label = "u00417E80"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00417E80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x8
+label = "u00417FC0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00417FC0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x9
+label = "exit-script"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "exit-script"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x21
+label = "u00418860"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00418860"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x22
+label = "u00418920"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00418920"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x25
+label = "u00418B40"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00418B40"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x50
+label = "add"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "add"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x51
+label = "sub"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "sub"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x52
+label = "mul"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "mul"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x53
+label = "div"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "div"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x54
+label = "mod"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "mod"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x55
+label = "mov"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "mov"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x56
+label = "and"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "and"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x57
+label = "or"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "or"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x58
+label = "sar"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "sar"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x59
+label = "shl"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "shl"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5a
+label = "eq"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "eq"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5b
+label = "ne"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "ne"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5c
+label = "lt"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "lt"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5d
+label = "lte"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "lte"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5e
+label = "gr"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "gr"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x5f
+label = "gre"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "gre"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x60
+label = "u0041A270"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041A270"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x61
+label = "lookup-array"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "lookup-array"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-ptr", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "g-str", "l-int", "l-str"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x63
+label = "u00414A60"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414A60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x64
+label = "copy-local-array"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "copy-local-array"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x6c
+label = "copy-to-global"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "copy-to-global"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x6e
+label = "show-text"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "show-text"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["string", "g-str"]
+
+[[opcode]]
+op = 0x6f
+label = "end-text-line"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "end-text-line"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x70
+label = "u0041A750"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041A750"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x71
+label = "u0041A7B0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "label-def"
+category = "structural"
+summary = "1 imm; count == T1 table size -> the label/anchor T1 indexes. v1 no-op; revisit if menu/callback dispatch looks up by id"
+noop_headless = true
+source = "investigation"
+confidence = "high"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x72
+label = "wait-for-input"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "wait-for-input"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x73
+label = "u0041AB30"
+argc = 10
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AB30"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 9
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 10
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x75
+label = "u0041AC30"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AC30"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x76
+label = "u0041AC60"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AC60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x77
+label = "u0041ACB0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041ACB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x78
+label = "u0041AD00"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AD00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x79
+label = "u0041AD30"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AD30"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x7a
+label = "u0041AD70"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "text-param?"
+category = "adv"
+summary = "3 args (imm/computed/imm); sub computes a value then 0x7a then show-text — text speed/wait/window param"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x7b
+label = "u0041ADB0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041ADB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x7c
+label = "u00416A90"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416A90"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x7f
+label = "u00414C60"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414C60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x80
+label = "u0041AF00"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041AF00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x85
+label = "u00414CF0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414CF0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x86
+label = "u0041B210"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B210"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x87
+label = "u00414D10"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414D10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x88
+label = "u0041B290"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B290"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x8b
+label = "u0041B3D0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B3D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x8c
+label = "jmp"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "jmp"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x8f
+label = "call"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "call"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x90
+label = "u0041BEB0"
+argc = 7
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "hotspot-branch"
+category = "input"
+summary = "cursor/input hotspot hit-test: rect (x,y,w,h) -> 3-way branch on interaction, else fall through to pc+1"
+noop_headless = true
+source = "investigation"
+confidence = "high"
+depends_on = [0x1f4, 0x1f5]
+evidence = "all 301 ADV scripts contain the identical 8 sites; enc.len 15 lands pc+1 on the fall-through stmt (design-confirmed); fall-through = correct headless no-input path, proven by 279 CLEAN dialogue scenes"
+confirm_by = "target->interaction-state mapping (hover-enter/leave/click) via live input capture or Frida in A2"
+details = """
+op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "ukn" noting args
+5-7 are code locations. Corpus analysis (all 301 ADV scripts) resolves it:
+- Two forms, both ONLY in one shared ADV-chrome subroutine copied into every ADV script:
+  * Mode A (1505 = 5x301): immediate x,y,w,h with w=h=20; the five on-screen buttons at
+    (684|706|728|750|772, 572), each setting one of G[0x6c9..0x6cd] to 1 / 0 / 0+run-action
+    (reads as hover-enter / hover-leave / click). All 3 targets real.
+  * Mode B (903 = 3x301): local-int operands, w=h=1, only tgt_c real -- a keyed 2-way input test.
+- Every one of the 301 scripts has EXACTLY 8 sites (5 A + 3 B); zero scene-specific use.
+- Falls through (pc+1) when nothing matches -- design-confirmed (0xd0 + 15 dwords = 0xdf = label_df).
+- Headless (no cursor/input) => fall through => vm0 stub already correct; the 12 EMPTY sweep scenes
+  are gated by state + this input-wait chrome, NOT by unmodelled 0x90. Model live in A2.
+"""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x93
+label = "u00415040"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415040"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x94
+label = "u00415090"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415090"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x97
+label = "u0041C150"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "hotspot-reg?"
+category = "input"
+summary = "companion register-hotspot / set-widget-action (argc5: v1 v2 1 1 <action-id>; NO code targets)"
+noop_headless = true
+source = "inference"
+confidence = "med"
+depends_on = [0x90]
+evidence = "interleaves with 0x90 in the shared ADV-chrome subroutine; trailing imm = action id 0x0/0x7/0x8; same widget cluster as 0x90/0x91/0x92/0x95; confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xa0
+label = "jcc"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "jcc"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xa1
+label = "u00427C00"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00427C00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xa2
+label = "u00427FD0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00427FD0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xa3
+label = "u004244D0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004244D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xae
+label = "u00415130"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415130"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xb4
+label = "play-sound-effect"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "play-sound-effect"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0xb5
+label = "u0041D050"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D050"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0xb6
+label = "u0041D080"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "snd-ctrl?"
+category = "audio"
+summary = "1 imm; self-chains, 0x41D family near play-sound-effect/0xb5 — sound channel/volume/stop control"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xb7
+label = "u0041D0E0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D0E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xb8
+label = "u00415520"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415520"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xb9
+label = "u0041D140"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D140"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xba
+label = "u0041D0B0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D0B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xbf
+label = "play-bgm"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "play-bgm"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0xc0
+label = "u00415620"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415620"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0xc2
+label = "u0041D2B0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D2B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xc4
+label = "play-voice"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "play-voice"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0xc5
+label = "u0041D4A0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D4A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0xc6
+label = "u0041D5D0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D5D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0xc7
+label = "u0041D760"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D760"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0xc8
+label = "sleep"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "sleep"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xcc
+label = "mouse_callback"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "mouse_callback"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xcd
+label = "get-input-type"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "get-input-type"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xd0
+label = "u00415830"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415830"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0xd3
+label = "u00425960"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00425960"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xd4
+label = "u004266F0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004266F0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xd5
+label = "u004262C0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004262C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xd9
+label = "u00415880"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415880"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0xfb
+label = "joy_callback"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "joy_callback"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xfe
+label = "u0041E360"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E360"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0xff
+label = "u00415A10"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415A10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x100
+label = "u00415A60"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415A60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x101
+label = "u00415BF0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415BF0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x107
+label = "u0041E500"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E500"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x108
+label = "u00415E70"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415E70"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x109
+label = "u00415EC0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415EC0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x10a
+label = "u0041E540"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E540"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x10b
+label = "u0041E5A0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E5A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x10c
+label = "u0041E5E0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E5E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x10d
+label = "u00415F10"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415F10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x12c
+label = "lookup-array-2d"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "lookup-array-2d"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-ptr", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "g-str", "l-int", "l-str"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x12e
+label = "u0041E940"
+argc = 8
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041E940"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0x12f
+label = "u0041ECB0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041ECB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x130
+label = "u00415F40"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415F40"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x131
+label = "u00415F70"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415F70"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x132
+label = "u0041EF00"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041EF00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x133
+label = "u0041EFF0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041EFF0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x134
+label = "u0041F050"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041F050"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x135
+label = "bit-set"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "bit-set"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x136
+label = "bit-reset"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "bit-reset"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x137
+label = "u0041F1C0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041F1C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x13a
+label = "u0041F3A0"
+argc = 6
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041F3A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x13f
+label = "check-bit"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "check-bit"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x140
+label = "u0041F9C0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041F9C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["string"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["string"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x141
+label = "u0041FAA0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041FAA0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x142
+label = "u0041FB10"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041FB10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x143
+label = "u00415FB0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415FB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x144
+label = "u004259D0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004259D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-str"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str"]
+
+[[opcode]]
+op = 0x149
+label = "u0041FCE0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041FCE0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x191
+label = "u0041A4A0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041A4A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x192
+label = "set-string"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "set-string"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-str", "l-str", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["string", "g-int", "g-str", "l-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x193
+label = "concat"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "concat"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-str", "l-str"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["string", "g-str", "l-str", "l-ptr", "l-str-ptr"]
+
+[[opcode]]
+op = 0x194
+label = "u00425480"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00425480"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-str", "l-str", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["string", "l-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x195
+label = "u00425580"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00425580"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-str", "l-str", "l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["string", "g-str"]
+
+[[opcode]]
+op = 0x196
+label = "display-furigana"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "display-furigana"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["string"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["string"]
+
+[[opcode]]
+op = 0x197
+label = "u0041B510"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B510"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x198
+label = "u0041B540"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B540"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x199
+label = "u00414D50"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414D50"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x19a
+label = "u00414E50"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414E50"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x19b
+label = "u00414E80"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414E80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x19c
+label = "u00414EC0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414EC0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x19d
+label = "u0041C680"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041C680"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode]]
+op = 0x19e
+label = "u0041C6E0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041C6E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x1a0
+label = "u0041C9B0"
+argc = 9
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041C9B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 9
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1a1
+label = "u0041CB40"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041CB40"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1a2
+label = "u00428010"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "resolve-handle?"
+category = "compute"
+summary = "1 local-ptr from lookup-array, then create-texture — resolves a looked-up resource/handle"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-ptr"]
+
+[[opcode]]
+op = 0x1a3
+label = "string-lookup-set"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "string-lookup-set"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-ptr"]
+
+[[opcode]]
+op = 0x1a4
+label = "u0041B580"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B580"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1a5
+label = "set-font"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "set-font"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["string"]
+
+[[opcode]]
+op = 0x1a6
+label = "halve-strlen"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "halve-strlen"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x1a7
+label = "comment"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "comment"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["string", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x1a8
+label = "dev_ukn"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "dev_ukn"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1a9
+label = "u00428090"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00428090"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x1aa
+label = "u00425920"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00425920"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x1ab
+label = "u0041CCA0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041CCA0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1ac
+label = "u0041CD80"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041CD80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1ad
+label = "u004154F0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004154F0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1ae
+label = "u0041CED0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041CED0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1af
+label = "u004245C0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004245C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1b0
+label = "u0041A510"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041A510"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1b2
+label = "u00425790"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00425790"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["string", "g-int"]
+
+[[opcode]]
+op = 0x1b3
+label = "u004257D0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004257D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1b4
+label = "u004237C0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004237C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1b5
+label = "u0041B5F0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B5F0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1b6
+label = "u00414F60"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414F60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x1b7
+label = "u0041B640"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B640"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x1b8
+label = "u0041B670"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B670"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1b9
+label = "u0041B710"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B710"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1ba
+label = "u0041D850"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D850"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1bb
+label = "u0041B7B0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B7B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1bc
+label = "u00415670"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "block-mark"
+category = "marker"
+summary = "zero-arg; follows jcc/mov, precedes mov/ret — block boundary"
+noop_headless = true
+source = "inference"
+confidence = "high"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1bd
+label = "u0041D910"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041D910"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1bf
+label = "u004156C0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "call-end"
+category = "marker"
+summary = "zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker"
+noop_headless = true
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1c1
+label = "u0041B820"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B820"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1c7
+label = "u00414F90"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414F90"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x1c8
+label = "toString"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "toString"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-str"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x1ca
+label = "u0041B9B0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B9B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x1cb
+label = "u00414FD0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00414FD0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x1cc
+label = "u00415010"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00415010"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x1ce
+label = "u0041B9F0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041B9F0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1cf
+label = "u0041DA10"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041DA10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x1d0
+label = "u0041BA80"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041BA80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1d1
+label = "u0041BAE0"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041BAE0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1d2
+label = "u0041BB40"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "stmt-desc?"
+category = "marker"
+summary = "2 imm; immediately after stmt-begin 0x1f4 — statement descriptor?"
+noop_headless = true
+source = "harness"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1d3
+label = "u0041BB90"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041BB90"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1d4
+label = "u0041BC00"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0041BC00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x1d5
+label = "u00415700"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "cond-block"
+category = "marker"
+summary = "zero-arg; ALWAYS follows jcc — marks conditional body entry"
+noop_headless = true
+source = "inference"
+confidence = "high"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1f4
+label = "u004160D0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "stmt-begin"
+category = "marker"
+summary = "zero-arg; opens scripts, pairs with stmt-end 0x1f5"
+noop_headless = true
+source = "investigation"
+confidence = "high"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1f5
+label = "u00416120"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "stmt-end"
+category = "marker"
+summary = "zero-arg; precedes exit/next-stmt, pairs with 0x1f4"
+noop_headless = true
+source = "investigation"
+confidence = "high"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1f6
+label = "u00416170"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416170"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x1f7
+label = "u00420270"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "ui-elem?"
+category = "draw"
+summary = "2 args; 0x420 family, pairs with 0x1fa — create/begin a UI element"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1f8
+label = "create-texture"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "create-texture"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1f9
+label = "set-texture"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "set-texture"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1fa
+label = "u00420480"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "ui-clear?"
+category = "draw"
+summary = "1 arg (element id); follows 0x1f7 — show/hide/clear UI element by id"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x1fb
+label = "draw-texture"
+argc = 8
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "draw-texture"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x1fd
+label = "u00420620"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420620"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x1fe
+label = "u004206C0"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004206C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x1ff
+label = "u00420770"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "draw?"
+category = "draw"
+summary = "4 args (global+imms); follows 0x217, then call"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x202
+label = "u00420880"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "draw-blit?"
+category = "draw"
+summary = "5 args (coords/sizes); preceded by coord arithmetic, near draw ops"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0x203
+label = "u00420950"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "draw?"
+category = "draw"
+summary = "4 args; chains with 0x202/draw-texture"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0x204
+label = "draw-string"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "draw-string"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x205
+label = "u00420A60"
+argc = 6
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420A60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x207
+label = "u00420B00"
+argc = 8
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420B00"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x208
+label = "u00420BF0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420BF0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x20a
+label = "u00420CE0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420CE0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x20b
+label = "u00420D50"
+argc = 7
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420D50"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x20c
+label = "u00416200"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416200"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x20d
+label = "u00420E10"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420E10"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x20e
+label = "u00416250"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416250"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x20f
+label = "u00420E40"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00420E40"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x212
+label = "u00421090"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421090"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x213
+label = "u004210D0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004210D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x215
+label = "u00421160"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "count?"
+category = "compute"
+summary = "2 args -> writes global then result tested >0 (gre/lt) — count/search-returns-index helper"
+noop_headless = false
+source = "inference"
+confidence = "med"
+depends_on = []
+evidence = "confirm via unicorn"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode]]
+op = 0x216
+label = "u004211A0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004211A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0x217
+label = "u004211E0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "gfx-geom?"
+category = "draw"
+summary = "4 global-ints; part of a 0x217/0x218/0x21a geometry chain"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x218
+label = "u00421270"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "gfx-geom?"
+category = "draw"
+summary = "4 global-ints; chains with 0x21a/0x217"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x219
+label = "u004212E0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004212E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int"]
+
+[[opcode]]
+op = 0x21a
+label = "u00421370"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "gfx-geom?"
+category = "draw"
+summary = "4 global-ints; chains with 0x218/0x217"
+noop_headless = false
+source = "inference"
+confidence = "low"
+depends_on = []
+evidence = "confirm via frida"
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x21b
+label = "u004213E0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "line-id?"
+category = "marker"
+summary = "1 imm; mov->0x21b->stmt-end; near save/load-messkip — likely line/stmt id, verify not msg-control"
+noop_headless = true
+source = "harness"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x21c
+label = "u00416270"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416270"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x21d
+label = "u00421410"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421410"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x21e
+label = "u00421450"
+argc = 6
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421450"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x21f
+label = "u00421510"
+argc = 7
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421510"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x220
+label = "u004215D0"
+argc = 6
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004215D0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x222
+label = "u004216C0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004216C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x223
+label = "u00421700"
+argc = 8
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421700"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x224
+label = "u00416290"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416290"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x228
+label = "u00421940"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421940"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x229
+label = "u004219E0"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004219E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x22a
+label = "u00421A90"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421A90"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x22c
+label = "u00421BD0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421BD0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x22d
+label = "u00421C60"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421C60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x22f
+label = "u00421DD0"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421DD0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x230
+label = "u00421E70"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421E70"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode]]
+op = 0x231
+label = "u00421EA0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421EA0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode]]
+op = 0x232
+label = "u00421EF0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421EF0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x233
+label = "u00421FB0"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00421FB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x234
+label = "u00422060"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422060"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x236
+label = "u004221A0"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004221A0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode]]
+op = 0x238
+label = "u00422390"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422390"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int"]
+
+[[opcode]]
+op = 0x239
+label = "u004223C0"
+argc = 6
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004223C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x23a
+label = "u00422420"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422420"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x23b
+label = "u00422460"
+argc = 7
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422460"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x23c
+label = "u004162B0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004162B0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x23d
+label = "u004162F0"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004162F0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x23f
+label = "u00422930"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422930"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode]]
+op = 0x241
+label = "u00422B80"
+argc = 5
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422B80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["l-int"]
+
+[[opcode]]
+op = 0x242
+label = "u00422D60"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422D60"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x243
+label = "u00417070"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00417070"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x248
+label = "u00422E80"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422E80"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x249
+label = "u00422EB0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422EB0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x24d
+label = "u00422E90"
+argc = 12
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422E90"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 9
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 10
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 11
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 12
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x24e
+label = "u00422EA0"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00422EA0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x258
+label = "u00422FE0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "decl?"
+category = "marker"
+summary = "2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?"
+noop_headless = true
+source = "harness"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x259
+label = "u00416410"
+argc = 0
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00416410"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode]]
+op = 0x2bd
+label = "u00423100"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00423100"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x2bf
+label = "u00423180"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u00423180"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+
+[[opcode]]
+op = 0x2c0
+label = "u004231C0"
+argc = 3
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u004231C0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-ptr"]
+
+[[opcode]]
+op = 0x2c5
+label = "strlen"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "strlen"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-str", "l-str", "l-str-ptr"]
+
+[[opcode]]
+op = 0x2c6
+label = "u0042B5E0"
+argc = 2
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0042B5E0"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str"]
+
+[[opcode]]
+op = 0x2c8
+label = "u0042B610"
+argc = 4
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "u0042B610"
+category = "unknown"
+summary = ""
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = ""
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-str-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
