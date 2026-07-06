@@ -116,9 +116,25 @@ def test_lint():
     e, w = M.lint(M.load(write_tmp(FIXTURE)))
     check(e == [], "clean fixture has no lint errors")
 
+def test_bootstrap():
+    import opcodes_build as B
+    from pathlib import Path
+    fd, p = tempfile.mkstemp(suffix=".toml"); os.close(fd); os.remove(p)
+    tp = Path(p)
+    B.bootstrap(tp)                      # first run: meta + all skeletons
+    m = M.load(tp)
+    check(len(m.opcodes) >= 240, f"bootstrap seeded ~248 opcodes (got {len(m.opcodes)})")
+    check(0x90 in m.opcodes and m.opcodes[0x90].argc == 7, "0x90 seeded with argc 7")
+    n1 = len(m.opcodes)
+    B.bootstrap(tp)                      # idempotent: appends nothing new
+    check(len(M.load(tp).opcodes) == n1, "second bootstrap adds no duplicates")
+    e, w = M.lint(m)
+    check(e == [], f"bootstrapped file lints clean (errors: {e[:3]})")
+
 def main():
     test_load()
     test_lint()
+    test_bootstrap()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 
