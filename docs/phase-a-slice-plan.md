@@ -181,6 +181,17 @@ Toolchain: `godot --headless --path godot --import` → `dotnet build godot/Hime
 **Next = A2b:** background via `AGF2BMP2AGF.exe`, `play-voice`/`play-bgm`, choices → VM globals,
 just-enough `call-script`/state (unlocks richer scenes).
 
+### A2b-Background — machinery landed; render blocked on asset resolution (2026-07-06)
+Engine-driven texture ops shipped: `create/set/draw-texture` (0x1f8/0x1f9/0x1fb) promoted from VM stubs
+to typed `IHost` methods (CaptureHost no-ops → trace parity kept; engine tests 8/8). Tools: `convert_agf.py`
+(AGF→BMP stills) + `tools/frida/` capture harness (Frida 17.15.3 installed). **Blocked:** rendering the bg
+needs `resId → asset file` resolution, which proved opaque — CGINIT isn't a filename map, SYS4INI (S4IC422)
+needs format RE, Frida file-I/O offsets are noisy (memory-mapping), and the opening mixes movies (MVB/OP =
+MPEG) with stills so eyeball-curation stalled too. **Asset resolution promoted to a dedicated foundational
+RE effort** (graphics + audio; not machine-verifiable — Frida ground truth + human eye/ear are the oracle):
+see `docs/asset-resolution-re.md`. The backend render (ResourceMap + Godot compositing) stays designed in
+`docs/superpowers/plans/2026-07-06-a2b-background.md` Tasks 3–5, mechanical once resolution lands.
+
 ---
 
 ## Risks / open questions for A0
