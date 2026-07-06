@@ -13,6 +13,11 @@ __pycache__/
 *.egg-info/
 .venv/
 
+# .NET (engine/) build output
+engine/**/bin/
+engine/**/obj/
+.vs/
+
 # Godot / C# (future)
 .godot/
 *.import
