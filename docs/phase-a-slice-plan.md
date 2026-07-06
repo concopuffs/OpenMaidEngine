@@ -150,11 +150,16 @@ input chrome whose fall-through stub is correct headless. Next = **A1** — port
 core, differential-test against `vm0.py`. 0x90/0x97 stay stubbed (correct headless); the interactive
 input path + per-scene state seeding land in **A2** (Godot backend) alongside the real hotspot model.
 
-## A1 — Port the validated model to C#
+## A1 — Port the validated model to C# ✅ DONE (2026-07-06)
 Reimplement the A0 execution model as the runtime VM core in C# (the language decision from the
 roadmap; GDScript is too slow for the loop). A0 is the reference: differential-test C# against the
 Python prototype's traces on the same scenes. Port the container parser too (or load via a shared
 spec). Deliverable: headless C# VM reproducing A0's results.
+
+**Result:** `engine/` .NET 8 solution (`Age.Engine` classlib w/ `Model`/`Vm`/`Sys4`/`Hosting` seams +
+`Age.Cli` + xUnit tests). RECOVER passes; the C# `trace` is **byte-identical to `vm0.py --trace` across
+all 297 SC/SP scenes** (offsets+halt+steps). Version-neutral `Script` contract enforced (VM core never
+references `Sys4`). Spec/plan: `docs/superpowers/{specs,plans}/2026-07-06-a1-csharp-vm*.md`.
 
 ## A2 — Godot ADV backend (one scene, with visuals)
 Wire the C# VM's effectful ops to Godot: `show-text`/message window (+ furigana via `display-furigana`),
