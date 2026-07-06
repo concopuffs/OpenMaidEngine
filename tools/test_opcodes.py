@@ -131,10 +131,21 @@ def test_bootstrap():
     e, w = M.lint(m)
     check(e == [], f"bootstrapped file lints clean (errors: {e[:3]})")
 
+def test_emit_inferred():
+    import opcodes_build as B
+    src = B.emit_inferred_py(M.load(write_tmp(FIXTURE)))
+    check("INFERRED" in src and "hotspot-branch" in src, "shim contains INFERRED + our mnemonic")
+    ns = {}
+    exec(compile(src, "<gen>", "exec"), ns)
+    inf = ns["INFERRED"]
+    check(0x90 in inf and inf[0x90]["name"] == "hotspot-branch", "generated INFERRED[0x90]['name'] correct")
+    check(0x1f4 in inf, "named marker 0x1f4 (name != label) included")
+
 def main():
     test_load()
     test_lint()
     test_bootstrap()
+    test_emit_inferred()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

@@ -107,6 +107,21 @@ def bootstrap(toml_path: Path) -> None:
         f.write("\n".join(blocks))
     print(f"bootstrap: {len(used)} used opcodes; appended {len(blocks)} new skeletons -> {toml_path}")
 
+GEN_HEADER = "# DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build\n"
+
+def emit_inferred_py(model: M.Model) -> str:
+    lines = [GEN_HEADER,
+             '"""Inferred Himegari opcode semantics (generated). sys4load reads INFERRED[op][\'name\']."""',
+             "from __future__ import annotations", "", "INFERRED: dict[int, dict] = {"]
+    for op, oc in sorted(model.opcodes.items()):
+        s = oc.semantics
+        if not s or s.name == oc.label:      # only ops we've given a distinct mnemonic
+            continue
+        lines.append("    0x%x: dict(name=%r, category=%r, noop=%r, confidence=%r, source=%r, summary=%r),"
+                     % (op, s.name, s.category, s.noop_headless, s.confidence, s.source, s.summary))
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bootstrap", action="store_true")
@@ -118,6 +133,26 @@ def main(argv=None):
     if args.bootstrap:
         bootstrap(tp)
         return 0
+    if args.build:
+        model = M.load(tp)
+        errors, warnings = M.lint(model)
+        for m in warnings:
+            print("warn:", m)
+        if errors:
+            for m in errors:
+                print("error:", m)
+            return 1
+        (paths.REPO / "tools" / "age_opcodes_himegari.py").write_text(emit_inferred_py(model), encoding="utf-8")
+        print("build: wrote tools/age_opcodes_himegari.py")
+        return 0
+    if args.lint:
+        errors, warnings = M.lint(M.load(tp))
+        for m in warnings:
+            print("warn:", m)
+        for m in errors:
+            print("error:", m)
+        print(f"lint: {len(errors)} errors, {len(warnings)} warnings")
+        return 1 if errors else 0
     ap.error("no action (expected --bootstrap/--build/--lint)")
 
 if __name__ == "__main__":
