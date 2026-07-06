@@ -410,6 +410,22 @@ def run_sweep(limit=None):
     return 0
 
 
+def run_trace(out_path):
+    """Dump per-scene emitted show-text offsets + halt + steps for the differential test."""
+    oracle = load_oracle()
+    scripts = paths.scripts()
+    names = sorted(n for n in scripts if SCENE_RE.match(n))
+    trace = {}
+    for name in names:
+        r = run_scene(name, scripts[name], oracle)
+        vm = r["vm"]
+        trace[name] = {"offsets": [off for off, _ in vm.text],
+                       "halt": vm.halt_reason, "steps": vm.steps}
+    Path(out_path).write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+    print(f"trace: {len(trace)} scenes -> {out_path}")
+    return 0
+
+
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
     if not argv or argv[0] == "--test":
@@ -418,6 +434,8 @@ def main(argv=None):
         return run_sweep(limit=int(argv[1]) if len(argv) > 1 else None)
     if argv[0] == "--scene":
         return run_one_scene(argv[1])
+    if argv[0] == "--trace":
+        return run_trace(argv[1])
     return run_file(argv[0])
 
 
