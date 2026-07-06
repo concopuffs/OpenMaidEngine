@@ -164,7 +164,8 @@ public sealed class VirtualMachine
                     _host.ShowText(off, text);
                 }
                 return pc + 1;
-            case "end-text-line": case "wait-for-input": case "set-font":
+            case "wait-for-input": _host.WaitForInput(); return pc + 1;
+            case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
             default:
