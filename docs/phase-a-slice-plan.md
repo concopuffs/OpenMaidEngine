@@ -169,6 +169,18 @@ on-disk `AGF2BMP2AGF.exe`. Resolve just-enough `call-script`/state so the scene'
 hand-set the preconditions). Deliverable: **the chosen scene playable in Godot** — bg + dialogue +
 a choice + voice — matching A0's text.
 
+### A2a — Interactive dialogue loop ✅ DONE (2026-07-06)
+Godot 4.7 (.NET, `S:/Godot/Godot_v4.7-stable_mono_win64`) project in `godot/` referencing `Age.Engine`
+in-process. VM gained one hook (`IHost.WaitForInput`, opcode 0x72); suspend/resume via a worker thread +
+blocking `SemaphoreSlim` in `GodotAdvHost`, UI marshalled with `CallDeferred`. Plays SC0000 page-by-page,
+pauses at wait-for-input, resumes on click/Enter. **Headless self-test** (`--headless -- --selftest`)
+asserts the emitted 186-line offset sequence == `build/vm0-trace.json`; A1 engine tests stay 7/7.
+Toolchain: `godot --headless --path godot --import` → `dotnet build godot/Himegari.csproj` →
+`godot --headless --path godot [-- --selftest]`. Spec/plan:
+`docs/superpowers/{specs,plans}/2026-07-06-a2a-godot-dialogue*.md`.
+**Next = A2b:** background via `AGF2BMP2AGF.exe`, `play-voice`/`play-bgm`, choices → VM globals,
+just-enough `call-script`/state (unlocks richer scenes).
+
 ---
 
 ## Risks / open questions for A0

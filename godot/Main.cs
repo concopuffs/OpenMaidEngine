@@ -26,6 +26,22 @@ public partial class Main : Godot.Control
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
         AddChild(_status);
 
+        // Best-effort CJK font so the visual isn't tofu (headless self-test doesn't depend on it).
+        foreach (var fp in new[] { "C:/Windows/Fonts/YuGothM.ttc", "C:/Windows/Fonts/YuGothR.ttc",
+                                   "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/meiryo.ttc" })
+        {
+            if (!System.IO.File.Exists(fp)) continue;
+            try
+            {
+                var ff = new FontFile { Data = System.IO.File.ReadAllBytes(fp) };
+                _text.AddThemeFontOverride("font", ff);
+                _status.AddThemeFontOverride("font", ff);
+                _text.AddThemeFontSizeOverride("font_size", 22);
+                break;
+            }
+            catch { /* fall back to the default font */ }
+        }
+
         _selftest = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--selftest") >= 0;
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
