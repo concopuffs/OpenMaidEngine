@@ -122,6 +122,74 @@ def emit_inferred_py(model: M.Model) -> str:
     lines.append("}")
     return "\n".join(lines) + "\n"
 
+def emit_json(model: M.Model) -> str:
+    rev = M.dependents(model)
+    out = {"meta": model.meta, "opcodes": [],
+           "dependents": {"0x%x" % k: ["0x%x" % d for d in v] for k, v in rev.items() if v}}
+    for op, oc in sorted(model.opcodes.items()):
+        e = {"op": "0x%x" % op, "label": oc.label, "argc": oc.argc,
+             "code_target_args": oc.code_target_args, "abi_source": oc.abi_source}
+        s = oc.semantics
+        if s:
+            e["semantics"] = {"name": s.name, "category": s.category, "summary": s.summary,
+                              "noop_headless": s.noop_headless, "source": s.source,
+                              "confidence": s.confidence, "depends_on": ["0x%x" % d for d in s.depends_on],
+                              "evidence": s.evidence, "details": s.details, "args": s.args}
+        out["opcodes"].append(e)
+    return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
+
+def emit_reference_md(model: M.Model) -> str:
+    rev = M.dependents(model)
+    L = ["<!-- DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build -->",
+         "# Opcode Reference (generated)", "",
+         f"{len(model.opcodes)} opcodes used by Himegari. Source of truth: `vm-map/opcodes.toml`.", ""]
+    by_cat = collections.defaultdict(list)
+    for op, oc in model.opcodes.items():
+        cat = oc.semantics.category if oc.semantics else "unknown"
+        by_cat[cat].append(op)
+    for cat in sorted(by_cat):
+        L += [f"## {cat}", ""]
+        for op in sorted(by_cat[cat]):
+            oc = model.opcodes[op]
+            s = oc.semantics
+            name = s.name if s else oc.label
+            L.append(f"### 0x{op:x} `{name}` ({oc.label}, argc {oc.argc})")
+            if s:
+                L.append(f"- **summary:** {s.summary}" if s.summary else "- **summary:** —")
+                L.append(f"- **grounding:** source={s.source}, confidence={s.confidence}"
+                         + (f", noop_headless={s.noop_headless}" if s.noop_headless else ""))
+                if s.depends_on:
+                    L.append("- **depends on:** " + ", ".join("0x%x" % d for d in s.depends_on))
+                if rev.get(op):
+                    L.append("- **depended on by:** " + ", ".join("0x%x" % d for d in rev[op]))
+                if s.evidence:
+                    L.append(f"- **evidence:** {s.evidence}")
+                if s.details:
+                    L += ["", s.details]
+            L.append("")
+    return "\n".join(L) + "\n"
+
+def emit_coverage_md(model: M.Model) -> str:
+    by_src = collections.Counter()
+    by_conf = collections.Counter()
+    by_cat = collections.Counter()
+    named = 0
+    for oc in model.opcodes.values():
+        s = oc.semantics
+        if s:
+            by_src[s.source] += 1
+            by_conf[s.confidence] += 1
+            by_cat[s.category] += 1
+            if s.name != oc.label:
+                named += 1
+    L = ["<!-- DO NOT EDIT -- generated from vm-map/opcodes.toml -->", "# Opcode Coverage (generated)", "",
+         f"- opcodes: {len(model.opcodes)}", f"- given a distinct mnemonic: {named}", "",
+         "## by source", ""]
+    L += [f"- {k}: {v}" for k, v in sorted(by_src.items())]
+    L += ["", "## by confidence", ""] + [f"- {k}: {by_conf[k]}" for k in ("high", "med", "low")]
+    L += ["", "## by category", ""] + [f"- {k}: {v}" for k, v in sorted(by_cat.items())]
+    return "\n".join(L) + "\n"
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bootstrap", action="store_true")
@@ -144,6 +212,11 @@ def main(argv=None):
             return 1
         (paths.REPO / "tools" / "age_opcodes_himegari.py").write_text(emit_inferred_py(model), encoding="utf-8")
         print("build: wrote tools/age_opcodes_himegari.py")
+        paths.BUILD.mkdir(parents=True, exist_ok=True)
+        (paths.BUILD / "opcodes.json").write_text(emit_json(model), encoding="utf-8")
+        (paths.REPO / "docs" / "opcode-reference.md").write_text(emit_reference_md(model), encoding="utf-8")
+        (paths.BUILD / "opcode-coverage.md").write_text(emit_coverage_md(model), encoding="utf-8")
+        print("build: wrote build/opcodes.json, docs/opcode-reference.md, build/opcode-coverage.md")
         return 0
     if args.lint:
         errors, warnings = M.lint(M.load(tp))

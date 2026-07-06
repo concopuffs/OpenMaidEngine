@@ -141,11 +141,23 @@ def test_emit_inferred():
     check(0x90 in inf and inf[0x90]["name"] == "hotspot-branch", "generated INFERRED[0x90]['name'] correct")
     check(0x1f4 in inf, "named marker 0x1f4 (name != label) included")
 
+def test_emit_views():
+    import opcodes_build as B, json as _json
+    m = M.load(write_tmp(FIXTURE))
+    j = _json.loads(B.emit_json(m))
+    check(j["dependents"]["0x1f4"] == ["0x90"], "json dependents index correct")
+    check(any(o["op"] == "0x90" for o in j["opcodes"]), "json lists opcode 0x90")
+    md = B.emit_reference_md(m)
+    check("hotspot-branch" in md and "depended on by" in md.lower(), "reference md has entry + dependents line")
+    cov = B.emit_coverage_md(m)
+    check("investigation" in cov, "coverage md breaks down by source")
+
 def main():
     test_load()
     test_lint()
     test_bootstrap()
     test_emit_inferred()
+    test_emit_views()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 
