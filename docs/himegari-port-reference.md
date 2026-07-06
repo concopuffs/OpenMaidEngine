@@ -109,7 +109,7 @@ See [sys4-format-notes.md](sys4-format-notes.md). Confirmed across all 481 files
 > this game directly — **476/476 scripts decode 100% clean, 1.46M instructions, 0
 > unknown opcodes, 37,392/0 string args resolved.** Model: code = instructions of
 > `<opcode> + argc*(<type><value>)`, length `1+2*argc`; stop code at the first inline
-> string offset. Himegari uses 248 opcodes, 52 named (see `vm-map/opcodes-himegari.json`).
+> string offset. Himegari uses 248 opcodes, 52 named (see `vm-map/opcodes.toml`).
 > Header fields F0–F5 are now known = local-variable counts (Kelebek's `BinaryHeader`).
 > **Unpacking `AGE.EXE` is no longer the blocker** — it's demoted to optional Phase 3
 > enrichment (prefer Frida hooking). Reproduce: `tools/validate_opcode_table.py`.

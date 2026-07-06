@@ -15,13 +15,13 @@
 - Kelebek1/Eushully-Decompiler's `age-shared.cpp` contains an opcode table (`{op_code, label, argument_count}`) and a header parser that **explicitly handles the SYS4 signature** (`"SYS4"`, header length `0x3C`, cp932 XOR-0xFF strings) — this exact game's format.
 - The instruction model: **code = a flat sequence of instructions; each instruction = `<opcode:u32>` followed by `argument_count` arguments, where every argument is a `<type:u32><value:u32>` pair. Instruction length in dwords = `1 + 2*argc`.** Inline strings sit *after* the code inside the `[0,F8)` region; stop decoding at the lowest string offset referenced (a type-2 arg, or op `0x64` arg 1).
 - Applying that table to Himegari's scripts: **476 of 476 parseable scripts decode 100% clean — 1,463,788 instructions, 0 unknown opcodes, and all 37,392 inline-string arguments resolve to valid decoded strings.** (The 7 non-decoding `.BIN` are container-level non-scripts like `SYS4AB`/`SYS4INI`, different magic.)
-- Himegari uses **248 distinct opcodes; 52 have semantic names** (in `vm-map/opcodes-himegari.json`). The other 196 decode perfectly (known length) but have engine-internal names only (`u004xxxx`). **Caveat (measured 2026-07-06):** the named 52 are the dialogue/ADV core but cover only **72.6% of instruction volume**, not "the entire core" — the unnamed 27.4% is concentrated in the highest-frequency opcodes and must be partly addressed before Phase 4. See Phase 3's coverage correction.
+- Himegari uses **248 distinct opcodes; 52 have semantic names** (in `vm-map/opcodes.toml`). The other 196 decode perfectly (known length) but have engine-internal names only (`u004xxxx`). **Caveat (measured 2026-07-06):** the named 52 are the dialogue/ADV core but cover only **72.6% of instruction volume**, not "the entire core" — the unnamed 27.4% is concentrated in the highest-frequency opcodes and must be partly addressed before Phase 4. See Phase 3's coverage correction.
 
 **This resolves the header unknowns too.** Kelebek's `BinaryHeader` struct maps my F0–F12 exactly: `F0`=local_integer_1, `F1`=local_floats, `F2`=local_strings_1, `F3`=local_integer_2, `F4`=unknown, `F5`=local_strings_2, `F6`=sub_header_length(0x1C), then the three (length, offset) table pairs. The "flag fields" were **local-variable counts**. Arg `type` codes: 0=immediate, 1=float, 2=string, 3=global-int, 4=global-float, 5=global-string, 6=global-ptr, 8=global-string-ptr, 9=local-int, A=local-float, B=local-string, C=local-ptr, D=local-float-ptr, E=local-string-ptr.
 
 **Consequence:** Unpacking `AGE.EXE` (still packed — see appendix) drops from *the blocker* to an *optional enrichment* used only to name the 196 unnamed opcodes' fine semantics, and even that has a cheaper dynamic alternative.
 
-**Provenance / sources in `vm-map/`:** `kelebek1-age-shared.cpp` (the opcode table), `kelebek1-disassembler.cpp` (the parser), `opcodes-himegari.json` (validated table filtered to what this game uses), `opcode-leads.json` + `small-script-listings.md` (this session's static analysis, now confirmed).
+**Provenance / sources in `vm-map/`:** `kelebek1-age-shared.cpp` (the opcode table), `kelebek1-disassembler.cpp` (the parser), `opcodes.toml` (validated table filtered to what this game uses), `opcode-leads.json` + `small-script-listings.md` (this session's static analysis, now confirmed).
 
 ---
 
@@ -93,7 +93,7 @@ changes, not the toolkit. The genuine rare tail stays lazy (name on demand).
 - [x] **3.0 — Inference pass DONE (2026-07-06).** Classified the top 21 unnamed opcodes →
   **instruction coverage 72.62% (named) → 96.94% (classified)**; ~90.5% is VM-handleable by
   inference alone. Tooling: `tools/opcode_context.py` (evidence gatherer). Results:
-  `vm-map/himegari-opcode-notes.md` (per-op evidence), `tools/age_opcodes_himegari.py`
+  `vm-map/opcodes.toml` (per-op evidence + provenance), `tools/age_opcodes_himegari.py`
   (`INFERRED` dict consumed by the disassembler + future VM), `build/opcode-coverage.md`
   (tiers + Frida/Unicorn shortlist). `sys4load` now renders inferred names (verified: MENU's
   `label-def 0x71` land exactly on its T1 targets). Key findings: `0x1f4`/`0x1f5` = stmt

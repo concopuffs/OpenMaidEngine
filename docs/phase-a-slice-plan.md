@@ -118,7 +118,7 @@ all parsing/decoding (no new parser).
   SC/SP), `--scene NAME` (detailed diff for one script), plus `load_oracle`/`subsequence_status`.
 
 **op 0x90 investigated in depth — it is input chrome, NOT a correctness hole** (full evidence:
-`vm-map/himegari-opcode-notes.md` §F). Kelebek left it "ukn"; corpus analysis resolves it:
+`vm-map/opcodes.toml` op 0x90 `details`). Kelebek left it "ukn"; corpus analysis resolves it:
 `0x90 x y w h tgt_a tgt_b tgt_c` (argc 7) is a **cursor/input hotspot hit-test** that branches per
 interaction outcome and **falls through to pc+1 when nothing matches** (design-confirmed: enc.len 15
 lands the next instr on the fall-through statement). It occurs ONLY in a shared ADV-chrome subroutine

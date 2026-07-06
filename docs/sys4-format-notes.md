@@ -11,7 +11,7 @@ live in `tools/probe_*.py`.
 > offset. 476/476 scripts decode clean (0 unknown opcodes). Header fields F0–F5 are
 > **local-variable counts** (F0=local_integer_1, F1=local_floats, F2=local_strings_1,
 > F3=local_integer_2, F4=unknown, F5=local_strings_2). See `vm-mapping-plan.md` and
-> `vm-map/opcodes-himegari.json`. The tag values below (0x71/0x03/0x8F etc.) are the
+> `vm-map/opcodes.toml`. The tag values below (0x71/0x03/0x8F etc.) are the
 > *opcodes at table targets*: 0x8F=`call`, 0x03=`call-script`, 0x71=`u0041A7B0`.
 
 ## Header — CONFIRMED
