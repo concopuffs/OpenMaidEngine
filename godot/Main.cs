@@ -64,7 +64,9 @@ public partial class Main : Godot.Control
         }
     }
 
-    public override void _UnhandledInput(InputEvent e)
+    // _Input (not _UnhandledInput): the root Control consumes mouse clicks as GUI input before they
+    // reach _UnhandledInput, so clicks were swallowed while keyboard ui_accept still got through.
+    public override void _Input(InputEvent e)
     {
         if (_selftest) return;
         if (e.IsActionPressed("ui_accept") ||
