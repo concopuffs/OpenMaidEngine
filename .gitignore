@@ -1,0 +1,28 @@
+# age-reimpl repo. NOTE: the repo root IS age-reimpl/. The original game install
+# (姫狩りダンジョンマイスター/) and the extracted ALF data (extracted/) are SIBLINGS
+# of this directory, outside the repo entirely — they can never be committed.
+
+# Derived / regenerable corpora (rebuild via tools/extract_phase2.py, opcodes_build.py, etc.).
+# "build/ is disposable" — see docs/PROJECT-STRUCTURE.md. Machine JSON + bulk disasm/text
+# corpora live here and are reproducible from tools/ + ../extracted/.
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Godot / C# (future)
+.godot/
+*.import
+.mono/
+mono_crash.*.json
+[Bb]in/obj/
+[Oo]bj/
+
+# OS / editor cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp

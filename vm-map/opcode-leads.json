@@ -1,0 +1,1194 @@
+{
+  "note": "Candidate SYS4 opcodes seeded from static byte analysis of 483 scripts. Statement leads = first dword after each [0x8F,0,line#] T3 record. These are HYPOTHESES to confirm against the (packed) AGE.EXE VM dispatch.",
+  "statement_leads": [
+    {
+      "op": "0x55",
+      "dec": 85,
+      "count": 21687,
+      "pct": 30.743,
+      "examples": [
+        "ADDEXP.BIN",
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "BUNKI.BIN",
+        "CAMP.BIN"
+      ]
+    },
+    {
+      "op": "0x8f",
+      "dec": 143,
+      "count": 10070,
+      "pct": 14.275,
+      "examples": [
+        "AIM.BIN",
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "BUNKI.BIN",
+        "CALLBACK_LOAD.BIN"
+      ]
+    },
+    {
+      "op": "0x1bf",
+      "dec": 447,
+      "count": 8393,
+      "pct": 11.898,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "GAMECLEAR.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN"
+      ]
+    },
+    {
+      "op": "0x71",
+      "dec": 113,
+      "count": 8168,
+      "pct": 11.579,
+      "examples": [
+        "DEBUG.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "GAMECLEAR.BIN",
+        "SC0000.BIN"
+      ]
+    },
+    {
+      "op": "0x5",
+      "dec": 5,
+      "count": 3777,
+      "pct": 5.354,
+      "examples": [
+        "ADDEXP.BIN",
+        "ALCHEMY.BIN",
+        "BUNKI.BIN",
+        "CALLBACK_LOAD.BIN",
+        "CGMODE.BIN"
+      ]
+    },
+    {
+      "op": "0x1f5",
+      "dec": 501,
+      "count": 3267,
+      "pct": 4.631,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x20c",
+      "dec": 524,
+      "count": 1934,
+      "pct": 2.742,
+      "examples": [
+        "AIM.BIN",
+        "ALCHEMY.BIN",
+        "BUNKI.BIN",
+        "CALLBACK_SETTING.BIN",
+        "CALLBACK_WINDOW.BIN"
+      ]
+    },
+    {
+      "op": "0x215",
+      "dec": 533,
+      "count": 1639,
+      "pct": 2.323,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0xa0",
+      "dec": 160,
+      "count": 1634,
+      "pct": 2.316,
+      "examples": [
+        "ALCHEMY.BIN",
+        "BUNKI.BIN",
+        "CALCSCOPE.BIN",
+        "CGMODE.BIN",
+        "DEBUGADV.BIN"
+      ]
+    },
+    {
+      "op": "0x1f4",
+      "dec": 500,
+      "count": 1592,
+      "pct": 2.257,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0xc8",
+      "dec": 200,
+      "count": 1553,
+      "pct": 2.201,
+      "examples": [
+        "CONFIG.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "FIELD.BIN",
+        "SC0000.BIN"
+      ]
+    },
+    {
+      "op": "0x51",
+      "dec": 81,
+      "count": 650,
+      "pct": 0.921,
+      "examples": [
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "CGMODE.BIN",
+        "CHMENU.BIN",
+        "DEBUGADV.BIN"
+      ]
+    },
+    {
+      "op": "0x217",
+      "dec": 535,
+      "count": 630,
+      "pct": 0.893,
+      "examples": [
+        "DEBUG.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN"
+      ]
+    },
+    {
+      "op": "0x1fb",
+      "dec": 507,
+      "count": 579,
+      "pct": 0.821,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SAVE.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN"
+      ]
+    },
+    {
+      "op": "0x8c",
+      "dec": 140,
+      "count": 446,
+      "pct": 0.632,
+      "examples": [
+        "ALCHEMY.BIN",
+        "ATSEEK.BIN",
+        "BTANINIT.BIN",
+        "BTL.BIN",
+        "BUNKI.BIN"
+      ]
+    },
+    {
+      "op": "0x6c",
+      "dec": 108,
+      "count": 434,
+      "pct": 0.615,
+      "examples": [
+        "DEBUG.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "GAMECLEAR.BIN",
+        "GAMESTART.BIN"
+      ]
+    },
+    {
+      "op": "0x21a",
+      "dec": 538,
+      "count": 399,
+      "pct": 0.566,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0030.BIN"
+      ]
+    },
+    {
+      "op": "0x61",
+      "dec": 97,
+      "count": 348,
+      "pct": 0.493,
+      "examples": [
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "CHMENU.BIN",
+        "DEBUGADV.BIN",
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0x5a",
+      "dec": 90,
+      "count": 311,
+      "pct": 0.441,
+      "examples": [
+        "AIM.BIN",
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "CGMODE.BIN",
+        "CHMENU.BIN"
+      ]
+    },
+    {
+      "op": "0x1ad",
+      "dec": 429,
+      "count": 297,
+      "pct": 0.421,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x199",
+      "dec": 409,
+      "count": 297,
+      "pct": 0.421,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x7c",
+      "dec": 124,
+      "count": 297,
+      "pct": 0.421,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x50",
+      "dec": 80,
+      "count": 264,
+      "pct": 0.374,
+      "examples": [
+        "BTL.BIN",
+        "CGMODE.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0xb4",
+      "dec": 180,
+      "count": 260,
+      "pct": 0.369,
+      "examples": [
+        "ADDEXP.BIN",
+        "CGMODE.BIN",
+        "CHMENU.BIN",
+        "CONFIG.BIN",
+        "DEBUGADV.BIN"
+      ]
+    },
+    {
+      "op": "0x22f",
+      "dec": 559,
+      "count": 256,
+      "pct": 0.363,
+      "examples": [
+        "DEBUGADV.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0040.BIN",
+        "SC0050.BIN"
+      ]
+    },
+    {
+      "op": "0x218",
+      "dec": 536,
+      "count": 255,
+      "pct": 0.361,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0030.BIN"
+      ]
+    },
+    {
+      "op": "0x2",
+      "dec": 2,
+      "count": 153,
+      "pct": 0.217,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x75",
+      "dec": 117,
+      "count": 139,
+      "pct": 0.197,
+      "examples": [
+        "CAMP.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "FIELD.BIN",
+        "FORT.BIN"
+      ]
+    },
+    {
+      "op": "0xae",
+      "dec": 174,
+      "count": 134,
+      "pct": 0.19,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0xbf",
+      "dec": 191,
+      "count": 115,
+      "pct": 0.163,
+      "examples": [
+        "DEBUGADV2.BIN",
+        "FIELD.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x5c",
+      "dec": 92,
+      "count": 83,
+      "pct": 0.118,
+      "examples": [
+        "ALCHEMY.BIN",
+        "CHMENU.BIN",
+        "EVOLVE.BIN",
+        "EXILE.BIN",
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0x202",
+      "dec": 514,
+      "count": 58,
+      "pct": 0.082,
+      "examples": [
+        "DEBUGADV.BIN",
+        "SC0010.BIN",
+        "SC0030.BIN",
+        "SC0060.BIN",
+        "SC0090.BIN"
+      ]
+    },
+    {
+      "op": "0x9",
+      "dec": 9,
+      "count": 54,
+      "pct": 0.077,
+      "examples": [
+        "GAMECLEAR.BIN",
+        "SC0000.BIN",
+        "SC0020.BIN",
+        "SC0030.BIN",
+        "SC0040.BIN"
+      ]
+    },
+    {
+      "op": "0x52",
+      "dec": 82,
+      "count": 46,
+      "pct": 0.065,
+      "examples": [
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN",
+        "SC0040.BIN",
+        "SC0060.BIN"
+      ]
+    },
+    {
+      "op": "0x203",
+      "dec": 515,
+      "count": 44,
+      "pct": 0.062,
+      "examples": [
+        "BTL.BIN",
+        "DEBUGADV.BIN",
+        "SC0020.BIN",
+        "SC0030.BIN",
+        "SC0040.BIN"
+      ]
+    },
+    {
+      "op": "0x56",
+      "dec": 86,
+      "count": 37,
+      "pct": 0.052,
+      "examples": [
+        "ALCHEMY.BIN",
+        "BUNKI.BIN",
+        "CGMODE.BIN",
+        "CHMENU.BIN",
+        "EVOLVE.BIN"
+      ]
+    },
+    {
+      "op": "0x3",
+      "dec": 3,
+      "count": 35,
+      "pct": 0.05,
+      "examples": [
+        "ALCHEMY.BIN",
+        "CHMENU.BIN",
+        "EVOLVE.BIN",
+        "FIELD.BIN",
+        "MENU.BIN"
+      ]
+    },
+    {
+      "op": "0x1fe",
+      "dec": 510,
+      "count": 25,
+      "pct": 0.035,
+      "examples": [
+        "DEBUGADV.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN",
+        "SC0070.BIN",
+        "SC0130.BIN"
+      ]
+    },
+    {
+      "op": "0xcd",
+      "dec": 205,
+      "count": 24,
+      "pct": 0.034,
+      "examples": [
+        "AIM.BIN",
+        "ALCHEMY.BIN",
+        "CHMENU.BIN",
+        "EVOLVE.BIN",
+        "EXILE.BIN"
+      ]
+    },
+    {
+      "op": "0xb6",
+      "dec": 182,
+      "count": 18,
+      "pct": 0.026,
+      "examples": [
+        "SC0000.BIN",
+        "SC0140.BIN",
+        "SP0044.BIN",
+        "SP0406.BIN",
+        "SP0822.BIN"
+      ]
+    },
+    {
+      "op": "0x5f",
+      "dec": 95,
+      "count": 17,
+      "pct": 0.024,
+      "examples": [
+        "ALCHEMY.BIN",
+        "CHMENU.BIN",
+        "EVOLVE.BIN",
+        "FIELD.BIN",
+        "IMPROVE.BIN"
+      ]
+    },
+    {
+      "op": "0x93",
+      "dec": 147,
+      "count": 17,
+      "pct": 0.024,
+      "examples": [
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0050.BIN",
+        "SC0080.BIN"
+      ]
+    },
+    {
+      "op": "0x59",
+      "dec": 89,
+      "count": 17,
+      "pct": 0.024,
+      "examples": [
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN",
+        "SC0040.BIN"
+      ]
+    },
+    {
+      "op": "0x101",
+      "dec": 257,
+      "count": 16,
+      "pct": 0.023,
+      "examples": [
+        "DEBUGADV2.BIN",
+        "FIELD.BIN",
+        "SHOWGROW.BIN"
+      ]
+    },
+    {
+      "op": "0xb5",
+      "dec": 181,
+      "count": 11,
+      "pct": 0.016,
+      "examples": [
+        "ALCHEMY.BIN",
+        "CHMENU.BIN",
+        "EXILE.BIN",
+        "IMPROVE.BIN",
+        "INFOCH.BIN"
+      ]
+    },
+    {
+      "op": "0x21f",
+      "dec": 543,
+      "count": 9,
+      "pct": 0.013,
+      "examples": [
+        "DEBUGADV.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0130.BIN",
+        "SC0710.BIN"
+      ]
+    },
+    {
+      "op": "0x64",
+      "dec": 100,
+      "count": 5,
+      "pct": 0.007,
+      "examples": [
+        "CGMODE.BIN",
+        "HMODE.BIN",
+        "INFO.BIN",
+        "INIT2.BIN",
+        "SELACT.BIN"
+      ]
+    },
+    {
+      "op": "0x230",
+      "dec": 560,
+      "count": 5,
+      "pct": 0.007,
+      "examples": [
+        "DEBUGADV.BIN"
+      ]
+    },
+    {
+      "op": "0x5b",
+      "dec": 91,
+      "count": 5,
+      "pct": 0.007,
+      "examples": [
+        "FIELD.BIN",
+        "HISTORY.BIN"
+      ]
+    },
+    {
+      "op": "0x12c",
+      "dec": 300,
+      "count": 4,
+      "pct": 0.006,
+      "examples": [
+        "BTL.BIN",
+        "FIELD.BIN",
+        "SALLY.BIN"
+      ]
+    },
+    {
+      "op": "0x1f8",
+      "dec": 504,
+      "count": 4,
+      "pct": 0.006,
+      "examples": [
+        "CGMODE.BIN",
+        "HMODE.BIN",
+        "SAVE.BIN"
+      ]
+    },
+    {
+      "op": "0xa1",
+      "dec": 161,
+      "count": 4,
+      "pct": 0.006,
+      "examples": [
+        "FIELD.BIN",
+        "FORT.BIN",
+        "INFO.BIN",
+        "TITLE.BIN"
+      ]
+    },
+    {
+      "op": "0x1f7",
+      "dec": 503,
+      "count": 4,
+      "pct": 0.006,
+      "examples": [
+        "SC0000.BIN",
+        "SC0130.BIN",
+        "SC0240.BIN"
+      ]
+    },
+    {
+      "op": "0x135",
+      "dec": 309,
+      "count": 3,
+      "pct": 0.004,
+      "examples": [
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0x1fa",
+      "dec": 506,
+      "count": 3,
+      "pct": 0.004,
+      "examples": [
+        "HISTORY.BIN",
+        "MENU.BIN",
+        "SAVE.BIN"
+      ]
+    },
+    {
+      "op": "0x192",
+      "dec": 402,
+      "count": 3,
+      "pct": 0.004,
+      "examples": [
+        "INPUTNAME.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x53",
+      "dec": 83,
+      "count": 2,
+      "pct": 0.003,
+      "examples": [
+        "CGMODE.BIN",
+        "HMODE.BIN"
+      ]
+    },
+    {
+      "op": "0x136",
+      "dec": 310,
+      "count": 2,
+      "pct": 0.003,
+      "examples": [
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0x5e",
+      "dec": 94,
+      "count": 1,
+      "pct": 0.001,
+      "examples": [
+        "BTL.BIN"
+      ]
+    },
+    {
+      "op": "0x243",
+      "dec": 579,
+      "count": 1,
+      "pct": 0.001,
+      "examples": [
+        "CALLBACK_LOAD.BIN"
+      ]
+    }
+  ],
+  "string_consuming_ops": [
+    {
+      "op": "0x0",
+      "dec": 0,
+      "count": 30537,
+      "pct": 80.407,
+      "examples": [
+        "ADDEXP.BIN",
+        "ADDRANDOMITEM.BIN",
+        "ADDSKILL.BIN",
+        "AIM.BIN",
+        "ALCHEMY.BIN"
+      ]
+    },
+    {
+      "op": "0x1a7",
+      "dec": 423,
+      "count": 1955,
+      "pct": 5.148,
+      "examples": [
+        "ADDEN.BIN",
+        "BTANINIT.BIN",
+        "BTL.BIN",
+        "BUNKI.BIN",
+        "CALLBACK_LOAD.BIN"
+      ]
+    },
+    {
+      "op": "0x9",
+      "dec": 9,
+      "count": 364,
+      "pct": 0.958,
+      "examples": [
+        "DRAWOBJ.BIN",
+        "INPUTNAME.BIN",
+        "RTN_B001.BIN",
+        "RTN_M008.BIN",
+        "RTN_M009.BIN"
+      ]
+    },
+    {
+      "op": "0x1a5",
+      "dec": 421,
+      "count": 203,
+      "pct": 0.535,
+      "examples": [
+        "AIM.BIN",
+        "ALCHEMY.BIN",
+        "BTL.BIN",
+        "BUNKI.BIN",
+        "CAMP.BIN"
+      ]
+    },
+    {
+      "op": "0x278",
+      "dec": 632,
+      "count": 140,
+      "pct": 0.369,
+      "examples": [
+        "CAMP.BIN",
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "FIELD.BIN",
+        "FORT.BIN"
+      ]
+    },
+    {
+      "op": "0x6be",
+      "dec": 1726,
+      "count": 134,
+      "pct": 0.353,
+      "examples": [
+        "DEBUGADV.BIN",
+        "DEBUGADV2.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN"
+      ]
+    },
+    {
+      "op": "0x7da",
+      "dec": 2010,
+      "count": 110,
+      "pct": 0.29,
+      "examples": [
+        "ALCHEMY.BIN",
+        "BUNKI.BIN",
+        "BUNKIMOVE.BIN",
+        "EVOLVE.BIN",
+        "FIELD.BIN"
+      ]
+    },
+    {
+      "op": "0x27b9",
+      "dec": 10169,
+      "count": 100,
+      "pct": 0.263,
+      "examples": [
+        "FIELD.BIN",
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27bb",
+      "dec": 10171,
+      "count": 100,
+      "pct": 0.263,
+      "examples": [
+        "FIELD.BIN",
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27bc",
+      "dec": 10172,
+      "count": 100,
+      "pct": 0.263,
+      "examples": [
+        "FIELD.BIN",
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27ba",
+      "dec": 10170,
+      "count": 99,
+      "pct": 0.261,
+      "examples": [
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN",
+        "STINIT.BIN"
+      ]
+    },
+    {
+      "op": "0x26b4",
+      "dec": 9908,
+      "count": 71,
+      "pct": 0.187,
+      "examples": [
+        "CCINIT.BIN"
+      ]
+    },
+    {
+      "op": "0x27a",
+      "dec": 634,
+      "count": 25,
+      "pct": 0.066,
+      "examples": [
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27b",
+      "dec": 635,
+      "count": 25,
+      "pct": 0.066,
+      "examples": [
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27c",
+      "dec": 636,
+      "count": 25,
+      "pct": 0.066,
+      "examples": [
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x27d",
+      "dec": 637,
+      "count": 25,
+      "pct": 0.066,
+      "examples": [
+        "ROUND.BIN",
+        "SC0310.BIN",
+        "SC0320.BIN",
+        "SC0450.BIN"
+      ]
+    },
+    {
+      "op": "0x276",
+      "dec": 630,
+      "count": 18,
+      "pct": 0.047,
+      "examples": [
+        "SAVE.BIN",
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN",
+        "SC0040.BIN"
+      ]
+    },
+    {
+      "op": "0x277",
+      "dec": 631,
+      "count": 16,
+      "pct": 0.042,
+      "examples": [
+        "SC0000.BIN",
+        "SC0010.BIN",
+        "SC0020.BIN",
+        "SC0040.BIN",
+        "SC0050.BIN"
+      ]
+    },
+    {
+      "op": "0x849",
+      "dec": 2121,
+      "count": 15,
+      "pct": 0.039,
+      "examples": [
+        "ADDSKILL.BIN",
+        "CHMENU.BIN",
+        "SAVE.BIN",
+        "SBUNKI.BIN",
+        "SBUNKIMOVE.BIN"
+      ]
+    },
+    {
+      "op": "0x279",
+      "dec": 633,
+      "count": 11,
+      "pct": 0.029,
+      "examples": [
+        "GAMESTART.BIN",
+        "INIT2.BIN",
+        "INPUTNAME.BIN",
+        "SALLY.BIN"
+      ]
+    },
+    {
+      "op": "0x57a",
+      "dec": 1402,
+      "count": 7,
+      "pct": 0.018,
+      "examples": [
+        "SAVE.BIN"
+      ]
+    },
+    {
+      "op": "0xd",
+      "dec": 13,
+      "count": 6,
+      "pct": 0.016,
+      "examples": [
+        "ALCHEMY.BIN",
+        "EVOLVE.BIN",
+        "INPUTNAME.BIN",
+        "SELSTAGE.BIN",
+        "SUMMON.BIN"
+      ]
+    },
+    {
+      "op": "0x1",
+      "dec": 1,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "ADDEXP.BIN",
+        "FIELD.BIN",
+        "SELSTAGE.BIN",
+        "SETCH.BIN",
+        "STUDY.BIN"
+      ]
+    },
+    {
+      "op": "0xc",
+      "dec": 12,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "CGMODE.BIN",
+        "DRAWCHP.BIN",
+        "INPUTNAME.BIN",
+        "RTN_B001.BIN",
+        "RTN_M018.BIN"
+      ]
+    },
+    {
+      "op": "0x18",
+      "dec": 24,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "DRAWENP.BIN",
+        "INPUTNAME.BIN"
+      ]
+    },
+    {
+      "op": "0x27",
+      "dec": 39,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "DRAWENP.BIN",
+        "INPUTNAME.BIN"
+      ]
+    },
+    {
+      "op": "0x36",
+      "dec": 54,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "DRAWENP.BIN",
+        "INPUTNAME.BIN"
+      ]
+    },
+    {
+      "op": "0x2",
+      "dec": 2,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "FIELD.BIN",
+        "INPUTNAME.BIN",
+        "STUDY.BIN"
+      ]
+    },
+    {
+      "op": "0x135",
+      "dec": 309,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "INPUTNAME.BIN"
+      ]
+    },
+    {
+      "op": "0x407",
+      "dec": 1031,
+      "count": 5,
+      "pct": 0.013,
+      "examples": [
+        "SELSTAGE.BIN"
+      ]
+    }
+  ],
+  "after_0x09_prefix": [
+    {
+      "op": "0x0",
+      "count": 257496
+    },
+    {
+      "op": "0x1",
+      "count": 29591
+    },
+    {
+      "op": "0x2",
+      "count": 12952
+    },
+    {
+      "op": "0x3",
+      "count": 6647
+    },
+    {
+      "op": "0x9",
+      "count": 4526
+    },
+    {
+      "op": "0x4",
+      "count": 4059
+    },
+    {
+      "op": "0x6",
+      "count": 3769
+    },
+    {
+      "op": "0x5",
+      "count": 3703
+    },
+    {
+      "op": "0x8",
+      "count": 3029
+    },
+    {
+      "op": "0x7",
+      "count": 2649
+    },
+    {
+      "op": "0xc",
+      "count": 2586
+    },
+    {
+      "op": "0xa",
+      "count": 2486
+    },
+    {
+      "op": "0xb",
+      "count": 2379
+    },
+    {
+      "op": "0x13e3d",
+      "count": 2024
+    },
+    {
+      "op": "0x55",
+      "count": 1604
+    },
+    {
+      "op": "0xf",
+      "count": 1516
+    },
+    {
+      "op": "0x3f7",
+      "count": 1157
+    },
+    {
+      "op": "0xe",
+      "count": 1028
+    },
+    {
+      "op": "0xd",
+      "count": 950
+    },
+    {
+      "op": "0x31",
+      "count": 823
+    }
+  ],
+  "confirmed": {
+    "0x02": "string-pointer operand tag (dword 0x02 followed by dword offset-into-body)",
+    "0x71": "T1 label/call-target record tag [0x71,0,val]",
+    "0x03": "T2 data/var record tag",
+    "0x8F": "T3 line-index record tag [0x8F,0,line#]"
+  }
+}
