@@ -1,0 +1,139 @@
+# vm-map/globals.toml -- CANONICAL living global-variable registry (hand-edited).
+# Generated artifacts (build/globals.json, docs/global-reference.md) come from this file via
+# tools/globals_build.py --build. Do not edit those. Skeletons are appended by
+# tools/story_flags.py --bootstrap; enrich each entry as we investigate.
+# See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
+[meta]
+note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
+
+[[global]]
+address = "0x3234"
+name = "chapter_mode"
+category = "story-flag"
+type = "int"
+value_domain = "1..9"
+usage = "Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62ccf"]
+
+[[global]]
+address = "0xa57"
+name = "lily_form_a"
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "Lily current-form flag A. Exactly one of form A/B/C is 1; gates form-specific voiced dialogue (seeding 0xa57=1 -> SC0000 186->229 lines). Set externally (menu/save), no static writer."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xa58", "0xa59"]
+
+[[global]]
+address = "0xa58"
+name = "lily_form_b"
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "Lily current-form flag B. See lily_form_a."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xa57", "0xa59"]
+
+[[global]]
+address = "0xa59"
+name = "lily_form_c"
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "Lily current-form flag C. See lily_form_a."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xa57", "0xa58"]
+
+[[global]]
+address = "0x6c9"
+name = "ui_toggle_0"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "ADV-chrome hotspot button toggle (op 0x90 site, near-universal across scenes)."
+source = "investigation"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6ca"
+name = "ui_toggle_1"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+source = "investigation"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6cb"
+name = "ui_toggle_2"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+source = "investigation"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6cc"
+name = "ui_toggle_3"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+source = "investigation"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6cd"
+name = "ui_toggle_4"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+source = "investigation"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x62ccf"
+name = "scjump_decision_out"
+category = "choice-output"
+type = "int"
+value_domain = "?"
+usage = "One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode."
+source = "inference"
+confidence = "low"
+depends_on = []
+
+[[global]]
+address = "0xeff75"
+name = "current_entity_index_hi"
+category = "index-pointer"
+type = "int"
+value_domain = "row index"
+usage = "High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector."
+source = "inference"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x152616"
+name = "current_entity_index"
+category = "index-pointer"
+type = "int"
+value_domain = "row index"
+usage = "Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses)."
+source = "investigation"
+confidence = "med"
+depends_on = []
