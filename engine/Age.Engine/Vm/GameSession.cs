@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 
@@ -37,6 +38,29 @@ public sealed class GameSession
 
         return new SceneResult(vm.Emitted.ToList(), vm.HaltReason, vm.Steps);
     }
+
+    /// <summary>Serialize the persistent state to JSON (globals + string globals, keyed by decimal address).
+    /// Lets an expensive booted state be snapshotted and reused; foundation for save-file work.</summary>
+    public string ToJson()
+    {
+        var snap = new StateSnapshot(
+            Globals.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+            GlobalStrings.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value));
+        return JsonSerializer.Serialize(snap,
+            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+    }
+
+    /// <summary>Rebuild a session from a <see cref="ToJson"/> snapshot.</summary>
+    public static GameSession FromJson(string json)
+    {
+        var s = new GameSession();
+        var snap = JsonSerializer.Deserialize<StateSnapshot>(json) ?? new StateSnapshot(new(), new());
+        foreach (var kv in snap.Globals) s.Globals[int.Parse(kv.Key)] = kv.Value;
+        foreach (var kv in snap.Strings) s.GlobalStrings[int.Parse(kv.Key)] = kv.Value;
+        return s;
+    }
+
+    private sealed record StateSnapshot(Dictionary<string, long> Globals, Dictionary<string, string> Strings);
 }
 
 /// <summary>The observable result of running one scene into a <see cref="GameSession"/>.</summary>

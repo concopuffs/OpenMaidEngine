@@ -77,7 +77,12 @@ if (args[0] == "play")
     var userScenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
     if (userScenes.Count == 0) { Console.WriteLine("usage: play [--boot] <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
     var scenes = (boot ? bootScripts.Concat(userScenes) : userScenes).ToList();
-    var session = new GameSession();
+    // --state <file>: start from a saved snapshot (e.g. a pre-booted state) instead of booting fresh.
+    string? StateArg(string flag) { int i = Array.IndexOf(args, flag); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
+    var loadState = StateArg("--state");
+    var saveState = StateArg("--save-state");
+    var session = loadState != null ? GameSession.FromJson(File.ReadAllText(loadState)) : new GameSession();
+    if (loadState != null) Console.WriteLine($"[state] loaded {session.Globals.Count} globals from {loadState}");
     foreach (var s in args.Skip(1).Where(a => a.Contains('=')))
     {
         var kv = s.Split('=');
@@ -94,6 +99,7 @@ if (args[0] == "play")
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
     }
     Console.WriteLine($"total: {totalLines} lines across {scenes.Count} scene(s); {session.Globals.Count} globals carried");
+    if (saveState != null) { File.WriteAllText(saveState, session.ToJson()); Console.WriteLine($"[state] saved -> {saveState}"); }
     return 0;
 }
 

@@ -91,6 +91,30 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void SnapshotRoundTripsState()
+    {
+        var s = new GameSession();
+        s.Seed(0x10, 42); s.Seed(0x20, -7); s.SeedString(0x30, "リリィ");
+        var t = GameSession.FromJson(s.ToJson());
+        Assert.Equal(42, t.Globals[0x10]);
+        Assert.Equal(-7, t.Globals[0x20]);
+        Assert.Equal("リリィ", t.GlobalStrings[0x30]);
+        Assert.Equal(s.Globals.Count, t.Globals.Count);
+    }
+
+    [Fact]
+    public void BootedStateSurvivesSnapshot()
+    {
+        var s = new GameSession();
+        s.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new CaptureHost());
+        var t = GameSession.FromJson(s.ToJson());   // snapshot the expensive booted state, rebuild
+        Assert.Equal("飛行", t.GlobalStrings[0x23a3]);
+        Assert.Equal(30, t.Globals[0xa6e5b]);
+        Assert.Equal(s.Globals.Count, t.Globals.Count);
+        Assert.Equal(s.GlobalStrings.Count, t.GlobalStrings.Count);
+    }
+
+    [Fact]
     public void SeedingFormFlagChangesBehavior()
     {
         // Lily's lines are gated on form flags G[0xa57/8/9]; unseeded => all skipped (0 voices on her lines).
