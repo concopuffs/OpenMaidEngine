@@ -245,6 +245,40 @@ of the above. **Watch-items:** BGM looping is whole-file for now (Eushully OGGs 
 `LOOPLENGTH` Vorbis comments — refine later); `play-sound-effect`(0xb4, argc 2) left stubbed (arg roles
 unconfirmed).
 
+### A2b-Geometry — `0x208` keystone + blit compositor (2026-07-06)
+
+Spec/plan: `docs/superpowers/{specs,plans}/2026-07-06-a2b-graphics-geometry*.md`. **Shipped & verified:**
+the CG-load subroutine (`SC0000.asm` `label_12649`) computes all sprite/background geometry **in
+bytecode** (`add`/`sub`/`div`/`lookup-array`); the only missing native primitive was **`0x208 =
+get-texture-size(slot) → (out_w, out_h)`**. Implemented as a real VM op (`IHost.GetTextureSize`, writes
+the two output globals); non-Godot hosts return `(0,0)` so trace/selftest parity holds (engine 11/11,
+`--selftest` byte-identical). Replaced the TextureRect-per-slot approximation with a faithful **800×600
+immediate-mode blit compositor** (`Main.BlitSlot`: `_screen.BlitRect(src rect → dst)` in execution order,
+one displayed `TextureRect`; source dims read from the pre-converted BMP header on the VM thread via
+`BmpHeader.ReadDims`, so the bytecode's geometry math sees real sizes synchronously). New diagnostics:
+`Age.Cli gfx <SCENE>` (headless numeric oracle — dumps per-draw resolved file + computed geometry) and
+`godot … -- --shot <png> [--shot-page N]` (page-gated screenshot capture). **The opening event-CG sequence
+renders correctly** — full-screen CG at `(0,0)` with dialogue over it (verified by screenshot, SC0000
+pages 1/3).
+
+**Slot-0 seed (bug found & fixed via the gfx oracle + user eyeball):** slot 0 is the **primary/screen
+surface** (800×600), normally created by engine-boot init the single-scene harness skips. Cold, `0x208`
+measured `0×0`, and the anchor-preserve math (`base' = center − (w_new/2, h_new)`) then wrote a corrupted
+`(−400,−600)` into the **persistent base globals** — so the first CG was grey and CG2 inherited the
+corruption. Fix: seed `_slotDims[0] = (800,600)` (and record `create-texture(w,h)` dims) so the first CG's
+anchor stays an identity. This is the faithful stand-in for the skipped boot-time primary-surface creation.
+
+**DEFERRED (next chunk) — the sprite/background anchor-record subsystem.** Everything blits through slot 0
+as an immediate-mode canvas; the anchor-preserve base globals **accumulate drift** across textures of
+*different* sizes (same-size 800×600 CGs stay put; the first `BG*` 800×500 / `AE*` 800×800 / sprite starts
+a drift that accumulates — `BG030A→(300,500)`, next→`(450,100)`, →`(800,350)`…, marching bottom-right).
+The real engine doesn't drift because it stores each element's geometry in a **per-object record** via
+`0x217/0x218/0x21a` (currently no-op) and restores it (the `0x12683` if-branch reading the `0x3239` record
+table). Implementing that store/restore (+ the record layout, likely Frida-confirmed) is the fix for
+backgrounds **and** sprites together. Fades/alpha (`AE*`, `0x202/0x203`) and green chromakey remain
+deferred as before (the compositor is built to accept alpha later). Also out: true multi-surface (dest
+handle is collapsed onto the screen). The full-screen opening path is unaffected by any of these.
+
 ---
 
 ## Risks / open questions for A0
