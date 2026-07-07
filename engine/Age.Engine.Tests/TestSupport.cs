@@ -8,11 +8,9 @@ using Age.Engine.Model;
 /// provider for synthetic call-script targets.</summary>
 internal sealed class RecordingHost : IHost
 {
-    public int Waits, CallScripts;
+    public int Waits;
     public readonly List<(int Offset, string Text)> Lines = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
-    public void CallScript(long id) => CallScripts++;
-    public void OnStub(int opcode) { }
     public void WaitForInput() => Waits++;
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) { }

@@ -28,8 +28,6 @@ public class GameSessionTests
         public int Voices;
         public List<int> Emitted = new();
         public void ShowText(int o, string t) => Emitted.Add(o);
-        public void CallScript(long id) { }
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }

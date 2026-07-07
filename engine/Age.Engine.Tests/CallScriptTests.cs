@@ -13,10 +13,7 @@ public class CallScriptTests
 
     private sealed class NullHost : IHost
     {
-        public List<long> Calls = new();
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) => Calls.Add(id);
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }

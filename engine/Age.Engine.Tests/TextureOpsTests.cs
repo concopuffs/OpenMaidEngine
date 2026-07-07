@@ -12,8 +12,6 @@ public class TextureOpsTests
         public List<(int slot, int w, int h)> Draws = new();
         public int Creates;
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) { }
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int slot, int w, int h) => Creates++;
         public void SetTexture(long resId, int slot) => Sets.Add((resId, slot));

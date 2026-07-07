@@ -7,10 +7,7 @@ public class CallScriptIntegrationTests
 {
     private sealed class NullHost : IHost
     {
-        public int CallScripts;
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) => CallScripts++;
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }

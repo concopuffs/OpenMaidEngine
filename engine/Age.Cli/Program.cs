@@ -17,7 +17,7 @@ if (args[0] == "run")
     var runHost = new CaptureHost();
     var vm = new VirtualMachine(script, table, runHost, null, provider);
     vm.Run();
-    Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {runHost.CallScriptCount} call-scripts (halt: {vm.HaltReason})");
+    Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {vm.CallScriptDispatches} call-scripts (halt: {vm.HaltReason})");
     foreach (var (off, text, scr) in vm.Emitted.Take(30)) Console.WriteLine($"  [{scr} 0x{off:x}] {text}");
     var sources = vm.Emitted.Select(e => e.Script).Distinct().ToList();
     Console.WriteLine($"source scripts ({sources.Count}): {string.Join(", ", sources)}");
@@ -213,8 +213,6 @@ sealed class AudioTraceHost : IHost
             : $"{e.Archive} {e.Name}" + (ResourceMap.AudioPath(e) == null ? " [NO FILE]" : "")));
     }
     public void ShowText(int offset, string text) { }
-    public void CallScript(long id) { }
-    public void OnStub(int opcode) { }
     public void WaitForInput() { }
     public void CreateTexture(int slot, int width, int height) { }
     public void SetTexture(long resourceId, int slot) { }
@@ -263,8 +261,6 @@ sealed class GfxTraceHost : IHost
         Events.Add($"create-texture slot={slot} {width}x{height}");
     }
     public void ShowText(int offset, string text) { }
-    public void CallScript(long id) { }
-    public void OnStub(int opcode) { }
     public void WaitForInput() { }
     public void PlayBgm(long id) { }
     public void PlayVoice(long id) { }
