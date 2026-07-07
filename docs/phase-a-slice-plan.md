@@ -344,7 +344,23 @@ subroutines makes their global-writes drive caller loops that headless can't bre
 `WaitForInput` is a no-op) — the known state-divergence, not a call-script bug (loops hit STEP-LIMIT,
 not the depth cap → recursion is bounded correctly).
 
-**Follow-ups (out of this slice):** wire the provider into the Godot play path (keep `--selftest`
-provider-less to preserve the 186-offset gate); optionally give the `audio`/`gfx` diagnostics a
-provider once their stub-era baselines are revisited; `decision→scene` (scene chaining) rides this same
-loader once the SCJUMP decision→scene-id native hop is reversed.
+**✅ Godot wired + testing approach corrected (2026-07-07, follow-up).** The provider is now injected
+**everywhere** — no path runs with call-script disabled:
+- **Godot play path** gets `Sys4ScriptProvider`, so subroutines execute live on screen (and the
+  headless input-wait loops break on real player input, which is why headless-only scenes STEP-LIMIT).
+- **Testing principle (user-directed): synthesize test data; never disable a feature to keep a real
+  scene matching a frozen number.** New `Age.Engine/Sys4/ScriptAssembler` (code+strings → `Script`;
+  also Phase-D modding-assembler groundwork). `SyntheticSceneTests` runs an assembled scene (show-text
+  + wait-for-input + real nested call-script + shared-global return) with full handling and asserts its
+  exact output. `WaitForInputTests` reworked onto a synthesized two-page scene. `RecoverTests` keeps its
+  ISA-litmus role with call-script handling ON via a no-op subroutine **double** (isolates the ISA from
+  the real subroutines' state deps). **`TraceDiffTests` retired** (it matched the C# VM to vm0.py's
+  stubbed trace; vm0 is off oracle duty and we don't gate handling to keep it matching).
+- **Godot `--selftest` rewritten:** was "run SC0000 stubbed, match vm0-trace(186)"; now runs a
+  synthesized scene through the Godot thread/semaphore/CallDeferred plumbing and asserts it matches a
+  **live headless run** of the same scene — full handling, no frozen golden, no vm0 dependency. Verified:
+  `godot --headless -- --selftest` → "threaded host matches headless (3 lines, full handling)".
+
+**Remaining follow-ups:** optionally give the `audio`/`gfx` CLI diagnostics a provider (they still run
+provider-less); `decision→scene` (scene chaining) rides this same loader once the SCJUMP
+decision→scene-id native hop is reversed.
