@@ -69,4 +69,27 @@ public class GfxCommandBufferTests
         vm.Run();
         Assert.Equal(0x80_112233L, vm.Gfx.TryGet(0x1000)!.Color);
     }
+
+    [Fact]
+    public void TwoObjectsKeepIndependentGeometry_NoDrift()
+    {
+        var t = T();
+        // The drift's essence: two different objects must NOT share geometry (pre-fix they collapsed to
+        // slot 0 and cross-contaminated). Set V24 on A, then on B, then read both back — each intact.
+        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 0x2000),
+            MovGI(3, 100), MovGI(4, 500), MovGI(5, 0),
+            (0x219, new[] { G(1), G(3), G(4), G(5) }),          // set V24 on A = (100,500,0)
+            MovGI(3, 300), MovGI(4, 100),
+            (0x219, new[] { G(2), G(3), G(4), G(5) }),          // set V24 on B = (300,100,0)
+            (0x21a, new[] { G(1), G(10), G(11), G(12) }),       // read A back
+            (0x21a, new[] { G(2), G(20), G(21), G(22) }),       // read B back
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        Assert.Equal((100L, 500L), (vm.Globals[10], vm.Globals[11]));   // A intact
+        Assert.Equal((300L, 100L), (vm.Globals[20], vm.Globals[21]));   // B intact, no cross-contamination
+    }
 }
