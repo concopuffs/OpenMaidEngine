@@ -19,6 +19,7 @@ public partial class Main : Godot.Control
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
+    private GodotTraceSink _trace = null!;
     private volatile bool _done;
     private bool _ended;
     private bool _selftest;
@@ -102,7 +103,8 @@ public partial class Main : Godot.Control
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
         _host = new GodotAdvHost(this, ResourceMap.Load(), scene);
-        _vm = new VirtualMachine(script, table, _host, null, provider);
+        _trace = new GodotTraceSink();
+        _vm = new VirtualMachine(script, table, _host, null, provider, _trace);
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // seed initial state before running
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
@@ -203,7 +205,7 @@ public partial class Main : Godot.Control
     private void ReportSubroutines()
     {
         var ids = new List<long>();
-        while (_host.Dispatched.TryDequeue(out var id)) ids.Add(id);
+        while (_trace.CallScripts.TryDequeue(out var id)) ids.Add(id);
         if (ids.Count == 0) { GD.Print("[subroutines] none dispatched on this path"); return; }
         var distinct = new List<string>();
         foreach (var id in ids) { var h = "0x" + id.ToString("x"); if (!distinct.Contains(h)) distinct.Add(h); }
