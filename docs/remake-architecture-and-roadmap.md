@@ -174,6 +174,18 @@ separate investigations:
 - **Breakpoints, single-step, var-bank inspection, opcode/script/global coverage**; and because VM
   state is just variable banks + a program counter, cheap **snapshot / rewind** (time-travel
   debugging nearly falls out of the design).
+- **State-divergence differ** *(backlog — the payoff consumer of the trace facility).* Builds on the
+  landed diagnostics seam (`Age.Engine/Diagnostics/ITraceSink`; spec/plan `docs/superpowers/{specs,
+  plans}/2026-07-07-engine-diagnostics*`): align our per-scene trace against a reference stream (a Frida
+  capture of the real engine's pc/branch sequence, a known-good seeded run, or the same scene ±a
+  candidate seed) and report the **first instruction where control forks** plus the **global that fed
+  the branch** — turning "the opening loops/​drifts somewhere in state" into "fork at `jcc g[0x…]`; seed
+  this flag." The fine-grained successor to `Age.Cli sweep 0xADDR=VAL` (which only reports *which* scenes
+  change ±seed, not *where/why*); it directly attacks the state-divergence root cause behind the 13
+  STEP-LIMIT scenes, the gfx geometry drift, and the form-gated silences. Requires: `--trace-steps`
+  granularity (have it), robust sequence alignment (LCS-style, not naive zip — the real work), and
+  treating native-nondeterministic ops (rand-like `0x60` in SCJUMP) as expected-to-differ. Enables the
+  "differential checks against known-correct behavior" named in the bootstrap order below.
 
 **The hard caveat: the instrument is only as trustworthy as the VM is correct.** A VM that executes
 *wrong* produces *wrong* observations — and circularly so: you would "learn" false facts about game
