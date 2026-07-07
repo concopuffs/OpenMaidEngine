@@ -57,9 +57,11 @@ class Frame:
 
 
 class VM:
-    def __init__(self, scr: sys4load.Sys4Script, verbose=False, emit_cap=EMIT_CAP):
+    def __init__(self, scr: sys4load.Sys4Script, verbose=False, emit_cap=EMIT_CAP, record_trace=False):
         self.scr = scr
         self.verbose = verbose
+        self.record_trace = record_trace
+        self.trace = []                           # executed code offsets (only if record_trace)
         self.code = scr.instructions
         self.by_off = {ins.offset: idx for idx, ins in enumerate(self.code)}
         self.G = collections.defaultdict(int)     # global-int bank (flat address space)
@@ -67,6 +69,7 @@ class VM:
         self.fr = Frame()
         self.callstack = []                       # return indices for call/ret
         self.text = []                            # captured show-text as (str_offset, text)
+        self.settex = []                          # set-texture calls: (code_offset, resId, slot)
         self.emit_seen = collections.Counter()    # per-offset emit count (loop-guard)
         self.emit_cap = emit_cap
         self.halt_reason = None                   # 'exit' | 'LOOP:...' | 'STEP-LIMIT' | 'ret-underflow'
@@ -135,6 +138,8 @@ class VM:
             ins = self.code[pc]
             op = ins.opcode
             self.exec_count[op] += 1
+            if self.record_trace:
+                self.trace.append(ins.offset)
             nxt = self.step(ins, pc)
             if nxt is None:                 # halt
                 break
@@ -212,6 +217,12 @@ class VM:
             return pc + 1
         if lbl in ("end-text-line", "wait-for-input", "set-font", "comment",
                    "display-furigana", "dev_ukn"):
+            return pc + 1
+
+        if lbl == "set-texture":                        # 0x1f9 (resId, slot, flag) — trace the load
+            resid = self.read(a[0]) if a else None
+            slot = self.read(a[1]) if len(a) > 1 else None
+            self.settex.append((ins.offset, resid, slot, len(self.trace)))   # +trace index
             return pc + 1
 
         if op in MARKERS:                               # classified no-op markers
@@ -426,6 +437,34 @@ def run_trace(out_path):
     return 0
 
 
+def run_settex(name):
+    """Execute a scene and dump its set-texture(resId) trace in execution order.
+
+    This is the VM side of the asset-resolution scope-selector correlation
+    (docs/asset-resolution-re.md): each entry is {i, off, resId, slot}, and aligning this
+    ordered resId sequence with the game's Frida load order pins every load to a bytecode
+    offset -> localizes where the active CG package/scope switches.
+    """
+    scripts = paths.scripts()
+    key = name.upper() if name.upper().endswith(".BIN") else name.upper() + ".BIN"
+    if key not in scripts:
+        raise SystemExit(f"scene not found: {name}")
+    vm = VM(sys4load.load(scripts[key]), record_trace=True)
+    vm.run()
+    out = paths.BUILD / f"settex-{key.removesuffix('.BIN')}.json"
+    rows = [{"i": i, "off": f"0x{off:x}", "resId": rid, "slot": slot, "trace_i": ti}
+            for i, (off, rid, slot, ti) in enumerate(vm.settex)]
+    out.write_text(json.dumps({"scene": key, "halt": vm.halt_reason, "steps": vm.steps,
+                               "count": len(rows), "settex": rows,
+                               "trace": [f"0x{o:x}" for o in vm.trace]},
+                              ensure_ascii=False), encoding="utf-8")
+    print(f"{key}: {len(rows)} set-texture calls (halt={vm.halt_reason}, steps={vm.steps}) "
+          f"-> {out.relative_to(paths.REPO)}")
+    for r in rows[:20]:
+        print(f"  #{r['i']:<3} {r['off']:>8}  resId={r['resId']} (0x{r['resId']:x})  slot={r['slot']}")
+    return 0
+
+
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
     if not argv or argv[0] == "--test":
@@ -434,6 +473,8 @@ def main(argv=None):
         return run_sweep(limit=int(argv[1]) if len(argv) > 1 else None)
     if argv[0] == "--scene":
         return run_one_scene(argv[1])
+    if argv[0] == "--settex":
+        return run_settex(argv[1])
     if argv[0] == "--trace":
         return run_trace(argv[1])
     return run_file(argv[0])

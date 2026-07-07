@@ -31,8 +31,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
 - **The resolution chain is opaque statically.** `CGINIT` (`build/data/CGINIT.json`) is a
   925-column *numeric* record table (row-major, sparse) — **not** an id→filename map.
   **`SYS4INI.BIN` (magic `S4IC422`) is the authoritative asset index** the game + `BinExtractALF`
-  use (name ↔ archive ↔ offset ↔ size), but filenames are **not stored as plain ASCII** (an
-  `EV001AA` search misses), so it needs S4IC-format RE to parse.
+  use (name ↔ archive ↔ offset ↔ size). Filenames aren't plain ASCII because the whole directory
+  is **LZSS-compressed** (not encrypted). **DONE (2026-07-06):** `tools/parse_sys4ini.py` parses it
+  → `build/asset-index.json` (13206 entries). See step 1 below.
 - **Frida file-I/O is noisy.** `ReadFile` hooks on `DATA2.ALF` capture reads during the opening, but
   the offsets/spans don't line up with extracted AGF sizes → the game likely **memory-maps** the
   archives (so `ReadFile` offsets are OS paging, not clean per-asset loads) and/or uses async reads.
@@ -40,16 +41,46 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
 
 ## The RE plan (ordered)
 
-1. **Parse `SYS4INI` (S4IC422) → an asset index** `{name, archive, offset, size}`. *Reusable and
-   bounded* — it names every asset in every DATA*.ALF, gives archive-offset→name (to rescue Frida
-   offsets), and is the **answer key** for step 2. Deliverable: `tools/parse_sys4ini.py` +
-   `build/asset-index.json`. (Format reference: asmodean's `exs4alf`, which `BinExtractALF` is based on.)
-2. **Crack `resId → filename`.** With SYS4INI as the answer key, either (a) **order-correlate**: run
-   SC0000 in our engine to get the `set-texture(resId)` sequence, capture the real game's asset-load
-   order via a *reliable* Frida hook, and align them; or (b) **hook the internal load-by-id
-   function** directly (find via the opcode dispatch for `0x1f9`) to read `resId → name` at the
-   source. Likely underlying rule: `resId → CGINIT/table → name`. Deliverable: the mechanism +
-   `vm-map/resources.json` (or a generated map) seeding at least SC0000's slideshow.
+1. **Parse `SYS4INI` (S4IC422) → an asset index** `{name, archive, offset, size}`. **✅ DONE
+   (2026-07-06).** `tools/parse_sys4ini.py` → `build/asset-index.json`: 5 archives (DATA1–5),
+   13206 real entries (2 `@` placeholders skipped). **Format:** `uint32 packed_size @0x134`, then an
+   LZSS stream at `0x138` running to EOF (GARbro-style: 0x1000 zero-filled ring buffer, init pos
+   0xFEE, control bits LSB→MSB, 1=literal / 0=two-byte backref `off=(hi&0xf0)<<4|lo`, `len=3+(hi&0xf)`).
+   Decompresses to `uint32 arc_count`, `arc_count × char[256]` archive names, `uint32 file_count`,
+   then `file_count ×` 80-byte records `{char name[64]; u32 arc_id, file_number, offset, size}`.
+   **Validated:** decompressed length (1058783) equals the stored size dword at `0x12c`; per-archive
+   counts match the `extracted/` ground truth exactly (DATA2=985, DATA3=39, DATA4=9733, DATA5=210);
+   all 13206 `offset+size` fit inside their real `.ALF`; 837 name-matched files → 0 size mismatches.
+   `files[]` preserves directory order (feeds step 2's order-correlation). Re-run:
+   `py -3.11 -X utf8 tools/parse_sys4ini.py --check`. (Ref: asmodean's `exs4alf` / GARbro Eushully `ArcALF.cs`.)
+2. **Resolve `resId → asset file`.** **✅ SOLVED (2026-07-06) — fully static & general; NO runtime capture.**
+
+   **The rule:** SYS4INI's file list is organized into **SECTIONS, one per scene** — each is a
+   `SCxxxx.BIN` script entry followed by that scene's **asset MANIFEST**: every asset it references,
+   across *all* archives and types (EV/BG/CS/AE graphics **and** OGG/WAV audio), interleaved in usage
+   order. `file_number` is the **0-based index within the section**. So:
+
+   > **`resId → files[ section_base(scene) + resId ]`**, where `section_base` = the start of the SYS4INI
+   > section containing the scene's `SCxxxx.BIN`.
+
+   Unified for `set-texture(resId)`, `play-bgm(id)`, `play-voice(id)` — one manifest. **Tool:**
+   `tools/resolve_asset.py --build` → `build/asset-sections.json` (359 sections, 136 scenes);
+   `resolve_asset.py <SCENE> [resId]` resolves. **Validated:** `file_number == position − section_base`
+   for 12848/13206 files (97%); SC0000 resolves 17/17 across archives vs the Frida capture (`0x25→EV052CA`,
+   `0x36→BG030A` background, `0x6c→EM* effect`, `play-bgm 5→BGM006`); 586/595 distinct captured loads
+   (all sections) satisfy `files[base+fn]==name`. This is the derivable rule that generalizes to any
+   AGE game with the same container — **the "scope" was just which SYS4INI section the scene lives in.**
+
+   *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
+   for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
+   hunt for the selector (thought it was native scene state; even tried reading `G[0x62424]` live — the
+   VM global memory is structured/packed, see `docs/global-memory-re.md`) missed the real structure until a
+   **full multi-archive capture** (user domain tip: DATA1 holds BG/CS/CB/CA/CP graphics by name prefix, not
+   just DATA2 EV CGs) revealed `file_number == SYS4INI position` inside per-scene sections. Superseded tools:
+   `tools/correlate_scope.py`, `vm0.py --settex` (VM set-texture trace; still useful, but vm0 diverges on
+   branchy non-opening scenes — use the C# VM to trace those). Runtime note for future work: the game is
+   **packed** (main VM logic in a per-run heap `r-x` region) and streams archives through a heap block-cache
+   via `ReadFile` (not mmap); the stable AGF decoder is `AGE.EXE+0x74f1f`.
 3. **Wire the backend** (already designed — A2b-background plan Tasks 3–5): `ResourceMap` resolver +
    Godot `TextureRect` compositing; render only resolved full-screen slots. Mechanical once (1)+(2) land.
 4. **Audio** (parallel, same shape): resolve `play-voice`/`play-bgm` `id → OGG` via SYS4INI + a
@@ -67,7 +98,9 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 ## Status
 
-A2b-background: **machinery landed** (texture ops engine-driven, tools, findings). The **render is
-blocked on asset resolution** (steps 1–2), which is promoted to its own foundational effort. Next:
-either start step 1 (`SYS4INI` parser) or bank momentum with the Frida-free **choices** sub-slice
-(static-RE opcode hunt) while resolution waits its scheduled turn.
+A2b-background: **machinery landed**; **steps 1 & 2 SOLVED (static, general).** Step 1 =
+`build/asset-index.json`. Step 2 = **`resId → files[section_base(scene) + resId]`** via SYS4INI
+per-scene sections (`tools/resolve_asset.py` + `build/asset-sections.json`) — no runtime capture, works
+across all archives/types and for audio too. Remaining for the render (step 3): wire a `ResourceMap`
+(scene → section_base; resId → asset via the index) + Godot `TextureRect` compositing (A2b plan Tasks 3–5,
+now purely mechanical). Audio (step 4) uses the *same* resolver (`play-bgm/play-voice id → files[base+id]`).

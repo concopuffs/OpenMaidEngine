@@ -17,6 +17,16 @@
 - **grounding:** source=inference, confidence=low
 - **evidence:** confirm via frida
 
+### 0xbf `play-bgm` (play-bgm, argc 1)
+- **summary:** Play background music by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (OGG in DATA3). Same resolution as set-texture.
+- **grounding:** source=frida, confidence=high
+- **evidence:** Frida capture: `play-bgm 0x5` in SC0000 (section base 0) loaded BGM006.OGG = files[5]. Unified with set-texture resolution rule.
+
+### 0xc4 `play-voice` (play-voice, argc 1)
+- **summary:** Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture/play-bgm.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** Section-manifest resolution validated across archives incl. DATA4 voice OGGs (586/595 captured loads); per-clip id->OGG not individually Frida-pinned yet.
+
 ## compute
 
 ### 0x1a2 `resolve-handle?` (u00428010, argc 1)
@@ -36,10 +46,25 @@
 - **grounding:** source=inference, confidence=med
 - **evidence:** confirm via frida
 
+### 0x1f8 `create-texture` (create-texture, argc 4)
+- **summary:** Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.).
+
+### 0x1f9 `set-texture` (set-texture, argc 3)
+- **summary:** Load asset #resId into texture slot: (resId, slot, flag=-1). resId resolves via the SYS4INI per-scene section manifest: files[section_base(scene)+resId] (same rule for play-bgm/play-voice). See docs/asset-resolution-re.md.
+- **grounding:** source=frida, confidence=high
+- **evidence:** SC0000 Frida-confirmed 17/17 (0x25->EV052CA, 0x2e->EV052DB, 0x36->BG030A background); resolution rule validated on 586/595 captured loads. Traced in CG-load subroutine label_12649 as `set-texture G[0x62424] <slot> -1`.
+
 ### 0x1fa `ui-clear?` (u00420480, argc 1)
 - **summary:** 1 arg (element id); follows 0x1f7 — show/hide/clear UI element by id
 - **grounding:** source=inference, confidence=med
 - **evidence:** confirm via frida
+
+### 0x1fb `draw-texture` (draw-texture, argc 8)
+- **summary:** Blit a texture slot to screen. Observed 8 args: (handle, slot, srcx, srcy, w, h, dstx, dsty). e.g. `draw-texture 0xcf08 0x3 0 0 0x320 0x258 0 0` = full-screen (800x600) slot 3 at (0,0).
+- **grounding:** source=investigation, confidence=med
+- **evidence:** SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 0 (w) (h) (dstx) (dsty)`; full-screen slot-3 draws use 0x320x0x258 (800x600).
 
 ### 0x1ff `draw?` (u00420770, argc 4)
 - **summary:** 4 args (global+imms); follows 0x217, then call
@@ -403,10 +428,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xbf `play-bgm` (play-bgm, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0xc0 `u00415620` (u00415620, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -414,10 +435,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0xc2 `u0041D2B0` (u0041D2B0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0xc4 `play-voice` (play-voice, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0xc5 `u0041D4A0` (u0041D4A0, argc 2)
 - **summary:** —
@@ -802,18 +819,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1f6 `u00416170` (u00416170, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x1f8 `create-texture` (create-texture, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x1f9 `set-texture` (set-texture, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x1fb `draw-texture` (draw-texture, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x1fd `u00420620` (u00420620, argc 4)
 - **summary:** —

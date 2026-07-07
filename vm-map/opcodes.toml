@@ -1849,17 +1849,17 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "play-bgm"
-category = "unknown"
-summary = ""
+category = "audio"
+summary = "Play background music by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (OGG in DATA3). Same resolution as set-texture."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "frida"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Frida capture: `play-bgm 0x5` in SC0000 (section base 0) loaded BGM006.OGG = files[5]. Unified with set-texture resolution rule."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "bgm id (section-manifest index)"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]
@@ -1917,17 +1917,17 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "play-voice"
-category = "unknown"
-summary = ""
+category = "audio"
+summary = "Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture/play-bgm."
 noop_headless = false
-source = "kelebek"
+source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "Section-manifest resolution validated across archives incl. DATA4 voice OGGs (586/595 captured loads); per-clip id->OGG not individually Frida-pinned yet."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "voice id (section-manifest index)"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode]]
@@ -4512,32 +4512,32 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "create-texture"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30."
 noop_headless = false
-source = "kelebek"
+source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "width"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "height"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "flag"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -4548,27 +4548,27 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "set-texture"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "Load asset #resId into texture slot: (resId, slot, flag=-1). resId resolves via the SYS4INI per-scene section manifest: files[section_base(scene)+resId] (same rule for play-bgm/play-voice). See docs/asset-resolution-re.md."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "frida"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "SC0000 Frida-confirmed 17/17 (0x25->EV052CA, 0x2e->EV052DB, 0x36->BG030A background); resolution rule validated on 586/595 captured loads. Traced in CG-load subroutine label_12649 as `set-texture G[0x62424] <slot> -1`."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "resId (section-manifest index into SYS4INI)"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "texture slot"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "flag (typically -1 / 0xffffffff)"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -4600,52 +4600,52 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "draw-texture"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "Blit a texture slot to screen. Observed 8 args: (handle, slot, srcx, srcy, w, h, dstx, dsty). e.g. `draw-texture 0xcf08 0x3 0 0 0x320 0x258 0 0` = full-screen (800x600) slot 3 at (0,0)."
 noop_headless = false
-source = "kelebek"
+source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 0 (w) (h) (dstx) (dsty)`; full-screen slot-3 draws use 0x320x0x258 (800x600)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "handle/source ref"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "src x"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "src y"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "width"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "height"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "dst x"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "dst y"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]

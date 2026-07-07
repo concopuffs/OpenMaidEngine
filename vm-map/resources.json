@@ -1,0 +1,16 @@
+{
+  "_doc": "SUPERSEDED. Asset resolution is now DERIVED statically, not curated per scene.",
+  "_rule": "resId -> files[section_base(scene) + resId], where SYS4INI is organized into sections (one per SCxxxx.BIN scene + its cross-archive asset manifest) and file_number is the index within the section. Same rule for set-texture / play-bgm / play-voice.",
+  "_use": "tools/resolve_asset.py --build -> build/asset-sections.json (scene -> section_base). Then resolve any (scene, resId) via build/asset-index.json. See docs/asset-resolution-re.md step 2.",
+  "_validated": "SC0000 opening 17/17 vs Frida (0x25->EV052CA, 0x36->BG030A, ...); 586/595 captured loads across all sections satisfy files[base+fn]==name.",
+  "scenes": {
+    "SC0000": {
+      "_section_base": 0,
+      "_note": "base 0 (section 0 = system + SC0000); resId -> files[resId]. Confirmed examples:",
+      "resId": {
+        "0x23": "EV049AA.AGF", "0x25": "EV052CA.AGF", "0x27": "EV052DA.AGF",
+        "0x2b": "EV052DC.AGF", "0x2e": "EV052DB.AGF", "0x36": "BG030A.AGF (background)"
+      }
+    }
+  }
+}

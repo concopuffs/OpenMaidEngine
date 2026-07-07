@@ -54,7 +54,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── opcode-leads.json, small-script-listings.md
     │
     ├── docs/                                 all documentation
-    │   ├── PROJECT-STRUCTURE.md                this file
+    │   ├── PROJECT-STRUCTURE.md                this file (where things live)
+    │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
+    │   ├── asset-resolution-re.md              resId→file RE (graphics/audio); asset-index steering
+    │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)
     │   ├── remake-architecture-and-roadmap.md  THE direction doc (phases A–E)
     │   ├── phase-a-slice-plan.md               the current slice (A0/A1/A2)
     │   ├── vm-mapping-plan.md                  the phased decode plan

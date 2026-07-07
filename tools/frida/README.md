@@ -21,15 +21,30 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 ## Tools
 
-- `capture_graphics.py` — hooks `ReadFile` on the graphics archives (`DATA2/DATA5*.ALF`), resolving
-  each handle→path via `GetFinalPathNameByHandleW` (cached) + the read offset. Log →
-  `build/frida-reads.log` (`path<TAB>offset<TAB>size`).
+- **`capture_load_order.py`** — ★ the working asset-resolution capture. Hooks `ReadFile` on
+  `DATA2.ALF`; each asset load starts with header reads **at its exact archive offset**, so exact-start
+  reads give the clean per-asset **load order** (→ names via `build/asset-index.json`). `--analyze`
+  prints the order + file_number. This **confirmed `resId == SYS4INI file_number`** (the load order
+  matches our engine's `set-texture(resId)` order 1:1). Attach by pid, replay the scene, Ctrl-C, `--analyze`.
+- `capture_graphics.py` — original `ReadFile` logger for `DATA2/DATA5` (`path<TAB>offset<TAB>size` →
+  `build/frida-reads.log`); pair with `tools/resolve_frida_reads.py`.
+- `locate_resource_load.py` — phase-1 locator (back-trace asset-opens → native load chain).
+- `capture_resid_args.py` — phase-2 probe (decoder args/context; showed the loader carries only offsets).
+- `find_globals_base.py`, `find_global_by_sequence.py` — **runtime global-variable RE (SHELVED)**. Full
+  write-up, findings, memory landmarks, and the recommended resume plan: **`docs/global-memory-re.md`**.
+  TL;DR: the VM global memory is structured/multi-store (not flat int32) and `G[0x62424]` is a transient
+  arg-register — heuristic value scans can't pin it. Resume from a *stable* anchor (the name global
+  `0x279`) and target the interpreter's address resolution, not scans.
 
-## Known limitations (see docs/asset-resolution-re.md)
+## Runtime architecture (learned 2026-07-06 — read before writing new hooks)
 
-- **File-I/O offsets are noisy** — spans don't match extracted AGF sizes; the game likely
-  **memory-maps** the archives (so `ReadFile` offsets are OS paging noise, not clean per-asset
-  loads) and/or uses async/`OVERLAPPED` reads. The robust hook is the game's **internal
-  load-by-id function** (find via the opcode dispatch), not file I/O — a future tool.
-- Correlation still needs the **`SYS4INI` (S4IC422) asset index** parsed to turn an archive offset
-  into a filename. That parser is the first foundational RE step.
+- **Attach, don't spawn**, and **use the pid** (`frida.get_local_device().enumerate_processes()` — the
+  module-level `frida.enumerate_processes()` was removed in frida 17.x). The process is `AGE.EXE`.
+- **The game is packed.** Its main VM logic runs from a per-run heap `r-x` region (~30 MB, nonstable
+  base). So you **cannot** hook the `set-texture`/VM handlers at a fixed `AGE.EXE+off` — only stable
+  library code (e.g. the AGF decoder `AGE.EXE+0x74f1f`) keeps a fixed offset.
+- **Archives are NOT memory-mapped.** No archive-sized region exists; the game streams them through a
+  small heap **block-cache via `ReadFile`** (128 KB blocks + big reads). The earlier "memory-mapped"
+  note was wrong — the 128 KB reads are the block cache, not OS paging.
+- **The reliable oracle is the `ReadFile` offset stream** → names via the SYS4INI index
+  (`tools/parse_sys4ini.py` → `build/asset-index.json`). Native-handler hooking is blocked by the packer.
