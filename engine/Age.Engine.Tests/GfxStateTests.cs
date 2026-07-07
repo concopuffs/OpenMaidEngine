@@ -59,4 +59,30 @@ public class GfxStateTests
         Assert.Equal(-1, g.QuerySlot(0x10));
         Assert.NotEqual(-1, g.QuerySlot(0x11));
     }
+
+    [Fact]
+    public void LayersAppendInOrderAndUpdateInPlace()
+    {
+        var g = new GfxState();
+        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 0));
+        g.AddOrUpdateLayer(new DrawLayer(0xB, 5, 0, 0, 200, 200, 100, 100));
+        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 50));   // re-draw A -> update in place
+        var s = g.SnapshotLayers();
+        Assert.Equal(2, s.Count);
+        Assert.Equal(0xA, s[0].Handle);           // order preserved (A still first)
+        Assert.Equal(50, s[0].DstY);              // updated
+        Assert.Equal(0xB, s[1].Handle);
+    }
+
+    [Fact]
+    public void EraseRangeAlsoDropsLayers()
+    {
+        var g = new GfxState();
+        g.AddOrUpdateLayer(new DrawLayer(0x10, 4, 0, 0, 10, 10, 0, 0));
+        g.AddOrUpdateLayer(new DrawLayer(0x20, 5, 0, 0, 10, 10, 0, 0));
+        g.EraseRange(0x10, 1);
+        var s = g.SnapshotLayers();
+        Assert.Single(s);
+        Assert.Equal(0x20, s[0].Handle);
+    }
 }
