@@ -64,20 +64,35 @@ if (args[0] == "audio")
 
 if (args[0] == "gfx")
 {
-    // gfx <SCENE.BIN> [0xADDR=VAL ...] — run the scene and dump executed texture ops in order with
-    // resolved file + computed geometry (set-texture / get-texture-size / draw-texture). Diagnostic only.
-    var sceneName = args[1];
+    // gfx [--boot] <SCENE.BIN> [0xADDR=VAL ...] — run the scene and dump executed texture ops with resolved
+    // file + computed geometry. --boot first runs SYSTEM4's state-setup prefix (INITCONFIG/INIT2/INIT,
+    // skipping the UI scripts LOGO/OP/TITLE) through a GameSession, so scene-assumed boot state — chiefly
+    // INIT2's gfx handle array 0x62455.. — is present. Diagnostic only.
+    bool boot = args.Contains("--boot");
+    var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = ResourceMap.Load();
     var host = new GfxTraceHost(res, sceneKey);
-    var vm = new VirtualMachine(Sys4Loader.Load(Paths.Scripts()[sceneName.ToUpperInvariant()], table), table, host);
-    foreach (var s in args.Skip(2))
+    var session = new GameSession();
+    foreach (var s in args.Where(a => a.Contains('=')))
     {
         var kv = s.Split('=');
         int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
         long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
-        vm.Globals[k] = v;
+        session.Seed(k, v);
     }
+    if (boot)
+        foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+        {
+            var bs = session.RunScene(Sys4Loader.Load(Paths.Scripts()[b], table), table, new CaptureHost(), null, provider);
+            Console.WriteLine($"[boot] {b}: {bs.Steps} steps (halt: {bs.Halt})");
+        }
+    var target = Sys4Loader.Load(Paths.Scripts()[sceneName.ToUpperInvariant()], table);
+    // With --boot, run the target like the real engine (call-scripts on) so subroutine-driven setup runs.
+    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider)
+                  : new VirtualMachine(target, table, host);
+    foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+    foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
     vm.Run();
     Console.WriteLine($"{sceneName}: {host.Events.Count} texture ops (halt: {vm.HaltReason})");
     foreach (var line in host.Events) Console.WriteLine("  " + line);
