@@ -99,6 +99,10 @@ if (args[0] == "gfx")
     var gfxObjs = vm.Gfx.Objects.OrderBy(o => o.Slot).ToList();
     Console.WriteLine($"  gfx objects: {gfxObjs.Count} -> " +
         string.Join(", ", gfxObjs.Select(o => $"0x{o.Handle:x}=slot{o.Slot}")));
+    var layers = vm.Gfx.SnapshotLayers();
+    Console.WriteLine($"  layers ({layers.Count}, composite order):");
+    foreach (var l in layers)
+        Console.WriteLine($"    h=0x{l.Handle:x} slot={l.Slot} src=({l.SrcX},{l.SrcY} {l.W}x{l.H}) dst=({l.DstX},{l.DstY})");
     return 0;
 }
 
