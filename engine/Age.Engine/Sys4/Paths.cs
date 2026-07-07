@@ -10,6 +10,7 @@ public static class Paths
     public static string OpcodesJson => Path.Combine(Build, "opcodes.json");
     public static string AssetSectionsJson => Path.Combine(Build, "asset-sections.json");
     public static string AssetIndexJson => Path.Combine(Build, "asset-index.json");
+    public static string CallscriptNamesJson => Path.Combine(Build, "callscript-names.json");
     public static string Textures => Path.Combine(Build, "textures");
 
     private static string FindRepo()
