@@ -81,6 +81,11 @@
 - **grounding:** source=inference, confidence=med
 - **evidence:** confirm via frida
 
+### 0x208 `get-texture-size` (get-texture-size, argc 3)
+- **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
+- **grounding:** source=inference, confidence=med
+- **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
+
 ### 0x217 `gfx-geom?` (u004211E0, argc 4)
 - **summary:** 4 global-ints; part of a 0x217/0x218/0x21a geometry chain
 - **grounding:** source=inference, confidence=low
@@ -837,10 +842,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x207 `u00420B00` (u00420B00, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x208 `u00420BF0` (u00420BF0, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

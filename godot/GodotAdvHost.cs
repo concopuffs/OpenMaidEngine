@@ -54,6 +54,9 @@ public sealed class GodotAdvHost : IHost
             _main.CallDeferred("DrawSlot", slot, bmp, dstX, dstY, width, height);
     }
 
+    // Temporary stub — replaced by the real BMP-header-backed impl in Task 3 (blit compositor).
+    public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
+
     // ---- audio ops (OGG plays natively in Godot) ----
     // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: via the per-scene manifest.
     public void PlayBgm(long id)
