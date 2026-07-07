@@ -1,19 +1,20 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16363 globals (12 curated, 16351 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16414 globals (68 curated, 16346 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0xa68` | — | med | auto-shape | TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']. |
+| `0x62ccc` | scjump_decision_out2 | low | inference | Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it. |
 | `0x62ccf` | scjump_decision_out | low | inference | One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode. |
 
 ## data-table
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
-| `0x0` | — | low | auto-shape | array |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -332,10 +333,60 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x0` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 21 scripts; compared against [0, 1, 2, 3, 4, 5]; writers=['BTL.BIN', 'CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']. |
+| `0x699` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CAMP.BIN', 'EVOLVE.BIN', 'SALLY.BIN', 'SYSTEM4.BIN']. |
+| `0x6be` | — | med | auto-shape | TODO: confirm. Branch-read in 146 scenes / 150 scripts; compared against [0]; writers=none (external/native?). |
+| `0x6c3` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 138 scripts; compared against []; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xa57` | lily_form_a | high | investigation | Lily current-form flag A. Exactly one of form A/B/C is 1; gates form-specific voiced dialogue (seeding 0xa57=1 -> SC0000 186->229 lines). Set externally (menu/save), no static writer. |
 | `0xa58` | lily_form_b | high | investigation | Lily current-form flag B. See lily_form_a. |
 | `0xa59` | lily_form_c | high | investigation | Lily current-form flag C. See lily_form_a. |
+| `0xa99` | — | med | auto-shape | TODO: confirm. Branch-read in 2 scenes / 3 scripts; compared against [1]; writers=['GAMESTART.BIN']. |
+| `0xd92` | — | med | auto-shape | TODO: confirm. Branch-read in 29 scenes / 29 scripts; compared against [1]; writers=none (external/native?). |
+| `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
+| `0x3275` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']. |
+| `0x6718` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 2]; writers=['ADDSKILL.BIN', 'CHMENU.BIN', 'DELCH.BIN', 'DRAWCHP.BIN']. |
+| `0x671b` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [999]; writers=['ALCHEMY.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0x671e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']. |
+| `0x6722` | — | med | auto-shape | TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']. |
+| `0x6724` | — | med | auto-shape | TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0x7679` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 4, 8, 16, 256, 512, 1024]; writers=['FIELD.BIN']. |
+| `0x767a` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'FIELD.BIN']. |
+| `0x767b` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 150 scripts; compared against [0, 1]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0x767d` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']. |
+| `0x204f4` | — | med | auto-shape | TODO: confirm. Branch-read in 2 scenes / 4 scripts; compared against [1, 3, 4, 5, 10, 15, 20, 25]; writers=['FIELD.BIN']. |
+| `0x204f5` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 8, 16, 32, 64]; writers=['FIELD.BIN']. |
+| `0x204f7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']. |
+| `0x2052e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 1, 2, 3]; writers=['FIELD.BIN']. |
+| `0x20530` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 22 scripts; compared against [0]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0x20534` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 24 scripts; compared against [0, 10, 100, 999]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0x53ef4` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CAMP.BIN']. |
+| `0x55e37` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['EVOLVE.BIN', 'STUDY.BIN']. |
+| `0x55e38` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2]; writers=['CHMENU.BIN', 'INFO.BIN', 'INFOAF.BIN', 'INFOCH.BIN']. |
+| `0x55e39` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0, 1, 4]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'MAGIC2.BIN', 'SELSTAGE.BIN']. |
+| `0x55e3a` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['FORT.BIN']. |
+| `0x617fd` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 25, 50]; writers=['GAMESTART.BIN', 'TUNE.BIN']. |
+| `0x62428` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CALLBACK_WINDOW.BIN', 'DEBUG.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']. |
+| `0x62439` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['CHMENU.BIN', 'INFOAF.BIN', 'INFOCH.BIN', 'INFOEN.BIN']. |
+| `0x6249e` | — | med | auto-shape | TODO: confirm. Branch-read in 78 scenes / 81 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
+| `0x624be` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0]; writers=['MENU.BIN']. |
+| `0x6642c` | route_branch | med | inference | Route/branch selector: sole writer is BUNKI.BIN (分岐 = branching), enum 0..7, branch-read in 36 scenes. Selects a story branch/route. INFERENCE from the BUNKI writer + enum — confirm exact routes via a listing/sweep. |
+| `0x665d3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [1, 2, 4, 8, 32, 64, 128, 65536]; writers=['ALCHEMY.BIN', 'BUNKI.BIN', 'DEBUGADV.BIN', 'EVOLVE.BIN']. |
+| `0x665d6` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']. |
+| `0x665d7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']. |
+| `0x66714` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']. |
+| `0xa6e59` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 2, 3, 4, 11, 21, 22, 23]; writers=['CALCDMG.BIN', 'CHMENU.BIN', 'FORT.BIN', 'INFOIT.BIN']. |
+| `0xab8e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 10, 15, 20, 25, 30, 35, 40]; writers=['CALCCC.BIN', 'CCINIT.BIN']. |
+| `0xaba5c` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
+| `0xaba5e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
+| `0xcc9f3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']. |
+| `0xccc21` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']. |
+| `0xeff77` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 2, 3]; writers=['BTRTN.BIN', 'MVRTN.BIN', 'RTN_B001.BIN', 'RTN_B002.BIN']. |
+| `0x152617` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CLOSE.BIN', 'FIELD.BIN', 'INFOEN.BIN', 'READY.BIN']. |
+| `0x152618` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 7]; writers=['FIELD.BIN']. |
+| `0x1560e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']. |
+| `0x15a094` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'SELSTAGE.BIN', 'STUDY.BIN']. |
+| `0x15a095` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']. |
 
 ## string-table
 
@@ -3477,6 +3528,10 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x3238` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 5 scripts; compared against [1]. |
+| `0x3301` | — | low | inference | Config/settings global (INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 6 scripts; compared against [1, 2]. |
+| `0x3303` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 8 scripts; compared against [1]. |
+| `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |
 | `0x84b` | — | high | auto-shape | unit-name-table |
 | `0xc33` | — | high | auto-shape | unit-desc-table |
 | `0x101b` | — | high | auto-shape | unit-desc1-table |
@@ -4897,7 +4952,6 @@
 | `0x64cde` | — | med | auto-shape | cg-gallery-field |
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x66713` | — | low | auto-shape | index/counter? |
-| `0x66714` | — | low | auto-shape | index/counter? |
 | `0x66715` | — | med | auto-shape | current-entity-index? |
 | `0x66716` | — | med | auto-shape | record-table[stride 30] |
 | `0x66751` | — | low | auto-shape | unit-field? |
@@ -16104,7 +16158,6 @@
 | `0xa6ace` | — | low | auto-shape | item-field? |
 | `0xa6acf` | — | low | auto-shape | item-field? |
 | `0xa6ad6` | — | low | auto-shape | item-field? |
-| `0xa6e59` | — | low | auto-shape | index/counter? |
 | `0xa6e5b` | — | med | auto-shape | skill-field |
 | `0xa6e5d` | — | low | auto-shape | skill-field? |
 | `0xa6f87` | — | med | auto-shape | skill-field |
@@ -16338,7 +16391,6 @@
 | `0xcca08` | — | med | auto-shape | record-table[stride 5] |
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
 | `0xccc0b` | — | low | auto-shape | index/counter? |
-| `0xccc21` | — | low | auto-shape | index/counter? |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |
 | `0xccc93` | — | med | auto-shape | record-table[stride 53] |
 | `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
@@ -16376,7 +16428,6 @@
 | `0x152101` | — | med | auto-shape | record-table[stride 3] |
 | `0x15222d` | — | med | auto-shape | record-table[stride 3] |
 | `0x152486` | — | med | auto-shape | record-table[stride 3] |
-| `0x152617` | — | low | auto-shape | index/counter? |
 | `0x15261a` | — | low | auto-shape | index/counter? |
 | `0x15261b` | — | low | auto-shape | index/counter? |
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |

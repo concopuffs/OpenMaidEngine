@@ -137,3 +137,619 @@ usage = "Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 r
 source = "investigation"
 confidence = "med"
 depends_on = []
+
+[[global]]
+address = "0x0"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2, 3, 4, 5}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 21 scripts; compared against [0, 1, 2, 3, 4, 5]; writers=['BTL.BIN', 'CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x699"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CAMP.BIN', 'EVOLVE.BIN', 'SALLY.BIN', 'SYSTEM4.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6be"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 146 scenes / 150 scripts; compared against [0]; writers=none (external/native?)."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6c3"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "?"
+usage = "TODO: confirm. Branch-read in 136 scenes / 138 scripts; compared against []; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xa68"
+name = ""
+category = "choice-output"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xa99"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 2 scenes / 3 scripts; compared against [1]; writers=['GAMESTART.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xd92"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 29 scenes / 29 scripts; compared against [1]; writers=none (external/native?)."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x3231"
+name = "game_mode"
+category = "story-flag"
+type = "int"
+value_domain = "1..9"
+usage = "Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning."
+source = "inference"
+confidence = "med"
+depends_on = ["0x3234"]
+
+[[global]]
+address = "0x3238"
+name = ""
+category = "unknown"
+type = "int"
+value_domain = "{0,1}"
+usage = "Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 5 scripts; compared against [1]."
+source = "inference"
+confidence = "low"
+depends_on = []
+
+[[global]]
+address = "0x3275"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x3301"
+name = ""
+category = "unknown"
+type = "int"
+value_domain = "one of {1, 2}"
+usage = "Config/settings global (INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 6 scripts; compared against [1, 2]."
+source = "inference"
+confidence = "low"
+depends_on = []
+
+[[global]]
+address = "0x3303"
+name = ""
+category = "unknown"
+type = "int"
+value_domain = "{0,1}"
+usage = "Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 8 scripts; compared against [1]."
+source = "inference"
+confidence = "low"
+depends_on = []
+
+[[global]]
+address = "0x3304"
+name = ""
+category = "unknown"
+type = "int"
+value_domain = "{0,1}"
+usage = "Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]."
+source = "inference"
+confidence = "low"
+depends_on = []
+
+[[global]]
+address = "0x6718"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 2}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 2]; writers=['ADDSKILL.BIN', 'CHMENU.BIN', 'DELCH.BIN', 'DRAWCHP.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x671b"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {999}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [999]; writers=['ALCHEMY.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x671e"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {5, 6}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6722"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 5, 99}"
+usage = "TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6724"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 25, 50, 99}"
+usage = "TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x7679"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 4, 8, 16, 256, 512, 1024}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 4, 8, 16, 256, 512, 1024]; writers=['FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x767a"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x767b"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 136 scenes / 150 scripts; compared against [0, 1]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x767d"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2, 3}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x204f4"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 3, 4, 5, 10, 15, 20, 25}"
+usage = "TODO: confirm. Branch-read in 2 scenes / 4 scripts; compared against [1, 3, 4, 5, 10, 15, 20, 25]; writers=['FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x204f5"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 2, 4, 8, 16, 32, 64}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 8, 16, 32, 64]; writers=['FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x204f7"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 2, 4, 6}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x2052e"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2, 3}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 1, 2, 3]; writers=['FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x20530"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 14 scenes / 22 scripts; compared against [0]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x20534"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 10, 100, 999}"
+usage = "TODO: confirm. Branch-read in 14 scenes / 24 scripts; compared against [0, 10, 100, 999]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x53ef4"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CAMP.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x55e37"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['EVOLVE.BIN', 'STUDY.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x55e38"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2]; writers=['CHMENU.BIN', 'INFO.BIN', 'INFOAF.BIN', 'INFOCH.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x55e39"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 4}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0, 1, 4]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'MAGIC2.BIN', 'SELSTAGE.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x55e3a"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['FORT.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x617fd"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 25, 50}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 25, 50]; writers=['GAMESTART.BIN', 'TUNE.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x62428"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CALLBACK_WINDOW.BIN', 'DEBUG.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x62439"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['CHMENU.BIN', 'INFOAF.BIN', 'INFOCH.BIN', 'INFOEN.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x6249e"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2, 3, 4, 5, 6, 7}"
+usage = "TODO: confirm. Branch-read in 78 scenes / 81 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x624be"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0]; writers=['MENU.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x62ccc"
+name = "scjump_decision_out2"
+category = "choice-output"
+type = "int"
+value_domain = "small enum"
+usage = "Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it."
+source = "inference"
+confidence = "low"
+depends_on = ["0x62ccf"]
+
+[[global]]
+address = "0x6642c"
+name = "route_branch"
+category = "story-flag"
+type = "int"
+value_domain = "0..7"
+usage = "Route/branch selector: sole writer is BUNKI.BIN (分岐 = branching), enum 0..7, branch-read in 36 scenes. Selects a story branch/route. INFERENCE from the BUNKI writer + enum — confirm exact routes via a listing/sweep."
+source = "inference"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x665d3"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 2, 4, 8, 32, 64, 128, 65536}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [1, 2, 4, 8, 32, 64, 128, 65536]; writers=['ALCHEMY.BIN', 'BUNKI.BIN', 'DEBUGADV.BIN', 'EVOLVE.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x665d6"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "?"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x665d7"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 3}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x66714"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "?"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xa6e59"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 2, 3, 4, 11, 21, 22, 23}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 2, 3, 4, 11, 21, 22, 23]; writers=['CALCDMG.BIN', 'CHMENU.BIN', 'FORT.BIN', 'INFOIT.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xab8e7"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 10, 15, 20, 25, 30, 35, 40}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 10, 15, 20, 25, 30, 35, 40]; writers=['CALCCC.BIN', 'CCINIT.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xaba5c"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xaba5e"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {2}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xcc9f3"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "?"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xccc21"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xeff77"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 2, 3}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 2, 3]; writers=['BTRTN.BIN', 'MVRTN.BIN', 'RTN_B001.BIN', 'RTN_B002.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x152617"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CLOSE.BIN', 'FIELD.BIN', 'INFOEN.BIN', 'READY.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x152618"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {1, 2, 4, 7}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 7]; writers=['FIELD.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x1560e7"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "one of {0, 1, 2, 3, 4, 5, 6, 7}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x15a094"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'SELSTAGE.BIN', 'STUDY.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x15a095"
+name = ""
+category = "story-flag"
+type = "int"
+value_domain = "{0,1}"
+usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']."
+source = "auto-shape"
+confidence = "med"
+depends_on = []

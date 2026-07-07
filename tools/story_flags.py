@@ -151,9 +151,13 @@ def skeleton_toml(ev: dict) -> str:
 def bootstrap(cands: dict[int, dict], toml_path=None) -> int:
     toml_path = Path(toml_path) if toml_path else (paths.VM_MAP / "globals.toml")
     present = set(_gb.load_toml(toml_path)[0]) if toml_path.exists() else set()
-    # only story-flag / ui-toggle / choice-output candidates are worth seeding for curation
+    # Seed only high-signal candidates worth hand-curating: story-flag / choice-output at med
+    # confidence that are NOT near-universal ADV-chrome (those 297-scene globals are engine
+    # scratch, not story state). The low-confidence long tail stays in the candidates JSON.
     seedable = {a: e for a, e in cands.items()
-                if e["category"] in ("story-flag", "ui-toggle", "choice-output") and a not in present}
+                if e["category"] in ("story-flag", "choice-output")
+                and e["confidence"] == "med" and not e["near_universal"]
+                and a not in present}
     if not seedable:
         print(f"bootstrap: nothing new to add ({len(present)} already present).")
         return 0

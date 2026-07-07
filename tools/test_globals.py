@@ -60,8 +60,11 @@ def test_miner_finds_known_flags():
 
 def test_bootstrap_is_additive_and_idempotent():
     import tempfile, pathlib, story_flags
-    # start from a copy of the real toml so curated entries are present
-    src = (paths.VM_MAP / "globals.toml").read_text(encoding="utf-8")
+    # Minimal fixture (one curated entry) so bootstrap always has candidates to add, independent
+    # of how many the real globals.toml already holds.
+    src = ('[meta]\nnote = "fixture"\n\n[[global]]\naddress = "0xa57"\nname = "lily_form_a"\n'
+           'category = "story-flag"\ntype = "int"\nvalue_domain = "{0,1}"\nusage = "curated"\n'
+           'source = "investigation"\nconfidence = "high"\ndepends_on = []\n')
     with tempfile.TemporaryDirectory() as d:
         tp = pathlib.Path(d) / "globals.toml"
         tp.write_text(src, encoding="utf-8")

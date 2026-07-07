@@ -102,6 +102,46 @@ Labels are prefixed `=` to mark them as inferred aliases. Regenerate the `.asm` 
 
 Confidence is marked per entry; labels ending `?` are low-confidence guesses.
 
+### The curated registry — `vm-map/globals.toml` (2026-07-07)
+
+The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
+*meaning* — and is sometimes wrong (it labels `0xa57`, the Lily form-A story flag, as a
+"string-table"). The curated registry fixes this, modelled exactly on `vm-map/opcodes.toml`:
+
+- **`vm-map/globals.toml`** — the only hand-edited source. One `[[global]]` per known address:
+  `name`, `category` (`story-flag`/`index-pointer`/`data-table`/`string-table`/`ui-toggle`/
+  `choice-output`/`counter`/`unknown`), `type`, `value_domain`, `usage`, and provenance
+  (`source`/`confidence`/`depends_on`).
+- **`tools/globals_build.py --build`** merges curated entries *over* the auto map →
+  `build/globals.json` (machine) + `docs/global-reference.md` (generated human view). `--lint`
+  checks vocabulary, the auto-shape≠high rule, and dangling `depends_on`. `sys4load` reads
+  `build/globals.json` for operand labels (curated names win, shown as `name(category)`; the auto
+  tail is kept only at high/med confidence). Regenerate the `.asm` corpus with
+  `tools/extract_phase2.py` to pick up new labels.
+
+#### Story-state flags (the first populated category)
+
+Story flags are scalar globals that ADV/progression logic *branches on* (chapter, character
+forms, choices, routes) — a category the auto shape map never enumerated. **`tools/story_flags.py`**
+is a 100% static miner: it flags a global as a candidate when it feeds a comparison (`eq`/`ne`/
+`lt`/`lte`/`gr`/`gre`), a logical (`and`/`or`), or a `jcc` condition, and is not a genuine table/
+index in the shape map. Per candidate it records compared-against constants (→ value domain), the
+writer set (progression-written but scene-read = strong story flag), total- and scene-reach, and
+near-universal (ADV-chrome) status → an auto category + confidence. Output:
+`build/story-flags-candidates.json` (review surface: 1261 branch-read globals, **205 story-flag
+candidates**); `--bootstrap` seeds high-signal skeletons (med-confidence, non-chrome) into
+`globals.toml` for human naming. Dynamic confirmation of a flag's reach stays separate —
+`Age.Cli sweep 0xADDR=VAL`.
+
+**Reading the catalog:** `reach_scenes > 0` = the flag changes SC/SP scene dialogue directly (e.g.
+`0xa57` Lily form, scene-reach 78). `reach_scenes = 0` with progression writers = a
+progression/menu-layer flag read by the game-flow scripts, not scenes (e.g. `0x3234` chapter, read
+by SCJUMP/FIELD). **Known/named anchors:** `0x3234` `chapter_mode` (enum 1..9), `0x3231`
+`game_mode` (adjacent mode selector), `0xa57/8/9` Lily forms A/B/C (boolean, externally set),
+`0x62ccf/0x62ccc` SCJUMP decision outputs, `0x6642c` `route_branch` (BUNKI = 分岐 writer),
+`0x6c9–0x6cd` UI toggles. Config/settings globals written by `CONFIG`/`INITCONFIG` (scene-reach 0)
+are *not* story flags — the miner over-tags them; they are recategorized `unknown` when curated.
+
 ### Future step — growing the map (planned, not yet done)
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
