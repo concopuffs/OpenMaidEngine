@@ -17,6 +17,8 @@ public class WaitForInputTests
         public void CreateTexture(int slot, int w, int h) { }
         public void SetTexture(long resId, int slot) { }
         public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) { }
+        public void PlayBgm(long id) { }
+        public void PlayVoice(long id) { }
     }
 
     [Fact]

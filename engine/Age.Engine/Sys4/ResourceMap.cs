@@ -60,4 +60,30 @@ public sealed class ResourceMap
         var bmp = Path.Combine(Paths.Textures, Path.GetFileNameWithoutExtension(a.Name) + ".BMP");
         return File.Exists(bmp) ? bmp : null;
     }
+
+    /// <summary>
+    /// Resolve a BGM id to its OGG path. BGM is addressed by DIRECT LITERAL NAME (BGM{id:D3}.OGG), NOT the
+    /// per-scene section manifest that voices/textures use. Confirmed by ear (play-bgm 5->BGM005, 8->BGM008)
+    /// and by the play-bgm 0x23->BGM035 case: BGM035 is a real standalone track (the BGM set skips 030-034),
+    /// which the manifest mis-resolved to a graphics entry. See docs/asset-resolution-re.md.
+    /// </summary>
+    public string? BgmPathById(long id)
+    {
+        var name = $"BGM{id:D3}.OGG";
+        foreach (var f in _files)
+            if (f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                return AudioPath(f);
+        return null;
+    }
+
+    /// <summary>Loose extracted OGG path for an audio asset (extracted/DATA{n}/{name}), or null.
+    /// OGG plays natively in Godot. Used for voices (which DO use the per-scene manifest via Resolve).</summary>
+    public static string? AudioPath(AssetEntry a)
+    {
+        if (!a.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase)) return null;
+        var dir = a.Archive.EndsWith(".ALF", StringComparison.OrdinalIgnoreCase)
+            ? a.Archive[..^4] : a.Archive;                       // "DATA3.ALF" -> "DATA3"
+        var ogg = Path.Combine(Paths.Extracted, dir, a.Name);
+        return File.Exists(ogg) ? ogg : null;
+    }
 }

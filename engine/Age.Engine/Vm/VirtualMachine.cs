@@ -175,6 +175,8 @@ public sealed class VirtualMachine
             case "draw-texture":   // (handle, slot, srcX, srcY, w, h, dstX, dstY)
                 _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                                   (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;
+            case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
+            case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
             default:
                 _host.OnStub(op); return pc + 1;
         }

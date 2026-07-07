@@ -18,6 +18,8 @@ public class TextureOpsTests
         public void CreateTexture(int slot, int w, int h) => Creates++;
         public void SetTexture(long resId, int slot) => Sets.Add((resId, slot));
         public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) => Draws.Add((slot, w, h));
+        public void PlayBgm(long id) { }
+        public void PlayVoice(long id) { }
     }
 
     [Fact]

@@ -18,14 +18,14 @@
 - **evidence:** confirm via frida
 
 ### 0xbf `play-bgm` (play-bgm, argc 1)
-- **summary:** Play background music by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (OGG in DATA3). Same resolution as set-texture.
-- **grounding:** source=frida, confidence=high
-- **evidence:** Frida capture: `play-bgm 0x5` in SC0000 (section base 0) loaded BGM006.OGG = files[5]. Unified with set-texture resolution rule.
+- **summary:** Play background music by id. BGM is addressed by DIRECT LITERAL NAME: id -> BGM{id:03d}.OGG (in DATA3), NOT the per-scene section manifest (that's voices/textures). E.g. play-bgm 5 -> BGM005.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for play-bgm 0x5 and BGM008 for play-bgm 0x8 (we initially mis-played BGM006/BGM009 via the manifest = off-by-one). Direct-name proven by play-bgm 0x23 -> BGM035.OGG, a real standalone track (BGM set skips 030-034) that the manifest mis-resolved to a graphics entry (EV049AA.AGF). CORRECTS the earlier 'unified manifest / Frida BGM006' claim, which was wrong by one. Voices/textures still use the manifest (files[base+id], offset 0). Diagnostic: `Age.Cli audio SC0000.BIN`.
 
 ### 0xc4 `play-voice` (play-voice, argc 1)
-- **summary:** Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture/play-bgm.
-- **grounding:** source=investigation, confidence=med
-- **evidence:** Section-manifest resolution validated across archives incl. DATA4 voice OGGs (586/595 captured loads); per-clip id->OGG not individually Frida-pinned yet.
+- **summary:** Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d}).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug.
 
 ## compute
 

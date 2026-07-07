@@ -12,7 +12,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
   `set-texture 0x1f9` `(resId,slot)`, `draw-texture 0x1fb` `(slot,x,y,w,h)` promoted from VM stubs to
   typed `IHost` methods; `CaptureHost` no-ops them (A1 trace-diff/A2a selftest stay green). The VM
   now *drives* graphics; only resolution + backend rendering remain.
-- **Audio ops named, not yet wired:** `play-voice 0xc4`, `play-bgm`.
+- **Audio ops WIRED (2026-07-06):** `play-bgm 0xbf` / `play-voice 0xc4` → `IHost.PlayBgm/PlayVoice` →
+  same resolver → OGG via Godot `AudioStreamPlayer`. See step 4 below.
 - **Tools:** `tools/convert_agf.py` (AGF→BMP for *stills* via `AGF2BMP2AGF.exe`); `tools/frida/`
   (runtime capture harness — see its README); Frida core installed (17.15.3).
 
@@ -63,13 +64,15 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    > **`resId → files[ section_base(scene) + resId ]`**, where `section_base` = the start of the SYS4INI
    > section containing the scene's `SCxxxx.BIN`.
 
-   Unified for `set-texture(resId)`, `play-bgm(id)`, `play-voice(id)` — one manifest. **Tool:**
-   `tools/resolve_asset.py --build` → `build/asset-sections.json` (359 sections, 136 scenes);
-   `resolve_asset.py <SCENE> [resId]` resolves. **Validated:** `file_number == position − section_base`
-   for 12848/13206 files (97%); SC0000 resolves 17/17 across archives vs the Frida capture (`0x25→EV052CA`,
-   `0x36→BG030A` background, `0x6c→EM* effect`, `play-bgm 5→BGM006`); 586/595 distinct captured loads
+   Manifest rule holds for `set-texture(resId)` and `play-voice(id)`. **⚠ `play-bgm` is the EXCEPTION —
+   it does NOT use the manifest; it uses direct literal names `BGM{id:03d}.OGG` (see step 4, by-ear
+   corrected 2026-07-06).** **Tool:** `tools/resolve_asset.py --build` → `build/asset-sections.json`
+   (359 sections, 136 scenes); `resolve_asset.py <SCENE> [resId]` resolves. **Validated:** `file_number ==
+   position − section_base` for 12848/13206 files (97%); SC0000 resolves 17/17 across archives vs the Frida
+   capture (`0x25→EV052CA`, `0x36→BG030A` background, `0x6c→EM* effect`); 586/595 distinct captured loads
    (all sections) satisfy `files[base+fn]==name`. This is the derivable rule that generalizes to any
    AGE game with the same container — **the "scope" was just which SYS4INI section the scene lives in.**
+   (The old `play-bgm 5→BGM006` validation point was a mis-attribution — the real game plays BGM005.)
 
    *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
    for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
@@ -90,9 +93,26 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    get-texture-size + the sprite position/animation chain); fades (`AE*`) draw opaque (no alpha); slot
    model approximates the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
    (A2b section) for the full write-up + the graphics-subsystem plan.
-4. **Audio** (parallel, same shape): resolve `play-voice`/`play-bgm` `id → OGG` via SYS4INI + a
-   Frida audio capture (hook `DATA3.ALF` reads or the audio-play fn); play via Godot. Reuses the
-   `tools/frida/` framework.
+4. **Audio.** **✅ WIRED (2026-07-06) — no Frida needed.** Same rule as textures:
+   `play-bgm(id)`/`play-voice(id)` → `files[section_base(scene)+id]` → OGG. `IHost.PlayBgm/PlayVoice` +
+   VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.AudioPath` → loose
+   `extracted/DATA{n}/{name}.OGG`; `GodotAdvHost` → `Main`'s two `AudioStreamPlayer` nodes
+   (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
+   → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
+   (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
+   addressing — the earlier "unified graphics+audio manifest" claim was WRONG for BGM:**
+   - **Voice** (`play-voice`) → per-scene manifest, `files[base+id]`, **offset 0** (same as textures). Proven:
+     the manifest interleaves graphics/voice (`files[35]=EV049AA`, `[36]=MAN999`, `[37]=EV052CA`, `[38]=SYL0001`),
+     so `id-1` would land voices on `.AGF` (silent) — they play, so offset is exactly 0.
+   - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), NOT the manifest.
+     Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`; the manifest gave BGM006/009 = off-by-one) and proven
+     by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the manifest mis-resolved
+     to a graphics entry. Implemented as `ResourceMap.BgmPathById(id)`; `GodotAdvHost.PlayBgm` uses it.
+     The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
+
+   Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). `play-sound-effect` (0xb4, argc 2)
+   left stubbed — arg roles unconfirmed. See `docs/phase-a-slice-plan.md` (A2b-Audio). Diagnostic: `Age.Cli
+   audio <SCENE>`.
 5. **Movies** (`OP`/`MVB`, MPEG) — a separate video-playback path; deferred.
 
 ## Validation reality (why this is the big haul)
@@ -111,5 +131,5 @@ files[section_base(scene) + resId]`** via SYS4INI per-scene sections (`tools/res
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
-alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4) uses the *same*
-resolver (`play-bgm/play-voice id → files[base+id]`).
+alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
+uses the manifest** (`files[base+id]`); **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.

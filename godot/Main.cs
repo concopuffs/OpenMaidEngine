@@ -11,6 +11,8 @@ public partial class Main : Godot.Control
     private readonly Dictionary<int, TextureRect> _slots = new();
     private Label _text = null!;
     private Label _status = null!;
+    private AudioStreamPlayer _bgm = null!;                // looping background music
+    private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private volatile bool _done;
@@ -49,6 +51,11 @@ public partial class Main : Godot.Control
             }
             catch { /* fall back to the default font */ }
         }
+
+        _bgm = new AudioStreamPlayer();
+        _voice = new AudioStreamPlayer();
+        AddChild(_bgm);
+        AddChild(_voice);
 
         _selftest = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--selftest") >= 0;
 
@@ -107,6 +114,25 @@ public partial class Main : Godot.Control
         tr.Position = new Vector2(x, y);
         tr.Size = new Vector2(w > 0 ? w : img.GetWidth(), h > 0 ? h : img.GetHeight());
         tr.Visible = true;
+    }
+
+    // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
+    public void PlayBgm(string oggPath)
+    {
+        var stream = AudioStreamOggVorbis.LoadFromBuffer(System.IO.File.ReadAllBytes(oggPath));
+        if (stream == null) { GD.Print($"OGG load failed {oggPath}"); return; }
+        stream.Loop = true;
+        _bgm.Stream = stream;
+        _bgm.Play();
+    }
+
+    public void PlayVoice(string oggPath)
+    {
+        var stream = AudioStreamOggVorbis.LoadFromBuffer(System.IO.File.ReadAllBytes(oggPath));
+        if (stream == null) { GD.Print($"OGG load failed {oggPath}"); return; }
+        stream.Loop = false;
+        _voice.Stream = stream;
+        _voice.Play();
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";

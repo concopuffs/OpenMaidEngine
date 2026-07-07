@@ -53,4 +53,19 @@ public sealed class GodotAdvHost : IHost
         if (_slotBmp.TryGetValue(slot, out var bmp) && bmp != null)
             _main.CallDeferred("DrawSlot", slot, bmp, dstX, dstY, width, height);
     }
+
+    // ---- audio ops (OGG plays natively in Godot) ----
+    // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: via the per-scene manifest.
+    public void PlayBgm(long id)
+    {
+        var path = _res.BgmPathById(id);
+        if (path != null) _main.CallDeferred("PlayBgm", path);
+    }
+
+    public void PlayVoice(long id)
+    {
+        var asset = _res.Resolve(_scene, id);
+        var path = asset != null ? ResourceMap.AudioPath(asset) : null;
+        if (path != null) _main.CallDeferred("PlayVoice", path);
+    }
 }
