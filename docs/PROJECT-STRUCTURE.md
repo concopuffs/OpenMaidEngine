@@ -75,11 +75,16 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   │   └── strings.jsonl                    every string, tagged by source opcode
     │   ├── data/                              parsed data tables (*INIT → JSON)
     │   ├── scripts-json/                      machine-readable full dumps (on demand via --json)
+    │   ├── textures/                          AGF→BMP stills (convert_agf.py) — feeds the Godot render
+    │   ├── engine-dump/                       UNPACKED engine dump (frida/dump_engine.py): range_<base>.bin + manifest.json
+    │   ├── asset-index.json, asset-sections.json   asset resolver data (parse_sys4ini / resolve_asset)
     │   ├── global-var-map.{json,md}           partial global-variable name map
     │   ├── opcodes.json                        GENERATED from opcodes.toml (machine view for the C# VM)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
-    └── godot/                               DELIVERABLE — the Godot/C# engine project (built in Phase A2+)
+    ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
+    ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
+    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
 ```
 
 ## Conventions

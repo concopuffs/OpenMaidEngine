@@ -78,10 +78,15 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `tools/frida/capture_resid_args.py` | Phase-2 probe: dumps the decoder's args / context / caller frame (established the loader carries only offsets, not names). | `py -3.11 -u -X utf8 tools/frida/capture_resid_args.py [pid]` · `--analyze` | running game → `build/frida-resid-args.jsonl` |
 | `tools/frida/find_globals_base.py` | Runtime-global RE (SHELVED — see `docs/global-memory-re.md`): flat-int32 signature scan for the VM global array. Finds nothing → layout isn't flat. | `--build-sig` · `py -3.11 -u -X utf8 tools/frida/find_globals_base.py [pid]` | `*INIT` → `build/globals-signature.json`; scans running game |
 | `tools/frida/find_global_by_sequence.py` | Runtime-global RE (SHELVED): differential resId value-scan + stability filter. Finds stack proxies; proved `G[0x62424]` is a transient arg-register. | `py -3.11 -u -X utf8 tools/frida/find_global_by_sequence.py [pid]` | running game + index → stdout |
+| `tools/frida/dump_engine.py` | ★ **Dump the UNPACKED engine code** from the live process for offline static RE (native handlers). `AGE.EXE` unpacks in-place at `0x400000`; Kelebek VAs map `VA−0x400000` = file-off. Validated via the AGF-decoder landmark `+0x74f1f`. | `py -3.11 -u -X utf8 tools/frida/dump_engine.py [pid]` | running game → `build/engine-dump/{manifest.json,range_<base>.bin}` |
+| `tools/frida/probe_handlers.py` | Probe which region the interpreter executes from (module vs heap). Confirmed: **operand-fetch `+0x1b940` fires ~8500/s ⇒ interpreter runs from the module `0x400000`** (handlers hookable by dump address). | `py -3.11 -u -X utf8 tools/frida/probe_handlers.py [pid]` | running game → stdout (per-hook fire counts) |
+| `tools/frida/capture_gfx_objects.py` | Capture the native gfx object-manager state: grab engine ctx (`esi` via operand-fetch `ecx`), poll the object-record array `[esi+0x53d64]` (20×120B; `field[0]=0xffffffff`=free, cmd-type at rec+0x24). **Finding: the real opening uses ZERO CG records ⇒ the bg/sprite drift is a state-divergence artifact, not a missing op.** | `py -3.11 -u -X utf8 tools/frida/capture_gfx_objects.py [pid] [secs]` | running game → `build/gfx-objects.jsonl` |
+
+*(Static disassembly of `build/engine-dump/range_00400000.bin` uses **capstone** — `py -3.11 -m pip install capstone`; VA `X` → file offset `X−0x400000`.)*
 
 ## Historical / one-off
 
 | Tool | Purpose |
 |---|---|
 | `probe_*.py` (`probe_header`, `probe_leads`, `probe_refs`, `probe_tables`, `probe_tags`, `probe_types`, `probe_xref`) | Container/opcode format-RE probes used to reverse the format originally. Kept for reproducibility; not part of the normal workflow. |
-| `pack_check.py` | Checks whether `AGE.EXE` is packed (it is). No longer a blocker — we run our own VM. |
+| `pack_check.py` | Checks whether `AGE.EXE` is packed (it is: entropy-8 code sections, zeroed IAT). `SYS4AB.BIN` is NOT a separate image — it's `XOR-0xFF(AGE.EXE)` byte-for-byte (0x2c header + XOR payload). The unpacked engine exists only in memory → dump it with `frida/dump_engine.py`. |

@@ -5227,23 +5227,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "count?"
-category = "compute"
-summary = "2 args -> writes global then result tested >0 (gre/lt) — count/search-returns-index helper"
+name = "query-gfx-object?"
+category = "draw"
+summary = "0x215 (out)(handle_id) — queries the native graphics-object manager by element handle-id (the value in 0x62455[idx], often +1/+2 for a sub-element); writes the object's slot/status into `out`, sign-tested (gre/lt 0) to drive label_12649's slot-select branch and set the working slot G[0x62452]. KEYSTONE for per-object slot selection — stubbing it collapses every draw onto slot 0, so the anchor-preserve geometry reads foreign-sized textures → cumulative bg/sprite drift (see docs/phase-a-slice-plan.md A2b-Geometry). Reads native object-manager state (NOT VM-computable). Exact return semantics: RE via unicorn (native handler @0x421160)."
 noop_headless = false
-source = "inference"
+source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = "confirm via unicorn"
+evidence = "SC0000 label_12649 (0x12670) + label_123ef (0x12419/0x12450): called with 0x62455[idx] handle-ids (±offset); result gre/lt 0 branches slot-select and feeds ui-elem?(0x1f7)/set-texture slot. Record table 0x3239 (label_125bd @0x0050f) assigns per-object slots 4..13. Handles are the 0xcf08/0xe678/0xd6d8 element-id family."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_slot_status"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "handle_id"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]
