@@ -174,10 +174,12 @@ deferred, and it is visibly logged so it never reads as "done."
 
 ## Risks / open questions (Phase-3 confirmations, not deferrals)
 
-1. **Set/get → vector pairing** (`0x217`/`0x219`/`0x1ff` set which of `vecA/B/C`; `0x218`/`0x21a` get which):
-   pinned by reading the 5 native workers' object-field offsets (`FUN_0047e800/e960/e910` setters,
-   `FUN_0047f360/f2e0` getters — 5 quick decompiles) **or** by the `0x217→0x218` round-trip oracle. The model
-   already supports N vectors; this is a lookup-table fill, ~30 min at the start of Phase 3.
+1. **Set/get → vector pairing — RESOLVED (2026-07-07).** Read the 5 native workers: **V18** (`+0x18/1c/20`) is
+   SET by `0x217` (`FUN_0047e960`) and GET by `0x218` (`FUN_0047f360`) = the anchor vector; **V24**
+   (`+0x24/28/2c`) is SET by `0x219` (`FUN_0047e910`) and GET by `0x21a` (`FUN_0047f2e0`) = the position vector;
+   **V16c** (`+0x16c`) is SET by `0x1ff` (`FUN_0047e800`), no getter in the family. All resolve the object in the
+   **one `ctx+0x408` registry** (via `FUN_0047ded0`) that `0x215` also queries → the model is a single
+   handle→object map, getters return `(0,0,0)` on miss. Constants baked into the Phase-3 plan.
 2. **Slot-allocation policy** (distinct 4..13): confirm against `label_125bd` / the `0x3239` record table
    (whether slots are positional or free-list). A `SlotAllocator` abstraction isolates this; the drift fix
    only needs *distinct, stable* slots per live object.
