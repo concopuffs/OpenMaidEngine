@@ -77,6 +77,20 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void BootingSkinitPopulatesDataTableGlobals()
+    {
+        // Running the SKINIT data script through the session populates the real skill table into the
+        // global bank (the game's boot behavior). Cross-check vs the static extraction (build/data/SKINIT.json):
+        // skill 0 = "飛行" at global-string 0x23a3, field G[0xa6e5b] = 30.
+        var session = new GameSession();
+        var r = session.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new CaptureHost());
+        Assert.Equal("exit", r.Halt);
+        Assert.Equal("飛行", session.GlobalStrings[0x23a3]);
+        Assert.Equal(30, session.Globals[0xa6e5b]);
+        Assert.True(session.Globals.Count > 1000, $"SKINIT should populate the skill table (got {session.Globals.Count})");
+    }
+
+    [Fact]
     public void SeedingFormFlagChangesBehavior()
     {
         // Lily's lines are gated on form flags G[0xa57/8/9]; unseeded => all skipped (0 voices on her lines).

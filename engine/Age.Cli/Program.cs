@@ -66,11 +66,17 @@ if (args[0] == "gfx")
 
 if (args[0] == "play")
 {
-    // play <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global state
-    // across them (optional up-front seeds). The state substrate for cross-scene flow; headless.
+    // play [--boot] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global
+    // state across them (optional up-front seeds). --boot first runs the data-table *INIT scripts so scenes
+    // see the real skill/item/unit/etc. state. The state substrate for cross-scene flow; headless.
+    // The *INIT boot set — all run clean (halt: exit) and populate the game's data tables into globals.
+    string[] bootScripts = { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+                             "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" };
     var scripts = Paths.Scripts();
-    var scenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
-    if (scenes.Count == 0) { Console.WriteLine("usage: play <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
+    bool boot = args.Contains("--boot");
+    var userScenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
+    if (userScenes.Count == 0) { Console.WriteLine("usage: play [--boot] <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
+    var scenes = (boot ? bootScripts.Concat(userScenes) : userScenes).ToList();
     var session = new GameSession();
     foreach (var s in args.Skip(1).Where(a => a.Contains('=')))
     {
