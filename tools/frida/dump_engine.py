@@ -39,8 +39,9 @@ function dump(baseStr, size, tag){
     for (let off = 0; off < size; off += CHUNK){
         const n = Math.min(CHUNK, size - off);
         let buf;
-        try { buf = Memory.readByteArray(base.add(off), n); }
+        try { buf = base.add(off).readByteArray(n); }      // frida 17: method on the pointer
         catch(e){ send({kind:'gap', base:baseStr, off:off, n:n, err:''+e}); continue; }
+        if (buf === null){ send({kind:'gap', base:baseStr, off:off, n:n, err:'null'}); continue; }
         send({kind:'chunk', base:baseStr, off:off, n:n, tag:tag}, buf);
     }
     send({kind:'done', base:baseStr, size:size, tag:tag});
@@ -52,16 +53,18 @@ const rw = ranges('rw-');
 
 // landmark check: the AGF decoder is documented at AGE.EXE+0x74f1f (stable, unpacked in-place)
 let landmark = null;
-try { landmark = Memory.readByteArray(mod.base.add(0x74f1f), 16); } catch(e){}
+try { landmark = mod.base.add(0x74f1f).readByteArray(16); } catch(e){}
 
 send({kind:'manifest',
       age_base: mod.base.toString(), age_size: mod.size,
       rx: rx, rw: rw}, landmark);
 
-// dump targets: the AGE.EXE module image, plus every r-x range >= 1 MB (the unpacked heap code)
+// dump targets: the AGE.EXE module image, plus every ANONYMOUS r-x range >= 1 MB (the unpacked heap
+// code). Skip file-backed r-x ranges — those are Windows system DLLs, not the engine.
 dump(mod.base.toString(), mod.size, 'age-module');
 for (const r of rx){
     if (r.base === mod.base.toString()) continue;      // module already covered
+    if (r.file) continue;                              // skip system DLLs
     if (r.size >= 1*1024*1024) dump(r.base, r.size, 'rx-heap');
 }
 send({kind:'alldone'});
