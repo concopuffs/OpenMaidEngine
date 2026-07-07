@@ -64,6 +64,81 @@ if (args[0] == "gfx")
     return 0;
 }
 
+if (args[0] == "play")
+{
+    // play [--boot] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global
+    // state across them (optional up-front seeds). --boot first runs the data-table *INIT scripts so scenes
+    // see the real skill/item/unit/etc. state. The state substrate for cross-scene flow; headless.
+    // The *INIT boot set — all run clean (halt: exit) and populate the game's data tables into globals.
+    string[] bootScripts = { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+                             "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" };
+    var scripts = Paths.Scripts();
+    bool boot = args.Contains("--boot");
+    var userScenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
+    if (userScenes.Count == 0) { Console.WriteLine("usage: play [--boot] <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
+    var scenes = (boot ? bootScripts.Concat(userScenes) : userScenes).ToList();
+    // --state <file>: start from a saved snapshot (e.g. a pre-booted state) instead of booting fresh.
+    string? StateArg(string flag) { int i = Array.IndexOf(args, flag); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
+    var loadState = StateArg("--state");
+    var saveState = StateArg("--save-state");
+    var session = loadState != null ? GameSession.FromJson(File.ReadAllText(loadState)) : new GameSession();
+    if (loadState != null) Console.WriteLine($"[state] loaded {session.Globals.Count} globals from {loadState}");
+    foreach (var s in args.Skip(1).Where(a => a.Contains('=')))
+    {
+        var kv = s.Split('=');
+        int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
+        long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
+        session.Seed(k, v);
+    }
+    long totalLines = 0;
+    foreach (var name in scenes)
+    {
+        var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
+        var r = session.RunScene(script, table, new CaptureHost());
+        totalLines += r.Emitted.Count;
+        Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
+    }
+    Console.WriteLine($"total: {totalLines} lines across {scenes.Count} scene(s); {session.Globals.Count} globals carried");
+    if (saveState != null) { File.WriteAllText(saveState, session.ToJson()); Console.WriteLine($"[state] saved -> {saveState}"); }
+    return 0;
+}
+
+if (args[0] == "sweep")
+{
+    // sweep [--boot] — run every SC/SP scene through GameSession (each from a fresh or booted-from-snapshot
+    // baseline) and report halt distribution + line counts. Validates the VM + state substrate at scale and
+    // surfaces how booted real data affects the corpus. Headless.
+    var sceneRe = new Regex(@"^S[CP]\d{4}\.BIN$");
+    var scripts = Paths.Scripts();
+    var names = scripts.Keys.Where(n => sceneRe.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+    bool boot = args.Contains("--boot");
+    string? baseline = null;
+    if (boot)
+    {
+        var bootSession = new GameSession();
+        foreach (var s in new[] { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+                                  "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" })
+            bootSession.RunScene(Sys4Loader.Load(scripts[s], table), table, new CaptureHost());
+        baseline = bootSession.ToJson();
+        Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
+    }
+    var haltDist = new SortedDictionary<string, int>(StringComparer.Ordinal);
+    long totalLines = 0; var anomalies = new List<string>();
+    foreach (var name in names)
+    {
+        var session = baseline != null ? GameSession.FromJson(baseline) : new GameSession();
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost());
+        var halt = r.Halt ?? "null";
+        haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
+        totalLines += r.Emitted.Count;
+        if (halt != "exit") anomalies.Add($"{name}: {r.Emitted.Count} lines, halt={halt}");
+    }
+    Console.WriteLine($"swept {names.Count} scenes{(boot ? " (booted)" : "")}: {totalLines} total lines");
+    Console.WriteLine("halt distribution: " + string.Join(", ", haltDist.Select(kv => $"{kv.Key}={kv.Value}")));
+    if (anomalies.Count > 0) { Console.WriteLine($"non-exit halts ({anomalies.Count}):"); foreach (var a in anomalies) Console.WriteLine("  " + a); }
+    return 0;
+}
+
 if (args[0] == "trace")
 {
     var scene = new Regex(@"^S[CP]\d{4}\.BIN$");
