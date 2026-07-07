@@ -122,11 +122,43 @@ if (args[0] == "sweep")
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
     }
+    // Optional seeds turn sweep into a story-state explorer: run each scene with AND without the seeds
+    // (from the same baseline) and report which scenes' dialogue changes — i.e. what a story flag affects.
+    var seeds = new List<(int, long)>();
+    foreach (var s in args.Skip(1).Where(a => a.Contains('=')))
+    {
+        var kv = s.Split('=');
+        int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
+        long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
+        seeds.Add((k, v));
+    }
+    GameSession Fresh() => baseline != null ? GameSession.FromJson(baseline) : new GameSession();
+    int RunLines(string name, bool seeded)
+    {
+        var session = Fresh();
+        if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
+        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost()).Emitted.Count;
+    }
+
+    if (seeds.Count > 0)
+    {
+        var changed = new List<string>();
+        foreach (var name in names)
+        {
+            int baseLines = RunLines(name, false), seededLines = RunLines(name, true);
+            if (baseLines != seededLines) changed.Add($"{name}: {baseLines} -> {seededLines} lines ({seededLines - baseLines:+#;-#;0})");
+        }
+        var seedStr = string.Join(" ", seeds.Select(s => $"0x{s.Item1:x}={s.Item2}"));
+        Console.WriteLine($"seed [{seedStr}]{(boot ? " (booted)" : "")}: {changed.Count}/{names.Count} scenes change dialogue");
+        foreach (var c in changed) Console.WriteLine("  " + c);
+        return 0;
+    }
+
     var haltDist = new SortedDictionary<string, int>(StringComparer.Ordinal);
     long totalLines = 0; var anomalies = new List<string>();
     foreach (var name in names)
     {
-        var session = baseline != null ? GameSession.FromJson(baseline) : new GameSession();
+        var session = Fresh();
         var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost());
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
