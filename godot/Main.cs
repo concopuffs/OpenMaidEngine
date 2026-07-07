@@ -2,8 +2,11 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
+using Age.Engine.Hosting;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
+using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
 public partial class Main : Godot.Control
 {
@@ -90,9 +93,14 @@ public partial class Main : Godot.Control
         }
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
+        // runs a SYNTHESIZED scene (not a real scene in a crippled mode) so its output is deterministic.
+        Script script;
+        IScriptProvider provider;
+        if (_selftest) (script, provider) = BuildSelfTestScene(table);
+        else { script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table); provider = Sys4ScriptProvider.Load(table); }
         _host = new GodotAdvHost(this, ResourceMap.Load(), "SC0000");
-        _vm = new VirtualMachine(script, table, _host);
+        _vm = new VirtualMachine(script, table, _host, null, provider);
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // seed initial state before running
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
@@ -183,25 +191,49 @@ public partial class Main : Godot.Control
     public void ClearPage() { _text.Text = ""; _status.Text = ""; }
     public void ShowEnd() => _status.Text = "— end —";
 
+    // The selftest verifies the GODOT PLUMBING (background thread + semaphore suspend on wait-for-input
+    // + CallDeferred marshalling) drives the VM faithfully — i.e. produces the SAME output as a plain
+    // in-process run of the identical scene. Full op handling is on (the synthetic scene includes a real
+    // nested call-script); the expected value is computed live from a headless run, not a frozen golden.
     private void RunSelfTest()
     {
-        var expected = LoadExpected("SC0000.BIN");
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var (script, provider) = BuildSelfTestScene(table);
+        var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider);
+        headless.Run();
+        var expected = headless.Emitted.ConvertAll(e => e.Offset);
+
         var actual = _host.Captured.ConvertAll(c => c.Offset);
-        bool ok = expected != null && actual.Count == expected.Count;
-        for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected![i];
-        if (ok) GD.Print($"SELFTEST OK: {actual.Count} lines match vm0 trace");
-        else GD.Print($"SELFTEST FAIL: cs={actual.Count} expected={(expected?.Count.ToString() ?? "n/a")}");
+        bool ok = actual.Count == expected.Count;
+        for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected[i];
+        if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling)");
+        else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}");
         GetTree().Quit(ok ? 0 : 1);
     }
 
-    private static List<int>? LoadExpected(string scene)
+    // A deterministic synthesized scene: show-text, wait-for-input (exercises the suspend plumbing), a
+    // nested call-script into a synthetic subroutine (exercises call-script handling), shared globals.
+    private static (Script, IScriptProvider) BuildSelfTestScene(OpcodeTable table)
     {
-        string p = System.IO.Path.Combine(Paths.Build, "vm0-trace.json");
-        if (!System.IO.File.Exists(p)) return null;
-        using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(p));
-        if (!doc.RootElement.TryGetProperty(scene, out var e)) return null;
-        var list = new List<int>();
-        foreach (var x in e.GetProperty("offsets").EnumerateArray()) list.Add(x.GetInt32());
-        return list;
+        (int, Operand[]) ShowText(int s) => (0x6e, new[] { new Operand(2, s), new Operand(0, 0) });
+        (int, Operand[]) Wait() => (0x72, new[] { new Operand(0, 0) });
+        (int, Operand[]) CallScript(long id) => (0x3, new[] { new Operand(0, id) });
+        (int, Operand[]) MovGG(int d, int s) => (0x55, new[] { new Operand(3, d), new Operand(3, s) });
+        (int, Operand[]) MovGI(int d, long v) => (0x55, new[] { new Operand(3, d), new Operand(0, v) });
+        (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
+
+        var callee = ScriptAssembler.Assemble(table, "SUBSCENE",
+            new List<(int, Operand[])> { ShowText(0), MovGI(0x31, 42), Exit() }, new[] { "Sub" });
+        var caller = ScriptAssembler.Assemble(table, "SELFTEST",
+            new List<(int, Operand[])> { ShowText(0), Wait(), ShowText(1), CallScript(5), MovGG(0x30, 0x31), Exit() },
+            new[] { "Hello", "World" });
+        return (caller, new SelfTestProvider(callee));
+    }
+
+    private sealed class SelfTestProvider : IScriptProvider
+    {
+        private readonly Script _callee;
+        public SelfTestProvider(Script callee) => _callee = callee;
+        public Script? GetById(long id) => id == 5 ? _callee : null;
     }
 }
