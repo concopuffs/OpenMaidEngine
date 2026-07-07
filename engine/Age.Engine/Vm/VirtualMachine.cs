@@ -23,6 +23,7 @@ public sealed class VirtualMachine
 
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
+    public GfxState Gfx { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
@@ -225,6 +226,38 @@ public sealed class VirtualMachine
             }
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
+            // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
+            case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
+                Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
+            case "query-gfx-field?":    // 0x216 (out)(idx)
+                Write(a[0], Gfx.QueryField(Read(a[1]))); return pc + 1;
+            case "get-gfx-geom3?":      // 0x218 (handle)(outA)(outB)(outC) <- V18
+            {
+                var v = Gfx.TryGet(Read(a[0]))?.V18 ?? default;
+                Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return pc + 1;
+            }
+            case "get-gfx-geom3-b?":    // 0x21a (handle)(outA)(outB)(outC) <- V24
+            {
+                var v = Gfx.TryGet(Read(a[0]))?.V24 ?? default;
+                Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return pc + 1;
+            }
+            case "set-gfx-geom3":       // 0x217 (handle)(a)(b)(c) -> V18
+                Gfx.GetOrCreate(Read(a[0])).V18 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "set-gfx-geom3-b":     // 0x219 (handle)(a)(b)(c) -> V24
+                Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "set-gfx-geom3-c":     // 0x1ff (handle)(a)(b)(c) -> V16c
+                Gfx.GetOrCreate(Read(a[0])).V16c = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "set-gfx-field64":     // 0x212 (idx)(val)
+                Gfx.GetOrCreate(Read(a[0])).Field64 = Read(a[1]); return pc + 1;
+            case "set-gfx-xy":          // 0x213 (idx)(x)(y)
+            {
+                var o = Gfx.GetOrCreate(Read(a[0])); o.Field68 = Read(a[1]); o.Field6c = Read(a[2]); return pc + 1;
+            }
+            case "gfx-cmd-register":    // 0x1a2 (val) — register/select
+            case "gfx-elem-create":     // 0x1f7 (handle)(count) — ensure object + slot
+                Gfx.GetOrCreate(Read(a[0])); return pc + 1;
+            case "gfx-elem-release":    // 0x1fa (handle)
+                Gfx.Release(Read(a[0])); return pc + 1;
             default:
                 // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
                 // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.
