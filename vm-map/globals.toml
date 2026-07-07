@@ -163,23 +163,23 @@ depends_on = []
 [[global]]
 address = "0x6be"
 name = ""
-category = "story-flag"
+category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 146 scenes / 150 scripts; compared against [0]; writers=none (external/native?)."
-source = "auto-shape"
-confidence = "med"
+usage = "ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (passed to render helpers u0041F9C0/u00415F70 alongside 0x6c3). NOT a story flag — high scene-reach is from the shared render chrome. Branch-read in 146 scenes."
+source = "inference"
+confidence = "low"
 depends_on = []
 
 [[global]]
 address = "0x6c3"
 name = ""
-category = "story-flag"
+category = "ui-toggle"
 type = "int"
 value_domain = "?"
-usage = "TODO: confirm. Branch-read in 136 scenes / 138 scripts; compared against []; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
-source = "auto-shape"
-confidence = "med"
+usage = "ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (`mov 0x6c3,<val>` then `u00415F70(0x6c3)` right after draw-texture; paired with 0x6be). NOT a story flag. Branch-read in 136 scenes."
+source = "inference"
+confidence = "low"
 depends_on = []
 
 [[global]]
@@ -195,13 +195,13 @@ depends_on = []
 
 [[global]]
 address = "0xa99"
-name = ""
+name = "game_started"
 category = "story-flag"
 type = "int"
 value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 2 scenes / 3 scripts; compared against [1]; writers=['GAMESTART.BIN']."
-source = "auto-shape"
-confidence = "med"
+usage = "New-game/playthrough gate: set to 1 by GAMESTART.BIN, then tested `==1` in story scenes (SC0200/SC0490, e.g. `0xa99==1 AND stat>3`). Marks that the game proper has begun. INFERENCE from the GAMESTART writer — confirm exact semantics before relying on it."
+source = "inference"
+confidence = "low"
 depends_on = []
 
 [[global]]
@@ -383,12 +383,12 @@ depends_on = []
 [[global]]
 address = "0x204f4"
 name = ""
-category = "story-flag"
+category = "unknown"
 type = "int"
-value_domain = "one of {1, 3, 4, 5, 10, 15, 20, 25}"
-usage = "TODO: confirm. Branch-read in 2 scenes / 4 scripts; compared against [1, 3, 4, 5, 10, 15, 20, 25]; writers=['FIELD.BIN']."
-source = "auto-shape"
-confidence = "med"
+value_domain = "small int"
+usage = "Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes."
+source = "inference"
+confidence = "low"
 depends_on = []
 
 [[global]]
@@ -537,12 +537,12 @@ depends_on = []
 [[global]]
 address = "0x6249e"
 name = ""
-category = "story-flag"
+category = "unknown"
 type = "int"
-value_domain = "one of {0, 1, 2, 3, 4, 5, 6, 7}"
-usage = "TODO: confirm. Branch-read in 78 scenes / 81 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
-source = "auto-shape"
-confidence = "med"
+value_domain = "0..7"
+usage = "Graphics-subsystem state in the 0x624xx gfx-object range (set via `mov 0x6249e,<n>` alongside `mov 0x62450,<slot>`). Likely a draw/slot parameter, NOT a story flag. Branch-read in 78 scenes."
+source = "inference"
+confidence = "low"
 depends_on = []
 
 [[global]]

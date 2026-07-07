@@ -335,12 +335,10 @@
 |---|---|---|---|---|
 | `0x0` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 21 scripts; compared against [0, 1, 2, 3, 4, 5]; writers=['BTL.BIN', 'CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']. |
 | `0x699` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CAMP.BIN', 'EVOLVE.BIN', 'SALLY.BIN', 'SYSTEM4.BIN']. |
-| `0x6be` | — | med | auto-shape | TODO: confirm. Branch-read in 146 scenes / 150 scripts; compared against [0]; writers=none (external/native?). |
-| `0x6c3` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 138 scripts; compared against []; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xa57` | lily_form_a | high | investigation | Lily current-form flag A. Exactly one of form A/B/C is 1; gates form-specific voiced dialogue (seeding 0xa57=1 -> SC0000 186->229 lines). Set externally (menu/save), no static writer. |
 | `0xa58` | lily_form_b | high | investigation | Lily current-form flag B. See lily_form_a. |
 | `0xa59` | lily_form_c | high | investigation | Lily current-form flag C. See lily_form_a. |
-| `0xa99` | — | med | auto-shape | TODO: confirm. Branch-read in 2 scenes / 3 scripts; compared against [1]; writers=['GAMESTART.BIN']. |
+| `0xa99` | game_started | low | inference | New-game/playthrough gate: set to 1 by GAMESTART.BIN, then tested `==1` in story scenes (SC0200/SC0490, e.g. `0xa99==1 AND stat>3`). Marks that the game proper has begun. INFERENCE from the GAMESTART writer — confirm exact semantics before relying on it. |
 | `0xd92` | — | med | auto-shape | TODO: confirm. Branch-read in 29 scenes / 29 scripts; compared against [1]; writers=none (external/native?). |
 | `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
@@ -354,7 +352,6 @@
 | `0x767a` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'FIELD.BIN']. |
 | `0x767b` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 150 scripts; compared against [0, 1]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x767d` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']. |
-| `0x204f4` | — | med | auto-shape | TODO: confirm. Branch-read in 2 scenes / 4 scripts; compared against [1, 3, 4, 5, 10, 15, 20, 25]; writers=['FIELD.BIN']. |
 | `0x204f5` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 8, 16, 32, 64]; writers=['FIELD.BIN']. |
 | `0x204f7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']. |
 | `0x2052e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 1, 2, 3]; writers=['FIELD.BIN']. |
@@ -368,7 +365,6 @@
 | `0x617fd` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 25, 50]; writers=['GAMESTART.BIN', 'TUNE.BIN']. |
 | `0x62428` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CALLBACK_WINDOW.BIN', 'DEBUG.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']. |
 | `0x62439` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['CHMENU.BIN', 'INFOAF.BIN', 'INFOCH.BIN', 'INFOEN.BIN']. |
-| `0x6249e` | — | med | auto-shape | TODO: confirm. Branch-read in 78 scenes / 81 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0x624be` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0]; writers=['MENU.BIN']. |
 | `0x6642c` | route_branch | med | inference | Route/branch selector: sole writer is BUNKI.BIN (分岐 = branching), enum 0..7, branch-read in 36 scenes. Selects a story branch/route. INFERENCE from the BUNKI writer + enum — confirm exact routes via a listing/sweep. |
 | `0x665d3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [1, 2, 4, 8, 32, 64, 128, 65536]; writers=['ALCHEMY.BIN', 'BUNKI.BIN', 'DEBUGADV.BIN', 'EVOLVE.BIN']. |
@@ -3518,6 +3514,8 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x6be` | — | low | inference | ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (passed to render helpers u0041F9C0/u00415F70 alongside 0x6c3). NOT a story flag — high scene-reach is from the shared render chrome. Branch-read in 146 scenes. |
+| `0x6c3` | — | low | inference | ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (`mov 0x6c3,<val>` then `u00415F70(0x6c3)` right after draw-texture; paired with 0x6be). NOT a story flag. Branch-read in 136 scenes. |
 | `0x6c9` | ui_toggle_0 | med | investigation | ADV-chrome hotspot button toggle (op 0x90 site, near-universal across scenes). |
 | `0x6ca` | ui_toggle_1 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
 | `0x6cb` | ui_toggle_2 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
@@ -3532,6 +3530,8 @@
 | `0x3301` | — | low | inference | Config/settings global (INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 6 scripts; compared against [1, 2]. |
 | `0x3303` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 8 scripts; compared against [1]. |
 | `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |
+| `0x204f4` | — | low | inference | Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes. |
+| `0x6249e` | — | low | inference | Graphics-subsystem state in the 0x624xx gfx-object range (set via `mov 0x6249e,<n>` alongside `mov 0x62450,<slot>`). Likely a draw/slot parameter, NOT a story flag. Branch-read in 78 scenes. |
 | `0x84b` | — | high | auto-shape | unit-name-table |
 | `0xc33` | — | high | auto-shape | unit-desc-table |
 | `0x101b` | — | high | auto-shape | unit-desc1-table |
