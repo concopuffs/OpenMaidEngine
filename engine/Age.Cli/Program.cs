@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 
@@ -9,13 +11,25 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson);
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var provider = Sys4ScriptProvider.Load(table);
 
+// --trace [--trace-file <path>] [--trace-steps] → a TextTraceSink to console or file; else inert.
+static ITraceSink BuildSink(string[] a, OpcodeTable tbl)
+{
+    if (!a.Contains("--trace")) return NullTraceSink.Instance;
+    bool steps = a.Contains("--trace-steps");
+    int fi = Array.IndexOf(a, "--trace-file");
+    TextWriter w = (fi >= 0 && fi + 1 < a.Length)
+        ? new StreamWriter(a[fi + 1]) { AutoFlush = true }
+        : Console.Out;
+    return new TextTraceSink(w, tbl, steps);
+}
+
 if (args.Length == 0) { Console.WriteLine("usage: run <file> | trace <out.json>"); return 1; }
 
 if (args[0] == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
     var runHost = new CaptureHost();
-    var vm = new VirtualMachine(script, table, runHost, null, provider);
+    var vm = new VirtualMachine(script, table, runHost, null, provider, BuildSink(args, table));
     vm.Run();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {vm.CallScriptDispatches} call-scripts (halt: {vm.HaltReason})");
     foreach (var (off, text, scr) in vm.Emitted.Take(30)) Console.WriteLine($"  [{scr} 0x{off:x}] {text}");
@@ -100,7 +114,7 @@ if (args[0] == "play")
     foreach (var name in scenes)
     {
         var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
-        var r = session.RunScene(script, table, new CaptureHost(), null, provider);
+        var r = session.RunScene(script, table, new CaptureHost(), null, provider, BuildSink(args, table));
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
     }
@@ -165,7 +179,7 @@ if (args[0] == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider);
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider, BuildSink(args, table));
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;

@@ -226,7 +226,9 @@ public sealed class VirtualMachine
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
             default:
-                _sink.Emit(TraceEvent.Stub(op, pc)); return pc + 1;
+                // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
+                // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.
+                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc)); return pc + 1;
         }
     }
 }
