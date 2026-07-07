@@ -14,7 +14,7 @@ if (args[0] == "run")
     var vm = new VirtualMachine(script, table, new CaptureHost());
     vm.Run();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text (halt: {vm.HaltReason})");
-    foreach (var (off, text) in vm.Emitted.Take(20)) Console.WriteLine($"  [{off:x}] {text}");
+    foreach (var (off, text, _) in vm.Emitted.Take(20)) Console.WriteLine($"  [{off:x}] {text}");
     return 0;
 }
 

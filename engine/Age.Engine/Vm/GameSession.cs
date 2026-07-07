@@ -64,4 +64,4 @@ public sealed class GameSession
 }
 
 /// <summary>The observable result of running one scene into a <see cref="GameSession"/>.</summary>
-public sealed record SceneResult(IReadOnlyList<(int Offset, string Text)> Emitted, string? Halt, long Steps);
+public sealed record SceneResult(IReadOnlyList<(int Offset, string Text, string Script)> Emitted, string? Halt, long Steps);
