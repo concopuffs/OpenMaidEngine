@@ -72,16 +72,28 @@ public partial class Main : Godot.Control
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
+        var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         for (int i = 0; i < userArgs.Length; i++)
         {
             if (userArgs[i] == "--shot" && i + 1 < userArgs.Length) _shotPath = userArgs[i + 1];
             if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
+            if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
+            {
+                var kv = userArgs[i + 1].Split('=');
+                if (kv.Length == 2)
+                {
+                    int k = kv[0].StartsWith("0x") ? System.Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
+                    long v = kv[1].StartsWith("0x") ? System.Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
+                    seeds.Add((k, v));
+                }
+            }
         }
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
         _host = new GodotAdvHost(this, ResourceMap.Load(), "SC0000");
         _vm = new VirtualMachine(script, table, _host);
+        foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // seed initial state before running
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
         if (_selftest)

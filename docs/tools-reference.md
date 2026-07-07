@@ -59,6 +59,28 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `vm0.py` | Headless Python bytecode VM (Phase A0 execution-model prototype; reuses `sys4load`). | `--test` (RECOVER unit test) · `--sweep [N]` (oracle coverage) · `--scene NAME` · `--settex NAME` (set-texture resId trace + exec trace) · `<file.BIN>` | corpus → stdout; `build/vm0-trace.json`; `build/settex-<NAME>.json` |
 | `correlate_scope.py` | Align the VM's `set-texture(resId)` trace with the game's Frida load order → tag each load's DATA2 package, flag package transitions, dump the significant ops in each transition span (the **scope selector** hunt). | `correlate_scope.py <SCENE>` | `build/settex-<SCENE>.json` + `build/frida-load-order-result.json` + index → stdout |
 
+## Engine (C#) — VM core, CLI, Godot frontend
+
+The `engine/` .NET solution (`AgeEngine.sln`) is the runtime VM; `godot/` is the ADV frontend. Not
+Python, but listed here as the things you *run*. Build: `dotnet build engine/AgeEngine.sln`; test:
+`dotnet test engine/AgeEngine.sln`. Run a CLI command: `dotnet run --project engine/Age.Cli -- <cmd>`.
+
+| Command | Purpose | Notes |
+|---|---|---|
+| `run <file.BIN>` | Execute a scene, print steps + first 20 show-text lines. | `CaptureHost` (headless). |
+| `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps (the A1 differential-test oracle). | writes JSON. |
+| `audio <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `play-bgm`/`play-voice` in order + resolved file. | optional global seeds. |
+| `gfx <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` with resolved file + computed geometry (the headless geometry oracle). | optional seeds. |
+| `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`. |
+| `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale validation (unbooted matches vm0.py: 294 exit + 3 LOOP). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
+
+**Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
+--import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`. It
+plays `SC0000` from the real bytecode. User args (after `--`):
+- `--selftest` — headless; asserts the emitted 186 offsets == `build/vm0-trace.json` (parity guardrail). Exits.
+- `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue (186→229 lines).
+- `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (headless-verifiable render check / dev screenshots).
+
 ## Asset resolution / graphics
 
 | Tool | Purpose | Run | Reads → Writes |
