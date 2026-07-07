@@ -34,11 +34,6 @@
 - **grounding:** source=inference, confidence=low
 - **evidence:** confirm via frida
 
-### 0x215 `count?` (u00421160, argc 2)
-- **summary:** 2 args -> writes global then result tested >0 (gre/lt) — count/search-returns-index helper
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via unicorn
-
 ## draw
 
 ### 0x1f7 `ui-elem?` (u00420270, argc 2)
@@ -85,6 +80,11 @@
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
 - **grounding:** source=inference, confidence=med
 - **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
+
+### 0x215 `query-gfx-object?` (u00421160, argc 2)
+- **summary:** 0x215 (out)(handle_id) — queries the native graphics-object manager by element handle-id (the value in 0x62455[idx], often +1/+2 for a sub-element); writes the object's slot/status into `out`, sign-tested (gre/lt 0) to drive label_12649's slot-select branch and set the working slot G[0x62452]. KEYSTONE for per-object slot selection — stubbing it collapses every draw onto slot 0, so the anchor-preserve geometry reads foreign-sized textures → cumulative bg/sprite drift (see docs/phase-a-slice-plan.md A2b-Geometry). Reads native object-manager state (NOT VM-computable). Exact return semantics: RE via unicorn (native handler @0x421160).
+- **grounding:** source=investigation, confidence=med
+- **evidence:** SC0000 label_12649 (0x12670) + label_123ef (0x12419/0x12450): called with 0x62455[idx] handle-ids (±offset); result gre/lt 0 branches slot-select and feeds ui-elem?(0x1f7)/set-texture slot. Record table 0x3239 (label_125bd @0x0050f) assigns per-object slots 4..13. Handles are the 0xcf08/0xe678/0xd6d8 element-id family.
 
 ### 0x217 `gfx-geom?` (u004211E0, argc 4)
 - **summary:** 4 global-ints; part of a 0x217/0x218/0x21a geometry chain
