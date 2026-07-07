@@ -5,16 +5,19 @@ using Age.Engine.Sys4;
 using Age.Engine.Vm;
 
 var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+// call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
+// `trace` stays provider-less on purpose (the base-ISA offset oracle).
+var provider = Sys4ScriptProvider.Load(table);
 
 if (args.Length == 0) { Console.WriteLine("usage: run <file> | trace <out.json>"); return 1; }
 
 if (args[0] == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
-    var vm = new VirtualMachine(script, table, new CaptureHost());
+    var vm = new VirtualMachine(script, table, new CaptureHost(), null, provider);
     vm.Run();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text (halt: {vm.HaltReason})");
-    foreach (var (off, text) in vm.Emitted.Take(20)) Console.WriteLine($"  [{off:x}] {text}");
+    foreach (var (off, text, _) in vm.Emitted.Take(20)) Console.WriteLine($"  [{off:x}] {text}");
     return 0;
 }
 
@@ -94,7 +97,7 @@ if (args[0] == "play")
     foreach (var name in scenes)
     {
         var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
-        var r = session.RunScene(script, table, new CaptureHost());
+        var r = session.RunScene(script, table, new CaptureHost(), null, provider);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
     }
@@ -118,7 +121,7 @@ if (args[0] == "sweep")
         var bootSession = new GameSession();
         foreach (var s in new[] { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
                                   "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" })
-            bootSession.RunScene(Sys4Loader.Load(scripts[s], table), table, new CaptureHost());
+            bootSession.RunScene(Sys4Loader.Load(scripts[s], table), table, new CaptureHost(), null, provider);
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
     }
@@ -137,7 +140,7 @@ if (args[0] == "sweep")
     {
         var session = Fresh();
         if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
-        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost()).Emitted.Count;
+        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider).Emitted.Count;
     }
 
     if (seeds.Count > 0)
@@ -159,7 +162,7 @@ if (args[0] == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost());
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;

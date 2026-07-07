@@ -6,6 +6,7 @@ public sealed class VirtualMachine
 {
     private const long NoJump = 0xFFFFFFFF;
     private const int HALT = int.MinValue;
+    private const int FRAME_RETURN = int.MinValue + 1;
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12;
 
@@ -13,18 +14,18 @@ public sealed class VirtualMachine
     private readonly OpcodeTable _t;
     private readonly IHost _host;
     private readonly VmOptions _o;
-    private readonly Frame _fr = new();
-    private readonly List<int> _callstack = new();
-    private readonly Dictionary<int, int> _emitSeen = new();
+    private readonly IScriptProvider? _provider;
+    private ExecFrame _cur = null!;
+    private int _depth;
 
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
-    public List<(int Offset, string Text)> Emitted { get; } = new();
+    public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
 
-    public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null)
-    { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); }
+    public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null, IScriptProvider? provider = null)
+    { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider; }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
@@ -38,9 +39,9 @@ public sealed class VirtualMachine
         T_IMM => op.Value,
         T_GINT or T_GFLOAT => Gi(Globals, (int)op.Value),
         T_GPTR => Gi(Globals, (int)Gi(Globals, (int)op.Value)),
-        T_LINT => Gi(_fr.I, (int)op.Value),
-        T_LFLOAT => Gi(_fr.F, (int)op.Value),
-        T_LPTR => Gi(Globals, (int)Gi(_fr.P, (int)op.Value)),
+        T_LINT => Gi(_cur.Locals.I, (int)op.Value),
+        T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
+        T_LPTR => Gi(Globals, (int)Gi(_cur.Locals.P, (int)op.Value)),
         _ => op.Value,
     };
 
@@ -50,17 +51,17 @@ public sealed class VirtualMachine
         {
             case T_GINT: case T_GFLOAT: Globals[(int)op.Value] = val; break;
             case T_GPTR: Globals[(int)Gi(Globals, (int)op.Value)] = val; break;
-            case T_LINT: _fr.I[(int)op.Value] = val; break;
-            case T_LFLOAT: _fr.F[(int)op.Value] = val; break;
-            case T_LPTR: Globals[(int)Gi(_fr.P, (int)op.Value)] = val; break;
+            case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
+            case T_LFLOAT: _cur.Locals.F[(int)op.Value] = val; break;
+            case T_LPTR: Globals[(int)Gi(_cur.Locals.P, (int)op.Value)] = val; break;
         }
     }
 
     private string ReadStr(Operand op) => op.Type switch
     {
-        T_STR => _s.GetString((int)op.Value),
+        T_STR => _cur.Script.GetString((int)op.Value),
         T_GSTR => Gs(GlobalStrings, (int)op.Value),
-        T_LSTR => Gs(_fr.S, (int)op.Value),
+        T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
         _ => "",
     };
 
@@ -69,15 +70,15 @@ public sealed class VirtualMachine
         switch (op.Type)
         {
             case T_GSTR: GlobalStrings[(int)op.Value] = val; break;
-            case T_LSTR: _fr.S[(int)op.Value] = val; break;
+            case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
         }
     }
 
     private long BaseAddr(Operand op) => op.Type switch
     {
         T_IMM or T_GINT or T_GFLOAT or T_GSTR or T_GPTR => op.Value,
-        T_LINT => Gi(_fr.I, (int)op.Value),
-        T_LPTR => Gi(_fr.P, (int)op.Value),
+        T_LINT => Gi(_cur.Locals.I, (int)op.Value),
+        T_LPTR => Gi(_cur.Locals.P, (int)op.Value),
         _ => op.Value,
     };
 
@@ -85,24 +86,39 @@ public sealed class VirtualMachine
     {
         switch (dst.Type)
         {
-            case T_LPTR: _fr.P[(int)dst.Value] = addr; break;
+            case T_LPTR: _cur.Locals.P[(int)dst.Value] = addr; break;
             case T_GPTR: Globals[(int)dst.Value] = addr; break;
             default: Write(dst, Gi(Globals, (int)addr)); break;
         }
     }
 
+    private enum FrameOutcome { Returned, Halted, RanOff }
+
     public void Run(int entryOffset = 0)
     {
-        int pc = _s.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
-        while (pc >= 0 && pc < _s.Instructions.Count)
+        var top = new ExecFrame(_s, _s.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0);
+        var outcome = RunFrame(top);
+        if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
+        else if (outcome == FrameOutcome.Returned) HaltReason ??= "exit";
+        // Halted: HaltReason already set by the halting op.
+    }
+
+    private FrameOutcome RunFrame(ExecFrame frame)
+    {
+        var prev = _cur; _cur = frame; _depth++;
+        var outcome = FrameOutcome.RanOff;
+        int pc = frame.Pc;
+        while (pc >= 0 && pc < frame.Script.Instructions.Count)
         {
-            if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; return; }
+            if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
             Steps++;
-            int next = Step(_s.Instructions[pc], pc);
-            if (next == HALT) return;
+            int next = Step(frame.Script.Instructions[pc], pc);
+            if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
+            if (next == HALT) { outcome = FrameOutcome.Halted; break; }
             pc = next;
         }
-        HaltReason ??= "pc-out-of-range";
+        _cur = prev; _depth--;
+        return outcome;
     }
 
     private int Step(Instruction ins, int pc)
@@ -139,28 +155,40 @@ public sealed class VirtualMachine
             case "bit-reset": Write(a[0], Read(a[0]) & ~Read(a[1])); return pc + 1;
             case "check-bit": Write(a[0], (Read(a[1]) >> (int)(Read(a[2]) & 31)) & 1); return pc + 1;
             case "copy-to-global": Write(a[0], Read(a[1])); return pc + 1;
-            case "jmp": return _s.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
-            case "call": _callstack.Add(pc + 1); return _s.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
+            case "jmp": return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
+            case "call": _cur.CallStack.Add(pc + 1); return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
             case "ret":
-                if (_callstack.Count > 0) { int r = _callstack[^1]; _callstack.RemoveAt(_callstack.Count - 1); return r; }
-                HaltReason = "ret-underflow"; return HALT;
+                if (_cur.CallStack.Count > 0) { int r = _cur.CallStack[^1]; _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1); return r; }
+                return FRAME_RETURN;    // empty intra-call stack => return from the script frame
             case "jcc":
             {
                 long tgt = Read(a[0]) != 0 ? a[1].Value : a[2].Value;
-                return tgt == NoJump ? pc + 1 : _s.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1);
+                return tgt == NoJump ? pc + 1 : _cur.Script.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1);
             }
             case "exit":
-            case "exit-script": HaltReason = "exit"; return HALT;
-            case "call-script": _host.CallScript(a.Count > 0 ? Read(a[0]) : 0); return pc + 1;
+            case "exit-script": return FRAME_RETURN;
+            case "call-script":
+            {
+                long id = a.Count > 0 ? Read(a[0]) : 0;
+                _host.CallScript(id);                       // notify (diagnostics)
+                if (_provider == null) return pc + 1;       // no script source: prior stub behavior
+                if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return HALT; }
+                var child = _provider.GetById(id);
+                if (child == null) { HaltReason ??= $"callscript-unresolved:0x{id:x}"; return HALT; }
+                var entry = child.IndexByOffset.TryGetValue(0, out var ci) ? ci : 0;
+                var outcome = RunFrame(new ExecFrame(child, entry));
+                if (outcome == FrameOutcome.Halted) return HALT;   // propagate whole-VM halt up
+                return pc + 1;                                      // Returned / RanOff: resume caller
+            }
             case "show-text":
                 foreach (var o in a)
                 {
                     if (o.Type != T_STR) continue;
                     int off = (int)o.Value;
-                    _emitSeen.TryGetValue(off, out var c); c++; _emitSeen[off] = c;
+                    _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
                     if (c > _o.EmitCap) { HaltReason = $"LOOP:line@0x{off:x}×{c}"; return HALT; }
-                    string text = _s.GetString(off);
-                    Emitted.Add((off, text));
+                    string text = _cur.Script.GetString(off);
+                    Emitted.Add((off, text, _cur.Script.Name));
                     _host.ShowText(off, text);
                 }
                 return pc + 1;

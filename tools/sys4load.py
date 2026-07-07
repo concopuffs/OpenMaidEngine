@@ -80,6 +80,21 @@ def _load_global_labels() -> dict:
 GLOBAL_LABELS = _load_global_labels()
 
 
+def _load_callscript_names() -> dict:
+    """id -> script name. `call-script <id>` (op 0x03) is a raw index into the SYS4INI file
+    table; build/callscript-names.json maps every id to its script name (see docs/engine-re.md)."""
+    try:
+        p = Path(__file__).resolve().parent.parent / "build" / "callscript-names.json"
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return {int(k): v for k, v in data.items()}
+
+
+CALLSCRIPT_NAMES = _load_callscript_names()
+CALLSCRIPT_OP = 0x03
+
+
 def display_label(op: int) -> str:
     """Rendered mnemonic: Kelebek name if it has one, else the inferred name, else u00…."""
     lbl = OPCODES.get(op, (f"?{op:x}", 0))[0]
@@ -368,6 +383,8 @@ def _fmt_operand(op: int, arg_index: int, atype: int, aval: int, strings: dict) 
     tlabel = ARG_TYPES.get(atype)
     if atype == 0 or tlabel is None:                # immediate / unknown-tag: raw value
         if atype == 0:
+            if op == CALLSCRIPT_OP and aval in CALLSCRIPT_NAMES:
+                return f"{aval:#x} ={CALLSCRIPT_NAMES[aval]}"   # call-script target script name
             return f"{aval:#x}"
         return f"<t{atype:#x} {aval:#x}>"
     if tlabel == "float":

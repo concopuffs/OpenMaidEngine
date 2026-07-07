@@ -95,6 +95,25 @@ outside scenes lives.
 
 ---
 
+## Call graph — scripts are addressable by `call-script <id>` (2026-07-07)
+
+`call-script <id>` (opcode 0x03) loads another script by a **raw index into the SYS4INI file table**
+(id = the entry's `raw_index` = its global position in SYS4INI). This is the resolved call-graph
+registry — there is no separate id→code table; SYS4INI is it. Mechanism: `engine-re.md` (op 0x03
+section); id→name single source: `build/callscript-names.json` (from `parse_sys4ini.py`); `sys4load`
+and the regenerated `build/disasm/*.asm` corpus now render targets by name
+(`call-script 0x1ab =ADDITEM.BIN`). **297 distinct scripts are called** across the corpus (3002 sites);
+the hottest are `HISTORY` (backlog), `MENU`, `HIDEWIN`, `BUNKI` (branch), `MES` (message), `ADDITEM`,
+`ADDEN`, `LOOK`, `RENDERMAP`. Scenes (`SCxxxx.BIN`) load through the *same* id-indexed loader.
+
+**Living-reference decision:** no separate generated markdown call-script reference is kept. Unlike
+`opcode-reference.md` / `global-reference.md` (rendered from *curated* knowledge bases), the id→name
+mapping is purely mechanical (SYS4INI index → filename) with no semantics to curate — it already lives
+in the build artifact and in the named disasm corpus. Full call-graph edges (caller→callee counts) are
+derivable on demand from the corpus; materialize a doc only if a consumer needs it.
+
+---
+
 ## Implications for the port
 
 1. **Much more game logic lives in bytecode than expected.** Damage formulas

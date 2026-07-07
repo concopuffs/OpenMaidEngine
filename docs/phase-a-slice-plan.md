@@ -307,3 +307,44 @@ is only needed for scenes that genuinely use runtime-positioned sprites — revi
 Build `tools/vm0.py` and get the **RECOVER unit test** green (pointer/array/control-flow correctness),
 then run the first linear ADV scene against the dialogue oracle. That single result tells us whether
 the whole VM approach executes correctly — the load-bearing question behind option 3.
+
+---
+
+## ✅ call-script EXECUTION (2026-07-07) — subroutines now run in the C# VM
+
+Spec `docs/superpowers/specs/2026-07-07-callscript-vm-execution-design.md`; plan
+`docs/superpowers/plans/2026-07-07-callscript-vm-execution.md`. Enabled by the native-RE finding that
+`call-script <id>` is a raw SYS4INI file index (`docs/engine-re.md`).
+
+**Shipped (engine 25/25 green):**
+- **`IScriptProvider`** (Hosting) + **`Sys4ScriptProvider`** (Sys4): `id → build/callscript-names.json →
+  name → Paths.Scripts() → Sys4Loader.Load`, cached. Injected into the VM so `Vm` never references `Sys4`.
+- **`ExecFrame` refactor** of `VirtualMachine`: per-script state (script, pc, locals, intra-call stack,
+  per-frame emit-guard) moved into `ExecFrame`, run by a recursive `RunFrame`. Globals/Emitted/Steps stay
+  VM-level (shared). Emitted lines now carry their source script name.
+- **`call-script` executes:** loads the child, runs it as a nested frame sharing globals, returns to the
+  caller at `pc+1`. `exit`/`exit-script` and empty-stack `ret` return from the frame (top frame → HALT).
+  Depth-capped (`VmOptions.CallDepthCap=64`; native limit 38). Shared globals are the return channel;
+  per-call locals are discarded on return.
+- **Product paths** (`Age.Cli run/play/sweep`, `GameSession.RunScene`) inject the provider. `trace` +
+  the `audio`/`gfx` diagnostics stay provider-less (base-ISA oracle / built against stub behavior).
+
+**Design decision (refines the spec):** a VM with **no provider** falls back to the prior stub
+(`host.CallScript(id); pc+1`), not a halt. This keeps every existing base-ISA test byte-identical
+(they construct provider-less VMs) and needs no golden-fixture regeneration; **vm0.py retires from
+oracle duty gracefully** — `trace`/`TraceDiffTests`/`WaitForInputTests` stay on the stub path as the
+base-ISA guard, with zero lockstep maintenance.
+
+**Validation:** 6 new tests (fake-provider unit tests: return-to-caller, callee `exit` returns not
+halts, shared-global visibility, per-frame local isolation, unresolved-id halt, no-provider stub;
+integration: ADDILL executes ADDILLSUB+CALCREVISE and reaches its own exit; BUNKI's top-level `ret`
+returns cleanly). **Corpus sweep (execution on): 284/297 exit clean, 13 STEP-LIMIT, 0 depth-cap, 0
+unresolved, 0 crashes.** The 13 STEP-LIMITs are input/state-gated ADV scenes (SC0000 etc.): executing
+subroutines makes their global-writes drive caller loops that headless can't break (no input;
+`WaitForInput` is a no-op) — the known state-divergence, not a call-script bug (loops hit STEP-LIMIT,
+not the depth cap → recursion is bounded correctly).
+
+**Follow-ups (out of this slice):** wire the provider into the Godot play path (keep `--selftest`
+provider-less to preserve the 186-offset gate); optionally give the `audio`/`gfx` diagnostics a
+provider once their stub-era baselines are revisited; `decision→scene` (scene chaining) rides this same
+loader once the SCJUMP decision→scene-id native hop is reversed.

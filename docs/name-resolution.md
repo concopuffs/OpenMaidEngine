@@ -12,10 +12,25 @@ would make it read like source.
 
 ---
 
-## #1 — `call-script` target resolution (naming the call graph)
+## #1 — `call-script` target resolution (naming the call graph) — ✅ SOLVED (2026-07-07)
 
-**What it is.** `call-script N` (Kelebek opcode 0x03) carries a bare number — `0x329d`,
-`0x2ade` — the id of an engine entry point. To render `call RECOVER` instead of
+**RESOLVED via native-RE.** `call-script <id>` is a **direct RAW index into the SYS4INI file table** —
+the very asset index we already parsed. No hidden engine registry: SYS4INI *is* the registry. Cracked
+by decompiling the handler chain in Ghidra (op 0x03 → `FUN_0041bc90` → loader `FUN_0040e980` →
+resolver `FUN_0044f390`, which does `record = table_base + id*0x50` over the 80-byte SYS4INI records).
+**Statically confirmed:** all 297/297 distinct corpus `call-script` ids resolve to a `.BIN` script with
+a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`), 0 out-of-range. Full
+mechanism in `engine-re.md` (“op 0x03 (call-script)…”). Tooling: `parse_sys4ini.py` →
+`build/callscript-names.json` (id→name); `sys4load` renders `call-script 0x1ab =ADDITEM.BIN`; the
+`build/disasm/*.asm` call graph now reads by name. The one caveat: index the RAW SYS4INI records
+(*including* the 2 `@` placeholders) — `asset-index.json` carries each entry's `raw_index` (= the id)
+for exactly this. **Remaining (functional, not naming):** the C# VM still stubs `call-script`
+execution; implementing it (load `.BIN` by id, push frame, run, return) is the follow-up. The original
+analysis (kept below for provenance) had concluded this was engine-level and deferred — it was, and
+the Ghidra loop is what resolved it.
+
+**What it is (original framing).** `call-script N` (Kelebek opcode 0x03) carries a bare number —
+`0x329d`, `0x2ade` — the id of an engine entry point. To render `call RECOVER` instead of
 `call-script 0x329d` you need a table `id → (script, entry)`.
 
 **Findings (inspected 2026-07-06):**
@@ -40,16 +55,18 @@ on disk to read. Resolving it needs one of:
 - **Find the registration path** — if a boot script assigns ids to entry points, extract it
   statically (SYSTEM4.BIN is far too small to hold ~13k, so it's cumulative or lives in AGE.EXE).
 
-**Status: deferred.** Not the quick win first assumed. Belongs with the engine/dispatch work
-(Phase 3), or a dedicated `SCJUMP.BIN` reverse. Until then `call-script` stays numeric.
+**Status: ✅ SOLVED** (see the banner at the top of this section). It did belong with the
+engine/dispatch work — the Ghidra + MCP loop resolved it via the opcode-dispatch table.
 
 **Update (2026-07-07):** SCJUMP's *decision logic* is now decoded — `(chapter_mode, guards) →
 decision value` — see `docs/scjump-progression.md` and `tools/scjump_decode.py`. That confirmed
-SCJUMP is not the `call-script` registry (it produces a decision value, not a script id). The
-decision→scene hop is **native and still unidentified** — an earlier guess that op `u00428010`
-resolved it was **disproven via Ghidra** (that op is a graphics command-buffer op; see
-`docs/engine-re.md`). It's the same engine-level bucket as `call-script`; the Ghidra + MCP loop (and
-its recovered opcode-dispatch table) is now the tool to crack the `call-script`/script-load handler.
+SCJUMP is not the `call-script` registry (it produces a decision value, not a script id). Then the
+Ghidra + MCP loop **cracked `call-script` itself** (the SOLVED banner above): via the opcode-dispatch
+table it walked the handler → loader → resolver and found the id is a raw SYS4INI file index. What
+remains of the earlier `decision→scene` question is now narrow: scenes are `SCxxxx.BIN` records loaded
+through the *same* id-indexed loader, so the only open piece is where the SCJUMP decision *value*
+becomes a scene *id* (a caller of SCJUMP). The `u00428010` guess for that hop was disproven via Ghidra
+(it's a graphics command-buffer op; see `docs/engine-re.md`).
 
 ---
 
@@ -172,7 +189,7 @@ automatically (it reads `build/global-var-map.json` at load).
 
 ## How the two relate
 #1 names **functions** (the call graph); #2 names **data** (game state). In `RECOVER`, #1 turns
-`call-script 0x329d` into a name; #2 turns `C[unit][s] = E[unit][s]` into `unit.hp[s] =
-unit.maxHp[s]`. Priority reversal from the first guess: **#2 is the tractable readability lever
-now** (static handholds already half-built via the `*INIT` extraction); **#1 needs the engine**
-(dispatch reverse or Frida) and is deferred.
+`call-script 0x329d` into `CALCREVISE.BIN`; #2 turns `C[unit][s] = E[unit][s]` into `unit.hp[s] =
+unit.maxHp[s]`. Both are now largely in hand: **#1 is SOLVED** (the SYS4INI-index dispatch reverse —
+turned out to need the engine, and the Ghidra loop delivered it), and **#2 has a partial static map**
+(the `*INIT` handholds) that grows on demand.

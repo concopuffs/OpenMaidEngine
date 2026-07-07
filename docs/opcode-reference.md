@@ -27,6 +27,36 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug.
 
+## control
+
+### 0x3 `call-script` (call-script, argc 1)
+- **summary:** load & call another SYS4 script by id; id = RAW index into the SYS4INI file table (asset-index). Pushes a script frame; returns to caller when the callee ends.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** native-RE (Ghidra): handler FUN_0041bc90 -> loader FUN_0040e980 -> resolver FUN_0044f390 indexes an 80-byte record table (base [ctx+0x414], count [ctx+0x40c]) at base+id*0x50 = the SYS4INI record layout {name[64],arc_id@0x40,file_number@0x44,offset@0x48,size@0x4c}. Confirmed statically: all 297 distinct corpus call-script ids resolve to a .BIN script with a semantically-exact name (0x1ab->ADDITEM, 0x2ae7->MES, 0x143->BUNKI, 0x329d->CALCREVISE), 0 out-of-range, 0 pack-branch. See docs/engine-re.md + name-resolution.md #1.
+
+op 0x03 (call-script, argc 1): `call-script <id>`. RESOLVED — the id is a direct RAW index into
+the SYS4INI global file table (the same table parse_sys4ini.py reads, but indexed WITHOUT skipping
+'@' placeholders; SYS4INI has 13208 records / 2 placeholders). No separate on-disk id->code registry
+exists; SYS4INI *is* the call-script registry.
+Native mechanism (dispatch table `handler(op)=ctx[0x26c93+op]`, op 0x03 -> FUN_0041bc90):
+  1. FUN_0041bc90 fetches operand 1 (id), bounds-checks call depth (<=0x26), pushes a frame.
+  2. FUN_0040e980 (loader): opens the resource by id, reads the 0x20-byte SYS4 header, checks magic,
+     allocates per-frame code/local buffers from the header var-counts, reads the bytecode body,
+     pushes a script frame (stride 0x1e = 30 dwords, indexed by ctx[0x14f45]).
+  3. FUN_0044f390 (resolver): record = [ctx+0x414] + id*0x50. Tries a LOOSE OVERRIDE first
+     (CreateFileA on record.name -> mod/patch hook point), else opens archive [record.arc_id*0x100 +
+     ctx+0x410], SetFilePointer to record.offset, size = record.size.
+     (High-byte-tagged ids `id & 0xff000000` select an alternate pack via [ctx+0x3028]; UNUSED by the
+     corpus -- 0/297 ids have a high byte.)
+Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see its entry.
+This also names the whole call graph statically (build/callscript-names.json).
+
+
+### 0x8f `call` (call, argc 1)
+- **summary:** intra-script subroutine call (local JSR): PC = frame.codebase + operand*4; pushes a return address on the per-frame return stack. NOT cross-script (that is call-script 0x03).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** native-RE (Ghidra): handler FUN_0041fba0 (= ctx[0x26c93+0x8f]) sets [frame PC @+0x53d2c] = [frame codebase @+0x53d28] + operand*4 and pushes ((pc-base)>>2)+3 onto the per-frame return stack ([ctx+0x552e8]/[ctx+0x55248]). Target is a code OFFSET within the current script (matches header table T3 tag 0x8F = local call targets), confirming it is a local JSR, not a script load.
+
 ## draw
 
 ### 0x1a2 `gfx-cmd-register` (u00428010, argc 1)
@@ -176,10 +206,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x2 `exit` (exit, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x3 `call-script` (call-script, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
@@ -372,10 +398,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x8c `jmp` (jmp, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x8f `call` (call, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
