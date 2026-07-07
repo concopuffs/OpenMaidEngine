@@ -40,55 +40,57 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
 
 ---
 
-## Master key — the opcode→handler dispatch table (2026-07-07)
+## Master key — the opcode→handler dispatch table (2026-07-07, anchored)
 
-The interpreter dispatches each op via a per-context handler table:
+The interpreter dispatches each op via a per-context handler table, **fully anchored**:
 
-> **`handler(op) = *(ctx + 0x9b8f4 + op*4)`**  — `ctx` = the engine context (`esi` in handlers, thiscall).
+> **`handler(op) = ctx[0x26c93 + op]`**  (word index) **= `*(ctx + 0x9b24c + op*4)`**
+> — `ctx` = the engine context (`esi` in handlers, thiscall; `param_1` in the decompile of the
+> registration routine).
 
-The table is populated by the registration routine **`FUN_00413860`** as a long run of
-`MOV dword ptr [ESI + 0x9b8f4 + op*4], <handler_va>`. Sample (from ~`0x414756`):
-
-| slot offset | handler VA |
-|---|---|
-| `0x9b8f4` | `0x42bd90` |
-| `0x9b8f8` | `0x427ed0` |
-| `0x9b8fc` | `0x427fb0` (the save handler below) |
-| `0x9b900` | `0x416b70` |
-| `0x9b904` | `0x428100` |
-| `0x9b908` | `0x428240` |
+The registration routine **`FUN_00413860`** first fills `0x400` (1024) slots starting at
+`ctx[0x26c93]` with a **default handler `FUN_004162b0`** (op 0's slot), then overrides specific
+opcodes: `ctx[0x26c93 + op] = <handler_va>`. So **opcode = (word_index − 0x26c93)**. Cross-check:
+`ctx[0x26e3f] = 0x427fb0` (byte offset `0x9b8fc`) → op `0x26e3f − 0x26c93 = 0x1ac`.
 
 **Why this matters:** the Kelebek `u00XXXXXX` opcode names encode handler VAs from *Kelebek's* build,
-which **drift** in our build (confirmed below). This table resolves the *real* handler for any opcode
-in our image — the general fix for VA drift across the whole project. (Anchoring the slot↔opcode index
-is the immediate next step: read the dispatch site's exact base, then `slot = base + op*4`.)
+which **drift** in ours. This table resolves the *real* handler for any opcode in our image — the
+general fix for VA drift project-wide. To find op `N`'s handler: read `ctx[0x26c93 + N]` from the
+`FUN_00413860` decompile (or `*(ctx + 0x9b24c + N*4)` at runtime).
 
 **Other confirmed engine-context offsets** (`ctx`/`esi`): `+0x53d14` = current gfx-object index;
 `+0x53d88` = per-object cmd-type table (stride `0x78` = 120 bytes); operand-fetch helper = `call
-0x41b940` (thiscall, `ecx=ctx`, arg = operand index → returns the operand value).
+0x41b940` (thiscall, `ecx=ctx`, arg = operand index → returns the operand value); `FUN_00415f30(i)` =
+a companion operand accessor.
 
 ---
 
 ## Findings
 
-### op `0x1a2` (`u00428010`) is a SAVE/resource-file op — NOT decision→scene (2026-07-07)
+### op `0x1a2` (`u00428010`) is a GRAPHICS command-buffer op — NOT save, NOT decision→scene (2026-07-07)
 
-The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong:**
+The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong**,
+and pinning the *real* handler via the dispatch table above corrects two layers of confusion:
 
-- Kelebek's `u00428010` = **opcode `0x1a2`, argc 1**. In *our* build, VA `0x428010` is **inside a
-  different function** (`0x427fb0`) — Kelebek-VA drift.
-- `0x427fb0` is a genuine interpreter handler (uses `ctx+0x53d14`, the `ctx+0x53d88` cmd-type table,
-  and the `0x41b940` operand-fetch). It builds file paths from the format string at `0x571e70` =
-  **`%s\SAVE%2.2d.DAT`** (and a second at `0x571e84`) via an sprintf-style `0x407770`. It is
-  **multi-operand** (fetches operands 2 and 3) — inconsistent with the argc-1 op `0x1a2`, reconfirming
-  the drift.
-- **Conclusion:** op `0x1a2`/`u00428010` is a **save/resource-file** op (matches its earlier tentative
-  "resource" tag). So the SCJUMP consumer pattern `lookup(0x5f0ed, decision); mov(ptr,1);
-  u00428010(ptr)` is **persisting the "visited-decision" flag into the save data**, *not* loading a
-  scene. The real decision→scene resolution is a **different** mechanism — most likely the same native
-  boundary as call-script/script-load (next investigation).
+- **VA-drift trap:** Kelebek's `u00428010` = op `0x1a2`. But Kelebek's raw VA `0x428010`, in *our*
+  build, sits inside a *different* handler `0x427fb0`, which is **op `0x1ac`** (per the table:
+  `ctx[0x26e3f]=0x427fb0`). Op `0x1ac` is a **save-path** op — its handler formats
+  `%s\SAVE%2.2d.DAT` (format string `0x571e70`) and is multi-operand. Reading the raw VA gave the
+  wrong opcode.
+- **Op `0x1a2`'s real handler = `FUN_0042d360`** (`= ctx[0x26c93+0x1a2] = ctx[0x26e35]`), argc 1. It:
+  sets the **current gfx-object cmd-type to 3** (`*(ctx+0x53d88 + ctx[0x53d14]*0x78) = 3`), fetches
+  operand 1, formats a key with `"%c%8.8x"` (format string `0x5714e0`) of `(3, operand)`, and calls
+  `FUN_0042cf70(key, &operand)`. This is a **graphics command-buffer registration op**, not save and
+  not scene-load.
+- **Consequence — the decision→scene premise is discredited.** The FIELD snippet
+  `lookup(0x5f0ed, 0x62ccf); mov(ptr,1); lookup(0x5f0ed, 0x62ccf); u00428010(ptr)` (next op `0x21b`,
+  also gfx-family) is a **graphics/UI operation**, not scene sequencing. So `u00428010` does **not**
+  resolve decision→scene. **The real decision→scene mechanism is unidentified** — it belongs with the
+  call-script / script-load dispatch (`name-resolution.md §1`), the next target for this loop (now
+  armed with the dispatch table to resolve the call-script handler directly).
 
-*(To pin op `0x1a2`'s exact handler in our build: index the dispatch table above by `0x1a2`.)*
+**Lesson:** never analyze a native op by its Kelebek `u00XXXXXX` VA directly — always resolve the real
+handler through the dispatch table (`ctx[0x26c93 + op]`). The raw VA is off by whole functions.
 
 ---
 

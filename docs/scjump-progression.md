@@ -40,13 +40,13 @@ choices are not pure story flags.
 Run: `py -3.11 -X utf8 tools/scjump_decode.py --verify`.
 
 ## The native decision→scene boundary (deferred)
-Consumers do `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`. **Correction (2026-07-07,
-via Ghidra):** `u00428010` (op `0x1a2`) is **not** the scene resolver — it's a **save/resource-file
-op** (its handler formats `%s\SAVE%2.2d.DAT`), so that pattern **persists the "visited-decision" flag
-into the save**, not loads a scene. See `docs/engine-re.md`. The actual decision→scene resolution is a
-different, still-native mechanism — most likely call-script/script-load-adjacent (`name-resolution.md
-§1`). Cracking it uses the engine-dump + Ghidra loop (the opcode-dispatch table found in
-`engine-re.md` is the key); still a separate slice.
+A FIELD snippet does `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`, which the spec
+guessed was the scene resolver. **Correction (2026-07-07, via Ghidra):** `u00428010` (op `0x1a2`) is a
+**graphics command-buffer op** (its real handler `FUN_0042d360` sets gfx cmd-type 3 and builds a
+`"%c%8.8x"` key) — not save, not scene-load. So that snippet is a **graphics/UI operation, not the
+decision→scene dispatch**. The real decision→scene mechanism is **still unidentified** and belongs with
+the call-script / script-load dispatch (`name-resolution.md §1`). See `docs/engine-re.md` for the
+verified handler analysis and the opcode-dispatch table that will crack call-script next.
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).
