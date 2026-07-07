@@ -103,6 +103,42 @@ if (args[0] == "play")
     return 0;
 }
 
+if (args[0] == "sweep")
+{
+    // sweep [--boot] — run every SC/SP scene through GameSession (each from a fresh or booted-from-snapshot
+    // baseline) and report halt distribution + line counts. Validates the VM + state substrate at scale and
+    // surfaces how booted real data affects the corpus. Headless.
+    var sceneRe = new Regex(@"^S[CP]\d{4}\.BIN$");
+    var scripts = Paths.Scripts();
+    var names = scripts.Keys.Where(n => sceneRe.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+    bool boot = args.Contains("--boot");
+    string? baseline = null;
+    if (boot)
+    {
+        var bootSession = new GameSession();
+        foreach (var s in new[] { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+                                  "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" })
+            bootSession.RunScene(Sys4Loader.Load(scripts[s], table), table, new CaptureHost());
+        baseline = bootSession.ToJson();
+        Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
+    }
+    var haltDist = new SortedDictionary<string, int>(StringComparer.Ordinal);
+    long totalLines = 0; var anomalies = new List<string>();
+    foreach (var name in names)
+    {
+        var session = baseline != null ? GameSession.FromJson(baseline) : new GameSession();
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost());
+        var halt = r.Halt ?? "null";
+        haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
+        totalLines += r.Emitted.Count;
+        if (halt != "exit") anomalies.Add($"{name}: {r.Emitted.Count} lines, halt={halt}");
+    }
+    Console.WriteLine($"swept {names.Count} scenes{(boot ? " (booted)" : "")}: {totalLines} total lines");
+    Console.WriteLine("halt distribution: " + string.Join(", ", haltDist.Select(kv => $"{kv.Key}={kv.Value}")));
+    if (anomalies.Count > 0) { Console.WriteLine($"non-exit halts ({anomalies.Count}):"); foreach (var a in anomalies) Console.WriteLine("  " + a); }
+    return 0;
+}
+
 if (args[0] == "trace")
 {
     var scene = new Regex(@"^S[CP]\d{4}\.BIN$");
