@@ -1,2 +1,2 @@
 namespace Age.Engine.Vm;
-public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000);
+public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64);

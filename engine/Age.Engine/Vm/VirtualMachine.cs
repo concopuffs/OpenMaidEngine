@@ -168,7 +168,19 @@ public sealed class VirtualMachine
             }
             case "exit":
             case "exit-script": return FRAME_RETURN;
-            case "call-script": _host.CallScript(a.Count > 0 ? Read(a[0]) : 0); return pc + 1;   // stub (executes in Task 3)
+            case "call-script":
+            {
+                long id = a.Count > 0 ? Read(a[0]) : 0;
+                _host.CallScript(id);                       // notify (diagnostics)
+                if (_provider == null) return pc + 1;       // no script source: prior stub behavior
+                if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return HALT; }
+                var child = _provider.GetById(id);
+                if (child == null) { HaltReason ??= $"callscript-unresolved:0x{id:x}"; return HALT; }
+                var entry = child.IndexByOffset.TryGetValue(0, out var ci) ? ci : 0;
+                var outcome = RunFrame(new ExecFrame(child, entry));
+                if (outcome == FrameOutcome.Halted) return HALT;   // propagate whole-VM halt up
+                return pc + 1;                                      // Returned / RanOff: resume caller
+            }
             case "show-text":
                 foreach (var o in a)
                 {
