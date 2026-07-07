@@ -40,9 +40,20 @@ def test_emit_json_shape():
     check(S.render_guard({"global": 0x3234, "op": "==", "value": 7}, {0x3234: "chapter_mode"}) == "chapter_mode==7",
           "render_guard uses registry name")
 
+def test_verify_sound_on_sample():
+    scr = S.load_scjump()
+    r = S.run_verify(scr, trials=1000)
+    # execution-driven check reaches many decision sites and agrees with the VM on all of them
+    check(r["rand_reached"] > 50, f"execution-driven check reaches decision sites (reached={r['rand_reached']})")
+    check(r["rand_ok"] == r["rand_reached"], f"every VM-realized decision agrees with the table (ok={r['rand_ok']}/{r['rand_reached']})")
+    # the fully-static decisions synthesize and match exactly
+    check(r["static_ok"] == r["static_n"], f"static-witness decisions all match (ok={r['static_ok']}/{r['static_n']})")
+    check(r["fails"] == [], f"0 verification failures (fails={r['fails'][:3]})")
+
 if __name__ == "__main__":
     test_cfg_acyclic_and_dispatch()
     test_decode_anchor_and_count()
     test_emit_json_shape()
+    test_verify_sound_on_sample()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)

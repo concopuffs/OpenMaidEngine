@@ -63,16 +63,6 @@ FLIP = {"==": "==", "!=": "!=", "<": ">", "<=": ">=", ">": "<", ">=": "<="}
 NEG  = {"==": "!=", "!=": "==", "<": ">=", ">=": "<", "<=": ">", ">": "<="}
 
 
-def _cmp_expr(op_sym, a, b):
-    """Build a Cmp guard from a comparison's operands (a <op> b). Global vs immediate only;
-    anything else -> opaque."""
-    if a[0] in GLOBAL_ATYPES and b[0] == IMM:
-        return {"global": a[1], "op": op_sym, "value": b[1]}
-    if a[0] == IMM and b[0] in GLOBAL_ATYPES:
-        return {"global": b[1], "op": FLIP[op_sym], "value": a[1]}
-    return {"opaque": f"cmp {op_sym} {a} {b}"}
-
-
 def negate(g):
     if "opaque" in g:      return {"opaque": "!(" + g["opaque"] + ")"}
     if "and" in g:         return {"or": [negate(x) for x in g["and"]]}
@@ -80,9 +70,30 @@ def negate(g):
     return {"global": g["global"], "op": NEG[g["op"]], "value": g["value"]}
 
 
-def _resolve(localmap, operand):
-    """Resolve a jcc/logic operand (a local holding a condition) to its guard expression."""
-    return localmap.get(operand[1], {"opaque": f"local {operand}"})
+# A local's symbolic content is one of:
+#   ("gref", global_addr)   value of a global (from `mov local, global`)
+#   ("imm", constant)       a constant
+#   ("expr", guard_dict)    a boolean comparison result (from cmp / and / or)
+#   ("opaque", desc)        anything we can't model (arithmetic, indirection)
+def _rval(localmap, operand):
+    """Resolve an operand to its symbolic value tuple."""
+    t, v = operand
+    if t in GLOBAL_ATYPES: return ("gref", v)
+    if t == IMM:           return ("imm", v)
+    if t == 9:             return localmap.get(v, ("opaque", f"local{v}"))
+    return ("opaque", f"op{list(operand)}")
+
+
+def _cmp_guard(op_sym, ra, rb):
+    """Guard from a comparison of two resolved values (ra <op> rb). global-vs-imm only."""
+    if ra[0] == "gref" and rb[0] == "imm": return {"global": ra[1], "op": op_sym, "value": rb[1]}
+    if ra[0] == "imm" and rb[0] == "gref": return {"global": rb[1], "op": FLIP[op_sym], "value": ra[1]}
+    return {"opaque": f"cmp {op_sym} {ra} {rb}"}
+
+
+def _as_guard(rval):
+    """A boolean guard from a resolved condition-local value."""
+    return rval[1] if rval[0] == "expr" else {"opaque": f"cond {rval}"}
 
 
 def chapter_of(guards):
@@ -111,17 +122,21 @@ def decode(scr):
                                   "decision": a[1][1], "guards": list(guards)})
                 idx += 1
                 continue
+            if op == MOV and len(a) >= 2 and a[0][0] == 9:      # mov local, <value> — track it
+                localmap[a[0][1]] = _rval(localmap, a[1])
+                idx += 1
+                continue
             if op in CMP_OPS and len(a) >= 3 and a[0][0] == 9:
-                localmap[a[0][1]] = _cmp_expr(CMP_OPS[op], a[1], a[2])
+                localmap[a[0][1]] = ("expr", _cmp_guard(CMP_OPS[op], _rval(localmap, a[1]), _rval(localmap, a[2])))
                 idx += 1
                 continue
             if op in LOGIC_OPS and len(a) >= 3 and a[0][0] == 9:
                 kind = LOGIC_OPS[op]
-                localmap[a[0][1]] = {kind: [_resolve(localmap, a[1]), _resolve(localmap, a[2])]}
+                localmap[a[0][1]] = ("expr", {kind: [_as_guard(_rval(localmap, a[1])), _as_guard(_rval(localmap, a[2]))]})
                 idx += 1
                 continue
             if op == JCC and len(a) >= 3:
-                expr = _resolve(localmap, a[0])
+                expr = _as_guard(_rval(localmap, a[0]))
                 a_tgt, b_tgt = a[1][1], a[2][1]
                 true_idx = idx + 1 if a_tgt == FALLTHROUGH else by_off.get(a_tgt)
                 false_idx = idx + 1 if b_tgt == FALLTHROUGH else by_off.get(b_tgt)
@@ -208,6 +223,151 @@ def build(scr=None) -> int:
     print(f"decode: {len({d['site_offset'] for d in decs})} decision sites, "
           f"{len({d['decision'] for d in decs})} distinct decisions -> build/scjump-decisions.{{json,md}}")
     return 0
+
+
+def _collect_constraints(guard, cons) -> bool:
+    """Flatten a guard into per-global (op,value) constraints. Returns False if unsynthesizable
+    (opaque, or an `or` whose disjuncts we don't resolve). Handles `and` by flattening."""
+    if "opaque" in guard:
+        return False
+    if "and" in guard:
+        return all(_collect_constraints(x, cons) for x in guard["and"])
+    if "or" in guard:
+        return False        # disjunctions: left to the execution-driven check
+    cons[guard["global"]].append((guard["op"], guard["value"]))
+    return True
+
+
+def synthesize_witness(guards):
+    """Return {global_addr: int} satisfying all guards, or None if any guard is opaque/or or the
+    per-global constraints are unsatisfiable by the simple integer solver. Only fully-static
+    (global-vs-immediate) decisions are synthesizable — most SCJUMP paths are gated by a native
+    computed value (op 0x60) and are covered by the execution-driven check instead."""
+    cons = collections.defaultdict(list)
+    for g in guards:
+        if not _collect_constraints(g, cons):
+            return None
+    state = {}
+    for addr, cs in cons.items():
+        lo, hi = -(1 << 31), (1 << 31) - 1     # inclusive integer window
+        eq_vals = {v for op, v in cs if op == "=="}
+        ne_vals = {v for op, v in cs if op == "!="}
+        for op, v in cs:
+            if op == "<":  hi = min(hi, v - 1)
+            elif op == "<=": hi = min(hi, v)
+            elif op == ">":  lo = max(lo, v + 1)
+            elif op == ">=": lo = max(lo, v)
+        if eq_vals:
+            if len(eq_vals) > 1: return None
+            val = next(iter(eq_vals))
+            if val in ne_vals or not (lo <= val <= hi): return None
+            state[addr] = val
+            continue
+        val = lo
+        while val in ne_vals and val <= hi:
+            val += 1
+        if val > hi: return None
+        state[addr] = val
+    return state
+
+
+def eval_guard(g, state):
+    """Evaluate a guard against a {global:value} state (unseeded globals = 0, matching vm0).
+    Returns True / False / None (None = contains an unresolved opaque/native term)."""
+    if "opaque" in g:
+        return None
+    if "and" in g:
+        vs = [eval_guard(x, state) for x in g["and"]]
+        if any(v is False for v in vs): return False
+        return None if any(v is None for v in vs) else True
+    if "or" in g:
+        vs = [eval_guard(x, state) for x in g["or"]]
+        if any(v is True for v in vs): return True
+        return None if any(v is None for v in vs) else False
+    val, op, c = state.get(g["global"], 0), g["op"], g["value"]
+    return {"==": val == c, "!=": val != c, "<": val < c, "<=": val <= c,
+            ">": val > c, ">=": val >= c}[op]
+
+
+def _guard_globals(g, acc):
+    if "opaque" in g: return
+    if "and" in g or "or" in g:
+        for x in g.get("and") or g.get("or"): _guard_globals(x, acc)
+        return
+    acc.add(g["global"])
+
+
+def run_verify(scr, trials=2000):
+    """Two-pronged validation against the executing VM (vm0):
+    1. static-witness — for fully-static decisions, synthesize a state and confirm the VM emits it;
+    2. execution-driven — seed many random states, run SCJUMP, and for each realized decision check
+       the table has that site with the right value AND no static guard is violated by the state.
+    Returns a stats dict with a `fails` list (empty = sound)."""
+    import random
+    import vm0
+    decs = decode(scr)
+    by_site = {d["site_offset"]: d for d in decs}
+    fails = []
+
+    static_ok = static_n = 0
+    for d in decs:
+        w = synthesize_witness(d["guards"])
+        if w is None:
+            continue
+        static_n += 1
+        vm = vm0.VM(scr)
+        for addr, val in w.items():
+            vm.G[addr] = val
+        vm.run()
+        if vm.G[DECISION_GLOBAL] == d["decision"]:
+            static_ok += 1
+        elif len(fails) < 20:
+            fails.append(f"static @0x{d['site_offset']:x}: table {d['decision']}, VM {vm.G[DECISION_GLOBAL]}")
+
+    inputs = set()
+    for d in decs:
+        for g in d["guards"]:
+            _guard_globals(g, inputs)
+    inputs.discard(VALID_GLOBAL); inputs.discard(DECISION_GLOBAL)
+    inputs = sorted(inputs)
+    rng = random.Random(0)
+    rand_reached = rand_ok = 0
+    for _ in range(trials):
+        state = {CHAPTER_GLOBAL: rng.randint(1, 9)}
+        for g in inputs:
+            state[g] = rng.randint(0, 6)          # small range -> exercises equality branches
+        vm = vm0.VM(scr, record_trace=True)
+        for addr, val in state.items():
+            vm.G[addr] = val
+        vm.run()
+        site = next((off for off in vm.trace if off in by_site), None)
+        if site is None:
+            continue
+        rand_reached += 1
+        entry = by_site[site]
+        emitted = vm.G[DECISION_GLOBAL]
+        problem = None
+        if entry["decision"] != emitted:
+            problem = f"exec @0x{site:x}: table {entry['decision']}, VM emitted {emitted}"
+        elif any(eval_guard(g, state) is False for g in entry["guards"]):
+            problem = f"exec @0x{site:x}: a static guard is False on the realizing state"
+        if problem:
+            if len(fails) < 20: fails.append(problem)
+        else:
+            rand_ok += 1
+
+    return {"total": len(by_site), "static_ok": static_ok, "static_n": static_n,
+            "rand_reached": rand_reached, "rand_ok": rand_ok, "trials": trials, "fails": fails}
+
+
+def verify(scr) -> int:
+    r = run_verify(scr)
+    print(f"verify: static-witness {r['static_ok']}/{r['static_n']} exact; "
+          f"execution-driven {r['rand_ok']}/{r['rand_reached']} consistent "
+          f"(over {r['trials']} random seeds); {len(r['fails'])} failures")
+    for m in r["fails"]:
+        print("  " + m)
+    return 1 if r["fails"] else 0
 
 
 def main(argv=None):
