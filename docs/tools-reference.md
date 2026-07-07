@@ -81,7 +81,7 @@ subsystem oracles. Test scenes are **synthesized** via `Age.Engine/Sys4/ScriptAs
 | `run <file.BIN>` | Execute a script; print steps, show-text count, **call-script dispatch count**, the first 30 lines (each tagged with its source script), and the distinct source scripts. | `CaptureHost` (headless); **executes call-script**. |
 | `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps. **Provider-less** (call-script stubbed) = a base-ISA offset dump. | writes JSON. (Was the vm0 differential oracle; vm0 is retired from oracle duty — `TraceDiffTests` removed.) |
 | `audio <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `play-bgm`/`play-voice` in order + resolved file. | optional seeds. provider-less (stub) for now. |
-| `gfx <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` with resolved file + computed geometry (the headless geometry oracle). | optional seeds. provider-less (stub) for now. |
+| `gfx [--boot] <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` (resolved file + computed geometry) **plus the per-object gfx slots** — the headless geometry oracle. **`--boot`** runs SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` first (so INIT2's gfx handle array is present) and runs the target with call-script on; without it, seeds-only + provider-less. | gfx ops now execute against `GfxState`. |
 | `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
 | `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale run. **With call-script execution on: 284/297 exit, 13 STEP-LIMIT** (input/state-gated ADV scenes spin headless once subroutine global-writes drive their loops — state divergence, not a bug; 0 depth-cap/unresolved). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
 
@@ -100,6 +100,7 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 - `--scene <NAME>` — which scene to play (default `SC0000`), e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
+- `--boot` — run SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` before the scene, so scene-assumed boot state (chiefly INIT2's gfx handle array) is present. **Needed for the gfx CGs to render** (without it the opening event CGs collapse/drift). e.g. `godot --path godot -- --boot`.
 - `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
 
 ## Asset resolution / graphics

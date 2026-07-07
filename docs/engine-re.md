@@ -188,7 +188,7 @@ the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_o
 | op | handler | cmd | dir | argc | contract |
 |---|---|---|---|---|---|
 | `0x1a2` | `0x42d360` | 3 | set | 1 | registry **insert**: key `"%c%8.8x"(3, operand-desc)` → `FUN_0042cf70` |
-| `0x1f7` | `0x422270` | 5 | set | 2 | element create/select by handle op1; `op2>1` → `FUN_0047d8b0(op1,op2)` (array), else `FUN_0047d850(op1)` |
+| `0x1f7` | `0x422270` | 5 | erase | 2 | registry **erase** (teardown, NOT create): `op2>1` → `gfx_registry_erase_range(op1,op2)` erases `[op1,op1+op2)`, else `gfx_registry_erase(op1)`. Objects are created lazily by the geometry SET ops. |
 | `0x1fa` | `0x4224a0` | 3 | set | 1 | release element `[ctx+0x52bd4 + op1*4]` (vtbl free) + `FUN_00474e40(op1)` |
 | `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
 | `0x202` | `0x4228d0` | 0xb | set | 5 | blit obj op1 with (op2,op3) + **packed ARGB** from op4(alpha)/op5(color) → `FUN_0047ea00` |
@@ -227,6 +227,29 @@ modelled — only the object-record data model, so the QUERY ops return what the
 correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj pointers, fields `+0x64/
 +0x68/+0x6c`), `ctx+0x46d14` (stride `0x14`), `ctx+0x52bd4` (element pointers), plus the `0x408` registry.
 
+Worker functions decoded + annotated in the Ghidra project (2026-07-07): `gfx_registry_erase`(`0x47d850`),
+`gfx_registry_erase_range`(`0x47d8b0`), `gfx_object_get_or_create`(`0x47ddb0`, inserts a zeroed default via
+`gfx_object_init_default`@`0x472810`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
+`gfx_get_vec18/24`(`0x47f360/f2e0`).
+
+### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
+
+Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still
+drifted. Runtime tracing found **the CG handle array `G[0x62455..0x6245c]` was all zeros**, so every CG
+collapsed onto object `0` and its geometry accumulated. Those handles are set by the **boot script `INIT2`**
+(mov `0x62455=0xcb20 … 0x6245c=0xcbc0`), which is call-scripted by the real entrypoint **`SYSTEM4.BIN`**
+(`LOADCONFIG → INITCONFIG → INIT2 → LOGO → OP → INIT → TITLE → …`). Our harness teleports straight into
+SC0000, skipping that boot. **Fix:** run the system-boot state prefix (`INITCONFIG/INIT2/INIT`, skipping the
+UI scripts) before the scene — `Age.Cli gfx --boot` and Godot `--boot` (both via `GameSession`). With boot,
+the CGs **de-collapse and render correctly** (screenshot-confirmed). **This is the synthesis of the old
+(a)-vs-(b) debate: the drift needed BOTH the native gfx ops (b) AND boot state (a) — specifically INIT2's
+handle array, never before identified (it is not a story flag).** Note two distinct boots: our Phase-B
+`--boot` runs the *data* `*INIT` scripts (skills/items/…); this is the *system* boot (`SYSTEM4` prefix) — a
+"full boot" should run both. **Residual:** the `AE*` fade/flash effects still draw opaque (alpha/blend
+deferred — Phase 2 scope), and some object-slot CGs start with a zero anchor (cold gfx objects vs the real
+game's warm ones; default object geometry is confirmed `(0,0)` in `gfx_object_init_default`, so it is not a
+missing-default bug). See `docs/phase-a-slice-plan.md` A2b-Geometry.
+
 ---
 
 ## Native walls backlog (targets for this loop)
@@ -236,9 +259,7 @@ correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj 
   via `call-script`/the same SYS4INI-index loader, so the open question is only where the decision
   value is turned into a scene *id* (a caller of SCJUMP; re-aimed away from `u00428010`).
 - **op `0x60`** (`u0041A270`) — the rand-like value gating 1732/1755 SCJUMP decisions.
-- **gfx command-buffer** — the `0x212–0x21a` positioned-object subsystem (`scjump`-unrelated; the
-  rendering drift). **Understood, not unidentified** (see the op `0x215` finding above): it's a native
-  record array + a handle→object hash registry that the gfx ops insert/query/write. The drift verdict is
-  settled — (b), a genuine native op, not state-divergence. Remaining work is *implementation*, not RE:
-  model the registry + record array host-side and execute the gfx ops (`0x1a2`/`0x215`/`0x212–0x21a`)
-  instead of stubbing — static, Frida-free.
+- ~~**gfx command-buffer**~~ — **DONE** (the `0x212–0x21a` positioned-object subsystem = the rendering
+  drift): all 14 ops reversed + implemented against a host-side `GfxState`, and the missing INIT2 boot
+  state supplied via `--boot`. CGs render (screenshot-confirmed). See the op `0x215` finding + "The render
+  drift's SECOND half" above. Remaining: `AE*` alpha/blend (deferred) and cold-object anchors.

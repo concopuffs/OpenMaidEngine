@@ -273,8 +273,8 @@ measured `0×0`, and the anchor-preserve math (`base' = center − (w_new/2, h_n
 corruption. Fix: seed `_slotDims[0] = (800,600)` (and record `create-texture(w,h)` dims) so the first CG's
 anchor stays an identity. This is the faithful stand-in for the skipped boot-time primary-surface creation.
 
-**Post-opening bg/sprite drift — root cause SETTLED as (b) a native command-buffer op via Ghidra
-(2026-07-07). ⚠ Corrects an earlier wrong "state-divergence" verdict here.** Symptom (screenshot
+**Post-opening bg/sprite drift — ✅ RESOLVED (2026-07-07): native gfx ops + missing INIT2 boot state.**
+⚠ Corrects an earlier wrong "state-divergence-only" verdict here. Symptom (screenshot
 `Screenshot 2026-07-06 211353.png`): everything blits through slot 0 as an immediate-mode canvas; the
 anchor-preserve base globals **accumulate drift** across differently-sized textures (`BG030A→(300,500)`,
 next→`(450,100)`, →`(800,350)`… marching bottom-right; the background ends up pinned off-centre / bottom-right
@@ -289,12 +289,24 @@ story-state **cannot** fix it. So this is **(b) a genuine native op**, *not* (a)
 problem. The prior conclusion in this doc — grounded in a 2/s `capture_gfx_objects.py` poll of the object-*record*
 array — was wrong: it observed the wrong structure (not the lookup map) and can't rule out transient records.
 
-**Fix (Frida-free, implementation not RE):** model the gfx command-buffer host-side (record array +
-handle→object hash registry) and *execute* the gfx ops (`0x1a2`/`0x215`/`0x212–0x21a`) instead of stubbing;
-the inserts are bytecode-driven, so the state rebuilds from the same scripts. Fades/alpha (`AE*`,
-`0x202/0x203`) + green chromakey + true multi-surface remain deferred; the compositor is built to accept alpha
-later. The full-screen event-CG opening path (`EV052*` at `(0,0)`) is correct and unaffected — the drift is
-specifically the `BG*`/sprite draws routed through `label_12649`.
+**Resolution had TWO halves** (canonical decode in `docs/engine-re.md`, op `0x215` + "The render drift's
+SECOND half"; don't duplicate here):
+1. **Native gfx ops (b):** all 14 command-buffer ops (`0x1a2`,`0x1f7`,`0x1fa`,`0x1ff`,`0x202`,`0x203`,
+   `0x212`,`0x213`,`0x215`–`0x21a`) reversed + implemented against a host-side `GfxState` (VM execution
+   state; `engine/Age.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots.
+2. **Missing system-boot state (a):** the CG handle array `G[0x62455..]` is set by boot script **INIT2**
+   (via entrypoint `SYSTEM4.BIN`), which a cold single-scene run skips → all CGs collapsed onto object 0.
+   Supplied via **`Age.Cli gfx --boot`** and **Godot `--boot`** (run `INITCONFIG/INIT2/INIT` through
+   `GameSession` first). So the drift needed BOTH — not story flags, and not native-ops-alone.
+
+**Result: with `--boot`, the opening event CGs render correctly** — screenshot-verified live in Godot
+(`--path godot -- --boot`; the CGs that were entirely missing now fill the frame). **Residual (deferred, not
+regressions):** `AE*` fade/flash effects draw opaque (alpha/blend deferred — a white "explosion" glow that
+should fade stays); some object-slot CGs start with a zero anchor (cold gfx objects vs the real game's warm
+ones — default object geometry is confirmed `(0,0)` in `gfx_object_init_default`, so not a missing default).
+Next visual chunk = **alpha/blend + effect fading** (`0x202/0x203` already store the packed color) + per-frame
+compositing. NOTE the two-boot gap: our Phase-B `--boot` runs *data* `*INIT` scripts; this added the *system*
+boot — a "full boot" should run both.
 
 ---
 
