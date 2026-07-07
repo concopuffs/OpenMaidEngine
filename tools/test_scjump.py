@@ -16,7 +16,21 @@ def test_cfg_acyclic_and_dispatch():
     expected = {1:0x81, 2:0x9f, 3:0x1ded, 4:0x1e6d, 5:0x54c1, 6:0x93c4, 7:0x1e868, 8:0x2aa42, 9:0x2b8a3}
     check(disp == expected, f"chapter dispatch matches known offsets (got {disp})")
 
+def test_decode_anchor_and_count():
+    scr = S.load_scjump()
+    decs = S.decode(scr)
+    check(len({d["site_offset"] for d in decs}) == 1755, f"1755 distinct decision sites (got {len({d['site_offset'] for d in decs})})")
+    # anchor: chapter 1, decision 0, guarded by 0x6d3 != 1
+    anchor = [d for d in decs if d["chapter"] == 1 and d["decision"] == 0]
+    check(len(anchor) >= 1, "chapter-1 decision 0 exists")
+    a = anchor[0]
+    has_chapter = any(g.get("global") == 0x3234 and g.get("op") == "==" and g.get("value") == 1 for g in a["guards"])
+    has_flag = any(g.get("global") == 0x6d3 and g.get("op") == "!=" and g.get("value") == 1 for g in a["guards"])
+    check(has_chapter, "anchor guarded by chapter_mode==1")
+    check(has_flag, "anchor guarded by 0x6d3!=1")
+
 if __name__ == "__main__":
     test_cfg_acyclic_and_dispatch()
+    test_decode_anchor_and_count()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)

@@ -59,6 +59,89 @@ def chapter_dispatch(scr) -> dict:
     return out
 
 
+FLIP = {"==": "==", "!=": "!=", "<": ">", "<=": ">=", ">": "<", ">=": "<="}
+NEG  = {"==": "!=", "!=": "==", "<": ">=", ">=": "<", "<=": ">", ">": "<="}
+
+
+def _cmp_expr(op_sym, a, b):
+    """Build a Cmp guard from a comparison's operands (a <op> b). Global vs immediate only;
+    anything else -> opaque."""
+    if a[0] in GLOBAL_ATYPES and b[0] == IMM:
+        return {"global": a[1], "op": op_sym, "value": b[1]}
+    if a[0] == IMM and b[0] in GLOBAL_ATYPES:
+        return {"global": b[1], "op": FLIP[op_sym], "value": a[1]}
+    return {"opaque": f"cmp {op_sym} {a} {b}"}
+
+
+def negate(g):
+    if "opaque" in g:      return {"opaque": "!(" + g["opaque"] + ")"}
+    if "and" in g:         return {"or": [negate(x) for x in g["and"]]}
+    if "or" in g:          return {"and": [negate(x) for x in g["or"]]}
+    return {"global": g["global"], "op": NEG[g["op"]], "value": g["value"]}
+
+
+def _resolve(localmap, operand):
+    """Resolve a jcc/logic operand (a local holding a condition) to its guard expression."""
+    return localmap.get(operand[1], {"opaque": f"local {operand}"})
+
+
+def chapter_of(guards):
+    for g in guards:
+        if g.get("global") == CHAPTER_GLOBAL and g.get("op") == "==":
+            return g["value"]
+    return None
+
+
+def decode(scr):
+    code = scr.instructions
+    by_off = {ins.offset: i for i, ins in enumerate(code)}
+    decisions = []
+    # explicit-stack DFS: each item is (idx, localmap, guards). No back-edges -> terminates.
+    stack = [(0, {}, [])]
+    while stack:
+        idx, localmap, guards = stack.pop()
+        localmap = dict(localmap)
+        while 0 <= idx < len(code):
+            ins = code[idx]
+            op, a = ins.opcode, ins.args
+            if ins.offset == END_TARGET:
+                break
+            if op == MOV and a and tuple(a[0]) == (3, DECISION_GLOBAL) and a[1][0] == IMM:
+                decisions.append({"site_offset": ins.offset, "chapter": chapter_of(guards),
+                                  "decision": a[1][1], "guards": list(guards)})
+                idx += 1
+                continue
+            if op in CMP_OPS and len(a) >= 3 and a[0][0] == 9:
+                localmap[a[0][1]] = _cmp_expr(CMP_OPS[op], a[1], a[2])
+                idx += 1
+                continue
+            if op in LOGIC_OPS and len(a) >= 3 and a[0][0] == 9:
+                kind = LOGIC_OPS[op]
+                localmap[a[0][1]] = {kind: [_resolve(localmap, a[1]), _resolve(localmap, a[2])]}
+                idx += 1
+                continue
+            if op == JCC and len(a) >= 3:
+                expr = _resolve(localmap, a[0])
+                a_tgt, b_tgt = a[1][1], a[2][1]
+                true_idx = idx + 1 if a_tgt == FALLTHROUGH else by_off.get(a_tgt)
+                false_idx = idx + 1 if b_tgt == FALLTHROUGH else by_off.get(b_tgt)
+                # explore false branch later; continue true branch inline
+                if false_idx is not None:
+                    stack.append((false_idx, dict(localmap), guards + [negate(expr)]))
+                if true_idx is None:
+                    break
+                idx, guards = true_idx, guards + [expr]
+                continue
+            if op == JMP and a:
+                tgt = a[0][1]
+                if tgt == END_TARGET or tgt not in by_off:
+                    break
+                idx = by_off[tgt]
+                continue
+            idx += 1
+    return decisions
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--verify", action="store_true")   # implemented in Task 4
