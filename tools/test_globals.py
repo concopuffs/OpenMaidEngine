@@ -40,9 +40,18 @@ def test_merge_precedence():
     check(auto_only is not None and merged[int(auto_only, 16)]["provenance"] == "auto",
           "auto-only address retained with provenance=auto")
 
+def test_sys4load_labels_from_registry():
+    import importlib, sys4load
+    importlib.reload(sys4load)   # re-run _load_global_labels against current build/globals.json
+    lbl = sys4load.GLOBAL_LABELS.get(0x3234, "")
+    check("chapter_mode" in lbl, f"sys4load labels 0x3234 with curated name (got {lbl!r})")
+    lbl2 = sys4load.GLOBAL_LABELS.get(0xa57, "")
+    check("lily_form_a" in lbl2, f"sys4load labels 0xa57 with curated name (got {lbl2!r})")
+
 if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
     test_merge_precedence()
+    test_sys4load_labels_from_registry()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)

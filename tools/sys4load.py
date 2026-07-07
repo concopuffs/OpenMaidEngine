@@ -45,9 +45,10 @@ try:
 except ImportError:
     INFERRED = {}
 
-# Global-variable labels (optional): annotate global operands with the partial global-var
-# map (build/global-var-map.json, produced by tools/global_map.py). High/medium confidence
-# only — the low-confidence tail (~12k sparse guesses) is left out to keep listings readable.
+# Global-variable labels (optional): annotate global operands from the merged registry
+# build/globals.json (curated vm-map/globals.toml over the auto shape map), produced by
+# tools/globals_build.py --build. Curated entries show their name+category; the auto tail
+# keeps only high/med confidence to stay readable. Degrades to {} if the file is absent.
 GLOBAL_ATYPES = {3, 4, 5, 6, 8}          # global-int/float/string/ptr/string-ptr
 
 
@@ -61,15 +62,18 @@ def _short_global_label(lbl: str) -> str:
 
 def _load_global_labels() -> dict:
     try:
-        p = Path(__file__).resolve().parent.parent / "build" / "global-var-map.json"
+        p = Path(__file__).resolve().parent.parent / "build" / "globals.json"
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
     out = {}
     for addr_s, e in data.get("globals", {}).items():
-        lbl, conf = e.get("label"), e.get("confidence")
-        if lbl and conf in ("high", "med"):
-            out[int(addr_s, 16)] = _short_global_label(lbl)
+        addr = int(addr_s, 16)
+        if e.get("provenance") == "curated" and e.get("name"):
+            cat = e.get("category")
+            out[addr] = f"{e['name']}({cat})" if cat and cat != "unknown" else e["name"]
+        elif e.get("usage") and e.get("confidence") in ("high", "med"):
+            out[addr] = _short_global_label(e["usage"])
     return out
 
 
