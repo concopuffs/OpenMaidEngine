@@ -13,10 +13,7 @@ public class CallScriptTests
 
     private sealed class NullHost : IHost
     {
-        public List<long> Calls = new();
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) => Calls.Add(id);
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }
@@ -58,12 +55,13 @@ public class CallScriptTests
             OP_MOV, 3, 0x11, 3, 0x10,
             OP_EXIT);
         var host = new NullHost();
-        var vm = new VirtualMachine(caller, t, host, null, new MapProvider(new() { [5] = callee }));
+        var sink = new RecordingTraceSink();
+        var vm = new VirtualMachine(caller, t, host, null, new MapProvider(new() { [5] = callee }), sink);
         vm.Run();
         Assert.Equal(7, vm.Globals[0x10]);           // callee wrote a shared global
         Assert.Equal(7, vm.Globals[0x11]);           // caller read it AFTER the call returned
         Assert.Equal("exit", vm.HaltReason);         // top-level exit
-        Assert.Contains(5L, host.Calls);             // host notified
+        Assert.Contains(5L, sink.CallScriptIds);     // dispatch observed via the trace sink
     }
 
     [Fact]
@@ -72,10 +70,11 @@ public class CallScriptTests
         var t = Table();
         var caller = Asm(t, "CALLER", OP_CALLSCRIPT, 0, 5, OP_EXIT);
         var host = new NullHost();
-        var vm = new VirtualMachine(caller, t, host, null, null);   // no provider
+        var sink = new RecordingTraceSink();
+        var vm = new VirtualMachine(caller, t, host, null, null, sink);   // no provider
         vm.Run();
         Assert.Equal("exit", vm.HaltReason);        // did not halt on the call; stub + continue
-        Assert.Contains(5L, host.Calls);
+        Assert.Contains(5L, sink.CallScriptIds);
     }
 
     [Fact]

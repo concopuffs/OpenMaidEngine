@@ -10,8 +10,6 @@ public class TextureGeometryTests
     private sealed class FakeSizeHost : IHost
     {
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) { }
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int slot, int w, int h) { }
         public void SetTexture(long resId, int slot) { }

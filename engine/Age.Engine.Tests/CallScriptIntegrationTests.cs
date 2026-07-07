@@ -7,10 +7,7 @@ public class CallScriptIntegrationTests
 {
     private sealed class NullHost : IHost
     {
-        public int CallScripts;
         public void ShowText(int o, string t) { }
-        public void CallScript(long id) => CallScripts++;
-        public void OnStub(int op) { }
         public void WaitForInput() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }
@@ -31,8 +28,8 @@ public class CallScriptIntegrationTests
         var host = new NullHost();
         var vm = new VirtualMachine(script, t, host, null, provider);
         vm.Run();
-        Assert.Equal(2, host.CallScripts);       // ADDILLSUB + CALCREVISE both dispatched
-        Assert.Equal("exit", vm.HaltReason);     // subroutines returned; ADDILL reached its own exit
+        Assert.Equal(2, vm.CallScriptDispatches); // ADDILLSUB + CALCREVISE both dispatched
+        Assert.Equal("exit", vm.HaltReason);      // subroutines returned; ADDILL reached its own exit
     }
 
     [Fact]

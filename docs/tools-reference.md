@@ -85,6 +85,14 @@ subsystem oracles. Test scenes are **synthesized** via `Age.Engine/Sys4/ScriptAs
 | `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
 | `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale run. **With call-script execution on: 284/297 exit, 13 STEP-LIMIT** (input/state-gated ADV scenes spin headless once subroutine global-writes drive their loops — state divergence, not a bug; 0 depth-cap/unresolved). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
 
+**`--trace [--trace-file <path>] [--trace-steps]`** (on `run`/`play`/`sweep`): stream the engine's own
+diagnostic events over the `Age.Engine.Diagnostics.ITraceSink` seam — scene/subroutine frame enter+exit
+(indented by call depth), call-script dispatch with resolved name, and the final halt+step count — to
+console or a file. Add `--trace-steps` for per-instruction opcode/arg + stub-op detail (high volume;
+gated). Absent ⇒ no tracing (`NullTraceSink`, byte-identical run). This is an **engine** fact stream:
+frontends consume it instead of reimplementing a diagnostic `IHost`. Example: `play SC0000.BIN --trace`
+shows `» SC0000.BIN (enter, TopScene)` → `call-script 0xee =INPUTNAME.BIN (resolved)` → `halt: …`.
+
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
 Plays the real bytecode with call-script execution on (subroutines run live). `--headless` can't render
