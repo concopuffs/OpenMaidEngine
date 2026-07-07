@@ -1,3 +1,4 @@
+using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 namespace Age.Engine.Vm;
@@ -17,6 +18,8 @@ public sealed class VirtualMachine
     private readonly IScriptProvider? _provider;
     private ExecFrame _cur = null!;
     private int _depth;
+    private readonly ITraceSink _sink;
+    public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
@@ -24,8 +27,10 @@ public sealed class VirtualMachine
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
 
-    public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null, IScriptProvider? provider = null)
-    { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider; }
+    public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
+                          IScriptProvider? provider = null, ITraceSink? sink = null)
+    { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
+      _sink = sink ?? NullTraceSink.Instance; }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
@@ -97,26 +102,30 @@ public sealed class VirtualMachine
     public void Run(int entryOffset = 0)
     {
         var top = new ExecFrame(_s, _s.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0);
-        var outcome = RunFrame(top);
+        var outcome = RunFrame(top, FrameCause.TopScene);
         if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
         else if (outcome == FrameOutcome.Returned) HaltReason ??= "exit";
         // Halted: HaltReason already set by the halting op.
+        _sink.Emit(TraceEvent.Halt(HaltReason ?? "unknown", Steps));
     }
 
-    private FrameOutcome RunFrame(ExecFrame frame)
+    private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
         var prev = _cur; _cur = frame; _depth++;
+        _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
         var outcome = FrameOutcome.RanOff;
         int pc = frame.Pc;
         while (pc >= 0 && pc < frame.Script.Instructions.Count)
         {
             if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
             Steps++;
+            if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             int next = Step(frame.Script.Instructions[pc], pc);
             if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
             if (next == HALT) { outcome = FrameOutcome.Halted; break; }
             pc = next;
         }
+        _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
         _cur = prev; _depth--;
         return outcome;
     }
@@ -170,13 +179,18 @@ public sealed class VirtualMachine
             case "call-script":
             {
                 long id = a.Count > 0 ? Read(a[0]) : 0;
-                _host.CallScript(id);                       // notify (diagnostics)
-                if (_provider == null) return pc + 1;       // no script source: prior stub behavior
+                CallScriptDispatches++;
+                if (_provider == null)
+                {
+                    _sink.Emit(TraceEvent.CallScript(id, null));   // stub mode: notify only, no child pushed
+                    return pc + 1;
+                }
                 if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return HALT; }
                 var child = _provider.GetById(id);
+                _sink.Emit(TraceEvent.CallScript(id, child?.Name));
                 if (child == null) { HaltReason ??= $"callscript-unresolved:0x{id:x}"; return HALT; }
                 var entry = child.IndexByOffset.TryGetValue(0, out var ci) ? ci : 0;
-                var outcome = RunFrame(new ExecFrame(child, entry));
+                var outcome = RunFrame(new ExecFrame(child, entry), FrameCause.CallScript, id);
                 if (outcome == FrameOutcome.Halted) return HALT;   // propagate whole-VM halt up
                 return pc + 1;                                      // Returned / RanOff: resume caller
             }
@@ -212,7 +226,7 @@ public sealed class VirtualMachine
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
             default:
-                _host.OnStub(op); return pc + 1;
+                _sink.Emit(TraceEvent.Stub(op, pc)); return pc + 1;
         }
     }
 }

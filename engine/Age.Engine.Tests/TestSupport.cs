@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 
@@ -35,4 +37,15 @@ internal sealed class AnyProvider : IScriptProvider
     private readonly Script _s;
     public AnyProvider(Script s) => _s = s;
     public Script? GetById(long id) => _s;
+}
+
+/// <summary>Captures every trace event for assertions; TracingSteps is settable so a test can
+/// exercise the Step gate both ways.</summary>
+internal sealed class RecordingTraceSink : ITraceSink
+{
+    public bool TracingSteps { get; init; }
+    public readonly List<TraceEvent> Events = new();
+    public void Emit(in TraceEvent e) => Events.Add(e);
+    public List<long> CallScriptIds =>
+        Events.Where(e => e.Kind == TraceEventKind.CallScript).Select(e => e.Id).ToList();
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 
@@ -25,9 +26,10 @@ public sealed class GameSession
 
     /// <summary>Run one scene: seed a fresh VM from session state, execute, merge final state back.</summary>
     public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
-                                VmOptions? options = null, IScriptProvider? provider = null)
+                                VmOptions? options = null, IScriptProvider? provider = null,
+                                ITraceSink? sink = null)
     {
-        var vm = new VirtualMachine(script, table, host, options, provider);
+        var vm = new VirtualMachine(script, table, host, options, provider, sink);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
 
