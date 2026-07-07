@@ -14,10 +14,13 @@ if (args.Length == 0) { Console.WriteLine("usage: run <file> | trace <out.json>"
 if (args[0] == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
-    var vm = new VirtualMachine(script, table, new CaptureHost(), null, provider);
+    var runHost = new CaptureHost();
+    var vm = new VirtualMachine(script, table, runHost, null, provider);
     vm.Run();
-    Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text (halt: {vm.HaltReason})");
-    foreach (var (off, text, _) in vm.Emitted.Take(20)) Console.WriteLine($"  [{off:x}] {text}");
+    Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {runHost.CallScriptCount} call-scripts (halt: {vm.HaltReason})");
+    foreach (var (off, text, scr) in vm.Emitted.Take(30)) Console.WriteLine($"  [{scr} 0x{off:x}] {text}");
+    var sources = vm.Emitted.Select(e => e.Script).Distinct().ToList();
+    Console.WriteLine($"source scripts ({sources.Count}): {string.Join(", ", sources)}");
     return 0;
 }
 

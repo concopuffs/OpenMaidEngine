@@ -42,7 +42,10 @@ public sealed class GodotAdvHost : IHost
     // called from the main thread (click) or the selftest auto-clicker
     public void SignalInput() { if (_gate.CurrentCount == 0) _gate.Release(); }
 
-    public void CallScript(long id) { }
+    // Records each call-script the VM dispatches (runs on the VM thread, so collect thread-safely and
+    // let the main thread report it — Godot drops GD.Print from background threads).
+    public readonly System.Collections.Concurrent.ConcurrentQueue<long> Dispatched = new();
+    public void CallScript(long id) => Dispatched.Enqueue(id);
     public void OnStub(int opcode) { }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----

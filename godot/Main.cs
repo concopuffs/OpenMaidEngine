@@ -75,9 +75,11 @@ public partial class Main : Godot.Control
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
+        string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         for (int i = 0; i < userArgs.Length; i++)
         {
+            if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];
             if (userArgs[i] == "--shot" && i + 1 < userArgs.Length) _shotPath = userArgs[i + 1];
             if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
@@ -98,8 +100,8 @@ public partial class Main : Godot.Control
         Script script;
         IScriptProvider provider;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
-        else { script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table); provider = Sys4ScriptProvider.Load(table); }
-        _host = new GodotAdvHost(this, ResourceMap.Load(), "SC0000");
+        else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
+        _host = new GodotAdvHost(this, ResourceMap.Load(), scene);
         _vm = new VirtualMachine(script, table, _host, null, provider);
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // seed initial state before running
         _ = Task.Run(() => { _vm.Run(); _done = true; });
@@ -122,6 +124,7 @@ public partial class Main : Godot.Control
                 var img = GetViewport().GetTexture().GetImage();
                 img.SavePng(_shotPath);
                 GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
+                ReportSubroutines();
                 GetTree().Quit(0);
             }
             return;
@@ -129,6 +132,7 @@ public partial class Main : Godot.Control
         if (_done && !_ended)
         {
             _ended = true;
+            ReportSubroutines();
             ShowEnd();
             if (_selftest) RunSelfTest();
         }
@@ -195,6 +199,17 @@ public partial class Main : Godot.Control
     // + CallDeferred marshalling) drives the VM faithfully — i.e. produces the SAME output as a plain
     // in-process run of the identical scene. Full op handling is on (the synthetic scene includes a real
     // nested call-script); the expected value is computed live from a headless run, not a frozen golden.
+    // Reports (from the main thread) the call-scripts the VM executed as nested subroutines this run.
+    private void ReportSubroutines()
+    {
+        var ids = new List<long>();
+        while (_host.Dispatched.TryDequeue(out var id)) ids.Add(id);
+        if (ids.Count == 0) { GD.Print("[subroutines] none dispatched on this path"); return; }
+        var distinct = new List<string>();
+        foreach (var id in ids) { var h = "0x" + id.ToString("x"); if (!distinct.Contains(h)) distinct.Add(h); }
+        GD.Print($"[subroutines] {ids.Count} call-scripts executed as nested frames ({distinct.Count} distinct: {string.Join(", ", distinct)})");
+    }
+
     private void RunSelfTest()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
