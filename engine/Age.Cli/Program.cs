@@ -81,6 +81,9 @@ if (args[0] == "gfx")
     vm.Run();
     Console.WriteLine($"{sceneName}: {host.Events.Count} texture ops (halt: {vm.HaltReason})");
     foreach (var line in host.Events) Console.WriteLine("  " + line);
+    var gfxObjs = vm.Gfx.Objects.OrderBy(o => o.Slot).ToList();
+    Console.WriteLine($"  gfx objects: {gfxObjs.Count} -> " +
+        string.Join(", ", gfxObjs.Select(o => $"0x{o.Handle:x}=slot{o.Slot}")));
     return 0;
 }
 
