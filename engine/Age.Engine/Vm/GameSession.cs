@@ -24,9 +24,10 @@ public sealed class GameSession
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
 
     /// <summary>Run one scene: seed a fresh VM from session state, execute, merge final state back.</summary>
-    public SceneResult RunScene(Script script, OpcodeTable table, IHost host, VmOptions? options = null)
+    public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
+                                VmOptions? options = null, IScriptProvider? provider = null)
     {
-        var vm = new VirtualMachine(script, table, host, options);
+        var vm = new VirtualMachine(script, table, host, options, provider);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
 

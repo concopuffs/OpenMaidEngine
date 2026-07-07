@@ -17,7 +17,6 @@ public sealed class VirtualMachine
     private readonly IScriptProvider? _provider;
     private ExecFrame _cur = null!;
     private int _depth;
-    private bool _halted;
 
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
@@ -111,11 +110,11 @@ public sealed class VirtualMachine
         int pc = frame.Pc;
         while (pc >= 0 && pc < frame.Script.Instructions.Count)
         {
-            if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; _halted = true; outcome = FrameOutcome.Halted; break; }
+            if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
             Steps++;
             int next = Step(frame.Script.Instructions[pc], pc);
             if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
-            if (next == HALT) { _halted = true; outcome = FrameOutcome.Halted; break; }
+            if (next == HALT) { outcome = FrameOutcome.Halted; break; }
             pc = next;
         }
         _cur = prev; _depth--;
