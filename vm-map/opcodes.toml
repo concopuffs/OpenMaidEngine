@@ -3435,14 +3435,14 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "resolve-handle?"
-category = "compute"
-summary = "1 local-ptr from lookup-array, then create-texture — resolves a looked-up resource/handle"
+name = "gfx-cmd-register"
+category = "draw"
+summary = "graphics command-buffer op: sets current gfx-object cmd-type=3 and registers a '%c%8.8x' key from operand 1"
 noop_headless = false
-source = "inference"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = "confirm via frida"
+evidence = "Ghidra: real handler FUN_0042d360 (via dispatch table ctx[0x26c93+op]); sets *(ctx+0x53d88+ctx[0x53d14]*0x78)=3, sprintf(\"%c%8.8x\",3,op1), FUN_0042cf70. NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md"
 
 [[opcode.semantics.args]]
 i = 1

@@ -9,7 +9,7 @@ INFERRED: dict[int, dict] = {
     0x90: dict(name='hotspot-branch', category='input', noop=True, confidence='high', source='investigation', summary='cursor/input hotspot hit-test: rect (x,y,w,h) -> 3-way branch on interaction, else fall through to pc+1'),
     0x97: dict(name='hotspot-reg?', category='input', noop=True, confidence='med', source='inference', summary='companion register-hotspot / set-widget-action (argc5: v1 v2 1 1 <action-id>; NO code targets)'),
     0xb6: dict(name='snd-ctrl?', category='audio', noop=False, confidence='low', source='inference', summary='1 imm; self-chains, 0x41D family near play-sound-effect/0xb5 — sound channel/volume/stop control'),
-    0x1a2: dict(name='resolve-handle?', category='compute', noop=False, confidence='low', source='inference', summary='1 local-ptr from lookup-array, then create-texture — resolves a looked-up resource/handle'),
+    0x1a2: dict(name='gfx-cmd-register', category='draw', noop=False, confidence='med', source='investigation', summary="graphics command-buffer op: sets current gfx-object cmd-type=3 and registers a '%c%8.8x' key from operand 1"),
     0x1bc: dict(name='block-mark', category='marker', noop=True, confidence='high', source='inference', summary='zero-arg; follows jcc/mov, precedes mov/ret — block boundary'),
     0x1bf: dict(name='call-end', category='marker', noop=True, confidence='med', source='inference', summary='zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker'),
     0x1d2: dict(name='stmt-desc?', category='marker', noop=True, confidence='med', source='harness', summary='2 imm; immediately after stmt-begin 0x1f4 — statement descriptor?'),

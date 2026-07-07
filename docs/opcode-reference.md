@@ -27,14 +27,12 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug.
 
-## compute
-
-### 0x1a2 `resolve-handle?` (u00428010, argc 1)
-- **summary:** 1 local-ptr from lookup-array, then create-texture — resolves a looked-up resource/handle
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
-
 ## draw
+
+### 0x1a2 `gfx-cmd-register` (u00428010, argc 1)
+- **summary:** graphics command-buffer op: sets current gfx-object cmd-type=3 and registers a '%c%8.8x' key from operand 1
+- **grounding:** source=investigation, confidence=med
+- **evidence:** Ghidra: real handler FUN_0042d360 (via dispatch table ctx[0x26c93+op]); sets *(ctx+0x53d88+ctx[0x53d14]*0x78)=3, sprintf("%c%8.8x",3,op1), FUN_0042cf70. NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md
 
 ### 0x1f7 `ui-elem?` (u00420270, argc 2)
 - **summary:** 2 args; 0x420 family, pairs with 0x1fa — create/begin a UI element

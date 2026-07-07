@@ -46,8 +46,10 @@ on disk to read. Resolving it needs one of:
 **Update (2026-07-07):** SCJUMP's *decision logic* is now decoded — `(chapter_mode, guards) →
 decision value` — see `docs/scjump-progression.md` and `tools/scjump_decode.py`. That confirmed
 SCJUMP is not the `call-script` registry (it produces a decision value, not a script id). The
-decision→scene hop itself is a **native op (`u00428010`)**, engine-level, in the same bucket as
-`call-script`; both await the engine dump / Frida.
+decision→scene hop is **native and still unidentified** — an earlier guess that op `u00428010`
+resolved it was **disproven via Ghidra** (that op is a graphics command-buffer op; see
+`docs/engine-re.md`). It's the same engine-level bucket as `call-script`; the Ghidra + MCP loop (and
+its recovered opcode-dispatch table) is now the tool to crack the `call-script`/script-load handler.
 
 ---
 
