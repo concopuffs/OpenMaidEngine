@@ -258,10 +258,26 @@ public sealed class VirtualMachine
                 Gfx.GetOrCreate(Read(a[0])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (handle)
                 Gfx.Release(Read(a[0])); return pc + 1;
+            case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — blend deferred
+                Gfx.GetOrCreate(Read(a[0])).Color = GfxState.PackColor(Read(a[3]), Read(a[4]));
+                WarnAlphaDeferredOnce(); return pc + 1;
+            case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — blend deferred
+                Gfx.GetOrCreate(Read(a[0])).Color = GfxState.PackColor(Read(a[2]), Read(a[3]));
+                WarnAlphaDeferredOnce(); return pc + 1;
             default:
                 // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
                 // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.
                 if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc)); return pc + 1;
         }
+    }
+
+    // Colored-draw ops (0x202/0x203) store the packed color on the object now; the actual alpha/additive
+    // blend in the compositor is deferred. Surface it once (not silently) via the trace sink — observe-only,
+    // so parity holds. See docs/superpowers/specs/2026-07-07-gfx-command-buffer-design.md (Deferrals).
+    private bool _warnedAlpha;
+    private void WarnAlphaDeferredOnce()
+    {
+        if (_warnedAlpha) return; _warnedAlpha = true;
+        _sink.Emit(TraceEvent.Stub(0x202, -1));
     }
 }

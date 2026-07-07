@@ -52,4 +52,21 @@ public class GfxCommandBufferTests
         Assert.NotEqual(0, vm.Globals[10]);              // not collapsed to slot 0
         Assert.NotEqual(vm.Globals[10], vm.Globals[11]); // distinct slots => no collapse
     }
+
+    private static (int, Operand[]) BlitColor(int h, int x, int y, int alpha, int color)
+        => (0x202, new[] { G(h), G(x), G(y), G(alpha), G(color) });
+
+    [Fact]
+    public void BlitColorStoresPackedArgbOnTheObject()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 0), MovGI(3, 0), MovGI(4, 0x80), MovGI(5, 0x112233),
+            BlitColor(1, 2, 3, 4, 5), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        Assert.Equal(0x80_112233L, vm.Gfx.TryGet(0x1000)!.Color);
+    }
 }
