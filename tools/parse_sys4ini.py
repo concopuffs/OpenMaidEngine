@@ -115,13 +115,18 @@ def parse(path: Path) -> dict:
                          f"have {len(blob)} decompressed bytes)")
 
     files = []
-    for _ in range(file_count):
+    for i in range(file_count):
         name_b, arc_id, file_number, offset, size = struct.unpack_from(FILE_ENTRY_FMT, blob, p)
         p += FILE_ENTRY_LEN
         name = _cstr(name_b)
         if name == "@" or not name:
             continue
         files.append({
+            # raw_index = the record's 0-based position in the SYS4INI table INCLUDING '@'
+            # placeholders. This is the engine's universal file id: `call-script <id>` and every
+            # script/asset load index by it (engine FUN_0044f390: record = base + id*0x50). It is
+            # NOT the same as this entry's position in `files` (which omits placeholders).
+            "raw_index": i,
             "name": name,
             "archive": archives[arc_id] if 0 <= arc_id < arc_count else None,
             "arc_id": arc_id,
@@ -214,6 +219,15 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"-> {out.relative_to(paths.REPO)}")
+
+    # call-script id -> name map (raw_index keyed). `call-script <id>` (opcode 0x03) is a direct
+    # raw index into the SYS4INI file table, so this IS the call-graph name registry that
+    # name-resolution.md #1 needed (confirmed via native-RE, see docs/engine-re.md). sys4load reads
+    # it to annotate `call-script 0x1ab =ADDITEM`.
+    cs = {str(f["raw_index"]): f["name"] for f in index["files"]}
+    cs_out = paths.BUILD / "callscript-names.json"
+    cs_out.write_text(json.dumps(cs, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"-> {cs_out.relative_to(paths.REPO)} ({len(cs)} ids)")
 
     if do_check:
         print("--- validation ---")

@@ -26,7 +26,7 @@ whenever a tool's inputs/outputs change.**
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `sys4load.py` | Loader + opcode-decoding disassembler for SYS4 `.BIN` scripts (the container-format core every other tool builds on). | `sys4load.py <file.BIN>` · `--summary` · `--strings` · `--json` · `sys4load.py <dir> --validate` (corpus check) | `.BIN` + `age_opcodes*.py` + `build/global-var-map.json` → stdout listing, or `build/scripts-json/` with `--json` |
+| `sys4load.py` | Loader + opcode-decoding disassembler for SYS4 `.BIN` scripts (the container-format core every other tool builds on). Annotates global operands (`build/globals.json`) and **`call-script` targets by name** (`build/callscript-names.json`, e.g. `call-script 0x1ab =ADDITEM.BIN`). | `sys4load.py <file.BIN>` · `--summary` · `--strings` · `--json` · `sys4load.py <dir> --validate` (corpus check) | `.BIN` + `age_opcodes*.py` + `build/globals.json` + `build/callscript-names.json` → stdout listing, or `build/scripts-json/` with `--json` |
 | `age_opcodes.py` | 548-entry Kelebek AGE opcode/arg-type table. **PRISTINE upstream data — never edit.** | *Imported.* | — |
 
 ## Opcode reference toolchain — single source of truth = `vm-map/opcodes.toml`
@@ -90,7 +90,7 @@ plays `SC0000` from the real bytecode. User args (after `--`):
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `parse_sys4ini.py` | Parse `SYS4INI.BIN` (S4IC422, LZSS-compressed) into the authoritative asset index — name ↔ archive ↔ offset ↔ size for all DATA*.ALF (the `resId→file` answer key). | `parse_sys4ini.py [--check]` (`--check` validates vs `extracted/` + `.ALF` sizes) | `姫狩り…/SYS4INI.BIN` → `build/asset-index.json` |
+| `parse_sys4ini.py` | Parse `SYS4INI.BIN` (S4IC422, LZSS-compressed) into the authoritative asset index — name ↔ archive ↔ offset ↔ size for all DATA*.ALF (the `resId→file` answer key). Each entry carries `raw_index` (its 0-based position in the SYS4INI record table incl. `@` placeholders) = the engine's universal file id. Also emits the **`call-script <id> → name`** map (id = `raw_index`; see `engine-re.md`). | `parse_sys4ini.py [--check]` (`--check` validates vs `extracted/` + `.ALF` sizes) | `姫狩り…/SYS4INI.BIN` → `build/asset-index.json` + `build/callscript-names.json` |
 | `resolve_asset.py` | ★ **The static asset resolver.** SYS4INI is sectioned (one per scene: `SCxxxx.BIN` + its cross-archive manifest; `file_number` = index within section). Resolves `resId → files[section_base(scene) + resId]` for graphics AND audio, no capture. | `resolve_asset.py --build` · `resolve_asset.py <SCENE> [resId]` | `build/asset-index.json` → `build/asset-sections.json`; resolves any (scene, resId) |
 | `resolve_frida_reads.py` | Rescue noisy Frida archive-read offsets → asset names via the index (per-archive range search; drops 0x20000 paging reads); recovers the per-scene asset load order. | `resolve_frida_reads.py [reads.log] [-o out.json]` | `build/frida-reads.log` + `build/asset-index.json` → `build/frida-asset-loads.json` |
 | `convert_agf.py` | Convert AGF stills to BMP via `AGF2BMP2AGF.exe` (searches all `extracted/DATA*`). `--scene` batch-converts a scene's whole SYS4INI manifest — feeds the Godot render. | `convert_agf.py EV052CA.AGF …` · `convert_agf.py --scene SC0000` | `extracted/DATA*/*.AGF` → `build/textures/*.BMP` |

@@ -94,11 +94,54 @@ handler through the dispatch table (`ctx[0x26c93 + op]`). The raw VA is off by w
 
 ---
 
+### op `0x03` (`call-script`) is a raw index into the SYS4INI file table — SOLVED (2026-07-07)
+
+The long-deferred `call-script <id>` registry (`name-resolution.md §1`) is cracked. Resolved through
+the dispatch table (op `0x03` → `ctx[0x26c93+3]` = **`FUN_0041bc90`**), then the loader/resolver chain:
+
+- **`FUN_0041bc90`** (handler): fetches operand 1 (the id), bounds-checks call depth (≤ 0x26), pushes
+  a script frame, and calls the loader.
+- **`FUN_0040e980`** (loader): opens the resource by id, reads the **0x20-byte SYS4 header**, checks
+  magic, allocates per-frame code/local buffers from the header var-counts, reads the bytecode body,
+  and pushes a script frame (**stride 0x1e = 30 dwords**, indexed by `ctx[0x14f45]`). Returns to the
+  caller when the callee ends.
+- **`FUN_0044f390`** (resolver — the key): `record = [ctx+0x414] + id*0x50`. The record is exactly the
+  **SYS4INI 80-byte layout** `{name[64], arc_id@0x40, file_number@0x44, offset@0x48, size@0x4c}`
+  (count = `[ctx+0x40c]`, archive-name table = `[ctx+0x410]`). It tries a **loose override first**
+  (`CreateFileA` on `record.name` → the mod/patch hook point), else opens archive
+  `[record.arc_id*0x100 + ctx+0x410]`, `SetFilePointer` to `record.offset`, size = `record.size`.
+  High-byte-tagged ids (`id & 0xff000000`) select an alternate pack via `[ctx+0x3028]` — **unused by
+  the corpus** (0/297 ids carry a high byte).
+
+**So `call-script <id>` = a direct RAW index into the SYS4INI global file table** — the same table
+`parse_sys4ini.py` reads, but indexed *without* skipping `@` placeholders (13208 records, 2
+placeholders). There is **no separate on-disk id→code registry**; SYS4INI *is* the registry, and we
+already had it. **Statically confirmed:** all **297/297** distinct corpus `call-script` ids resolve to
+a `.BIN` script with a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`,
+`0x329d→CALCREVISE`, `0x2add→CALCBTPARAM`), 0 out-of-range, 0 pack-branch. Tooling:
+`parse_sys4ini.py` emits `build/callscript-names.json` (id→name); `sys4load` annotates
+`call-script 0x1ab =ADDITEM.BIN`; the whole `build/disasm/*.asm` call graph now reads by name. See
+`name-resolution.md §1`.
+
+**Companion — op `0x8f` (`call`) is INTRA-script, not cross-script.** Its handler **`FUN_0041fba0`**
+sets `[frame PC @+0x53d2c] = [frame codebase @+0x53d28] + operand*4` and pushes a return address on
+the per-frame return stack (`[ctx+0x552e8]`/`[ctx+0x55248]`). The operand is a **code offset within
+the current script** (matches header table **T3, tag 0x8F** = local call targets). So `0x8f` is a
+local JSR; only `0x03` loads another script.
+
+**Follow-up (functional):** the C# VM still *stubs* `call-script`. With the id→resource mapping now
+known, it can be implemented for real (load the target `.BIN` from the archive via the SYS4INI record,
+push a frame, run, return) — the unlock for subroutine-using scripts and, via the same path,
+decision→scene (scenes are just `SCxxxx.BIN` records loaded by their SYS4INI index).
+
+---
+
 ## Native walls backlog (targets for this loop)
 
-- **decision→scene** — how `0x62ccf`/the decision actually selects the next `SCxxxx` (re-aimed away
-  from `u00428010`; likely call-script-adjacent).
-- **call-script dispatch** — `call-script <id>` → engine entry point (`name-resolution.md §1`).
+- ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.
+- **decision→scene** — how `0x62ccf`/the decision selects the next `SCxxxx`. Now narrower: scenes load
+  via `call-script`/the same SYS4INI-index loader, so the open question is only where the decision
+  value is turned into a scene *id* (a caller of SCJUMP; re-aimed away from `u00428010`).
 - **op `0x60`** (`u0041A270`) — the rand-like value gating 1732/1755 SCJUMP decisions.
 - **gfx command-buffer** — the `0x212–0x21a` positioned-object subsystem (`scjump`-unrelated; the
   rendering drift).
