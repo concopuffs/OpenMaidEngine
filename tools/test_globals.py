@@ -48,10 +48,21 @@ def test_sys4load_labels_from_registry():
     lbl2 = sys4load.GLOBAL_LABELS.get(0xa57, "")
     check("lily_form_a" in lbl2, f"sys4load labels 0xa57 with curated name (got {lbl2!r})")
 
+def test_miner_finds_known_flags():
+    import story_flags
+    cands = story_flags.mine()
+    check(0x3234 in cands, "miner surfaces chapter flag 0x3234")
+    check(set(range(1, 9)) <= set(cands[0x3234]["consts"]), "0x3234 compared against 1..8 enum")
+    check(cands[0x3234]["category"] == "story-flag", "0x3234 classified story-flag")
+    check(0xa57 in cands, "miner surfaces Lily form flag 0xa57")
+    check(cands[0xa57]["reach_scenes"] >= 70, "0xa57 high scene reach")
+    check(cands[0xa57]["category"] == "story-flag", "0xa57 classified story-flag")
+
 if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
+    test_miner_finds_known_flags()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)
