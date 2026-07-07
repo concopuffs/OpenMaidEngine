@@ -250,6 +250,29 @@ deferred — Phase 2 scope), and some object-slot CGs start with a zero anchor (
 game's warm ones; default object geometry is confirmed `(0,0)` in `gfx_object_init_default`, so it is not a
 missing-default bug). See `docs/phase-a-slice-plan.md` A2b-Geometry.
 
+### The gfx animation/effects subsystem — the `AE*` fades (2026-07-07)
+
+The `AE*` flash/glow effects (and sprite motion) are a **native time-animated retained render loop**, not
+per-frame bytecode. Reversed + annotated in Ghidra:
+- **Retained objects carry animation state:** an *active* flag (obj`+0` bit 4), a **progress** counter
+  (obj`+0x214`, starts 0), a **duration** (obj`+0x228`), and a **target vector** (obj`+0x244/248/24c`).
+- **`gfx_anim_start`** (`0x47f060`, worker for op **`0x234`**) configures a per-object animation: sets the
+  flag, resets progress, stores duration + target. Op **`0x1fd`** (`gfx_op_0x1fd_set_vec_scaled`) sets a
+  scaled 3-vector.
+- **Op `0x238`** (`gfx_op_0x238_set_anim_clock`) sets a **global animation clock**, **non-blocking**:
+  `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = duration` (the max per-object duration; SC0000 `label_1235a`
+  maxes a table to compute it). It does **not** loop/wait.
+- **Frame model:** the bytecode does `configure anims (0x234/0x1fd) → set clock (0x238) → show-text →
+  wait-for-input` and **continues**; the native render loop advances the clock + per-object progress each
+  frame, interpolates, composites, presents. Render/present family nearby: `0x243/0x20c/0x21c/0x224`
+  (`u004162xx`, not yet fully RE'd). **⇒ the port can drive animation in the HOST per-frame loop while the
+  VM is parked at wait-for-input — no blocking present op, no VM/host frame-lockstep** (the answer to the
+  "frame loop" question).
+
+Consequence: reproducing the fades needs a **retained per-frame animated compositor** — the current
+immediate-mode permanent canvas can neither fade nor clear. Design: `docs/superpowers/specs/2026-07-07-
+animated-compositor-design.md`.
+
 ---
 
 ## Native walls backlog (targets for this loop)
