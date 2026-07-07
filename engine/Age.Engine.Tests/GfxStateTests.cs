@@ -38,4 +38,25 @@ public class GfxStateTests
     [Fact]
     public void PackColorPacksArgb()
         => Assert.Equal(0x80_112233L, GfxState.PackColor(0x80, 0x112233));
+
+    [Fact]
+    public void EraseRangeRemovesHandlesInRange()
+    {
+        var g = new GfxState();
+        g.GetOrCreate(0x10); g.GetOrCreate(0x11); g.GetOrCreate(0x12); g.GetOrCreate(0x20);
+        g.EraseRange(0x10, 3);                      // count>1 → erase [0x10, 0x13)
+        Assert.Equal(-1, g.QuerySlot(0x10));
+        Assert.Equal(-1, g.QuerySlot(0x12));
+        Assert.NotEqual(-1, g.QuerySlot(0x20));     // outside the range, kept
+    }
+
+    [Fact]
+    public void EraseRangeCountLeOneErasesSingleHandle()
+    {
+        var g = new GfxState();
+        g.GetOrCreate(0x10); g.GetOrCreate(0x11);
+        g.EraseRange(0x10, 1);                       // count<=1 → single handle
+        Assert.Equal(-1, g.QuerySlot(0x10));
+        Assert.NotEqual(-1, g.QuerySlot(0x11));
+    }
 }

@@ -64,10 +64,10 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra: real handler FUN_0042d360 (via dispatch table ctx[0x26c93+op]); sets *(ctx+0x53d88+ctx[0x53d14]*0x78)=3, sprintf("%c%8.8x",3,op1), FUN_0042cf70 (hash insert; counterpart of op 0x215 find). NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md
 
-### 0x1f7 `gfx-elem-create` (gfx-elem-create, argc 2)
-- **summary:** 0x1f7 (handle)(count) — gfx cmd-type 5. Handler gfx_op_0x1f7_elem_create @0x422270: if count>1 → FUN_0047d8b0(handle,count) (array element), else FUN_0047d850(handle) (single). In label_12649 it selects the object after a 0x215 slot-query, before 0x1fa clears the slot. See docs/engine-re.md gfx op-contract table.
+### 0x1f7 `gfx-elem-erase` (gfx-elem-erase, argc 2)
+- **summary:** 0x1f7 (handle)(count) — gfx cmd-type 5. Handler gfx_op_0x1f7_elem_erase @0x422270: ERASES registry handles — if count>1 → gfx_registry_erase_range(handle,count) [erase [handle, handle+count)], else gfx_registry_erase(handle). It is a TEARDOWN/erase, NOT a create (corrects the earlier 'gfx-elem-create' reading). In label_12649 it runs after a 0x215 slot-query, before 0x1fa releases the slot. Objects are created lazily by the geometry SET ops (gfx_object_get_or_create). See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x422270 (dispatch ctx[0x26c93+0x1f7]); FUN_0047d8b0/FUN_0047d850 on operand1 gated by operand2>1.
+- **evidence:** Ghidra handler 0x422270 (dispatch ctx[0x26c93+0x1f7]); count>1 → gfx_registry_erase_range @0x47d8b0 (loops gfx_registry_erase @0x47d850 over [op1,op1+op2)), else gfx_registry_erase(op1). gfx_registry_erase does map.find+erase on the ctx+0x408 registry.
 
 ### 0x1f8 `create-texture` (create-texture, argc 4)
 - **summary:** Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30.

@@ -253,9 +253,10 @@ public sealed class VirtualMachine
             {
                 var o = Gfx.GetOrCreate(Read(a[0])); o.Field68 = Read(a[1]); o.Field6c = Read(a[2]); return pc + 1;
             }
-            case "gfx-cmd-register":    // 0x1a2 (val) — register/select
-            case "gfx-elem-create":     // 0x1f7 (handle)(count) — ensure object + slot
+            case "gfx-cmd-register":    // 0x1a2 (val) — register/insert
                 Gfx.GetOrCreate(Read(a[0])); return pc + 1;
+            case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase registry range (teardown, NOT create)
+                Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (handle)
                 Gfx.Release(Read(a[0])); return pc + 1;
             case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — blend deferred

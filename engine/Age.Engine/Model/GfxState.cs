@@ -54,6 +54,15 @@ public sealed class GfxState
         if (_objects.TryGetValue(handle, out var o)) { if (o.Slot >= 0) _free.Add(o.Slot); _objects.Remove(handle); }
     }
 
+    /// <summary>Op 0x1f7 semantics (native gfx_registry_erase_range @0x47d8b0): erase handles in
+    /// [handle, handle+count) when count>1, else just <paramref name="handle"/>. It is a teardown/erase,
+    /// NOT a create — objects are created lazily by the geometry SET ops (gfx_object_get_or_create).</summary>
+    public void EraseRange(long handle, long count)
+    {
+        if (count > 1) for (long i = handle; i < handle + count; i++) Release(i);
+        else Release(handle);
+    }
+
     /// <summary>Pack (alpha, rgb) → 0xAARRGGBB, matching op 0x202/0x203's handler bit-manipulation for the
     /// common (non-negative-sentinel) case. The alpha&lt;0 / color&lt;0 native-fetch path is deferred.</summary>
     public static long PackColor(long alpha, long color)
