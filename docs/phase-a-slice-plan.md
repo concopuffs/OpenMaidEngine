@@ -268,16 +268,28 @@ measured `0×0`, and the anchor-preserve math (`base' = center − (w_new/2, h_n
 corruption. Fix: seed `_slotDims[0] = (800,600)` (and record `create-texture(w,h)` dims) so the first CG's
 anchor stays an identity. This is the faithful stand-in for the skipped boot-time primary-surface creation.
 
-**DEFERRED (next chunk) — the sprite/background anchor-record subsystem.** Everything blits through slot 0
-as an immediate-mode canvas; the anchor-preserve base globals **accumulate drift** across textures of
-*different* sizes (same-size 800×600 CGs stay put; the first `BG*` 800×500 / `AE*` 800×800 / sprite starts
-a drift that accumulates — `BG030A→(300,500)`, next→`(450,100)`, →`(800,350)`…, marching bottom-right).
-The real engine doesn't drift because it stores each element's geometry in a **per-object record** via
-`0x217/0x218/0x21a` (currently no-op) and restores it (the `0x12683` if-branch reading the `0x3239` record
-table). Implementing that store/restore (+ the record layout, likely Frida-confirmed) is the fix for
-backgrounds **and** sprites together. Fades/alpha (`AE*`, `0x202/0x203`) and green chromakey remain
-deferred as before (the compositor is built to accept alpha later). Also out: true multi-surface (dest
-handle is collapsed onto the screen). The full-screen opening path is unaffected by any of these.
+**Post-opening bg/sprite drift — RESOLVED as a STATE-DIVERGENCE artifact, NOT a missing native op
+(2026-07-06/07).** Symptom: everything blits through slot 0 as an immediate-mode canvas; the anchor-preserve
+base globals **accumulate drift** across differently-sized textures (`BG030A→(300,500)`, next→`(450,100)`,
+→`(800,350)`… marching bottom-right). We reverse-engineered the whole chain (systematic-debugging):
+1. Root cause traced to **`0x215` = native graphics-object query** (opcodes.toml `query-gfx-object?`), which we
+   stub → `label_12649` takes the wrong branch → all draws collapse onto slot 0 → anchor-preserve reads foreign
+   textures → drift.
+2. **Engine now statically analyzable (major, general unlock):** `SYS4AB.BIN` = `XOR-0xFF(AGE.EXE)` (dead end),
+   but `AGE.EXE` unpacks **in-place at 0x400000** in the live process → `tools/frida/dump_engine.py` →
+   `build/engine-dump/` (validated via AGF-decoder landmark; interpreter confirmed to run from the module, so
+   handlers are hookable). Handler ABI + object-record layout (`[esi+0x53d64]`, 120B/rec, cmd-type at rec+0x24)
+   decoded. See `docs/vm-mapping-plan.md` appendix + `tools/frida/README.md`.
+3. **Live capture verdict (the resolution):** `tools/frida/capture_gfx_objects.py` polled the object-record
+   array through the **real** opening — it held only **3 persistent UI objects, ZERO CG objects**. So the real
+   game does **not** draw the opening CGs via the `0x212–0x21a` positioned-object path our headless VM uses;
+   with proper state it takes a different (direct) branch that we already render correctly. **⇒ the drift is
+   downstream of our unseeded headless VM taking `label_12649`'s else-branch (compute-from-drifting-base) where
+   the real game hits the if-branch (stored/record geometry). The fix is the Phase B state/choices-flow work,
+   not a separate native-op subsystem.** Seeding real per-scene/object state makes `label_12649` branch right.
+Fades/alpha (`AE*`, `0x202/0x203`) + green chromakey + true multi-surface remain deferred; the compositor is
+built to accept alpha later. The full-screen opening path is correct and unaffected. **Native gfx-op modeling
+is only needed for scenes that genuinely use runtime-positioned sprites — revisit later with the dump in hand.**
 
 ---
 
