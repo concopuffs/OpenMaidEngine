@@ -21,6 +21,14 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 ## Tools
 
+- **`dump_engine.py`** — ★ dumps the **unpacked engine code** from the live process for offline static
+  RE (native op handlers). Both on-disk images are the same packed binary (`SYS4AB.BIN` = XOR-0xFF of
+  `AGE.EXE`), so the real handler code exists only in memory: the `AGE.EXE` module (some code unpacked
+  in-place, e.g. the AGF decoder `+0x74f1f`) plus the main VM interpreter in a large per-run heap `r-x`
+  region (~30 MB, nonstable base). Attach → it enumerates ranges, dumps the module image + every r-x
+  range ≥ 1 MB (chunked) → `build/engine-dump/{manifest.json,range_<base>.bin}`, and prints the
+  landmark bytes at `AGE.EXE+0x74f1f` to validate. Then disassemble (capstone) and locate a handler
+  (e.g. `0x215` @ Kelebek VA `0x421160`) via the opcode dispatch table. Attach by pid.
 - **`capture_load_order.py`** — ★ the working asset-resolution capture. Hooks `ReadFile` on
   `DATA2.ALF`; each asset load starts with header reads **at its exact archive offset**, so exact-start
   reads give the clean per-asset **load order** (→ names via `build/asset-index.json`). `--analyze`
