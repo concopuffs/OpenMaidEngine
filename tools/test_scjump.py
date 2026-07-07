@@ -29,8 +29,20 @@ def test_decode_anchor_and_count():
     check(has_chapter, "anchor guarded by chapter_mode==1")
     check(has_flag, "anchor guarded by 0x6d3!=1")
 
+def test_emit_json_shape():
+    scr = S.load_scjump()
+    decs = S.decode(scr)
+    names = S.load_names()
+    obj = json.loads(S.emit_json(decs, names))
+    check(obj["meta"]["decision_sites"] == 1755, "json meta reports 1755 sites")
+    check(all(set(("site_offset", "chapter", "decision", "guards")) <= set(d) for d in obj["decisions"]), "each decision has required keys")
+    # rendering uses registry names when present
+    check(S.render_guard({"global": 0x3234, "op": "==", "value": 7}, {0x3234: "chapter_mode"}) == "chapter_mode==7",
+          "render_guard uses registry name")
+
 if __name__ == "__main__":
     test_cfg_acyclic_and_dispatch()
     test_decode_anchor_and_count()
+    test_emit_json_shape()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)
