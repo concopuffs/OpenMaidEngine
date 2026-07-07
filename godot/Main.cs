@@ -7,8 +7,9 @@ using Age.Engine.Vm;
 
 public partial class Main : Godot.Control
 {
-    private Control _stage = null!;                       // texture layer (behind the text)
-    private readonly Dictionary<int, TextureRect> _slots = new();
+    private TextureRect _screenView = null!;              // shows the composited screen backbuffer
+    private Image _screen = null!;                        // 800x600 immediate-mode canvas
+    private ImageTexture _screenTex = null!;
     private Label _text = null!;
     private Label _status = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
@@ -18,14 +19,26 @@ public partial class Main : Godot.Control
     private volatile bool _done;
     private bool _ended;
     private bool _selftest;
+    private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
+    private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
+    private volatile int _pageCount;
+    private int _shotSettle;
+    private bool _shotDone;
 
     public override void _Ready()
     {
-        // texture stage, added first so it draws BEHIND the dialogue text
-        _stage = new Control();
-        _stage.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _stage.MouseFilter = MouseFilterEnum.Ignore;
-        AddChild(_stage);
+        // Screen backbuffer: one 800x600 canvas that draw-texture blits into, shown behind the dialogue.
+        _screen = Image.CreateEmpty(800, 600, false, Image.Format.Rgba8);
+        _screenTex = ImageTexture.CreateFromImage(_screen);
+        _screenView = new TextureRect
+        {
+            Texture = _screenTex,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_screenView);   // added first -> draws behind the text/status labels
 
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -57,7 +70,13 @@ public partial class Main : Godot.Control
         AddChild(_bgm);
         AddChild(_voice);
 
-        _selftest = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--selftest") >= 0;
+        var userArgs = OS.GetCmdlineUserArgs();
+        _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
+        for (int i = 0; i < userArgs.Length; i++)
+        {
+            if (userArgs[i] == "--shot" && i + 1 < userArgs.Length) _shotPath = userArgs[i + 1];
+            if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
+        }
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
@@ -67,10 +86,26 @@ public partial class Main : Godot.Control
 
         if (_selftest)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
+        // --shot: auto-advance up to (but not past) the target page, then _Process captures + quits.
+        if (_shotPath != null)
+            _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting && _host.Pages < _shotPage) _host.SignalInput(); await Task.Delay(1); } });
     }
 
     public override void _Process(double delta)
     {
+        // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
+        if (_shotPath != null && !_shotDone && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
+        {
+            if (++_shotSettle >= 3)
+            {
+                _shotDone = true;
+                var img = GetViewport().GetTexture().GetImage();
+                img.SavePng(_shotPath);
+                GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
+                GetTree().Quit(0);
+            }
+            return;
+        }
         if (_done && !_ended)
         {
             _ended = true;
@@ -92,28 +127,24 @@ public partial class Main : Godot.Control
     public override void _ExitTree() { _host?.SignalInput(); }
 
     // ---- UI methods invoked on the main thread via CallDeferred ----
-    // Composite a resolved texture into a slot at (x,y) sized (w,h). One TextureRect per slot,
-    // layered in draw order (backgrounds are drawn before sprites, so they sit behind).
-    public void DrawSlot(int slot, string bmpPath, int x, int y, int w, int h)
+    // Blit a source BMP (src rect) onto the screen backbuffer at (dstX,dstY), then refresh the display
+    // texture. Execution order == paint order, so later draws (sprites) land over earlier ones (bg).
+    public void BlitSlot(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY)
     {
-        var img = new Image();
-        var err = img.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath));
-        if (err != Error.Ok) { GD.Print($"BMP load failed {bmpPath}: {err}"); return; }
-        if (!_slots.TryGetValue(slot, out var tr))
-        {
-            tr = new TextureRect
-            {
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.Scale,
-                MouseFilter = MouseFilterEnum.Ignore,
-            };
-            _stage.AddChild(tr);
-            _slots[slot] = tr;
-        }
-        tr.Texture = ImageTexture.CreateFromImage(img);
-        tr.Position = new Vector2(x, y);
-        tr.Size = new Vector2(w > 0 ? w : img.GetWidth(), h > 0 ? h : img.GetHeight());
-        tr.Visible = true;
+        var src = new Image();
+        if (src.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath)) != Error.Ok)
+        { GD.Print($"BMP load failed {bmpPath}"); return; }
+        if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
+
+        // Clamp the source rect to the image; a zero/negative size falls back to the full image.
+        int sw = w > 0 ? w : src.GetWidth();
+        int sh = h > 0 ? h : src.GetHeight();
+        sw = System.Math.Min(sw, src.GetWidth() - srcX);
+        sh = System.Math.Min(sh, src.GetHeight() - srcY);
+        if (sw <= 0 || sh <= 0) return;
+
+        _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
+        _screenTex.Update(_screen);
     }
 
     // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
@@ -136,7 +167,7 @@ public partial class Main : Godot.Control
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";
-    public void PageBreak() => _status.Text = "▼ click / Enter";
+    public void PageBreak() { _pageCount++; _status.Text = "▼ click / Enter"; }
     public void ClearPage() { _text.Text = ""; _status.Text = ""; }
     public void ShowEnd() => _status.Text = "— end —";
 

@@ -114,15 +114,17 @@ sealed class GfxTraceHost : IHost
     private readonly ResourceMap _res;
     private readonly string _scene;
     private readonly Dictionary<int, string?> _slotBmp = new();   // slot -> resolved BMP path (or null)
+    // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
+    // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
+    private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     public List<string> Events { get; } = new();
     public GfxTraceHost(ResourceMap res, string scene) { _res = res; _scene = scene; }
 
     public (int Width, int Height) GetTextureSize(int slot)
     {
-        _slotBmp.TryGetValue(slot, out var bmp);
-        var (w, h) = BmpHeader.ReadDims(bmp);
-        Events.Add($"get-tex-size slot={slot} -> {w}x{h}");
-        return (w, h);
+        var d = _slotDims.TryGetValue(slot, out var v) ? v : (0, 0);
+        Events.Add($"get-tex-size slot={slot} -> {d.Item1}x{d.Item2}");
+        return d;
     }
 
     public void SetTexture(long resId, int slot)
@@ -130,6 +132,7 @@ sealed class GfxTraceHost : IHost
         var e = _res.Resolve(_scene, resId);
         var bmp = e != null ? ResourceMap.TexturePath(e) : null;
         _slotBmp[slot] = bmp;
+        _slotDims[slot] = BmpHeader.ReadDims(bmp);
         Events.Add($"set-texture slot={slot} res=0x{resId:x} -> {(e?.Name ?? "<unresolved>")}"
                    + (bmp == null ? " [NO BMP]" : ""));
     }
@@ -141,7 +144,11 @@ sealed class GfxTraceHost : IHost
                    + $"file={(bmp != null ? System.IO.Path.GetFileName(bmp) : "<none>")}");
     }
 
-    public void CreateTexture(int slot, int width, int height) => Events.Add($"create-texture slot={slot} {width}x{height}");
+    public void CreateTexture(int slot, int width, int height)
+    {
+        _slotDims[slot] = (width, height);
+        Events.Add($"create-texture slot={slot} {width}x{height}");
+    }
     public void ShowText(int offset, string text) { }
     public void CallScript(long id) { }
     public void OnStub(int opcode) { }
