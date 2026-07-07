@@ -60,14 +60,14 @@ This also names the whole call graph statically (build/callscript-names.json).
 ## draw
 
 ### 0x1a2 `gfx-cmd-register` (u00428010, argc 1)
-- **summary:** graphics command-buffer op: sets current gfx-object cmd-type=3 and registers a '%c%8.8x' key from operand 1
-- **grounding:** source=investigation, confidence=med
-- **evidence:** Ghidra: real handler FUN_0042d360 (via dispatch table ctx[0x26c93+op]); sets *(ctx+0x53d88+ctx[0x53d14]*0x78)=3, sprintf("%c%8.8x",3,op1), FUN_0042cf70. NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md
+- **summary:** 0x1a2 (val) — gfx cmd-type 3. Handler gfx_op_0x1a2_registry_insert @0x42d360: builds key '%c%8.8x'(3, operand-desc) and INSERTS operand 1 into the gfx command-buffer registry (FUN_0042cf70, open-addressing hash). This is what POPULATES the registry that op 0x215 queries. NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra: real handler FUN_0042d360 (via dispatch table ctx[0x26c93+op]); sets *(ctx+0x53d88+ctx[0x53d14]*0x78)=3, sprintf("%c%8.8x",3,op1), FUN_0042cf70 (hash insert; counterpart of op 0x215 find). NOT save/scene (raw Kelebek VA 0x428010 drifted to op 0x1ac save handler). See docs/engine-re.md
 
-### 0x1f7 `ui-elem?` (u00420270, argc 2)
-- **summary:** 2 args; 0x420 family, pairs with 0x1fa — create/begin a UI element
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via frida
+### 0x1f7 `gfx-elem-create` (u00420270, argc 2)
+- **summary:** 0x1f7 (handle)(count) — gfx cmd-type 5. Handler gfx_op_0x1f7_elem_create @0x422270: if count>1 → FUN_0047d8b0(handle,count) (array element), else FUN_0047d850(handle) (single). In label_12649 it selects the object after a 0x215 slot-query, before 0x1fa clears the slot. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x422270 (dispatch ctx[0x26c93+0x1f7]); FUN_0047d8b0/FUN_0047d850 on operand1 gated by operand2>1.
 
 ### 0x1f8 `create-texture` (create-texture, argc 4)
 - **summary:** Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30.
@@ -79,55 +79,75 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=frida, confidence=high
 - **evidence:** SC0000 Frida-confirmed 17/17 (0x25->EV052CA, 0x2e->EV052DB, 0x36->BG030A background); resolution rule validated on 586/595 captured loads. Traced in CG-load subroutine label_12649 as `set-texture G[0x62424] <slot> -1`.
 
-### 0x1fa `ui-clear?` (u00420480, argc 1)
-- **summary:** 1 arg (element id); follows 0x1f7 — show/hide/clear UI element by id
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via frida
+### 0x1fa `gfx-elem-release` (u00420480, argc 1)
+- **summary:** 0x1fa (idx) — gfx cmd-type 3. Handler gfx_op_0x1fa_elem_release @0x4224a0: releases the element at [ctx+0x52bd4 + idx*4] (virtual free, then nulls the slot) + FUN_00474e40(idx). In label_12649 it clears the working slot G[0x62452] after a 0x215/0x1f7 pair. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x52bd4[operand1*4] via vtbl, then FUN_00474e40(operand1).
 
 ### 0x1fb `draw-texture` (draw-texture, argc 8)
 - **summary:** Blit a texture slot to screen. Observed 8 args: (handle, slot, srcx, srcy, w, h, dstx, dsty). e.g. `draw-texture 0xcf08 0x3 0 0 0x320 0x258 0 0` = full-screen (800x600) slot 3 at (0,0).
 - **grounding:** source=investigation, confidence=med
 - **evidence:** SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 0 (w) (h) (dstx) (dsty)`; full-screen slot-3 draws use 0x320x0x258 (800x600).
 
-### 0x1ff `draw?` (u00420770, argc 4)
-- **summary:** 4 args (global+imms); follows 0x217, then call
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
+### 0x1ff `set-gfx-geom3-c` (u00420770, argc 4)
+- **summary:** 0x1ff (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x1ff_set_geom3 @0x4227b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e800 (sibling of 0x217/0x219, a distinct per-object vector). See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4227b0 (dispatch ctx[0x26c93+0x1ff]); FUN_0047e800(op1,(float)op2,(float)op3,(float)op4).
 
-### 0x202 `draw-blit?` (u00420880, argc 5)
-- **summary:** 5 args (coords/sizes); preceded by coord arithmetic, near draw ops
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via frida
+### 0x202 `gfx-blit-color` (u00420880, argc 5)
+- **summary:** 0x202 (handle)(x)(y)(alpha)(color) — gfx cmd-type 0xb. Handler gfx_op_0x202_blit_color @0x4228d0: blits object `handle` at (x,y) with a packed ARGB built from alpha(op4, ≥0x100→0xff, <0→FUN_0047f3e0) and color(op5, <0→FUN_0047f3e0) → FUN_0047ea00. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4228d0 (dispatch ctx[0x26c93+0x202]); packs (alpha<<24|rgb) from operands 4/5, FUN_0047ea00(op1,op2,op3,packed).
 
-### 0x203 `draw?` (u00420950, argc 4)
-- **summary:** 4 args; chains with 0x202/draw-texture
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via frida
+### 0x203 `gfx-draw-color` (u00420950, argc 4)
+- **summary:** 0x203 (handle)(v)(alpha)(color) — gfx cmd-type 9. Handler gfx_op_0x203_draw_color @0x4229a0: draws object `handle` with op2 + a packed ARGB from alpha(op3)/color(op4) → FUN_0047e9b0. Sibling of 0x202 with one fewer positional arg. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); packs color from operands 3/4, FUN_0047e9b0(op1,op2,packed).
 
 ### 0x208 `get-texture-size` (get-texture-size, argc 3)
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
 - **grounding:** source=inference, confidence=med
 - **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
 
+### 0x212 `set-gfx-field64` (u00421090, argc 2)
+- **summary:** 0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4230c0 (dispatch ctx[0x26c93+0x212]); writes [obj+0x64]=operand2, obj from ctx+0x14d54[operand1*4].
+
+### 0x213 `set-gfx-xy` (u004210D0, argc 3)
+- **summary:** 0x213 (obj_idx)(x)(y) — gfx cmd-type 7. Handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x423110; writes obj+0x68/+0x6c from operands 2/3, obj from ctx+0x14d54[operand1*4].
+
 ### 0x215 `query-gfx-object?` (u00421160, argc 2)
 - **summary:** 0x215 (out)(handle_id) — native graphics command-buffer op. Real handler FUN_0042a0b0 (Ghidra-resolved via the dispatch table ctx[0x26c93+op]; Kelebek's 0x421160 is VA-drift, lands in an unrelated fn). Does TWO things: (1) writes cmd-type 5 into the CURRENT gfx-object record `[ctx+0x53d88 + ctx[0x53d14]*0x78]` (a command-buffer registration, parallel to op 0x1a2→type 3); (2) returns `out = map.find(handle_id)` over an engine-internal associative registry (found value, else 0xffffffff=not-found), sign-tested (gre/lt 0) to drive label_12649's slot-select branch + set working slot G[0x62452]. So `out` is NATIVE COMMAND-BUFFER STATE (the registry is populated by sibling gfx ops — op 0x1a2→FUN_0042cf70 is the hash insert), NOT the VM global bank → seeding story-state CANNOT reproduce it. Stubbed → constant return → every draw collapses to slot 0 → anchor-preserve reads foreign-sized textures → the cumulative bg/sprite drift. SETTLES the drift as (b) a genuine native op, NOT (a) state-divergence. Faithful fix = model the gfx command-buffer (record array + handle→object registry) and run the gfx ops instead of stubbing — static/Frida-free (handlers now readable; inserts are bytecode-driven). Full decode + verdict: docs/engine-re.md (op 0x215 section).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra: real handler FUN_0042a0b0 = {*(ctx+0x53d88+ctx[0x53d14]*0x78)=5; out=FUN_0047f280(FUN_0041b940(2))}. FUN_0047f280 = std::map::find (returns mapped value or 0xffffffff); FUN_0041b940(2) = operand-fetch of operand 2 (the handle key); FUN_00425fb0(1,val) = operand-write to `out`. Registry populated by op 0x1a2 handler FUN_0042d360 → FUN_0042cf70 (open-addressing hash insert). Bytecode sites: SC0000 label_12649 (0x12670) + label_123ef (0x12419/0x12450), handle-ids from 0x62455[idx] (±offset); result gre/lt 0 branches slot-select. Record table 0x3239 (label_125bd @0x0050f) assigns per-object slots 4..13.
 
-### 0x217 `gfx-geom?` (u004211E0, argc 4)
-- **summary:** 4 global-ints; part of a 0x217/0x218/0x21a geometry chain
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
+### 0x216 `query-gfx-field?` (u004211A0, argc 2)
+- **summary:** 0x216 (out)(idx) — gfx cmd-type 5. Handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x42a0f0; reads ctx+0x46d14[operand2 * 0x14], writes operand1 via FUN_00425fb0(1,·).
 
-### 0x218 `gfx-geom?` (u00421270, argc 4)
-- **summary:** 4 global-ints; chains with 0x21a/0x217
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
+### 0x217 `set-gfx-geom3` (u004211E0, argc 4)
+- **summary:** 0x217 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x217_set_geom3 @0x4231b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e960. In SC0000 label_12649 it writes the anchor vector G[0x6249b/c/d] INTO the object; op 0x218 reads it back. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4231b0 (dispatch ctx[0x26c93+0x217]); FUN_0047e960(op1,(float)op2,(float)op3,(float)op4). label_12649 sites e.g. 0x00c67 handle=G[0x62457], vec=G[0x6249b/c/d].
 
-### 0x21a `gfx-geom?` (u00421370, argc 4)
-- **summary:** 4 global-ints; chains with 0x218/0x217
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
+### 0x218 `get-gfx-geom3?` (u00421270, argc 4)
+- **summary:** 0x218 (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x218_query_geom3 @0x42a130: GETS a stored 3-vector from object `handle` (FUN_0047f360) into out_a/b/c. In label_12649 it reads the object's anchor vector back into G[0x6249b/c/d] — a stubbed DRIVER of the render drift (stale anchor → bad centering). See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x42a130; FUN_0047f360(obj op1) + 3x FUN_00550850→FUN_00425fb0(2/3/4). label_12649 site 0x00c8f handle=G[0x62457] → G[0x6249b/c/d].
+
+### 0x219 `set-gfx-geom3-b` (u004212E0, argc 4)
+- **summary:** 0x219 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x219_set_geom3 @0x423240: SETS a 3-vector (int→float) on object `handle` via native worker FUN_0047e910 (sibling of 0x217, a different per-object vector). See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x423240 (was unanalyzed; function created this session; dispatch ctx[0x26c93+0x219]); FUN_0047e910(op1,(float)op2,(float)op3,(float)op4).
+
+### 0x21a `get-gfx-geom3-b?` (u00421370, argc 4)
+- **summary:** 0x21a (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x21a_query_geom3 @0x42a1b0: GETS a stored 3-vector from object `handle` (FUN_0047f2e0) into out_a/b/c. In label_12649 it reads the object's position vector into G[0x62498/9/a] — a stubbed DRIVER of the render drift. See docs/engine-re.md gfx op-contract table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2/3/4). label_12649 site 0x00c86 handle=G[0x62457] → G[0x62498/9/a].
 
 ## input
 
@@ -886,22 +906,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x20f `u00420E40` (u00420E40, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x212 `u00421090` (u00421090, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x213 `u004210D0` (u004210D0, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x216 `u004211A0` (u004211A0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x219 `u004212E0` (u004212E0, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

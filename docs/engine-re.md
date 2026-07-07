@@ -177,6 +177,56 @@ are **bytecode-driven** — so a faithful host-side model, with the gfx ops (`0x
 `0x212–0x21a` family) *executed* instead of stubbed, rebuilds the state from the same scripts. The opcode-
 level summary lives in `vm-map/opcodes.toml` op `0x215`.
 
+#### gfx command-buffer — op contract table (2026-07-07, full family reversed)
+
+Every gfx op shares one shape: **write a `cmd-type` into the current object record** (`*(ctx + 0x53d88 +
+ctx[0x53d14]*0x78) = <cmd>`), fetch operands via `FUN_0041b940(i)` (1-based; `docs` = the `0x1a2` variant
+uses `FUN_00415f30`), then either **SET** object fields (call a native worker `FUN_0047xxxx`) or **QUERY**
+object fields (write results back to output operands via `FUN_00425fb0(i, val)`). Handlers resolved through
+the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_op_0x<op>_<role>`.
+
+| op | handler | cmd | dir | argc | contract |
+|---|---|---|---|---|---|
+| `0x1a2` | `0x42d360` | 3 | set | 1 | registry **insert**: key `"%c%8.8x"(3, operand-desc)` → `FUN_0042cf70` |
+| `0x1f7` | `0x422270` | 5 | set | 2 | element create/select by handle op1; `op2>1` → `FUN_0047d8b0(op1,op2)` (array), else `FUN_0047d850(op1)` |
+| `0x1fa` | `0x4224a0` | 3 | set | 1 | release element `[ctx+0x52bd4 + op1*4]` (vtbl free) + `FUN_00474e40(op1)` |
+| `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
+| `0x202` | `0x4228d0` | 0xb | set | 5 | blit obj op1 with (op2,op3) + **packed ARGB** from op4(alpha)/op5(color) → `FUN_0047ea00` |
+| `0x203` | `0x4229a0` | 9 | set | 4 | draw obj op1 with op2 + packed color(op3/op4) → `FUN_0047e9b0` |
+| `0x212` | `0x4230c0` | 5 | set | 2 | `obj[ctx+0x14d54 + op1*4] -> +0x64 = op2` |
+| `0x213` | `0x423110` | 7 | set | 3 | `obj[0x14d54+op1*4] -> +0x68 = op2 ; +0x6c = op3` (an (x,y) pair) |
+| `0x215` | `0x42a0b0` | 5 | **query** | 2 | registry **find**(op2 handle) → op1 (value / `0xffffffff`). **Drives slot-select.** |
+| `0x216` | `0x42a0f0` | 5 | **query** | 2 | read `[ctx+0x46d14 + op2*0x14]` → op1 |
+| `0x217` | `0x4231b0` | 9 | set | 4 | 3 int→float on obj op1 → `FUN_0047e960` (SETS a geom 3-vector) |
+| `0x218` | `0x42a130` | 9 | **query** | 4 | `FUN_0047f360(obj op1)` → op2,op3,op4 (GETS a geom 3-vector) |
+| `0x219` | `0x423240` | 9 | set | 4 | 3 int→float on obj op1 → `FUN_0047e910` (SETS a geom 3-vector) |
+| `0x21a` | `0x42a1b0` | 9 | **query** | 4 | `FUN_0047f2e0(obj op1)` → op2,op3,op4 (GETS a geom 3-vector) |
+
+**`label_12649` correlation (the drift chain, confirmed).** The recurring idiom is:
+```
+query-gfx-object? (G 0x62452) (G 0x6245X)   ; 0x215: handle G[0x6245X] -> working slot G[0x62452]
+ui-elem?          (G 0x6245X) 0xa           ; 0x1f7: select that element
+ui-clear?         (G 0x62452)               ; 0x1fa: clear the slot
+```
+`G[0x62452]` is the **working slot**; `G[0x6245X]` are per-object **handles** (the `0x62455[idx]` family:
+`0x62456/7/8/a/b/c`). The geometry ops move two per-object 3-vectors between object records and globals:
+- **`0x217` SET** anchor-vector `G[0x6249b/c/d]` **into** the object; **`0x218` GET** it back **out**.
+- **`0x21a` GET** position-vector into `G[0x62498/9/a]`.
+These get-vectors are exactly the inputs to the anchor-preserve math (`docs/superpowers/specs/2026-07-06-a2b-graphics-geometry-design.md`:
+`G[0x62498] = G[0x6249b] − w/2`, foot-anchor at `G[0x6249c]`). **So the drift has two stubbed drivers, not
+one:** `0x215` (wrong slot → collapse to slot 0) **and** `0x218`/`0x21a` (stale geometry vectors → the
+anchor math reads garbage). Both read object state the SET ops (`0x217`/`0x219`/`0x212`/`0x213`) wrote — all
+bytecode-driven, all host-modelable.
+
+**Model implication for the host-side reimplementation (Phase 2 input).** The subsystem is a set of
+per-object records keyed by handle, carrying: a **slot** (from the `0x215` registry), a **position 3-vector**
+(`0x21a` get / a matching set), and an **anchor 3-vector** (`0x218` get / `0x217` set), plus color/blit
+params (`0x202`/`0x203`). The native workers (`FUN_0047xxxx` = the DirectDraw/surface layer) need **not** be
+modelled — only the object-record data model, so the QUERY ops return what the SET ops stored. That makes
+`0x215`/`0x216`/`0x218`/`0x21a` return correct values and the existing bytecode geometry math produces
+correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj pointers, fields `+0x64/
++0x68/+0x6c`), `ctx+0x46d14` (stride `0x14`), `ctx+0x52bd4` (element pointers), plus the `0x408` registry.
+
 ---
 
 ## Native walls backlog (targets for this loop)
