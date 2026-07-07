@@ -3450,7 +3450,7 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1a2
-label = "u00428010"
+label = "gfx-cmd-register"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
@@ -4500,7 +4500,7 @@ evidence = ""
 
 [[opcode]]
 op = 0x1f7
-label = "u00420270"
+label = "gfx-elem-create"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
@@ -4593,7 +4593,7 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x1fa
-label = "u00420480"
+label = "gfx-elem-release"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
@@ -4747,7 +4747,7 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x1ff
-label = "u00420770"
+label = "set-gfx-geom3-c"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -4783,7 +4783,7 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x202
-label = "u00420880"
+label = "gfx-blit-color"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
@@ -4824,7 +4824,7 @@ observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
 op = 0x203
-label = "u00420950"
+label = "gfx-draw-color"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -5185,7 +5185,7 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x212
-label = "u00421090"
+label = "set-gfx-field64"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
@@ -5211,7 +5211,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x213
-label = "u004210D0"
+label = "set-gfx-xy"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
@@ -5242,7 +5242,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x215
-label = "u00421160"
+label = "query-gfx-object?"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
@@ -5268,7 +5268,7 @@ observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0x216
-label = "u004211A0"
+label = "query-gfx-field?"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
@@ -5294,7 +5294,7 @@ observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
 op = 0x217
-label = "u004211E0"
+label = "set-gfx-geom3"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -5330,7 +5330,7 @@ observed_types = ["imm", "g-int"]
 
 [[opcode]]
 op = 0x218
-label = "u00421270"
+label = "get-gfx-geom3?"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -5366,7 +5366,7 @@ observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x219
-label = "u004212E0"
+label = "set-gfx-geom3-b"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -5402,7 +5402,7 @@ observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x21a
-label = "u00421370"
+label = "get-gfx-geom3-b?"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
