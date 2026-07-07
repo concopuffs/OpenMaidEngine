@@ -4,5 +4,9 @@ config_version=5
 config/name="Himegari (age-reimpl A2a)"
 run/main_scene="res://Main.tscn"
 
+[display]
+window/size/viewport_width=800
+window/size/viewport_height=600
+
 [dotnet]
 project/assembly_name="Himegari"

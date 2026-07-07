@@ -81,8 +81,15 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    branchy non-opening scenes — use the C# VM to trace those). Runtime note for future work: the game is
    **packed** (main VM logic in a per-run heap `r-x` region) and streams archives through a heap block-cache
    via `ReadFile` (not mmap); the stable AGF decoder is `AGE.EXE+0x74f1f`.
-3. **Wire the backend** (already designed — A2b-background plan Tasks 3–5): `ResourceMap` resolver +
-   Godot `TextureRect` compositing; render only resolved full-screen slots. Mechanical once (1)+(2) land.
+3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Age.Engine/Sys4/ResourceMap.cs`
+   (Resolve + BMP path) + `GodotAdvHost` texture ops → `TextureRect` compositing behind the dialogue;
+   `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
+   scene's manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed
+   bytecode. **Limitations (next chunk = graphics geometry/blend):** sprites + `BG*` (routed through the
+   CG-load subroutine) have garbage geometry because native graphics ops are stubbed (`0x208`
+   get-texture-size + the sprite position/animation chain); fades (`AE*`) draw opaque (no alpha); slot
+   model approximates the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
+   (A2b section) for the full write-up + the graphics-subsystem plan.
 4. **Audio** (parallel, same shape): resolve `play-voice`/`play-bgm` `id → OGG` via SYS4INI + a
    Frida audio capture (hook `DATA3.ALF` reads or the audio-play fn); play via Godot. Reuses the
    `tools/frida/` framework.
@@ -98,9 +105,11 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 ## Status
 
-A2b-background: **machinery landed**; **steps 1 & 2 SOLVED (static, general).** Step 1 =
-`build/asset-index.json`. Step 2 = **`resId → files[section_base(scene) + resId]`** via SYS4INI
-per-scene sections (`tools/resolve_asset.py` + `build/asset-sections.json`) — no runtime capture, works
-across all archives/types and for audio too. Remaining for the render (step 3): wire a `ResourceMap`
-(scene → section_base; resId → asset via the index) + Godot `TextureRect` compositing (A2b plan Tasks 3–5,
-now purely mechanical). Audio (step 4) uses the *same* resolver (`play-bgm/play-voice id → files[base+id]`).
+A2b-background: **steps 1–3 landed.** Step 1 = `build/asset-index.json`. Step 2 = **`resId →
+files[section_base(scene) + resId]`** via SYS4INI per-scene sections (`tools/resolve_asset.py` +
+`build/asset-sections.json`) — no runtime capture, all archives/types + audio. Step 3 = **first-pass
+render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
+layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
+subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
+alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4) uses the *same*
+resolver (`play-bgm/play-voice id → files[base+id]`).

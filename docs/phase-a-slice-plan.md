@@ -181,16 +181,34 @@ Toolchain: `godot --headless --path godot --import` → `dotnet build godot/Hime
 **Next = A2b:** background via `AGF2BMP2AGF.exe`, `play-voice`/`play-bgm`, choices → VM globals,
 just-enough `call-script`/state (unlocks richer scenes).
 
-### A2b-Background — machinery landed; render blocked on asset resolution (2026-07-06)
-Engine-driven texture ops shipped: `create/set/draw-texture` (0x1f8/0x1f9/0x1fb) promoted from VM stubs
-to typed `IHost` methods (CaptureHost no-ops → trace parity kept; engine tests 8/8). Tools: `convert_agf.py`
-(AGF→BMP stills) + `tools/frida/` capture harness (Frida 17.15.3 installed). **Blocked:** rendering the bg
-needs `resId → asset file` resolution, which proved opaque — CGINIT isn't a filename map, SYS4INI (S4IC422)
-needs format RE, Frida file-I/O offsets are noisy (memory-mapping), and the opening mixes movies (MVB/OP =
-MPEG) with stills so eyeball-curation stalled too. **Asset resolution promoted to a dedicated foundational
-RE effort** (graphics + audio; not machine-verifiable — Frida ground truth + human eye/ear are the oracle):
-see `docs/asset-resolution-re.md`. The backend render (ResourceMap + Godot compositing) stays designed in
-`docs/superpowers/plans/2026-07-06-a2b-background.md` Tasks 3–5, mechanical once resolution lands.
+### A2b-Background — FIRST-PASS RENDER LANDED (2026-07-06)
+Resolution solved (`docs/asset-resolution-re.md`: `resId → files[section_base(scene)+resId]`) and wired
+into a live render. **Shipped:** `Age.Engine/Sys4/ResourceMap.cs` (loads `build/asset-index.json` +
+`build/asset-sections.json`; `Resolve(scene,resId) → AssetEntry`; `TexturePath` → pre-converted BMP);
+`GodotAdvHost` implements `create/set/draw-texture` (slot → `TextureRect` composited behind the dialogue
+in a `_stage` layer); `IHost.DrawTexture` + VM dispatch extended to pass the destination x/y (draw-texture
+args 7/8); `project.godot` window = 800×600; `convert_agf.py` searches all archives + `--scene` batch.
+Engine 8/8, C# `--selftest` still byte-matches the vm0 trace (VM behaviour unchanged). **Works end-to-end:**
+the VM executes `set-texture(resId)` → ResourceMap resolves across archives → BMP loads → composite; the
+full-screen **event-CG layer (`EV052*`) renders correctly** as the opening plays.
+
+**Known first-pass limitations (all one subsystem = graphics geometry/blend, the next chunk):**
+1. **Only the full-screen layer is correct.** Sprites/effects and `BG*` backgrounds routed through the
+   CG-load subroutine (`label_12649`) derive width/height/position from native ops we still **stub** —
+   `0x208` (get-texture-size) + the sprite position/registration/animation chain — so their `dst/size`
+   are garbage (backgrounds land off-center, e.g. `BG030A dst=(300,300)`; sizes come out `0x0`). Only the
+   *immediate* full-screen draws (`(0,0) 800×600`) render right.
+2. **No alpha/blend.** `AE*` full-screen fade/flash effects draw **opaque and instant** (a static grey/white
+   sheet over the CG) instead of alpha-animating. No chromakey either (sprites would show green boxes —
+   moot until they position).
+3. **Slot model is an approximation.** We use one `TextureRect` per slot, replace-on-draw; the game
+   actually **blits onto slot 0 as an immediate-mode canvas** (everything composites into slot 0).
+4. AGF is **pre-converted to BMP offline** (`convert_agf.py --scene`); a runtime C# AGF decoder is deferred.
+
+**Next chunk — graphics-geometry/blend subsystem:** implement `0x208` (host returns the slot's real image
+dims) + the sprite position/registration ops so geometry is correct; add alpha/additive blend for fades +
+green chromakey; likely move to a proper canvas/blit compositor. Fixes sprites, background placement, and
+fades together. (Superseded: the id-specific plan in `docs/superpowers/plans/2026-07-06-a2b-background.md`.)
 
 ---
 

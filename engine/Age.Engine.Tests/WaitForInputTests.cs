@@ -16,7 +16,7 @@ public class WaitForInputTests
         public void WaitForInput() => Waits++;
         public void CreateTexture(int slot, int w, int h) { }
         public void SetTexture(long resId, int slot) { }
-        public void DrawTexture(int slot, int x, int y, int w, int h) { }
+        public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) { }
     }
 
     [Fact]

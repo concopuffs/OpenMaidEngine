@@ -7,6 +7,8 @@ using Age.Engine.Vm;
 
 public partial class Main : Godot.Control
 {
+    private Control _stage = null!;                       // texture layer (behind the text)
+    private readonly Dictionary<int, TextureRect> _slots = new();
     private Label _text = null!;
     private Label _status = null!;
     private VirtualMachine _vm = null!;
@@ -17,6 +19,12 @@ public partial class Main : Godot.Control
 
     public override void _Ready()
     {
+        // texture stage, added first so it draws BEHIND the dialogue text
+        _stage = new Control();
+        _stage.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _stage.MouseFilter = MouseFilterEnum.Ignore;
+        AddChild(_stage);
+
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _text.OffsetLeft = 40; _text.OffsetTop = 40; _text.OffsetRight = -40; _text.OffsetBottom = -80;
@@ -46,7 +54,7 @@ public partial class Main : Godot.Control
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        _host = new GodotAdvHost(this);
+        _host = new GodotAdvHost(this, ResourceMap.Load(), "SC0000");
         _vm = new VirtualMachine(script, table, _host);
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
@@ -77,6 +85,30 @@ public partial class Main : Godot.Control
     public override void _ExitTree() { _host?.SignalInput(); }
 
     // ---- UI methods invoked on the main thread via CallDeferred ----
+    // Composite a resolved texture into a slot at (x,y) sized (w,h). One TextureRect per slot,
+    // layered in draw order (backgrounds are drawn before sprites, so they sit behind).
+    public void DrawSlot(int slot, string bmpPath, int x, int y, int w, int h)
+    {
+        var img = new Image();
+        var err = img.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath));
+        if (err != Error.Ok) { GD.Print($"BMP load failed {bmpPath}: {err}"); return; }
+        if (!_slots.TryGetValue(slot, out var tr))
+        {
+            tr = new TextureRect
+            {
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
+                MouseFilter = MouseFilterEnum.Ignore,
+            };
+            _stage.AddChild(tr);
+            _slots[slot] = tr;
+        }
+        tr.Texture = ImageTexture.CreateFromImage(img);
+        tr.Position = new Vector2(x, y);
+        tr.Size = new Vector2(w > 0 ? w : img.GetWidth(), h > 0 ? h : img.GetHeight());
+        tr.Visible = true;
+    }
+
     public void AppendLine(string text) => _text.Text += text + "\n";
     public void PageBreak() => _status.Text = "▼ click / Enter";
     public void ClearPage() { _text.Text = ""; _status.Text = ""; }

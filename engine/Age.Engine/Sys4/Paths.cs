@@ -8,6 +8,9 @@ public static class Paths
     public static string GameDir => Path.Combine(Workspace, "姫狩りダンジョンマイスター");
     public static string Build => Path.Combine(Repo, "build");
     public static string OpcodesJson => Path.Combine(Build, "opcodes.json");
+    public static string AssetSectionsJson => Path.Combine(Build, "asset-sections.json");
+    public static string AssetIndexJson => Path.Combine(Build, "asset-index.json");
+    public static string Textures => Path.Combine(Build, "textures");
 
     private static string FindRepo()
     {

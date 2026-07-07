@@ -1,15 +1,22 @@
 using System.Collections.Generic;
 using System.Threading;
 using Age.Engine.Hosting;
+using Age.Engine.Sys4;
 
 public sealed class GodotAdvHost : IHost
 {
     private readonly Main _main;
+    private readonly ResourceMap _res;
+    private readonly string _scene;                       // e.g. "SC0000" — for section_base
+    private readonly Dictionary<int, string?> _slotBmp = new();   // slot -> pre-converted BMP path
     private readonly SemaphoreSlim _gate = new(0, 1);
     public volatile bool IsWaiting;
     public readonly List<(int Offset, string Text)> Captured = new();
 
-    public GodotAdvHost(Main main) => _main = main;
+    public GodotAdvHost(Main main, ResourceMap res, string scene)
+    {
+        _main = main; _res = res; _scene = scene;
+    }
 
     public void ShowText(int offset, string text)
     {
@@ -31,4 +38,19 @@ public sealed class GodotAdvHost : IHost
 
     public void CallScript(long id) { }
     public void OnStub(int opcode) { }
+
+    // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
+    public void CreateTexture(int slot, int width, int height) => _slotBmp[slot] = null;
+
+    public void SetTexture(long resourceId, int slot)
+    {
+        var asset = _res.Resolve(_scene, resourceId);
+        _slotBmp[slot] = asset != null ? ResourceMap.TexturePath(asset) : null;
+    }
+
+    public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY)
+    {
+        if (_slotBmp.TryGetValue(slot, out var bmp) && bmp != null)
+            _main.CallDeferred("DrawSlot", slot, bmp, dstX, dstY, width, height);
+    }
 }

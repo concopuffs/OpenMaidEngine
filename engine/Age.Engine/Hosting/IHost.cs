@@ -7,5 +7,5 @@ public interface IHost
     void WaitForInput();
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
-    void DrawTexture(int slot, int x, int y, int width, int height);
+    void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
 }
