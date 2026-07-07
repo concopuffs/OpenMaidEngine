@@ -92,4 +92,24 @@ public class GfxCommandBufferTests
         Assert.Equal((100L, 500L), (vm.Globals[10], vm.Globals[11]));   // A intact
         Assert.Equal((300L, 100L), (vm.Globals[20], vm.Globals[21]));   // B intact, no cross-contamination
     }
+
+    private static (int, Operand[]) DrawTex(int handle, int slot, int w, int h, int dx, int dy)
+        => (0x1fb, new[] { G(handle), G(slot), I(0), I(0), G(w), G(h), G(dx), G(dy) });
+
+    [Fact]
+    public void DrawTextureRecordsARetainedLayer()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xA), MovGI(2, 4), MovGI(3, 800), MovGI(4, 600), MovGI(5, 0), MovGI(6, 0),
+            DrawTex(1, 2, 3, 4, 5, 6), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var layers = vm.Gfx.SnapshotLayers();
+        Assert.Single(layers);
+        Assert.Equal(0xA, layers[0].Handle);
+        Assert.Equal((800, 600, 0, 0), (layers[0].W, layers[0].H, layers[0].DstX, layers[0].DstY));
+    }
 }

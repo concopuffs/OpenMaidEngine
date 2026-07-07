@@ -216,6 +216,8 @@ public sealed class VirtualMachine
             case "set-texture":
                 _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "draw-texture":   // (handle, slot, srcX, srcY, w, h, dstX, dstY)
+                Gfx.AddOrUpdateLayer(new DrawLayer(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
                 _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                                   (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;
             case "get-texture-size":   // 0x208 (slot) (out_w) (out_h)
