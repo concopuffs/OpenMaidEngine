@@ -34,7 +34,7 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   → `run_analysis`.
 - **Load sanity check (AGF-decoder landmark):** at VA `0x474f23`, `CMP word ptr [ESI + 0x4], 0x4d42`
   (the `BM`/BMP-magic check) confirms the image is correctly based + decoded.
-- Escalation (unused so far): `tools/pe-sieve32.exe /pid <PID> /imp 3 /dmode 3 /dir <out>` (run from
+- Escalation (unused so far): `bin/pe-sieve32.exe /pid <PID> /imp 3 /dmode 3 /dir <out>` (run from
   **PowerShell**, not Git Bash — it mangles `/flags`) rebuilds the IAT into a clean PE. Only needed if
   raw-dump analysis is inadequate; it was fine for reading logic, so we stayed on the raw dump.
 

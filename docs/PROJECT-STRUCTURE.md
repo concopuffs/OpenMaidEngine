@@ -49,7 +49,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │
     ├── bin/                                  3rd-party binaries we use (not ours, not the game's)
     │   ├── BinExtractALF.exe                   ALF archive extractor → produces extracted/
-    │   └── LzssCpp.dll                         its LZSS codec dependency
+    │   ├── LzssCpp.dll                         its LZSS codec dependency
+    │   └── pe-sieve32.exe                      (hollowsprocess) unpacked-PE dumper — engine-RE escalation (see docs/engine-re.md)
     │
     ├── vm-map/                               VM / reverse-engineering reference artifacts
     │   ├── opcodes.toml                        ★ CANONICAL opcode reference (hand-edited: ABI + semantics
