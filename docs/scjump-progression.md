@@ -40,10 +40,13 @@ choices are not pure story flags.
 Run: `py -3.11 -X utf8 tools/scjump_decode.py --verify`.
 
 ## The native decision→scene boundary (deferred)
-The decision value → actual `SCxxxx.BIN` is resolved by the **native op `u00428010`** (consumers do
-`lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`). That mapping is compiled into `AGE.EXE`,
-not present in any script — so it is engine-level, the same bucket as the `call-script` dispatch (see
-`name-resolution.md §1`). Cracking it needs the engine dump / Frida and is a separate slice.
+Consumers do `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`. **Correction (2026-07-07,
+via Ghidra):** `u00428010` (op `0x1a2`) is **not** the scene resolver — it's a **save/resource-file
+op** (its handler formats `%s\SAVE%2.2d.DAT`), so that pattern **persists the "visited-decision" flag
+into the save**, not loads a scene. See `docs/engine-re.md`. The actual decision→scene resolution is a
+different, still-native mechanism — most likely call-script/script-load-adjacent (`name-resolution.md
+§1`). Cracking it uses the engine-dump + Ghidra loop (the opcode-dispatch table found in
+`engine-re.md` is the key); still a separate slice.
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).
