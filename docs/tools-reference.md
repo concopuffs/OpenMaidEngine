@@ -46,6 +46,8 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `globals_build.py` | Merge curated `globals.toml` over the auto shape map; generate the global registry + linter. | `--build` · `--lint` | `vm-map/globals.toml`, `build/global-var-map.json` → ⚙ `build/globals.json`, ⚙ `docs/global-reference.md` |
 | `story_flags.py` | Static story-flag miner (branch-condition mining) + `--bootstrap` skeleton seeding. | `story_flags.py` · `--bootstrap` | corpus, `build/global-var-map.json` → ⚙ `build/story-flags-candidates.json`, appends `vm-map/globals.toml` |
 | `test_globals.py` | Unit tests for the globals registry + story-flag miner. | `test_globals.py` | — |
+| `scjump_decode.py` | Decode SCJUMP's progression logic → decision table; `--verify` VM cross-check. | `scjump_decode.py` · `--verify` | SCJUMP.BIN, `build/globals.json` → ⚙ `build/scjump-decisions.{json,md}` |
+| `test_scjump.py` | Unit tests for the SCJUMP decoder. | `test_scjump.py` | — |
 
 ## Extraction / data corpora
 

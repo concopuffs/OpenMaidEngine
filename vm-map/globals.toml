@@ -753,3 +753,47 @@ usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0
 source = "auto-shape"
 confidence = "med"
 depends_on = []
+
+[[global]]
+address = "0x4dfbc"
+name = "scjump_progress_a"
+category = "counter"
+type = "int"
+value_domain = "progress index"
+usage = "Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough."
+source = "inference"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x2052e"
+name = "scjump_progress_b"
+category = "counter"
+type = "int"
+value_domain = "progress index"
+usage = "Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage."
+source = "inference"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0x152618"
+name = "scjump_progress_c"
+category = "counter"
+type = "int"
+value_domain = "progress index"
+usage = "Third SCJUMP switch input (530 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage."
+source = "inference"
+confidence = "med"
+depends_on = []
+
+[[global]]
+address = "0xe6c5d"
+name = "scjump_progress_d"
+category = "counter"
+type = "int"
+value_domain = "progress index"
+usage = "SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage."
+source = "inference"
+confidence = "med"
+depends_on = []

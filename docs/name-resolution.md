@@ -43,6 +43,12 @@ on disk to read. Resolving it needs one of:
 **Status: deferred.** Not the quick win first assumed. Belongs with the engine/dispatch work
 (Phase 3), or a dedicated `SCJUMP.BIN` reverse. Until then `call-script` stays numeric.
 
+**Update (2026-07-07):** SCJUMP's *decision logic* is now decoded — `(chapter_mode, guards) →
+decision value` — see `docs/scjump-progression.md` and `tools/scjump_decode.py`. That confirmed
+SCJUMP is not the `call-script` registry (it produces a decision value, not a script id). The
+decision→scene hop itself is a **native op (`u00428010`)**, engine-level, in the same bucket as
+`call-script`; both await the engine dump / Frida.
+
 ---
 
 ## #2 — The global-variable map (naming the data)

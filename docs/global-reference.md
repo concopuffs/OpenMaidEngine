@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16414 globals (68 curated, 16346 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16415 globals (70 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -10,6 +10,15 @@
 | `0xa68` | — | med | auto-shape | TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']. |
 | `0x62ccc` | scjump_decision_out2 | low | inference | Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it. |
 | `0x62ccf` | scjump_decision_out | low | inference | One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode. |
+
+## counter
+
+| address | name | conf | source | usage |
+|---|---|---|---|---|
+| `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
+| `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
+| `0xe6c5d` | scjump_progress_d | med | inference | SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
+| `0x152618` | scjump_progress_c | med | inference | Third SCJUMP switch input (530 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 
 ## data-table
 
@@ -354,7 +363,6 @@
 | `0x767d` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']. |
 | `0x204f5` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 8, 16, 32, 64]; writers=['FIELD.BIN']. |
 | `0x204f7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']. |
-| `0x2052e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 1, 2, 3]; writers=['FIELD.BIN']. |
 | `0x20530` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 22 scripts; compared against [0]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x20534` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 24 scripts; compared against [0, 10, 100, 999]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x53ef4` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CAMP.BIN']. |
@@ -379,7 +387,6 @@
 | `0xccc21` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']. |
 | `0xeff77` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 2, 3]; writers=['BTRTN.BIN', 'MVRTN.BIN', 'RTN_B001.BIN', 'RTN_B002.BIN']. |
 | `0x152617` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CLOSE.BIN', 'FIELD.BIN', 'INFOEN.BIN', 'READY.BIN']. |
-| `0x152618` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 7]; writers=['FIELD.BIN']. |
 | `0x1560e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']. |
 | `0x15a094` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'SELSTAGE.BIN', 'STUDY.BIN']. |
 | `0x15a095` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']. |
@@ -3621,7 +3628,6 @@
 | `0x141a4` | — | med | auto-shape | record-table[stride 50] |
 | `0x20543` | — | med | auto-shape | record-table[stride 27] |
 | `0x341ab` | — | med | auto-shape | record-table[stride 53] |
-| `0x4dfbc` | — | low | auto-shape | index/counter? |
 | `0x4e085` | — | med | auto-shape | record-table[stride 3] |
 | `0x4e11b` | — | med | auto-shape | record-table[stride 14] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
