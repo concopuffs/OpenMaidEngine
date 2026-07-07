@@ -158,7 +158,9 @@ spec). Deliverable: headless C# VM reproducing A0's results.
 
 **Result:** `engine/` .NET 8 solution (`Age.Engine` classlib w/ `Model`/`Vm`/`Sys4`/`Hosting` seams +
 `Age.Cli` + xUnit tests). RECOVER passes; the C# `trace` is **byte-identical to `vm0.py --trace` across
-all 297 SC/SP scenes** (offsets+halt+steps). Version-neutral `Script` contract enforced (VM core never
+all 297 SC/SP scenes** (offsets+halt+steps). *(Historical: this parity held while call-script was
+stubbed; once call-script execution landed [2026-07-07], vm0.py was retired from oracle duty and
+`TraceDiffTests` removed — see the call-script EXECUTION section.)* Version-neutral `Script` contract enforced (VM core never
 references `Sys4`). Spec/plan: `docs/superpowers/{specs,plans}/2026-07-06-a1-csharp-vm*.md`.
 
 ## A2 — Godot ADV backend (one scene, with visuals)
@@ -175,6 +177,9 @@ in-process. VM gained one hook (`IHost.WaitForInput`, opcode 0x72); suspend/resu
 blocking `SemaphoreSlim` in `GodotAdvHost`, UI marshalled with `CallDeferred`. Plays SC0000 page-by-page,
 pauses at wait-for-input, resumes on click/Enter. **Headless self-test** (`--headless -- --selftest`)
 asserts the emitted 186-line offset sequence == `build/vm0-trace.json`; A1 engine tests stay 7/7.
+*(Historical: the selftest was later rewritten [2026-07-07] to run a SYNTHESIZED scene through the
+plumbing and match a live headless run — full call-script handling, no vm0/frozen golden — see the
+call-script EXECUTION section.)*
 Toolchain: `godot --headless --path godot --import` → `dotnet build godot/Himegari.csproj` →
 `godot --headless --path godot [-- --selftest]`. Spec/plan:
 `docs/superpowers/{specs,plans}/2026-07-06-a2a-godot-dialogue*.md`.
