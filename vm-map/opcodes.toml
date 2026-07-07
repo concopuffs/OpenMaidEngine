@@ -4978,33 +4978,33 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x208
-label = "u00420BF0"
+label = "get-texture-size"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420BF0"
-category = "unknown"
-summary = ""
+name = "get-texture-size"
+category = "draw"
+summary = "0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)"
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "inference"
+confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws"
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "slot"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "out_width"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "out_height"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
