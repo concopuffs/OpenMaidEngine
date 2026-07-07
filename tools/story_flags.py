@@ -126,6 +126,44 @@ def write_candidates(cands: dict[int, dict]) -> Path:
     return p
 
 
+import globals_build as _gb
+
+
+def skeleton_toml(ev: dict) -> str:
+    consts = ", ".join(str(c) for c in ev["consts"][:8])
+    domain = "{0,1}" if set(ev["consts"]) <= {0, 1} and ev["consts"] else (f"one of {{{consts}}}" if consts else "?")
+    usage = (f"TODO: confirm. Branch-read in {ev['reach_scenes']} scenes / {ev['reach_total']} scripts; "
+             f"compared against [{consts}]; "
+             f"writers={ev['writers'][:4] or 'none (external/native?)'}.")
+    lines = ["[[global]]",
+             f'address = "{ev["address"]}"',
+             'name = ""',
+             f'category = "{ev["category"]}"',
+             'type = "int"',
+             f'value_domain = "{domain}"',
+             f'usage = "{usage}"',
+             'source = "auto-shape"',
+             f'confidence = "{ev["confidence"]}"',
+             "depends_on = []"]
+    return "\n".join(lines) + "\n"
+
+
+def bootstrap(cands: dict[int, dict], toml_path=None) -> int:
+    toml_path = Path(toml_path) if toml_path else (paths.VM_MAP / "globals.toml")
+    present = set(_gb.load_toml(toml_path)[0]) if toml_path.exists() else set()
+    # only story-flag / ui-toggle / choice-output candidates are worth seeding for curation
+    seedable = {a: e for a, e in cands.items()
+                if e["category"] in ("story-flag", "ui-toggle", "choice-output") and a not in present}
+    if not seedable:
+        print(f"bootstrap: nothing new to add ({len(present)} already present).")
+        return 0
+    blocks = [skeleton_toml(seedable[a]) for a in sorted(seedable)]
+    with toml_path.open("a", encoding="utf-8") as f:
+        f.write("\n" + "\n".join(blocks))
+    print(f"bootstrap: appended {len(blocks)} skeletons -> {toml_path}")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bootstrap", action="store_true")   # implemented in Task 5

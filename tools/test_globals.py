@@ -58,11 +58,35 @@ def test_miner_finds_known_flags():
     check(cands[0xa57]["reach_scenes"] >= 70, "0xa57 high scene reach")
     check(cands[0xa57]["category"] == "story-flag", "0xa57 classified story-flag")
 
+def test_bootstrap_is_additive_and_idempotent():
+    import tempfile, pathlib, story_flags
+    # start from a copy of the real toml so curated entries are present
+    src = (paths.VM_MAP / "globals.toml").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory() as d:
+        tp = pathlib.Path(d) / "globals.toml"
+        tp.write_text(src, encoding="utf-8")
+        before, _ = G.load_toml(tp)
+        cands = story_flags.mine()
+        story_flags.bootstrap(cands, toml_path=tp)
+        after, _ = G.load_toml(tp)
+        check(len(after) > len(before), "bootstrap adds new skeleton entries")
+        check(after[0xa57]["name"] == "lily_form_a", "bootstrap preserves curated 0xa57")
+        # idempotent: second run adds nothing
+        n1 = len(after)
+        story_flags.bootstrap(story_flags.mine(), toml_path=tp)
+        after2, _ = G.load_toml(tp)
+        check(len(after2) == n1, "second bootstrap is a no-op (idempotent)")
+        # every skeleton is auto-shape and not high-confidence
+        added = set(after) - set(before)
+        check(all(after[a]["source"] == "auto-shape" for a in added), "skeletons are source=auto-shape")
+        check(all(after[a]["confidence"] != "high" for a in added), "skeletons never high confidence")
+
 if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
+    test_bootstrap_is_additive_and_idempotent()
     print(f"\n{len(FAILS)} failures")
     sys.exit(1 if FAILS else 0)
