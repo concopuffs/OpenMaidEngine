@@ -64,6 +64,33 @@ if (args[0] == "gfx")
     return 0;
 }
 
+if (args[0] == "play")
+{
+    // play <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global state
+    // across them (optional up-front seeds). The state substrate for cross-scene flow; headless.
+    var scripts = Paths.Scripts();
+    var scenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
+    if (scenes.Count == 0) { Console.WriteLine("usage: play <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
+    var session = new GameSession();
+    foreach (var s in args.Skip(1).Where(a => a.Contains('=')))
+    {
+        var kv = s.Split('=');
+        int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
+        long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
+        session.Seed(k, v);
+    }
+    long totalLines = 0;
+    foreach (var name in scenes)
+    {
+        var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
+        var r = session.RunScene(script, table, new CaptureHost());
+        totalLines += r.Emitted.Count;
+        Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
+    }
+    Console.WriteLine($"total: {totalLines} lines across {scenes.Count} scene(s); {session.Globals.Count} globals carried");
+    return 0;
+}
+
 if (args[0] == "trace")
 {
     var scene = new Regex(@"^S[CP]\d{4}\.BIN$");
