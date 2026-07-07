@@ -136,6 +136,49 @@ decision→scene (scenes are just `SCxxxx.BIN` records loaded by their SYS4INI i
 
 ---
 
+### op `0x215` (`query-gfx-object?`) is a native command-buffer op — settles the render drift as (b) (2026-07-07)
+
+**This is the canonical account of the background/sprite "drift" bug** (background pinned off-centre /
+bottom-right, rest grey — `Screenshot 2026-07-06 211353.png`). It supersedes the earlier "drift =
+state-divergence, seed state and it's fixed" conclusion in `docs/phase-a-slice-plan.md` and the status
+memory, which are corrected to point here.
+
+Resolved via the dispatch table (`ctx[0x26c93 + 0x215]`): the registration routine `FUN_00413860` stores
+`[ESI + 0x9baa0] = 0x42a0b0`, so op `0x215`'s **real handler is `FUN_0042a0b0`**. (Kelebek's `0x421160` is
+VA-drift — it lands inside the unrelated `FUN_00421090`. Same lesson as `0x1a2`: never trust a Kelebek raw VA.)
+
+`FUN_0042a0b0(ctx)` does exactly two things:
+1. **`*(ctx + 0x53d88 + ctx[0x53d14]*0x78) = 5`** — writes **cmd-type 5** into the *current* gfx-object
+   record. A **command-buffer registration** side-effect, directly parallel to op `0x1a2` (`FUN_0042d360`)
+   writing cmd-type 3. So `0x215` is part of the gfx command-buffer subsystem, not a pure query.
+2. **`out = FUN_0047f280(FUN_0041b940(2))`** — `FUN_0041b940(2)` fetches operand 2 (the bytecode handle
+   key); `FUN_0047f280` is a **`std::map::find`** over an engine-internal associative registry, returning
+   the mapped value or **`0xffffffff` (not-found)**; `FUN_00425fb0(1, out)` writes it to operand 1. That
+   registry is **populated by sibling gfx ops** — op `0x1a2`'s handler builds a `"%c%8.8x"` key and calls
+   `FUN_0042cf70`, an open-addressing hash **insert** into the same kind of store.
+
+**(a) vs (b) — the verdict is (b).** The value `0x215` returns is **native command-buffer state**: "has a
+gfx object already been registered under this handle?" (`≥0` = existing → use its slot; `-1` = new). That
+state lives in the engine's own registry, maintained by the gfx ops, **not in the VM global bank**. So
+**seeding story-state globals cannot reproduce it** — the drift is *not* the Phase-B state-divergence
+problem. Stubbing `0x215` returns a constant → `label_12649`'s slot-select always takes one branch → every
+draw collapses onto slot 0 → the anchor-preserve math measures foreign-sized textures → cumulative drift.
+
+**Why the prior "state-divergence" conclusion was wrong.** It was grounded in `capture_gfx_objects.py`,
+which polled the object-*record* array (`[esi+0x53d64]`) at ~2/s and saw only 3 persistent UI objects, "0
+CG objects." But (i) the branch is driven by the **map lookup** (a different structure the poll never
+observed), and (ii) command-buffer records are **transient** — a 2/s poll can't prove CG records weren't
+used. Absence in that capture ≠ absence of the native path.
+
+**The fix is tractable and Frida-free.** (b) does *not* mean an opaque native state machine. The subsystem
+is a **modelable data structure**: an object-record array (slot / geometry / cmd-type per object) plus a
+handle→object registry (a hash map). The gfx ops are inserts/queries/writes against these, and the inserts
+are **bytecode-driven** — so a faithful host-side model, with the gfx ops (`0x1a2`, `0x215`, and the
+`0x212–0x21a` family) *executed* instead of stubbed, rebuilds the state from the same scripts. The opcode-
+level summary lives in `vm-map/opcodes.toml` op `0x215`.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.
@@ -144,4 +187,8 @@ decision→scene (scenes are just `SCxxxx.BIN` records loaded by their SYS4INI i
   value is turned into a scene *id* (a caller of SCJUMP; re-aimed away from `u00428010`).
 - **op `0x60`** (`u0041A270`) — the rand-like value gating 1732/1755 SCJUMP decisions.
 - **gfx command-buffer** — the `0x212–0x21a` positioned-object subsystem (`scjump`-unrelated; the
-  rendering drift).
+  rendering drift). **Understood, not unidentified** (see the op `0x215` finding above): it's a native
+  record array + a handle→object hash registry that the gfx ops insert/query/write. The drift verdict is
+  settled — (b), a genuine native op, not state-divergence. Remaining work is *implementation*, not RE:
+  model the registry + record array host-side and execute the gfx ops (`0x1a2`/`0x215`/`0x212–0x21a`)
+  instead of stubbing — static, Frida-free.

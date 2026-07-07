@@ -273,28 +273,28 @@ measured `0×0`, and the anchor-preserve math (`base' = center − (w_new/2, h_n
 corruption. Fix: seed `_slotDims[0] = (800,600)` (and record `create-texture(w,h)` dims) so the first CG's
 anchor stays an identity. This is the faithful stand-in for the skipped boot-time primary-surface creation.
 
-**Post-opening bg/sprite drift — RESOLVED as a STATE-DIVERGENCE artifact, NOT a missing native op
-(2026-07-06/07).** Symptom: everything blits through slot 0 as an immediate-mode canvas; the anchor-preserve
-base globals **accumulate drift** across differently-sized textures (`BG030A→(300,500)`, next→`(450,100)`,
-→`(800,350)`… marching bottom-right). We reverse-engineered the whole chain (systematic-debugging):
-1. Root cause traced to **`0x215` = native graphics-object query** (opcodes.toml `query-gfx-object?`), which we
-   stub → `label_12649` takes the wrong branch → all draws collapse onto slot 0 → anchor-preserve reads foreign
-   textures → drift.
-2. **Engine now statically analyzable (major, general unlock):** `SYS4AB.BIN` = `XOR-0xFF(AGE.EXE)` (dead end),
-   but `AGE.EXE` unpacks **in-place at 0x400000** in the live process → `tools/frida/dump_engine.py` →
-   `build/engine-dump/` (validated via AGF-decoder landmark; interpreter confirmed to run from the module, so
-   handlers are hookable). Handler ABI + object-record layout (`[esi+0x53d64]`, 120B/rec, cmd-type at rec+0x24)
-   decoded. See `docs/vm-mapping-plan.md` appendix + `tools/frida/README.md`.
-3. **Live capture verdict (the resolution):** `tools/frida/capture_gfx_objects.py` polled the object-record
-   array through the **real** opening — it held only **3 persistent UI objects, ZERO CG objects**. So the real
-   game does **not** draw the opening CGs via the `0x212–0x21a` positioned-object path our headless VM uses;
-   with proper state it takes a different (direct) branch that we already render correctly. **⇒ the drift is
-   downstream of our unseeded headless VM taking `label_12649`'s else-branch (compute-from-drifting-base) where
-   the real game hits the if-branch (stored/record geometry). The fix is the Phase B state/choices-flow work,
-   not a separate native-op subsystem.** Seeding real per-scene/object state makes `label_12649` branch right.
-Fades/alpha (`AE*`, `0x202/0x203`) + green chromakey + true multi-surface remain deferred; the compositor is
-built to accept alpha later. The full-screen opening path is correct and unaffected. **Native gfx-op modeling
-is only needed for scenes that genuinely use runtime-positioned sprites — revisit later with the dump in hand.**
+**Post-opening bg/sprite drift — root cause SETTLED as (b) a native command-buffer op via Ghidra
+(2026-07-07). ⚠ Corrects an earlier wrong "state-divergence" verdict here.** Symptom (screenshot
+`Screenshot 2026-07-06 211353.png`): everything blits through slot 0 as an immediate-mode canvas; the
+anchor-preserve base globals **accumulate drift** across differently-sized textures (`BG030A→(300,500)`,
+next→`(450,100)`, →`(800,350)`… marching bottom-right; the background ends up pinned off-centre / bottom-right
+with the rest of the screen grey). Root cause = the stubbed native op **`0x215`** collapsing every draw onto
+slot 0 (its return drives `label_12649`'s slot-select).
+
+**The canonical decode + verdict now lives in `docs/engine-re.md` (op `0x215` section)** — don't duplicate it
+here. In brief: `0x215`'s real handler `FUN_0042a0b0` (Ghidra) writes cmd-type 5 into the current gfx-object
+record and returns a **`std::map::find`** over an engine-internal command-buffer registry (populated by sibling
+gfx ops like `0x1a2`). That return is **native command-buffer state, not the VM global bank** → seeding
+story-state **cannot** fix it. So this is **(b) a genuine native op**, *not* (a) the Phase-B state-divergence
+problem. The prior conclusion in this doc — grounded in a 2/s `capture_gfx_objects.py` poll of the object-*record*
+array — was wrong: it observed the wrong structure (not the lookup map) and can't rule out transient records.
+
+**Fix (Frida-free, implementation not RE):** model the gfx command-buffer host-side (record array +
+handle→object hash registry) and *execute* the gfx ops (`0x1a2`/`0x215`/`0x212–0x21a`) instead of stubbing;
+the inserts are bytecode-driven, so the state rebuilds from the same scripts. Fades/alpha (`AE*`,
+`0x202/0x203`) + green chromakey + true multi-surface remain deferred; the compositor is built to accept alpha
+later. The full-screen event-CG opening path (`EV052*` at `(0,0)`) is correct and unaffected — the drift is
+specifically the `BG*`/sprite draws routed through `label_12649`.
 
 ---
 

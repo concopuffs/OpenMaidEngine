@@ -28,7 +28,8 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
   region (~30 MB, nonstable base). Attach → it enumerates ranges, dumps the module image + every r-x
   range ≥ 1 MB (chunked) → `build/engine-dump/{manifest.json,range_<base>.bin}`, and prints the
   landmark bytes at `AGE.EXE+0x74f1f` to validate. Then disassemble (capstone) and locate a handler
-  (e.g. `0x215` @ Kelebek VA `0x421160`) via the opcode dispatch table. Attach by pid.
+  (e.g. `0x215` → real handler `0x42a0b0`, resolved via the opcode dispatch table — Kelebek's `0x421160`
+  is VA-drift, an unrelated fn). Attach by pid.
 - **`capture_load_order.py`** — ★ the working asset-resolution capture. Hooks `ReadFile` on
   `DATA2.ALF`; each asset load starts with header reads **at its exact archive offset**, so exact-start
   reads give the clean per-asset **load order** (→ names via `build/asset-index.json`). `--analyze`
