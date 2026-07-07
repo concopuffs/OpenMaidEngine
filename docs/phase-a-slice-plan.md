@@ -361,6 +361,12 @@ not the depth cap → recursion is bounded correctly).
   **live headless run** of the same scene — full handling, no frozen golden, no vm0 dependency. Verified:
   `godot --headless -- --selftest` → "threaded host matches headless (3 lines, full handling)".
 
+**Verified live in Godot (2026-07-07):** added `--scene <NAME>` to the frontend and a scene-end report
+of the call-scripts executed as nested frames (collected thread-safely — Godot drops `GD.Print` from the
+VM background thread). **SC0240 executes 29 call-scripts** (RESETLAND, SETEN, ADDEN, RENDERMAP, SETOBJ,
+DRAWOBJ, CALCREVISE, LOOK) live in the real runtime; SC0000 renders the opening event CG (windowed).
+
 **Remaining follow-ups:** optionally give the `audio`/`gfx` CLI diagnostics a provider (they still run
-provider-less); `decision→scene` (scene chaining) rides this same loader once the SCJUMP
-decision→scene-id native hop is reversed.
+provider-less); **engine-level diagnostics** (the next pivot — the engine, not the frontend, should
+surface script/scene execution + call-script dispatch); `decision→scene` (scene chaining) rides this
+same loader once the SCJUMP decision→scene-id native hop is reversed.

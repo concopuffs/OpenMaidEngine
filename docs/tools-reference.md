@@ -70,21 +70,29 @@ The `engine/` .NET solution (`AgeEngine.sln`) is the runtime VM; `godot/` is the
 Python, but listed here as the things you *run*. Build: `dotnet build engine/AgeEngine.sln`; test:
 `dotnet test engine/AgeEngine.sln`. Run a CLI command: `dotnet run --project engine/Age.Cli -- <cmd>`.
 
+**call-script executes** on the product paths: they inject `Sys4ScriptProvider` (id→`.BIN`, via
+`build/callscript-names.json`), so `call-script <id>` loads & runs the target as a nested subroutine
+frame sharing globals. `trace`/`audio`/`gfx` stay **provider-less** (call-script stubbed) — base-ISA /
+subsystem oracles. Test scenes are **synthesized** via `Age.Engine/Sys4/ScriptAssembler` (see
+[[testing-synthesize-dont-disable]]: synthesize test data, never disable a feature to keep a golden green).
+
 | Command | Purpose | Notes |
 |---|---|---|
-| `run <file.BIN>` | Execute a scene, print steps + first 20 show-text lines. | `CaptureHost` (headless). |
-| `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps (the A1 differential-test oracle). | writes JSON. |
-| `audio <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `play-bgm`/`play-voice` in order + resolved file. | optional global seeds. |
-| `gfx <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` with resolved file + computed geometry (the headless geometry oracle). | optional seeds. |
-| `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`. |
-| `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale validation (unbooted matches vm0.py: 294 exit + 3 LOOP). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
+| `run <file.BIN>` | Execute a script; print steps, show-text count, **call-script dispatch count**, the first 30 lines (each tagged with its source script), and the distinct source scripts. | `CaptureHost` (headless); **executes call-script**. |
+| `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps. **Provider-less** (call-script stubbed) = a base-ISA offset dump. | writes JSON. (Was the vm0 differential oracle; vm0 is retired from oracle duty — `TraceDiffTests` removed.) |
+| `audio <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `play-bgm`/`play-voice` in order + resolved file. | optional seeds. provider-less (stub) for now. |
+| `gfx <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` with resolved file + computed geometry (the headless geometry oracle). | optional seeds. provider-less (stub) for now. |
+| `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
+| `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale run. **With call-script execution on: 284/297 exit, 13 STEP-LIMIT** (input/state-gated ADV scenes spin headless once subroutine global-writes drive their loops — state divergence, not a bug; 0 depth-cap/unresolved). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
 
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
---import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`. It
-plays `SC0000` from the real bytecode. User args (after `--`):
-- `--selftest` — headless; asserts the emitted 186 offsets == `build/vm0-trace.json` (parity guardrail). Exits.
-- `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue (186→229 lines).
-- `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (headless-verifiable render check / dev screenshots).
+--import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
+Plays the real bytecode with call-script execution on (subroutines run live). `--headless` can't render
+texture ops (no GPU context) — run windowed for real scenes. User args (after `--`):
+- `--scene <NAME>` — which scene to play (default `SC0000`), e.g. `--scene SC0240` (executes 29 nested subroutines).
+- `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
+- `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
+- `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
 
 ## Asset resolution / graphics
 

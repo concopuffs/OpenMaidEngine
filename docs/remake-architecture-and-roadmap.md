@@ -106,8 +106,10 @@ assembly + external data/assets + host hooks; the read-like-C dream is a stretch
 
 **Two enablers become load-bearing under this goal** (they were "polish" for a port):
 - **Global-var map** — modders must know what game state a global is to touch it safely.
-- **Call-script resolution** — needed both to *run* scripts and to *add/replace* scenes. This is now
-  on the critical path, not deferred.
+- **Call-script resolution** — needed both to *run* scripts and to *add/replace* scenes. **✅ SOLVED
+  (2026-07-07):** `call-script <id>` = a raw index into the SYS4INI file table (native-RE via Ghidra;
+  `docs/engine-re.md`, `name-resolution.md §1`), and the C# VM now **executes** it (loads the target
+  `.BIN` as a nested subroutine frame). Resolution + execution both done; see the status memory.
 
 ---
 
@@ -122,8 +124,9 @@ Forces, and thereby de-risks, every core unknown at once:
 - Port the container parser + VM core to C#.
 - Implement the ADV effectful ops against Godot: `show-text`, `end-text-line`, `wait-for-input`,
   `set-font`, `play-voice`, `play-bgm`, `draw-texture`/`create-texture`/`draw-string`, choices.
-- Resolve **just enough `call-script`** to enter/leave a scene (side-task: `SCJUMP.BIN` decode or a
-  targeted Frida capture — now critical-path).
+- ~~Resolve **just enough `call-script`** to enter/leave a scene~~ **✅ DONE** — full call-script
+  resolution + execution landed (nested subroutine frames sharing globals). *Scene→scene chaining*
+  (decision→scene) still needs the SCJUMP decision→scene-id native hop.
 - **AGF → texture** for the one scene's art (side-task; `AGF2BMP2AGF.exe` already on disk).
 - Treat the classified no-op markers as skips; validate the tentative-no-op ops via the dialogue diff.
 
@@ -214,12 +217,13 @@ VM and dead weight on an incorrect one.
 **Reused for free:** container parser, VM core, backend adapters, the opcode table (the engine ABI
 is shared across the family), disassembler/assembler, the whole extraction methodology.
 **Per-game (inherent content work):** the **global-var map** (globals are game-specific), the
-**call-script registry**, the **data-table layouts** (each game's `*INIT` differs), assets, and any
-game-specific effectful behavior. Process: point the toolchain at the new game's archives, re-run
-extraction, rebuild its global map, resolve its call-script registry, author a profile. The long
-poles are exactly the two enablers (global map + call-script). **This is the core payoff of the VM
-approach:** the *engine* cost amortizes across all AGE games; only content-mapping recurs — far less
-than re-coding each game's logic bespoke.
+**data-table layouts** (each game's `*INIT` differs), assets, and any game-specific effectful behavior.
+The **call-script registry is no longer a per-game long pole** — it's a raw index into that game's
+SYS4INI file table, derived automatically by `parse_sys4ini.py` (`build/callscript-names.json`); the
+resolver is generic. So the remaining long pole is really just the **global-var map**. Process: point
+the toolchain at the new game's archives, re-run extraction, rebuild its global map, author a profile.
+**This is the core payoff of the VM approach:** the *engine* cost amortizes across all AGE games; only
+content-mapping recurs — far less than re-coding each game's logic bespoke.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
@@ -245,8 +249,9 @@ through the same system.
 **Feasible? Yes — but it is the largest phase of the whole effort**, on the scale of a small ScummVM
 target. The decoding groundwork substantially de-risks it (we understand the format, 97% of opcodes,
 the data, a partial global map). Biggest risks, with mitigations:
-- **`call-script` dispatch entangled in the packed AGE.EXE** → try `SCJUMP.BIN` static decode first;
-  fall back to a targeted Frida capture. Gating for *anything* running.
+- ~~**`call-script` dispatch entangled in the packed AGE.EXE**~~ **✅ RESOLVED** — cracked statically
+  via the Ghidra dispatch table (no Frida): `call-script <id>` = a raw SYS4INI file index; the C# VM
+  executes it. (SCJUMP was *not* the registry, as first guessed.)
 - **Effectful-op surface is large and quirk-laden** (esp. SRPG battle/dungeon UI) → ADV-first; defer
   SRPG; lean on the Frida shortlist.
 - **AGF graphics** → low risk; `AGF2BMP2AGF.exe` (asmodean) already present.
@@ -254,8 +259,9 @@ the data, a partial global map). Biggest risks, with mitigations:
 - **Toolchain (Python) vs runtime (C#) drift** → share the documented format spec; runtime is
   canonical.
 
-**Open questions to resolve early:** exact `call-script` mechanism; how scenes register (needed to
-*add* content); how much the SRPG layer's rendering diverges from ADV; save layout.
+**Open questions to resolve early:** ~~exact `call-script` mechanism~~ (solved); how scenes *chain*
+(the SCJUMP decision→scene-id native hop — needed to sequence and to *add* content); how much the SRPG
+layer's rendering diverges from ADV; save layout.
 
 ---
 
