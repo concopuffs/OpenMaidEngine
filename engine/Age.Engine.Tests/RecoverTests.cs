@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Age.Engine.Hosting;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
@@ -12,7 +13,13 @@ public class RecoverTests
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Path.Combine(Paths.Data1, "RECOVER.BIN"), table);
-        var vm = new VirtualMachine(script, table, new CaptureHost());
+        // Full call-script handling on, but the subroutines are doubled by a no-op `exit` script:
+        // this test isolates RECOVER's ISA semantics (pointer/lvalue, 2D-stride, loops) from the real
+        // subroutines' game-state dependencies. The real subroutines are covered elsewhere.
+        var noop = ScriptAssembler.Assemble(table, "NOOP",
+            new List<(int, Age.Engine.Model.Operand[])> { (0x2, System.Array.Empty<Age.Engine.Model.Operand>()) },
+            System.Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new CaptureHost(), null, new AnyProvider(noop));
 
         int unit = 0;
         vm.Globals[0x152616] = unit;

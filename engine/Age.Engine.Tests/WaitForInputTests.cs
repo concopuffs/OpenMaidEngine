@@ -1,37 +1,31 @@
 using System.Collections.Generic;
-using Age.Engine.Hosting;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
 
 public class WaitForInputTests
 {
-    private sealed class CountHost : IHost
-    {
-        public int Waits;
-        public List<int> Emitted = new();
-        public void ShowText(int offset, string text) => Emitted.Add(offset);
-        public void CallScript(long id) { }
-        public void OnStub(int opcode) { }
-        public void WaitForInput() => Waits++;
-        public void CreateTexture(int slot, int w, int h) { }
-        public void SetTexture(long resId, int slot) { }
-        public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) { }
-        public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
-        public void PlayBgm(long id) { }
-        public void PlayVoice(long id) { }
-    }
-
+    // wait-for-input (0x72) fires per page. Synthesize a two-page scene and assert it fires exactly
+    // twice — full handling, no dependency on a real scene's (stubbed) line count.
     [Fact]
-    public void WaitForInputFiresAndEmittedIsStable()
+    public void WaitForInputFiresOncePerPage()
     {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        var host = new CountHost();
-        var vm = new VirtualMachine(script, table, host);
+        var t = OpcodeTableJson.Load(Paths.OpcodesJson);
+        (int, Operand[]) ShowText(int s) => (0x6e, new[] { new Operand(2, s), new Operand(0, 0) });
+        (int, Operand[]) Wait() => (0x72, new[] { new Operand(0, 0) });
+        (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
+
+        var scene = ScriptAssembler.Assemble(t, "TWOPAGE",
+            new List<(int, Operand[])> { ShowText(0), Wait(), ShowText(1), Wait(), Exit() },
+            new[] { "page one", "page two" });
+
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(scene, t, host);
         vm.Run();
-        Assert.True(host.Waits > 0, "wait-for-input (0x72) should fire at least once");
-        Assert.Equal(186, host.Emitted.Count);   // unchanged vs the A1 SC0000 trace
+
+        Assert.Equal(2, host.Waits);
+        Assert.Equal(new[] { "page one", "page two" }, vm.Emitted.Select(e => e.Text).ToArray());
         Assert.Equal("exit", vm.HaltReason);
     }
 }
