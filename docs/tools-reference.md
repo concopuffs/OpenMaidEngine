@@ -94,6 +94,24 @@ gated). Absent ⇒ no tracing (`NullTraceSink`, byte-identical run). This is an 
 frontends consume it instead of reimplementing a diagnostic `IHost`. Example: `play SC0000.BIN --trace`
 shows `» SC0000.BIN (enter, TopScene)` → `call-script 0xee =INPUTNAME.BIN (resolved)` → `halt: …`.
 
+**Aggregating / filtered diagnostics** (added 2026-07-08 after a full `--trace-steps` dump proved unusable
+at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`sweep`:
+- **`--trace-histogram`** — instead of a per-line dump, aggregate **execution counts per opcode** and per
+  **call-site `(script:pc)`** (with a sample first operand), dumped sorted after the run. Answers "how many
+  times did op X run, and from where?" directly. This is what pinpointed, in one line, that the 493,175
+  `sleep`s in a headless `play` come from `INPUTNAME.BIN:0x1c3` — a name-entry input-poll loop that spins
+  only because headless has no keyboard — not from the opening. Step lines are attributed to the **real
+  running script** (nested call-script frames included), the "which script is this pc in?" answer a bare
+  step trace can't give.
+- **`--trace-ops <csv>`** — filter the text trace to only the named ops (mnemonics or `0x` hex, e.g.
+  `--trace-ops sleep,draw-texture,wait-for-input`), each line tagged `script:pc`. The ordered interleaving of
+  a few ops of interest without the flood.
+- `--trace-file <path>` now creates the parent directory if missing.
+- **Godot** accepts **`--trace-histogram <file>`** — profile the **real** run (headless flow diverges because
+  `wait-for-input` is a no-op there; the real run to page 1 is ~562 steps with **0** sleeps vs headless's 2M
+  steps / 493k sleeps). Dumped when the scene ends or the window closes. e.g.
+  `godot --path godot -- --boot --shot out/p1.png --trace-histogram out/hist.txt`.
+
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
 Plays the real bytecode with call-script execution on (subroutines run live). `--headless` can't render
@@ -104,6 +122,7 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 - `--boot` — run SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` before the scene, so scene-assumed boot state (chiefly INIT2's gfx handle array) is present. **Needed for the gfx CGs to render** (without it the opening event CGs collapse/drift). e.g. `godot --path godot -- --boot`.
 - `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
 - `--shot-sequence <dir> [--frames N]` — dump one PNG per rendered frame (`frame_0000.png…`, default N=180 ≈ 3s @60fps) then quit, auto-advancing past input waits. Verifies **time-based (sleep-paced) effects** — e.g. the opening `AE*` burst — as distinct frames, which a single `--shot` cannot. CPU/IO-heavy by design (a PNG every frame); a dev diagnostic, not a normal run. e.g. `godot --path godot -- --boot --shot-sequence out/seq --frames 300`.
+- `--sleep-scale <f>` — multiply every `sleep` (op 0xc8) duration by `f` (default 1.0). The authentic opening burst is only ~2 s, too fast to eyeball live; `--sleep-scale 5` stretches it to ~10 s so the paced sequence (arcane `AE*` → character CGs → settled BG) is watchable. Debug-only; leave at 1.0 for real playback.
 
 ## Asset resolution / graphics
 

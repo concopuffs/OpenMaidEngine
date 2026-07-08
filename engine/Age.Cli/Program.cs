@@ -11,17 +11,9 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson);
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var provider = Sys4ScriptProvider.Load(table);
 
-// --trace [--trace-file <path>] [--trace-steps] → a TextTraceSink to console or file; else inert.
-static ITraceSink BuildSink(string[] a, OpcodeTable tbl)
-{
-    if (!a.Contains("--trace")) return NullTraceSink.Instance;
-    bool steps = a.Contains("--trace-steps");
-    int fi = Array.IndexOf(a, "--trace-file");
-    TextWriter w = (fi >= 0 && fi + 1 < a.Length)
-        ? new StreamWriter(a[fi + 1]) { AutoFlush = true }
-        : Console.Out;
-    return new TextTraceSink(w, tbl, steps);
-}
+// Diagnostics flags (see the TraceSetup class below): --trace (text flow), --trace-steps (every op),
+// --trace-ops <csv> (only these mnemonics/hex, tagged with their script), --trace-histogram (op +
+// call-site execution counts, dumped after the run), --trace-file <path> (write to a file, else console).
 
 if (args.Length == 0) { Console.WriteLine("usage: run <file> | trace <out.json>"); return 1; }
 
@@ -29,8 +21,10 @@ if (args[0] == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
     var runHost = new CaptureHost();
-    var vm = new VirtualMachine(script, table, runHost, null, provider, BuildSink(args, table));
+    using var trace = TraceSetup.Build(args, table);
+    var vm = new VirtualMachine(script, table, runHost, null, provider, trace.Sink);
     vm.Run();
+    trace.Report();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {vm.CallScriptDispatches} call-scripts (halt: {vm.HaltReason})");
     foreach (var (off, text, scr) in vm.Emitted.Take(30)) Console.WriteLine($"  [{scr} 0x{off:x}] {text}");
     var sources = vm.Emitted.Select(e => e.Script).Distinct().ToList();
@@ -133,13 +127,15 @@ if (args[0] == "play")
         session.Seed(k, v);
     }
     long totalLines = 0;
+    using var trace = TraceSetup.Build(args, table);   // one sink across the sequence (histogram aggregates)
     foreach (var name in scenes)
     {
         var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
-        var r = session.RunScene(script, table, new CaptureHost(), null, provider, BuildSink(args, table));
+        var r = session.RunScene(script, table, new CaptureHost(), null, provider, trace.Sink);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
     }
+    trace.Report();
     Console.WriteLine($"total: {totalLines} lines across {scenes.Count} scene(s); {session.Globals.Count} globals carried");
     if (saveState != null) { File.WriteAllText(saveState, session.ToJson()); Console.WriteLine($"[state] saved -> {saveState}"); }
     return 0;
@@ -198,15 +194,17 @@ if (args[0] == "sweep")
 
     var haltDist = new SortedDictionary<string, int>(StringComparer.Ordinal);
     long totalLines = 0; var anomalies = new List<string>();
+    using var trace = TraceSetup.Build(args, table);   // one sink across the corpus (histogram aggregates)
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider, BuildSink(args, table));
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider, trace.Sink);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;
         if (halt != "exit") anomalies.Add($"{name}: {r.Emitted.Count} lines, halt={halt}");
     }
+    trace.Report();
     Console.WriteLine($"swept {names.Count} scenes{(boot ? " (booted)" : "")}: {totalLines} total lines");
     Console.WriteLine("halt distribution: " + string.Join(", ", haltDist.Select(kv => $"{kv.Key}={kv.Value}")));
     if (anomalies.Count > 0) { Console.WriteLine($"non-exit halts ({anomalies.Count}):"); foreach (var a in anomalies) Console.WriteLine("  " + a); }
@@ -230,6 +228,67 @@ if (args[0] == "trace")
     return 0;
 }
 Console.WriteLine("unknown command"); return 1;
+
+// Assembles the diagnostic sink from CLI flags and owns the file writer + the post-run histogram dump.
+// Inert (NullTraceSink) unless a --trace* flag is present, so normal runs are untouched (parity).
+sealed class TraceSetup : IDisposable
+{
+    public ITraceSink Sink { get; private init; } = NullTraceSink.Instance;
+    private HistogramTraceSink? _hist;
+    private TextWriter? _file;              // owned file writer; null => console
+    private OpcodeTable? _table;
+
+    public static TraceSetup Build(string[] a, OpcodeTable tbl)
+    {
+        bool text = a.Contains("--trace");
+        bool steps = a.Contains("--trace-steps");
+        bool hist = a.Contains("--trace-histogram");
+        string? opsCsv = ArgVal(a, "--trace-ops");
+        if (!text && !hist && opsCsv == null) return new TraceSetup();   // inert
+
+        int fi = Array.IndexOf(a, "--trace-file");
+        TextWriter? file = null;
+        if (fi >= 0 && fi + 1 < a.Length)
+        {
+            var path = a[fi + 1];
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);   // robust: create parent dir
+            file = new StreamWriter(path) { AutoFlush = true };
+        }
+        TextWriter w = file ?? Console.Out;
+
+        HashSet<int>? filter = null;
+        if (opsCsv != null)
+        {
+            filter = new HashSet<int>();
+            foreach (var tok in opsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                int? op = tok.StartsWith("0x") ? Convert.ToInt32(tok, 16) : tbl.ByLabel(tok);
+                if (op is int o) filter.Add(o);
+                else Console.Error.WriteLine($"--trace-ops: unknown op '{tok}' (ignored)");
+            }
+        }
+
+        var sinks = new List<ITraceSink>();
+        if (text || filter != null) sinks.Add(new TextTraceSink(w, tbl, steps, filter));
+        HistogramTraceSink? h = null;
+        if (hist) { h = new HistogramTraceSink(); sinks.Add(h); }
+
+        return new TraceSetup
+        {
+            Sink = sinks.Count == 1 ? sinks[0] : new CompositeTraceSink(sinks.ToArray()),
+            _hist = h, _file = file, _table = tbl,
+        };
+    }
+
+    /// <summary>After the run, dump the histogram (if enabled). Text/filter output already streamed live.</summary>
+    public void Report() => _hist?.WriteReport(_file ?? Console.Out, _table);
+
+    public void Dispose() { _file?.Flush(); _file?.Dispose(); }
+
+    private static string? ArgVal(string[] a, string key)
+    { int i = Array.IndexOf(a, key); return i >= 0 && i + 1 < a.Length ? a[i + 1] : null; }
+}
 
 sealed class AudioTraceHost : IHost
 {

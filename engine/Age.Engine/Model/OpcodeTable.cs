@@ -11,4 +11,12 @@ public sealed class OpcodeTable
     }
     public string Label(int op) => _t.TryGetValue(op, out var e) ? e.Label : "";
     public int Argc(int op) => _t.TryGetValue(op, out var e) ? e.Argc : -1;
+
+    /// <summary>Reverse lookup: opcode by mnemonic label (e.g. "sleep" -> 0xc8), or null if none.
+    /// Used by --trace-ops to let a diagnostic filter name ops by mnemonic instead of raw hex.</summary>
+    public int? ByLabel(string label)
+    {
+        foreach (var kv in _t) if (kv.Value.Label == label) return kv.Key;
+        return null;
+    }
 }

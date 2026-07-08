@@ -47,9 +47,10 @@ public sealed class GodotAdvHost : IHost
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;
     // blocking this throwaway task thread is behaviorally equivalent given our threading model. Operand is
     // MILLISECONDS (docs/engine-re.md sleep section + opcodes.toml 0xc8). Headless CLI hosts no-op it (parity).
+    public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier to slow/speed the paced opening for inspection
     public void Sleep(long duration)
     {
-        int ms = (int)System.Math.Clamp(duration, 0, 10_000);   // cap so a pathological script can't hang the window
+        int ms = (int)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
         if (ms > 0) Thread.Sleep(ms);
     }
 

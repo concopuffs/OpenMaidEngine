@@ -20,6 +20,10 @@ public partial class Main : Godot.Control
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private GodotTraceSink _trace = null!;
+    private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
+    private string? _histFile;
+    private Age.Engine.Model.OpcodeTable? _table;
+    private bool _histDumped;
     private volatile bool _done;
     private bool _ended;
     private bool _selftest;
@@ -84,6 +88,8 @@ public partial class Main : Godot.Control
         bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0;   // run SYSTEM4's state prefix first
         string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
+        double sleepScale = 1.0;                         // --sleep-scale <f>: slow/speed the paced opening for inspection
+        string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         for (int i = 0; i < userArgs.Length; i++)
         {
             if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];
@@ -92,6 +98,8 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--shot-settle" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotSettleTarget);
             if (userArgs[i] == "--shot-sequence" && i + 1 < userArgs.Length) _seqDir = userArgs[i + 1];
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
+            if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
+            if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');
@@ -111,9 +119,16 @@ public partial class Main : Godot.Control
         IScriptProvider provider;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
-        _host = new GodotAdvHost(this, ResourceMap.Load(), scene);
+        _host = new GodotAdvHost(this, ResourceMap.Load(), scene) { SleepScale = sleepScale };
         _trace = new GodotTraceSink();
-        _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, _trace);
+        // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
+        // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
+        _table = table;
+        _histFile = histFile;
+        Age.Engine.Diagnostics.ITraceSink sink = _trace;
+        if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
+                                 sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
+        _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, sink);
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
         if (boot && !_selftest)
@@ -170,6 +185,7 @@ public partial class Main : Godot.Control
         if (_done && !_ended)
         {
             _ended = true;
+            DumpHistogram();
             ReportSubroutines();
             ShowEnd();
             if (_selftest) RunSelfTest();
@@ -186,7 +202,24 @@ public partial class Main : Godot.Control
             _host.SignalInput();
     }
 
-    public override void _ExitTree() { _host?.SignalInput(); }
+    public override void _ExitTree() { DumpHistogram(); _host?.SignalInput(); }
+
+    // Write the real-run op/call-site histogram to --trace-histogram <file>. Idempotent; called when the
+    // scene ends or the window closes (the opening parks at wait-for-input, so closing is the usual trigger).
+    private void DumpHistogram()
+    {
+        if (_histDumped || _hist == null || _histFile == null) return;
+        _histDumped = true;
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(_histFile);
+            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+            using var w = new System.IO.StreamWriter(_histFile);
+            _hist.WriteReport(w, _table);
+            GD.Print($"[trace-histogram] wrote {_hist.TotalSteps} steps -> {_histFile}");
+        }
+        catch (System.Exception e) { GD.Print($"[trace-histogram] write failed: {e.Message}"); }
+    }
 
     // ---- retained per-frame compositor (main thread, from _Process) ----
     // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
