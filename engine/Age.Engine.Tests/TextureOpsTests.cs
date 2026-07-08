@@ -14,6 +14,7 @@ public class TextureOpsTests
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
+        public void FrameYield() { }
         public void CreateTexture(int slot, int w, int h) => Creates++;
         public void SetTexture(long resId, int slot) => Sets.Add((resId, slot));
         public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) => Draws.Add((slot, w, h));

@@ -317,6 +317,7 @@ sealed class AudioTraceHost : IHost
     public void ShowText(int offset, string text) { }
     public void WaitForInput() { }
     public void Sleep(long duration) { }
+    public void FrameYield() { }
     public void CreateTexture(int slot, int width, int height) { }
     public void SetTexture(long resourceId, int slot) { }
     public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
@@ -366,6 +367,7 @@ sealed class GfxTraceHost : IHost
     public void ShowText(int offset, string text) { }
     public void WaitForInput() { }
     public void Sleep(long duration) { }
+    public void FrameYield() { }
     public void PlayBgm(long id) { }
     public void PlayVoice(long id) { }
 }

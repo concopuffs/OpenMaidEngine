@@ -10,6 +10,7 @@ public class CallScriptIntegrationTests
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
+        public void FrameYield() { }
         public void CreateTexture(int s, int w, int h) { }
         public void SetTexture(long r, int s) { }
         public void DrawTexture(int s, int sx, int sy, int w, int h, int dx, int dy) { }
