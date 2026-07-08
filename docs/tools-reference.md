@@ -86,6 +86,16 @@ subsystem oracles. Test scenes are **synthesized** via `Age.Engine/Sys4/ScriptAs
 | `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
 | `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale run. **With call-script execution on: 284/297 exit, 13 STEP-LIMIT** (input/state-gated ADV scenes spin headless once subroutine global-writes drive their loops — state divergence, not a bug; 0 depth-cap/unresolved). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
 
+**Faithful headless vs plow (`HaltAtWaitForInput`)** — headless has no player, so op `0x72 wait-for-input`
+either **halts** ("the scene is waiting; with no input, stop here") or is ignored (**plow** — walk every page).
+Plow is a *fiction*: it runs past every prompt into code no real playthrough reaches — e.g. a plowed
+`SC0000` fell through 166 prompts into the name-entry poll loop and spun `sleep 1` **493k×** to STEP-LIMIT.
+So: **`run`/`play` HALT at the first `wait-for-input` by default** (faithful; `SC0000` stops at ~402 steps,
+0 sleeps — matching the real run's path to the first prompt), with **`--plow`** to opt into full-page
+coverage. **`sweep` PLOWS by default** (it *is* the dialogue-coverage oracle: 284 exit / 13 STEP-LIMIT),
+with **`--halt-at-wait`** to opt into faithful mode (then all 297 scenes halt cleanly at their first prompt
+— 0 STEP-LIMIT). Interactive Godot is unaffected (it really blocks on input; flag stays false there).
+
 **`--trace [--trace-file <path>] [--trace-steps]`** (on `run`/`play`/`sweep`): stream the engine's own
 diagnostic events over the `Age.Engine.Diagnostics.ITraceSink` seam — scene/subroutine frame enter+exit
 (indented by call depth), call-script dispatch with resolved name, and the final halt+step count — to

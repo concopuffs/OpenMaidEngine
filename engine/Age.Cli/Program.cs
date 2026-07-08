@@ -22,7 +22,10 @@ if (args[0] == "run")
     var script = Sys4Loader.Load(args[1], table);
     var runHost = new CaptureHost();
     using var trace = TraceSetup.Build(args, table);
-    var vm = new VirtualMachine(script, table, runHost, null, provider, trace.Sink);
+    // Faithful by default: halt at wait-for-input (no player => stop, don't plow past prompts). --plow opts
+    // into the old walk-every-page behavior (dialogue coverage). See VmOptions.HaltAtWaitForInput.
+    var vm = new VirtualMachine(script, table, runHost, new VmOptions(HaltAtWaitForInput: !args.Contains("--plow")),
+                                provider, trace.Sink);
     vm.Run();
     trace.Report();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {vm.CallScriptDispatches} call-scripts (halt: {vm.HaltReason})");
@@ -128,10 +131,11 @@ if (args[0] == "play")
     }
     long totalLines = 0;
     using var trace = TraceSetup.Build(args, table);   // one sink across the sequence (histogram aggregates)
+    var playOpts = new VmOptions(HaltAtWaitForInput: !args.Contains("--plow"));   // faithful by default
     foreach (var name in scenes)
     {
         var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
-        var r = session.RunScene(script, table, new CaptureHost(), null, provider, trace.Sink);
+        var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
     }
@@ -150,6 +154,9 @@ if (args[0] == "sweep")
     var scripts = Paths.Scripts();
     var names = scripts.Keys.Where(n => sceneRe.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
     bool boot = args.Contains("--boot");
+    // Sweep DEFAULTS to plow (walk every page) — it's the dialogue-coverage oracle. --halt-at-wait opts into
+    // the faithful "stop at the first prompt" semantics (VmOptions.HaltAtWaitForInput).
+    var sweepOpts = new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait"));
     string? baseline = null;
     if (boot)
     {
@@ -175,7 +182,7 @@ if (args[0] == "sweep")
     {
         var session = Fresh();
         if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
-        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider).Emitted.Count;
+        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), sweepOpts, provider).Emitted.Count;
     }
 
     if (seeds.Count > 0)
@@ -198,7 +205,7 @@ if (args[0] == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), null, provider, trace.Sink);
+        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), sweepOpts, provider, trace.Sink);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;
