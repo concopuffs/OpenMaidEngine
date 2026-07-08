@@ -378,6 +378,33 @@ CG draws as "slot 0"). Verified against native code + the raw bytecode:
   0xc8`), a separate subsystem from the transform/alpha channel. **Lesson: never characterise the engine's render
   mechanism from our own VM's oracle output — use native code + raw bytecode.**
 
+### `sleep` (op `0xc8`) — the frame-pacing primitive (2026-07-08, decoded)
+
+Handler resolved via the dispatch table (`ctx[0x26c93+0xc8]` = `param_1[0x26d5b]` in `FUN_00413860`) →
+**`sleep_op_0xc8`@`0x420ec0`** (was `LAB_00420ec0`; created + annotated). It is **NON-BLOCKING**:
+
+- It **arms a timer** — `sleep_timer_arm`@`0x44cff0` on the object at `ctx+0x5f304`: `+8 = 1` (active),
+  `+0x14 = (*DAT_0056f3d4)()` (start tick — an **ms** source, `timeGetTime`/`GetTickCount` class, same
+  `DAT_0056f3d4` the boot uses to seed `srand` via `time/100`), `+0x18 = duration` (operand, min 1). The engine's
+  main loop polls `elapsed ≥ duration` and resumes the script — rendering continues in the meantime. This is the
+  native confirmation that the engine paces animation in its per-frame loop, not by blocking.
+- **Operand unit = MILLISECONDS.** `duration < 10` fast-paths through import `[0x56f0b8]`; every real scene sleep
+  (`100`/`750`/`1000` in SC0000) is `≥ 10` → the timer-arm path.
+- The handler also writes gfx **cmd-type 3** into the current object record (`ctx+0x53d88+curidx*0x78`) and runs
+  two **anti-tamper** checks (call `[ctx+0x5512c]`; a rotate-checksum compare of `ctx+0x55120/0x55124`;
+  `__CxxThrowException` on mismatch — integrity work piggybacked on a hot op). Neither is needed by our model.
+
+**Port equivalent (implemented):** our VM runs on a background thread (like `wait-for-input`), so blocking that
+thread for `duration` ms while the main-thread compositor (`Main.Recomposite` in `_Process`) keeps presenting is
+behaviorally equivalent to the native non-blocking timer — the `sleep`-paced opening `AE*` burst now gets frames
+to display. Headless/CLI hosts no-op `Sleep` (parity). `IHost.Sleep(long)` + VM `case "sleep"`; see
+`vm-map/opcodes.toml` 0xc8.
+
+**Related — `present-frame` (op `0x20c`):** dispatch `param_1[0x26e9f] = gfx_op_0x20c_present_frame` →
+`gfx_render_frame`@`0x4820b0` (buffer flip). Our compositor presents every frame regardless, so `0x20c` is a VM
+no-op (`noop_headless=true`); the Kelebek label `u00416200` was VA-drift. This corrects the earlier open item
+("no per-frame present") above — present is host-implicit; only `sleep` timing was missing.
+
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
 Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still

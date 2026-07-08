@@ -57,6 +57,13 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** native-RE (Ghidra): handler FUN_0041fba0 (= ctx[0x26c93+0x8f]) sets [frame PC @+0x53d2c] = [frame codebase @+0x53d28] + operand*4 and pushes ((pc-base)>>2)+3 onto the per-frame return stack ([ctx+0x552e8]/[ctx+0x55248]). Target is a code OFFSET within the current script (matches header table T3 tag 0x8F = local call targets), confirming it is a local JSR, not a script load.
 
+### 0xc8 `sleep` (sleep, argc 1)
+- **summary:** Pause the script for <duration> milliseconds while rendering continues (frame pacing).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section.
+
+Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host blocks the VM background thread <duration> ms while the per-frame compositor keeps presenting -> the sleep-paced opening AE* burst animates. Headless hosts no-op it (parity).
+
 ## draw
 
 ### 0x1a2 `gfx-cmd-register` (gfx-cmd-register, argc 1)
@@ -108,6 +115,13 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
 - **grounding:** source=inference, confidence=med
 - **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
+
+### 0x20c `present-frame` (present-frame, argc 0)
+- **summary:** Present the composited frame (native gfx_render_frame). Host-implicit: our compositor presents every frame.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
+
+Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0 flips the composited buffers. Our Godot host runs a continuous per-frame compositor (Main.Recomposite in _Process), so an explicit present is redundant and the VM can skip it. noop_headless=true -> scene coverage classifies it safe-noop. Kelebek label u00416200 was VA-drift (unrelated fn); real handler resolved via the dispatch table.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
 - **summary:** 0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table.
@@ -514,10 +528,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xc8 `sleep` (sleep, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0xcc `mouse_callback` (mouse_callback, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -911,10 +921,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x20b `u00420D50` (u00420D50, argc 7)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x20c `u00416200` (u00416200, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
