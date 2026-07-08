@@ -270,12 +270,10 @@ public sealed class VirtualMachine
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (handle)
                 Gfx.Release(Read(a[0])); return pc + 1;
-            case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — blend deferred
-                Gfx.GetOrCreate(Read(a[0])).Color = GfxState.PackColor(Read(a[3]), Read(a[4]));
-                WarnAlphaDeferredOnce(); return pc + 1;
-            case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — blend deferred
-                Gfx.GetOrCreate(Read(a[0])).Color = GfxState.PackColor(Read(a[2]), Read(a[3]));
-                WarnAlphaDeferredOnce(); return pc + 1;
+            case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — static alpha/tint (anim interp deferred)
+                Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[3]), Read(a[4]))); return pc + 1;
+            case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — static alpha/tint
+                Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;
             // ---- sprite transform / animation cluster (docs/engine-re.md "0x21c-0x243 ... ANIMATION") ----
             case "set-anim-transform-abs":   // 0x220 (handle)(p1)(p2)(x)(y)(z) — set transform directly
                 Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
@@ -294,13 +292,4 @@ public sealed class VirtualMachine
         }
     }
 
-    // Colored-draw ops (0x202/0x203) store the packed color on the object now; the actual alpha/additive
-    // blend in the compositor is deferred. Surface it once (not silently) via the trace sink — observe-only,
-    // so parity holds. See docs/superpowers/specs/2026-07-07-gfx-command-buffer-design.md (Deferrals).
-    private bool _warnedAlpha;
-    private void WarnAlphaDeferredOnce()
-    {
-        if (_warnedAlpha) return; _warnedAlpha = true;
-        _sink.Emit(TraceEvent.Stub(0x202, -1));
-    }
 }
