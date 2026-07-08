@@ -277,6 +277,10 @@ public sealed class VirtualMachine
             case "set-anim-transform-norm":  // 0x21e — same, operands are ~percent (/_DAT_00571c28)
                 Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
                     (Read(a[3]), Read(a[4]), Read(a[5])), normalized: true); return pc + 1;
+            case "anim-start":   // 0x234 (handle)(duration)(x)(y)(z) — animate toward target over the global clock
+                Gfx.StartAnim(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
+            case "set-anim-clock":   // 0x238 (duration) — global, non-blocking (host advances it per-frame)
+                Gfx.SetAnimClock(Read(a[0])); return pc + 1;
             default:
                 // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
                 // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.

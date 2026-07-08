@@ -69,4 +69,27 @@ public class GfxAnimationTests
         Assert.False(o.AnimNormalized);
         Assert.True(o.AnimEnabled);
     }
+
+    [Fact]
+    public void AnimStartAndClock_DispatchSetTargetDurationClockAndGeneration()
+    {
+        var t = T();
+        // anim-start(handle=0x1000, duration=30, target=(0,0,5)); set-anim-clock(400)
+        var scene = ScriptAssembler.Assemble(t, "ANIM", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 30), MovGI(3, 0), MovGI(4, 0), MovGI(5, 5), MovGI(6, 400),
+            (0x234, new[] { G(1), G(2), G(3), G(4), G(5) }),
+            (0x238, new[] { G(6) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.Equal((0L, 0L, 5L), o.AnimTarget);
+        Assert.Equal(30, o.AnimDurationTicks);
+        Assert.Equal(1, o.AnimGeneration);
+        Assert.True(o.AnimEnabled);
+        Assert.Equal(400, vm.Gfx.AnimClockDurationTicks);
+        Assert.Equal(1, vm.Gfx.AnimClockGeneration);
+    }
 }
