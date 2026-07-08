@@ -102,12 +102,12 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **evidence:** Ghidra handler 0x4227b0 (dispatch ctx[0x26c93+0x1ff]); FUN_0047e800(op1,(float)op2,(float)op3,(float)op4).
 
 ### 0x202 `gfx-blit-color` (gfx-blit-color, argc 5)
-- **summary:** 0x202 (handle)(x)(y)(alpha)(color) — gfx cmd-type 0xb. Handler gfx_op_0x202_blit_color @0x4228d0: blits object `handle` at (x,y) with a packed ARGB built from alpha(op4, ≥0x100→0xff, <0→FUN_0047f3e0) and color(op5, <0→FUN_0047f3e0) → FUN_0047ea00. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x202 (handle)(x)(y)(alpha)(color) — gfx cmd-type 0xb. Handler gfx_op_0x202_blit_color @0x4228d0: worker gfx_op_0x202_worker_set_color_anim @0x47ea00 sets an ANIMATED color/alpha target (obj+0x64) + anim bit; packs ARGB from alpha(op4, ≥0x100→0xff, <0→FUN_0047f3e0) and color(op5, <0→FUN_0047f3e0). C# VM (2026-07-08 blend slice): routes through GfxState.SetObjectColor → the compositor applies STATIC alpha/tint (BlendKind.Alpha); smooth color-anim interpolation deferred. See docs/engine-re.md §Blend & transparency.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4228d0 (dispatch ctx[0x26c93+0x202]); packs (alpha<<24|rgb) from operands 4/5, FUN_0047ea00(op1,op2,op3,packed).
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
-- **summary:** 0x203 (handle)(v)(alpha)(color) — gfx cmd-type 9. Handler gfx_op_0x203_draw_color @0x4229a0: draws object `handle` with op2 + a packed ARGB from alpha(op3)/color(op4) → FUN_0047e9b0. Sibling of 0x202 with one fewer positional arg. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x203 (handle)(v)(alpha)(color) — gfx cmd-type 9. Handler gfx_op_0x203_draw_color @0x4229a0: worker gfx_op_0x203_worker_set_color @0x47e9b0 sets a STATIC color/alpha (obj+0x60), no anim bit; packs ARGB from alpha(op3)/color(op4). Sibling of 0x202 (one fewer positional arg). C# VM (2026-07-08 blend slice): routes through GfxState.SetObjectColor → compositor applies static alpha/tint (BlendKind.Alpha). See docs/engine-re.md §Blend & transparency.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); packs color from operands 3/4, FUN_0047e9b0(op1,op2,packed).
 
