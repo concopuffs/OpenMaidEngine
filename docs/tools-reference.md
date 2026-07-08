@@ -103,6 +103,7 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
 - `--boot` — run SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` before the scene, so scene-assumed boot state (chiefly INIT2's gfx handle array) is present. **Needed for the gfx CGs to render** (without it the opening event CGs collapse/drift). e.g. `godot --path godot -- --boot`.
 - `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
+- `--shot-sequence <dir> [--frames N]` — dump one PNG per rendered frame (`frame_0000.png…`, default N=180 ≈ 3s @60fps) then quit, auto-advancing past input waits. Verifies **time-based (sleep-paced) effects** — e.g. the opening `AE*` burst — as distinct frames, which a single `--shot` cannot. CPU/IO-heavy by design (a PNG every frame); a dev diagnostic, not a normal run. e.g. `godot --path godot -- --boot --shot-sequence out/seq --frames 300`.
 
 ## Asset resolution / graphics
 

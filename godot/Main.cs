@@ -30,6 +30,9 @@ public partial class Main : Godot.Control
     private int _shotSettleTarget = 3;          // --shot-settle <frames>: settle N frames before grabbing (to
                                                 // capture mid-tween — the anim clock keeps running while parked)
     private bool _shotDone;
+    private string? _seqDir;                    // --shot-sequence <dir>: dump one PNG per frame (verify paced anim)
+    private int _seqFrames = 180;               // --frames <n>: how many frames to dump (default ~3s @60fps)
+    private int _seqIdx;
 
     public override void _Ready()
     {
@@ -87,6 +90,8 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--shot" && i + 1 < userArgs.Length) _shotPath = userArgs[i + 1];
             if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
             if (userArgs[i] == "--shot-settle" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotSettleTarget);
+            if (userArgs[i] == "--shot-sequence" && i + 1 < userArgs.Length) _seqDir = userArgs[i + 1];
+            if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');
@@ -128,12 +133,26 @@ public partial class Main : Godot.Control
         // --shot: auto-advance up to (but not past) the target page, then _Process captures + quits.
         if (_shotPath != null)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting && _host.Pages < _shotPage) _host.SignalInput(); await Task.Delay(1); } });
+        // --shot-sequence: auto-advance past every input wait so the paced burst isn't blocked on a click.
+        if (_seqDir != null)
+            _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
     }
 
     public override void _Process(double delta)
     {
         _lastDelta = delta;
         if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
+        // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
+        // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
+        if (_seqDir != null && _seqIdx < _seqFrames && !_done)
+        {
+            System.IO.Directory.CreateDirectory(_seqDir);
+            var fimg = GetViewport().GetTexture().GetImage();
+            fimg.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
+            _seqIdx++;
+            if (_seqIdx >= _seqFrames) { GD.Print($"SEQ saved {_seqIdx} frames -> {_seqDir}"); GetTree().Quit(0); }
+            return;
+        }
         // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
         if (_shotPath != null && !_shotDone && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
         {
