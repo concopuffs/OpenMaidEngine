@@ -272,6 +272,56 @@ Worker functions decoded + annotated in the Ghidra project (2026-07-07): `gfx_re
 `gfx_object_init_default`@`0x472810`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
 `gfx_get_vec18/24`(`0x47f360/f2e0`).
 
+#### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-07, recon — implementation pending)
+
+The scene-completeness tracker (`tools/scene_opcode_coverage.py`) flagged a dense band of GAP ops in
+`0x21c–0x243` (+ `0x2bd/0x2bf`) — the **largest remaining rendering unknown** in SC0000 (e.g. `0x220`×66,
+`0x22f`×34, `0x228`×33, `0x21e`×25 static sites). Resolving every one through the dispatch table
+(`ctx[0x26c93+op]`, read from `FUN_00413860`) shows it is **one coherent subsystem: sprite transform +
+animation/tween** — and two members were already named in prior RE (`0x234 gfx_op_0x234_anim_start`,
+`0x238 gfx_op_0x238_set_anim_clock`). Kelebek VAs drift here as everywhere (op `0x220` real handler is
+`0x4234e0`, not Kelebek's `0x4215D0`). **Op → real handler map:**
+
+| op | handler | op | handler | op | handler |
+|---|---|---|---|---|---|
+| `0x21c` | `0x417520` (417xxx trivial) | `0x229` | `0x423700` | `0x236` | `0x423ee0` |
+| `0x21d` | `0x423310` | `0x22a` | `0x4237b0` | `0x237` | `0x4240a0` |
+| `0x21e` | `0x423350` **✎ set_transform3_norm** | `0x22b` | `0x423850` | `0x238` | **anim_start's clock ✎** |
+| `0x21f` | `0x423410` | `0x22c` | `0x423900` | `0x239` | `0x424120` |
+| `0x220` | `0x4234e0` **✎ set_transform3_abs** | `0x22d` | `0x423990` | `0x23a` | `0x42a440` |
+| `0x221` | `0x423590` | `0x22e` | `0x423a40` | `0x23b` | `0x424190` |
+| `0x222` | `0x4235e0` | `0x22f` | `0x423b00` | `0x23c` | `0x417580` (417xxx) |
+| `0x223` | `0x423620` | `0x230` | `0x423ba0` | `0x23d` | `0x4175c0` (417xxx) |
+| `0x224` | `0x417550` (417xxx) | `0x231` | `0x423be0` | `0x23e` | `0x42a4a0` |
+| `0x225` | `0x4236a0` | `0x232` | `0x423c30` | `0x23f` | `0x42a520` |
+| `0x226` | `0x42a230` | `0x233` | `0x423cf0` | `0x240` | `0x4245f0` |
+| `0x227` | `0x42a2e0` | `0x234` | **anim_start ✎** | `0x241` | `0x4247e0` |
+| `0x228` | `0x42a3a0` | `0x235` | `0x423e40` | `0x242` | `0x4249d0` |
+|  |  |  |  | `0x243` | `0x4182d0` (417xxx) |
+
+(`0x2bd`→`0x4251c0`, `0x2bf`→`0x425240`. The handful of `0x417xxx` handlers are trivial/marker-shaped — the
+default-handler neighbourhood — and are almost certainly no-ops or arg-poppers; triage before modelling.)
+
+**Contract (decoded, representative ops `0x220`/`0x21e`, both `argc 6`, annotated in Ghidra):** same shape as
+the geometry family — write **cmd-type `0xd`** into the current object record, fetch operands 1..6, call a
+transform worker with `(int op1=handle, int op2, int op3, float op4, float op5, float op6)`. `0x220` uses raw
+floats (worker `0x47ecc0`); **`0x21e` normalizes the 3 floats by `/_DAT_00571c28`** (runtime-init divisor,
+static 0) so operand `0x64`=100 → a fraction → **scale/percentage** (worker `gfx_anim_set_channel`@`0x47eaa0`).
+The worker calls the SAME `gfx_object_get_or_create` our `GfxState` already models, then arms an animation
+channel on the object record: `obj+0x3c = op2`, `obj+0x50 = op3`, `obj+0x68 = 1` (enable), `obj+0xac =
+vec3(op4,op5,op6)` (the transform target), and raises global dirty flags `ctx+0xb558/+0xb560`. Corpus idiom:
+`0x220 (handle=0xcb20+k) 800 500 0 0 0` (size a CG object), `0x21e (handle) (val) 100 100 100 100` (scale/color
+channels). **`0x234 anim_start` + `0x238 set_anim_clock` imply a per-frame clock that interpolates these
+targets over time** — i.e. this is what makes `AE*` fades/effects *animate* rather than snap.
+
+**Model implication (Phase-2 input, mirrors the geometry family):** the DirectDraw workers need NOT be
+modelled — extend the host `GfxState` object with the transform/anim fields (a transform `vec3` target + the
+two scalar params + enable + an animation clock), have the SET ops (`0x21e/0x220/0x234/0x238/…`) write them and
+the compositor apply the transform per-frame, stepping the clock on `anim_start`/`set_anim_clock`. This is a
+spec/plan-worthy chunk (~18 effectful handlers + workers `0x47eaa0/0x47ecc0` + the per-frame stepping); the op
+map above is the de-risked starting point. `tools/scene_opcode_coverage.py SC0000` measures the GAP shrink as
+each lands.
+
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
 Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still
