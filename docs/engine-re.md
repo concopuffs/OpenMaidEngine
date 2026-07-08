@@ -322,6 +322,35 @@ spec/plan-worthy chunk (~18 effectful handlers + workers `0x47eaa0/0x47ecc0` + t
 map above is the de-risked starting point. `tools/scene_opcode_coverage.py SC0000` measures the GAP shrink as
 each lands.
 
+##### `anim_start`/`set_anim_clock` decoded + opening confirmed (2026-07-07, animation-slice Task 1)
+
+Decoding the two already-named clock/start ops (dispatch table → `0x234`@`0x00423da0`, `0x238`@`0x004240e0`;
+both annotated) and grepping the SC0000 opening settles the animation model and confirms the opening exercises it:
+
+- **`0x238 set_anim_clock` (argc 1, cmd-type 3):** `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = operand1`
+  (total duration). **A GLOBAL, NON-BLOCKING clock** — not per-object. The op only *configures* the clock; it
+  does **not** loop/wait. The native render loop advances this clock each frame and interpolates *all* animating
+  objects. Its own plate comment states the payoff: "our port can drive animation in the host's per-frame loop
+  while the VM is parked at wait-for-input; no VM/host frame-lockstep." → **validates the wall-clock-tween
+  architecture directly.** SC0000: `set-anim-clock(G[0x624bb])` @`0x123bd`, `set-anim-clock(0x190=400)` @`0x13858`.
+- **`0x234 anim_start` (argc 5, cmd-type 0xb):** `gfx_anim_start(op1=handle, op2, (float)op3, (float)op4,
+  (float)op5)`. `op2` = *this object's* animation duration (`label_1235a` maxes the per-object durations into the
+  global clock); `(op3,op4,op5)` = the target transform vec3 the object animates **toward**. SC0000 opening
+  @`0x00daf`: `anim_start(G[0x62457], 0x2328, 0, 0, local2)` on the INIT2 CG handles, then `call label_1235a`.
+- **The opening path uses the whole subsystem, early.** `0x21e`/`0x220` transform-sets fire from `0x00f73`
+  onward (`0x21e (G[0x6245b]) 0 0x12c l0 l1 0x64`, `0x220 (G[0x62457]) 0x96 0x3e8 l1 l3 0`), on the same INIT2 CG
+  handles (`G[0x62457]`,`0x6245b`,`0x6245c`) — this is the opening, **not** battle/debug. So the slice's ops are
+  real and verifiable on screen.
+
+**Corrected host model (supersedes the "per-object clock" wording above):**
+- **Global clock** (from `0x238`): one `AnimClockDurationTicks` + a generation/reset marker the host watches to
+  reset its wall-clock `elapsed` to 0. The host tweens all armed objects over this duration.
+- **Per-object** (from `0x21e`/`0x220` = set transform directly; `0x234` = animate toward a target): the object's
+  transform target vec3 + the two scalar params + enable + a per-object generation (bumped by `anim_start`).
+- **Residual (empirical, Task 6):** *which* vec3 component is opacity vs scale vs position lives in the DirectDraw
+  draw-worker we deliberately don't model. Determine it empirically from the animating channel + screenshot, not
+  by RE'ing the surface layer.
+
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
 Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still
