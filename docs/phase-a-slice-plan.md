@@ -206,8 +206,10 @@ full-screen **event-CG layer (`EV052*`) renders correctly** as the opening plays
 2. **No alpha/blend.** `AE*` full-screen fade/flash effects draw **opaque and instant** (a static grey/white
    sheet over the CG) instead of alpha-animating. No chromakey either (sprites would show green boxes —
    moot until they position).
-3. **Slot model is an approximation.** We use one `TextureRect` per slot, replace-on-draw; the game
-   actually **blits onto slot 0 as an immediate-mode canvas** (everything composites into slot 0).
+3. **Slot model is an approximation.** We use one `TextureRect` per slot, replace-on-draw. (⚠ Earlier this
+   line claimed "the game blits onto slot 0 as an immediate-mode canvas" — **DISPROVEN 2026-07-08**: the engine
+   is RETAINED — `draw-texture` binds a retained object by handle (`gfx_object_bind_draw`), objects have distinct
+   handles + per-object source slots, composited each frame. See engine-re.md "opening render path is RETAINED".)
 4. AGF is **pre-converted to BMP offline** (`convert_agf.py --scene`); a runtime C# AGF decoder is deferred.
 
 **Next chunk — graphics-geometry/blend subsystem:** implement `0x208` (host returns the slot's real image
@@ -361,15 +363,20 @@ opening page 2 is pixel-identical to baseline at settle 3 and 300; Godot selftes
 **Tracker delta (`scene_opcode_coverage.py SC0000`):** GAP 68→**64** ops (836→**741** instrs), impl 49→**53**,
 correctly-handled 60→**65/129 (50.4%)**.
 
-**⚠ Honest scope — the opening `AE*` explosion does NOT visibly animate from this chunk.** The `gfx` oracle
-(`Age.Cli gfx --boot SC0000.BIN`) shows the opening's `AE*` effect is `AE001D → AE002B → AE003B` blitted
-**immediate-mode onto slot 0** full-screen, each overdrawn by the next `EV*`/`AE*` — a **frame sequence** the
-real game paces one-per-tick via `sleep`/the render loop. Our VM executes the whole burst instantly, so the
-compositor only ever sees the final slot-0 state; the transient `AE*` frames never show. This per-object alpha
-channel is the correct foundation for **retained-sprite** animation (character fades/scales via the handle
-system), but the opening explosion needs **frame-pacing** — modeling the scene-coroutine / `sleep 0xc8` timing
-(`0x7b`/`0x140`/`0xc8`, still GAP) so the burst is *not* collapsed. That is the clearly-scoped next chunk for the
-visible opening animation, and a genuinely different subsystem than the transform/alpha channel landed here.
+**⚠ Honest scope — the opening `AE*` explosion does NOT visibly animate from this chunk.** The opening's `AE*`
+effect (`AE001D → AE002B → AE003B`) is a **`sleep`-paced sequence of RETAINED-object loads/draws** — verified
+2026-07-08 from native code + the raw bytecode (NOT our `gfx` oracle, which mis-reported these as "slot 0"; see
+engine-re.md "opening render path is RETAINED"). `draw-texture` binds a retained object by handle
+(`gfx_object_bind_draw`@`0x47e870`); the SC0000 CG loader supplies `handle = CG_array[G[0x62450]]` (the INIT2
+handle array `G[0x62455..]`) and a per-object working slot `G[0x62452]`, with `sleep` (`0x64`/`0x3e8`/`0x2ee`)
+between steps. Our VM executes the whole load/draw/`sleep` burst **instantly** (no timing, no per-frame present),
+so we only ever see the *final* retained state; the intermediate `AE*` frames never get a frame to display. This
+per-object alpha channel is the correct foundation for **retained-sprite** animation (character fades/scales via
+the handle system), but the opening explosion needs **frame-pacing** — modeling the scene-coroutine / `sleep 0xc8`
+timing (`0x7b`/`0x140`/`0xc8`, still GAP) so the burst is *not* collapsed. That is the clearly-scoped next chunk
+for the visible opening animation, and a genuinely different subsystem than the transform/alpha channel landed
+here. (**Correction:** an earlier draft of this note called it "immediate-mode slot-0 blits" — wrong; the engine
+is retained, per the native `draw-texture → gfx_object_bind_draw` bind.)
 
 ---
 

@@ -351,6 +351,33 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
   draw-worker we deliberately don't model. Determine it empirically from the animating channel + screenshot, not
   by RE'ing the surface layer.
 
+##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
+
+A working note in the animation slice mis-called the SC0000 opening a set of "immediate-mode slot-0 blits." That
+was **wrong**, and it came from trusting our own `Age.Cli gfx` oracle (which executes our VM and mis-labeled the
+CG draws as "slot 0"). Verified against native code + the raw bytecode:
+
+- **`draw-texture` (op `0x1fb`, handler `gfx_op_0x1fb_draw_bind`@`0x422510`) is a RETAINED bind, not a blit.** It
+  writes cmd-type `0x11` and calls **`gfx_object_bind_draw`@`0x47e870`**, which on the object keyed by `handle`
+  (operand 1) sets: `flag|=1` (visible), `obj+4 = source SLOT index`, `obj+8..0x14 = source rect`,
+  `obj+0x24/28/2c = position`. Its plate comment (prior RE) already states the key fact: the object stores the
+  **slot INDEX — a live ref to `surface[slot]`, resolved each frame at render — NOT a texture snapshot.** Objects
+  persist and are composited each frame; this is exactly the surfaces+objects model in "The full gfx render
+  model" above.
+- **The SC0000 opening is a retained scene of distinct objects, `sleep`-paced.** Raw bytecode: fixed-handle UI
+  objects (`0xcf08` slot 3 full-screen, `0xc350` slot 0xe, `0xe678` slot 0xd — a 400×30 element re-bound 20+
+  times), an animated sprite (`draw-texture (G[0x62457]) (G[0x62452]) … (G[0x62498]) (G[0x62499])`, computed
+  position), and the CG loader (`SC0000` @`0x126e1`/`0x12970`): `set-texture G[0x62424] → slot G[0x62452]`,
+  `get-texture-size`, centre it, then `draw-texture (handle = CG_array[G[0x62450]] = INIT2 array G[0x62455..])
+  slot G[0x62452] …`. `sleep 0x64/0x3e8/0x2ee` sits between steps. So different draws use **different handles and
+  per-object working slots** — not one slot-0 canvas.
+- **Why our port still doesn't animate the opening (conclusion unchanged, mechanism corrected):** we execute the
+  whole load/draw/`sleep` sequence **instantly** — no `sleep` timing, no per-frame present — so we only ever see
+  the *final* retained state; the intermediate `AE*` frames (`AE001D→AE002B→AE003B`, surface swaps on the working
+  slot between paced frames) never get a frame to display. The fix is **frame-pacing** (scene-coroutine / `sleep
+  0xc8`), a separate subsystem from the transform/alpha channel. **Lesson: never characterise the engine's render
+  mechanism from our own VM's oracle output — use native code + raw bytecode.**
+
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
 Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still
