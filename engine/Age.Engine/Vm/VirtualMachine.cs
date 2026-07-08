@@ -122,6 +122,7 @@ public sealed class VirtualMachine
             Steps++;
             if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             int next = Step(frame.Script.Instructions[pc], pc);
+            _host.FrameYield();
             if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
             if (next == HALT) { outcome = FrameOutcome.Halted; break; }
             pc = next;
