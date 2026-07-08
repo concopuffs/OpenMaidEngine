@@ -58,10 +58,16 @@ public sealed class GodotAdvHost : IHost
     public (int Width, int Height) GetTextureSize(int slot)
         => _slotDims.TryGetValue(slot, out var d) ? (d.W, d.H) : (0, 0);
 
-    public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY)
+    // Retained render model: draw-texture updates GfxState (object -> surface bind); Main._Process composites
+    // the visible objects each frame in ascending-handle order. No immediate blit here.
+    public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
+
+    /// <summary>Resolve a gfx surface's resId to its pre-converted BMP path (Main's per-frame compositor
+    /// resolves each visible object's surface through this).</summary>
+    public string? ResolveResIdTexture(long resId)
     {
-        if (_slotBmp.TryGetValue(slot, out var bmp) && bmp != null)
-            _main.CallDeferred("BlitSlot", bmp, srcX, srcY, width, height, dstX, dstY);
+        var asset = _res.Resolve(_scene, resId);
+        return asset != null ? ResourceMap.TexturePath(asset) : null;
     }
 
     // ---- audio ops (OGG plays natively in Godot) ----

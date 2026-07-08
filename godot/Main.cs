@@ -76,6 +76,7 @@ public partial class Main : Godot.Control
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
+        bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0;   // run SYSTEM4's state prefix first
         string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         for (int i = 0; i < userArgs.Length; i++)
@@ -104,8 +105,19 @@ public partial class Main : Godot.Control
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
         _host = new GodotAdvHost(this, ResourceMap.Load(), scene);
         _trace = new GodotTraceSink();
-        _vm = new VirtualMachine(script, table, _host, null, provider, _trace);
-        foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // seed initial state before running
+        _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, _trace);
+        // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
+        // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
+        if (boot && !_selftest)
+        {
+            var session = new GameSession();
+            foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+                session.RunScene(Sys4Loader.Load(Paths.Scripts()[b], table), table, new CaptureHost(), null, provider);
+            foreach (var kv in session.Globals) _vm.Globals[kv.Key] = kv.Value;
+            foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
+            GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");
+        }
+        foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
         if (_selftest)
@@ -117,6 +129,7 @@ public partial class Main : Godot.Control
 
     public override void _Process(double delta)
     {
+        if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
         // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
         if (_shotPath != null && !_shotDone && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
         {
@@ -152,25 +165,42 @@ public partial class Main : Godot.Control
 
     public override void _ExitTree() { _host?.SignalInput(); }
 
-    // ---- UI methods invoked on the main thread via CallDeferred ----
-    // Blit a source BMP (src rect) onto the screen backbuffer at (dstX,dstY), then refresh the display
-    // texture. Execution order == paint order, so later draws (sprites) land over earlier ones (bg).
-    public void BlitSlot(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY)
-    {
-        var src = new Image();
-        if (src.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath)) != Error.Ok)
-        { GD.Print($"BMP load failed {bmpPath}"); return; }
-        if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
+    // ---- retained per-frame compositor (main thread, from _Process) ----
+    // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
+    // engine's z-order), each blitting its live surface's rect at its position. Surfaces are cached by BMP
+    // path (this runs every frame). Alpha/colorkey/animation come in later phases (objects opaque here).
+    private readonly System.Collections.Generic.Dictionary<string, Image?> _imgCache = new();
 
+    private void Recomposite()
+    {
+        _screen.Fill(new Color(0, 0, 0, 0));
+        foreach (var v in _vm.Gfx.SnapshotVisibleObjects())   // already ascending-handle = z-order
+        {
+            if (v.SurfaceResId == 0) continue;                 // render-target/blank surface (no file) — later phase
+            var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
+            if (bmp != null) BlitLayer(bmp, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY);
+        }
+        _screenTex.Update(_screen);
+    }
+
+    private void BlitLayer(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY)
+    {
+        if (!_imgCache.TryGetValue(bmpPath, out var src))
+        {
+            src = new Image();
+            if (src.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath)) != Error.Ok)
+            { GD.Print($"BMP load failed {bmpPath}"); src = null; }
+            else if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
+            _imgCache[bmpPath] = src;
+        }
+        if (src == null) return;
         // Clamp the source rect to the image; a zero/negative size falls back to the full image.
         int sw = w > 0 ? w : src.GetWidth();
         int sh = h > 0 ? h : src.GetHeight();
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
-
         _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
-        _screenTex.Update(_screen);
     }
 
     // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
