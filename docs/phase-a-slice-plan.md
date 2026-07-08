@@ -600,3 +600,32 @@ compositing + cold-object anchors (the thing that makes the paced opening actual
 the Ctrl `Speed` multiplier (ADV-mode-scope RE). (c) Full scene-coroutine framework (`0x7b`/`0x7c`/`0x140`)
 for interactive multi-object scenes. (d) Model `0xcd get-input-type` (name-entry interactivity, the separate
 input gap noted above).
+
+### A2b — Blend & transparency (slice A) ✅ DONE (2026-07-08)
+
+First of three graphics-fidelity slices (A blend/transparency, B geometry/anchors, C render-targets).
+Spec `docs/superpowers/specs/2026-07-08-blend-transparency-design.md`, plan
+`docs/superpowers/plans/2026-07-08-blend-transparency.md`, branch `feat/blend-transparency` (engine 69/69,
+sweep exit=284/STEP-LIMIT=13 parity, `SELFTEST OK`).
+
+**Landed (hybrid: engine resolves, host blits):**
+- `Age.Engine/Model/BlendMath.cs` — pure colorkey match + ARGB unpack (colorkey format reversed:
+  op arg 3 `<0` = none, else `0xRRGGBB` exact-match, `0` = key black; baked at surface-load, see
+  engine-re.md §Blend).
+- `RenderObject` gains `Alpha`/`Tint`/`Blend` (`BlendKind` Opaque|Alpha|Additive); `GfxObject.HasColor`;
+  `GfxState.SetObjectColor`; `SnapshotVisibleObjects` resolves them. `0x202`/`0x203` route through
+  `SetObjectColor` (the stale "alpha deferred" trace stub is gone — alpha is now consumed).
+- Godot compositor: colorkey-baked image cache (keyed by `(path, colorKey)`), `BlitLayer` applies
+  colorkey + object alpha + RGB-tint modulate, and **surfaceless colored objects fill a tint×alpha quad**
+  (the fades) instead of being skipped.
+
+**Result (pixels):** page-1 event-CG composites cleanly (dialogue + prompt, no opaque boxes); the opening's
+mid-fade frames now alpha-blend (dark bg + light-ray burst, then a blended dark transition) instead of the
+pre-change **full-screen opaque grey wall** that ate the CG. Verified via `--shot`/`--shot-sequence` on
+`SC0000 --boot`.
+
+**Deferred (documented, NOT built — confirmed by a stalled interp RE pass, engine-re.md §Blend):**
+smooth color-animation *interpolation* (the fade ramps snap to the correct end-state rather than gliding —
+the `0x202` color channel's blit consumer + clock coupling is a dedicated dig) and **additive/glow blend**
+(`local_2c` mode 2/3; its object field isn't pinned). `BlendKind.Additive` is an unused seam. Next graphics
+slices unchanged: B (geometry/anchors — sprite *placement*) and C (render-targets).

@@ -16,7 +16,7 @@ public readonly record struct AnimState(bool Enabled, bool Normalized, long TX, 
 /// "The full gfx render model").</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
-                                           AnimState Anim);
+                                           AnimState Anim, int Alpha, long Tint, BlendKind Blend);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -31,6 +31,7 @@ public sealed class GfxState
         public (long X, long Y, long Z) V18, V24, V16c;
         public long Field64, Field68, Field6c;
         public long Color;
+        public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
         // draw-texture bind (gfx_object_bind_draw): the surface to draw + its source rect + the visible flag.
         public int SourceSlot = -1;
         public (int X, int Y, int W, int H) SrcRect;
@@ -129,6 +130,13 @@ public sealed class GfxState
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----
     private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
     public void SetSurface(int slot, long resId, long colorKey) { lock (_lock) { _surfaces[slot] = (resId, colorKey); } }
+
+    /// <summary>Ops 0x202/0x203: record a packed 0xAARRGGBB color/alpha modulation on the object and mark it
+    /// HasColor so the compositor applies alpha+tint (vs the opaque default).</summary>
+    public void SetObjectColor(long handle, long packed)
+    {
+        lock (_lock) { var o = GetOrCreate(handle); o.Color = packed; o.HasColor = true; }
+    }
     public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }   // create-texture (blank)
 
     /// <summary>draw-texture bind (gfx_object_bind_draw): object <paramref name="handle"/> draws surface
@@ -188,11 +196,20 @@ public sealed class GfxState
                 var o = kv.Value;
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
+
+                int alpha = 255; long tint = 0xFFFFFF; var blend = BlendKind.Opaque;
+                if (o.HasColor)
+                {
+                    var (a, r, g, b) = BlendMath.UnpackArgb(o.Color);
+                    alpha = a; tint = ((long)r << 16) | ((long)g << 8) | (long)b; blend = BlendKind.Alpha;
+                }
+
                 list.Add(new RenderObject(kv.Key, resId, ck, o.SrcRect.X, o.SrcRect.Y, o.SrcRect.W, o.SrcRect.H,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new AnimState(o.AnimEnabled, o.AnimNormalized,
                                                         o.AnimTarget.X, o.AnimTarget.Y, o.AnimTarget.Z,
-                                                        o.AnimDurationTicks, o.AnimGeneration)));
+                                                        o.AnimDurationTicks, o.AnimGeneration),
+                                          alpha, tint, blend));
             }
             return list;
         }
