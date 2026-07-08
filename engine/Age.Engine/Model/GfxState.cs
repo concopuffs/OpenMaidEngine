@@ -78,15 +78,21 @@ public sealed class GfxState
 
     public GfxObject GetOrCreate(long handle)
     {
-        if (!_objects.TryGetValue(handle, out var o)) { o = new GfxObject(); _objects[handle] = o; }
-        CurrentObject = handle;
-        return o;
+        // Locked: called from the VM thread (directly by 0x217/0x219/0x1ff/0x212/0x213 and inside BindDraw/anim
+        // ops) while the main-thread compositor enumerates _objects in SnapshotVisibleObjects. _lock is re-entrant
+        // (Monitor) so the callers that already hold it are fine.
+        lock (_lock)
+        {
+            if (!_objects.TryGetValue(handle, out var o)) { o = new GfxObject(); _objects[handle] = o; }
+            CurrentObject = handle;
+            return o;
+        }
     }
 
     /// <summary>Op 0x1a2 (gfx-cmd-register, native FUN_0042d360 -> FUN_0042cf70 hash insert): add the handle to
     /// the op-0x215 query registry. Native inserts map[handle]=handle; QuerySlot returns that value (handle) or
     /// -1. Only this op populates the query registry — geometry/draw ops do not.</summary>
-    public void Register(long handle) => _registry.Add(handle);
+    public void Register(long handle) { lock (_lock) { _registry.Add(handle); } }
 
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
 
@@ -97,8 +103,11 @@ public sealed class GfxState
 
     public void Release(long handle)
     {
-        _objects.Remove(handle);
-        _registry.Remove(handle);        // op 0x1fa/0x1f7 also tear down the query registration
+        lock (_lock)   // re-entrant: EraseRange already holds _lock; op 0x1fa calls this directly
+        {
+            _objects.Remove(handle);
+            _registry.Remove(handle);        // op 0x1fa/0x1f7 also tear down the query registration
+        }
     }
 
     /// <summary>Op 0x1f7 semantics (native gfx_registry_erase_range @0x47d8b0): erase handles in
