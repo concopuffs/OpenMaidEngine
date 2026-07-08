@@ -19,6 +19,7 @@ public partial class Main : Godot.Control
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
+    private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private GodotTraceSink _trace = null!;
     private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
     private string? _histFile;
@@ -119,7 +120,7 @@ public partial class Main : Godot.Control
         IScriptProvider provider;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
-        _host = new GodotAdvHost(this, ResourceMap.Load(), scene) { SleepScale = sleepScale };
+        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock) { SleepScale = sleepScale };
         _trace = new GodotTraceSink();
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
@@ -156,6 +157,8 @@ public partial class Main : Godot.Control
     public override void _Process(double delta)
     {
         _lastDelta = delta;
+        _clock.Advance(delta);
+        _host?.PulseFrame();
         if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
         // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
@@ -278,7 +281,7 @@ public partial class Main : Godot.Control
             tw.TargetA = targetA;
             tw.Initialized = true;
         }
-        tw.Elapsed += _lastDelta;
+        tw.Elapsed += _lastDelta * _clock.Speed;   // Speed==1 now => identical; future Ctrl scales the tween
         double p = tw.Duration > 0 ? System.Math.Clamp(tw.Elapsed / tw.Duration, 0, 1) : 1;
         tw.CurrentA = tw.StartA + (tw.TargetA - tw.StartA) * p;
         return (float)tw.CurrentA;

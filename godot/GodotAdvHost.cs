@@ -13,12 +13,15 @@ public sealed class GodotAdvHost : IHost
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     private readonly SemaphoreSlim _gate = new(0, 1);
+    private readonly Age.Engine.Hosting.FrameClock _clock;
+    private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
+    private int _opsSinceYield;
     public volatile bool IsWaiting;
     public readonly List<(int Offset, string Text)> Captured = new();
 
-    public GodotAdvHost(Main main, ResourceMap res, string scene)
+    public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock)
     {
-        _main = main; _res = res; _scene = scene;
+        _main = main; _res = res; _scene = scene; _clock = clock;
     }
 
     public void ShowText(int offset, string text)
@@ -42,16 +45,35 @@ public sealed class GodotAdvHost : IHost
     // called from the main thread (click) or the selftest auto-clicker
     public void SignalInput() { if (_gate.CurrentCount == 0) _gate.Release(); }
 
+    // Main thread, once per rendered frame: releases a VM thread parked in FrameYield/Sleep.
+    public void PulseFrame() => _frameSignal.Set();
+
+    // Called once per executed opcode (IHost.FrameYield). After a frame's worth of ops (the clock's
+    // budget), block the VM background thread until Main._Process advances the clock — throttling the
+    // interpreter to ~budget ops per rendered frame (the native engine's rate-limited cadence).
+    public void FrameYield()
+    {
+        if (++_opsSinceYield < _clock.EffectiveBudget) return;
+        _opsSinceYield = 0;
+        long start = _clock.NowMs;
+        while (_clock.NowMs == start)                 // wait until a real _Process advanced the clock
+            if (!_frameSignal.WaitOne(50)) break;     // 50ms safety cap: never hang if _Process stalls
+    }
+
     // op 0xc8: block the VM background thread so the main-thread compositor (Main.Recomposite in _Process)
     // presents the current retained GfxState — this is what makes the sleep-paced opening burst animate.
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;
     // blocking this throwaway task thread is behaviorally equivalent given our threading model. Operand is
     // MILLISECONDS (docs/engine-re.md sleep section + opcodes.toml 0xc8). Headless CLI hosts no-op it (parity).
     public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier to slow/speed the paced opening for inspection
+    // Wait on the unified FrameClock timebase (not Thread.Sleep) so a future Speed multiplier scales
+    // sleeps together with the throttle and the tween. Main._Process advances the clock + pulses each frame.
     public void Sleep(long duration)
     {
-        int ms = (int)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
-        if (ms > 0) Thread.Sleep(ms);
+        long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
+        long deadline = _clock.NowMs + ms;
+        while (_clock.NowMs < deadline)
+            if (!_frameSignal.WaitOne(2000)) break;   // safety cap
     }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
