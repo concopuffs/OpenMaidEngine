@@ -557,7 +557,28 @@ buffers (present). **Slot 0 is NOT special** — a normal slot; several objects 
 a host per-frame compositor that draws visible objects **in ascending-handle order** from their live surface,
 interpolating animations by elapsed time. No VM/host lockstep (op `0x238` clock is non-blocking; animations
 play during the wait-for-input park). Open detail for implementation: the exact scale/transform math in
-`gfx_object_composite` (`FUN_00472f00`/`FUN_00473ed0`) and the colorkey format.
+`gfx_object_composite` (`FUN_00472f00`/`FUN_00473ed0`).
+
+### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
+
+Reversed for graphics slice A (spec `docs/superpowers/specs/2026-07-08-blend-transparency-design.md`;
+Ghidra functions renamed + plate-commented, saved).
+
+- **Colorkey format** (`gfx_op_0x1f9_load_surface` `0x422360`): read op arg 3; if `(int)key < 0` → **no
+  colorkey** (opaque); else the operand is **`0xRRGGBB`**, converted to `0xFFRRGGBB` and passed to the
+  surface creator `FUN_00477c40` as the transparent key (so operand `0` = key **black**). Colorkey is baked
+  **at surface-load** (matching texels → transparent), NOT compared per-blit. *Port:* interpret arg 3 as
+  RGB888; `<0` = none; else texels whose `(R,G,B)` equal the key become transparent when the surface image
+  is loaded/cached.
+- **`0x202` (`gfx_op_0x202_worker_set_color_anim` `0x47ea00`)**: sets an **animated** color/alpha target
+  `obj+0x64 = packedARGB`, the color-anim active bit, resets progress `obj+0x34=0`. Animates over the global
+  clock (`0x238`).
+- **`0x203` (`gfx_op_0x203_worker_set_color` `0x47e9b0`)**: sets a **static** color/alpha `obj+0x60`, no anim
+  bit. Immediate per-object modulation.
+- **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** (`local_2c`: 0 opaque, 1 alpha
+  `SRCALPHA/INVSRCALPHA`, 2/3 additive/special for glow/flash) and passes a modulation color/alpha to the
+  device draw. Slice A ports the **alpha** path (fades); additive (glow) is deferred (its `local_2c` source
+  field is not yet pinned).
 
 ---
 
