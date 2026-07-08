@@ -42,6 +42,17 @@ public sealed class GodotAdvHost : IHost
     // called from the main thread (click) or the selftest auto-clicker
     public void SignalInput() { if (_gate.CurrentCount == 0) _gate.Release(); }
 
+    // op 0xc8: block the VM background thread so the main-thread compositor (Main.Recomposite in _Process)
+    // presents the current retained GfxState — this is what makes the sleep-paced opening burst animate.
+    // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;
+    // blocking this throwaway task thread is behaviorally equivalent given our threading model. Operand is
+    // MILLISECONDS (docs/engine-re.md sleep section + opcodes.toml 0xc8). Headless CLI hosts no-op it (parity).
+    public void Sleep(long duration)
+    {
+        int ms = (int)System.Math.Clamp(duration, 0, 10_000);   // cap so a pathological script can't hang the window
+        if (ms > 0) Thread.Sleep(ms);
+    }
+
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
     public void CreateTexture(int slot, int width, int height) { _slotBmp[slot] = null; _slotDims[slot] = (width, height); }
 
