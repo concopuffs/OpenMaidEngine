@@ -26,6 +26,17 @@ public sealed class GfxState
         public int SourceSlot = -1;
         public (int X, int Y, int W, int H) SrcRect;
         public bool Visible;
+
+        // ---- animation channel (cluster 0x21c-0x243; see docs/engine-re.md "sprite transform / ANIMATION").
+        // 0x21e/0x220 set the transform directly (worker gfx_anim_set_channel@0x47eaa0: obj+0x3c=p1, +0x50=p2,
+        // +0xac=target, +0x68=enable); 0x234 anim-start animates toward a target over the GLOBAL clock (0x238).
+        // Passive: recorded here, interpolated by the Godot compositor over wall-clock. ----
+        public (long X, long Y, long Z) AnimTarget;
+        public long AnimParam1, AnimParam2;
+        public bool AnimNormalized;         // 0x21e (operands ~percent, /_DAT_00571c28) vs 0x220 (absolute)
+        public bool AnimEnabled;            // obj+0x68
+        public long AnimDurationTicks;      // 0x234 anim-start op2 (this object's duration; maxed into the clock)
+        public long AnimGeneration;         // bumped by anim-start (0x234); the compositor's per-object re-trigger
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
@@ -42,6 +53,13 @@ public sealed class GfxState
 
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
+
+    // ---- GLOBAL animation clock (op 0x238 set-anim-clock; native ctx+0x51b7c total / +0x51b78 elapsed).
+    // Non-blocking: the op only configures duration; the host advances elapsed per-frame and tweens all armed
+    // objects over it (docs/engine-re.md, "anim_start/set_anim_clock decoded"). Generation bumps on each set so
+    // the compositor resets its wall-clock elapsed. ----
+    public long AnimClockDurationTicks { get; private set; }
+    public long AnimClockGeneration { get; private set; }
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
@@ -104,6 +122,40 @@ public sealed class GfxState
             var o = GetOrCreate(handle);
             o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
         }
+    }
+
+    /// <summary>Op 0x21e/0x220 (set-anim-transform): record the transform target + two scalar params on the
+    /// object and enable its animation channel. normalized = 0x21e (operands ~percent, /_DAT_00571c28);
+    /// absolute = 0x220. Native worker gfx_anim_set_channel@0x47eaa0 sets obj+0x3c=p1, +0x50=p2, +0xac=target,
+    /// +0x68=1.</summary>
+    public void SetAnimTransform(long handle, long p1, long p2, (long X, long Y, long Z) target, bool normalized)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.AnimParam1 = p1; o.AnimParam2 = p2; o.AnimTarget = target;
+            o.AnimNormalized = normalized; o.AnimEnabled = true;
+        }
+    }
+
+    /// <summary>Op 0x234 (anim-start): animate the object toward <paramref name="target"/> over the global
+    /// clock; <paramref name="durationTicks"/> is this object's duration (native label_1235a maxes them into
+    /// the clock). Bumps AnimGeneration — the compositor's per-object re-trigger.</summary>
+    public void StartAnim(long handle, long durationTicks, (long X, long Y, long Z) target)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.AnimTarget = target; o.AnimDurationTicks = durationTicks;
+            o.AnimEnabled = true; o.AnimGeneration++;
+        }
+    }
+
+    /// <summary>Op 0x238 (set-anim-clock): set the GLOBAL animation duration (game ticks) and bump the clock
+    /// generation so the host resets its wall-clock elapsed. Non-blocking (the render loop advances it).</summary>
+    public void SetAnimClock(long durationTicks)
+    {
+        lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
     }
 
     /// <summary>Visible objects in ascending-handle order (= the engine's z-order), each with its source
