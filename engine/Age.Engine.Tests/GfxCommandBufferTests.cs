@@ -96,20 +96,25 @@ public class GfxCommandBufferTests
     private static (int, Operand[]) DrawTex(int handle, int slot, int w, int h, int dx, int dy)
         => (0x1fb, new[] { G(handle), G(slot), I(0), I(0), G(w), G(h), G(dx), G(dy) });
 
+    private static (int, Operand[]) SetTex(int resId, int slot) => (0x1f9, new[] { G(resId), G(slot), I(0) });
+
     [Fact]
-    public void DrawTextureRecordsARetainedLayer()
+    public void SetThenDrawTextureMakesAVisibleObjectFromTheSurface()
     {
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
-            MovGI(1, 0xA), MovGI(2, 4), MovGI(3, 800), MovGI(4, 600), MovGI(5, 0), MovGI(6, 0),
-            DrawTex(1, 2, 3, 4, 5, 6), Exit(),
+            MovGI(1, 0xA), MovGI(2, 4), MovGI(7, 0x25), MovGI(3, 800), MovGI(4, 600), MovGI(5, 0), MovGI(6, 0),
+            SetTex(7, 2),                  // load resId 0x25 into surface slot 4
+            DrawTex(1, 2, 3, 4, 5, 6),     // object 0xA draws surface 4 at (0,0)
+            Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        var layers = vm.Gfx.SnapshotLayers();
-        Assert.Single(layers);
-        Assert.Equal(0xA, layers[0].Handle);
-        Assert.Equal((800, 600, 0, 0), (layers[0].W, layers[0].H, layers[0].DstX, layers[0].DstY));
+        var vis = vm.Gfx.SnapshotVisibleObjects();
+        Assert.Single(vis);
+        Assert.Equal(0xA, vis[0].Handle);
+        Assert.Equal(0x25, vis[0].SurfaceResId);          // resolved from the object's live source slot
+        Assert.Equal((800, 600, 0, 0), (vis[0].W, vis[0].H, vis[0].DstX, vis[0].DstY));
     }
 }

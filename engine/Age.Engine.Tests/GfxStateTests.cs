@@ -61,28 +61,38 @@ public class GfxStateTests
     }
 
     [Fact]
-    public void LayersAppendInOrderAndUpdateInPlace()
+    public void BindDrawMakesAVisibleRenderObjectFromItsSurface()
     {
         var g = new GfxState();
-        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 0));
-        g.AddOrUpdateLayer(new DrawLayer(0xB, 5, 0, 0, 200, 200, 100, 100));
-        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 50));   // re-draw A -> update in place
-        var s = g.SnapshotLayers();
-        Assert.Equal(2, s.Count);
-        Assert.Equal(0xA, s[0].Handle);           // order preserved (A still first)
-        Assert.Equal(50, s[0].DstY);              // updated
-        Assert.Equal(0xB, s[1].Handle);
+        g.SetSurface(4, 0x25, 0);                        // load resId 0x25 into surface slot 4
+        g.BindDraw(0xcb2a, 4, 0, 0, 800, 600, 0, 0);     // object 0xcb2a draws surface 4 at (0,0)
+        var vis = g.SnapshotVisibleObjects();
+        Assert.Single(vis);
+        Assert.Equal(0xcb2a, vis[0].Handle);
+        Assert.Equal(0x25, vis[0].SurfaceResId);         // resolved from the object's live source slot
+        Assert.Equal((800, 600, 0, 0), (vis[0].W, vis[0].H, vis[0].DstX, vis[0].DstY));
     }
 
     [Fact]
-    public void EraseRangeAlsoDropsLayers()
+    public void VisibleObjectsComeInAscendingHandleOrder()   // ascending handle == the engine's z-order
     {
         var g = new GfxState();
-        g.AddOrUpdateLayer(new DrawLayer(0x10, 4, 0, 0, 10, 10, 0, 0));
-        g.AddOrUpdateLayer(new DrawLayer(0x20, 5, 0, 0, 10, 10, 0, 0));
+        g.SetSurface(4, 0x1, 0); g.SetSurface(5, 0x2, 0);
+        g.BindDraw(0xcf08, 5, 0, 0, 10, 10, 0, 0);        // higher handle (should be on top / last)
+        g.BindDraw(0xcb20, 4, 0, 0, 10, 10, 0, 0);        // lower handle (behind / first)
+        var vis = g.SnapshotVisibleObjects();
+        Assert.Equal(2, vis.Count);
+        Assert.Equal(0xcb20, vis[0].Handle);
+        Assert.Equal(0xcf08, vis[1].Handle);
+    }
+
+    [Fact]
+    public void EraseRangeRemovesTheObjectFromCompositing()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x1, 0);
+        g.BindDraw(0x10, 4, 0, 0, 10, 10, 0, 0);
         g.EraseRange(0x10, 1);
-        var s = g.SnapshotLayers();
-        Assert.Single(s);
-        Assert.Equal(0x20, s[0].Handle);
+        Assert.Empty(g.SnapshotVisibleObjects());        // erased => gone from the registry => not composited
     }
 }

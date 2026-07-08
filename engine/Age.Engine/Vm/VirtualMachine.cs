@@ -211,15 +211,17 @@ public sealed class VirtualMachine
             case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
-            case "create-texture":
+            case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
+                Gfx.ClearSurface((int)Read(a[0]));
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
-            case "set-texture":
-                _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;
-            case "draw-texture":   // (handle, slot, srcX, srcY, w, h, dstX, dstY)
-                Gfx.AddOrUpdateLayer(new DrawLayer(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
-                                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
+            case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
+                Gfx.SetSurface((int)Read(a[1]), Read(a[0]), a.Count > 2 ? Read(a[2]) : 0);
+                _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;   // host still tracks dims for get-texture-size
+            case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
+                Gfx.BindDraw(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
                 _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
-                                  (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;
+                                  (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;   // IHost seam (oracle log; Godot no-ops)
             case "get-texture-size":   // 0x208 (slot) (out_w) (out_h)
             {
                 var (gw, gh) = _host.GetTextureSize((int)Read(a[0]));
