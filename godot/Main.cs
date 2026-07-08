@@ -257,10 +257,21 @@ public partial class Main : Godot.Control
         _lastClockGen = clockGen;
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects())   // already ascending-handle = z-order
         {
-            if (v.SurfaceResId == 0) continue;                 // render-target/blank surface (no file) — later phase
+            float a = AlphaFor(v, clockReset, clockDur) * (v.Alpha / 255f);
+            if (v.SurfaceResId == 0)
+            {
+                // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Fill its
+                // rect (full-screen when it has no size, the opening's case) with the tint at alpha. Uncolored
+                // surfaceless objects are render targets — still skipped (slice C).
+                if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
+                {
+                    int fw = v.W > 0 ? v.W : 800, fh = v.H > 0 ? v.H : 600;
+                    FillQuad(v.DstX, v.DstY, fw, fh, v.Tint, a);
+                }
+                continue;
+            }
             var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
             if (bmp == null) continue;
-            float a = AlphaFor(v, clockReset, clockDur) * (v.Alpha / 255f);
             BlitLayer(bmp, v.ColorKey, v.Tint, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, a);
         }
         _screenTex.Update(_screen);
@@ -340,6 +351,28 @@ public partial class Main : Godot.Control
                 dst[di + 1] = (byte)((sg * sa + dst[di + 1] * (255 - sa)) / 255);
                 dst[di + 2] = (byte)((sb * sa + dst[di + 2] * (255 - sa)) / 255);
                 dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + sa);
+            }
+        _screen.SetData(dw, dh, false, _screen.GetFormat(), dst);
+    }
+
+    // Alpha-blend a solid tint (0xRRGGBB) rectangle over the screen — the surfaceless fade/flash fill.
+    private void FillQuad(int dstX, int dstY, int w, int h, long tint, float alpha)
+    {
+        int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
+        if (ia == 0) return;
+        int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
+        byte[] dst = _screen.GetData();
+        int dw = _screen.GetWidth(), dh = _screen.GetHeight();
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int dxp = dstX + x, dyp = dstY + y;
+                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
+                int di = (dyp * dw + dxp) * 4;
+                dst[di]     = (byte)((tr * ia + dst[di]     * (255 - ia)) / 255);
+                dst[di + 1] = (byte)((tg * ia + dst[di + 1] * (255 - ia)) / 255);
+                dst[di + 2] = (byte)((tb * ia + dst[di + 2] * (255 - ia)) / 255);
+                dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + ia);
             }
         _screen.SetData(dw, dh, false, _screen.GetFormat(), dst);
     }
