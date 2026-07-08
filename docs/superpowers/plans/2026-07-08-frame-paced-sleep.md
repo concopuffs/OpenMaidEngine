@@ -1,5 +1,9 @@
 # Frame-paced `sleep` Implementation Plan
 
+> **⚠ OUTCOME CORRECTION (2026-07-08):** the goal below (make the opening burst animate) was **not** achieved — the
+> burst is not sleep-paced (its real pacer is unknown). The plan's tasks did land correctly (sleep seam, race fix,
+> tooling); only the animation claim was wrong. Corrected result: `docs/phase-a-slice-plan.md` (A2b frame-paced sleep).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give `sleep` (`0xc8`) real timing so the SC0000 opening's `sleep`-paced retained-object burst animates on screen, using the compositor and alpha-tween subsystem that already exist.

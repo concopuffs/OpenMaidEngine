@@ -378,15 +378,28 @@ for the visible opening animation, and a genuinely different subsystem than the 
 here. (**Correction:** an earlier draft of this note called it "immediate-mode slot-0 blits" — wrong; the engine
 is retained, per the native `draw-texture → gfx_object_bind_draw` bind.)
 
-### A2b — Frame-paced `sleep`: the opening animates ✅ (2026-07-08)
+### A2b — Frame-paced `sleep` (2026-07-08) — ⚠ did NOT make the opening animate (corrected)
 
 The chunk the animation-subsystem note above flagged as "the clearly-scoped next chunk." Spec/plan
 `docs/superpowers/{specs,plans}/2026-07-08-frame-paced-sleep{-design,}.md`; RE `docs/engine-re.md` ("sleep (op
 0xc8)").
 
-**Root cause (one line):** the Godot compositor (`Main.Recomposite` in `_Process`) already presented live
-`GfxState` every frame — but `sleep` (`0xc8`) was a GAP, so the VM ran the whole draw/`sleep` burst in
-microseconds and the compositor only ever caught the *final* state. Nothing else was missing.
+> **⚠ CORRECTION (2026-07-08).** The original heading here ("the opening animates ✅") and the "Verified
+> visually" claim below were **WRONG** — a misread. The `sleep` op is correctly decoded + implemented and the
+> **one-shot dramatic pauses now work**, but the **rapid opening CG/AE\* burst is NOT sleep-paced** and did not
+> start animating. Execution trace (via the new `--trace-histogram`) shows the back-to-back
+> `set-texture→draw-texture` swaps run with **no** `sleep`/`wait`/`present`/coroutine between them; what actually
+> paces them is still **unknown**. The `--shot-sequence` frames I read (arcane → Lily → maid → sky) were the game
+> holding on key CGs via the **sparse one-shot sleeps** (slowed further by per-frame PNG-IO), which I mistook for
+> the burst stepping. How the mistake happened: I inherited "the opening is sleep-paced" from this repo's own docs
+> and treated it as verified instead of tracing execution first. What IS solid: the `sleep` seam, the one-shot
+> pauses, the `GfxState` race fix, and the tooling. Related: the "493k sleeps" that confused me were a **headless
+> artifact** (the name-entry poll loop), since fixed — see the "Headless divergence" note below.
+
+**What `sleep` actually is (RE-confirmed, correct):** the Godot compositor (`Main.Recomposite` in `_Process`)
+presents live `GfxState` every frame; `sleep` (`0xc8`) was a GAP so the VM ran the whole burst in microseconds.
+Implementing it makes the **explicit one-shot sleeps** (1000/750/200 ms) pause correctly — but those are the
+dramatic holds, not the rapid burst's pacer.
 
 **RE (Ghidra):** `sleep_op_0xc8`@`0x420ec0` is **non-blocking** — it arms a main-loop-polled timer
 (`sleep_timer_arm`@`0x44cff0`; start = ms tick, duration = operand). **Operand unit = milliseconds.** (Also
@@ -404,20 +417,37 @@ overlaps VM-thread `_objects`/`_registry` writes. `GetOrCreate`/`Register`/`Rele
 them on the existing (re-entrant) `_lock`. New `GfxStateConcurrencyTests` (deterministic repro of the
 "Destination array is not long enough" crash) + `SleepDispatchTests`; **engine 52/52**.
 
-**Verified visually** via the new `--shot-sequence <dir> [--frames N]` (one PNG per frame, auto-advancing past
-input waits — a time-based effect can't be verified by a single `--shot`). `godot --boot --shot-sequence` on
-SC0000: the opening steps through **distinct, sleep-paced frames** — blank → arcane `AE*` magic-circle (held
-~12 frames ≈ 200 ms) → character (Lily) → transitions → settled sky-background CG — each held for its sleep
-duration, instead of jumping straight to the final CG. (Residual, **not a regression**: some intermediate
-frames still show the cold-object anchor doubling documented under "residual" — a geometry issue independent of
-timing; the settled CG renders cleanly.)
+**New tool** `--shot-sequence <dir> [--frames N]` (one PNG per frame, auto-advancing past input waits — a
+time-based effect can't be captured by a single `--shot`). The frames it produced showed the game holding on
+distinct CGs (arcane `AE*` → Lily → maid → sky) — but per the correction above, those holds are the **sparse
+one-shot sleeps**, not the rapid burst stepping. (Residual, unrelated: intermediate frames show the cold-object
+anchor doubling — a geometry issue independent of timing.)
 
 **Tracker delta (`scene_opcode_coverage.py SC0000`):** GAP 64→**62** ops (741→**714** instrs), impl 53→**54**
 (`sleep`), safe-noop 12→**13** (`present-frame`), correctly-handled 65→**67/129 (51.9%)**.
 
-**Still deferred (the next frame-pacing chunk):** the full scene-coroutine framework (`0x7b`/`0x7c`/`0x140` +
-the `G[0xaba5c]` re-entry gate + `label_125bd` slot-table setup) for interactive multi-object scenes — out of
-scope here (the opening's path is linear).
+**Open (the real burst pacer):** what advances the rapid opening CG/AE\* burst frame-to-frame is **unknown** —
+not `sleep`, not `present-frame` (only 2× in the whole scene), not the coroutine ops (absent from the burst).
+Next: profile the **real Godot run** (`--trace-histogram`) of SC0000's `0x3958–0x3973` loop + gfx-op sequence.
+The scene-coroutine framework (`0x7b`/`0x7c`/`0x140` + `G[0xaba5c]` gate + `label_125bd`) remains deferred.
+
+### Diagnostics framework extended (2026-07-08)
+
+Motivated by the misread above (a `--trace-steps` dump was 2.5M lines → grep/awk). Added, all observe-only
+(parity preserved): **`HistogramTraceSink`** (op + call-site `script:pc` execution counts + sample operand),
+**`TraceSinkBase`** (per-script step attribution across call-script frames), **`TextTraceSink`** op-filter
+(`--trace-ops`), **`CompositeTraceSink`**, `OpcodeTable.ByLabel`; CLI `--trace-histogram`/`--trace-ops`; Godot
+`--trace-histogram <file>` (profiles the REAL run) + `--sleep-scale`. See `docs/tools-reference.md`.
+
+### Headless divergence FIXED — faithful halt-at-wait (2026-07-08)
+
+The histogram pinned the goose-chase root cause: op `0x72 wait-for-input` was a **no-op headless**, so a run
+plowed past all 166 of a scene's prompts into the name-entry poll loop (`INPUTNAME.BIN`) and spun `sleep 1`
+**493,182×** to STEP-LIMIT — a path no real playthrough reaches. Fix = **`VmOptions.HaltAtWaitForInput`**: the VM
+halts (reason `wait-for-input`) at `0x72`. **`run`/`play` faithful by default** (SC0000 → ~402 steps / 0 sleeps,
+matching the real path to the first prompt; `--plow` = old walk-every-page); **`sweep` plow by default** (dialogue
+oracle, 284/13 unchanged) with `--halt-at-wait` → all 297 scenes halt cleanly (0 STEP-LIMIT). Godot unaffected
+(really blocks on input). The corpus's 13 STEP-LIMIT scenes were all this artifact, not VM bugs. `HaltAtWaitTests`.
 
 ---
 

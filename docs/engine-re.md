@@ -396,9 +396,13 @@ Handler resolved via the dispatch table (`ctx[0x26c93+0xc8]` = `param_1[0x26d5b]
 
 **Port equivalent (implemented):** our VM runs on a background thread (like `wait-for-input`), so blocking that
 thread for `duration` ms while the main-thread compositor (`Main.Recomposite` in `_Process`) keeps presenting is
-behaviorally equivalent to the native non-blocking timer — the `sleep`-paced opening `AE*` burst now gets frames
-to display. Headless/CLI hosts no-op `Sleep` (parity). `IHost.Sleep(long)` + VM `case "sleep"`; see
-`vm-map/opcodes.toml` 0xc8.
+behaviorally equivalent to the native non-blocking timer. This correctly reproduces the **explicit one-shot
+sleeps** (the dramatic 1000/750/200 ms holds). Headless/CLI hosts no-op `Sleep` (parity). `IHost.Sleep(long)` +
+VM `case "sleep"`; see `vm-map/opcodes.toml` 0xc8. **⚠ It does NOT make the rapid opening `AE*` burst animate**
+— execution trace shows the back-to-back `set-texture→draw-texture` swaps have no `sleep`/`wait`/`present`/
+coroutine between them, so bare `sleep` was never their pacer; what advances that burst is still unknown (an
+earlier claim that "the opening is sleep-paced" was inherited from this doc and never execution-verified —
+corrected). Profile the real Godot run (`--trace-histogram`) to find it.
 
 **Related — `present-frame` (op `0x20c`):** dispatch `param_1[0x26e9f] = gfx_op_0x20c_present_frame` →
 `gfx_render_frame`@`0x4820b0` (buffer flip). Our compositor presents every frame regardless, so `0x20c` is a VM

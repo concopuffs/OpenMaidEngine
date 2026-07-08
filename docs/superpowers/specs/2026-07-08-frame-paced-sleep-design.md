@@ -1,5 +1,11 @@
 # Frame-paced `sleep` — the SC0000 opening animates
 
+> **⚠ OUTCOME CORRECTION (2026-07-08):** this spec's premise — that bare `sleep` paces the opening burst, so
+> implementing it would make the opening animate — was **wrong**. `sleep` is correctly implemented and the
+> one-shot dramatic pauses work, but the rapid CG/AE\* burst is not sleep-paced (trace shows no sleep between the
+> draws) and did not animate. Canonical corrected result: `docs/phase-a-slice-plan.md` (A2b frame-paced sleep).
+> Kept as-authored below for provenance.
+
 **Date:** 2026-07-08
 **Branch:** continues `feat/gfx-command-buffer`
 **Slice goal:** make the SC0000 opening's `sleep`-paced retained-object burst (`AE001D → AE002B →
