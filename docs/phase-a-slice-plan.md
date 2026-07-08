@@ -338,6 +338,39 @@ Re-run per scene (`scene_opcode_coverage.py SC0240 …`) to gauge any target. Th
 `opcodes.toml` metadata against VM behavior — it already surfaced `0x259` (script-entry marker) missing its
 `noop_headless` flag (now reconciled).
 
+### A2b — Sprite transform/animation subsystem, opening slice (2026-07-07)
+
+Spec `docs/superpowers/specs/2026-07-07-gfx-animation-subsystem-design.md`; plan
+`docs/superpowers/plans/2026-07-07-gfx-animation-subsystem.md`; RE in `docs/engine-re.md`
+("0x21c–0x243 sprite transform / ANIMATION cluster"). First slice of the `0x21c–0x243` cluster the
+completeness gauge flagged.
+
+**Implemented (VM records, engine 50/50, full parity — sweep 284 exit/13 STEP-LIMIT unchanged):** the four
+opening-path anim ops — `0x21e set-anim-transform-norm` / `0x220 set-anim-transform-abs` (per-object transform
+channel: target vec3 + 2 params + enable), `0x234 anim-start` (animate toward a target vec3 over the clock),
+`0x238 set-anim-clock` (**GLOBAL, non-blocking** duration). `GfxState` gained the per-object anim channel + a
+global clock (passive — non-Godot hosts read none of it, so trace parity holds); `RenderObject.AnimState` carries
+it to the compositor. **RE correction:** the clock is global 1-operand (not per-object), and `anim-start` carries
+the target — the `set_anim_clock` handler's own comment confirms the wall-clock design ("drive animation in the
+host's per-frame loop while the VM is parked at wait-for-input").
+
+**Compositor (Godot):** a per-handle wall-clock alpha tween over the global clock + an alpha-aware `BlitLayer`
+(3rd vec component = opacity), plus `--shot-settle <frames>` to capture mid-tween. **Non-regressing:** SC0000
+opening page 2 is pixel-identical to baseline at settle 3 and 300; Godot selftest OK.
+
+**Tracker delta (`scene_opcode_coverage.py SC0000`):** GAP 68→**64** ops (836→**741** instrs), impl 49→**53**,
+correctly-handled 60→**65/129 (50.4%)**.
+
+**⚠ Honest scope — the opening `AE*` explosion does NOT visibly animate from this chunk.** The `gfx` oracle
+(`Age.Cli gfx --boot SC0000.BIN`) shows the opening's `AE*` effect is `AE001D → AE002B → AE003B` blitted
+**immediate-mode onto slot 0** full-screen, each overdrawn by the next `EV*`/`AE*` — a **frame sequence** the
+real game paces one-per-tick via `sleep`/the render loop. Our VM executes the whole burst instantly, so the
+compositor only ever sees the final slot-0 state; the transient `AE*` frames never show. This per-object alpha
+channel is the correct foundation for **retained-sprite** animation (character fades/scales via the handle
+system), but the opening explosion needs **frame-pacing** — modeling the scene-coroutine / `sleep 0xc8` timing
+(`0x7b`/`0x140`/`0xc8`, still GAP) so the burst is *not* collapsed. That is the clearly-scoped next chunk for the
+visible opening animation, and a genuinely different subsystem than the transform/alpha channel landed here.
+
 ---
 
 ## Risks / open questions for A0
