@@ -2,12 +2,21 @@ using System.Linq;
 
 namespace Age.Engine.Model;
 
+/// <summary>Per-object animation channel snapshot for the compositor (cluster 0x21c-0x243). Enabled = the
+/// object has an active anim channel; (TX,TY,TZ) = the transform target it animates toward; Normalized = the
+/// 0x21e ~percent variant; DurationTicks = the object's own duration (anim-start op2). The GLOBAL clock timebase
+/// (duration + generation) is read separately off <see cref="GfxState.AnimClockDurationTicks"/>. Generation bumps
+/// on each anim-start — the compositor re-triggers its wall-clock tween when it changes.</summary>
+public readonly record struct AnimState(bool Enabled, bool Normalized, long TX, long TY, long TZ,
+                                        long DurationTicks, long Generation);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
 /// "The full gfx render model").</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
-                                           int SrcX, int SrcY, int W, int H, int DstX, int DstY);
+                                           int SrcX, int SrcY, int W, int H, int DstX, int DstY,
+                                           AnimState Anim);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -171,7 +180,10 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
                 list.Add(new RenderObject(kv.Key, resId, ck, o.SrcRect.X, o.SrcRect.Y, o.SrcRect.W, o.SrcRect.H,
-                                          (int)o.V24.X, (int)o.V24.Y));
+                                          (int)o.V24.X, (int)o.V24.Y,
+                                          new AnimState(o.AnimEnabled, o.AnimNormalized,
+                                                        o.AnimTarget.X, o.AnimTarget.Y, o.AnimTarget.Z,
+                                                        o.AnimDurationTicks, o.AnimGeneration)));
             }
             return list;
         }

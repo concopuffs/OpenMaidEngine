@@ -92,4 +92,28 @@ public class GfxAnimationTests
         Assert.Equal(400, vm.Gfx.AnimClockDurationTicks);
         Assert.Equal(1, vm.Gfx.AnimClockGeneration);
     }
+
+    [Fact]
+    public void SnapshotCarriesAnimStateForVisibleObject()
+    {
+        var t = T();
+        // make object 0xA visible via set/draw-texture, then anim-start it toward (800,600,0) over 30 ticks.
+        var scene = ScriptAssembler.Assemble(t, "ANIM", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xA), MovGI(2, 4), MovGI(7, 0x25), MovGI(3, 800), MovGI(4, 600), MovGI(5, 0), MovGI(6, 0),
+            (0x1f9, new[] { G(7), G(2), I(0) }),                              // set-texture resId 0x25 -> slot 4
+            (0x1fb, new[] { G(1), G(2), I(0), I(0), G(3), G(4), G(5), G(6) }),  // draw-texture: object 0xA visible
+            MovGI(8, 30),
+            (0x234, new[] { G(1), G(8), G(3), G(4), G(5) }),                 // anim-start(0xA, dur=30, (800,600,0))
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var vis = vm.Gfx.SnapshotVisibleObjects();
+        Assert.Single(vis);
+        Assert.True(vis[0].Anim.Enabled);
+        Assert.Equal((800L, 600L, 0L), (vis[0].Anim.TX, vis[0].Anim.TY, vis[0].Anim.TZ));
+        Assert.Equal(30, vis[0].Anim.DurationTicks);
+        Assert.Equal(1, vis[0].Anim.Generation);
+    }
 }
