@@ -11,7 +11,6 @@ public class TextureGeometryTests
     {
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
-        public void Sleep(long duration) { }
         public void CreateTexture(int slot, int w, int h) { }
         public void SetTexture(long resId, int slot) { }
         public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }

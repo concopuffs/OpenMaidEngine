@@ -10,8 +10,10 @@ internal sealed class RecordingHost : IHost
 {
     public int Waits;
     public readonly List<(int Offset, string Text)> Lines = new();
+    public readonly List<long> SleptDurations = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void WaitForInput() => Waits++;
+    public void Sleep(long duration) => SleptDurations.Add(duration);
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) { }
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }

@@ -3,6 +3,7 @@ public interface IHost
 {
     void ShowText(int offset, string text);
     void WaitForInput();
+    void Sleep(long duration);
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);

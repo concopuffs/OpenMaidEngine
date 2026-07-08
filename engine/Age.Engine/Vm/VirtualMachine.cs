@@ -208,6 +208,8 @@ public sealed class VirtualMachine
                 }
                 return pc + 1;
             case "wait-for-input": _host.WaitForInput(); return pc + 1;
+            case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
+                _host.Sleep(Read(a[0])); return pc + 1;
             case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
