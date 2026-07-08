@@ -273,6 +273,39 @@ Consequence: reproducing the fades needs a **retained per-frame animated composi
 immediate-mode permanent canvas can neither fade nor clear. Design: `docs/superpowers/specs/2026-07-07-
 animated-compositor-design.md`.
 
+### The full gfx render model — surfaces + objects + composite (2026-07-07)
+
+Reversed the create/set/draw-texture handlers + the render loop (all annotated in Ghidra). **This is the
+canonical model** (an earlier flat "draw layers to one screen" attempt was WRONG — it had no surface concept
+and snapshotted textures at draw time; symptoms: alternating grey, glow over backgrounds, vanishing sprites).
+
+**Two distinct stores:**
+- **Surfaces** — image buffers at `ctx+0x52bd4[slot]`, indexed by slot. `gfx_op_0x1f8_create_surface`
+  (`0x4222d0`) allocates a blank one (releasing any old); `gfx_op_0x1f9_load_surface` (`0x422360`, op `0x1f9`
+  set-texture) resolves `resId` via the SYS4INI resolver (`FUN_0044f390`) and loads the file into the slot's
+  surface **with a colorkey/chromakey** (op arg 3 — never modelled before), also releasing the old surface.
+  A surface persists at its slot until the next set-texture overwrites it.
+- **Objects** — the `ctx+0x408` registry, keyed by handle (a `std::map`). `gfx_op_0x1fb_draw_bind` (`0x422510`,
+  op `0x1fb` draw-texture) → `gfx_object_bind_draw` (`0x47e870`): sets the object's **source slot** (`obj+4`),
+  **source rect** (`obj+8..0x14` = left,top,right,bottom), **position** (`obj+0x24/28/2c` = V24), and the
+  **visible** flag (bit 0). The object references its surface **by slot index, live** (re-resolved each frame),
+  NOT a snapshot. Objects also carry anchor V18 (`obj+0x18`), animation (flag bit 2 + progress `obj+0x214` /
+  duration `obj+0x228` / target `obj+0x244..`), and color/alpha (`0x202/0x203`).
+
+**Render frame** — `gfx_render_frame` (`0x4820b0`), driven by op `0x20c` present (`gfx_op_0x20c_present_frame`
+`0x4174a0`, which also updates the frame timer `ctx+0x51b64/68`): iterate the object registry **in ascending
+handle order — that IS the z-order** (lower handle behind, higher on top; `std::map` key order). For each
+object with visible bit 0, `gfx_object_composite` (`0x47f650`) computes its transform from geometry, **applies
+the animation interpolation if bit 2 is set**, and blits `surface[obj.slot]` with alpha/colorkey. Then swap
+buffers (present). **Slot 0 is NOT special** — a normal slot; several objects may share one surface.
+
+**⇒ Faithful port:** a `SurfaceStore` (`slot → {image, colorkey}`, from create/set-texture) + an `ObjectStore`
+(`handle → {slot, srcRect, position, anchor, scale, anim, alpha, visible}`, from draw-texture + the gfx ops) +
+a host per-frame compositor that draws visible objects **in ascending-handle order** from their live surface,
+interpolating animations by elapsed time. No VM/host lockstep (op `0x238` clock is non-blocking; animations
+play during the wait-for-input park). Open detail for implementation: the exact scale/transform math in
+`gfx_object_composite` (`FUN_00472f00`/`FUN_00473ed0`) and the colorkey format.
+
 ---
 
 ## Native walls backlog (targets for this loop)

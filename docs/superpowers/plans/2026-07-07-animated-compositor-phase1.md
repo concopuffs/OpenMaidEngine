@@ -1,275 +1,172 @@
-# Animated Compositor — Phase 1: Retained Compositor Implementation Plan (TDD)
+# Animated Compositor — Phase 1 (Surfaces + Objects + Composite) — TDD Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Steps use `- [ ]` checkboxes.
 
-**Goal:** Replace the immediate-mode permanent canvas with a **retained-object compositor** — `draw-texture` records/updates a persistent layer keyed by its object handle; the Godot host clears + re-composites all active layers each frame; `0x1f7` erase removes them. This is the foundation for alpha (Phase 2) and time-animation (Phase 3).
+**Goal:** Implement the RE-confirmed render model — a **SurfaceStore** + per-object **source slot / rect /
+position / visible** in `GfxState`, and a Godot host that **clears and composites the visible objects in
+ascending-handle order** from their live surface each frame. No alpha/colorkey/animation yet (opaque). This
+replaces the reverted flat-layer attempt and must render the booted CGs correctly (the guardrail).
 
-**Architecture:** The retained layer set lives in **`GfxState`** (VM-owned, version-neutral, thread-safe): the VM's `draw-texture` updates it (additive — engine parity preserved), `EraseRange` removes from it. The Godot host stops immediate-blitting; `Main._Process` snapshots the layers each frame and composites them (in execution order = current correct paint order) using the host's slot→image map. Design: `docs/superpowers/specs/2026-07-07-animated-compositor-design.md`.
+**Model (see `docs/engine-re.md` "The full gfx render model" + the design spec):** surfaces are image buffers
+per slot (create/set-texture); objects reference a surface by slot (live) + a rect + a position (V24) + a
+visible flag (draw-texture); the render loop iterates objects by ascending handle (= z-order) and blits each
+visible object's surface-rect at its position.
 
-**Tech Stack:** C# / .NET 8 (`engine/`, xUnit); Godot 4.7 .NET (`godot/`).
+**Tech:** C#/.NET 8 (`engine/`, xUnit), Godot 4.7 .NET.
 
-## Global Constraints
+## Global constraints
 
-- **Composite order = execution order, handle-keyed update-in-place** (matches the current, correct immediate-mode render — the guardrail is "booted SC0000 CGs must not regress"). Erase removes by handle. This ordering policy is the Phase-1 design choice; validate by screenshot no-regression.
-- **Engine parity:** `draw-texture` gains a `GfxState` update but stays one step / `pc+1`; non-Godot hosts are unaffected (they read nothing new). `dotnet test engine/AgeEngine.sln` must stay green; Godot `--selftest` (synthetic, no gfx) must stay green.
-- **Thread-safety:** `GfxState` layers are mutated on the VM thread and read on the Godot main thread → all layer access is `lock`-guarded; the host reads via an immutable `SnapshotLayers()`.
-- **No auto-screenshot:** per the user, do NOT screenshot-and-quit for validation; the user drives the live window. Provide the numeric `Age.Cli gfx` oracle for headless checks.
-- **Seam:** `GfxState` is `Age.Engine/Model`; the VM references `Model`. `DrawLayer` lives with `GfxState`.
+- **Model-first, no guessing.** If an assumption isn't in the RE, RE it or pin it via the `gfx` oracle before coding on it.
+- **Guardrail:** `godot -- --boot` opening CGs must render correctly at Phase 1 (the reverted attempt failed this).
+- **Parity:** VM ops stay one step / `pc+1`; non-Godot hosts unaffected; `dotnet test` + Godot `--selftest` stay green.
+- **Threading:** `GfxState` mutated on the VM thread, read on the Godot main thread → `lock`-guarded; host reads one immutable snapshot per frame.
+- **Seam:** `GfxState` stores `ResId`/`ColorKey`/geometry (version-neutral); the host resolves `ResId → BMP` via `ResourceMap`.
+- **No auto-screenshot** for validation — user drives the live window.
 
 ## File structure
 
 | File | Responsibility | Task |
 |---|---|---|
-| `engine/Age.Engine/Model/GfxState.cs` | `DrawLayer` + retained layer list (add/update, remove, snapshot; lock-guarded); `EraseRange` also drops layers | 1.1 |
-| `engine/Age.Engine.Tests/GfxStateTests.cs` | Layer add/update-in-place/order/erase unit tests | 1.1 |
-| `engine/Age.Engine/Vm/VirtualMachine.cs` | `draw-texture` records a `DrawLayer` in `GfxState` | 1.2 |
-| `engine/Age.Engine.Tests/GfxCommandBufferTests.cs` | Synthetic scene: draws → layer list; erase → removed | 1.2 |
-| `engine/Age.Cli/Program.cs` (`gfx` cmd) | Dump the retained layer list (headless oracle) | 1.3 |
-| `godot/GodotAdvHost.cs` | `DrawTexture` no longer blits (retained loop composites); keep slot→BMP map | 1.4 |
-| `godot/Main.cs` | `_Process` snapshots `GfxState` layers → clear + composite each frame | 1.4 |
+| `engine/Age.Engine/Model/GfxState.cs` | `SurfaceStore` (slot→{resId,colorkey}); object `SourceSlot`/`SrcRect`/`Visible`; `RenderObject` snapshot (visible, ascending-handle) | 1.1 |
+| `engine/Age.Engine.Tests/GfxStateTests.cs` | surface set/get; object bind; ascending-handle visible snapshot | 1.1 |
+| `engine/Age.Engine/Vm/VirtualMachine.cs` | `set/create-texture` → surface; `draw-texture` → object bind (slot/rect/pos/visible) | 1.2 |
+| `engine/Age.Engine.Tests/GfxCommandBufferTests.cs` | synthetic scene: set-texture + draw-texture → a visible render object | 1.2 |
+| `engine/Age.Cli/Program.cs` (`gfx`) | dump visible render objects (handle order) with resolved surface | 1.3 |
+| `godot/GodotAdvHost.cs`, `godot/Main.cs` | per-frame clear + composite from `SnapshotVisibleObjects()` | 1.4 |
 
 ---
 
-### Task 1.1 — `DrawLayer` + retained layer list in `GfxState` (pure data)
+### Task 1.1 — `SurfaceStore` + object fields + `RenderObject` snapshot (pure data)
 
-**Files:** Modify `engine/Age.Engine/Model/GfxState.cs`; Test `engine/Age.Engine.Tests/GfxStateTests.cs`.
+**Interfaces produced:** on `GfxState`: `void SetSurface(int slot, long resId, long colorKey)`;
+`void ClearSurface(int slot)` (create-texture blank); object mutators `void BindDraw(long handle, int slot,
+int sx, int sy, int w, int h, int dstX, int dstY)` (sets SourceSlot/SrcRect/Position(V24)/Visible=true);
+`IReadOnlyList<RenderObject> SnapshotVisibleObjects()` (visible objects, ascending handle, with resolved
+surface resId+colorkey + rect + position). `readonly record struct RenderObject(long Handle, long SurfaceResId,
+long ColorKey, int SrcX, int SrcY, int W, int H, int DstX, int DstY)`. `GfxObject` gains `int SourceSlot=-1`,
+`(int X,int Y,int W,int H) SrcRect`, `bool Visible`.
 
-**Interfaces produced:** `readonly record struct DrawLayer(long Handle, int Slot, int SrcX, int SrcY, int W, int H, int DstX, int DstY)`; on `GfxState`: `void AddOrUpdateLayer(DrawLayer l)` (update-in-place by `Handle`, else append — preserving order), `void RemoveLayers(long handle)`, `IReadOnlyList<DrawLayer> SnapshotLayers()`. `EraseRange` also calls `RemoveLayers` per erased handle.
-
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: failing tests** (append to `GfxStateTests.cs`)
 ```csharp
     [Fact]
-    public void LayersAppendInOrderAndUpdateInPlace()
+    public void BindDrawMakesAVisibleRenderObjectFromItsSurface()
     {
         var g = new GfxState();
-        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 0));
-        g.AddOrUpdateLayer(new DrawLayer(0xB, 5, 0, 0, 200, 200, 100, 100));
-        g.AddOrUpdateLayer(new DrawLayer(0xA, 4, 0, 0, 800, 600, 0, 50));   // re-draw A -> update in place
-        var s = g.SnapshotLayers();
-        Assert.Equal(2, s.Count);
-        Assert.Equal(0xA, s[0].Handle);           // order preserved (A still first)
-        Assert.Equal(50, s[0].DstY);              // updated
-        Assert.Equal(0xB, s[1].Handle);
+        g.SetSurface(4, 0x25, 0);                        // load resId 0x25 into surface slot 4
+        g.BindDraw(0xcb2a, 4, 0, 0, 800, 600, 0, 0);     // object 0xcb2a draws surface 4 at (0,0)
+        var vis = g.SnapshotVisibleObjects();
+        Assert.Single(vis);
+        Assert.Equal(0xcb2a, vis[0].Handle);
+        Assert.Equal(0x25, vis[0].SurfaceResId);          // resolved from the object's source slot
+        Assert.Equal((800, 600, 0, 0), (vis[0].W, vis[0].H, vis[0].DstX, vis[0].DstY));
     }
 
     [Fact]
-    public void EraseRangeAlsoDropsLayers()
+    public void VisibleObjectsComeInAscendingHandleOrder()   // ascending handle == z-order
     {
         var g = new GfxState();
-        g.AddOrUpdateLayer(new DrawLayer(0x10, 4, 0, 0, 10, 10, 0, 0));
-        g.AddOrUpdateLayer(new DrawLayer(0x20, 5, 0, 0, 10, 10, 0, 0));
-        g.EraseRange(0x10, 1);
-        var s = g.SnapshotLayers();
-        Assert.Single(s);
-        Assert.Equal(0x20, s[0].Handle);
+        g.SetSurface(4, 0x1, 0); g.SetSurface(5, 0x2, 0);
+        g.BindDraw(0xcf08, 5, 0, 0, 10, 10, 0, 0);        // higher handle
+        g.BindDraw(0xcb20, 4, 0, 0, 10, 10, 0, 0);        // lower handle
+        var vis = g.SnapshotVisibleObjects();
+        Assert.Equal(new long[] { 0xcb20, 0xcf08 }, vis.Select(v => v.Handle).ToArray());
     }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [ ] **Step 2:** run → FAIL (missing members). `dotnet test engine/AgeEngine.sln --filter FullyQualifiedName~GfxStateTests`
 
-Run: `dotnet test engine/AgeEngine.sln --filter FullyQualifiedName~GfxStateTests`
-Expected: FAIL — `DrawLayer`/`AddOrUpdateLayer` don't exist (compile error).
-
-- [ ] **Step 3: Implement**
-
-In `engine/Age.Engine/Model/GfxState.cs`, add the record (top of namespace) and the layer members:
+- [ ] **Step 3: implement** in `GfxState.cs`
 ```csharp
-public readonly record struct DrawLayer(long Handle, int Slot, int SrcX, int SrcY, int W, int H, int DstX, int DstY);
+public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
+                                           int SrcX, int SrcY, int W, int H, int DstX, int DstY);
 ```
-Inside `GfxState`:
+On `GfxObject` add: `public int SourceSlot = -1; public (int X, int Y, int W, int H) SrcRect; public bool Visible;`
+On `GfxState` (all `_surfaces`/object access under the existing `_lock`):
 ```csharp
-    private readonly List<DrawLayer> _layers = new();
-    private readonly object _lock = new();
+    private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
+    public void SetSurface(int slot, long resId, long colorKey) { lock (_lock) { _surfaces[slot] = (resId, colorKey); } }
+    public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }
 
-    public void AddOrUpdateLayer(DrawLayer l)
+    public void BindDraw(long handle, int slot, int sx, int sy, int w, int h, int dstX, int dstY)
     {
         lock (_lock)
         {
-            for (int i = 0; i < _layers.Count; i++)
-                if (_layers[i].Handle == l.Handle) { _layers[i] = l; return; }
-            _layers.Add(l);
+            var o = GetOrCreate(handle);
+            o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
         }
     }
 
-    public void RemoveLayers(long handle)
+    public IReadOnlyList<RenderObject> SnapshotVisibleObjects()
     {
-        lock (_lock) { _layers.RemoveAll(l => l.Handle == handle); }
-    }
-
-    public IReadOnlyList<DrawLayer> SnapshotLayers()
-    {
-        lock (_lock) { return _layers.ToArray(); }
-    }
-```
-Extend `EraseRange` to also drop layers — change its body to:
-```csharp
-    public void EraseRange(long handle, long count)
-    {
-        if (count > 1) for (long i = handle; i < handle + count; i++) { Release(i); RemoveLayers(i); }
-        else { Release(handle); RemoveLayers(handle); }
-    }
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test engine/AgeEngine.sln --filter FullyQualifiedName~GfxStateTests`
-Expected: PASS (all facts, including the pre-existing ones).
-
-- [ ] **Step 5: Commit**
-```bash
-git add engine/Age.Engine/Model/GfxState.cs engine/Age.Engine.Tests/GfxStateTests.cs
-git commit -m "feat(gfx): retained DrawLayer list in GfxState (thread-safe)
-
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-```
-
----
-
-### Task 1.2 — `draw-texture` records a retained layer
-
-**Files:** Modify `engine/Age.Engine/Vm/VirtualMachine.cs`; Test `engine/Age.Engine.Tests/GfxCommandBufferTests.cs`.
-
-**Interfaces:** Consumes `GfxState.AddOrUpdateLayer`. The `draw-texture` case builds a `DrawLayer` from `a[0]`(handle),`a[1]`(slot),`a[2..7]` and records it; it **keeps** the existing `_host.DrawTexture(...)` call (the CLI oracle logs it; the Godot host will no-op-blit in Task 1.4).
-
-- [ ] **Step 1: Write the failing test** (in `GfxCommandBufferTests.cs`)
-```csharp
-    private static (int, Operand[]) DrawTex(int handle, int slot, int w, int h, int dx, int dy)
-        => (0x1fb, new[] { G(handle), G(slot), I(0), I(0), G(w), G(h), G(dx), G(dy) });
-
-    [Fact]
-    public void DrawTextureRecordsARetainedLayer()
-    {
-        var t = T();
-        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        lock (_lock)
         {
-            MovGI(1, 0xA), MovGI(2, 4), MovGI(3, 800), MovGI(4, 600), MovGI(5, 0), MovGI(6, 0),
-            DrawTex(1, 2, 3, 4, 5, 6), Exit(),
-        }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
-        vm.Run();
-        var layers = vm.Gfx.SnapshotLayers();
-        Assert.Single(layers);
-        Assert.Equal(0xA, layers[0].Handle);
-        Assert.Equal((800, 600, 0, 0), (layers[0].W, layers[0].H, layers[0].DstX, layers[0].DstY));
+            var list = new List<RenderObject>();
+            foreach (var kv in _objects.OrderBy(k => k.Key))
+            {
+                var o = kv.Value;
+                if (!o.Visible) continue;
+                var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
+                list.Add(new RenderObject(kv.Key, resId, ck, o.SrcRect.X, o.SrcRect.Y, o.SrcRect.W, o.SrcRect.H, (int)o.V24.X, (int)o.V24.Y));
+            }
+            return list;
+        }
     }
 ```
-(Note: `draw-texture` reads slot from `a[1]`, dst from `a[6]/a[7]`, w/h from `a[4]/a[5]` — mirror the existing case's operand indices exactly.)
+(Add `using System.Linq;` if needed. `GetOrCreate` already exists; `_lock` already exists from the prior layer work — reuse it. Remove the old `DrawLayer`/`_layers`/`AddOrUpdateLayer`/`SnapshotLayers`/`RemoveLayers` from the reverted flat model if still present, and the `EraseRange`→`RemoveLayers` call.)
 
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test engine/AgeEngine.sln --filter FullyQualifiedName~DrawTextureRecords`
-Expected: FAIL — no layer recorded (`Empty` snapshot).
-
-- [ ] **Step 3: Implement** — in `VirtualMachine.Step`, extend the `draw-texture` case:
-```csharp
-            case "draw-texture":   // (handle, slot, srcX, srcY, w, h, dstX, dstY)
-                Gfx.AddOrUpdateLayer(new DrawLayer(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
-                                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
-                _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
-                                  (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;
-```
-
-- [ ] **Step 4: Run to verify pass + full suite (parity)**
-
-Run: `dotnet test engine/AgeEngine.sln`
-Expected: all green — `draw-texture` still one step; non-Godot hosts unaffected; new test passes.
-
-- [ ] **Step 5: Commit**
-```bash
-git add engine/Age.Engine/Vm/VirtualMachine.cs engine/Age.Engine.Tests/GfxCommandBufferTests.cs
-git commit -m "feat(gfx): draw-texture records a retained layer in GfxState
-
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-```
+- [ ] **Step 4:** run → PASS. **Step 5:** commit (`feat(gfx): SurfaceStore + object bind + ascending-handle render snapshot`).
 
 ---
 
-### Task 1.3 — CLI `gfx` oracle dumps the retained layer list
+### Task 1.2 — VM: `set/create-texture` → surface; `draw-texture` → object bind
 
-**Files:** Modify `engine/Age.Cli/Program.cs` (the `gfx` command, after the run).
+- [ ] **Step 1: failing test** (`GfxCommandBufferTests.cs`): a synthetic scene that `set-texture(0x25, slot 4)` then `draw-texture(handle 0xcb2a, slot 4, 800x600 @ 0,0)` yields one visible `RenderObject` with `SurfaceResId==0x25`. (Use op `0x1f9` set-texture args `(resId, slot, colorkey)`, op `0x1fb` draw-texture args `(handle, slot, sx, sy, w, h, dx, dy)`.)
 
-- [ ] **Step 1: Add the layer dump** — after the existing `gfx objects` print:
-```csharp
-    var layers = vm.Gfx.SnapshotLayers();
-    Console.WriteLine($"  layers ({layers.Count}, composite order):");
-    foreach (var l in layers)
-        Console.WriteLine($"    h=0x{l.Handle:x} slot={l.Slot} src=({l.SrcX},{l.SrcY} {l.W}x{l.H}) dst=({l.DstX},{l.DstY})");
-```
+- [ ] **Step 2:** run → FAIL.
 
-- [ ] **Step 2: Build + eyeball on the drift scene**
+- [ ] **Step 3: implement** — in `VirtualMachine.Step`:
+  - `set-texture` (`0x1f9`): `Gfx.SetSurface((int)Read(a[1]), Read(a[0]), a.Count > 2 ? Read(a[2]) : 0);` then keep `_host.SetTexture(...)` (host still loads dims for `get-texture-size`).
+  - `create-texture` (`0x1f8`): `Gfx.ClearSurface((int)Read(a[0]));` then keep `_host.CreateTexture(...)`.
+  - `draw-texture` (`0x1fb`): `Gfx.BindDraw(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));` — and **drop the `_host.DrawTexture` call** (the retained compositor renders now; the Godot host's `DrawTexture` becomes a no-op in 1.4).
 
-Run: `dotnet run --project engine/Age.Cli -- gfx --boot SC0000.BIN`
-Expected: prints a retained layer list. Sanity: the full-screen CGs appear as layers at `(0,0) 800x600`; erased handles are absent (fewer layers than raw draw-texture calls). This is the headless proof the retained set is built correctly.
-
-- [ ] **Step 3: Commit**
-```bash
-git add engine/Age.Cli/Program.cs
-git commit -m "feat(gfx): gfx oracle dumps the retained layer list
-
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-```
+- [ ] **Step 4:** run full suite → green (parity). **Step 5:** commit.
 
 ---
 
-### Task 1.4 — Godot: per-frame clear + recomposite from the retained layers
+### Task 1.3 — CLI `gfx` oracle: dump visible render objects (handle order)
 
-**Files:** Modify `godot/GodotAdvHost.cs`, `godot/Main.cs`.
-
-**Interfaces:** Consumes `_vm.Gfx.SnapshotLayers()` + the host's slot→BMP map. Produces a per-frame composite in `Main._Process`.
-
-- [ ] **Step 1: Godot host — stop immediate-blitting; keep slot→BMP**
-
-In `godot/GodotAdvHost.cs`, make `DrawTexture` a no-op for compositing (the retained loop handles it) but keep the slot→BMP map current (still populated by `SetTexture`). Expose the slot→BMP map (e.g. `public string? SlotBmp(int slot)`), since `Main._Process` needs it to composite a layer's slot.
-
-- [ ] **Step 2: Main — per-frame recomposite in `_Process`**
-
-In `godot/Main.cs`, give `Main` access to the VM (`_vm` already a field) and the host. In `_Process`, each frame:
+- [ ] **Step 1:** after the run, replace/add the layer dump with:
 ```csharp
-    // Retained recomposite: clear, then blit each layer (execution order) from its slot's BMP.
-    var layers = _vm.Gfx.SnapshotLayers();
-    _screen.Fill(new Color(0, 0, 0, 0));                 // clear (transparent; the frame is rebuilt)
-    foreach (var l in layers)
+    var vis = vm.Gfx.SnapshotVisibleObjects();
+    Console.WriteLine($"  visible objects ({vis.Count}, ascending-handle = z-order):");
+    foreach (var v in vis)
+        Console.WriteLine($"    h=0x{v.Handle:x} surf=0x{v.SurfaceResId:x} ({res.Resolve(sceneKey, v.SurfaceResId)?.Name ?? "?"}) src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY})");
+```
+- [ ] **Step 2:** `dotnet run --project engine/Age.Cli -- gfx --boot SC0000.BIN` — sanity: the CGs appear as visible objects with real surfaces + plausible positions, in ascending-handle order. **Step 3:** commit.
+
+---
+
+### Task 1.4 — Godot: per-frame clear + composite from visible objects
+
+- [ ] **Step 1:** `GodotAdvHost.cs`: make `DrawTexture` a no-op (retained compositor renders); keep `SetTexture` populating dims. Add `public string? ResolveResIdTexture(long resId)` (`_res.Resolve(_scene, resId) → TexturePath`).
+- [ ] **Step 2:** `Main.cs`: add `Recomposite()` called from `_Process` (guard `!_selftest && _vm != null`); replace `BlitSlot` with a cached `BlitLayer`. Recomposite:
+```csharp
+    _screen.Fill(new Color(0, 0, 0, 0));
+    foreach (var v in _vm.Gfx.SnapshotVisibleObjects())   // already ascending-handle = z-order
     {
-        var bmp = _host.SlotBmp(l.Slot);
-        if (bmp == null) continue;
-        BlitLayer(bmp, l.SrcX, l.SrcY, l.W, l.H, l.DstX, l.DstY);   // same clamp logic as the old BlitSlot
+        if (v.SurfaceResId == 0) continue;
+        var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
+        if (bmp != null) BlitLayer(bmp, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY);
     }
     _screenTex.Update(_screen);
 ```
-`BlitLayer` is the old `BlitSlot` body (load BMP, clamp src rect, `BlitRect`) minus the per-call `_screenTex.Update` (do one update after the loop). Cache loaded `Image`s by path to avoid re-reading every frame (a `Dictionary<string, Image>`), since `_Process` runs every frame.
-
-**Guardrail:** the booted opening CGs must render identically to before (same execution-order composite, now rebuilt each frame). If a CG flickers/disappears, the layer set or order is wrong — check the `gfx --boot` oracle layer dump against the expected draws.
-
-- [ ] **Step 3: Build**
-
-Run: `godot --headless --path godot --import && dotnet build godot/Himegari.csproj`
-Expected: builds clean.
-
-- [ ] **Step 4: Selftest parity**
-
-Run: `godot --headless --path godot -- --selftest`
-Expected: `SELFTEST OK …` (synthetic scene, no gfx layers → unaffected).
-
-- [ ] **Step 5: Live check (user-driven, NOT auto-screenshot)**
-
-Launch for the user in the background: `godot --path godot -- --boot`. Ask them to confirm: (a) the opening CGs still render correctly (no regression), and (b) the stuck bottom overlay no longer persists indefinitely across pages (it's now rebuilt per frame from the active layer set; it clears when its handle is erased or no longer drawn). *A still-opaque, non-fading glow while its handle is active is EXPECTED at Phase 1 — alpha is Phase 2, fading is Phase 3.*
-
-- [ ] **Step 6: Commit**
-```bash
-git add godot/GodotAdvHost.cs godot/Main.cs
-git commit -m "feat(gfx): retained per-frame compositor in Godot (clear + recomposite)
-
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-```
-
----
+`BlitLayer` = the old `BlitSlot` body, caching `Image`s by path (`Dictionary<string, Image?>`), one `_screenTex.Update` after the loop. (Removed: the immediate `CallDeferred("BlitSlot")` in `DrawTexture`.)
+- [ ] **Step 3:** build Godot (`--import` → `dotnet build godot/Himegari.csproj`); **Step 4:** `--selftest` green.
+- [ ] **Step 5: live, user-driven:** launch `godot -- --boot` in the background; ask the user to confirm the CGs render correctly across pages (no alternating grey, no vanished content). Expected caveats (Phases 2/3): glow opaque, no fade, possible green boxes on sprites, occasional off-position CG (cold-anchor residual). **Step 6:** commit.
 
 ## Self-review
 
-- **Spec coverage (Phase 1):** retained layer model in `GfxState` → 1.1; `draw-texture` retained → 1.2; per-frame clear + recomposite → 1.4; headless oracle → 1.3. Alpha/animation explicitly NOT here (Phases 2/3). ✓
-- **Parity:** `draw-texture` stays one step + keeps `_host.DrawTexture`; non-Godot hosts read nothing new; engine suite + selftest re-asserted (1.2 Step 4, 1.4 Step 4). ✓
-- **Threading:** all `_layers` access lock-guarded; host reads via immutable `SnapshotLayers()`; the Image cache prevents per-frame disk reads. ✓
-- **Placeholder scan:** 1.1–1.3 have complete code; 1.4 is host glue (concrete approach + key code, validated live) — the honest boundary (no unit oracle for pixels). ✓
-- **Guardrail explicit:** "booted CGs must not regress" stated at 1.4; the Phase-1 layer-order/reset policy (execution-order, handle-keyed, erase-removes) is called out for screenshot validation. ✓
-
-**Next:** Phase 2 (alpha/blend) then Phase 3 (time-animation), per the design spec.
+- Model-first: every field comes from the RE (`obj+4` slot, `obj+8..0x14` rect, `V24` position, visible bit 0, ascending-handle z-order). No flat-layer/snapshot logic. ✓
+- Parity + threading + seam constraints restated per task. ✓
+- Guardrail (booted CGs render) is the Phase-1 live check. ✓
+- Open items (scale math, colorkey bits, visible-flag clear) are explicitly deferred to later phases / to be RE'd, not guessed. ✓
