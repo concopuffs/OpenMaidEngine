@@ -562,3 +562,41 @@ timer — which only makes sense if the interpreter yields back to that loop).
 the Ctrl speed governor. (3) Frame-lock our VM to the render loop (a per-frame step budget or a per-frame
 yield/sync point) instead of the free-running thread. Confirm any fix against **pixels** (windowed
 `--shot-sequence` → real PNGs), not op-counts.
+
+### A2b — Frame-stepped VM ✅ DONE & MERGED (2026-07-08)
+
+Executed the "Next (open)" list above (option 3: a per-frame yield/sync point). Spec
+`docs/superpowers/specs/2026-07-08-frame-stepped-vm-design.md`, plan
+`docs/superpowers/plans/2026-07-08-frame-stepped-vm.md`; merged to `main` (`74a4221`).
+
+**What landed (3 TDD tasks):**
+1. `engine/Age.Engine/Hosting/FrameClock.cs` — pure, threadless virtual clock: `NowMs`, `Speed` (field,
+   1.0), `OpsPerFrame` (30), `Advance(realΔseconds)`, `EffectiveBudget` (= `OpsPerFrame*Speed`, min 1).
+2. `IHost.FrameYield()` — the VM (`VirtualMachine.RunFrame`) calls it **once per executed opcode** (right
+   after `Step`). **No-op in all 9 headless hosts** (`CaptureHost`, the CLI trace hosts, every test host) →
+   headless output byte-identical. This is the parity guarantee.
+3. `godot/GodotAdvHost.cs` + `godot/Main.cs` — the throttle. `Main` owns a `FrameClock`; each `_Process`
+   it `Advance(delta)`s the clock and `PulseFrame()`s. `GodotAdvHost.FrameYield()` counts ops and, once
+   `EffectiveBudget` is reached, **blocks the VM background thread** on an `AutoResetEvent` until the next
+   `_Process` advances the clock — throttling the interpreter to ≈`OpsPerFrame` ops per rendered frame
+   (≈30 → ≈1800 ops/sec, the native rate-limited cadence). `Sleep` now waits on the **same** clock (not
+   `Thread.Sleep`), and the anim tween reads `_lastDelta * _clock.Speed`, so the single `Speed` factor
+   scales throttle + sleep + tween coherently. `Speed` is the future **Ctrl fast-forward** hook, left
+   **unwired at 1.0** (wiring it needs ADV-mode-scope RE; the seam is ready).
+
+**Verified.** Engine 62/62; `sweep` exit=284/STEP-LIMIT=13 (parity); Godot `SELFTEST OK`; windowed
+`--boot --shot-sequence` = **16 distinct paced visual states across 120 frames** (event-CG → fade/transition
+→ onward) instead of an instant jump to the final frame — the throttle demonstrably steps the opening over
+real time.
+
+**⚠ Residual (NOT this slice — the graphics geometry/blend subsystem).** By-eye the opening is still hard to
+judge because the **graphics are still wrong** (AE* fades draw opaque with no alpha/blend; cold-object
+anchors double; multi-surface compositing approximate). Pacing is fixed and mechanically confirmed against
+pixels, but visual correctness is a **separate open chunk** the user has deferred. Do not conflate "pacing
+fixed" with "opening looks right."
+
+**Next candidates (deferred).** (a) Graphics geometry/blend fidelity — AE* alpha/blend + per-frame
+compositing + cold-object anchors (the thing that makes the paced opening actually *look* right). (b) Wire
+the Ctrl `Speed` multiplier (ADV-mode-scope RE). (c) Full scene-coroutine framework (`0x7b`/`0x7c`/`0x140`)
+for interactive multi-object scenes. (d) Model `0xcd get-input-type` (name-entry interactivity, the separate
+input gap noted above).
