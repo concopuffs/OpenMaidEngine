@@ -580,6 +580,19 @@ Ghidra functions renamed + plate-commented, saved).
   device draw. Slice A ports the **alpha** path (fades); additive (glow) is deferred (its `local_2c` source
   field is not yet pinned).
 
+**Interpolation RE pass (2026-07-08, stalled → both deferrals confirmed).** Attempted to pin how a `0x202`
+fade animates so smooth ramping could join slice A. Findings (Ghidra `gfx_object_anim_interpolate`
+`0x473ed0`, annotated+saved): the bit-2 anim family (op `0x234`) interpolates **5 independent sub-channels**
+(color `obj+0x240`/period `obj+0x220`, two matrices, rotation `0x168`=360°, src-rect scroll), each on the
+**global frame clock `ctx+0xb550`** (advanced per present, NOT the op-`0x238` clock `ctx+0x51b7c`), and each
+**ping-pongs** (triangle wave, folded at period/2) — i.e. these are *oscillating/pulsing* effects, not
+one-shot fades. The `0x202`/`0x203` color (`obj+0x60` static / `obj+0x64` animated, sets
+`ctx+0xb558`/`0xb560`) is a **separate channel whose blit consumer was not located** in this pass. So a
+one-shot fade's exact source→target→easing is still unresolved and would take a dedicated dig (find the
+`obj+0x64` consumer + the color→`obj+0x240` path + the clock advance). ⇒ **smooth color-anim interpolation
+stays deferred**; slice A ships the static end-state (which reaches the correct final alpha/tint and fixes
+the stuck-opaque bug), with interpolation as a scoped follow-up.
+
 ---
 
 ## Native walls backlog (targets for this loop)
