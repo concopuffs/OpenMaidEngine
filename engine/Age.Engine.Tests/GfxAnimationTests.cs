@@ -42,4 +42,31 @@ public class GfxAnimationTests
         Assert.Equal(400, g.AnimClockDurationTicks);
         Assert.Equal(cg0 + 1, g.AnimClockGeneration);
     }
+
+    // ---- Tasks 3-5: VM dispatch + snapshot (synthesized scenes) ----
+
+    private static OpcodeTable T() => OpcodeTableJson.Load(Paths.OpcodesJson);
+    private static Operand G(int a) => new(3, a);
+    private static Operand I(long v) => new(0, v);
+    private static (int, Operand[]) MovGI(int d, long v) => (0x55, new[] { G(d), I(v) });
+    private static (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
+
+    [Fact]
+    public void SetAnimTransformAbs_DispatchRecordsChannel()
+    {
+        var t = T();
+        // handle g[1]=0x1000; p1 g[2]=7; p2 g[3]=9; target g[4,5,6]=(800,500,0)
+        var scene = ScriptAssembler.Assemble(t, "ANIM", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 7), MovGI(3, 9), MovGI(4, 800), MovGI(5, 500), MovGI(6, 0),
+            (0x220, new[] { G(1), G(2), G(3), G(4), G(5), G(6) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.Equal((800L, 500L, 0L), o.AnimTarget);
+        Assert.False(o.AnimNormalized);
+        Assert.True(o.AnimEnabled);
+    }
 }

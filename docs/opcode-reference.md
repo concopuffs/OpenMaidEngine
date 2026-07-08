@@ -149,6 +149,22 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2/3/4). label_12649 site 0x00c86 handle=G[0x62457] → G[0x62498/9/a].
 
+### 0x21e `set-anim-transform-norm` (set-anim-transform-norm, argc 6)
+- **summary:** (handle)(p1)(p2)(x)(y)(z) — set sprite transform channel, NORMALIZED (float operands /_DAT_00571c28 ~percent); cmd-type 0xd, worker gfx_anim_set_channel@0x47eaa0. SC0000 opening @0xf73+ on INIT2 CG handles. Cluster 0x21c-0x243. Handler 0x423350; Kelebek VA 0x421450 is drift.
+- **grounding:** source=investigation, confidence=high
+
+### 0x220 `set-anim-transform-abs` (set-anim-transform-abs, argc 6)
+- **summary:** (handle)(p1)(p2)(x)(y)(z) — set sprite transform channel, ABSOLUTE (raw floats); cmd-type 0xd, worker 0x47ecc0. Twin of 0x21e. SC0000 opening @0x18a5+ on INIT2 CG handles. Cluster 0x21c-0x243. Handler 0x4234e0; Kelebek VA 0x4215D0 is drift.
+- **grounding:** source=investigation, confidence=high
+
+### 0x234 `anim-start` (anim-start, argc 5)
+- **summary:** (handle)(duration)(x)(y)(z) — animate object toward target vec3 (x,y,z) over the GLOBAL clock; cmd-type 0xb, worker gfx_anim_start. op2=this object's duration (label_1235a maxes into the clock). SC0000 opening @0xdaf on INIT2 CG handles. Handler 0x423da0; Kelebek VA 0x422060 is drift.
+- **grounding:** source=investigation, confidence=high
+
+### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
+- **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
+- **grounding:** source=investigation, confidence=high
+
 ## input
 
 ### 0x90 `hotspot-branch` (u0041BEB0, argc 7)
@@ -922,15 +938,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x21e `u00421450` (u00421450, argc 6)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x21f `u00421510` (u00421510, argc 7)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x220 `u004215D0` (u004215D0, argc 6)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -986,15 +994,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x234 `u00422060` (u00422060, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x236 `u004221A0` (u004221A0, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x238 `u00422390` (u00422390, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

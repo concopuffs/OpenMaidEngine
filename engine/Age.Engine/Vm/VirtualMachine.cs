@@ -270,6 +270,13 @@ public sealed class VirtualMachine
             case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — blend deferred
                 Gfx.GetOrCreate(Read(a[0])).Color = GfxState.PackColor(Read(a[2]), Read(a[3]));
                 WarnAlphaDeferredOnce(); return pc + 1;
+            // ---- sprite transform / animation cluster (docs/engine-re.md "0x21c-0x243 ... ANIMATION") ----
+            case "set-anim-transform-abs":   // 0x220 (handle)(p1)(p2)(x)(y)(z) — set transform directly
+                Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
+                    (Read(a[3]), Read(a[4]), Read(a[5])), normalized: false); return pc + 1;
+            case "set-anim-transform-norm":  // 0x21e — same, operands are ~percent (/_DAT_00571c28)
+                Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
+                    (Read(a[3]), Read(a[4]), Read(a[5])), normalized: true); return pc + 1;
             default:
                 // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
                 // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.

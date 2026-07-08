@@ -5501,17 +5501,17 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x21e
-label = "u00421450"
+label = "set-anim-transform-norm"
 argc = 6
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421450"
-category = "unknown"
-summary = ""
+name = "set-anim-transform-norm"
+category = "draw"
+summary = "(handle)(p1)(p2)(x)(y)(z) — set sprite transform channel, NORMALIZED (float operands /_DAT_00571c28 ~percent); cmd-type 0xd, worker gfx_anim_set_channel@0x47eaa0. SC0000 opening @0xf73+ on INIT2 CG handles. Cluster 0x21c-0x243. Handler 0x423350; Kelebek VA 0x421450 is drift."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
 evidence = ""
 
@@ -5598,17 +5598,17 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x220
-label = "u004215D0"
+label = "set-anim-transform-abs"
 argc = 6
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004215D0"
-category = "unknown"
-summary = ""
+name = "set-anim-transform-abs"
+category = "draw"
+summary = "(handle)(p1)(p2)(x)(y)(z) — set sprite transform channel, ABSOLUTE (raw floats); cmd-type 0xd, worker 0x47ecc0. Twin of 0x21e. SC0000 opening @0x18a5+ on INIT2 CG handles. Cluster 0x21c-0x243. Handler 0x4234e0; Kelebek VA 0x4215D0 is drift."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
 evidence = ""
 
@@ -6102,17 +6102,17 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x234
-label = "u00422060"
+label = "anim-start"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422060"
-category = "unknown"
-summary = ""
+name = "anim-start"
+category = "draw"
+summary = "(handle)(duration)(x)(y)(z) — animate object toward target vec3 (x,y,z) over the GLOBAL clock; cmd-type 0xb, worker gfx_anim_start. op2=this object's duration (label_1235a maxes into the clock). SC0000 opening @0xdaf on INIT2 CG handles. Handler 0x423da0; Kelebek VA 0x422060 is drift."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
 evidence = ""
 
@@ -6179,17 +6179,17 @@ observed_types = ["imm", "l-ptr"]
 
 [[opcode]]
 op = 0x238
-label = "u00422390"
+label = "set-anim-clock"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422390"
-category = "unknown"
-summary = ""
+name = "set-anim-clock"
+category = "draw"
+summary = "(duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
 evidence = ""
 
