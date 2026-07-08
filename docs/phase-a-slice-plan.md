@@ -378,6 +378,47 @@ for the visible opening animation, and a genuinely different subsystem than the 
 here. (**Correction:** an earlier draft of this note called it "immediate-mode slot-0 blits" — wrong; the engine
 is retained, per the native `draw-texture → gfx_object_bind_draw` bind.)
 
+### A2b — Frame-paced `sleep`: the opening animates ✅ (2026-07-08)
+
+The chunk the animation-subsystem note above flagged as "the clearly-scoped next chunk." Spec/plan
+`docs/superpowers/{specs,plans}/2026-07-08-frame-paced-sleep{-design,}.md`; RE `docs/engine-re.md` ("sleep (op
+0xc8)").
+
+**Root cause (one line):** the Godot compositor (`Main.Recomposite` in `_Process`) already presented live
+`GfxState` every frame — but `sleep` (`0xc8`) was a GAP, so the VM ran the whole draw/`sleep` burst in
+microseconds and the compositor only ever caught the *final* state. Nothing else was missing.
+
+**RE (Ghidra):** `sleep_op_0xc8`@`0x420ec0` is **non-blocking** — it arms a main-loop-polled timer
+(`sleep_timer_arm`@`0x44cff0`; start = ms tick, duration = operand). **Operand unit = milliseconds.** (Also
+carries anti-tamper + a gfx cmd-type-3 write, neither needed host-side.) `0x20c` = `gfx_op_0x20c_present_frame`
+→ host-implicit (our compositor presents continuously) → `noop_headless`.
+
+**Implemented:** `IHost.Sleep(long)` + VM `case "sleep"` forwarding the raw operand; the 9 non-Godot hosts no-op
+it → **headless/CLI parity held** (sweep unchanged 284 exit/13 STEP-LIMIT, emitted offsets/steps identical,
+selftest OK). `GodotAdvHost.Sleep` blocks the VM background thread `duration` ms (capped 10s) — the WaitForInput
+suspend pattern, time-based — so the main-thread compositor presents each intermediate frame. Behaviorally
+equivalent to the native non-blocking timer given our threading model.
+
+**Race closed:** once the VM runs concurrently for seconds, the main-thread `SnapshotVisibleObjects` truly
+overlaps VM-thread `_objects`/`_registry` writes. `GetOrCreate`/`Register`/`Release` were unlocked → serialized
+them on the existing (re-entrant) `_lock`. New `GfxStateConcurrencyTests` (deterministic repro of the
+"Destination array is not long enough" crash) + `SleepDispatchTests`; **engine 52/52**.
+
+**Verified visually** via the new `--shot-sequence <dir> [--frames N]` (one PNG per frame, auto-advancing past
+input waits — a time-based effect can't be verified by a single `--shot`). `godot --boot --shot-sequence` on
+SC0000: the opening steps through **distinct, sleep-paced frames** — blank → arcane `AE*` magic-circle (held
+~12 frames ≈ 200 ms) → character (Lily) → transitions → settled sky-background CG — each held for its sleep
+duration, instead of jumping straight to the final CG. (Residual, **not a regression**: some intermediate
+frames still show the cold-object anchor doubling documented under "residual" — a geometry issue independent of
+timing; the settled CG renders cleanly.)
+
+**Tracker delta (`scene_opcode_coverage.py SC0000`):** GAP 64→**62** ops (741→**714** instrs), impl 53→**54**
+(`sleep`), safe-noop 12→**13** (`present-frame`), correctly-handled 65→**67/129 (51.9%)**.
+
+**Still deferred (the next frame-pacing chunk):** the full scene-coroutine framework (`0x7b`/`0x7c`/`0x140` +
+the `G[0xaba5c]` re-entry gate + `label_125bd` slot-table setup) for interactive multi-object scenes — out of
+scope here (the opening's path is linear).
+
 ---
 
 ## Risks / open questions for A0
