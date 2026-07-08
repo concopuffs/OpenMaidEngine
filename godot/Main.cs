@@ -231,7 +231,7 @@ public partial class Main : Godot.Control
     // engine's z-order), each blitting its live surface's rect at its position. Surfaces are cached by BMP
     // path (this runs every frame). Animated objects tween over the global anim-clock (0x238); their opacity
     // is applied by the alpha-aware BlitLayer. See docs/engine-re.md "sprite transform / ANIMATION cluster".
-    private readonly System.Collections.Generic.Dictionary<string, Image?> _imgCache = new();
+    private readonly System.Collections.Generic.Dictionary<(string Path, long Key), Image?> _imgCache = new();
 
     // Per-handle wall-clock tween of the animation channel. The engine's clock (op 0x238) is a GLOBAL,
     // non-blocking clock; the host advances it here while the VM is parked at wait-for-input. Opacity comes
@@ -260,7 +260,8 @@ public partial class Main : Godot.Control
             if (v.SurfaceResId == 0) continue;                 // render-target/blank surface (no file) — later phase
             var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
             if (bmp == null) continue;
-            BlitLayer(bmp, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, AlphaFor(v, clockReset, clockDur));
+            float a = AlphaFor(v, clockReset, clockDur) * (v.Alpha / 255f);
+            BlitLayer(bmp, v.ColorKey, v.Tint, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, a);
         }
         _screenTex.Update(_screen);
     }
@@ -287,44 +288,71 @@ public partial class Main : Godot.Control
         return (float)tw.CurrentA;
     }
 
-    private void BlitLayer(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY, float alpha = 1f)
+    // Blit one object's surface rect. The source Image is cached per (path, colorKey): on first load, texels
+    // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
+    // tint (0xRRGGBB) modulates the texel RGB (fade-to-black uses tint=black); alpha is the object's opacity.
+    private void BlitLayer(string bmpPath, long colorKey, long tint, int srcX, int srcY, int w, int h,
+                           int dstX, int dstY, float alpha = 1f)
     {
-        if (!_imgCache.TryGetValue(bmpPath, out var src))
+        var cacheKey = (bmpPath, colorKey);
+        if (!_imgCache.TryGetValue(cacheKey, out var src))
         {
             src = new Image();
             if (src.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath)) != Error.Ok)
             { GD.Print($"BMP load failed {bmpPath}"); src = null; }
-            else if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
-            _imgCache[bmpPath] = src;
+            else
+            {
+                if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
+                if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
+            }
+            _imgCache[cacheKey] = src;
         }
         if (src == null) return;
-        // Clamp the source rect to the image; a zero/negative size falls back to the full image.
+
         int sw = w > 0 ? w : src.GetWidth();
         int sh = h > 0 ? h : src.GetHeight();
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
-        if (alpha >= 0.999f)   // fast opaque path (unchanged behaviour for non-animating objects)
+
+        bool plainOpaque = alpha >= 0.999f && tint == 0xFFFFFF && !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
+        if (plainOpaque)   // fast path: unchanged behaviour for opaque, un-keyed, un-tinted layers
         {
             _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
             return;
         }
-        // Alpha composite over the raw RGBA byte buffer: out = src*(sa) + dst*(1-sa), sa = srcAlpha * objAlpha.
+
+        int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
         byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
-        int dw = _screen.GetWidth(), sfw = src.GetWidth();
+        int dw = _screen.GetWidth(), dh = _screen.GetHeight(), sfw = src.GetWidth();
         int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
         for (int y = 0; y < sh; y++)
             for (int x = 0; x < sw; x++)
             {
                 int dxp = dstX + x, dyp = dstY + y;
-                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= _screen.GetHeight()) continue;
+                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
                 int di = (dyp * dw + dxp) * 4;
                 int si = ((srcY + y) * sfw + (srcX + x)) * 4;
-                int sa = ss[si + 3] * ia / 255;
-                for (int c = 0; c < 3; c++) dst[di + c] = (byte)((ss[si + c] * sa + dst[di + c] * (255 - sa)) / 255);
+                int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object alpha
+                if (sa == 0) continue;
+                int sr = ss[si] * tr / 255, sg = ss[si + 1] * tg / 255, sb = ss[si + 2] * tb / 255;   // tint modulate
+                dst[di]     = (byte)((sr * sa + dst[di]     * (255 - sa)) / 255);
+                dst[di + 1] = (byte)((sg * sa + dst[di + 1] * (255 - sa)) / 255);
+                dst[di + 2] = (byte)((sb * sa + dst[di + 2] * (255 - sa)) / 255);
                 dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + sa);
             }
-        _screen.SetData(dw, _screen.GetHeight(), false, _screen.GetFormat(), dst);
+        _screen.SetData(dw, dh, false, _screen.GetFormat(), dst);
+    }
+
+    // Make colorkey-matching texels transparent (native colorkey is baked at surface load).
+    private static void BakeColorKey(Image img, long colorKey)
+    {
+        byte[] px = img.GetData();
+        int w = img.GetWidth(), h = img.GetHeight();
+        for (int i = 0; i < px.Length; i += 4)
+            if (Age.Engine.Model.BlendMath.ColorKeyMatches(px[i], px[i + 1], px[i + 2], colorKey))
+                px[i + 3] = 0;
+        img.SetData(w, h, false, img.GetFormat(), px);
     }
 
     // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
