@@ -62,6 +62,7 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `vm0.py` | Headless Python bytecode VM (Phase A0 execution-model prototype; reuses `sys4load`). | `--test` (RECOVER unit test) · `--sweep [N]` (oracle coverage) · `--scene NAME` · `--settex NAME` (set-texture resId trace + exec trace) · `<file.BIN>` | corpus → stdout; `build/vm0-trace.json`; `build/settex-<NAME>.json` |
+| `scene_opcode_coverage.py` | Per-scene opcode completeness gauge: histograms a scene's static opcodes and classifies each **impl** / **safe-noop** / **GAP** (effectful op the VM silently stubs). Implemented set parsed from `VirtualMachine.cs` `case` arms; metadata from `opcodes.json`. Surfaces the concrete rendering/feature holes so a half-drawn scene reads as "N ops still stubbed", not "mystery". | `scene_opcode_coverage.py [SCENE …]` (default SC0000) | corpus, `build/opcodes.json`, `engine/…/VirtualMachine.cs`, `build/callscript-names.json` → ⚙ `build/scene-opcode-coverage/<SCENE>.md` + stdout |
 | `correlate_scope.py` | Align the VM's `set-texture(resId)` trace with the game's Frida load order → tag each load's DATA2 package, flag package transitions, dump the significant ops in each transition span (the **scope selector** hunt). | `correlate_scope.py <SCENE>` | `build/settex-<SCENE>.json` + `build/frida-load-order-result.json` + index → stdout |
 
 ## Engine (C#) — VM core, CLI, Godot frontend

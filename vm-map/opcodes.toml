@@ -6644,14 +6644,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00416410"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
+name = "script-entry"
+category = "marker"
+summary = "zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural"
+noop_headless = true
+source = "harness"
 confidence = "low"
 depends_on = []
-evidence = ""
+evidence = "SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'script-entry 0x259'; VM treats it as no-op (default stub) across all 279 CLEAN A0 scenes"
 
 [[opcode]]
 op = 0x2bd

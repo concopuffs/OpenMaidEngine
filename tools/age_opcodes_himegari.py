@@ -17,4 +17,5 @@ INFERRED: dict[int, dict] = {
     0x1f5: dict(name='stmt-end', category='marker', noop=True, confidence='high', source='investigation', summary='zero-arg; precedes exit/next-stmt, pairs with 0x1f4'),
     0x21b: dict(name='line-id?', category='marker', noop=True, confidence='med', source='harness', summary='1 imm; mov->0x21b->stmt-end; near save/load-messkip — likely line/stmt id, verify not msg-control'),
     0x258: dict(name='decl?', category='marker', noop=True, confidence='low', source='harness', summary='2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?'),
+    0x259: dict(name='script-entry', category='marker', noop=True, confidence='low', source='harness', summary='zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural'),
 }

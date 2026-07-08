@@ -308,6 +308,36 @@ Next visual chunk = **alpha/blend + effect fading** (`0x202/0x203` already store
 compositing. NOTE the two-boot gap: our Phase-B `--boot` runs *data* `*INIT` scripts; this added the *system*
 boot — a "full boot" should run both.
 
+### A2b — Scene completeness gauge (opcode coverage tracker, 2026-07-07)
+
+To stop guessing how "done" a rendered scene is, `tools/scene_opcode_coverage.py` histograms a scene's
+static opcodes and classifies each against the C# VM: **impl** (VM has a handler arm — real or a deliberate
+no-op like `set-font`), **safe-noop** (no arm, but `opcodes.toml` marks it `noop_headless` — a statement /
+block marker, correct to skip), or **GAP** (no arm and effectful → the VM silently `pc+1`s past it). The
+implemented set is parsed from `VirtualMachine.cs`'s `case` arms (single source of truth, no drift); output is
+`build/scene-opcode-coverage/<SCENE>.md`. This makes a half-rendered scene legible: *"N ops still stubbed"*,
+not *"something's wrong and we thought everything ran."*
+
+**SC0000 baseline:** 129 distinct opcodes / 16257 instrs. Instruction-weighted the VM already covers **~94.8%**
+(impl 12368 + safe-noop 3053); the holes are **68 GAP opcodes / 836 instrs (5.1%)**. The GAP list clusters into
+concrete backlog buckets (drives the rendering roadmap below):
+- **ADV on-screen text** — `draw-string`(0x204)×205 + `0x7a` text-param×205 (1:1 paired). Dialogue text is
+  currently surfaced via `IHost.ShowText` → Godot `Label`; the engine's *native* glyph/window draw path is
+  unmodeled (cosmetic for now, but it owns text layout/speed).
+- **Unmodeled gfx-range cluster** — `0x21c–0x243` + `0x2bd/0x2bf` (e.g. 0x220×66, 0x22f×34, 0x228×33, 0x21e×25):
+  siblings of the `0x212–0x21a` command-buffer family we implemented, **not yet reversed** → the biggest single
+  rendering unknown (likely sprite/effect/blend geometry). RE these next before more compositor work.
+- **Timing** — `sleep`(0xc8)×20: animation pacing; fades/effects can't *animate* (only snap) until this exists.
+- **Audio/SFX** — `play-sound-effect`(0xb4)×24 + `0xb5/0xb6/0xc2/0xd9` (channel/volume/stop control) — stubbed.
+- **Scene coroutine** — `0x7b`×6 / `0x7c`×2 / `0x140`×1: the scene-coroutine framework backlog (multi-object
+  scene setup routes through it; see the "SECOND latent gap" note in the status memory).
+- **Misc VM-support ops** — a long tail (`0x75-0x77`, `0x85/0x88/0x8b`, `0x93/0x94`, `0x197-0x1a4`, `0x1c7-0x1cf`,
+  `0x1fd`, `0x20a/0x20c/0x20e`, …), 1–2 sites each; mixed markers vs effectful — triage per-op as the VM reaches them.
+
+Re-run per scene (`scene_opcode_coverage.py SC0240 …`) to gauge any target. The tracker also cross-checks
+`opcodes.toml` metadata against VM behavior — it already surfaced `0x259` (script-entry marker) missing its
+`noop_headless` flag (now reconciled).
+
 ---
 
 ## Risks / open questions for A0

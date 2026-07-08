@@ -213,6 +213,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** 2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?
 - **grounding:** source=harness, confidence=low, noop_headless=True
 
+### 0x259 `script-entry` (u00416410, argc 0)
+- **summary:** zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural
+- **grounding:** source=harness, confidence=low, noop_headless=True
+- **evidence:** SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'script-entry 0x259'; VM treats it as no-op (default stub) across all 279 CLEAN A0 scenes
+
 ## structural
 
 ### 0x71 `label-def` (u0041A7B0, argc 1)
@@ -1042,10 +1047,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x24e `u00422EA0` (u00422EA0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x259 `u00416410` (u00416410, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
