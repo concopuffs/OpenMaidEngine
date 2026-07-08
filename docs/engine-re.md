@@ -177,6 +177,46 @@ are **bytecode-driven** — so a faithful host-side model, with the gfx ops (`0x
 `0x212–0x21a` family) *executed* instead of stubbed, rebuilds the state from the same scripts. The opcode-
 level summary lives in `vm-map/opcodes.toml` op `0x215`.
 
+#### The query registry is SEPARATE from the geometry object store (2026-07-07) — the retained-mode "2nd CG off-screen" fix
+
+Modelling the gfx ops (above) exposed a subtle but decisive point that the first retained-mode
+implementation got wrong. There are **two distinct native structures**, and they must stay distinct:
+
+1. **The op-`0x215` query registry** — a `std::map<handle,value>` **populated ONLY by op `0x1a2`**
+   (`FUN_0042cf70` hash insert; native stores `map[handle] = handle`). `0x215` does `map.find(handle)`
+   → the found value (which equals the handle, and for small system/UI handles doubles as their surface
+   slot) or `0xffffffff` = **-1**.
+2. **The geometry object store** — per-handle V18/V24/V16c/color/draw-bind, touched lazily by the
+   geometry SET ops and `draw-texture` (`gfx_object_get_or_create`). This feeds the compositor.
+
+The first `GfxState` conflated them: `GetOrCreate` (called by *every* geometry/draw op) also assigned a
+fabricated per-object slot via an `AcquireSlot()` allocator, and `QuerySlot` (op `0x215`) returned it.
+That is a fiction with **no basis in the engine** — the native `0x215` never allocates a slot.
+
+Consequence, traced end-to-end in `SC0000` `label_12649` (the CG-load subroutine): a CG handle
+(`0xcb2a` = `INIT2`'s `G[0x62456]`, idx 1) is **never `0x1a2`-registered**. Real engine → `0x215` returns
+`-1` → the **fresh branch** runs → anchor comes from the `INIT2` arrays (`G[0x62469+idx]=400`,
+`G[0x6247d+idx]=600`) → `dst = anchor − (w/2, h) = (0,0)`. Correct. But with the fabricated allocator the
+*second* pass over the same handle found it "existing" (slot `4`) → the **existing branch** ran
+`get-texture-size(4)` on a slot whose surface was never loaded (the bytecode's own slot table
+`rec[s3]`/`G[0x3239]` gave slot `0`) → size `0` → `anchor = pos(0,0) + 0` → `dst = (0−400, 0−600) =
+(−400,−600)` — the CG rendered off-screen. This is the bug that had been mis-attributed to "geometry
+accumulation / drift" several times.
+
+**Fix (branch `feat/gfx-command-buffer`):** `GfxState` keeps a separate `_registry` (a `HashSet<long>`)
+populated only by `Register(handle)` (op `0x1a2`); `QuerySlot` returns `handle` if registered else `-1`,
+and no longer consults the geometry store or invents slots. Verified: `Age.Cli gfx --boot SC0000.BIN`
+→ all event CGs `dst=(0,0)`, zero `(−400,−600)` draws; Godot `--boot --shot` pages 1/2/4 render the
+opening event CGs full-screen; engine 44/44; sweep parity 284 exit / 13 STEP-LIMIT unchanged.
+
+Note a **second, still-latent** gap this uncovered: `label_125bd` (which fills `rec[s3]`/`G[0x3239]` with
+the per-object slots 4..13, called at `SC0000` `0x50f`) does **not** execute in a cold single-scene run —
+the scene coroutine framework (ops `0x7b`/`0x140` + the `G[0xaba5c]==1` re-entry gate) routes cold flow
+past it, so every fresh CG is assigned slot `0`. It doesn't break the *opening* (one full-screen CG shown
+at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correct regardless), but a scene
+with several simultaneous distinct-slot objects would need the setup to run. Tracked as the scene-coroutine
+work, separate from this fix.
+
 #### gfx command-buffer — op contract table (2026-07-07, full family reversed)
 
 Every gfx op shares one shape: **write a `cmd-type` into the current object record** (`*(ctx + 0x53d88 +

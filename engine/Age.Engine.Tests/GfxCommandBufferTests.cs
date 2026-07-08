@@ -36,21 +36,27 @@ public class GfxCommandBufferTests
         Assert.Equal(30, vm.Globals[7]);
     }
 
+    private static (int, Operand[]) Register(int handle) => (0x1a2, new[] { G(handle) });
+
     [Fact]
-    public void QueryReturnsDistinctSlotsPerHandle_NotZero()
+    public void QueryReturnsMinusOneUntilRegistered_ThenTheHandle()
     {
+        // Native contract (docs/engine-re.md op 0x215/0x1a2): the query registry is populated ONLY by op 0x1a2
+        // (gfx-cmd-register). Giving a handle geometry via set-geom (0x217) must NOT register it — query stays -1
+        // so a CG handle takes label_12649's fresh branch. After 0x1a2, query returns the handle (native
+        // map[handle]=handle; small system handles double as their surface slot).
         var t = T();
-        // create two objects via set-geom, then query each into g[10], g[11].
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
-            MovGI(1, 0x1000), MovGI(2, 0x2000), MovGI(3, 0),
-            SetGeom3(1, 3, 3, 3), SetGeom3(2, 3, 3, 3),
+            MovGI(1, 0xcb2a), MovGI(2, 0xd), MovGI(3, 0),
+            SetGeom3(1, 3, 3, 3),          // 0xcb2a: geometry only, NOT registered
+            Register(2),                    // 0xd: op 0x1a2 registers it
             Query(10, 1), Query(11, 2), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.NotEqual(0, vm.Globals[10]);              // not collapsed to slot 0
-        Assert.NotEqual(vm.Globals[10], vm.Globals[11]); // distinct slots => no collapse
+        Assert.Equal(-1, vm.Globals[10]);   // geometry-only CG handle -> -1 -> fresh branch (the bug fix)
+        Assert.Equal(0xd, vm.Globals[11]);  // 0x1a2-registered handle -> its value (== handle)
     }
 
     private static (int, Operand[]) BlitColor(int h, int x, int y, int alpha, int color)

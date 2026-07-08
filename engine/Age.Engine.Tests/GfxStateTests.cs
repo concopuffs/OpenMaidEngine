@@ -4,14 +4,19 @@ using Xunit;
 public class GfxStateTests
 {
     [Fact]
-    public void DistinctHandlesGetDistinctSlots()
+    public void QueryRegistryIsPopulatedOnlyByRegister_NotByGeometryOps()
     {
+        // Native contract (docs/engine-re.md op 0x215/0x1a2): the op-0x215 query registry is populated ONLY by
+        // op 0x1a2 (gfx-cmd-register). Merely giving a handle geometry (GetOrCreate, as the set-geom ops do)
+        // must NOT make query-gfx-object return a slot for it — otherwise a CG handle (never 0x1a2-registered)
+        // wrongly takes label_12649's existing branch and collapses off-screen.
         var g = new GfxState();
-        int s1 = g.GetOrCreate(0x1000).Slot;
-        int s2 = g.GetOrCreate(0x2000).Slot;
-        Assert.NotEqual(s1, s2);
-        Assert.Equal(s1, g.QuerySlot(0x1000));   // stable
-        Assert.Equal(-1, g.QuerySlot(0x9999));    // unknown -> -1 (matches native 0xffffffff)
+        g.GetOrCreate(0xcb2a).V18 = (400, 600, 0);   // geometry only, like the fresh CG-load branch
+        Assert.Equal(-1, g.QuerySlot(0xcb2a));        // NOT registered => -1 => fresh branch (correct)
+
+        g.Register(0xd);                               // op 0x1a2 registers a small system/UI handle
+        Assert.Equal(0xd, g.QuerySlot(0xd));           // native map[handle]=handle; the value doubles as its slot
+        Assert.Equal(-1, g.QuerySlot(0x9999));         // unknown -> -1 (matches native 0xffffffff)
     }
 
     [Fact]
@@ -26,13 +31,13 @@ public class GfxStateTests
     }
 
     [Fact]
-    public void ReleaseFreesTheSlotForReuse()
+    public void ReleaseRemovesTheHandleFromTheQueryRegistry()
     {
         var g = new GfxState();
-        int s1 = g.GetOrCreate(0x1000).Slot;
-        g.Release(0x1000);
-        Assert.Equal(-1, g.QuerySlot(0x1000));
-        Assert.Equal(s1, g.GetOrCreate(0x2000).Slot);  // freed slot reused
+        g.Register(0x10);
+        Assert.Equal(0x10, g.QuerySlot(0x10));
+        g.Release(0x10);                          // op 0x1fa / 0x1f7 tear down the registration too
+        Assert.Equal(-1, g.QuerySlot(0x10));
     }
 
     [Fact]
@@ -43,7 +48,7 @@ public class GfxStateTests
     public void EraseRangeRemovesHandlesInRange()
     {
         var g = new GfxState();
-        g.GetOrCreate(0x10); g.GetOrCreate(0x11); g.GetOrCreate(0x12); g.GetOrCreate(0x20);
+        g.Register(0x10); g.Register(0x11); g.Register(0x12); g.Register(0x20);
         g.EraseRange(0x10, 3);                      // count>1 → erase [0x10, 0x13)
         Assert.Equal(-1, g.QuerySlot(0x10));
         Assert.Equal(-1, g.QuerySlot(0x12));
@@ -54,7 +59,7 @@ public class GfxStateTests
     public void EraseRangeCountLeOneErasesSingleHandle()
     {
         var g = new GfxState();
-        g.GetOrCreate(0x10); g.GetOrCreate(0x11);
+        g.Register(0x10); g.Register(0x11);
         g.EraseRange(0x10, 1);                       // count<=1 → single handle
         Assert.Equal(-1, g.QuerySlot(0x10));
         Assert.NotEqual(-1, g.QuerySlot(0x11));

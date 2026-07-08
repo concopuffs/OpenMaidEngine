@@ -19,7 +19,6 @@ public sealed class GfxState
 {
     public sealed class GfxObject
     {
-        public int Slot = -1;
         public (long X, long Y, long Z) V18, V24, V16c;
         public long Field64, Field68, Field6c;
         public long Color;
@@ -29,42 +28,50 @@ public sealed class GfxState
         public bool Visible;
     }
 
+    // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
+    // Populated lazily by the geometry SET ops and draw-texture. Membership here does NOT mean the object is
+    // in the op-0x215 query registry (that is a SEPARATE native structure; see _registry below).
     private readonly Dictionary<long, GfxObject> _objects = new();
-    private readonly SortedSet<int> _free = new();
-    private int _nextSlot = 4;                       // observed native slot range is 4..13
+
+    // ---- op-0x215 query registry (native std::map queried by gfx_op_0x215, populated ONLY by op 0x1a2
+    // gfx-cmd-register -> FUN_0042cf70 hash insert). map[handle] = handle (native stores operand1 as the value;
+    // small system/UI handles double as their surface slot). CG handles are NEVER 0x1a2-registered, so
+    // query-gfx-object returns -1 for them and label_12649 takes its fresh branch (correct anchor from the
+    // INIT2 arrays) instead of collapsing onto a fabricated slot. See docs/engine-re.md op 0x215/0x1a2. ----
+    private readonly HashSet<long> _registry = new();
+
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
 
-    /// <summary>Live objects and their slots — for the CLI gfx oracle (Task 3.7).</summary>
+    /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
     {
-        get { foreach (var kv in _objects) yield return (kv.Key, kv.Value.Slot); }
-    }
-
-    private int AcquireSlot()
-    {
-        if (_free.Count > 0) { int s = _free.Min; _free.Remove(s); return s; }
-        return _nextSlot++;
+        get { foreach (var kv in _objects) yield return (kv.Key, kv.Value.SourceSlot); }
     }
 
     public GfxObject GetOrCreate(long handle)
     {
-        if (!_objects.TryGetValue(handle, out var o))
-        {
-            o = new GfxObject { Slot = AcquireSlot() };
-            _objects[handle] = o;
-        }
+        if (!_objects.TryGetValue(handle, out var o)) { o = new GfxObject(); _objects[handle] = o; }
         CurrentObject = handle;
         return o;
     }
 
+    /// <summary>Op 0x1a2 (gfx-cmd-register, native FUN_0042d360 -> FUN_0042cf70 hash insert): add the handle to
+    /// the op-0x215 query registry. Native inserts map[handle]=handle; QuerySlot returns that value (handle) or
+    /// -1. Only this op populates the query registry — geometry/draw ops do not.</summary>
+    public void Register(long handle) => _registry.Add(handle);
+
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
-    public int QuerySlot(long handle) => _objects.TryGetValue(handle, out var o) ? o.Slot : -1;
+
+    /// <summary>Op 0x215 (query-gfx-object): native returns std::map::find(handle) — the registered value (=handle),
+    /// or 0xffffffff (=-1) when the handle was never 0x1a2-registered. NOT a fabricated slot allocator.</summary>
+    public int QuerySlot(long handle) => _registry.Contains(handle) ? (int)handle : -1;
     public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
 
     public void Release(long handle)
     {
-        if (_objects.TryGetValue(handle, out var o)) { if (o.Slot >= 0) _free.Add(o.Slot); _objects.Remove(handle); }
+        _objects.Remove(handle);
+        _registry.Remove(handle);        // op 0x1fa/0x1f7 also tear down the query registration
     }
 
     /// <summary>Op 0x1f7 semantics (native gfx_registry_erase_range @0x47d8b0): erase handles in
