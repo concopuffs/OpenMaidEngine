@@ -409,6 +409,82 @@ corrected). Profile the real Godot run (`--trace-histogram`) to find it.
 no-op (`noop_headless=true`); the Kelebek label `u00416200` was VA-drift. This corrects the earlier open item
 ("no per-frame present") above — present is host-implicit; only `sleep` timing was missing.
 
+### Frame cadence — the interpreter tick, and why our port "speeds through" (2026-07-08)
+
+Answers the open question the `sleep` section above left ("what advances the rapid opening burst is still
+unknown"). The pace is an **engine-level execution cadence**, not any bytecode primitive. Corroborated in-game
+by Ctrl fast-forwarding ADV (a speed governor). Motivated by the user's observation that our port visibly
+speeds through the opening — which contradicted, and correctly overturned, an earlier same-day overclaim that
+"there is no missing pacer" (that was inferred from headless op-counts, which cannot render).
+
+**Confirmed from the engine image (annotated in Ghidra):**
+
+- **The interpreter is a cooperative one-op-per-tick step, not a run-to-completion loop.**
+  `adv_interpreter_tick`@`0x410fb0` (renamed from `FUN_00410fb0`) executes **exactly one opcode** per call:
+  `op = **(ctx+0x53d2c + curCtx*0x78)`; if `0 ≤ op ≤ 0x3ff` it dispatches `(*(ctx+0x9b24c+op*4))()` (the
+  handler table = `ctx[0x26c93+op]`) then advances `PC += *(ctx+0x53d88+curCtx*0x78) * 4` (decoded cmd size),
+  else the default handler `FUN_004162b0`. It also runs the **message-skip / click / auto-advance** logic each
+  tick (`s_set_CancelMesSkipOnClick`, `s_message_ReadTextSkip`, skip bit `ctx+0xa0ce4 & 0x8000000`) — i.e. the
+  **Ctrl fast-forward governor lives at the per-op level**, and a click can reposition the PC (skip-to-next).
+- **Script contexts are coroutine records.** `curCtx = *(ctx+0x53d14)` indexes `0x78`-byte records at
+  `ctx+0x53d60`/`ctx+0x53d2c` (PC, codebase, cmd-size). The engine multiplexes script "threads." Init/reset =
+  `scene_context_init_reset`@`0x40b3b0` (zeroes `0x53d14` + `0xa0ce4`, allocs surfaces `ctx+0x52bd4[1000]`).
+- **Advancement is gated by an interpreter run-state flags word `ctx+0xa0ce4`** (bit1 = sleeping, plus wait/
+  skip/etc.), read+written by ~40 state functions. `sleep_op_0xc8` sets bit1 + arms the ms timer and returns —
+  it does not block. So the outer loop consults `0xa0ce4` to decide whether to step the script this frame.
+- **Effects are frame-stepped.** Screen transitions `FUN_0043cdb0` (12 wipe/slide modes) render **one frame per
+  step** and take a step-count parameter (the natural place a speed multiplier applies); `present-frame` (0x20c)
+  and the anim clock (0x238) advance per frame. A CG transition therefore spreads over many real frames.
+- **Timing source** = the ms-clock function pointer `*DAT_0056f3d4` (`timeGetTime`-class), used throughout.
+
+**Model:** single-threaded, vsync-timed frame loop; each frame it steps opcodes until the context **yields**
+(`sleep` armed / `wait-for-input` 0x72 / active frame-stepped transition/anim / present), renders
+(`gfx_render_frame`), waits on the clock, continues. Back-to-back draws inside one page compose into a single
+frame (fine); the opening's CG-to-CG advances are gated by frame-stepped transitions + sleeps, which spread
+them over real time.
+
+**⚠ Not statically resolvable (honest boundary):** the **outer frame loop itself** is not readable from this
+dump. `adv_interpreter_tick` is invoked through a **runtime-set mode function pointer** (heap/vtable slot) — it
+has zero static xrefs, and its address bytes (`b0 10 41 00`) appear nowhere in `range_00400000` (0x400000–
+0x65ffff). The functions touching the scheduler state (`0x53d14`, `0xa0ce4`) are init/reset, save
+(`context_state_serialize`@`0x40d320`), and op-handlers — never the loop. The "run-until-yield then render"
+statement above is a **reconstruction** from those pieces, not a line read from the loop; pinning the actual
+loop + its exact per-frame step budget / vsync wait needs a **live-debugger break** (attach + break in the
+frame loop), or a wider memory dump that includes the mode object.
+
+**Port relevance (the speed-through root cause).** Our Godot VM runs on a **free-running background thread**
+(`Task.Run(() => vm.Run())` in `Main.cs`) with no frame binding — it executes an entire page's ops in
+microseconds; only `WaitForInput` and `Sleep` pause it, and the compositor merely samples `GfxState` at 60fps.
+So every no-`sleep` CG/state advance collapses to its end state → the speed-through. **Fix shape:** throttle
+the VM to a bounded wall-clock op rate (see the measured numbers below) via a per-opcode host yield; retire the
+free-running thread. Spec: `docs/superpowers/specs/2026-07-08-frame-stepped-vm-design.md`.
+
+### Frame cadence — live measurement (2026-07-08, Frida read-only)
+
+The static pass couldn't reach the outer loop, so we measured the running game. **Read-only / import-only
+only** (`tools/frida/probe_frame_cadence.py`, `probe_present.py`): a plain-JS hook on the proven operand-fetch
+`0x41b940` (grab ctx + count exec rate) + system-DLL hooks; no engine-code patching. **Lesson learned the hard
+way:** a first attempt with a **CModule** hook on the hyper-hot `adv_interpreter_tick` crashed the game
+instantly (bad native callback into the hottest path — *not* anti-tamper; our other scripts hook engine code
+via plain JS and survive). Use plain-JS hooks on proven addresses + memory polling.
+
+Findings:
+- **Execution is rate-limited, not free-running.** Normal active rate ≈ **1,788 operand-fetches/sec** (peak
+  ~5,796) — far below an unthrottled interpreter (millions/sec), so the engine paces itself. Execution is
+  bursty (parked at `wait-for-input` prompts, then a bounded burst), confirming per-iteration op-budgeting.
+- **Fast-forward (Ctrl) scales the rate ~4×** (≈7,738/sec avg, peak ~15,572), gated by the engine skip bit
+  **`ctx+0xa0ce4 & 0x8000000`** (set only while fast-forwarding). It runs *more ops per unit time* — it does
+  not skip content. (Ctrl is **ADV-scoped**; it does not speed up gameplay/menus.)
+- **Rendering = Direct3D 9, UNCAPPED.** `ddraw.dll` is not loaded; the game uses `d3d9.dll` (+ `nvd3dum.dll`).
+  `IDirect3DDevice9::Present` (device vtable slot 17, found by scanning ctx for a d3d9-vtable object with a
+  full ~119-method table) fires ~**1,908/sec** with **no vsync**; `BeginScene`/`EndScene` never fire → a **2D
+  StretchRect-style compositor**, not a 3D scene. So there is **no fixed display-frame rate**; `Present` rate
+  ≈ op rate (~1 op per present). ⇒ the pacing quantity is the **wall-clock op rate**, not a per-frame budget.
+- **Implication for the port:** throttle our VM to ~**1,800 ops/sec** wall-clock (≈30 ops per 60 fps Godot
+  `_Process`, tunable), ~4× under a future Ctrl multiplier; Godot's 60 fps compositor + wall-clock tweens then
+  show the smoothly-advancing state. This *measured* mechanism replaces the earlier present-driven guess
+  (present is rare in our path and uncapped natively).
+
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
 Implementing the gfx ops (above) was necessary but not sufficient — a cold single-scene run of SC0000 still

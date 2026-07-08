@@ -162,8 +162,10 @@ public partial class Main : Godot.Control
         if (_seqDir != null && _seqIdx < _seqFrames && !_done)
         {
             System.IO.Directory.CreateDirectory(_seqDir);
-            var fimg = GetViewport().GetTexture().GetImage();
-            fimg.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
+            // Headless has no rendered viewport texture (GetImage() is null). Still advance/count/quit so the
+            // real-run trace-histogram can profile the live path without a display; only the PNG grab is skipped.
+            var fimg = GetViewport().GetTexture()?.GetImage();
+            fimg?.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
             _seqIdx++;
             if (_seqIdx >= _seqFrames) { GD.Print($"SEQ saved {_seqIdx} frames -> {_seqDir}"); GetTree().Quit(0); }
             return;

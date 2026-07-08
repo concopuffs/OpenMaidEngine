@@ -528,3 +528,37 @@ DRAWOBJ, CALCREVISE, LOOK) live in the real runtime; SC0000 renders the opening 
 provider-less); **engine-level diagnostics** (the next pivot — the engine, not the frontend, should
 surface script/scene execution + call-script dispatch); `decision→scene` (scene chaining) rides this
 same loader once the SCJUMP decision→scene-id native hop is reversed.
+
+## A2b — opening speed-through: the pacing lead is ENGINE CADENCE (2026-07-08)
+
+> ⛔ **Correction.** An earlier draft of this section claimed "there is no missing pacer — all opening
+> pacing primitives are already shipped." That was **retracted**: it was inferred from *headless op-counts*
+> (which cannot render) and it contradicts the direct eyes-on observation that the opening **visibly speeds
+> through**. Ground truth = it speeds through; the pacer is real and the cause is still open. What survives
+> below is only the mechanically-verified part plus the corrected hypothesis.
+
+**Verified (mechanical).**
+1. The "rapid burst" seen in *plow* traces is a headless fiction (input-plow). The real back-to-back
+   `set-texture→draw-texture` swaps are the **per-page compositor** `label_1235a` (instruction indices
+   `0x3958–0x3973` = dword `0x123e8–0x12497`): a loop over ≤8 gfx object slots that per slot queries state
+   (`0x215`), erases/releases (`0x1f7`/`0x1fa`), and draws with alpha (`0x203`).
+2. Op `0xcd get-input-type` is **unmodeled** in the VM (no `case`; only `0x72 wait-for-input` is handled —
+   two input mechanisms, one modeled). `INPUTNAME.BIN:0x1c1` name-entry is a `get-input-type→jcc→sleep 1→jmp`
+   poll that spins unfed. This is a **real but separate** gap (interactive blocker), **not** the speed-through.
+
+**The corrected hypothesis (engine cadence, not bytecode).** Many opening draws are **back-to-back with no
+`sleep` between them in the bytecode** (e.g. resId `0x29` twice at `0xc45`/`0xc52`; `0x34`→`0x35` at
+`0x1467`/`0x1479`), yet the real game paces them. So the pace comes from the **engine's execution cadence**,
+not a script primitive. Corroboration: holding **Ctrl fast-forwards ADV** in the real game (faster, not
+instant) — a global engine speed governor over interpreter advancement. **Suspected cause in our port:** the
+Godot VM runs on a **free-running background thread** that is not synced to the 60fps compositor, so it blasts
+an entire page's draws in microseconds and the main-thread `Recomposite` only ever samples the final gfx-state
+→ the intermediate CGs collapse. The native engine is a cooperatively-scheduled main loop where the interpreter
+yields per frame under vsync (consistent with `sleep` already being RE'd as a *non-blocking, main-loop-polled*
+timer — which only makes sense if the interpreter yields back to that loop).
+
+**Next (open).** (1) Determine what actually landed re 60fps/vsync and the VM threading model in `godot/`.
+(2) RE the native engine main loop in Ghidra: how it ticks the interpreter per frame, the frame cap/vsync, and
+the Ctrl speed governor. (3) Frame-lock our VM to the render loop (a per-frame step budget or a per-frame
+yield/sync point) instead of the free-running thread. Confirm any fix against **pixels** (windowed
+`--shot-sequence` → real PNGs), not op-counts.
