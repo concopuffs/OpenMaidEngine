@@ -27,6 +27,8 @@ public partial class Main : Godot.Control
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
     private volatile int _pageCount;
     private int _shotSettle;
+    private int _shotSettleTarget = 3;          // --shot-settle <frames>: settle N frames before grabbing (to
+                                                // capture mid-tween — the anim clock keeps running while parked)
     private bool _shotDone;
 
     public override void _Ready()
@@ -84,6 +86,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];
             if (userArgs[i] == "--shot" && i + 1 < userArgs.Length) _shotPath = userArgs[i + 1];
             if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
+            if (userArgs[i] == "--shot-settle" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotSettleTarget);
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');
@@ -129,11 +132,12 @@ public partial class Main : Godot.Control
 
     public override void _Process(double delta)
     {
+        _lastDelta = delta;
         if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
         // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
         if (_shotPath != null && !_shotDone && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
         {
-            if (++_shotSettle >= 3)
+            if (++_shotSettle >= _shotSettleTarget)
             {
                 _shotDone = true;
                 var img = GetViewport().GetTexture().GetImage();
@@ -168,22 +172,65 @@ public partial class Main : Godot.Control
     // ---- retained per-frame compositor (main thread, from _Process) ----
     // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
     // engine's z-order), each blitting its live surface's rect at its position. Surfaces are cached by BMP
-    // path (this runs every frame). Alpha/colorkey/animation come in later phases (objects opaque here).
+    // path (this runs every frame). Animated objects tween over the global anim-clock (0x238); their opacity
+    // is applied by the alpha-aware BlitLayer. See docs/engine-re.md "sprite transform / ANIMATION cluster".
     private readonly System.Collections.Generic.Dictionary<string, Image?> _imgCache = new();
+
+    // Per-handle wall-clock tween of the animation channel. The engine's clock (op 0x238) is a GLOBAL,
+    // non-blocking clock; the host advances it here while the VM is parked at wait-for-input. Opacity comes
+    // from the 3rd anim vec component (TZ), data-driven from the opening (100=full, 0=clear).
+    private sealed class TweenState
+    {
+        public long Generation = long.MinValue;
+        public bool Initialized;
+        public double Elapsed, Duration;
+        public double StartA, TargetA, CurrentA = 1.0;
+    }
+    private readonly System.Collections.Generic.Dictionary<long, TweenState> _tweens = new();
+    private long _lastClockGen = long.MinValue;
+    private double _lastDelta;
+    private const double GameTickSeconds = 1.0 / 60.0;   // anim-clock ticks -> seconds (game runs ~60fps)
 
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
+        long clockGen = _vm.Gfx.AnimClockGeneration;
+        double clockDur = System.Math.Max(1, _vm.Gfx.AnimClockDurationTicks) * GameTickSeconds;
+        bool clockReset = clockGen != _lastClockGen;
+        _lastClockGen = clockGen;
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects())   // already ascending-handle = z-order
         {
             if (v.SurfaceResId == 0) continue;                 // render-target/blank surface (no file) — later phase
             var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
-            if (bmp != null) BlitLayer(bmp, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY);
+            if (bmp == null) continue;
+            BlitLayer(bmp, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, AlphaFor(v, clockReset, clockDur));
         }
         _screenTex.Update(_screen);
     }
 
-    private void BlitLayer(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY)
+    // Current opacity for a visible object: 1.0 unless it has an active anim channel, in which case tween the
+    // 3rd vec component (TZ, ~percent) over the global clock. Start opaque on first sight so a CG never
+    // begins invisible (the safe direction); re-arm whenever the object's or the clock's generation bumps.
+    private float AlphaFor(Age.Engine.Model.RenderObject v, bool clockReset, double clockDur)
+    {
+        if (!v.Anim.Enabled) return 1f;
+        var tw = _tweens.TryGetValue(v.Handle, out var t) ? t : (_tweens[v.Handle] = new TweenState());
+        double targetA = System.Math.Clamp(v.Anim.TZ / 100.0, 0, 1);
+        if (clockReset || tw.Generation != v.Anim.Generation)
+        {
+            tw.Generation = v.Anim.Generation;
+            tw.Elapsed = 0; tw.Duration = clockDur;
+            tw.StartA = tw.Initialized ? tw.CurrentA : 1.0;   // hold previous on-screen alpha; first sight opaque
+            tw.TargetA = targetA;
+            tw.Initialized = true;
+        }
+        tw.Elapsed += _lastDelta;
+        double p = tw.Duration > 0 ? System.Math.Clamp(tw.Elapsed / tw.Duration, 0, 1) : 1;
+        tw.CurrentA = tw.StartA + (tw.TargetA - tw.StartA) * p;
+        return (float)tw.CurrentA;
+    }
+
+    private void BlitLayer(string bmpPath, int srcX, int srcY, int w, int h, int dstX, int dstY, float alpha = 1f)
     {
         if (!_imgCache.TryGetValue(bmpPath, out var src))
         {
@@ -200,7 +247,27 @@ public partial class Main : Godot.Control
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
-        _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
+        if (alpha >= 0.999f)   // fast opaque path (unchanged behaviour for non-animating objects)
+        {
+            _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
+            return;
+        }
+        // Alpha composite over the raw RGBA byte buffer: out = src*(sa) + dst*(1-sa), sa = srcAlpha * objAlpha.
+        byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
+        int dw = _screen.GetWidth(), sfw = src.GetWidth();
+        int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
+        for (int y = 0; y < sh; y++)
+            for (int x = 0; x < sw; x++)
+            {
+                int dxp = dstX + x, dyp = dstY + y;
+                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= _screen.GetHeight()) continue;
+                int di = (dyp * dw + dxp) * 4;
+                int si = ((srcY + y) * sfw + (srcX + x)) * 4;
+                int sa = ss[si + 3] * ia / 255;
+                for (int c = 0; c < 3; c++) dst[di + c] = (byte)((ss[si + c] * sa + dst[di + c] * (255 - sa)) / 255);
+                dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + sa);
+            }
+        _screen.SetData(dw, _screen.GetHeight(), false, _screen.GetFormat(), dst);
     }
 
     // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
