@@ -295,22 +295,58 @@ at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correc
 with several simultaneous distinct-slot objects would need the setup to run. Tracked as the scene-coroutine
 work, separate from this fix.
 
-**⇒ Scene-coroutine framework — the fix for the slot-0 collapse (2026-07-09, RE head-start).** To run
-`label_125bd` (and every scene's slot-table setup) generally, the scene-coroutine framework must work. Ops
-(handlers via dispatch table `ctx[0x26c93+op]`):
-- **`0x7b` (`FUN_0041ebf0`)** — **yield-state save**: writes op1→`ctx[0x6da88 + ctxidx*4]`, op2→
-  `ctx[0x6db28 + ctxidx*4]` (ctxidx = `ctx[0x53d14]`, the coroutine/script-context index).
-- **`0x7c` (`FUN_00417cb0`)** — **yield/resume**: requires run-state bit `0x2000000` set (`ctx[0x6dbc8]`);
-  restores PC = `ctx[0x53d28] + ctx[0x6dbcc]*4`, clears the run-state (`ctx+0xa0ce4 &= ~0x2000000`), resets
-  input/line state. This is the coroutine RESUME.
-- **`0x140` (`LAB_004299c0`)** — the LABEL/yield op (`u0041F9C0`, `"LABEL" "J"` in SC0000 `0x46d`); a LAB not
-  a FUN, so decompile the actual target next. Central to the re-entry.
-- **Gate:** `G[0xaba5c]` (`==1` re-entry gate at SC0000 `0x450`); the scene runs as a coroutine that yields
-  and re-enters, and `label_125bd` (slot setup) is reached only on the correct pass. `G[0xaba5c]` writers =
-  DEBUGADV/SC0000/SC0010; compared against [0,1].
-Context records are the 0x78-byte coroutine records at `ctx+0x53d14`/`0x53d88` (see §"Frame cadence"). NEXT:
-finish RE (`0x140` target, the gate branch semantics), then implement so cold single-scene runs execute the
-scene's setup — removing the need for the manual `--seed` slot-table unblock.
+**⇒ Scene-coroutine framework — INVESTIGATION COMPLETE (2026-07-09).** The mechanism behind the slot-0
+collapse is now fully understood; what remains is a *host-model design choice*, not more RE. Summary:
+
+**The gate `G[0xaba5c]` is NATIVE scene-entry state — no script sets it to 1.** Across the whole corpus
+(429 references in 150 files) *every* `aba5c` reference is a read or a write of `0`; nothing anywhere writes
+`1`. So `aba5c==1` is set by the engine's scene loader/scheduler on entry — the **same class as the INIT2
+handle array** (native entry-state a cold single-scene harness skips), NOT a story flag. Cold, it reads `0`.
+
+**Corrected roles of the two branches** (the earlier head-start had them inverted). At SC0000 `0x450`
+`eq local0 = (aba5c==1)`; `0x457 jcc local0 label_462 <fallthrough>`:
+- **`aba5c==1` → `label_462` "ループ開始" (loop start)** = the scene's **intro/setup LOOP**. Its body
+  `label_491` runs `call label_125bd` (@`0x50f`, the slot-table fill `G[0x3239..0x3256]=4..13`) plus ADV
+  state init, UI-slot clears (a loop over `G[0x3239]`), intro draw — then `jmp label_462` (@`0x711`). A real
+  loop, exited only when its iterator makes `G[0x6be]==exit-PC` (→ `mov aba5c 0`, `jmp label_45e`).
+- **`aba5c!=1` → `label_45e → call label_71b`** = the **scene CONTENT**: `label_71b` is a `switch(G[0x62ccf])`
+  on the SCJUMP decision → "序章 / プロローグ", `play-bgm`, `call label_12649` (CG loads that *read* the slot
+  table). So the intended lifecycle is **enter `aba5c=1` → intro loop fills slots → `aba5c→0` → content uses
+  slots.** Cold we skip straight to content with an empty slot table → all layers collapse to slot 0 → grey.
+
+**The loop iterator `op 0x140` is a native video-service call — not statically reproducible.** Handler =
+**`0x4299c0`** (dispatch `ctx[0x9b74c]=0x4299c0`; created+typed `EngineCtx*`+annotated; Kelebek `u0041F9C0` is
+VA-drift). It writes gfx cmd-type 9, copies operand-2/3 strings (`"LABEL"`, `"J"`) + operand-4 int, calls
+**`(*DAT_005c6018)(8, ctx[0x54fe8], &{str,str,int})`**, and writes the returned PC-like value back to operand 1
+(SC0000: `G[0x6be]`). `DAT_005c6018` is a **runtime-resolved function pointer** (all 6 xrefs are READs, no
+static writer) — the engine's **native video / transition / timing service**: `FUN_00405740` (a screen-
+transition/fade routine full of DirectDraw-layer calls) calls the *same* pointer with `cmd_id=3` and branches
+on its return (`1`/`2` = transition progress). It is the **same class as the DirectDraw workers this project
+deliberately does not model.** ⇒ faithfully emulating `0x140` = emulating the native video service = out of
+static scope, permanently.
+
+**The two companion ops (confirmed):**
+- **`0x7b` (`FUN_0041ebf0`)** — *save yield handlers*: writes op1→`ctx[0x6da88+idx*4]`, op2→`ctx[0x6db28+idx*4]`
+  (idx=`ctx[0x53d14]`). SC0000 `0x79`: `op 0x7b label_3c9 label_41e` — registers the per-frame ADV handlers.
+- **`0x7c` (`FUN_00417cb0`)** — *resume*: requires run-state bit `0x2000000` (`ctx[0x6dbc8]`) — **throws
+  (`__CxxThrowException`) if unset**, so it is only ever reached on a scheduler-driven re-entry, never cold;
+  restores PC=`ctx[0x53d28]+ctx[0x6dbcc]*4`, clears the bit, resets input/line state.
+- `label_3c9`/`label_41e` (the `0x7b`-saved handlers) are per-frame *render → poll (`call label_8c`) → yield
+  (`0x7c`)* routines — i.e. **this coroutine machinery IS the ADV per-frame loop**, not just intro setup.
+
+**⇒ DESIGN (host-model, not emulate).** To make cold single-scene runs correct: (1) supply `aba5c=1` as
+scene-entry state (native, seedable, like INIT2); (2) give `0x140` a **host-modeled bounded "labeled yield"**
+that runs the intro body at least once (so `label_125bd` fills the slot table + ADV init runs) then reports
+completion so content plays — we reproduce the *observable effect*, not the video service. The idiom is
+byte-identical across all ~136 ADV scenes, so it generalizes with zero per-scene work. **Payoff beyond the
+slot fix:** the same `0x7b`/`0x7c` + handler machinery is the ADV frame loop, so a clean host model becomes
+the seam for the interactive-ADV backlog (`0x90` hotspots / EMPTY scenes) and likely fixes the stuck magic
+circle (scene-phase cleanup). **Permanently out of static scope:** the real intro-transition *timing/pacing*
+inside the loop (it lives in the native video service) — we approximate it host-side, as everywhere else.
+**Open for the spec (a choice, not RE):** how `G[0x6be]` initialises before the loop and the exact "run body
+once then terminate" mechanic (the terminal must satisfy `G[0x6be]==G[0x6c3]`, and `G[0x6c3]` is a per-scene
+immediate = that scene's exit-PC, so the host model can't hardcode `0x45e`). Context records = the 0x78-byte
+coroutine records at `ctx+0x53d14`/`0x53d88` (see §"Frame cadence").
 
 **Revealed issue (2026-07-08, post slot-fix): a magic-circle effect persists across the scene transition**
 (screenshot: opening ritual circle still overlaid on the arena BG). A retained object not released at the
@@ -794,6 +830,36 @@ unlabeled but heavily-used scalar (766 uses) in the **same cluster as the op-`0x
 NOT the predicted coroutine yield (`0x140`/`~0x50f`); the oracle reports whatever diverges *first*, and it
 surfaced an earlier state hole. **This is now the repeatable way to localize a mis-modeled op/state.**
 Phase-2 extension (deferred): effects-diff (global-bank / gfx-registry writes) for branchy scenes.
+
+### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
+
+**Problem the oracle surfaced:** single-scene VM runs diverge from the engine because they lack the
+pre-scene global state the engine accumulates over `SYSTEM4 → … → TITLE → New Game`. `--boot` reproduces
+only the data `*INIT` scripts; flags like `G[0x6c1]` (ADV-chrome enable) are set later and missed.
+
+**Solution — `capture_global_writes.py`** hooks `vm_operand_write@0x425fb0` and logs every global-int
+write as `(codebase, index, PLAINTEXT value)`. **Key: the helper receives the plaintext value** before the
+engine encodes it into the obfuscated global store (rotate+XOR with the per-session cookie `ctx+0x55120`)
+— which is exactly why the shelved flat-int32 scans (`global-memory-re.md`) found nothing, and why hooking
+the WRITER is clean (no de-obfuscation). ABI: thiscall `ecx=ctx`, `[esp+4]`=operand index, `[esp+8]`=value;
+the global index/type come from the instruction's operand slot (`framePc + idx*8`; `type=*(opnd-4)`,
+`index=*opnd`), type 3 = global-int.
+
+**Packer gotcha (solved):** AGE.EXE unpacks in-place at `0x400000`, so a `--spawn`-time hook hits packed
+bytes → Frida "unable to intercept function at 00425FB0". Fix: poll `0x425fb0` until the real prologue
+(`6aff 6836a85600 64a1…`) appears (unpack done), THEN attach. `--spawn` is required for completeness
+(attach misses pre-attach boot writes); the tool also kills the spawned pid on setup failure so a JS error
+can't leave a suspended windowless orphan. (First bug hit: `SIG` hex without `0x` → JS `create_script`
+SyntaxError → resume never ran → orphaned suspended game.)
+
+**Validated:** a real boot→New-Game→SC0000 capture (34,008 globals incl. `G[0x6c1]=1`, `G[0x62424]=0x23`
+the resId) loaded via `Age.Cli trace SC0000 --state <snap> --trace-json` seeds the VM to match the engine's
+**entire opening** (542 ops, no non-realignable fork) with ZERO manual seeding — confirming the
+pre-scene-state theory and giving a general auto-seed for single-scene fidelity. **Residual:** a 2-op color
+detour (`0x202/0x203` @ `0x122d0`, writing `G[0x62451]`) the full state does NOT fix = a real branch/op
+difference to chase (not state). **Caveats:** snapshot is playthrough-specific (best for canonical entry
+points — new-game opening, chapter starts); v1 captures global-INTS only (type 3; strings/floats TODO);
+includes the scene's own early writes (can exclude by codebase for a pure pre-scene boundary).
 
 ---
 
