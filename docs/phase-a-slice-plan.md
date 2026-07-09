@@ -629,3 +629,25 @@ smooth color-animation *interpolation* (the fade ramps snap to the correct end-s
 the `0x202` color channel's blit consumer + clock coupling is a dedicated dig) and **additive/glow blend**
 (`local_2c` mode 2/3; its object field isn't pinned). `BlendKind.Additive` is an unused seam. Next graphics
 slices unchanged: B (geometry/anchors — sprite *placement*) and C (render-targets).
+
+### A2b — SC0000 anim/transform/spritesheet cluster (partial) ✅ DONE (2026-07-08)
+
+The `0x21c`–`0x243` gfx cluster, scoped to a **tractable subset** after Task-1 RE revealed it's heterogeneous
+(setters + queries + matrix/scale + a movie op). Spec `docs/superpowers/specs/2026-07-08-sc0000-anim-transform-cluster-design.md`,
+plan `.../plans/2026-07-08-sc0000-anim-transform-cluster.md`, branch `feat/anim-transform-cluster`
+(engine 79/79, sweep exit=284/STEP-LIMIT=13 parity, `SELFTEST OK`, coverage SC0000 67→74/129 handled).
+
+**Key RE unlock:** the dispatch table `handler(op)=ctx[0x26c93+op]` recovered statically from `FUN_00413860`
+(the `opcodes.toml` `u004xxxx` labels are Kelebek drift). Full op→field map in `engine-re.md` §SC0000 anim cluster.
+
+**Built (hybrid: engine resolves, host blits):**
+- `GfxObject` gains src-rect (spritesheet) + animated-color channels; `GfxState.SetSrcRect` / `SetColorAnim`;
+  `BlendMath.PingPong`; `SnapshotVisibleObjects(long nowMs)` = a port of `gfx_object_anim_interpolate`
+  (ping-pong the spritesheet cell + color/glow), driven by the **`FrameClock`** (the "mach 5" pacing fix).
+- Wired 7 ops: `0x22f`/`0x229` position (direct V24 set), `0x239`/`0x231` spritesheet (static cell / animate),
+  `0x232` color glow (ping-pong), `0x228`/`0x23f` queries (geometry back to script vars).
+
+**Deferred (own follow-ups, per scope decision):** `0x21f`/`0x223` matrix/scale (need affine rendering),
+`0x236` timed/movie op, and the rare `0x21c/0x21d/0x224/0x242/0x243/0x23d/0x20a/0x20e` tail. Adjacent
+non-cluster gaps remain: `draw-string 0x204`×205 (on-screen text) and `play-sound-effect`. **Whole-scene
+visual validation is the user's call** (they deferred confirmation until the scene is coherent).

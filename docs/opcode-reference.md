@@ -171,6 +171,26 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **summary:** (handle)(p1)(p2)(x)(y)(z) — set sprite transform channel, ABSOLUTE (raw floats); cmd-type 0xd, worker 0x47ecc0. Twin of 0x21e. SC0000 opening @0x18a5+ on INIT2 CG handles. Cluster 0x21c-0x243. Handler 0x4234e0; Kelebek VA 0x4215D0 is drift.
 - **grounding:** source=investigation, confidence=high
 
+### 0x228 `u00421940` (u00421940, argc 5)
+- **summary:** 0x228 query-position (succ)(handle)(outX)(outY)(outZ): read the object's current computed position into vars (worker FUN_0047cdd0). C# VM: writes V24 + success flag. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
+### 0x229 `u004219E0` (u004219E0, argc 5)
+- **summary:** 0x229 set-position2 (handle)(op2)(x)(y)(z): set object position/geometry directly (FUN_00472bb0/be0). C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
+### 0x22f `u00421DD0` (u00421DD0, argc 5)
+- **summary:** 0x22f set-position (handle)(op2)(x)(y)(z): set the object base position (direct transform, not ping-pong). Worker gfx_worker_set_translation @0x472e90. C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
+### 0x231 `u00421EA0` (u00421EA0, argc 4)
+- **summary:** 0x231 anim-srcrect (handle)(period)(gridW)(gridH): ping-pong the spritesheet cell across the grid over period ms. Worker gfx_worker_anim_srcrect @0x47eec0 -> interpolator SRC-RECT SCROLL channel. C# VM: GfxState.SetSrcRect. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
+### 0x232 `u00421EF0` (u00421EF0, argc 4)
+- **summary:** 0x232 anim-color (handle)(period)(alpha)(color): ping-pong the object color/alpha toward the packed target over period ms (pulsing GLOW). Worker gfx_worker_anim_color @0x47ef50 -> interpolator COLOR channel. C# VM: GfxState.SetColorAnim. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
 ### 0x234 `anim-start` (anim-start, argc 5)
 - **summary:** (handle)(duration)(x)(y)(z) — animate object toward target vec3 (x,y,z) over the GLOBAL clock; cmd-type 0xb, worker gfx_anim_start. op2=this object's duration (label_1235a maxes into the clock). SC0000 opening @0xdaf on INIT2 CG handles. Handler 0x423da0; Kelebek VA 0x422060 is drift.
 - **grounding:** source=investigation, confidence=high
@@ -178,6 +198,14 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 ### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
 - **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
 - **grounding:** source=investigation, confidence=high
+
+### 0x239 `u004223C0` (u004223C0, argc 6)
+- **summary:** 0x239 set-srcrect-cell (handle)(p3)(p4)(gridW)(gridH)(cell): set the spritesheet grid + static visible cell. Worker gfx_worker_set_srcrect_cell @0x47ed90. C# VM: GfxState.SetSrcRect (period 0). See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
+
+### 0x23f `u00422930` (u00422930, argc 2)
+- **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
+- **grounding:** source=kelebek, confidence=low
 
 ## input
 
@@ -960,14 +988,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x228 `u00421940` (u00421940, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x229 `u004219E0` (u004219E0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x22a `u00421A90` (u00421A90, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -980,19 +1000,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x22f `u00421DD0` (u00421DD0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x230 `u00421E70` (u00421E70, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x231 `u00421EA0` (u00421EA0, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x232 `u00421EF0` (u00421EF0, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1001,10 +1009,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x236 `u004221A0` (u004221A0, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x239 `u004223C0` (u004223C0, argc 6)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1021,10 +1025,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x23d `u004162F0` (u004162F0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23f `u00422930` (u00422930, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

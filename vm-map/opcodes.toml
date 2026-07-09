@@ -5750,8 +5750,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u00421940"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x228 query-position (succ)(handle)(outX)(outY)(outZ): read the object's current computed position into vars (worker FUN_0047cdd0). C# VM: writes V24 + success flag. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -5791,8 +5791,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u004219E0"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x229 set-position2 (handle)(op2)(x)(y)(z): set object position/geometry directly (FUN_00472bb0/be0). C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -5935,8 +5935,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u00421DD0"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x22f set-position (handle)(op2)(x)(y)(z): set the object base position (direct transform, not ping-pong). Worker gfx_worker_set_translation @0x472e90. C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -5997,8 +5997,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u00421EA0"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x231 anim-srcrect (handle)(period)(gridW)(gridH): ping-pong the spritesheet cell across the grid over period ms. Worker gfx_worker_anim_srcrect @0x47eec0 -> interpolator SRC-RECT SCROLL channel. C# VM: GfxState.SetSrcRect. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -6033,8 +6033,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u00421EF0"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x232 anim-color (handle)(period)(alpha)(color): ping-pong the object color/alpha toward the packed target over period ms (pulsing GLOW). Worker gfx_worker_anim_color @0x47ef50 -> interpolator COLOR channel. C# VM: GfxState.SetColorAnim. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -6208,8 +6208,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u004223C0"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x239 set-srcrect-cell (handle)(p3)(p4)(gridW)(gridH)(cell): set the spritesheet grid + static visible cell. Worker gfx_worker_set_srcrect_cell @0x47ed90. C# VM: GfxState.SetSrcRect (period 0). See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
@@ -6363,8 +6363,8 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "u00422930"
-category = "unknown"
-summary = ""
+category = "draw"
+summary = "0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "kelebek"
 confidence = "low"
