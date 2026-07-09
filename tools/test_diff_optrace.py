@@ -1,6 +1,6 @@
 # tools/test_diff_optrace.py (plain runner)
 import sys
-from diff_optrace import first_divergence, pick_scene_codebase
+from diff_optrace import first_divergence, pick_scene_codebase, operand_filter
 FAILS=[]
 def check(c,m): (FAILS.append(m) or print("FAIL:",m)) if not c else print("ok:",m)
 
@@ -21,8 +21,13 @@ def test_pick_codebase_by_longest_common_prefix():
              {"codebase":200,"offset":0},{"codebase":200,"offset":1},{"codebase":200,"offset":2}]
     check(pick_scene_codebase(entries,[0,1,2])==200, "codebase matching VM prefix chosen")
 
+def test_operand_filter_drops_zero_operand_ops():
+    # argc: 0x0->2, 0x5->0 (marker), 0xa->1, 0xf->0 => keep 0x0 and 0xa
+    argc = {0x0:2, 0x5:0, 0xa:1, 0xf:0}
+    check(operand_filter([0x0,0x5,0xa,0xf,0x5], argc)==[0x0,0xa], "operand_filter keeps only argc>=1 ops")
+
 def main():
     test_equal_no_divergence(); test_first_divergence_point(); test_prefix_shorter_vm()
-    test_pick_codebase_by_longest_common_prefix()
+    test_pick_codebase_by_longest_common_prefix(); test_operand_filter_drops_zero_operand_ops()
     print("FAILURES:",len(FAILS)); return 1 if FAILS else 0
 if __name__=="__main__": sys.exit(main())

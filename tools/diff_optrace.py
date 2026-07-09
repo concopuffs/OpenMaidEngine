@@ -46,6 +46,15 @@ def first_divergence(a: list, b: list) -> dict:
             "b": b[n] if n < len(b) else None}
 
 
+def operand_filter(offsets: list, argc_by_off: dict) -> list:
+    """Keep only offsets whose instruction has >=1 operand — the subsequence an OPERAND-mode engine
+    capture (vm_operand_fetch hook, deduped per-pc) can see. Zero-operand ops (stmt-begin/end and other
+    markers) never trigger an operand fetch, so they are absent from the engine trace; filtering the VM
+    trace the same way makes the two directly comparable. (Markers don't branch, so control flow is
+    preserved.) Offsets not in the map (shouldn't happen for a valid scene) are dropped."""
+    return [o for o in offsets if argc_by_off.get(o, 0) >= 1]
+
+
 def pick_scene_codebase(entries: list, vm_offsets: list):
     """The codebase whose in-order offset sequence shares the longest common prefix with `vm_offsets`
     — identifies which loaded-script instance in the engine trace is the scene we ran in the VM. Returns
@@ -95,12 +104,13 @@ def _load_scene_disasm(scene: str):
     scr = sys4load.load(paths.scripts()[key])
     sys4load.decode_code(scr)
     op_by_off = {ins.offset: ins.opcode for ins in scr.instructions}
+    argc_by_off = {ins.offset: len(ins.args) for ins in scr.instructions}
     line_by_off = {}
     for line in sys4load.render_listing(scr).splitlines():
         m = re.match(r"\s*0x([0-9a-fA-F]+):\s*(.*)", line)
         if m:
             line_by_off[int(m.group(1), 16)] = m.group(2).rstrip()
-    return op_by_off, line_by_off
+    return op_by_off, argc_by_off, line_by_off
 
 
 def _fmt(off, op_by_off, line_by_off) -> str:
@@ -111,15 +121,21 @@ def _fmt(off, op_by_off, line_by_off) -> str:
     return f"0x{off:05x}: {line}" + (f"   [op 0x{op:x}]" if op is not None else "   [op ?]")
 
 
-def report(scene, entries, vm_offsets):
+def report(scene, entries, vm_offsets, operand_mode=True):
+    op_by_off, argc_by_off, line_by_off = _load_scene_disasm(scene)
+    # An operand-hook engine capture only sees ops with >=1 operand; filter the VM trace to match so the
+    # two are the same subsequence. --full turns this off (for a tick-mode engine capture, which sees all).
+    if operand_mode:
+        vm_offsets = operand_filter(vm_offsets, argc_by_off)
+
     cb = pick_scene_codebase(entries, vm_offsets)
     if cb is None:
         print(f"[!] could not identify {scene}'s codebase in the engine trace "
               f"({len(entries)} entries, {len({e['codebase'] for e in entries})} codebases) — "
-              f"no shared leading offset with the VM trace.")
+              f"no shared leading offset with the VM trace"
+              f"{' (operand-filtered)' if operand_mode else ''}.")
         return 2
     engine_seq = [e["offset"] for e in entries if e["codebase"] == cb]
-    op_by_off, line_by_off = _load_scene_disasm(scene)
 
     d = first_divergence(engine_seq, vm_offsets)
     print(f"=== differential offset-path oracle: {scene} ===")
@@ -173,7 +189,7 @@ def main(argv=None):
 
     entries = _load_engine(engine_path)
     vm_offsets = json.loads(vm_path.read_text(encoding="utf-8"))["offsets"]
-    return report(scene, entries, vm_offsets)
+    return report(scene, entries, vm_offsets, operand_mode="--full" not in argv)
 
 
 if __name__ == "__main__":
