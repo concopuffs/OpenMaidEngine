@@ -236,6 +236,15 @@ if (args[0] == "trace")
         var jscripts = Paths.Scripts();
         var target = Sys4Loader.Load(jscripts[sceneName.ToUpperInvariant()], table);
         var session = new GameSession();
+        // optional 0xADDR=VAL seeds — inject pre-scene state the cold --boot misses (e.g. 0x6c1=1, the
+        // ADV-chrome enable set by the real engine's system boot). Applied before boot so they persist.
+        foreach (var s in args.Where(a => a.Contains('=') && a != outPath))
+        {
+            var kv = s.Split('=');
+            int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
+            long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
+            session.Seed(k, v);
+        }
         if (boot)
             foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
                 session.RunScene(Sys4Loader.Load(jscripts[b], table), table, new CaptureHost(), null, provider);
