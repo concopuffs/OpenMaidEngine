@@ -255,6 +255,26 @@ public sealed class VirtualMachine
                 Gfx.GetOrCreate(Read(a[0])).V18 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             case "set-gfx-geom3-b":     // 0x219 (handle)(a)(b)(c) -> V24
                 Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+
+            // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
+            case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
+            case "u004219E0":   // 0x229 set-position2: same shape, direct position
+                Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[2]), Read(a[3]), Read(a[4])); return pc + 1;
+            case "u004223C0":   // 0x239 spritesheet cell: (handle)(p3)(p4)(gridW)(gridH)(cell) — static cell
+                Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
+            case "u00421EA0":   // 0x231 anim spritesheet: (handle)(period)(gridW)(gridH) — ping-pong the cell
+                Gfx.SetSrcRect(Read(a[0]), Read(a[2]), Read(a[3]), 0, Read(a[1])); return pc + 1;
+            case "u00421EF0":   // 0x232 anim color/glow: (handle)(period)(alpha)(color) — ping-pong the color
+                Gfx.SetColorAnim(Read(a[0]), Read(a[1]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;
+            case "u00421940":   // 0x228 query-position: (succ)(handle)(outX)(outY)(outZ) <- current V24
+            {
+                var obj = Gfx.TryGet(Read(a[1]));
+                var v = obj?.V24 ?? default;
+                Write(a[2], v.X); Write(a[3], v.Y); Write(a[4], v.Z);
+                Write(a[0], obj != null ? 0 : 1); return pc + 1;
+            }
+            case "u00422930":   // 0x23f query-object: (out)(handle) <- 0 if the object exists, else -1
+                Write(a[0], Gfx.TryGet(Read(a[1])) != null ? 0 : -1); return pc + 1;
             case "set-gfx-geom3-c":     // 0x1ff (handle)(a)(b)(c) -> V16c
                 Gfx.GetOrCreate(Read(a[0])).V16c = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             case "set-gfx-field64":     // 0x212 (idx)(val)
