@@ -16,6 +16,7 @@ public sealed class VirtualMachine
     private readonly IHost _host;
     private readonly VmOptions _o;
     private readonly IScriptProvider? _provider;
+    private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
     private int _depth;
     private readonly ITraceSink _sink;
@@ -221,6 +222,9 @@ public sealed class VirtualMachine
                 Gfx.ClearSurface((int)Read(a[0]));
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
+                if (_diagSetTexture)   // AGE_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
+                    System.Console.Error.WriteLine($"[settex] resId=0x{Read(a[0]):x} slot={(int)Read(a[1])} " +
+                        $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
                 Gfx.SetSurface((int)Read(a[1]), Read(a[0]), a.Count > 2 ? Read(a[2]) : 0);
                 _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;   // host still tracks dims for get-texture-size
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
@@ -238,6 +242,12 @@ public sealed class VirtualMachine
             case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
+                if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)
+                {
+                    long h = Read(a[1]);
+                    System.Console.Error.WriteLine($"[query] handle=0x{h:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
+                        $"-> QuerySlot={Gfx.QuerySlot(h)} registered={Gfx.IsRegistered(h)}");
+                }
                 Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
             case "query-gfx-field?":    // 0x216 (out)(idx)
                 Write(a[0], Gfx.QueryField(Read(a[1]))); return pc + 1;

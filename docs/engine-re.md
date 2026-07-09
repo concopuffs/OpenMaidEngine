@@ -637,11 +637,20 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
    the effect spritesheet (`AE001H`, an 800×400 4×2 grid of blob frames) **all set-texture into slot 0**.
    Objects live-reference their slot, so loading the effect **evicts** the BG → grey; and the effect is
    drawn full-screen from slot 0 (its object `src=(0,0 800x600)`) → the whole sheet (blob grid) covers the
-   screen. ⇒ The layering failure is a **slot-assignment** problem: the slot-selecting globals aren't
-   populated (unseeded boot/gfx state, or a stubbed op the display subroutine relies on), collapsing the
-   scene into one slot. **Open (next):** trace an effect-display subroutine to find which global holds the
-   slot and why it's 0 (`--boot`/INIT2 gap vs a stubbed slot-compute op). Same class as the known
-   `G[0x624xx]` gfx boot-state gap. NOT a compositor/z-order/blend bug.
+   screen. ⇒ The layering failure is a **slot-assignment** problem. **CONFIRMED CAUSE (2026-07-08, live
+   `AGE_DIAG_SETTEX` trace):** every `set-texture` slot = `G[0x62452]`, written by `query-gfx-object?`
+   (`0x215`) which returns **-1** for the (correctly-unregistered) CG/effect handles → the fallback at
+   SC0000 `label_12649` does `G[0x62452] = lookup-array-2d(rec[s3]=G[0x3239], G[0x62450], 3, 0)` = **0**
+   because the slot table `rec[s3]`/`G[0x3239]` is **empty**. That table is filled by `call label_125bd`
+   (SC0000 `0x50f`, slots 4..13), which is reached **only through the scene-coroutine framework** — the
+   `G[0xaba5c]` gate (`0x450`) + op `0x140` (`u0041F9C0`, coroutine LABEL/yield `"LABEL" "J"` @ `0x46d`).
+   **Op `0x140` is stubbed** (SC0000 GAP list) → the coroutine re-entry never routes through `label_125bd`
+   → slot table stays 0 → all layers collapse into slot 0. This is exactly the "second still-latent gap"
+   flagged above (§"the render drift's second half"), now confirmed as the cause of the visible grey BG on
+   multi-object pages. **Fix = implement the scene-coroutine framework (`0x7b`/`0x7c`/`0x140` + `G[0xaba5c]`
+   gate) so `label_125bd` runs** (or, as a targeted unblock, run `label_125bd`/seed `G[0x3239]` directly).
+   NOT a compositor/z-order/blend bug. Diagnostics: `AGE_DIAG_SETTEX=1` env → VM logs each `set-texture`
+   slot operand + `query-gfx-object?` result.
 
 ---
 

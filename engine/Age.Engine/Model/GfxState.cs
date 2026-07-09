@@ -113,6 +113,7 @@ public sealed class GfxState
     /// <summary>Op 0x215 (query-gfx-object): native returns std::map::find(handle) — the registered value (=handle),
     /// or 0xffffffff (=-1) when the handle was never 0x1a2-registered. NOT a fabricated slot allocator.</summary>
     public int QuerySlot(long handle) => _registry.Contains(handle) ? (int)handle : -1;
+    public bool IsRegistered(long handle) { lock (_lock) { return _registry.Contains(handle); } }
     public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
 
     public void Release(long handle)
