@@ -48,13 +48,23 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   `GetProcAddress`-resolved into private pointer tables, invisible to a static IAT scan. Report/dump left
   at `build/pe-sieve/process_<pid>/` (disposable).
 
-  **→ The right approach (queued, Frida-based; the real "Task B"):** name the dynamically-resolved APIs at
-  their call sites via the LIVE process. (1) Frida-read the loaded modules' export tables → `{runtime_addr
-  → dll!Func}`; (2) read the engine module's resolved import-pointer storage from the SAME live process,
-  resolve each stored pointer → name, and record **`RVA → name`** (RVAs in the fixed `0x400000` main module
-  are ASLR-stable; only the DLL targets relocate, and we resolve those live); (3) apply the `RVA → name`
-  labels to the `/v2` Ghidra image. All plain-JS Frida reads (no spawn, no patching — anti-tamper-safe).
-  This replaces the pe-sieve step; spec/plan when picked up.
+  **→ The Frida import-map approach — ✅ DONE 2026-07-09 (replaced pe-sieve).** Named the
+  dynamically-resolved APIs at their call sites via the LIVE process. `tools/frida/map_imports.py`
+  (read-only, plain-JS): (1) Frida-reads all loaded modules' export tables → `{runtime_addr → dll!Func}`
+  (23,342 exports); (2) scans the `0x400000` module for aligned DWORDs holding those addresses → `RVA →
+  name` (ASLR-stable: RVAs into the fixed main module transfer to the dump even though the DLL targets
+  relocate); (3) a `run_script_inline` pass labels the `/v2` image `imp_<dll>_<func>`. **Result: the packer's
+  rebuilt core IAT lives at RVA `0x16f000` (VA `0x56f000`) — 248 imports labeled** (kernel32 129, user32 57,
+  winmm 20, gdi32 17, advapi32/ole/oleaut/version/ntdll), 0 clobbers. **Validated:** `FUN_0044f390` now reads
+  `(*imp_kernel32_CreateFileA)` / `(*imp_kernel32_SetFilePointer)` at its resolver I/O; `sleep_timer_arm` reads
+  `(*imp_winmm_timeGetTime)()` — pinning the long-standing `DAT_0056f3d4` = **timeGetTime**. Tool:
+  `tools/frida/map_imports.py [--recon]` → `build/import-map.json`; plan
+  `docs/superpowers/plans/2026-07-09-frida-import-map.md`.
+  **Known limit (by design):** only the module-resident IAT is labelable. `d3d9`/`shell32`/`dsound`/CRT are
+  `GetProcAddress`-resolved into HEAP (not in the `0x400000` dump), so they aren't labeled — and D3D9 is used
+  via COM vtables (`Present` = device vtable slot 17, see `probe_present.py`), not an import thunk, so this
+  costs us nothing on the render path. 29 isolated singleton matches were set aside (`build/import-map-singletons.json`),
+  not auto-applied.
 
 ---
 
