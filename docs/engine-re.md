@@ -116,9 +116,23 @@ decode when you reverse one (the generic name is a floor, not a final).
 > GUI's active program, so a wrong-program script would mutate/measure garbage.
 
 **Other confirmed engine-context offsets** (`ctx`/`esi`): `+0x53d14` = current gfx-object index;
-`+0x53d88` = per-object cmd-type table (stride `0x78` = 120 bytes); operand-fetch helper = `call
-0x41b940` (thiscall, `ecx=ctx`, arg = operand index → returns the operand value); `FUN_00415f30(i)` =
-a companion operand accessor.
+`+0x53d88` = per-object cmd-type table (stride `0x78` = 120 bytes); operand-fetch helper =
+**`vm_operand_fetch`@`0x41b940`** (thiscall, `ecx=ctx`, arg = operand index → returns the operand value);
+**`vm_operand_write`@`0x425fb0`** = the counterpart store; **`vm_operand_lvalue`@`0x415f30`** = the
+companion index/pointer accessor.
+
+**Hot-helper naming pass (2026-07-09, lever #2).** Ghidra's Function ID analyzer names **0** functions on
+this image (the bundled FidDbs don't cover the VC9/VS2008 static runtime; ~3,660 of 4,428 funcs stay
+`FUN_`), and the library workers we actually touch were already hand-named (`gfx_registry_map_find`,
+etc.). So "STL/CRT auto-naming" had little to add — but the recon (rank unnamed funcs by call-count)
+surfaced the real win: ubiquitous **documented-but-unnamed helpers**. Named the top 5 (~2,400 call
+sites): `vm_operand_fetch`@`0x41b940` (1021 refs), `vm_operand_write`@`0x425fb0` (188),
+`vm_operand_lvalue`@`0x415f30`, plus two CRT primitives identified by behavior —
+`__security_check_cookie`@`0x54f981` (692; compares `__security_cookie`=`DAT_005c28c0`) and
+`operator_new`@`0x5502be` (533; `_malloc`+`__callnewh`+throw `bad_alloc`). ⇒ every handler now reads
+e.g. `vm_operand_fetch(2)` not `FUN_0041b940(2)`. No FidDb generation (out of scope, low ROI). Rename
+hot unnamed funcs by call-count when de-noising further; there is no registry file for these — the
+Ghidra name is the record.
 
 **These `ctx` offsets are now a typed struct (2026-07-09).** The canonical field map is
 `vm-map/engine-ctx.toml` → generated `docs/engine-ctx-reference.md`; a `run_script_inline` pass created
