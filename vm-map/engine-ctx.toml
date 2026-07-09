@@ -1,0 +1,184 @@
+# vm-map/engine-ctx.toml -- CANONICAL source for the EngineCtx struct (hand-edited).
+# Generated: build/engine-ctx.json + docs/engine-ctx-reference.md via `tools/engine_ctx_build.py --build`.
+# Applied to the Ghidra /v2 image via run_script_inline (docs/superpowers/plans/2026-07-09-engine-ctx-struct.md).
+# ctx = the engine context (esi; thiscall `this`). The VM global bank G[...] is a SEPARATE address space
+# (vm-map/globals.toml), NOT ctx offsets -- do not add globals here. Grows one [[field]] at a time as we RE more.
+[meta]
+struct_name = "EngineCtx"
+size = 0xa1000
+
+[[field]]
+offset = 0x408
+name = "gfx_obj_registry"
+type = "int"
+note = "gfx object registry (std::map handle->object); op 0x1a2 insert / 0x215 find"
+[[field]]
+offset = 0x40c
+name = "sys4ini_count"
+type = "int"
+note = "SYS4INI record count"
+[[field]]
+offset = 0x410
+name = "archive_name_table"
+type = "void*"
+note = "archive-name table base (arc_id*0x100 indexes it)"
+[[field]]
+offset = 0x414
+name = "sys4ini_records"
+type = "void*"
+note = "SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50"
+[[field]]
+offset = 0x3028
+name = "alt_pack_table"
+type = "int"
+note = "call-script high-byte alternate pack table (unused by corpus)"
+[[field]]
+offset = 0xb558
+name = "gfx_dirty_a"
+type = "int"
+note = "gfx dirty flag (anim set raises)"
+[[field]]
+offset = 0xb560
+name = "gfx_dirty_b"
+type = "int"
+note = "gfx dirty flag"
+[[field]]
+offset = 0x14d54
+name = "gfx_obj_ptr_table"
+type = "void*"
+note = "per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c)"
+[[field]]
+offset = 0x14f45
+name = "script_frame_index"
+type = "int"
+note = "call-script frame index (0x1e-dword frames)"
+[[field]]
+offset = 0x46d14
+name = "query_table_46d14"
+type = "void*"
+note = "stride-0x14 table read by op 0x216"
+[[field]]
+offset = 0x51b64
+name = "frame_timer"
+type = "int"
+note = "frame timer (present updates 0x51b64/0x51b68)"
+[[field]]
+offset = 0x51b78
+name = "anim_clock_elapsed"
+type = "int"
+note = "global anim clock elapsed (op 0x238 zeroes)"
+[[field]]
+offset = 0x51b7c
+name = "anim_clock_duration"
+type = "int"
+note = "global anim clock total duration (op 0x238 sets)"
+[[field]]
+offset = 0x52bd4
+name = "surfaces"
+type = "void*"
+note = "surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate"
+[[field]]
+offset = 0x53d14
+name = "cur_ctx_index"
+type = "uint"
+note = "current gfx-object / script-context index (curCtx); indexes 0x78-byte records"
+[[field]]
+offset = 0x53d28
+name = "frame_codebase"
+type = "void*"
+note = "current frame codebase (PC = codebase + off*4)"
+[[field]]
+offset = 0x53d2c
+name = "frame_pc"
+type = "int"
+note = "current frame PC column (op = *(0x53d2c + curCtx*0x78))"
+[[field]]
+offset = 0x53d60
+name = "ctx_record_base"
+type = "void*"
+note = "0x78-byte context-record array base (coroutine/script contexts)"
+[[field]]
+offset = 0x53d64
+name = "gfx_obj_record_array"
+type = "void*"
+note = "gfx object-record array (field[0]=0xffffffff free; cmd-type at rec+0x24)"
+[[field]]
+offset = 0x53d88
+name = "cmd_type_table"
+type = "int"
+note = "per-object cmd-type column base (write *(0x53d88 + curCtx*0x78))"
+[[field]]
+offset = 0x55120
+name = "anti_tamper_a"
+type = "int"
+note = "anti-tamper checksum operand"
+[[field]]
+offset = 0x55124
+name = "anti_tamper_b"
+type = "int"
+note = "anti-tamper checksum operand"
+[[field]]
+offset = 0x5512c
+name = "anti_tamper_fp"
+type = "int"
+note = "anti-tamper (import fn ptr / result)"
+[[field]]
+offset = 0x55248
+name = "ret_stack_a"
+type = "void*"
+note = "per-frame return stack (op 0x8f call pushes)"
+[[field]]
+offset = 0x552e8
+name = "ret_stack_b"
+type = "void*"
+note = "per-frame return stack (companion)"
+[[field]]
+offset = 0x5f304
+name = "sleep_timer"
+type = "int"
+note = "sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration)"
+[[field]]
+offset = 0x6da88
+name = "coroutine_yield_a"
+type = "void*"
+note = "op 0x7b yield-state save (op1 -> +ctxidx*4)"
+[[field]]
+offset = 0x6db28
+name = "coroutine_yield_b"
+type = "void*"
+note = "op 0x7b yield-state save (op2 -> +ctxidx*4)"
+[[field]]
+offset = 0x6dbc8
+name = "coroutine_runstate"
+type = "int"
+note = "op 0x7c resume gate (run-state bit 0x2000000)"
+[[field]]
+offset = 0x6dbcc
+name = "coroutine_resume_off"
+type = "int"
+note = "op 0x7c resume PC offset"
+[[field]]
+offset = 0x9b24c
+name = "dispatch_table"
+type = "void*"
+note = "opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4)"
+[[field]]
+offset = 0xa0cc0
+name = "screen_w"
+type = "int"
+note = "screen width (640)"
+[[field]]
+offset = 0xa0cc4
+name = "screen_h"
+type = "int"
+note = "screen height (480)"
+[[field]]
+offset = 0xa0cc8
+name = "screen_bpp"
+type = "int"
+note = "screen bpp (8)"
+[[field]]
+offset = 0xa0ce4
+name = "run_state_flags"
+type = "uint"
+note = "interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward)"
