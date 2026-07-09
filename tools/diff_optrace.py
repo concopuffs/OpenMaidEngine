@@ -55,6 +55,39 @@ def operand_filter(offsets: list, argc_by_off: dict) -> list:
     return [o for o in offsets if argc_by_off.get(o, 0) >= 1]
 
 
+def align(a: list, b: list, window: int = 6) -> dict:
+    """Resync-tolerant alignment of engine offsets `a` vs VM offsets `b`. Strict lockstep over-reports:
+    the operand-hook engine capture misses not just zero-operand ops but any op whose operands aren't
+    fetched via `vm_operand_fetch` (comment, set-string, the string-op cluster) — the engine *executes*
+    them (they sit after non-branching ops) but they're absent from `a`, so they appear as one-sided
+    insertions in `b`. On a mismatch we skip up to `window` such insertions on either side to realign;
+    only a mismatch that CANNOT be resynced within the window is a genuine control-flow fork.
+
+    Returns {hard, i, j, a, b, resyncs, skipped_b, skipped_a}: `hard=True` with the diverging engine/VM
+    offsets at indices i/j when a real fork is found; `hard=False` (one side exhausted) when `b` is a
+    clean resync-subsequence of `a` (the VM merely halted early). `skipped_b` = the blind-spot ops."""
+    i = j = 0
+    resyncs = 0
+    skipped_b, skipped_a = [], []
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+            continue
+        found = False
+        for s in range(1, window + 1):
+            if j + s < len(b) and a[i] == b[j + s]:      # b had s extra (blind-spot) ops
+                skipped_b.extend(b[j:j + s]); j += s; resyncs += 1; found = True; break
+            if i + s < len(a) and a[i + s] == b[j]:      # a had s extra ops
+                skipped_a.extend(a[i:i + s]); i += s; resyncs += 1; found = True; break
+        if not found:
+            return {"hard": True, "i": i, "j": j, "a": a[i], "b": b[j],
+                    "resyncs": resyncs, "skipped_b": skipped_b, "skipped_a": skipped_a}
+    return {"hard": False, "i": i, "j": j,
+            "a": a[i] if i < len(a) else None, "b": b[j] if j < len(b) else None,
+            "resyncs": resyncs, "skipped_b": skipped_b, "skipped_a": skipped_a}
+
+
 def pick_scene_codebase(entries: list, vm_offsets: list):
     """The codebase whose in-order offset sequence shares the longest common prefix with `vm_offsets`
     — identifies which loaded-script instance in the engine trace is the scene we ran in the VM. Returns
@@ -137,34 +170,52 @@ def report(scene, entries, vm_offsets, operand_mode=True):
         return 2
     engine_seq = [e["offset"] for e in entries if e["codebase"] == cb]
 
-    d = first_divergence(engine_seq, vm_offsets)
+    r = align(engine_seq, vm_offsets)
     print(f"=== differential offset-path oracle: {scene} ===")
     print(f"engine codebase 0x{cb:x}: {len(engine_seq)} executed offsets "
           f"(of {len(entries)} total across {len({e['codebase'] for e in entries})} codebases)")
     print(f"VM: {len(vm_offsets)} executed offsets")
 
-    if d["index"] is None:
-        print(f"\nNO DIVERGENCE over {d['agreed']} steps — the VM path matches the engine exactly. ✓")
+    # Blind-spot summary: ops present in the VM trace that the operand hook can't see in the engine
+    # (the engine executes them, but their operands aren't fetched via vm_operand_fetch).
+    if r["skipped_b"]:
+        from collections import Counter
+        c = Counter(op_by_off.get(o) for o in r["skipped_b"])
+        blind = ", ".join(f"0x{o:x}×{n}" for o, n in c.most_common())
+        print(f"operand-hook blind spots (VM-only, artifacts — engine ran them but the hook can't see "
+              f"non-fetched operands): {len(r['skipped_b'])} ops, {r['resyncs']} resyncs — {blind}")
+    if r["skipped_a"]:
+        # engine ran these; the VM's path skipped them and then reconverged. NOT artifacts — small
+        # reconverging branch/state differences worth a look (e.g. a still-missing pre-scene flag).
+        print(f"engine-only detours (VM skipped, reconverged — potential residual state/branch gaps): "
+              f"{len(r['skipped_a'])}")
+        for o in r["skipped_a"]:
+            print(f"    {_fmt(o, op_by_off, line_by_off)}")
+
+    if not r["hard"]:
+        tail = (" — but see the engine-only detours above" if r["skipped_a"] else
+                " ✓ every difference was an operand-hook blind spot")
+        print(f"\nNo NON-REALIGNABLE fork: the VM path matches the engine for all {r['j']} VM ops "
+              f"(then the VM halts early at wait-for-input){tail}.")
         return 0
 
-    i = d["index"]
-    print(f"\nAGREED {d['agreed']} steps, then DIVERGE at index {i}:")
+    i, j = r["i"], r["j"]
+    print(f"\nAGREED to engine op {i} / VM op {j}, then DIVERGE:")
     if i > 0:
-        shared = engine_seq[i - 1]
-        print(f"  last agreed op   {_fmt(shared, op_by_off, line_by_off)}")
-        print(f"                   ^ this instruction's successor differs — the mis-modeled branch/op")
-    print(f"  engine went ->   {_fmt(d['a'], op_by_off, line_by_off)}")
-    print(f"  VM     went ->   {_fmt(d['b'], op_by_off, line_by_off)}")
+        print(f"  last agreed op   {_fmt(engine_seq[i - 1], op_by_off, line_by_off)}")
+        print(f"                   ^ this instruction's successor differs — the mis-modeled branch/op/state")
+    print(f"  engine went ->   {_fmt(r['a'], op_by_off, line_by_off)}")
+    print(f"  VM     went ->   {_fmt(r['b'], op_by_off, line_by_off)}")
 
-    def ctx(seq, label):
-        lo, hi = max(0, i - 3), min(len(seq), i + 4)
+    def ctx(seq, idx, label):
+        lo, hi = max(0, idx - 3), min(len(seq), idx + 4)
         print(f"\n  {label} context [{lo}..{hi}):")
-        for j in range(lo, hi):
-            mark = " <-- diverge" if j == i else ("  (last agreed)" if j == i - 1 else "")
-            print(f"    [{j}] {_fmt(seq[j], op_by_off, line_by_off)}{mark}")
+        for k in range(lo, hi):
+            mark = " <-- diverge" if k == idx else ("  (last agreed)" if k == idx - 1 else "")
+            print(f"    [{k}] {_fmt(seq[k], op_by_off, line_by_off)}{mark}")
 
-    ctx(engine_seq, "engine")
-    ctx(vm_offsets, "VM")
+    ctx(engine_seq, i, "engine")
+    ctx(vm_offsets, j, "VM")
     return 0
 
 

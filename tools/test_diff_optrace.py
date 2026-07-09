@@ -1,6 +1,6 @@
 # tools/test_diff_optrace.py (plain runner)
 import sys
-from diff_optrace import first_divergence, pick_scene_codebase, operand_filter
+from diff_optrace import first_divergence, pick_scene_codebase, operand_filter, align
 FAILS=[]
 def check(c,m): (FAILS.append(m) or print("FAIL:",m)) if not c else print("ok:",m)
 
@@ -26,8 +26,18 @@ def test_operand_filter_drops_zero_operand_ops():
     argc = {0x0:2, 0x5:0, 0xa:1, 0xf:0}
     check(operand_filter([0x0,0x5,0xa,0xf,0x5], argc)==[0x0,0xa], "operand_filter keeps only argc>=1 ops")
 
+def test_align_resyncs_over_blindspot_insertions():
+    # b has an extra op (99) the engine hook can't see; align skips it, no real fork
+    r = align([0,1,2,3],[0,1,99,2,3])
+    check(r["hard"] is False and r["skipped_b"]==[99], "align resyncs over a one-sided blind-spot op")
+
+def test_align_reports_hard_fork():
+    r = align([0,1,2,3,4],[0,1,7,8,9])          # after 0,1 they truly fork (no resync within window)
+    check(r["hard"] and r["a"]==2 and r["b"]==7 and r["i"]==2 and r["j"]==2, "align reports a genuine fork")
+
 def main():
     test_equal_no_divergence(); test_first_divergence_point(); test_prefix_shorter_vm()
     test_pick_codebase_by_longest_common_prefix(); test_operand_filter_drops_zero_operand_ops()
+    test_align_resyncs_over_blindspot_insertions(); test_align_reports_hard_fork()
     print("FAILURES:",len(FAILS)); return 1 if FAILS else 0
 if __name__=="__main__": sys.exit(main())
