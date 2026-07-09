@@ -255,7 +255,7 @@ public partial class Main : Godot.Control
         double clockDur = System.Math.Max(1, _vm.Gfx.AnimClockDurationTicks) * GameTickSeconds;
         bool clockReset = clockGen != _lastClockGen;
         _lastClockGen = clockGen;
-        foreach (var v in _vm.Gfx.SnapshotVisibleObjects())   // already ascending-handle = z-order
+        foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
         {
             float a = AlphaFor(v, clockReset, clockDur) * (v.Alpha / 255f);
             if (v.SurfaceResId == 0)
