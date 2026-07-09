@@ -618,6 +618,31 @@ annotated in Ghidra, saved.
 **timed/animated-surface (movie-like) op**; plus the unclassified `0x21c/0x21d/0x224/0x242/0x23d/0x20a/0x20e/0x243`
 tail (2-arg flags / inline). These stay GAP until a follow-up slice or are safe-noop'd if the opening tolerates it.
 
+### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
+
+Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md). The grey background has
+**two distinct causes**, both now proven:
+
+1. **CORRECTION to the blend section above — op `0x202`/`0x203` "alpha" is a TINT STRENGTH, not object
+   opacity.** Evidence: the primary CG is drawn with `0x203 (alpha=0, color=white)` = `0x00ffffff`. That
+   means "blend the tint (white) into the texel by strength 0" = **no tint, fully opaque CG** — but slice-A
+   treated the alpha byte as the object's opacity → the CG rendered fully transparent → grey. Fix (commit
+   5e4fdda): `RenderObject.TintStrength` split from `Alpha` (opacity); textured objects stay opaque and the
+   tint LERPs the RGB by strength (0=keep texel, 1=full tint). Surfaceless fills use the strength as fill
+   opacity. Verified: the opening event CGs render again (shot-confirmed).
+
+2. **Effect pages: everything collapses into slot 0.** `set-texture` is dominantly
+   `set-texture (GLOBAL resId)(GLOBAL slot)(local colorkey)` (543× across the corpus); the **slot is a
+   global**. In our run every such global resolves to **0**, so the background (`BG030A`), event CGs, and
+   the effect spritesheet (`AE001H`, an 800×400 4×2 grid of blob frames) **all set-texture into slot 0**.
+   Objects live-reference their slot, so loading the effect **evicts** the BG → grey; and the effect is
+   drawn full-screen from slot 0 (its object `src=(0,0 800x600)`) → the whole sheet (blob grid) covers the
+   screen. ⇒ The layering failure is a **slot-assignment** problem: the slot-selecting globals aren't
+   populated (unseeded boot/gfx state, or a stubbed op the display subroutine relies on), collapsing the
+   scene into one slot. **Open (next):** trace an effect-display subroutine to find which global holds the
+   slot and why it's 0 (`--boot`/INIT2 gap vs a stubbed slot-compute op). Same class as the known
+   `G[0x624xx]` gfx boot-state gap. NOT a compositor/z-order/blend bug.
+
 ---
 
 ## Native walls backlog (targets for this loop)
