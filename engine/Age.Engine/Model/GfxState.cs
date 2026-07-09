@@ -14,9 +14,13 @@ public readonly record struct AnimState(bool Enabled, bool Normalized, long TX, 
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
 /// "The full gfx render model").</summary>
+/// <summary><paramref name="Alpha"/> is the object's OPACITY (0-255). <paramref name="TintStrength"/> is how
+/// strongly <paramref name="Tint"/> (RGB) is blended into the texel (0=keep texel, 255=full tint) — this is the
+/// op 0x202/0x203/0x232 "alpha" byte, which is a tint strength, NOT opacity (conflating them made opaque CGs
+/// vanish — the grey-background bug).</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
-                                           AnimState Anim, int Alpha, long Tint, BlendKind Blend);
+                                           AnimState Anim, int Alpha, long Tint, int TintStrength, BlendKind Blend);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -236,20 +240,21 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
 
-                // ---- color: slice-A static base, then op-0x232 ping-pong toward the target ----
-                int alpha = 255; long tint = 0xFFFFFF; var blend = BlendKind.Opaque;
+                // ---- color: object stays OPAQUE; the op-0x202/0x203 alpha is a TINT STRENGTH (0=keep texel,
+                // 255=full tint), NOT opacity. 0x232 ping-pongs the strength (+tint) toward the target (glow). ----
+                int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
                 if (o.HasColor)
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(o.Color);
-                    alpha = a; tint = ((long)r << 16) | ((long)g << 8) | (long)b; blend = BlendKind.Alpha;
+                    strength = a; tint = ((long)r << 16) | ((long)g << 8) | (long)b; blend = BlendKind.Alpha;
                 }
                 if (o.ColorAnim)
                 {
                     if (o.ColorStart < 0) o.ColorStart = nowMs;
                     double t = PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod);
                     var (ta, tr, tg, tb) = BlendMath.UnpackArgb(o.ColorTarget);
-                    var (ba, br, bg, bb) = (alpha, (int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff), (int)(tint & 0xff));
-                    alpha = (int)(ba + (ta - ba) * t);
+                    var (br, bg, bb) = ((int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff), (int)(tint & 0xff));
+                    strength = (int)(strength + (ta - strength) * t);
                     tint = ((long)(br + (tr - br) * t) << 16) | ((long)(bg + (tg - bg) * t) << 8) | (long)(bb + (tb - bb) * t);
                     blend = BlendKind.Alpha;
                 }
@@ -278,7 +283,7 @@ public sealed class GfxState
                                           new AnimState(o.AnimEnabled, o.AnimNormalized,
                                                         o.AnimTarget.X, o.AnimTarget.Y, o.AnimTarget.Z,
                                                         o.AnimDurationTicks, o.AnimGeneration),
-                                          alpha, tint, blend));
+                                          alpha, tint, strength, blend));
             }
             return list;
         }

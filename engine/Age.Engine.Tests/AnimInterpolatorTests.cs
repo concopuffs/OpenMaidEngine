@@ -43,15 +43,17 @@ public class AnimInterpolatorTests
     }
 
     [Fact]
-    public void ColorAnim_PingPongsAlphaTowardTarget()
+    public void ColorAnim_PingPongsTintStrength_ObjectStaysOpaque()
     {
         var g = VisibleObj(0x100);
-        // base = opaque white (no static color); target = alpha 0 (fade out) => pulses opaque<->transparent
-        g.SetColorAnim(0x100, period: 1000, target: GfxState.PackColor(0x00, 0x000000));
+        // base = no tint (strength 0); target = full-strength (alpha 0xff) red glow => strength pulses 0<->255
+        g.SetColorAnim(0x100, period: 1000, target: GfxState.PackColor(0xFF, 0xFF0000));
         g.SnapshotVisibleObjects(0);                       // seeds start=0
-        var opaque = g.SnapshotVisibleObjects(0).Single();
-        Assert.Equal(255, opaque.Alpha);                   // t=0 -> base opaque
+        var baseFrame = g.SnapshotVisibleObjects(0).Single();
+        Assert.Equal(255, baseFrame.Alpha);                // object opacity ALWAYS opaque (never the color alpha)
+        Assert.Equal(0, baseFrame.TintStrength);           // t=0 -> no tint
         var peak = g.SnapshotVisibleObjects(500).Single();
-        Assert.Equal(0, peak.Alpha);                       // t=1 -> target alpha 0
+        Assert.Equal(255, peak.Alpha);                     // still opaque
+        Assert.Equal(255, peak.TintStrength);              // t=1 -> full tint strength (the glow peak)
     }
 }

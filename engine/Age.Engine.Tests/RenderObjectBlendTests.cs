@@ -14,25 +14,33 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
-    public void ObjectWithoutColor_ResolvesOpaqueWhiteTint()
+    public void ObjectWithoutColor_ResolvesOpaqueNoTint()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
         var ro = g.SnapshotVisibleObjects().Single();
-        Assert.Equal(255, ro.Alpha);
+        Assert.Equal(255, ro.Alpha);          // opaque
+        Assert.Equal(0, ro.TintStrength);     // no tint
         Assert.Equal(0xFFFFFF, ro.Tint);
         Assert.Equal(BlendKind.Opaque, ro.Blend);
     }
 
     [Fact]
-    public void DrawColor_0x203_SetsAlphaTintAndBlend()
+    public void DrawColor_0x203_IsTintStrength_ObjectStaysOpaque()
     {
+        // Op 0x203/0x202 alpha is TINT-BLEND STRENGTH, not object opacity (evidence: a CG drawn with
+        // (alpha=0, color=white) must stay fully OPAQUE + untinted, not vanish). Root cause of the grey-BG.
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
-        // emulate op 0x203: pack (alpha=0x80, color=0x102030) and mark HasColor
-        g.SetObjectColor(0x100, GfxState.PackColor(0x80, 0x102030));
+        g.SetObjectColor(0x100, GfxState.PackColor(0x00, 0xFFFFFF));   // "no tint" — the grey-BG case
         var ro = g.SnapshotVisibleObjects().Single();
-        Assert.Equal(0x80, ro.Alpha);
-        Assert.Equal(0x102030, ro.Tint);
-        Assert.Equal(BlendKind.Alpha, ro.Blend);
+        Assert.Equal(255, ro.Alpha);          // OBJECT STAYS OPAQUE (was wrongly 0 -> invisible)
+        Assert.Equal(0, ro.TintStrength);     // zero tint strength
+
+        g.SetObjectColor(0x100, GfxState.PackColor(0x80, 0x102030));   // half-strength tint toward 0x102030
+        var ro2 = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(255, ro2.Alpha);         // still opaque
+        Assert.Equal(0x80, ro2.TintStrength); // strength from the alpha byte
+        Assert.Equal(0x102030, ro2.Tint);
+        Assert.Equal(BlendKind.Alpha, ro2.Blend);
     }
 
     [Fact]
