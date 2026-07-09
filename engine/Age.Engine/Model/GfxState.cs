@@ -32,6 +32,15 @@ public sealed class GfxState
         public long Field64, Field68, Field6c;
         public long Color;
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
+
+        // ---- src-rect / spritesheet-cell channel (ops 0x239 static cell, 0x231 animate). Interpolator
+        // SRC-RECT SCROLL channel: period obj+0x230, start obj+0x21c, grid obj+0x238/0x23c. ----
+        public long SrcGridW = 1, SrcGridH = 1, SrcCell, SrcPeriod, SrcStart = -1;
+        public bool SrcAnim;
+        // ---- animated color/glow channel (op 0x232). Interpolator COLOR channel: period obj+0x220,
+        // start obj+0x20c, target obj+0x240 — PING-PONG (distinct from static 0x202/0x203). ----
+        public long ColorPeriod, ColorStart = -1, ColorTarget;
+        public bool ColorAnim;
         // draw-texture bind (gfx_object_bind_draw): the surface to draw + its source rect + the visible flag.
         public int SourceSlot = -1;
         public (int X, int Y, int W, int H) SrcRect;
@@ -136,6 +145,29 @@ public sealed class GfxState
     public void SetObjectColor(long handle, long packed)
     {
         lock (_lock) { var o = GetOrCreate(handle); o.Color = packed; o.HasColor = true; }
+    }
+
+    /// <summary>Ops 0x239 (static cell, period=0) / 0x231 (animate, period&gt;0): set the spritesheet grid +
+    /// the visible cell. When animated, the interpolator ping-pongs the cell across the grid over the period.</summary>
+    public void SetSrcRect(long handle, long gridW, long gridH, long cell, long period)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.SrcGridW = gridW < 1 ? 1 : gridW; o.SrcGridH = gridH < 1 ? 1 : gridH;
+            o.SrcCell = cell; o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
+        }
+    }
+
+    /// <summary>Op 0x232 (anim-color): ping-pong the object's color/alpha toward <paramref name="target"/>
+    /// (packed 0xAARRGGBB) over <paramref name="period"/> ms — the pulsing glow. Distinct from static 0x202/0x203.</summary>
+    public void SetColorAnim(long handle, long period, long target)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.ColorPeriod = period; o.ColorTarget = target; o.ColorStart = -1; o.ColorAnim = true;
+        }
     }
     public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }   // create-texture (blank)
 
