@@ -235,9 +235,14 @@ if (args[0] == "trace")
         bool boot = args.Contains("--boot");
         var jscripts = Paths.Scripts();
         var target = Sys4Loader.Load(jscripts[sceneName.ToUpperInvariant()], table);
-        var session = new GameSession();
-        // optional 0xADDR=VAL seeds — inject pre-scene state the cold --boot misses (e.g. 0x6c1=1, the
-        // ADV-chrome enable set by the real engine's system boot). Applied before boot so they persist.
+        // --state <file>: start from a captured scene-entry snapshot (Frida global-write log →
+        // capture_global_writes.py) — the real engine's full pre-scene state, superseding the partial
+        // --boot. Otherwise fresh + optional --boot.
+        int si = Array.IndexOf(args, "--state");
+        var session = (si >= 0 && si + 1 < args.Length)
+            ? GameSession.FromJson(File.ReadAllText(args[si + 1]))
+            : new GameSession();
+        // optional 0xADDR=VAL seeds — inject pre-scene state by hand (e.g. 0x6c1=1). Applied on top.
         foreach (var s in args.Where(a => a.Contains('=') && a != outPath))
         {
             var kv = s.Split('=');
@@ -245,7 +250,7 @@ if (args[0] == "trace")
             long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
             session.Seed(k, v);
         }
-        if (boot)
+        if (boot && si < 0)   // --state already carries boot state; don't re-run the *INIT prefix
             foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
                 session.RunScene(Sys4Loader.Load(jscripts[b], table), table, new CaptureHost(), null, provider);
         var sink = new JsonOffsetTraceSink(target.Name);
