@@ -34,9 +34,27 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   → `run_analysis`.
 - **Load sanity check (AGF-decoder landmark):** at VA `0x474f23`, `CMP word ptr [ESI + 0x4], 0x4d42`
   (the `BM`/BMP-magic check) confirms the image is correctly based + decoded.
-- Escalation (unused so far): `bin/pe-sieve32.exe /pid <PID> /imp 3 /dmode 3 /dir <out>` (run from
-  **PowerShell**, not Git Bash — it mangles `/flags`) rebuilds the IAT into a clean PE. Only needed if
-  raw-dump analysis is inadequate; it was fine for reading logic, so we stayed on the raw dump.
+- IAT reconstruction — **tried, DOESN'T WORK on this binary (2026-07-09):** `bin/pe-sieve32.exe /pid
+  <PID> /imp 3 /dmode 3 /dir build/pe-sieve` (run from **PowerShell**, not Git Bash — it mangles
+  `/flags`) ran fine but the game is packed with a **zeroed IAT** resolved via `GetProcAddress` at load,
+  so there is no conventional import table to rebuild. Of 363 "imports" it emitted, only ~17 are genuine
+  (`in_main:1`): the packer bootstrap (`LoadLibraryA`/`GetProcAddress`/`GetModuleHandleA`/`VirtualAlloc`/
+  `VirtualFree`) + a one-per-DLL seed block at RVA `0x202bfc` (`d3d9.Direct3DCreate9`,
+  `user32.RegisterClassExA`, `gdi32.GetStockObject`, `winmm.timeSetEvent`, `advapi32.RegOpenKeyA`,
+  `shell32.SHGetSpecialFolderPathA`, `oleaut32.Variant*`, `kernel32.RaiseException`, …). The other 300+
+  are stray pointer-shaped DWORDs mis-resolved to "first export at module base" (e.g. `msvcrt._wstrtime_s`
+  30×, `in_main:0`, non-terminated). ⇒ **do not graft pe-sieve output** — grafting the noise would inject
+  wrong import names. The game's hot APIs (`ReadFile`/`CreateFileA`/`timeGetTime`/d3d9 device methods) are
+  `GetProcAddress`-resolved into private pointer tables, invisible to a static IAT scan. Report/dump left
+  at `build/pe-sieve/process_<pid>/` (disposable).
+
+  **→ The right approach (queued, Frida-based; the real "Task B"):** name the dynamically-resolved APIs at
+  their call sites via the LIVE process. (1) Frida-read the loaded modules' export tables → `{runtime_addr
+  → dll!Func}`; (2) read the engine module's resolved import-pointer storage from the SAME live process,
+  resolve each stored pointer → name, and record **`RVA → name`** (RVAs in the fixed `0x400000` main module
+  are ASLR-stable; only the DLL targets relocate, and we resolve those live); (3) apply the `RVA → name`
+  labels to the `/v2` Ghidra image. All plain-JS Frida reads (no spawn, no patching — anti-tamper-safe).
+  This replaces the pe-sieve step; spec/plan when picked up.
 
 ---
 

@@ -1,5 +1,14 @@
 # RE Tooling: Handler Labeling + IAT Reconstruction — Implementation Plan
 
+> **STATUS (2026-07-09):** **Task A COMPLETE** (committed `97fb1d6` on `feat/re-tooling-handler-labels`) —
+> whole-image dispatch-handler labeling landed; see the status memory + `docs/engine-re.md` "Materialized +
+> applied image-wide". **Task B (pe-sieve IAT graft) ABANDONED — the premise fails on this packed binary**
+> (zeroed IAT, `GetProcAddress`-resolved imports; pe-sieve produced ~17 genuine + 300+ spurious entries).
+> See `docs/engine-re.md` runbook "IAT reconstruction — tried, DOESN'T WORK". **Task B is re-scoped to a
+> Frida live import-map** (build `{runtime_addr→dll!Func}` from the live process's module exports, read the
+> engine's resolved import-pointer storage → `RVA→name`, label the `/v2` image) — that gets its OWN
+> spec/plan when picked up; the pe-sieve Task B below is retained only as the record of what was tried.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Eliminate two recurring native-RE taxes — Kelebek VA-drift and unnamed imports — by (A) auto-labeling every opcode dispatch handler in the Ghidra image and (B) grafting reconstructed IAT names onto that same image.
