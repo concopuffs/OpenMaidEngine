@@ -593,6 +593,31 @@ one-shot fade's exact source→target→easing is still unresolved and would tak
 stays deferred**; slice A ships the static end-state (which reaches the correct final alpha/tint and fixes
 the stuck-opaque bug), with interpolation as a scoped follow-up.
 
+### SC0000 anim/transform/spritesheet cluster — op→field map (2026-07-08)
+
+Reversed for the animation cluster slice (spec `docs/superpowers/specs/2026-07-08-sc0000-anim-transform-cluster-design.md`).
+Every cluster handler resolved via the dispatch table `handler(op)=ctx[0x26c93+op]` (the `opcodes.toml`
+`u004xxxx` labels are Kelebek VA drift — do not use them). Each op is a thin wrapper (`FUN_0041b940(n)`
+fetches operand n) → a worker that writes object fields; the interpolator `gfx_object_anim_interpolate`
+(`0x473ed0`) is the consumer. **The cluster is heterogeneous** — setters, queries, and a movie op. Renamed +
+annotated in Ghidra, saved.
+
+**In scope (built this slice):**
+| op | handler / worker | semantics |
+|---|---|---|
+| `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel |
+| `0x229` | `gfx_op_0x229_set_position` (`FUN_00472bb0`+`FUN_00472be0`) | set object **position/geometry** immediately (`obj+0x420/0x424` + vec `obj+0x440..0x448`) |
+| `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | set **spritesheet** grid `obj+0x238/0x23c` + static cell `obj+0x234` |
+| `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | **animate spritesheet cell**: bit2 active, period `obj+0x230`, grid `obj+0x238/0x23c` → interpolator SRC-RECT SCROLL channel (ping-pong across the row) |
+| `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color** (pulsing GLOW): bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Distinct from static `0x202`/`0x203` (`obj+0x60/0x64`) |
+| `0x228` | `gfx_op_0x228_query_position` (`FUN_0047cdd0`) | **query** current computed (x,y,z) → operand slots 3/4/5 (script logic, not render) |
+| `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
+
+**Deferred (own follow-ups, per scope decision):** `0x21f` (`FUN_0047eb70`, 4-float scale/matrix), `0x223`
+(`FUN_0047f440`, 8-arg matrix row) → need **affine rendering**; `0x236` (`gfx_op_0x236` @`0x423ee0`) a
+**timed/animated-surface (movie-like) op**; plus the unclassified `0x21c/0x21d/0x224/0x242/0x23d/0x20a/0x20e/0x243`
+tail (2-arg flags / inline). These stay GAP until a follow-up slice or are safe-noop'd if the opening tolerates it.
+
 ---
 
 ## Native walls backlog (targets for this loop)
