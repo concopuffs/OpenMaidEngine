@@ -58,12 +58,22 @@ def test_cluster_runs_groups_contiguous():
           "cluster groups contiguous aligned runs, isolates singleton")
 
 
+def test_select_table_matches_splits_runs_from_singletons():
+    from map_imports_full import select_table_matches
+    matches = [(0x100, 0, "a!f"), (0x104, 0, "b!g"), (0x108, 0, "c!h"), (0x200, 0, "d!i")]
+    runs = [(0x100, 3), (0x200, 1)]
+    table, singles = select_table_matches(matches, runs, min_run=3)
+    check(set(table) == {"0x100", "0x104", "0x108"} and set(singles) == {"0x200"},
+          "run members auto-apply; singleton set aside")
+
+
 def main():
     test_export_index_canonicalizes()
     test_export_index_first_name_wins_and_skips_zero()
     test_scan_matches_little_endian_aligned()
     test_scan_ignores_unaligned()
     test_cluster_runs_groups_contiguous()
+    test_select_table_matches_splits_runs_from_singletons()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 
