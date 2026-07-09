@@ -220,6 +220,40 @@ if (args[0] == "sweep")
 
 if (args[0] == "trace")
 {
+    // --trace-json <path>: single-scene per-op offset trace for the differential oracle (docs/engine-re.md).
+    // Emits EVERY instruction offset the scene executes, in order (not just show-text lines), filtered to the
+    // scene's own frame so call-script subroutines into other scripts are excluded — matching the Frida engine
+    // tracer's per-codebase filter. --boot first runs SYSTEM4's state-setup prefix (INITCONFIG/INIT2/INIT) so
+    // the scene sees real boot state, exactly like `gfx --boot`. Offsets are bytecode WORD indices, the same
+    // unit the engine emits as (pc-codebase)/4. Observe-only (a step sink) — the sweep path below is untouched.
+    int tji = Array.IndexOf(args, "--trace-json");
+    if (tji >= 0)
+    {
+        if (tji + 1 >= args.Length) { Console.WriteLine("usage: trace <SCENE.BIN> [--boot] --trace-json <out.json>"); return 1; }
+        var outPath = args[tji + 1];
+        var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
+        bool boot = args.Contains("--boot");
+        var jscripts = Paths.Scripts();
+        var target = Sys4Loader.Load(jscripts[sceneName.ToUpperInvariant()], table);
+        var session = new GameSession();
+        if (boot)
+            foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+                session.RunScene(Sys4Loader.Load(jscripts[b], table), table, new CaptureHost(), null, provider);
+        var sink = new JsonOffsetTraceSink(target.Name);
+        var vm = new VirtualMachine(target, table, new CaptureHost(),
+                                    new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink);
+        foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
+        vm.Run();
+        var dir = Path.GetDirectoryName(outPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.WriteAllText(outPath, JsonSerializer.Serialize(
+            new { scene = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant(), offsets = sink.Offsets },
+            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        Console.WriteLine($"{sceneName}{(boot ? " (booted)" : "")}: {sink.Offsets.Count} offsets -> {outPath} (halt: {vm.HaltReason})");
+        return 0;
+    }
+
     var scene = new Regex(@"^S[CP]\d{4}\.BIN$");
     var scripts = Paths.Scripts();
     var trace = new SortedDictionary<string, object>(StringComparer.Ordinal);
