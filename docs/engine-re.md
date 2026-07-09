@@ -120,6 +120,13 @@ decode when you reverse one (the generic name is a floor, not a final).
 0x41b940` (thiscall, `ecx=ctx`, arg = operand index → returns the operand value); `FUN_00415f30(i)` =
 a companion operand accessor.
 
+**These `ctx` offsets are now a typed struct (2026-07-09).** The canonical field map is
+`vm-map/engine-ctx.toml` → generated `docs/engine-ctx-reference.md`; a `run_script_inline` pass created
+an `EngineCtx` Ghidra struct and retyped **all 419 dispatch handlers' `this` to `EngineCtx *`**, so they
+decompile `ctx->cur_ctx_index` / `ctx->cmd_type_table` / `ctx->run_state_flags` instead of `param_1 + 0x…`
+(verified: `sleep_op_0xc8`, `gfx_op_0x215_register_query`). Add a field: edit `engine-ctx.toml`, run
+`engine_ctx_build.py --build`, re-apply the struct. (The VM global bank `G[…]` is separate — `globals.toml`.)
+
 ---
 
 ## Findings
