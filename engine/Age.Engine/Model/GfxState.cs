@@ -216,9 +216,16 @@ public sealed class GfxState
         lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
     }
 
-    /// <summary>Visible objects in ascending-handle order (= the engine's z-order), each with its source
-    /// surface (resId/colorkey) resolved from its live source slot — for the host per-frame compositor.</summary>
-    public IReadOnlyList<RenderObject> SnapshotVisibleObjects()
+    /// <summary>Back-compat: snapshot with no animation clock (nowMs = 0) — deterministic, for headless
+    /// callers and existing tests.</summary>
+    public IReadOnlyList<RenderObject> SnapshotVisibleObjects() => SnapshotVisibleObjects(0);
+
+    /// <summary>Visible objects in ascending-handle order (= z-order), each with its source surface resolved
+    /// and its active anim channels interpolated at <paramref name="nowMs"/> (the port of
+    /// gfx_object_anim_interpolate). Position is the base V24 (a direct transform, ops 0x22f/0x229). The
+    /// src-rect channel (0x239/0x231) selects the spritesheet cell; the color channel (0x232) ping-pongs the
+    /// alpha/tint. Channel Start fields seed to nowMs on first sight.</summary>
+    public IReadOnlyList<RenderObject> SnapshotVisibleObjects(long nowMs)
     {
         lock (_lock)
         {
@@ -229,14 +236,44 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
 
+                // ---- color: slice-A static base, then op-0x232 ping-pong toward the target ----
                 int alpha = 255; long tint = 0xFFFFFF; var blend = BlendKind.Opaque;
                 if (o.HasColor)
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(o.Color);
                     alpha = a; tint = ((long)r << 16) | ((long)g << 8) | (long)b; blend = BlendKind.Alpha;
                 }
+                if (o.ColorAnim)
+                {
+                    if (o.ColorStart < 0) o.ColorStart = nowMs;
+                    double t = PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod);
+                    var (ta, tr, tg, tb) = BlendMath.UnpackArgb(o.ColorTarget);
+                    var (ba, br, bg, bb) = (alpha, (int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff), (int)(tint & 0xff));
+                    alpha = (int)(ba + (ta - ba) * t);
+                    tint = ((long)(br + (tr - br) * t) << 16) | ((long)(bg + (tg - bg) * t) << 8) | (long)(bb + (tb - bb) * t);
+                    blend = BlendKind.Alpha;
+                }
 
-                list.Add(new RenderObject(kv.Key, resId, ck, o.SrcRect.X, o.SrcRect.Y, o.SrcRect.W, o.SrcRect.H,
+                // ---- src-rect: pick the spritesheet cell (static or ping-ponged across the grid) ----
+                int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
+                if (o.SrcAnim && o.SrcGridW >= 1)
+                {
+                    int cellW = (int)(o.SrcRect.W / o.SrcGridW);
+                    int cellH = o.SrcGridH >= 1 ? (int)(o.SrcRect.H / o.SrcGridH) : o.SrcRect.H;
+                    long cell = o.SrcCell;
+                    if (o.SrcPeriod > 0)
+                    {
+                        if (o.SrcStart < 0) o.SrcStart = nowMs;
+                        double t = PingPongWeight(nowMs, o.SrcStart, o.SrcPeriod);
+                        cell = (long)System.Math.Round(t * (o.SrcGridW - 1));
+                    }
+                    long cols = o.SrcGridW;
+                    srcX = o.SrcRect.X + (int)(cell % cols) * cellW;
+                    srcY = o.SrcRect.Y + (int)(cell / cols) * cellH;
+                    w = cellW; h = cellH;
+                }
+
+                list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new AnimState(o.AnimEnabled, o.AnimNormalized,
                                                         o.AnimTarget.X, o.AnimTarget.Y, o.AnimTarget.Z,
@@ -245,6 +282,14 @@ public sealed class GfxState
             }
             return list;
         }
+    }
+
+    /// <summary>Ping-pong interpolation weight in [0,1] toward the target: 0 at cycle start, 1 at half-period.</summary>
+    private static double PingPongWeight(long now, long start, long period)
+    {
+        if (period <= 0) return 0;
+        long half = period / 2; if (half <= 0) return 0;
+        return (double)BlendMath.PingPong(now, start, period) / half;
     }
 
     /// <summary>Pack (alpha, rgb) → 0xAARRGGBB, matching op 0x202/0x203's handler bit-manipulation for the

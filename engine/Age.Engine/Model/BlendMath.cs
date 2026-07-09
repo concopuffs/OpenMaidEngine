@@ -19,4 +19,15 @@ public static class BlendMath
     public static (int A, int R, int G, int B) UnpackArgb(long packed)
         => ((int)((packed >> 24) & 0xff), (int)((packed >> 16) & 0xff),
             (int)((packed >> 8) & 0xff), (int)(packed & 0xff));
+
+    /// <summary>Ping-pong (triangle-wave) progress of gfx_object_anim_interpolate: fold (now-start) mod
+    /// period at period/2 so the value ramps to the peak at half-period then back. Returns u in
+    /// [0, period/2]; the interpolation weight toward the target is u / (period/2).</summary>
+    public static long PingPong(long now, long start, long period)
+    {
+        if (period <= 0) return 0;
+        long u = ((now - start) % period + period) % period;
+        if (u >= period / 2) u = period - u;
+        return u;
+    }
 }
