@@ -217,6 +217,28 @@ at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correc
 with several simultaneous distinct-slot objects would need the setup to run. Tracked as the scene-coroutine
 work, separate from this fix.
 
+**⇒ Scene-coroutine framework — the fix for the slot-0 collapse (2026-07-09, RE head-start).** To run
+`label_125bd` (and every scene's slot-table setup) generally, the scene-coroutine framework must work. Ops
+(handlers via dispatch table `ctx[0x26c93+op]`):
+- **`0x7b` (`FUN_0041ebf0`)** — **yield-state save**: writes op1→`ctx[0x6da88 + ctxidx*4]`, op2→
+  `ctx[0x6db28 + ctxidx*4]` (ctxidx = `ctx[0x53d14]`, the coroutine/script-context index).
+- **`0x7c` (`FUN_00417cb0`)** — **yield/resume**: requires run-state bit `0x2000000` set (`ctx[0x6dbc8]`);
+  restores PC = `ctx[0x53d28] + ctx[0x6dbcc]*4`, clears the run-state (`ctx+0xa0ce4 &= ~0x2000000`), resets
+  input/line state. This is the coroutine RESUME.
+- **`0x140` (`LAB_004299c0`)** — the LABEL/yield op (`u0041F9C0`, `"LABEL" "J"` in SC0000 `0x46d`); a LAB not
+  a FUN, so decompile the actual target next. Central to the re-entry.
+- **Gate:** `G[0xaba5c]` (`==1` re-entry gate at SC0000 `0x450`); the scene runs as a coroutine that yields
+  and re-enters, and `label_125bd` (slot setup) is reached only on the correct pass. `G[0xaba5c]` writers =
+  DEBUGADV/SC0000/SC0010; compared against [0,1].
+Context records are the 0x78-byte coroutine records at `ctx+0x53d14`/`0x53d88` (see §"Frame cadence"). NEXT:
+finish RE (`0x140` target, the gate branch semantics), then implement so cold single-scene runs execute the
+scene's setup — removing the need for the manual `--seed` slot-table unblock.
+
+**Revealed issue (2026-07-08, post slot-fix): a magic-circle effect persists across the scene transition**
+(screenshot: opening ritual circle still overlaid on the arena BG). A retained object not released at the
+phase change — plausibly the same coroutine/lifecycle gap (scene-phase cleanup), or a separate release/clear
+op. Verify once the coroutine framework runs.
+
 #### gfx command-buffer — op contract table (2026-07-07, full family reversed)
 
 Every gfx op shares one shape: **write a `cmd-type` into the current object record** (`*(ctx + 0x53d88 +
