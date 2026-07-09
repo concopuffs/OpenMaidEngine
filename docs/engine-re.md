@@ -752,6 +752,49 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
    NOT a compositor/z-order/blend bug. Diagnostics: `AGE_DIAG_SETTEX=1` env → VM logs each `set-texture`
    slot operand + `query-gfx-object?` result.
 
+### Differential offset-path oracle — engine-vs-VM control-flow diff (2026-07-09)
+
+**Method (lever #3 of the RE-front-loading program).** Run the same scene in the real engine and our C#
+VM and diff the **executed script-offset path**. Both run the same bytecode, so the opcode at each offset
+is static (from disasm); the first place the two offset sequences differ is exactly the branch/opcode/state
+we modeled wrong — cheaper and higher-signal than diffing effects, and precisely where the render-drift
+walk-backs lived. Tools: `tools/frida/trace_engine_ops.py` (engine capture) · `Age.Cli trace <SCENE>
+--boot --trace-json` (VM capture) · `tools/diff_optrace.py` (align + first-divergence). Spec/plan:
+`docs/superpowers/{specs,plans}/2026-07-09-differential-oracle*`.
+
+**Capture method that WORKS = the operand hook `vm_operand_fetch@0x41b940`** (thiscall `ecx=ctx`; per op,
+`offset=(pc−codebase)/4` from `cur_ctx_index@0x53d14` / `frame_pc@0x53d2c` / `frame_codebase@0x53d28`,
+per-context stride `0x78`). Validation: **100% of captured offsets land on valid SC0000 instruction
+starts** — proves both the ctx-field offsets and the `(pc−codebase)/4` math. **The tick hook
+`adv_interpreter_tick@0x410fb0` does NOT work** — plain-JS `Interceptor.attach` there sees `ecx≠ctx`
+(0 entries), so the recon gate's *tick* path is closed too, not just the CModule path noted under Frame
+cadence. Two capture caveats, both handled:
+- **Frida must hook BEFORE the scene loads.** The scene-entry setup (decl preamble + first CG load at
+  `0x802 mov G[0x62424]=0x23; call label_12649`) runs in a µs burst at load; a capture started mid-scene
+  floors at ~`0x80d` and misses it. `trace_engine_ops.py` writes `build/tracer-live.flag` once the hook is
+  installed → launch it in the background and gate the New-Game trigger on that flag.
+- **Operand mode skips zero-operand ops** (stmt-begin/end markers, script-entry `0x259`) — they never
+  trigger an operand fetch. `diff_optrace.py` filters the VM trace to argc≥1 ops (same subsequence);
+  control flow is preserved (markers don't branch). `--full` disables it for a hypothetical tick capture.
+
+**Codebase identification.** The engine trace tags each op with its script's `codebase` pointer (a per-run
+heap address). `pick_scene_codebase` picks the codebase whose offset sequence shares the longest common
+prefix with the VM trace. From a boot→opening capture (7 codebases / 265k ops), SC0000 = `0x09c1afe8`
+(13252 ops, 100% valid, first offset `1` = offset 0 filtered).
+
+**FIRST DIVERGENCE FOUND (the tool's first catch + self-test).** On the SC0000 opening the VM and engine
+agree for **27 ops** (including the coroutine op `0x7b` @ `0x79`, which matched), then **diverge at offset
+`0x8d` = op `0xa0` (jcc) on `global-int G[0x6c1]`:** the engine falls through to `0x94` (the op-`0x90`
+hotspot-chrome registration block) ⇒ `G[0x6c1]≠0`; the VM jumps to `label_df` (`0xdf`) ⇒ `G[0x6c1]==0`.
+Because both ran `1..0x8d` identically, `G[0x6c1]` is set **before** SC0000 — by pre-scene *system* boot
+the VM's cold `--boot` (INITCONFIG/INIT2/INIT) doesn't replicate (the **two-boot gap**). `G[0x6c1]` is an
+unlabeled but heavily-used scalar (766 uses) in the **same cluster as the op-`0x90` hotspot flags
+`G[0x6c9..0x6cd]`** = ADV-chrome/input state. Headlessly benign (no input) but a genuine VM-side state gap
+— and a clean demonstration that the oracle localizes a mis-modeled branch to a single instruction. It is
+NOT the predicted coroutine yield (`0x140`/`~0x50f`); the oracle reports whatever diverges *first*, and it
+surfaced an earlier state hole. **This is now the repeatable way to localize a mis-modeled op/state.**
+Phase-2 extension (deferred): effects-diff (global-bank / gfx-registry writes) for branchy scenes.
+
 ---
 
 ## Native walls backlog (targets for this loop)
