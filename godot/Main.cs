@@ -38,6 +38,10 @@ public partial class Main : Godot.Control
     private string? _seqDir;                    // --shot-sequence <dir>: dump one PNG per frame (verify paced anim)
     private int _seqFrames = 180;               // --frames <n>: how many frames to dump (default ~3s @60fps)
     private int _seqIdx;
+    private string? _gfxLogPath;                // --gfx-log <file>: log per-object compositor draw/skip CHANGES
+    private System.IO.StreamWriter? _gfxLog;
+    private readonly System.Collections.Generic.Dictionary<long, string> _lastGfxDecision = new();
+    private int _gfxLogFrame;
 
     public override void _Ready()
     {
@@ -98,6 +102,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--shot-page" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotPage);
             if (userArgs[i] == "--shot-settle" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotSettleTarget);
             if (userArgs[i] == "--shot-sequence" && i + 1 < userArgs.Length) _seqDir = userArgs[i + 1];
+            if (userArgs[i] == "--gfx-log" && i + 1 < userArgs.Length) _gfxLogPath = userArgs[i + 1];
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
@@ -120,7 +125,7 @@ public partial class Main : Godot.Control
         IScriptProvider provider;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
-        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock) { SleepScale = sleepScale };
+        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
         _trace = new GodotTraceSink();
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
@@ -255,26 +260,69 @@ public partial class Main : Godot.Control
         double clockDur = System.Math.Max(1, _vm.Gfx.AnimClockDurationTicks) * GameTickSeconds;
         bool clockReset = clockGen != _lastClockGen;
         _lastClockGen = clockGen;
+        System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null ? new() : null;
+        int z = 0;
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
         {
-            float a = AlphaFor(v, clockReset, clockDur) * (v.Alpha / 255f);
+            float animA = AlphaFor(v, clockReset, clockDur);
+            float opacity = animA * (v.Alpha / 255f);        // object opacity (color-op alpha is NOT opacity)
+            float strength = v.TintStrength / 255f;          // tint-blend / fill strength
+            string outcome;
             if (v.SurfaceResId == 0)
             {
-                // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Fill its
-                // rect (full-screen when it has no size, the opening's case) with the tint at alpha. Uncolored
-                // surfaceless objects are render targets — still skipped (slice C).
+                // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Its presence
+                // is the tint STRENGTH (0=absent, 255=solid), scaled by any object opacity. Uncolored surfaceless
+                // objects are render targets — still skipped (slice C).
                 if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
                 {
                     int fw = v.W > 0 ? v.W : 800, fh = v.H > 0 ? v.H : 600;
-                    FillQuad(v.DstX, v.DstY, fw, fh, v.Tint, a);
+                    float fillA = opacity * strength;
+                    FillQuad(v.DstX, v.DstY, fw, fh, v.Tint, fillA);
+                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {fw}x{fh}@({v.DstX},{v.DstY})";
                 }
-                continue;
+                else outcome = "SKIP(no-resId, opaque render-target)";
             }
-            var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
-            if (bmp == null) continue;
-            BlitLayer(bmp, v.ColorKey, v.Tint, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, a);
+            else
+            {
+                var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
+                if (bmp == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
+                else
+                {
+                    BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, opacity);
+                    var raw = _vm.Gfx.TryGet(v.Handle);
+                    outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
+                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY}) " +
+                              $"op={opacity:0.00} tintStr={strength:0.00}";
+                }
+            }
+            decisions?.Add(v.Handle, $"z{z} {outcome}");
+            z++;
         }
         _screenTex.Update(_screen);
+        if (decisions != null) LogGfxDecisionChanges(decisions);
+    }
+
+    // Diagnostic (--gfx-log): print, per rendered frame, only the objects whose compositor outcome CHANGED
+    // since last frame (added / gone / drawn↔skip / resId change). Quiet until something actually changes, so
+    // the frame where the background drops out — and WHY — stands out. See systematic-debugging of the grey-BG.
+    private void LogGfxDecisionChanges(System.Collections.Generic.Dictionary<long, string> curr)
+    {
+        _gfxLog ??= new System.IO.StreamWriter(_gfxLogPath!) { AutoFlush = true };
+        _gfxLogFrame++;
+        var lines = new System.Collections.Generic.List<string>();
+        foreach (var kv in curr)
+            if (!_lastGfxDecision.TryGetValue(kv.Key, out var prev) || prev != kv.Value)
+                lines.Add($"  0x{kv.Key:x}: {kv.Value}" + (_lastGfxDecision.ContainsKey(kv.Key) ? "" : "  [NEW]"));
+        foreach (var kv in _lastGfxDecision)
+            if (!curr.ContainsKey(kv.Key))
+                lines.Add($"  0x{kv.Key:x}: GONE (was {kv.Value})");
+        if (lines.Count > 0)
+        {
+            _gfxLog.WriteLine($"[frame {_gfxLogFrame} nowMs={_clock.NowMs} page={_pageCount}] {curr.Count} visible, {lines.Count} changes:");
+            foreach (var l in lines) _gfxLog.WriteLine(l);
+        }
+        _lastGfxDecision.Clear();
+        foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
     }
 
     // Current opacity for a visible object: 1.0 unless it has an active anim channel, in which case tween the
@@ -301,8 +349,9 @@ public partial class Main : Godot.Control
 
     // Blit one object's surface rect. The source Image is cached per (path, colorKey): on first load, texels
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
-    // tint (0xRRGGBB) modulates the texel RGB (fade-to-black uses tint=black); alpha is the object's opacity.
-    private void BlitLayer(string bmpPath, long colorKey, long tint, int srcX, int srcY, int w, int h,
+    // tintStrength (0..1, the op 0x202/0x203 alpha) LERPs the texel RGB toward tint (0=keep texel, 1=full tint;
+    // fade-to-black uses tint=black, strength=1); alpha is the object's OPACITY (independent of the tint).
+    private void BlitLayer(string bmpPath, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
                            int dstX, int dstY, float alpha = 1f)
     {
         var cacheKey = (bmpPath, colorKey);
@@ -326,8 +375,9 @@ public partial class Main : Godot.Control
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
 
-        bool plainOpaque = alpha >= 0.999f && tint == 0xFFFFFF && !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
-        if (plainOpaque)   // fast path: unchanged behaviour for opaque, un-keyed, un-tinted layers
+        int istr = (int)(System.Math.Clamp(tintStrength, 0f, 1f) * 255);
+        bool plainOpaque = alpha >= 0.999f && istr == 0 && !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
+        if (plainOpaque)   // fast path: opaque, un-keyed, un-tinted layer (the common CG case)
         {
             _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
             return;
@@ -344,9 +394,12 @@ public partial class Main : Godot.Control
                 if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
                 int di = (dyp * dw + dxp) * 4;
                 int si = ((srcY + y) * sfw + (srcX + x)) * 4;
-                int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object alpha
+                int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object opacity
                 if (sa == 0) continue;
-                int sr = ss[si] * tr / 255, sg = ss[si + 1] * tg / 255, sb = ss[si + 2] * tb / 255;   // tint modulate
+                // tint = LERP texel toward tint by strength (0=keep texel, 255=full tint), NOT a multiply
+                int sr = (ss[si]     * (255 - istr) + tr * istr) / 255;
+                int sg = (ss[si + 1] * (255 - istr) + tg * istr) / 255;
+                int sb = (ss[si + 2] * (255 - istr) + tb * istr) / 255;
                 dst[di]     = (byte)((sr * sa + dst[di]     * (255 - sa)) / 255);
                 dst[di + 1] = (byte)((sg * sa + dst[di + 1] * (255 - sa)) / 255);
                 dst[di + 2] = (byte)((sb * sa + dst[di + 2] * (255 - sa)) / 255);

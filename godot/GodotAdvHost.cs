@@ -77,7 +77,13 @@ public sealed class GodotAdvHost : IHost
     }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
-    public void CreateTexture(int slot, int width, int height) { _slotBmp[slot] = null; _slotDims[slot] = (width, height); }
+    public bool TraceOps;   // --gfx-log: print set-texture/create-texture slot assignments (diagnose slot collisions)
+
+    public void CreateTexture(int slot, int width, int height)
+    {
+        _slotBmp[slot] = null; _slotDims[slot] = (width, height);
+        if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
+    }
 
     public void SetTexture(long resourceId, int slot)
     {
@@ -85,6 +91,7 @@ public sealed class GodotAdvHost : IHost
         var bmp = asset != null ? ResourceMap.TexturePath(asset) : null;
         _slotBmp[slot] = bmp;
         _slotDims[slot] = BmpHeader.ReadDims(bmp);   // synchronous: dims from the header, no Godot Image
+        if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(bmp != null ? System.IO.Path.GetFileName(bmp) : "<none>")}");
     }
 
     // Dims are read from the BMP header on the VM thread so the bytecode's geometry math (which calls this
