@@ -162,6 +162,13 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 
 *(Static disassembly of `build/engine-dump/range_00400000.bin` uses **capstone** — `py -3.11 -m pip install capstone`; VA `X` → file offset `X−0x400000`.)*
 
+## Native engine RE (Ghidra)
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `ghidra_handler_map.py` | Extract the opcode→real-handler dispatch table (`handler(op)=ctx[0x26c93+op]`) from `FUN_00413860`'s override stores — the general fix for Kelebek VA-drift. `--check` diffs derived handlers vs `opcodes.toml` prose (found 0 real drift). Feeds the one-shot Ghidra annotation pass that names every handler `op_0xNN_handler` (see `docs/engine-re.md` "Materialized + applied image-wide"). | `ghidra_handler_map.py build/engine-dump/FUN_00413860.disasm.txt [--check]` | ⚙ `build/engine-dump/FUN_00413860.disasm.txt` (from ghidra-mcp `disassemble_function(0x413860)`) → ⚙ `build/op-handler-map.json` |
+| `test_ghidra_handler_map.py` | Unit tests for the dispatch-table parser (plain runner, no pytest). | `test_ghidra_handler_map.py` | — |
+
 ## Historical / one-off
 
 | Tool | Purpose |

@@ -58,6 +58,35 @@ which **drift** in ours. This table resolves the *real* handler for any opcode i
 general fix for VA drift project-wide. To find op `N`'s handler: read `ctx[0x26c93 + N]` from the
 `FUN_00413860` decompile (or `*(ctx + 0x9b24c + N*4)` at runtime).
 
+### Materialized + applied image-wide (2026-07-09)
+
+The table is no longer resolved op-by-op by hand — it is **extracted once and applied to the whole
+image**. `tools/ghidra_handler_map.py` parses the override stores in `FUN_00413860` (dump at
+`build/engine-dump/FUN_00413860.disasm.txt`) → **`build/op-handler-map.json`** (`{op → handler VA}`,
+**420 overrides**). Regenerate: `py -3.11 -X utf8 tools/ghidra_handler_map.py
+build/engine-dump/FUN_00413860.disasm.txt --check`. The `--check` diffs the derived handlers against the
+handler VAs mentioned in `vm-map/opcodes.toml` prose and found **0 real drift** — the only 7 flags are
+ops whose toml text records the *worker* VA, not the handler (`0x20c→0x4174a0`, and the `0x21c–0x243`
+cluster entries), each already matching the recon tables below.
+
+A one-shot Ghidra script (via `run_script_inline`; needs `GHIDRA_MCP_ALLOW_SCRIPTS=1`) then labeled the
+image from that map: **281 raw `FUN_`/`LAB_` handlers renamed `op_0xNN_handler`, 107 bare handler VAs
+turned into functions, 31 hand-named handlers preserved** (source `USER_DEFINED` is never renamed), and
+a plate comment `opcode 0xNN dispatch handler; ctx[0x26c93+op] in FUN_00413860` set on every one
+(appended to existing decode comments, never clobbering). The one shared handler `0x416650` (ops
+`0xaf`/`0x1a8`) is `op_0xaf_0x1a8_handler`. ⇒ every dispatch handler in the image now self-identifies its
+opcode; a bare `op_0xNN_handler` is a handler not yet role-RE'd. Enrich with a descriptive name +
+decode when you reverse one (the generic name is a floor, not a final).
+
+> **⚠ Two-program gotcha (cost time 2026-07-09).** The Ghidra project holds **two** imports named
+> `range_00400000.bin`: the GOOD one at project path **`/v2/range_00400000.bin`** (`x86:LE:32:default`,
+> image base `0x400000`, 4308 functions — all our annotations live here) and a BROKEN early import at
+> **`/range_00400000.bin`** (the `x86:LE:32:System Management Mode` mis-import: base `0000:0000`, **0
+> functions**; see the language gotcha in the runbook). After a Ghidra restart the broken one can become
+> active. **Always confirm `get_current_program_info` shows base `0x400000` / 4308 functions (or
+> `switch_program /v2/range_00400000.bin`) before doing anything** — `run_script_inline` runs against the
+> GUI's active program, so a wrong-program script would mutate/measure garbage.
+
 **Other confirmed engine-context offsets** (`ctx`/`esi`): `+0x53d14` = current gfx-object index;
 `+0x53d88` = per-object cmd-type table (stride `0x78` = 120 bytes); operand-fetch helper = `call
 0x41b940` (thiscall, `ecx=ctx`, arg = operand index → returns the operand value); `FUN_00415f30(i)` =
