@@ -51,8 +51,9 @@ is a known library function." **Small by design** (a handful to low-dozens), not
 
 - Task 1: report the newly-named count; spot-check 2–3 (e.g. does `FUN_0047f280` now carry a
   `std::map`-family name? does a known `operator new` site read named?).
-- Task 2 (if taken): decompile `gfx_op_0x215_register_query` — its `gfx_registry_map_find(...)` /
-  `FUN_0047f280` call should read as the curated `std_map_find`; `--lint` clean; 0 clobbers.
+- Task 2 (if taken): do not classify `0x47f280` or `0x42cf70` as generic STL helpers. Later RE proved
+  they are purpose-specific `gfx_object_query_source_slot` and `vm_lvalue_descriptor_hash_insert`;
+  decompile `gfx_op_0x215_query_source_slot` to verify the former remains named; `--lint` clean; 0 clobbers.
 - `save_program` succeeds.
 
 ## Scope & boundaries

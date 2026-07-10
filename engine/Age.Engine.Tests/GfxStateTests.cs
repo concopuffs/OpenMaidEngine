@@ -4,19 +4,20 @@ using Xunit;
 public class GfxStateTests
 {
     [Fact]
-    public void QueryRegistryIsPopulatedOnlyByRegister_NotByGeometryOps()
+    public void QueryReturnsBoundSourceSlot_NotOperandRegistryValue()
     {
-        // Native contract (docs/engine-re.md op 0x215/0x1a2): the op-0x215 query registry is populated ONLY by
-        // op 0x1a2 (gfx-cmd-register). Merely giving a handle geometry (GetOrCreate, as the set-geom ops do)
-        // must NOT make query-gfx-object return a slot for it — otherwise a CG handle (never 0x1a2-registered)
-        // wrongly takes label_12649's existing branch and collapses off-screen.
+        // Native op 0x215 queries the retained-object map and returns obj+4, the source slot set by draw-texture.
+        // Geometry alone creates an object but leaves obj+4 at -1. Op 0x1a2 is a separate descriptor registry.
         var g = new GfxState();
-        g.GetOrCreate(0xcb2a).V18 = (400, 600, 0);   // geometry only, like the fresh CG-load branch
-        Assert.Equal(-1, g.QuerySlot(0xcb2a));        // NOT registered => -1 => fresh branch (correct)
+        g.GetOrCreate(0xcb2a).V18 = (400, 600, 0);
+        Assert.Equal(-1, g.QuerySlot(0xcb2a));
 
-        g.Register(0xd);                               // op 0x1a2 registers a small system/UI handle
-        Assert.Equal(0xd, g.QuerySlot(0xd));           // native map[handle]=handle; the value doubles as its slot
-        Assert.Equal(-1, g.QuerySlot(0x9999));         // unknown -> -1 (matches native 0xffffffff)
+        g.Register(0xcb2a);
+        Assert.Equal(-1, g.QuerySlot(0xcb2a));
+
+        g.BindDraw(0xcb2a, 6, 0, 0, 200, 200, 10, 20);
+        Assert.Equal(6, g.QuerySlot(0xcb2a));
+        Assert.Equal(-1, g.QuerySlot(0x9999));
     }
 
     [Fact]
@@ -31,12 +32,12 @@ public class GfxStateTests
     }
 
     [Fact]
-    public void ReleaseRemovesTheHandleFromTheQueryRegistry()
+    public void ReleaseRemovesTheRetainedObject()
     {
         var g = new GfxState();
-        g.Register(0x10);
-        Assert.Equal(0x10, g.QuerySlot(0x10));
-        g.Release(0x10);                          // op 0x1fa / 0x1f7 tear down the registration too
+        g.BindDraw(0x10, 4, 0, 0, 10, 10, 0, 0);
+        Assert.Equal(4, g.QuerySlot(0x10));
+        g.Release(0x10);
         Assert.Equal(-1, g.QuerySlot(0x10));
     }
 
@@ -48,7 +49,8 @@ public class GfxStateTests
     public void EraseRangeRemovesHandlesInRange()
     {
         var g = new GfxState();
-        g.Register(0x10); g.Register(0x11); g.Register(0x12); g.Register(0x20);
+        g.BindDraw(0x10, 1, 0, 0, 1, 1, 0, 0); g.BindDraw(0x11, 2, 0, 0, 1, 1, 0, 0);
+        g.BindDraw(0x12, 3, 0, 0, 1, 1, 0, 0); g.BindDraw(0x20, 4, 0, 0, 1, 1, 0, 0);
         g.EraseRange(0x10, 3);                      // count>1 → erase [0x10, 0x13)
         Assert.Equal(-1, g.QuerySlot(0x10));
         Assert.Equal(-1, g.QuerySlot(0x12));
@@ -59,7 +61,7 @@ public class GfxStateTests
     public void EraseRangeCountLeOneErasesSingleHandle()
     {
         var g = new GfxState();
-        g.Register(0x10); g.Register(0x11);
+        g.BindDraw(0x10, 1, 0, 0, 1, 1, 0, 0); g.BindDraw(0x11, 2, 0, 0, 1, 1, 0, 0);
         g.EraseRange(0x10, 1);                       // count<=1 → single handle
         Assert.Equal(-1, g.QuerySlot(0x10));
         Assert.NotEqual(-1, g.QuerySlot(0x11));
@@ -99,5 +101,21 @@ public class GfxStateTests
         g.BindDraw(0x10, 4, 0, 0, 10, 10, 0, 0);
         g.EraseRange(0x10, 1);
         Assert.Empty(g.SnapshotVisibleObjects());        // erased => gone from the registry => not composited
+    }
+
+    [Fact]
+    public void Sc0000EffectCleanupQueryEnablesObjectEraseAndSurfaceRelease()
+    {
+        var g = new GfxState();
+        g.SetSurface(6, 0x37, 0);
+        g.BindDraw(0xcb8e, 6, 0, 0, 200, 200, 300, 180);
+
+        int slot = g.QuerySlot(0xcb8e);              // mirrors post-effect cleanup at SC0000 0x3321
+        Assert.Equal(6, slot);
+        g.EraseRange(0xcb8e, 10);                    // op 0x1f7
+        g.ClearSurface(slot);                         // op 0x1fa
+
+        Assert.Empty(g.SnapshotVisibleObjects());
+        Assert.Equal(-1, g.QuerySlot(0xcb8e));
     }
 }

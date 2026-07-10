@@ -11,7 +11,7 @@ size = 0xa1000
 offset = 0x408
 name = "gfx_obj_registry"
 type = "int"
-note = "gfx object registry (std::map handle->object); op 0x1a2 insert / 0x215 find"
+note = "retained gfx-object map (std::map handle->object); geometry/draw get-or-create, 0x215 returns obj+4 source slot, 0x1f7 erases"
 [[field]]
 offset = 0x40c
 name = "sys4ini_count"

@@ -123,7 +123,7 @@ companion index/pointer accessor.
 
 **Hot-helper naming pass (2026-07-09, lever #2).** Ghidra's Function ID analyzer names **0** functions on
 this image (the bundled FidDbs don't cover the VC9/VS2008 static runtime; ~3,660 of 4,428 funcs stay
-`FUN_`), and the library workers we actually touch were already hand-named (`gfx_registry_map_find`,
+`FUN_`), and the library workers we actually touch were already hand-named (`gfx_object_query_source_slot`,
 etc.). So "STL/CRT auto-naming" had little to add — but the recon (rank unnamed funcs by call-count)
 surfaced the real win: ubiquitous **documented-but-unnamed helpers**. Named the top 5 (~2,400 call
 sites): `vm_operand_fetch`@`0x41b940` (1021 refs), `vm_operand_write`@`0x425fb0` (188),
@@ -138,7 +138,7 @@ Ghidra name is the record.
 `vm-map/engine-ctx.toml` → generated `docs/engine-ctx-reference.md`; a `run_script_inline` pass created
 an `EngineCtx` Ghidra struct and retyped **all 419 dispatch handlers' `this` to `EngineCtx *`**, so they
 decompile `ctx->cur_ctx_index` / `ctx->cmd_type_table` / `ctx->run_state_flags` instead of `param_1 + 0x…`
-(verified: `sleep_op_0xc8`, `gfx_op_0x215_register_query`). Add a field: edit `engine-ctx.toml`, run
+(verified: `sleep_op_0xc8`, `gfx_op_0x215_query_source_slot`). Add a field: edit `engine-ctx.toml`, run
 `engine_ctx_build.py --build`, re-apply the struct. (The VM global bank `G[…]` is separate — `globals.toml`.)
 
 ---
@@ -250,45 +250,39 @@ used. Absence in that capture ≠ absence of the native path.
 
 **The fix is tractable and Frida-free.** (b) does *not* mean an opaque native state machine. The subsystem
 is a **modelable data structure**: an object-record array (slot / geometry / cmd-type per object) plus a
-handle→object registry (a hash map). The gfx ops are inserts/queries/writes against these, and the inserts
-are **bytecode-driven** — so a faithful host-side model, with the gfx ops (`0x1a2`, `0x215`, and the
-`0x212–0x21a` family) *executed* instead of stubbed, rebuilds the state from the same scripts. The opcode-
-level summary lives in `vm-map/opcodes.toml` op `0x215`.
+handle→object registry (a `std::map`). Geometry and draw workers lazily populate that retained-object map;
+query and erase workers read/remove the same entries. Op `0x1a2` also maintains an operand-descriptor hash,
+but that is a separate structure and is not what op `0x215` queries. The opcode-level source of truth is
+`vm-map/opcodes.toml`.
 
-#### The query registry is SEPARATE from the geometry object store (2026-07-07) — the retained-mode "2nd CG off-screen" fix
+#### Op `0x215` queries the retained gfx-object's source slot (corrected 2026-07-09)
 
-Modelling the gfx ops (above) exposed a subtle but decisive point that the first retained-mode
-implementation got wrong. There are **two distinct native structures**, and they must stay distinct:
+The decisive caller/callee detail is the owner pointer. Op `0x215`'s handler passes
+`ECX = ctx+0x46614` to `gfx_object_query_source_slot` (`0x47f280`); that worker searches
+`ECX+0x408`. `draw-texture` passes the same owner to `gfx_object_bind_draw` (`0x47e870`), whose
+`gfx_object_get_or_create` uses the same `owner+0x408` map and writes the source surface slot to
+`obj+4`. Therefore:
 
-1. **The op-`0x215` query registry** — a `std::map<handle,value>` **populated ONLY by op `0x1a2`**
-   (`FUN_0042cf70` hash insert; native stores `map[handle] = handle`). `0x215` does `map.find(handle)`
-   → the found value (which equals the handle, and for small system/UI handles doubles as their surface
-   slot) or `0xffffffff` = **-1**.
-2. **The geometry object store** — per-handle V18/V24/V16c/color/draw-bind, touched lazily by the
-   geometry SET ops and `draw-texture` (`gfx_object_get_or_create`). This feeds the compositor.
+- absent handle → `0x215` returns `0xffffffff` (-1);
+- geometry-only/unbound object → its default source slot is -1;
+- draw-bound object → `0x215` returns the live source slot from `obj+4`.
 
-The first `GfxState` conflated them: `GetOrCreate` (called by *every* geometry/draw op) also assigned a
-fabricated per-object slot via an `AcquireSlot()` allocator, and `QuerySlot` (op `0x215`) returned it.
-That is a fiction with **no basis in the engine** — the native `0x215` never allocates a slot.
+The earlier “op `0x215` reads a registry populated only by `0x1a2`” conclusion was wrong: it conflated
+the retained-object `std::map` with `0x1a2`'s open-addressing operand-descriptor hash. The useful part of
+the earlier fix remains: `GetOrCreate` must not fabricate a slot. A fresh object stays unbound (-1) until
+`draw-texture` supplies its real source slot.
 
-Consequence, traced end-to-end in `SC0000` `label_12649` (the CG-load subroutine): a CG handle
-(`0xcb2a` = `INIT2`'s `G[0x62456]`, idx 1) is **never `0x1a2`-registered**. Real engine → `0x215` returns
-`-1` → the **fresh branch** runs → anchor comes from the `INIT2` arrays (`G[0x62469+idx]=400`,
-`G[0x6247d+idx]=600`) → `dst = anchor − (w/2, h) = (0,0)`. Correct. But with the fabricated allocator the
-*second* pass over the same handle found it "existing" (slot `4`) → the **existing branch** ran
-`get-texture-size(4)` on a slot whose surface was never loaded (the bytecode's own slot table
-`rec[s3]`/`G[0x3239]` gave slot `0`) → size `0` → `anchor = pos(0,0) + 0` → `dst = (0−400, 0−600) =
-(−400,−600)` — the CG rendered off-screen. This is the bug that had been mis-attributed to "geometry
-accumulation / drift" several times.
-
-**Fix (branch `feat/gfx-command-buffer`):** `GfxState` keeps a separate `_registry` (a `HashSet<long>`)
-populated only by `Register(handle)` (op `0x1a2`); `QuerySlot` returns `handle` if registered else `-1`,
-and no longer consults the geometry store or invents slots. Verified: `Age.Cli gfx --boot SC0000.BIN`
-→ all event CGs `dst=(0,0)`, zero `(−400,−600)` draws; Godot `--boot --shot` pages 1/2/4 render the
-opening event CGs full-screen; engine 44/44; sweep parity 284 exit / 13 STEP-LIMIT unchanged.
+This also explains the reported magic-circle retention end-to-end. `AE001H.AGF` (resource `0x37`) is
+bound to the ritual object's surface slot. At the post-effect cleanup (SC0000 `0x3321`), the script queries that object with
+`0x215`, sign-tests the returned slot, then executes `0x1f7(handle, 10)` followed by
+`0x1fa(returned_slot)`. Native `0x1f7` removes the retained object group from this same map; `0x1fa`
+releases the surface slot. The port's old separate-registry model returned -1, skipped the guarded cleanup,
+and left the circle compositing. `GfxState.QuerySlot` now returns `GfxObject.SourceSlot`; VM op `0x1fa`
+clears that surface slot. The booted SC0000 regression ends with no visible resource `0x37`; live
+clicked-path validation confirmed the corrected disappearance on 2026-07-10.
 
 Note a **second, still-latent** gap this uncovered: `label_125bd` (which fills `rec[s3]`/`G[0x3239]` with
-the per-object slots 4..13, called at `SC0000` `0x50f`) does **not** execute in a cold single-scene run —
+the eight per-object slots 4..11, called at `SC0000` `0x50f`) does **not** execute in a cold single-scene run —
 the scene coroutine framework (ops `0x7b`/`0x140` + the `G[0xaba5c]==1` re-entry gate) routes cold flow
 past it, so every fresh CG is assigned slot `0`. It doesn't break the *opening* (one full-screen CG shown
 at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correct regardless), but a scene
@@ -296,7 +290,7 @@ with several simultaneous distinct-slot objects would need the setup to run. Tra
 work, separate from this fix.
 
 **⇒ Scene-coroutine framework — INVESTIGATION COMPLETE (2026-07-09).** The mechanism behind the slot-0
-collapse is now fully understood; what remains is a *host-model design choice*, not more RE. Summary:
+collapse is fully understood; the native finding and the implemented host-model disposition follow:
 
 **The gate `G[0xaba5c]` is NATIVE scene-entry state — no script sets it to 1.** Across the whole corpus
 (429 references in 150 files) *every* `aba5c` reference is a read or a write of `0`; nothing anywhere writes
@@ -306,7 +300,7 @@ handle array** (native entry-state a cold single-scene harness skips), NOT a sto
 **Corrected roles of the two branches** (the earlier head-start had them inverted). At SC0000 `0x450`
 `eq local0 = (aba5c==1)`; `0x457 jcc local0 label_462 <fallthrough>`:
 - **`aba5c==1` → `label_462` "ループ開始" (loop start)** = the scene's **intro/setup LOOP**. Its body
-  `label_491` runs `call label_125bd` (@`0x50f`, the slot-table fill `G[0x3239..0x3256]=4..13`) plus ADV
+  `label_491` runs `call label_125bd` (@`0x50f`, the slot-table fill `G[0x3239..0x324e]=4..11`) plus ADV
   state init, UI-slot clears (a loop over `G[0x3239]`), intro draw — then `jmp label_462` (@`0x711`). A real
   loop, exited only when its iterator makes `G[0x6be]==exit-PC` (→ `mov aba5c 0`, `jmp label_45e`).
 - **`aba5c!=1` → `label_45e → call label_71b`** = the **scene CONTENT**: `label_71b` is a `switch(G[0x62ccf])`
@@ -343,15 +337,18 @@ slot fix:** the same `0x7b`/`0x7c` + handler machinery is the ADV frame loop, so
 the seam for the interactive-ADV backlog (`0x90` hotspots / EMPTY scenes) and likely fixes the stuck magic
 circle (scene-phase cleanup). **Permanently out of static scope:** the real intro-transition *timing/pacing*
 inside the loop (it lives in the native video service) — we approximate it host-side, as everywhere else.
-**Open for the spec (a choice, not RE):** how `G[0x6be]` initialises before the loop and the exact "run body
-once then terminate" mechanic (the terminal must satisfy `G[0x6be]==G[0x6c3]`, and `G[0x6c3]` is a per-scene
-immediate = that scene's exit-PC, so the host model can't hardcode `0x45e`). Context records = the 0x78-byte
-coroutine records at `ctx+0x53d14`/`0x53d88` (see §"Frame cadence").
+**Host model implemented (2026-07-09).** `VirtualMachine` recognizes only the ADV `"LABEL","J"` form
+(138 corpus scripts; all have the same terminal-check shape), synthesizes `G[0xaba5c]=1` on top-level
+scene entry, forces one setup-body pass even if `G[0x6be]` is stale, then returns the terminal immediate
+discovered from the following `mov`/`eq` pair. Thus no SC0000 offset is hardcoded. Op `0x7b` retains the
+saved handler PCs as frame metadata; op `0x7c` is a host-scheduler marker because `IHost.FrameYield` and
+`FrameClock` already own per-frame pacing. `TITLE.BIN`'s unrelated `"BIN","SC????.BIN"` service remains
+stubbed. The real video-service timing remains intentionally unmodeled.
 
-**Revealed issue (2026-07-08, post slot-fix): a magic-circle effect persists across the scene transition**
-(screenshot: opening ritual circle still overlaid on the arena BG). A retained object not released at the
-phase change — plausibly the same coroutine/lifecycle gap (scene-phase cleanup), or a separate release/clear
-op. Verify once the coroutine framework runs.
+**Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
+(resource `0x37`). SC0000 already contains the correct teardown, but the port's wrong `0x215` query
+returned -1 and skipped it. The corrected source-slot query now reaches `0x1f7(handle,10)` object erasure
+and `0x1fa(slot)` surface release; the booted regression ends with no visible `0x37` object.
 
 #### gfx command-buffer — op contract table (2026-07-07, full family reversed)
 
@@ -363,15 +360,15 @@ the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_o
 
 | op | handler | cmd | dir | argc | contract |
 |---|---|---|---|---|---|
-| `0x1a2` | `0x42d360` | 3 | set | 1 | registry **insert**: key `"%c%8.8x"(3, operand-desc)` → `FUN_0042cf70` |
-| `0x1f7` | `0x422270` | 5 | erase | 2 | registry **erase** (teardown, NOT create): `op2>1` → `gfx_registry_erase_range(op1,op2)` erases `[op1,op1+op2)`, else `gfx_registry_erase(op1)`. Objects are created lazily by the geometry SET ops. |
-| `0x1fa` | `0x4224a0` | 3 | set | 1 | release element `[ctx+0x52bd4 + op1*4]` (vtbl free) + `FUN_00474e40(op1)` |
+| `0x1a2` | `0x42d360` | 3 | set | 1 | operand-descriptor hash insert: key `"%c%8.8x"(3, operand-desc)` → `FUN_0042cf70`; separate from the retained object map |
+| `0x1f7` | `0x422270` | 5 | erase | 2 | retained-object erase: `op2>1` → `gfx_object_erase_range(op1,op2)` erases `[op1,op1+op2)`, else `gfx_object_erase(op1)` |
+| `0x1fa` | `0x4224a0` | 3 | set | 1 | release **surface slot** `ctx+0x52bd4[op1]` (vtbl free) + `FUN_00474e40(op1)` |
 | `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
 | `0x202` | `0x4228d0` | 0xb | set | 5 | blit obj op1 with (op2,op3) + **packed ARGB** from op4(alpha)/op5(color) → `FUN_0047ea00` |
 | `0x203` | `0x4229a0` | 9 | set | 4 | draw obj op1 with op2 + packed color(op3/op4) → `FUN_0047e9b0` |
 | `0x212` | `0x4230c0` | 5 | set | 2 | `obj[ctx+0x14d54 + op1*4] -> +0x64 = op2` |
 | `0x213` | `0x423110` | 7 | set | 3 | `obj[0x14d54+op1*4] -> +0x68 = op2 ; +0x6c = op3` (an (x,y) pair) |
-| `0x215` | `0x42a0b0` | 5 | **query** | 2 | registry **find**(op2 handle) → op1 (value / `0xffffffff`). **Drives slot-select.** |
+| `0x215` | `0x42a0b0` | 5 | **query** | 2 | retained-object **find**(op2 handle) → op1 = obj+4 source slot / `0xffffffff`. **Drives setup and teardown.** |
 | `0x216` | `0x42a0f0` | 5 | **query** | 2 | read `[ctx+0x46d14 + op2*0x14]` → op1 |
 | `0x217` | `0x4231b0` | 9 | set | 4 | 3 int→float on obj op1 → `FUN_0047e960` (SETS a geom 3-vector) |
 | `0x218` | `0x42a130` | 9 | **query** | 4 | `FUN_0047f360(obj op1)` → op2,op3,op4 (GETS a geom 3-vector) |
@@ -395,7 +392,7 @@ anchor math reads garbage). Both read object state the SET ops (`0x217`/`0x219`/
 bytecode-driven, all host-modelable.
 
 **Model implication for the host-side reimplementation (Phase 2 input).** The subsystem is a set of
-per-object records keyed by handle, carrying: a **slot** (from the `0x215` registry), a **position 3-vector**
+per-object records keyed by handle, carrying: a live source **slot** (written by draw-texture, queried by `0x215`), a **position 3-vector**
 (`0x21a` get / a matching set), and an **anchor 3-vector** (`0x218` get / `0x217` set), plus color/blit
 params (`0x202`/`0x203`). The native workers (`FUN_0047xxxx` = the DirectDraw/surface layer) need **not** be
 modelled — only the object-record data model, so the QUERY ops return what the SET ops stored. That makes
@@ -403,8 +400,9 @@ modelled — only the object-record data model, so the QUERY ops return what the
 correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj pointers, fields `+0x64/
 +0x68/+0x6c`), `ctx+0x46d14` (stride `0x14`), `ctx+0x52bd4` (element pointers), plus the `0x408` registry.
 
-Worker functions decoded + annotated in the Ghidra project (2026-07-07): `gfx_registry_erase`(`0x47d850`),
-`gfx_registry_erase_range`(`0x47d8b0`), `gfx_object_get_or_create`(`0x47ddb0`, inserts a zeroed default via
+Worker functions decoded + annotated in the Ghidra project (updated 2026-07-09): `gfx_object_erase`(`0x47d850`),
+`gfx_object_erase_range`(`0x47d8b0`), `gfx_object_query_source_slot`(`0x47f280`),
+`gfx_object_get_or_create`(`0x47ddb0`, inserts a zeroed default via
 `gfx_object_init_default`@`0x472810`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
 `gfx_get_vec18/24`(`0x47f360/f2e0`).
 
@@ -438,25 +436,22 @@ animation/tween** — and two members were already named in prior RE (`0x234 gfx
 (`0x2bd`→`0x4251c0`, `0x2bf`→`0x425240`. The handful of `0x417xxx` handlers are trivial/marker-shaped — the
 default-handler neighbourhood — and are almost certainly no-ops or arg-poppers; triage before modelling.)
 
-**Contract (decoded, representative ops `0x220`/`0x21e`, both `argc 6`, annotated in Ghidra):** same shape as
-the geometry family — write **cmd-type `0xd`** into the current object record, fetch operands 1..6, call a
-transform worker with `(int op1=handle, int op2, int op3, float op4, float op5, float op6)`. `0x220` uses raw
-floats (worker `0x47ecc0`); **`0x21e` normalizes the 3 floats by `/_DAT_00571c28`** (runtime-init divisor,
-static 0) so operand `0x64`=100 → a fraction → **scale/percentage** (worker `gfx_anim_set_channel`@`0x47eaa0`).
-The worker calls the SAME `gfx_object_get_or_create` our `GfxState` already models, then arms an animation
-channel on the object record: `obj+0x3c = op2`, `obj+0x50 = op3`, `obj+0x68 = 1` (enable), `obj+0xac =
-vec3(op4,op5,op6)` (the transform target), and raises global dirty flags `ctx+0xb558/+0xb560`. Corpus idiom:
-`0x220 (handle=0xcb20+k) 800 500 0 0 0` (size a CG object), `0x21e (handle) (val) 100 100 100 100` (scale/color
-channels). **`0x234 anim_start` + `0x238 set_anim_clock` imply a per-frame clock that interpolates these
-targets over time** — i.e. this is what makes `AE*` fades/effects *animate* rather than snap.
+**Contract (corrected 2026-07-09, representative ops `0x21e`/`0x220`, both `argc 6`):** these are
+independent matrix channels, not two encodings of one vec3 property.
 
-**Model implication (Phase-2 input, mirrors the geometry family):** the DirectDraw workers need NOT be
-modelled — extend the host `GfxState` object with the transform/anim fields (a transform `vec3` target + the
-two scalar params + enable + an animation clock), have the SET ops (`0x21e/0x220/0x234/0x238/…`) write them and
-the compositor apply the transform per-frame, stepping the clock on `anim_start`/`set_anim_clock`. This is a
-spec/plan-worthy chunk (~18 effectful handlers + workers `0x47eaa0/0x47ecc0` + the per-frame stepping); the op
-map above is the de-risked starting point. `tools/scene_opcode_coverage.py SC0000` measures the GAP shrink as
-each lands.
+- `0x21e` normalizes operands 4–6, then `gfx_object_set_scale_channel` (`0x47eaa0`) stores timing at
+  `obj+0x3c/+0x50` and calls `0x48af1d`, which writes the three values onto a 4×4 matrix diagonal at
+  `obj+0xac`: a **scale matrix**.
+- `0x220` passes raw operands 4–6 to `gfx_object_set_translation_channel` (`0x47ecc0`), stores timing at
+  `obj+0x44/+0x58`, and calls `0x48afb1`, which writes them into matrix entries 12–14 at
+  `obj+0x1ac`: a **translation matrix**.
+- `gfx_object_apply_transform_channels` (`0x472f00`) interpolates and combines both matrices separately.
+  Neither third component is opacity.
+
+**Port implication:** `GfxState` must ultimately retain separate scale and translation matrices/timing.
+The current single `AnimTarget` plus Godot `TZ/100 = opacity` approximation is native-inaccurate and is
+now tracked as transform-compositor debt. It was not the cause of the lingering circle: that was the skipped
+`0x215`/`0x1f7`/`0x1fa` teardown above.
 
 ##### `anim_start`/`set_anim_clock` decoded + opening confirmed (2026-07-07, animation-slice Task 1)
 
@@ -481,11 +476,10 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
 **Corrected host model (supersedes the "per-object clock" wording above):**
 - **Global clock** (from `0x238`): one `AnimClockDurationTicks` + a generation/reset marker the host watches to
   reset its wall-clock `elapsed` to 0. The host tweens all armed objects over this duration.
-- **Per-object** (from `0x21e`/`0x220` = set transform directly; `0x234` = animate toward a target): the object's
-  transform target vec3 + the two scalar params + enable + a per-object generation (bumped by `anim_start`).
-- **Residual (empirical, Task 6):** *which* vec3 component is opacity vs scale vs position lives in the DirectDraw
-  draw-worker we deliberately don't model. Determine it empirically from the animating channel + screenshot, not
-  by RE'ing the surface layer.
+- **Per-object correction:** `0x21e` is scale and `0x220` is translation; they occupy distinct matrices and
+  timing fields. No component of either channel is opacity.
+- **Residual:** finish separating these channels in `GfxState`/Godot and identify the remaining color/alpha
+  channel consumers. Do not reuse transform Z as alpha.
 
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
 
@@ -778,14 +772,11 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
    (`0x215`) which returns **-1** for the (correctly-unregistered) CG/effect handles → the fallback at
    SC0000 `label_12649` does `G[0x62452] = lookup-array-2d(rec[s3]=G[0x3239], G[0x62450], 3, 0)` = **0**
    because the slot table `rec[s3]`/`G[0x3239]` is **empty**. That table is filled by `call label_125bd`
-   (SC0000 `0x50f`, slots 4..13), which is reached **only through the scene-coroutine framework** — the
+   (SC0000 `0x50f`, slots 4..11), which is reached **only through the scene-coroutine framework** — the
    `G[0xaba5c]` gate (`0x450`) + op `0x140` (`u0041F9C0`, coroutine LABEL/yield `"LABEL" "J"` @ `0x46d`).
-   **Op `0x140` is stubbed** (SC0000 GAP list) → the coroutine re-entry never routes through `label_125bd`
-   → slot table stays 0 → all layers collapse into slot 0. This is exactly the "second still-latent gap"
-   flagged above (§"the render drift's second half"), now confirmed as the cause of the visible grey BG on
-   multi-object pages. **Fix = implement the scene-coroutine framework (`0x7b`/`0x7c`/`0x140` + `G[0xaba5c]`
-   gate) so `label_125bd` runs** (or, as a targeted unblock, run `label_125bd`/seed `G[0x3239]` directly).
-   NOT a compositor/z-order/blend bug. Diagnostics: `AGE_DIAG_SETTEX=1` env → VM logs each `set-texture`
+   **Fixed by the bounded scene-coroutine host model:** `0x140` runs the setup body once, `label_125bd`
+   fills the eight slot records, and SC0000 resource `0x23` loads into assigned slot 5 instead of slot 0.
+   This was not a compositor/z-order/blend bug. Diagnostics: `AGE_DIAG_SETTEX=1` env → VM logs each `set-texture`
    slot operand + `query-gfx-object?` result.
 
 ### Differential offset-path oracle — engine-vs-VM control-flow diff (2026-07-09)

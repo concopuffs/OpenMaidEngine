@@ -63,16 +63,14 @@ public sealed class GfxState
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
-    // Populated lazily by the geometry SET ops and draw-texture. Membership here does NOT mean the object is
-    // in the op-0x215 query registry (that is a SEPARATE native structure; see _registry below).
+    // Populated lazily by the geometry SET ops and draw-texture. Op 0x215 queries this same native map and
+    // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
     private readonly Dictionary<long, GfxObject> _objects = new();
 
-    // ---- op-0x215 query registry (native std::map queried by gfx_op_0x215, populated ONLY by op 0x1a2
-    // gfx-cmd-register -> FUN_0042cf70 hash insert). map[handle] = handle (native stores operand1 as the value;
-    // small system/UI handles double as their surface slot). CG handles are NEVER 0x1a2-registered, so
-    // query-gfx-object returns -1 for them and label_12649 takes its fresh branch (correct anchor from the
-    // INIT2 arrays) instead of collapsing onto a fabricated slot. See docs/engine-re.md op 0x215/0x1a2. ----
-    private readonly HashSet<long> _registry = new();
+    // ---- opcode 0x1a2's operand-descriptor registry. Native op 0x1a2 hashes the lvalue descriptor string;
+    // it is separate from the retained-object map queried by op 0x215. We retain membership for diagnostics
+    // and teardown parity, but it does not make an undrawn gfx object queryable as a surface slot. ----
+    private readonly HashSet<long> _operandRegistry = new();
 
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
@@ -103,35 +101,38 @@ public sealed class GfxState
         }
     }
 
-    /// <summary>Op 0x1a2 (gfx-cmd-register, native FUN_0042d360 -> FUN_0042cf70 hash insert): add the handle to
-    /// the op-0x215 query registry. Native inserts map[handle]=handle; QuerySlot returns that value (handle) or
-    /// -1. Only this op populates the query registry — geometry/draw ops do not.</summary>
-    public void Register(long handle) { lock (_lock) { _registry.Add(handle); } }
+    /// <summary>Op 0x1a2: retain the operand's current value in the separate descriptor registry. This does
+    /// not populate the retained-object map used by op 0x215.</summary>
+    public void Register(long handle) { lock (_lock) { _operandRegistry.Add(handle); } }
 
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
 
-    /// <summary>Op 0x215 (query-gfx-object): native returns std::map::find(handle) — the registered value (=handle),
-    /// or 0xffffffff (=-1) when the handle was never 0x1a2-registered. NOT a fabricated slot allocator.</summary>
-    public int QuerySlot(long handle) => _registry.Contains(handle) ? (int)handle : -1;
-    public bool IsRegistered(long handle) { lock (_lock) { return _registry.Contains(handle); } }
+    /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
+    /// the live source-surface slot written by draw-texture, or -1 when absent/unbound.</summary>
+    public int QuerySlot(long handle)
+    {
+        lock (_lock)
+            return _objects.TryGetValue(handle, out var o) ? o.SourceSlot : -1;
+    }
+    public bool IsRegistered(long handle) { lock (_lock) { return _operandRegistry.Contains(handle); } }
     public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
 
     public void Release(long handle)
     {
-        lock (_lock)   // re-entrant: EraseRange already holds _lock; op 0x1fa calls this directly
+        lock (_lock)   // re-entrant: EraseRange already holds _lock
         {
             _objects.Remove(handle);
-            _registry.Remove(handle);        // op 0x1fa/0x1f7 also tear down the query registration
+            _operandRegistry.Remove(handle);
         }
     }
 
-    /// <summary>Op 0x1f7 semantics (native gfx_registry_erase_range @0x47d8b0): erase handles in
+    /// <summary>Op 0x1f7 semantics (native gfx_object_erase_range @0x47d8b0): erase handles in
     /// [handle, handle+count) when count>1, else just <paramref name="handle"/>. It is a teardown/erase,
     /// NOT a create — objects are created lazily by the geometry SET ops (gfx_object_get_or_create).</summary>
     public void EraseRange(long handle, long count)
     {
-        // Registry/slot cleanup (native gfx_registry_erase): removes the object from the registry, so it stops
-        // compositing next frame. Faithful to the engine (the render loop iterates the registry).
+        // Retained-object cleanup (native gfx_object_erase): removes the object from the map, so it stops
+        // compositing next frame. Faithful to the engine (the render loop iterates the retained-object map).
         lock (_lock)
         {
             if (count > 1) for (long i = handle; i < handle + count; i++) Release(i);

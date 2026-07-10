@@ -429,7 +429,7 @@ anchor doubling — a geometry issue independent of timing.)
 **Open (the real burst pacer):** what advances the rapid opening CG/AE\* burst frame-to-frame is **unknown** —
 not `sleep`, not `present-frame` (only 2× in the whole scene), not the coroutine ops (absent from the burst).
 Next: profile the **real Godot run** (`--trace-histogram`) of SC0000's `0x3958–0x3973` loop + gfx-op sequence.
-The scene-coroutine framework (`0x7b`/`0x7c`/`0x140` + `G[0xaba5c]` gate + `label_125bd`) remains deferred.
+The scene-coroutine framework was deferred here; the bounded host model is completed below (2026-07-09).
 
 ### Diagnostics framework extended (2026-07-08)
 
@@ -598,7 +598,7 @@ fixed" with "opening looks right."
 **Next candidates (deferred).** (a) Graphics geometry/blend fidelity — AE* alpha/blend + per-frame
 compositing + cold-object anchors (the thing that makes the paced opening actually *look* right). (b) Wire
 the Ctrl `Speed` multiplier (ADV-mode-scope RE). (c) Full scene-coroutine framework (`0x7b`/`0x7c`/`0x140`)
-for interactive multi-object scenes. (d) Model `0xcd get-input-type` (name-entry interactivity, the separate
+for interactive multi-object scenes (**completed below, 2026-07-09**). (d) Model `0xcd get-input-type` (name-entry interactivity, the separate
 input gap noted above).
 
 ### A2b — Blend & transparency (slice A) ✅ DONE (2026-07-08)
@@ -651,3 +651,47 @@ plan `.../plans/2026-07-08-sc0000-anim-transform-cluster.md`, branch `feat/anim-
 `0x236` timed/movie op, and the rare `0x21c/0x21d/0x224/0x242/0x243/0x23d/0x20a/0x20e` tail. Adjacent
 non-cluster gaps remain: `draw-string 0x204`×205 (on-screen text) and `play-sound-effect`. **Whole-scene
 visual validation is the user's call** (they deferred confirmation until the scene is coherent).
+
+### A2b -- Scene-coroutine host model (2026-07-09) -- DONE
+
+The native mechanism is fully reversed in `docs/engine-re.md` under Scene-coroutine framework.
+The port deliberately models its observable ADV lifecycle instead of emulating the runtime-resolved
+video service behind op `0x140`.
+
+**Bounded model for this slice:**
+
+1. Detect only the corpus-wide ADV form `0x140 out "LABEL" "J" in`. `TITLE.BIN`'s unrelated
+   `"BIN" "SC????.BIN"` use remains unmodeled and must not acquire ADV scene-entry behavior.
+2. On a top-level entry at offset zero, synthesize native scheduler state `G[0xaba5c]=1` for a script
+   containing that ADV form. A captured global-write snapshot cannot supply it because the native scene
+   loader does not set it through the script operand-write helper.
+3. At each ADV labeled-yield site, force exactly one setup-body iteration, then return the terminal value
+   encoded by the site's following `mov terminal, immediate` + `eq terminal, out` sequence. This handles a
+   stale prior-scene `out` value and avoids hardcoding SC0000's `0x45e`; all 138 corpus ADV sites share the
+   same shape.
+4. Record op `0x7b`'s two saved handler PCs as frame metadata. Consume op `0x7c` as the host-scheduler
+   resume marker: the port's existing `IHost.FrameYield`/`FrameClock` path supplies per-frame pacing, so it
+   does not recursively execute the native render/poll/yield bytecode handlers.
+
+**Acceptance gates:** a synthetic stale-terminal scene runs its setup body once and reaches content; a
+non-ADV `0x140` remains unchanged/stub-reported; real SC0000 executes op `0x140` twice, clears
+`G[0xaba5c]`, and fills the slot-table columns (`G[0x3239..0x324e] = 4..11`) before content. Then run the engine
+suite, corpus sweep, Godot self-test, and live/pixel validation of the previously grey multi-layer page.
+
+**Result.** The bounded model landed in `VirtualMachine`/`ExecFrame` with four focused tests. SC0000 now
+executes `0x140` twice, runs `label_125bd` once, clears the native entry gate, and loads resource `0x23`
+into assigned slot 5 rather than the broken slot 0. Static corpus validation found 138 ADV sites and zero
+shape mismatches; the one non-ADV `TITLE.BIN` site remains stub-reported.
+
+**Verified:** engine **85/85**; full sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot threaded
+self-test `SELFTEST OK` (3 lines, full handling). The native transition timing remains host-approximated.
+SC0000 coverage is now **77/129 handled (59.7%)**, with 52 GAP ops / 613 GAP instructions.
+
+**Follow-up — magic-circle teardown fixed (2026-07-09).** Ghidra caller analysis corrected op `0x215`:
+it queries the retained gfx-object map and returns `obj+4`, the source surface slot written by
+`draw-texture`; it does not query op `0x1a2`'s descriptor hash. The old host model returned -1 for CG
+handles, so SC0000 skipped its explicit `0x1f7(handle,10)` + `0x1fa(slot)` cleanup and left
+`AE001H.AGF` (resource `0x37`) visible. `GfxState.QuerySlot` now returns the bound source slot,
+`0x1f7` erases retained objects, and `0x1fa` clears the surface. A booted SC0000 integration regression
+asserts no visible resource `0x37` remains; engine suite **86/86**. **Live clicked-path validation
+confirmed the fix on 2026-07-10:** the magic circle now disappears at the intended transition.

@@ -238,9 +238,10 @@ public partial class Main : Godot.Control
     // is applied by the alpha-aware BlitLayer. See docs/engine-re.md "sprite transform / ANIMATION cluster".
     private readonly System.Collections.Generic.Dictionary<(string Path, long Key), Image?> _imgCache = new();
 
-    // Per-handle wall-clock tween of the animation channel. The engine's clock (op 0x238) is a GLOBAL,
-    // non-blocking clock; the host advances it here while the VM is parked at wait-for-input. Opacity comes
-    // from the 3rd anim vec component (TZ), data-driven from the opening (100=full, 0=clear).
+    // Legacy host approximation: per-handle wall-clock tween using Anim.TZ as opacity. Native RE now proves
+    // op 0x21e is a scale matrix and 0x220 is a separate translation matrix, so TZ is NOT opacity. Keep this
+    // behavior isolated here until the transform compositor is split; it is unrelated to retained-object
+    // teardown (0x215/0x1f7/0x1fa), which now removes the magic-circle object correctly.
     private sealed class TweenState
     {
         public long Generation = long.MinValue;
@@ -325,9 +326,8 @@ public partial class Main : Godot.Control
         foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
     }
 
-    // Current opacity for a visible object: 1.0 unless it has an active anim channel, in which case tween the
-    // 3rd vec component (TZ, ~percent) over the global clock. Start opaque on first sight so a CG never
-    // begins invisible (the safe direction); re-arm whenever the object's or the clock's generation bumps.
+    // Current legacy opacity approximation. TODO(transform compositor): replace this with independent native
+    // scale/translation matrices and source opacity only from the actual color/blend channel.
     private float AlphaFor(Age.Engine.Model.RenderObject v, bool clockReset, double clockDur)
     {
         if (!v.Anim.Enabled) return 1f;

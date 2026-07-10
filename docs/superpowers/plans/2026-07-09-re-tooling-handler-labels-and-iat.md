@@ -240,7 +240,7 @@ Expected: named imports carry parameter types.
 
 - [ ] **Step B8: Save, verify annotations intact, update docs, commit**
 
-Confirm a sample of pre-existing renames/plate comments still present (`get_function_by_address` on `gfx_op_0x215_register_query`, `sleep_op_0xc8`). Run `mcp__ghidra__save_program`.
+Confirm a sample of pre-existing renames/plate comments still present (`get_function_by_address` on `gfx_op_0x215_query_source_slot`, `sleep_op_0xc8`). Run `mcp__ghidra__save_program`.
 Edit `docs/engine-re.md` (runbook: IAT reconstruction is done; note graft vs fallback) and `docs/tools-reference.md` (`apply_imports.py`).
 
 ```bash

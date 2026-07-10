@@ -11,5 +11,8 @@ internal sealed class ExecFrame
     public readonly Frame Locals = new();
     public readonly List<int> CallStack = new();         // intra-script `call` (op 0x8f) returns
     public readonly Dictionary<int, int> EmitSeen = new();
+    public int? CoroutineYieldHandlerA;                  // op 0x7b: native per-frame handler PCs
+    public int? CoroutineYieldHandlerB;
+    public readonly Dictionary<int, int> CoroutineYieldVisits = new(); // instruction index -> visits
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }

@@ -8,6 +8,7 @@ public sealed class VirtualMachine
     private const long NoJump = 0xFFFFFFFF;
     private const int HALT = int.MinValue;
     private const int FRAME_RETURN = int.MinValue + 1;
+    private const int SceneEntryCoroutineGate = 0xaba5c;
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12;
 
@@ -40,6 +41,33 @@ public sealed class VirtualMachine
     private static long PyMod(long a, long b) { if (b == 0) return 0; long r = a % b; if (r != 0 && (r < 0) != (b < 0)) r += b; return r; }
 
     private static bool IsStr(Operand o) => o.Type == T_STR || o.Type == T_GSTR || o.Type == T_LSTR;
+    private static bool SameOperand(Operand a, Operand b) => a.Type == b.Type && a.Value == b.Value;
+
+    private static bool IsAdvLabeledYield(Script script, Instruction ins)
+        => ins.Opcode == 0x140 && ins.Args.Count >= 4
+           && ins.Args[1].Type == T_STR && ins.Args[2].Type == T_STR
+           && script.GetString((int)ins.Args[1].Value) == "LABEL"
+           && script.GetString((int)ins.Args[2].Value) == "J";
+
+    private bool TryGetAdvYieldTerminal(int pc, Operand output, out long terminal)
+    {
+        terminal = 0;
+        if (pc + 2 >= _cur.Script.Instructions.Count) return false;
+        var setTerminal = _cur.Script.Instructions[pc + 1];
+        var compare = _cur.Script.Instructions[pc + 2];
+        if (_t.Label(setTerminal.Opcode) != "mov" || setTerminal.Args.Count < 2
+            || setTerminal.Args[1].Type != T_IMM
+            || _t.Label(compare.Opcode) != "eq" || compare.Args.Count < 3)
+            return false;
+
+        var terminalOperand = setTerminal.Args[0];
+        bool comparesTerminalToOutput =
+            (SameOperand(compare.Args[1], terminalOperand) && SameOperand(compare.Args[2], output))
+            || (SameOperand(compare.Args[2], terminalOperand) && SameOperand(compare.Args[1], output));
+        if (!comparesTerminalToOutput) return false;
+        terminal = Read(setTerminal.Args[1]);
+        return true;
+    }
 
     private long Read(Operand op) => op.Type switch
     {
@@ -103,6 +131,11 @@ public sealed class VirtualMachine
 
     public void Run(int entryOffset = 0)
     {
+        // The native scheduler supplies this scene-entry state outside script-visible global writes.
+        // Restrict it to the byte-identical ADV LABEL/J idiom; op 0x140 also has an unrelated TITLE use.
+        if (entryOffset == 0 && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
+            Globals[SceneEntryCoroutineGate] = 1;
+
         var top = new ExecFrame(_s, _s.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0);
         var outcome = RunFrame(top, FrameCause.TopScene);
         if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
@@ -177,6 +210,35 @@ public sealed class VirtualMachine
                 long tgt = Read(a[0]) != 0 ? a[1].Value : a[2].Value;
                 return tgt == NoJump ? pc + 1 : _cur.Script.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1);
             }
+            case "u0041ADB0":
+            case "coroutine-save-yield-handlers":   // 0x7b: retain native handler metadata
+                _cur.CoroutineYieldHandlerA = (int)Read(a[0]);
+                _cur.CoroutineYieldHandlerB = (int)Read(a[1]);
+                return pc + 1;
+            case "u00416A90":
+            case "coroutine-resume":                // 0x7c: host FrameYield/FrameClock owns re-entry
+                return pc + 1;
+            case "u0041F9C0":
+            case "coroutine-label-yield":           // 0x140: bounded host model for LABEL/J only
+            {
+                if (!IsAdvLabeledYield(_cur.Script, ins))
+                {
+                    if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc));
+                    return pc + 1;
+                }
+                if (!TryGetAdvYieldTerminal(pc, a[0], out long terminal))
+                {
+                    HaltReason ??= $"coroutine-yield-pattern@0x{ins.Offset:x}";
+                    return HALT;
+                }
+
+                int visits = _cur.CoroutineYieldVisits.GetValueOrDefault(pc);
+                _cur.CoroutineYieldVisits[pc] = visits + 1;
+                // First visit must enter setup even if out retained this same terminal from a prior scene.
+                // Every later visit returns the script-encoded terminal and exits the bounded loop.
+                Write(a[0], visits == 0 ? (terminal == 0 ? 1 : 0) : terminal);
+                return pc + 1;
+            }
             case "exit":
             case "exit-script": return FRAME_RETURN;
             case "call-script":
@@ -246,7 +308,7 @@ public sealed class VirtualMachine
                 {
                     long h = Read(a[1]);
                     System.Console.Error.WriteLine($"[query] handle=0x{h:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
-                        $"-> QuerySlot={Gfx.QuerySlot(h)} registered={Gfx.IsRegistered(h)}");
+                        $"-> QuerySlot={Gfx.QuerySlot(h)} objectPresent={Gfx.TryGet(h) != null}");
                 }
                 Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
             case "query-gfx-field?":    // 0x216 (out)(idx)
@@ -293,13 +355,13 @@ public sealed class VirtualMachine
             {
                 var o = Gfx.GetOrCreate(Read(a[0])); o.Field68 = Read(a[1]); o.Field6c = Read(a[2]); return pc + 1;
             }
-            case "gfx-cmd-register":    // 0x1a2 (handle) — insert into the op-0x215 query registry (native
-                                        // FUN_0042d360 -> FUN_0042cf70 hash insert; the ONLY populator of that map)
+            case "gfx-cmd-register":    // 0x1a2 (handle) — operand-descriptor hash insert; separate from
+                                        // op 0x215's retained gfx-object/source-slot lookup
                 Gfx.Register(Read(a[0])); return pc + 1;
-            case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase registry range (teardown, NOT create)
+            case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
-            case "gfx-elem-release":    // 0x1fa (handle)
-                Gfx.Release(Read(a[0])); return pc + 1;
+            case "gfx-elem-release":    // 0x1fa (surface slot)
+                Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
             case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — static alpha/tint (anim interp deferred)
                 Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[3]), Read(a[4]))); return pc + 1;
             case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — static alpha/tint

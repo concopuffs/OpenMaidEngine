@@ -35,7 +35,7 @@ where `disp = 0x9b24c + op*4` (word index `0x26c93 + op`; e.g. `ctx[0x26e3f]=0x4
 3. For each real `(op, handler_va)`:
    - `create_function` at `handler_va` if none exists.
    - **Preserve good names:** if the function already has a non-`FUN_`/`LAB_` name (e.g.
-     `gfx_op_0x215_register_query`, `sleep_op_0xc8`), do **not** rename — only ensure a plate comment
+     `gfx_op_0x215_query_source_slot`, `sleep_op_0xc8`), do **not** rename — only ensure a plate comment
      records the opcode. Rename only raw `FUN_xxxx`/`LAB_xxxx` → `op_0xNN_handler`.
    - `set_plate_comment`: `opcode 0xNN dispatch handler; resolved via ctx[0x26c93+op] in FUN_00413860`.
 4. Emit `build/op-handler-map.json` (`{ "0x1ac": {"handler": "0x427fb0", "name": "..."}, ... }`).

@@ -24,15 +24,27 @@ public class TextureOpsTests
     }
 
     [Fact]
-    public void SC0000FiresTextureOpsWithSlot0FullScreenSlideshow()
+    public void SC0000FiresTextureOpsWithAssignedFullScreenSlot()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var provider = Sys4ScriptProvider.Load(table);
+        var session = new GameSession();
+        foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+            session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new CaptureHost(), provider: provider);
+
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
         var host = new RecHost();
-        new VirtualMachine(script, table, host).Run();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider);
+        foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
+        vm.Run();
+
         Assert.True(host.Creates > 0, "create-texture should fire");
-        // The intro loads a sequence of full-screen images into slot 0; res 0x23 is the first bg.
-        Assert.Contains(host.Sets, s => s.resId == 0x23 && s.slot == 0);
-        Assert.Contains(host.Draws, d => d.slot == 0 && d.w == 0x320 && d.h == 0x258);
+        // Boot + coroutine setup fill the handle/slot tables, so the first bg uses its assigned slot.
+        Assert.Contains(host.Sets, s => s.resId == 0x23 && s.slot == 5);
+        Assert.Contains(host.Draws, d => d.slot == 5 && d.w == 0x320 && d.h == 0x258);
+        // AE001H is the ritual/magic-circle sheet. At the post-effect transition SC0000 explicitly queries its
+        // retained object, erases the object group, and releases the returned slot; it must not survive the scene.
+        Assert.DoesNotContain(vm.Gfx.SnapshotVisibleObjects(), o => o.SurfaceResId == 0x37);
     }
 }

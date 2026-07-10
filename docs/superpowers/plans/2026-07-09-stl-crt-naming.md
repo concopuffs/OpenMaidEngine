@@ -71,21 +71,18 @@ Expected: an explicit STRONG/WEAK verdict with the number.
 
 - [ ] **Step 1: Seed `vm-map/lib-functions.toml` with the known library functions**
 
-Include the library functions we've identified in RE (grep `engine-re.md` for `std::map`, `FUN_0047f280`, `FUN_0042cf70`, hash insert/find, `operator new`, etc.). Start conservative — only addresses we're confident about:
+Include only actual library functions identified in RE. **Correction (2026-07-09): do not seed
+`0x47f280` or `0x42cf70` here** — later caller/field analysis proved they are engine-purpose-specific
+`gfx_object_query_source_slot` and `vm_lvalue_descriptor_hash_insert`, not generic STL helpers.
+Start conservative — only addresses and roles we're confident about:
 ```toml
 # vm-map/lib-functions.toml -- CANONICAL registry of identified statically-linked library functions.
 # Generated: build/lib-functions.json + docs/lib-functions-reference.md via tools/lib_functions_build.py --build.
 # Applied to /v2 via run_script_inline (rename; never clobbers USER_DEFINED). Grows as we identify more.
 [[func]]
-address = 0x47f280
-name = "std_map_find"
-note = "std::map::find over the gfx object registry (op 0x215 handler calls it; returns value or 0xffffffff)"
-source = "native-RE"
-confidence = "high"
-[[func]]
-address = 0x42cf70
-name = "gfx_registry_hash_insert"
-note = "open-addressing hash insert into the op-0x215 query registry (op 0x1a2 handler calls it)"
+address = 0x5502be
+name = "operator_new"
+note = "VC9 operator new; malloc + new-handler retry + bad_alloc"
 source = "native-RE"
 confidence = "high"
 ```
@@ -111,7 +108,8 @@ Expected: N renamed (or skipped if we'd already named them), 0 clobbers.
 
 - [ ] **Step 6: Validate + commit**
 
-`decompile_function 0x42a0b0` (`gfx_op_0x215_register_query`) — its registry-find call should read `std_map_find(...)`.
+`decompile_function 0x42a0b0` (`gfx_op_0x215_query_source_slot`) — verify its purpose-specific
+`gfx_object_query_source_slot(...)` call was not clobbered by the library pass.
 ```bash
 git add vm-map/lib-functions.toml tools/lib_functions_build.py tools/test_lib_functions.py docs/lib-functions-reference.md
 git commit -m "re: curated library-function registry (lib-functions.toml) + apply"

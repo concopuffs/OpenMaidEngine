@@ -39,24 +39,24 @@ public class GfxCommandBufferTests
     private static (int, Operand[]) Register(int handle) => (0x1a2, new[] { G(handle) });
 
     [Fact]
-    public void QueryReturnsMinusOneUntilRegistered_ThenTheHandle()
+    public void QueryReturnsMinusOneUntilDrawBound_ThenSourceSlot()
     {
-        // Native contract (docs/engine-re.md op 0x215/0x1a2): the query registry is populated ONLY by op 0x1a2
-        // (gfx-cmd-register). Giving a handle geometry via set-geom (0x217) must NOT register it — query stays -1
-        // so a CG handle takes label_12649's fresh branch. After 0x1a2, query returns the handle (native
-        // map[handle]=handle; small system handles double as their surface slot).
+        // Op 0x215 returns obj+4 from the retained gfx object. Geometry creates the object but leaves it unbound;
+        // op 0x1a2's descriptor registry is unrelated. Draw-texture binds the source slot returned by the query.
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
-            MovGI(1, 0xcb2a), MovGI(2, 0xd), MovGI(3, 0),
-            SetGeom3(1, 3, 3, 3),          // 0xcb2a: geometry only, NOT registered
-            Register(2),                    // 0xd: op 0x1a2 registers it
-            Query(10, 1), Query(11, 2), Exit(),
+            MovGI(1, 0xcb2a), MovGI(2, 6), MovGI(3, 0), MovGI(4, 200),
+            SetGeom3(1, 3, 3, 3),
+            Register(1),
+            Query(10, 1),
+            (0x1fb, new[] { G(1), G(2), I(0), I(0), G(4), G(4), G(3), G(3) }),
+            Query(11, 1), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.Equal(-1, vm.Globals[10]);   // geometry-only CG handle -> -1 -> fresh branch (the bug fix)
-        Assert.Equal(0xd, vm.Globals[11]);  // 0x1a2-registered handle -> its value (== handle)
+        Assert.Equal(-1, vm.Globals[10]);
+        Assert.Equal(6, vm.Globals[11]);
     }
 
     private static (int, Operand[]) BlitColor(int h, int x, int y, int alpha, int color)

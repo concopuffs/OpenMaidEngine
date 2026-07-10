@@ -6,7 +6,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 
 | offset | name | type | note |
 |---|---|---|---|
-| `0x408` | `gfx_obj_registry` | `int` | gfx object registry (std::map handle->object); op 0x1a2 insert / 0x215 find |
+| `0x408` | `gfx_obj_registry` | `int` | retained gfx-object map (std::map handle->object); geometry/draw get-or-create, 0x215 returns obj+4 source slot, 0x1f7 erases |
 | `0x40c` | `sys4ini_count` | `int` | SYS4INI record count |
 | `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
 | `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
