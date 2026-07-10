@@ -158,6 +158,11 @@ name = "coroutine_resume_off"
 type = "int"
 note = "op 0x7c resume PC offset"
 [[field]]
+offset = 0x6dbd4
+name = "adv_read_skip_state"
+type = "int"
+note = "current ADV read/click-skip service state; queried by op 0x1cc, maintained from ReadTextSkip + per-PC read history"
+[[field]]
 offset = 0x9b24c
 name = "dispatch_table"
 type = "void*"

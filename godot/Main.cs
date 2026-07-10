@@ -98,6 +98,7 @@ public partial class Main : Godot.Control
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: slow/speed the paced opening for inspection
         double speed = 1.0;                              // --speed <f>: whole-runtime diagnostic speed
+        long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         for (int i = 0; i < userArgs.Length; i++)
         {
@@ -111,6 +112,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
+            if (userArgs[i] == "--transition-click-ms" && i + 1 < userArgs.Length) long.TryParse(userArgs[i + 1], out transitionClickMs);
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
@@ -167,6 +169,17 @@ public partial class Main : Godot.Control
         // --shot-sequence: auto-advance past every input wait so the paced burst isn't blocked on a click.
         if (_seqDir != null)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
+        if (transitionClickMs >= 0)
+            _ = Task.Run(async () =>
+            {
+                while (!_done)
+                {
+                    if (_host.IsTransitionWaiting && _host.TransitionStartedAtMs >= 0 &&
+                        _clock.NowMs - _host.TransitionStartedAtMs >= transitionClickMs)
+                        _host.SignalInput();
+                    await Task.Delay(1);
+                }
+            });
     }
 
     public override void _Process(double delta)
@@ -253,7 +266,8 @@ public partial class Main : Godot.Control
         _screen.Fill(new Color(0, 0, 0, 0));
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
-        foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
+        var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // one synchronized sample for objects + ranges
+        foreach (var v in visible)   // interpolate at the throttled clock
         {
             var t = v.Transform;
             var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);
@@ -264,7 +278,13 @@ public partial class Main : Godot.Control
             float opacity = v.Alpha / 255f;                  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
             string outcome;
-            if (v.SurfaceResId == 0)
+            if (v.SurfaceTransition is { } transition)
+            {
+                int layers = DrawTransitionRange(visible, transition);
+                outcome = $"TRANSITION slot={transition.TargetSlot} key=0x{transition.CommandKey:x} " +
+                          $"progress={transition.Progress:0.000} forced={transition.Forced} layers={layers}";
+            }
+            else if (v.SurfaceResId == 0)
             {
                 // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Its presence
                 // is the tint STRENGTH (0=absent, 255=solid), scaled by any object opacity. Uncolored surfaceless
@@ -303,6 +323,37 @@ public partial class Main : Godot.Control
         }
         _screenTex.Update(_screen);
         if (decisions != null) LogGfxDecisionChanges(decisions);
+    }
+
+    // Native type-0 surface commands first leave range A in normal z-order, then alpha-composite range B
+    // into the target surface. SC0000 binds that target to handle+2, above both source handles, so drawing
+    // range B here with progress produces old*(1-progress)+new*progress without disturbing ambient channels.
+    private int DrawTransitionRange(IReadOnlyList<RenderObject> visible, SurfaceTransitionState transition)
+    {
+        int drawn = 0;
+        long end = transition.RangeBStart + transition.RangeBCount;
+        foreach (var source in visible)
+        {
+            if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
+                continue;
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation).FromLocalOrigin(source.DstX, source.DstY);
+            float opacity = source.Alpha / 255f * (float)transition.Progress;
+            if (source.SurfaceResId == 0)
+            {
+                if (source.Blend == BlendKind.Opaque) continue;
+                int w = source.W > 0 ? source.W : 800, h = source.H > 0 ? source.H : 600;
+                FillAffineQuad(w, h, affine, source.Tint, opacity * source.TintStrength / 255f);
+            }
+            else
+            {
+                var bmp = _host.ResolveResIdTexture(source.SurfaceResId);
+                if (bmp == null) continue;
+                BlitLayer(bmp, source.ColorKey, source.Tint, source.TintStrength / 255f,
+                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity);
+            }
+            drawn++;
+        }
+        return drawn;
     }
 
     // Diagnostic (--gfx-log): print, per rendered frame, only the objects whose compositor outcome CHANGED

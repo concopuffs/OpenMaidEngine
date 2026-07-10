@@ -4,6 +4,27 @@ using Xunit;
 
 public class RenderObjectBlendTests
 {
+    [Fact]
+    public void NegativeColorOperands_PreserveCurrentStaticColor()
+    {
+        var g = new GfxState();
+        g.SetObjectColor(0x100, GfxState.PackColor(0, 0xffffff));
+        g.SetObjectColorResolved(0x100, -1, -1);
+        Assert.Equal(GfxState.PackColor(0, 0xffffff), g.TryGet(0x100)!.Color);
+    }
+
+    [Fact]
+    public void TransitionColorMode_TreatsWhiteAsIdentityAndAlphaAsOpacity()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 1, -1);
+        g.BindDraw(0x100, 4, 0, 0, 1, 1, 0, 0);
+        g.SetStaticObjectColorResolved(0x100, 2, -1, -1);
+        var rendered = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(255, rendered.Alpha);
+        Assert.Equal(0, rendered.TintStrength);
+    }
+
     // Make a visible textured object bound to a slot that has a surface, so it appears in the snapshot.
     private static GfxState WithVisibleObject(long handle, long resId, long colorKey)
     {

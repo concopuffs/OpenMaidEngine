@@ -1,3 +1,5 @@
+using Age.Engine.Model;
+
 namespace Age.Engine.Hosting;
 public interface IHost
 {
@@ -5,6 +7,14 @@ public interface IHost
     void WaitForInput();
     void Sleep(long duration);
     void FrameYield();
+    // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
+    // hosts default to normal playback; the Godot host supplies the live interactive values.
+    bool IsMessageSkipActive => false;
+    bool IsAdvReadSkipActive => false;
+    // Normal playback reaches op 0x21c and parks until a queued 0x223 transition completes. The
+    // read/message-skip branch reaches op 0x20c and presents the completed endpoint immediately.
+    void WaitForForegroundTransition(GfxState gfx) { }
+    void PresentFrame(GfxState gfx) { }
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);

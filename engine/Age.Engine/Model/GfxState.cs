@@ -14,6 +14,12 @@ public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
                                                  double AxisX, double AxisY, double AxisZ,
                                                  double AngleDegrees = 0);
 
+/// <summary>Sampled op-0x223 type-0 surface transition. Range A is already present in normal z-order;
+/// the compositor draws range B over it with <paramref name="Progress"/> to form the native crossfade.</summary>
+public readonly record struct SurfaceTransitionState(long CommandKey, int TargetSlot,
+    long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
+    long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
@@ -25,7 +31,8 @@ public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
                                            TransformState Transform, RotationCycleState Rotation,
-                                           int Alpha, long Tint, int TintStrength, BlendKind Blend);
+                                           int Alpha, long Tint, int TintStrength, BlendKind Blend,
+                                           SurfaceTransitionState? SurfaceTransition = null);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -35,12 +42,20 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
 /// the query ops read back, which is all the bytecode geometry math needs.</summary>
 public sealed class GfxState
 {
+    private sealed class SurfaceTransition
+    {
+        public long CommandKey, RangeAStart, RangeBStart, DelayMs, DurationMs;
+        public int TargetSlot, RangeACount, RangeBCount;
+        public long StartMs = -1;
+        public bool Forced;
+    }
     public sealed class GfxObject
     {
         public (long X, long Y, long Z) V18, V24, V16c;
         public long Field64, Field68, Field6c;
         public long Color;
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
+        public long StaticColorMode; // op 0x203 operand 2 -> obj+0x30; mode 2 is transition alpha/identity
 
         // ---- src-rect / spritesheet-cell channel (ops 0x239 static cell, 0x231 animate). Interpolator
         // SRC-RECT SCROLL channel: period obj+0x230, start obj+0x21c, grid obj+0x238/0x23c. ----
@@ -115,6 +130,37 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
+    public bool CloneObject(long sourceHandle, long destinationHandle)
+    {
+        lock (_lock)
+        {
+            if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
+            _objects[destinationHandle] = new GfxObject
+            {
+                V18 = s.V18, V24 = s.V24, V16c = s.V16c,
+                Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
+                Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
+                SrcGridW = s.SrcGridW, SrcGridH = s.SrcGridH, SrcCell = s.SrcCell,
+                SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
+                ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
+                ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
+                ScaleCurrent = s.ScaleCurrent, ScaleTarget = s.ScaleTarget,
+                ScaleDelayMs = s.ScaleDelayMs, ScaleDurationMs = s.ScaleDurationMs, ScaleEnabled = s.ScaleEnabled,
+                TranslationCurrent = s.TranslationCurrent, TranslationTarget = s.TranslationTarget,
+                TranslationDelayMs = s.TranslationDelayMs, TranslationDurationMs = s.TranslationDurationMs,
+                TranslationEnabled = s.TranslationEnabled,
+                RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
+                RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
+                RotationChannelEnabled = s.RotationChannelEnabled, MatrixStartMs = s.MatrixStartMs,
+                RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
+                RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
+            };
+            CurrentObject = destinationHandle;
+            return true;
+        }
+    }
+
     /// <summary>Op 0x1a2: retain the operand's current value in the separate descriptor registry. This does
     /// not populate the retained-object map used by op 0x215.</summary>
     public void Register(long handle) { lock (_lock) { _operandRegistry.Add(handle); } }
@@ -158,6 +204,7 @@ public sealed class GfxState
 
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----
     private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
+    private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
     public void SetSurface(int slot, long resId, long colorKey) { lock (_lock) { _surfaces[slot] = (resId, colorKey); } }
 
     /// <summary>Ops 0x202/0x203: record a packed 0xAARRGGBB color/alpha modulation on the object and mark it
@@ -165,6 +212,27 @@ public sealed class GfxState
     public void SetObjectColor(long handle, long packed)
     {
         lock (_lock) { var o = GetOrCreate(handle); o.Color = packed; o.HasColor = true; }
+    }
+
+    /// <summary>Resolve 0x202/0x203's native negative sentinels against obj+0x60 (the current static
+    /// packed color): negative alpha preserves its alpha byte; negative RGB preserves its RGB bytes.</summary>
+    public void SetObjectColorResolved(long handle, long alpha, long rgb)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            long current = o.HasColor ? o.Color : 0xffffffff;
+            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+            o.Color = PackColor(resolvedAlpha, resolvedRgb);
+            o.HasColor = true;
+        }
+    }
+
+    public void SetStaticObjectColorResolved(long handle, long mode, long alpha, long rgb)
+    {
+        SetObjectColorResolved(handle, alpha, rgb);
+        lock (_lock) GetOrCreate(handle).StaticColorMode = mode;
     }
 
     /// <summary>Ops 0x239 (static cell, period=0) / 0x231 (animate, period&gt;0): set the spritesheet grid +
@@ -190,6 +258,73 @@ public sealed class GfxState
         }
     }
     public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }   // create-texture (blank)
+
+    /// <summary>Op 0x223: queue a type-0 timed alpha transition into a target surface slot.</summary>
+    public void QueueSurfaceAlphaTransition(long commandKey, int targetSlot,
+        long rangeAStart, int rangeACount, long rangeBStart, int rangeBCount,
+        long delayMs, long durationMs)
+    {
+        lock (_lock)
+        {
+            _surfaceTransitions[targetSlot] = new SurfaceTransition
+            {
+                CommandKey = commandKey, TargetSlot = targetSlot,
+                RangeAStart = rangeAStart, RangeACount = System.Math.Max(0, rangeACount),
+                RangeBStart = rangeBStart, RangeBCount = System.Math.Max(0, rangeBCount),
+                DelayMs = System.Math.Max(0, delayMs), DurationMs = System.Math.Max(0, durationMs),
+            };
+        }
+    }
+
+    /// <summary>Start every pending foreground transition at the native present boundary.</summary>
+    public int StartForegroundTransitions(long nowMs)
+    {
+        lock (_lock)
+        {
+            int started = 0;
+            foreach (var t in _surfaceTransitions.Values)
+                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+            return started;
+        }
+    }
+
+    public bool HasActiveForegroundTransitions(long nowMs)
+    {
+        lock (_lock)
+            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0);
+    }
+
+    /// <summary>Click completion affects only type-0 foreground transitions, never ambient object channels.</summary>
+    public int CompleteForegroundTransitions(long nowMs)
+    {
+        lock (_lock)
+        {
+            int completed = 0;
+            foreach (var t in _surfaceTransitions.Values)
+                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+            return completed;
+        }
+    }
+
+    public IReadOnlyList<SurfaceTransitionState> SnapshotForegroundTransitions(long nowMs)
+    {
+        lock (_lock)
+            return _surfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+    }
+
+    private static double TransitionProgress(SurfaceTransition t, long nowMs)
+    {
+        if (t.Forced) return 1.0;
+        if (t.StartMs < 0) return 0.0;
+        long elapsed = nowMs - t.StartMs - t.DelayMs;
+        if (elapsed <= 0) return 0.0;
+        if (t.DurationMs <= 0) return 1.0;
+        return System.Math.Clamp(elapsed / (double)t.DurationMs, 0.0, 1.0);
+    }
+
+    private static SurfaceTransitionState SampleTransition(SurfaceTransition t, long nowMs)
+        => new(t.CommandKey, t.TargetSlot, t.RangeAStart, t.RangeACount, t.RangeBStart, t.RangeBCount,
+               t.DelayMs, t.DurationMs, t.StartMs, TransitionProgress(t, nowMs), t.Forced);
 
     /// <summary>draw-texture bind (gfx_object_bind_draw): object <paramref name="handle"/> draws surface
     /// <paramref name="slot"/>'s rect at (dstX,dstY) and becomes visible.</summary>
@@ -289,7 +424,17 @@ public sealed class GfxState
                 if (o.HasColor)
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(o.Color);
-                    strength = a; tint = ((long)r << 16) | ((long)g << 8) | (long)b; blend = BlendKind.Alpha;
+                    tint = ((long)r << 16) | ((long)g << 8) | (long)b;
+                    if (o.StaticColorMode == 2)
+                    {
+                        // Native transition-source mode: 0xffffffff is opaque identity modulation,
+                        // not a request to replace every texel with white.
+                        alpha = a; strength = 0; blend = BlendKind.Alpha;
+                    }
+                    else
+                    {
+                        strength = a; blend = BlendKind.Alpha;
+                    }
                 }
                 if (o.ColorAnim)
                 {
@@ -342,6 +487,8 @@ public sealed class GfxState
                     cycleAngle = ((elapsed % o.RotationPeriodMs) * 360) / o.RotationPeriodMs;
                 }
 
+                SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
+                    ? SampleTransition(st, nowMs) : null;
                 list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new TransformState(scale.X, scale.Y, scale.Z,
@@ -351,7 +498,7 @@ public sealed class GfxState
                                           new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
                                                                  o.RotationAxis.Z, cycleAngle),
-                                          alpha, tint, strength, blend));
+                                          alpha, tint, strength, blend, transition));
             }
             return list;
         }

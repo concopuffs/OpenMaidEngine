@@ -515,9 +515,10 @@ Op `0x234` is the independent rotation cycle above. Op `0x238` still configures 
 ##### `label_1235a` animation-section boundary (2026-07-10)
 
 The section helper computes the maximum configured duration and arms it with `0x238`, then reads
-message-skip through `0x1c7` and ADV service state through `0x1cc`. Normal playback (both zero)
-executes `0x243` (reset the separate global animation-service clock) followed by `0x20c` present;
-the skip/service branch executes `0x21c` (set run-state bit `0x400`). Both branches finish with
+message-skip through `0x1c7` and ADV read/click-skip state through `0x1cc`. The raw `jcc` order matters:
+normal playback (both zero) branches to `0x21c` (set run-state bit `0x400`), while a nonzero skip/read
+state executes `0x243` (reset the separate global animation-service clock) followed by `0x20c` present.
+Both branches finish with
 `0x224`, which clears the native gfx command queue at `ctx+0x418`. These handlers are now named,
 commented, and saved in the Ghidra image.
 
@@ -805,8 +806,33 @@ into the target and ramps alpha 0→1. Its SC0000 site `0x129e7` passes `(handle
 handle+1,1,handle,1,G[0x6249f],G[0x624a0])`. It remains a render-target/transition slice dependency rather
 than being approximated in the affine object compositor.
 
+#### ADV foreground surface-transition lifecycle (2026-07-10)
+
+The completed native chain is `0x21d` snapshot -> `0x223` queue -> `label_1235a` skip queries ->
+`0x21c` normal yield or `0x20c` skip endpoint-present:
+
+- `gfx_object_clone` (`0x47e4f0`, op `0x21d` handler `0x423310`) copies the complete retained-object
+  record: exactly `0xb5` dwords / `0x2d4` bytes. SC0000 `0x128fc` clones the current CG handle to
+  `handle+1`; the loader then rebinds the source handle to the new CG, and `0x223 @ 0x129e7` uses
+  `handle+1` as old range A, the updated handle as new range B, and `handle+2` as the target presenter.
+- `0x1c7` is the `run_state_flags & 0x08000000` message-skip query. `0x1cc` reads
+  `ctx+0x6dbd4`, now named `adv_read_skip_state`; `adv_refresh_read_skip_state` (`0x406cd0`) and the
+  text/label/wait handlers maintain it from `message_ReadTextSkip` plus per-PC read history. It is not
+  surface-transition progress.
+- Zero OR-state is normal playback and reaches `0x21c`; run-state bit `0x400` parks interpreter
+  progression while the type-0 surface command advances from the frame clock. Nonzero skip/read state
+  reaches `0x243 + 0x20c`, exposing the completed endpoint without the normal wait.
+- Op `0x203` stores operand 2 at object `+0x30`. Transition sources use mode 2; their common
+  `0xffffffff` color is opaque identity modulation, not a solid-white tint. Negative alpha/RGB operands
+  separately preserve the corresponding byte(s) of current static color via the `FUN_0047f3e0` lookup.
+
+The port mirrors this with an explicit pending/start/progress/natural-or-forced-complete state. A click
+while `0x21c` is parked completes only the active foreground surface transition and is consumed; it does
+not pre-arm the following `wait-for-input`, and it does not complete independent retained rotation,
+matrix, spritesheet, or color-animation channels.
+
 **Still deferred:** `0x236` (`gfx_op_0x236` @`0x423ee0`) a
-**timed/animated-surface (movie-like) op**; plus the unclassified `0x21c/0x21d/0x224/0x242/0x23d/0x20a/0x20e/0x243`
+**timed/animated-surface (movie-like) op**; plus the unclassified `0x242/0x23d/0x20a/0x20e`
 tail (2-arg flags / inline). These stay GAP until a follow-up slice or are safe-noop'd if the opening tolerates it.
 
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)

@@ -4199,19 +4199,19 @@ observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x1cc
-label = "get-adv-service-state"
+label = "get-adv-read-skip-state"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "get-adv-service-state"
+name = "get-adv-read-skip-state"
 category = "control"
-summary = "(out) - copy native ADV service state ctx+0x6dbd4; label_1235a ORs it with message-skip to select its yield branch."
+summary = "(out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Exact service-state producer remains outside this opcode."
+evidence = "Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Producer recovered 2026-07-10: adv_update_read_text_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message_ReadTextSkip plus current-PC read-history lookup; adv_interpreter_tick consumes it in click/read-skip control. It is not the 0x223 surface-transition progress flag."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4832,12 +4832,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-draw-color"
 category = "draw"
-summary = "0x203 (handle)(v)(alpha)(color) — gfx cmd-type 9. Handler gfx_op_0x203_draw_color @0x4229a0: worker gfx_op_0x203_worker_set_color @0x47e9b0 sets a STATIC color/alpha (obj+0x60), no anim bit; packs ARGB from alpha(op3)/color(op4). Sibling of 0x202 (one fewer positional arg). C# VM (2026-07-08 blend slice): routes through GfxState.SetObjectColor → compositor applies static alpha/tint (BlendKind.Alpha). See docs/engine-re.md §Blend & transparency."
+summary = "0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores mode at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes through FUN_0047f3e0. Mode 2 is the 0x223 transition-source alpha/identity path (0xffffffff = opaque identity, not solid white); mode 0 retains the established tint-strength behavior."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); packs color from operands 3/4, FUN_0047e9b0(op1,op2,packed)."
+evidence = "Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); negative operands read current obj+0x60 via FUN_0047f3e0, then gfx_op_0x203_worker_set_color stores op2 at obj+0x30 and packed ARGB at obj+0x60. SC0000 transition setup uses mode 2 with -1/-1 before 0x21d/0x223; synchronized window pixels prove treating 0xffffffff as generic white tint is wrong."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5109,12 +5109,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "present-frame"
 category = "draw"
-summary = "Present the composited frame (native gfx_render_frame). Host-implicit: our compositor presents every frame."
-details = "Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0 flips the composited buffers. Our Godot host runs a continuous per-frame compositor (Main.Recomposite in _Process), so an explicit present is redundant and the VM can skip it. noop_headless=true -> scene coverage classifies it safe-noop. Kelebek label u00416200 was VA-drift (unrelated fn); real handler resolved via the dispatch table."
-noop_headless = true
+summary = "Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately."
+details = "Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0. Godot composites continuously. In label_1235a the OR of 0x1c7/0x1cc is nonzero on the read/message-skip branch, which resets the animation service then presents; the port starts and snaps any pending 0x223 transition to its endpoint here. Normal zero-state playback branches to 0x21c, which owns wait/resume. Headless hosts remain non-blocking. Kelebek label u00416200 was VA-drift."
+noop_headless = false
 source = "investigation"
 confidence = "high"
-depends_on = []
+depends_on = [0x223, 0x1c7, 0x1cc]
 evidence = "Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08."
 
 [[opcode]]
@@ -5130,7 +5130,7 @@ summary = ""
 noop_headless = false
 source = "kelebek"
 confidence = "low"
-depends_on = []
+depends_on = [0x20c, 0x1c7, 0x1cc]
 evidence = ""
 
 [[opcode.semantics.args]]
@@ -5468,28 +5468,29 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "mark-frame-yield"
 category = "control"
-summary = "Set native run-state bit 0x400. Host-implicit: the port already offers a scheduler yield after every completed opcode."
-noop_headless = true
+summary = "Set native run-state bit 0x400; in normal ADV playback this is the queued foreground-transition yield/resume boundary."
+details = "SC0000 label_1235a reaches this when the OR of 0x1c7 message-skip and 0x1cc read-skip state is zero (normal playback). Native run-state bit 0x400 yields the interpreter while the queued foreground presentation advances. The interactive port starts pending 0x223 commands here, parks only the VM thread while per-frame compositing continues, and resumes after natural or click-forced completion."
+noop_headless = false
 source = "investigation"
 confidence = "high"
-depends_on = []
-evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a reaches it only when op 0x1c7 or 0x1cc is nonzero."
+depends_on = [0x223, 0x1c7, 0x1cc]
+evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a's jcc reaches it when the OR of op 0x1c7/0x1cc is zero; synchronized port trace confirmed this is the normal path after 0x223."
 
 [[opcode]]
 op = 0x21d
-label = "u00421410"
+label = "clone-gfx-object"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421410"
-category = "unknown"
-summary = ""
+name = "clone-gfx-object"
+category = "draw"
+summary = "(source_handle)(destination_handle) - clone the complete retained gfx object record (0xb5 dwords / 0x2d4 bytes). SC0000 uses destination=source+1 as range A's old-frame snapshot immediately before 0x223 crossfades range B's updated source into target handle source+2."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x223]
+evidence = "Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in ctx+0x408 map, creates destination, copies exactly 0xb5 dwords from source object record, then marks ctx+0xb558 dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5683,7 +5684,7 @@ summary = "(command_key)(target_slot)(range_a_start)(range_a_count)(range_b_star
 noop_headless = false
 source = "investigation"
 confidence = "high"
-depends_on = []
+depends_on = [0x20c, 0x21c, 0x1c7, 0x1cc]
 evidence = "Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7."
 
 [[opcode.semantics.args]]

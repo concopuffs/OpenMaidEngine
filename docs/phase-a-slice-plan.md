@@ -895,3 +895,47 @@ and composite call order; named useful parameters; saved `/v2`.
 apart from the pre-existing nullable warning and threaded `SELFTEST OK`; opcode tooling and focused Python
 tests clean; transform tool compiles; SC0000 coverage **81/129 handled (62.8%)**, 48 GAP ops / 602 GAP
 instructions; windowed affine capture clean. Final whitespace/diff validation is recorded with the handoff.
+
+### A2b — ADV foreground transition/click lifecycle ✅ DONE (2026-07-10)
+
+**Native recovery and control-flow correction.** `0x1c7` is the message-skip run-state query.
+`0x1cc` reads `ctx+0x6dbd4`, now `adv_read_skip_state`; `adv_refresh_read_skip_state@0x406cd0` plus the
+text/label/wait handlers maintain it from `message_ReadTextSkip` and the current-PC read-history lookup.
+It is not surface progress. The earlier reading of `label_1235a`'s branch was reversed: zero OR-state
+(normal playback) reaches `0x21c` and sets scheduler bit `0x400`; nonzero skip/read state reaches
+`0x243 + 0x20c` to present the endpoint. Synchronized execution caught and corrected this before validation.
+
+The executed missing producer for `0x223` range A was `0x21d`: `gfx_object_clone@0x47e4f0` copies the full
+`0x2d4`-byte retained-object record from the current CG handle to `handle+1`. SC0000 then rebinds the source
+handle to the new CG and queues `0x223` with old clone range A, new source range B, and target presenter
+`handle+2`. Op `0x203` mode 2 is the companion transition-source alpha/identity path; its `0xffffffff`
+is opaque identity, not generic solid-white tint, and negative alpha/RGB preserve current static bytes.
+
+**Port lifecycle.** `GfxState` owns explicit queue/start/wall-clock progress/natural-or-forced completion.
+Normal `0x21c` parks only the VM thread until the foreground command completes while Godot continues
+per-frame compositing. A click during that wait forces only the foreground transition to progress 1, is
+consumed, and resumes the VM; stable `wait-for-input` remains a separate gate. Tests verify that forcing a
+transition leaves an independent cyclic retained rotation active. The `0x20c` skip/read path starts and
+snaps a pending foreground transition to its endpoint without the normal wait.
+
+**Synchronized window evidence.** At normal speed, the second-to-third CG transition produced seven
+successive distinct PNG hashes while progress advanced `0.133, 0.297, 0.442, 0.592, 0.742, 0.891, 1.000`;
+the user independently observed that fade working in the live window. A timed click landed at progress
+`0.157`, the next frame was the endpoint, and the stable page count did not advance. The accelerated
+windowed run reached `BGM008 @ 0x1728` on frame 137 with non-white changing pixels (2,469 sampled colors at
+the sentinel) and continued; its earlier white interval was finite and released before that boundary.
+This is windowed pixel/object/timeline evidence, not the earlier headless reachability inference.
+
+The retained dialogue-text surface `0xe678` still has no pixels because native `draw-string 0x204` remains
+a separate GAP; the Godot `Label` shortcut remains outside this slice. Its create/erase events are explicit
+in the object timeline and are not being mistaken for foreground CG transition correctness.
+
+**Ghidra.** Renamed/commented `adv_refresh_read_skip_state` (`0x406cd0`),
+`op_0x1cc_get_adv_read_skip_state` (`0x427330`), `op_0x21d_clone_gfx_object` (`0x423310`), and
+`gfx_object_clone` (`0x47e4f0`); added `EngineCtx.adv_read_skip_state`; saved `/v2`.
+
+**Validation:** engine **102/102**; full sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot build clean
+apart from the pre-existing nullable warning and threaded `SELFTEST OK`; all six Python test scripts,
+opcode/ctx lint, 481-script decode validation, RECOVER, and Windows CR-aware `git diff --check` clean.
+The plain check reports only the generated reference's CRLF on its newly added row. SC0000 coverage is
+**85/129 handled (65.9%)**, 44 GAP ops / 598 GAP instructions. No commit was made.

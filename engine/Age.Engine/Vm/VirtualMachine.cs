@@ -277,6 +277,11 @@ public sealed class VirtualMachine
                 _host.WaitForInput(); return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
+            case "get-message-skip": // 0x1c7: Ctrl/message fast-forward run-state bit
+                Write(a[0], _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
+            case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
+            case "get-adv-service-state":   // compatibility with pre-recovery generated tables
+                Write(a[0], _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;
             case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
@@ -362,10 +367,12 @@ public sealed class VirtualMachine
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (surface slot)
                 Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
+            case "clone-gfx-object":    // 0x21d (source handle)(destination handle)
+                Gfx.CloneObject(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — static alpha/tint (anim interp deferred)
-                Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[3]), Read(a[4]))); return pc + 1;
+                Gfx.SetObjectColorResolved(Read(a[0]), Read(a[3]), Read(a[4])); return pc + 1;
             case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — static alpha/tint
-                Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;
+                Gfx.SetStaticObjectColorResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             // ---- sprite transform / animation cluster (docs/engine-re.md "0x21c-0x243 ... ANIMATION") ----
             case "set-anim-transform-abs":   // 0x220 (handle)(delay)(duration)(tx)(ty)(tz)
                 Gfx.SetTranslationChannel(Read(a[0]), Read(a[1]), Read(a[2]),
@@ -382,7 +389,13 @@ public sealed class VirtualMachine
                 Gfx.SetAnimClock(Read(a[0])); return pc + 1;
             case "reset-anim-clock": // 0x243: reset the separate global animation-service clock
                 Gfx.ResetAnimClock(); return pc + 1;
-            case "mark-frame-yield": // 0x21c: host already yields after every completed opcode
+            case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
+                Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
+                    Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;
+            case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint
+                _host.PresentFrame(Gfx); return pc + 1;
+            case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary
+                _host.WaitForForegroundTransition(Gfx); return pc + 1;
             case "clear-gfx-command-queue": // 0x224: retained compositor does not use this native queue
                 return pc + 1;
             default:

@@ -9,12 +9,30 @@ using Age.Engine.Model;
 internal sealed class RecordingHost : IHost
 {
     public int Waits;
+    public int Presents;
+    public int TransitionWaits;
+    public bool MessageSkip;
+    public bool AdvReadSkip;
     public readonly List<(int Offset, string Text)> Lines = new();
     public readonly List<long> SleptDurations = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void WaitForInput() => Waits++;
     public void Sleep(long duration) => SleptDurations.Add(duration);
     public void FrameYield() { }
+    public bool IsMessageSkipActive => MessageSkip;
+    public bool IsAdvReadSkipActive => AdvReadSkip;
+    public void PresentFrame(GfxState gfx)
+    {
+        Presents++;
+        gfx.StartForegroundTransitions(100);
+        gfx.CompleteForegroundTransitions(100);
+    }
+    public void WaitForForegroundTransition(GfxState gfx)
+    {
+        TransitionWaits++;
+        gfx.StartForegroundTransitions(100);
+        gfx.CompleteForegroundTransitions(100);
+    }
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) { }
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }

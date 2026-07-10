@@ -79,15 +79,20 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Writes gfx cmd-type 9; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
 
-### 0x1cc `get-adv-service-state` (get-adv-service-state, argc 1)
-- **summary:** (out) - copy native ADV service state ctx+0x6dbd4; label_1235a ORs it with message-skip to select its yield branch.
+### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
+- **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Exact service-state producer remains outside this opcode.
+- **depended on by:** 0x20c, 0x20d, 0x21c, 0x223
+- **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Producer recovered 2026-07-10: adv_update_read_text_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message_ReadTextSkip plus current-PC read-history lookup; adv_interpreter_tick consumes it in click/read-skip control. It is not the 0x223 surface-transition progress flag.
 
 ### 0x21c `mark-frame-yield` (mark-frame-yield, argc 0)
-- **summary:** Set native run-state bit 0x400. Host-implicit: the port already offers a scheduler yield after every completed opcode.
-- **grounding:** source=investigation, confidence=high, noop_headless=True
-- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a reaches it only when op 0x1c7 or 0x1cc is nonzero.
+- **summary:** Set native run-state bit 0x400; in normal ADV playback this is the queued foreground-transition yield/resume boundary.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x223, 0x1c7, 0x1cc
+- **depended on by:** 0x223
+- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a's jcc reaches it when the OR of op 0x1c7/0x1cc is zero; synchronized port trace confirmed this is the normal path after 0x223.
+
+SC0000 label_1235a reaches this when the OR of 0x1c7 message-skip and 0x1cc read-skip state is zero (normal playback). Native run-state bit 0x400 yields the interpreter while the queued foreground presentation advances. The interactive port starts pending 0x223 commands here, parks only the VM thread while per-frame compositing continues, and resumes after natural or click-forced completion.
 
 ## draw
 
@@ -132,9 +137,9 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **evidence:** Ghidra handler 0x4228d0 (dispatch ctx[0x26c93+0x202]); packs (alpha<<24|rgb) from operands 4/5, FUN_0047ea00(op1,op2,op3,packed).
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
-- **summary:** 0x203 (handle)(v)(alpha)(color) — gfx cmd-type 9. Handler gfx_op_0x203_draw_color @0x4229a0: worker gfx_op_0x203_worker_set_color @0x47e9b0 sets a STATIC color/alpha (obj+0x60), no anim bit; packs ARGB from alpha(op3)/color(op4). Sibling of 0x202 (one fewer positional arg). C# VM (2026-07-08 blend slice): routes through GfxState.SetObjectColor → compositor applies static alpha/tint (BlendKind.Alpha). See docs/engine-re.md §Blend & transparency.
+- **summary:** 0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores mode at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes through FUN_0047f3e0. Mode 2 is the 0x223 transition-source alpha/identity path (0xffffffff = opaque identity, not solid white); mode 0 retains the established tint-strength behavior.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); packs color from operands 3/4, FUN_0047e9b0(op1,op2,packed).
+- **evidence:** Ghidra handler 0x4229a0 (dispatch ctx[0x26c93+0x203]); negative operands read current obj+0x60 via FUN_0047f3e0, then gfx_op_0x203_worker_set_color stores op2 at obj+0x30 and packed ARGB at obj+0x60. SC0000 transition setup uses mode 2 with -1/-1 before 0x21d/0x223; synchronized window pixels prove treating 0xffffffff as generic white tint is wrong.
 
 ### 0x208 `get-texture-size` (get-texture-size, argc 3)
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
@@ -142,11 +147,13 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
 
 ### 0x20c `present-frame` (present-frame, argc 0)
-- **summary:** Present the composited frame (native gfx_render_frame). Host-implicit: our compositor presents every frame.
-- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x223, 0x1c7, 0x1cc
+- **depended on by:** 0x20d, 0x223
 - **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
 
-Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0 flips the composited buffers. Our Godot host runs a continuous per-frame compositor (Main.Recomposite in _Process), so an explicit present is redundant and the VM can skip it. noop_headless=true -> scene coverage classifies it safe-noop. Kelebek label u00416200 was VA-drift (unrelated fn); real handler resolved via the dispatch table.
+Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0. Godot composites continuously. In label_1235a the OR of 0x1c7/0x1cc is nonzero on the read/message-skip branch, which resets the animation service then presents; the port starts and snaps any pending 0x223 transition to its endpoint here. Normal zero-state playback branches to 0x21c, which owns wait/resume. Headless hosts remain non-blocking. Kelebek label u00416200 was VA-drift.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
 - **summary:** 0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table.
@@ -188,6 +195,12 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2/3/4). label_12649 site 0x00c86 handle=G[0x62457] → G[0x62498/9/a].
 
+### 0x21d `clone-gfx-object` (clone-gfx-object, argc 2)
+- **summary:** (source_handle)(destination_handle) - clone the complete retained gfx object record (0xb5 dwords / 0x2d4 bytes). SC0000 uses destination=source+1 as range A's old-frame snapshot immediately before 0x223 crossfades range B's updated source into target handle source+2.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x223
+- **evidence:** Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in ctx+0x408 map, creates destination, copies exactly 0xb5 dwords from source object record, then marks ctx+0xb558 dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7.
+
 ### 0x21e `set-anim-transform-norm` (set-anim-transform-norm, argc 6)
 - **summary:** (handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
@@ -206,6 +219,8 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 ### 0x223 `queue-surface-alpha-transition` (queue-surface-alpha-transition, argc 8)
 - **summary:** (command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration.
 - **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x21c, 0x1c7, 0x1cc
+- **depended on by:** 0x20c, 0x21c, 0x21d
 - **evidence:** Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7.
 
 ### 0x224 `clear-gfx-command-queue` (clear-gfx-command-queue, argc 0)
@@ -286,6 +301,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1c7 `get-message-skip` (get-message-skip, argc 1)
 - **summary:** (out) - write 1 iff ADV message-skip run-state bit 0x08000000 is set, otherwise 0.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x20c, 0x20d, 0x21c, 0x223
 - **evidence:** Ghidra handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). SC0000 label_1235a ORs it with op 0x1cc.
 
 ## marker
@@ -988,16 +1004,13 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x20d `u00420E10` (u00420E10, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+- **depends on:** 0x20c, 0x1c7, 0x1cc
 
 ### 0x20e `u00416250` (u00416250, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x20f `u00420E40` (u00420E40, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x21d `u00421410` (u00421410, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

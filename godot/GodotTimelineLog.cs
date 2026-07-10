@@ -23,7 +23,7 @@ public sealed class GodotTimelineLog : System.IDisposable
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         _writer = new StreamWriter(path) { AutoFlush = true };
-        Record("start", new() { ["transition"] = "unmodeled" });
+        Record("start", new() { ["transition"] = "surface-alpha-lifecycle" });
     }
 
     public void SetFrame(int frame, long nowMs)
