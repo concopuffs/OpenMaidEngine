@@ -4110,19 +4110,19 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x1c7
-label = "u00414F90"
+label = "get-message-skip"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414F90"
-category = "unknown"
-summary = ""
+name = "get-message-skip"
+category = "input"
+summary = "(out) - write 1 iff ADV message-skip run-state bit 0x08000000 is set, otherwise 0."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). SC0000 label_1235a ORs it with op 0x1cc."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4199,19 +4199,19 @@ observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x1cc
-label = "u00415010"
+label = "get-adv-service-state"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415010"
-category = "unknown"
-summary = ""
+name = "get-adv-service-state"
+category = "control"
+summary = "(out) - copy native ADV service state ctx+0x6dbd4; label_1235a ORs it with message-skip to select its yield branch."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Exact service-state producer remains outside this opcode."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5461,19 +5461,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x21c
-label = "u00416270"
+label = "mark-frame-yield"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00416270"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "mark-frame-yield"
+category = "control"
+summary = "Set native run-state bit 0x400. Host-implicit: the port already offers a scheduler yield after every completed opcode."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a reaches it only when op 0x1c7 or 0x1cc is nonzero."
 
 [[opcode]]
 op = 0x21d
@@ -5728,19 +5728,19 @@ observed_types = ["imm", "g-int"]
 
 [[opcode]]
 op = 0x224
-label = "u00416290"
+label = "clear-gfx-command-queue"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00416290"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "clear-gfx-command-queue"
+category = "draw"
+summary = "Clear the native gfx command queue rooted at ctx+0x418. Host-implicit because the port composites retained state directly."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x417550 -> gfx_command_queue_clear 0x47cb10, which destroys queued nodes and restores the sentinel links/count."
 
 [[opcode]]
 op = 0x228
@@ -6450,19 +6450,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x243
-label = "u00417070"
+label = "reset-anim-clock"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00417070"
-category = "unknown"
-summary = ""
+name = "reset-anim-clock"
+category = "draw"
+summary = "Reset the native global animation-service elapsed and duration fields to zero when service flag bit 1 is clear."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set ctx+0x51b70=1 and zero ctx+0x51b78/+0x51b7c. Normal SC0000 label_1235a calls it before present-frame."
 
 [[opcode]]
 op = 0x248

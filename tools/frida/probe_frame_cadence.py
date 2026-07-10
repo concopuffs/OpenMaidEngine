@@ -4,8 +4,9 @@ rate vs displayed-frame rate, and frame timing — so the frame-stepped-VM fix p
 data instead of by feel.
 
 SAFE pattern (matches capture_gfx_objects.py, which runs without crashing): plain-JS hooks only, no
-CModule; the only engine-code hook is the PROVEN operand-fetch helper `0x41b940` (fires per opcode,
-ecx = context) used to (a) grab the context pointer once and (b) count execution rate. Frame timing
+CModule; the only engine-code hook is the PROVEN operand-fetch helper `0x41b940` (fires once per
+operand read, often several times per opcode; ecx = context) used to (a) grab the context pointer once
+and (b) count operand-fetch rate. Frame timing
 comes from SYSTEM-DLL hooks (user32 message pump — never engine code, never anti-tamper). Engine state
 (coroutine PC, run-state flags, sleep timer) is READ-ONLY polled. Nothing patches engine code beyond the
 one address our other scripts already prove is safe.
@@ -29,7 +30,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "build" / "frida-frame-cadence.jsonl"
 
-OPFETCH_OFF = 0x1b940   # operand-fetch helper (0x41b940); per-op, ecx=ctx. PROVEN-safe hook.
+OPFETCH_OFF = 0x1b940   # operand-fetch helper (0x41b940); per operand read, ecx=ctx. PROVEN-safe hook.
 IDX_OFF     = 0x53d14   # current coroutine index
 PC_BASE     = 0x53d2c   # per-coroutine record base; +idx*0x78 holds the PC pointer (deref = opcode)
 PC_STRIDE   = 0x78

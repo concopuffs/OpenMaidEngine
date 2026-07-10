@@ -79,6 +79,16 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Writes gfx cmd-type 9; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
 
+### 0x1cc `get-adv-service-state` (get-adv-service-state, argc 1)
+- **summary:** (out) - copy native ADV service state ctx+0x6dbd4; label_1235a ORs it with message-skip to select its yield branch.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Exact service-state producer remains outside this opcode.
+
+### 0x21c `mark-frame-yield` (mark-frame-yield, argc 0)
+- **summary:** Set native run-state bit 0x400. Host-implicit: the port already offers a scheduler yield after every completed opcode.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a reaches it only when op 0x1c7 or 0x1cc is nonzero.
+
 ## draw
 
 ### 0x1a2 `gfx-cmd-register` (gfx-cmd-register, argc 1)
@@ -188,6 +198,11 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550.
 
+### 0x224 `clear-gfx-command-queue` (clear-gfx-command-queue, argc 0)
+- **summary:** Clear the native gfx command queue rooted at ctx+0x418. Host-implicit because the port composites retained state directly.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra handler 0x417550 -> gfx_command_queue_clear 0x47cb10, which destroys queued nodes and restores the sentinel links/count.
+
 ### 0x228 `u00421940` (u00421940, argc 5)
 - **summary:** 0x228 query-position (succ)(handle)(outX)(outY)(outZ): read the object's current computed position into vars (worker FUN_0047cdd0). C# VM: writes V24 + success flag. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=kelebek, confidence=low
@@ -225,6 +240,11 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=kelebek, confidence=low
 
+### 0x243 `reset-anim-clock` (reset-anim-clock, argc 0)
+- **summary:** Reset the native global animation-service elapsed and duration fields to zero when service flag bit 1 is clear.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set ctx+0x51b70=1 and zero ctx+0x51b78/+0x51b7c. Normal SC0000 label_1235a calls it before present-frame.
+
 ## input
 
 ### 0x90 `hotspot-branch` (u0041BEB0, argc 7)
@@ -252,6 +272,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=inference, confidence=med, noop_headless=True
 - **depends on:** 0x90
 - **evidence:** interleaves with 0x90 in the shared ADV-chrome subroutine; trailing imm = action id 0x0/0x7/0x8; same widget cluster as 0x90/0x91/0x92/0x95; confirm via frida
+
+### 0x1c7 `get-message-skip` (get-message-skip, argc 1)
+- **summary:** (out) - write 1 iff ADV message-skip run-state bit 0x08000000 is set, otherwise 0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). SC0000 label_1235a ORs it with op 0x1cc.
 
 ## marker
 
@@ -882,10 +907,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1c7 `u00414F90` (u00414F90, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1c8 `toString` (toString, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -895,10 +916,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1cb `u00414FD0` (u00414FD0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1cc `u00415010` (u00415010, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -970,10 +987,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x21c `u00416270` (u00416270, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x21d `u00421410` (u00421410, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -987,10 +1000,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x223 `u00421700` (u00421700, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x224 `u00416290` (u00416290, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1039,10 +1048,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x242 `u00422D60` (u00422D60, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x243 `u00417070` (u00417070, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

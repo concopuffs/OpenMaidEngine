@@ -234,6 +234,12 @@ public sealed class GfxState
         lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
     }
 
+    /// <summary>Op 0x243: reset the separate global animation-service clock.</summary>
+    public void ResetAnimClock()
+    {
+        lock (_lock) { AnimClockDurationTicks = 0; AnimClockGeneration++; }
+    }
+
     /// <summary>Back-compat: snapshot with no animation clock (nowMs = 0) — deterministic, for headless
     /// callers and existing tests.</summary>
     public IReadOnlyList<RenderObject> SnapshotVisibleObjects() => SnapshotVisibleObjects(0);

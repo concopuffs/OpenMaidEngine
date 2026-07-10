@@ -94,6 +94,7 @@ public partial class Main : Godot.Control
         string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: slow/speed the paced opening for inspection
+        double speed = 1.0;                              // --speed <f>: whole-runtime diagnostic speed
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         for (int i = 0; i < userArgs.Length; i++)
         {
@@ -105,6 +106,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--gfx-log" && i + 1 < userArgs.Length) _gfxLogPath = userArgs[i + 1];
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
+            if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
@@ -117,6 +119,9 @@ public partial class Main : Godot.Control
                 }
             }
         }
+
+        if (!double.IsFinite(speed) || speed <= 0) speed = 1.0;
+        _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
@@ -211,7 +216,7 @@ public partial class Main : Godot.Control
             _host.SignalInput();
     }
 
-    public override void _ExitTree() { DumpHistogram(); _host?.SignalInput(); }
+    public override void _ExitTree() { DumpHistogram(); _host?.Stop(); }
 
     // Write the real-run op/call-site histogram to --trace-histogram <file>. Idempotent; called when the
     // scene ends or the window closes (the opening parks at wait-for-input, so closing is the usual trigger).
@@ -245,8 +250,9 @@ public partial class Main : Godot.Control
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
         {
             var t = v.Transform;
-            int dstX = (int)System.Math.Round(t.AnchorX + (v.DstX - t.AnchorX) * t.ScaleX + t.TranslateX);
-            int dstY = (int)System.Math.Round(t.AnchorY + (v.DstY - t.AnchorY) * t.ScaleY + t.TranslateY);
+            var projected = Age.Engine.Model.Transform2DMath.Apply(v.DstX, v.DstY, t);
+            int dstX = (int)System.Math.Round(projected.X);
+            int dstY = (int)System.Math.Round(projected.Y);
             float opacity = v.Alpha / 255f;                  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
             string outcome;
@@ -265,6 +271,7 @@ public partial class Main : Godot.Control
                     float fillA = opacity * strength;
                     FillQuad(fillX, fillY, fw, fh, v.Tint, fillA);
                     outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {fw}x{fh}@({fillX},{fillY}) " +
+                              $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
                               $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0})";
                 }
@@ -280,7 +287,8 @@ public partial class Main : Godot.Control
                               dstX, dstY, t.ScaleX, t.ScaleY, opacity);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
-                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({dstX},{dstY}) " +
+                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
+                              $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
                               $"op={opacity:0.00} tintStr={strength:0.00}";
                 }
@@ -367,15 +375,17 @@ public partial class Main : Godot.Control
         byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
         int dw = _screen.GetWidth(), dh = _screen.GetHeight(), sfw = src.GetWidth();
         int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
-        for (int y = 0; y < outH; y++)
-            for (int x = 0; x < outW; x++)
+        int x0 = System.Math.Max(0, -outX), x1 = System.Math.Min(outW, dw - outX);
+        int y0 = System.Math.Max(0, -outY), y1 = System.Math.Min(outH, dh - outY);
+        if (x1 <= x0 || y1 <= y0) return;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
             {
                 int sampleX = System.Math.Min(sw - 1, (int)(x / absScaleX));
                 int sampleY = System.Math.Min(sh - 1, (int)(y / absScaleY));
                 if (scaleX < 0) sampleX = sw - 1 - sampleX;
                 if (scaleY < 0) sampleY = sh - 1 - sampleY;
                 int dxp = outX + x, dyp = outY + y;
-                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
                 int di = (dyp * dw + dxp) * 4;
                 int si = ((srcY + sampleY) * sfw + (srcX + sampleX)) * 4;
                 int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object opacity
@@ -400,11 +410,13 @@ public partial class Main : Godot.Control
         int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
         byte[] dst = _screen.GetData();
         int dw = _screen.GetWidth(), dh = _screen.GetHeight();
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
+        int x0 = System.Math.Max(0, -dstX), x1 = System.Math.Min(w, dw - dstX);
+        int y0 = System.Math.Max(0, -dstY), y1 = System.Math.Min(h, dh - dstY);
+        if (x1 <= x0 || y1 <= y0) return;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
             {
                 int dxp = dstX + x, dyp = dstY + y;
-                if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
                 int di = (dyp * dw + dxp) * 4;
                 dst[di]     = (byte)((tr * ia + dst[di]     * (255 - ia)) / 255);
                 dst[di + 1] = (byte)((tg * ia + dst[di + 1] * (255 - ia)) / 255);

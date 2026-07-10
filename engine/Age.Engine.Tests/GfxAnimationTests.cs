@@ -104,6 +104,23 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void ResetAnimClock_DispatchClearsOnlyGlobalServiceClock()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "CLOCKRESET", new List<(int, Operand[])>
+        {
+            MovGI(1, 400),
+            (0x238, new[] { G(1) }),
+            (0x243, System.Array.Empty<Operand>()),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        Assert.Equal(0, vm.Gfx.AnimClockDurationTicks);
+        Assert.Equal(2, vm.Gfx.AnimClockGeneration);
+    }
+
+    [Fact]
     public void SnapshotSamplesDelayedMatrixChannels_WithoutUsingZAsOpacity()
     {
         var g = new GfxState();
@@ -137,5 +154,31 @@ public class GfxAnimationTests
             (done.Transform.TranslateX, done.Transform.TranslateY, done.Transform.TranslateZ));
         Assert.True(done.Rotation.Enabled);
         Assert.Equal(255, done.Alpha);   // scale-Z=3, translation-Z=99, rotation-axis-Z=5: still opaque
+    }
+
+    [Fact]
+    public void Transform2D_UsesNativeAnchoredRowVectorOrder_AndDirectProjection()
+    {
+        var t = new TransformState(2, 3, 99, 10, -7, 1234, 100, 50, 888);
+        var p = Transform2DMath.Apply(120, 60, t);
+        Assert.Equal((150.0, 73.0), p);
+    }
+
+    [Fact]
+    public void Transform2D_NegativeScaleMovesFarEdgeAcrossAnchor()
+    {
+        var t = new TransformState(-2, 1, 1, 0, 0, 0, 100, 0, 0);
+        var left = Transform2DMath.Apply(90, 0, t);
+        var right = Transform2DMath.Apply(110, 0, t);
+        Assert.Equal((120.0, 0.0), left);
+        Assert.Equal((80.0, 0.0), right);
+    }
+
+    [Fact]
+    public void Transform2D_MatchesCapturedNativeSc0000ScaleEndpoint()
+    {
+        // Native handle 0xcbc0: base=(0,600), anchor=(400,1000), scale=5.
+        var t = new TransformState(5, 5, 1, 0, 0, 0, 400, 1000, 0);
+        Assert.Equal((-1600.0, -1000.0), Transform2DMath.Apply(0, 600, t));
     }
 }

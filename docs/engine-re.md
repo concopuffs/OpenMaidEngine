@@ -451,6 +451,16 @@ independent matrix channels, not two encodings of one vec3 property.
   delay, linearly interpolates current→target for its duration, then commits the target and clears its own timing.
   Neither third component is opacity.
 
+**Exact composition and 2D reduction (live-validated 2026-07-10).** The consumer starts from identity and
+right-multiplies `T(-V18) → scale-current → middle/rotation → translation-current → T(+V18)`;
+`matrix4_multiply` at `0x4ee2a4` computes `out = left * right`. AGE uses row vectors. With no
+rotation/perspective, the screen projection is therefore exactly
+`V18.xy + (point.xy - V18.xy) * scale.xy + translation.xy`. The captured SC0000 handle `0xcbc0`
+has base `(0,600)`, anchor `(400,1000)`, and final scale `(5,5)`; native matrix translation
+terms are `(-1600,-4000)`, projecting the base point to `(-1600,-1000)`. The port's focused
+projection test and transform-aware gfx log reproduce those values. Rotation projection and final D3D
+raster/rounding details remain deferred; the axis-aligned anchor/order/projection no longer are provisional.
+
 **Port result (2026-07-10):** `GfxState` now retains separate current/target scale and translation
 channels with the native shared-start/independent-timing model. Godot scales around `V18` (anchor),
 applies translation independently, and never derives opacity from transform Z. The shared `AnimTarget`
@@ -482,6 +492,28 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
 `ctx+0xb550` using their own delay/duration; they do not use op `0x238` as their duration.
 Op `0x234` is the independent rotation cycle above. Op `0x238` still configures the separate
 `ctx+0x51b78/+0x51b7c` animation service used by its own family.
+
+##### `label_1235a` animation-section boundary (2026-07-10)
+
+The section helper computes the maximum configured duration and arms it with `0x238`, then reads
+message-skip through `0x1c7` and ADV service state through `0x1cc`. Normal playback (both zero)
+executes `0x243` (reset the separate global animation-service clock) followed by `0x20c` present;
+the skip/service branch executes `0x21c` (set run-state bit `0x400`). Both branches finish with
+`0x224`, which clears the native gfx command queue at `ctx+0x418`. These handlers are now named,
+commented, and saved in the Ghidra image.
+
+None of `0x21c/0x224/0x243` waits for the per-object transform duration. The normal-path boundary is
+the engine's rate-limited one-op interpreter cadence plus continuous retained compositing. This matters because
+the earlier Frida probe hooked `vm_operand_fetch`: its ~1,788/s result counts **operand reads**, commonly
+several per completed opcode. Feeding that number to the port's per-completed-opcode `FrameYield` made
+the `0xcbc0` section reach only scale 1.44 in 226 ms before teardown.
+
+The corrected host limiter is refresh-independent and runs at 200 completed opcodes/s. It resets accumulated
+credit after sleep/input parking, and clicks are accepted only while actually waiting, so clicks during a
+visible animation cannot pre-arm the next wait. A normal-clock replay retained `0xcbc0` for 1,798 ms at
+the intermediate 215/s calibration; the final 200/s replay kept it alive for 2,014 virtual ms, beyond the native
+1,890 ms endpoint. `--speed` scales VM, sleep, and animation clocks together for comparison without
+changing these virtual-time relationships or auto-advancing waits.
 
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
 
@@ -612,10 +644,11 @@ Findings:
   full ~119-method table) fires ~**1,908/sec** with **no vsync**; `BeginScene`/`EndScene` never fire → a **2D
   StretchRect-style compositor**, not a 3D scene. So there is **no fixed display-frame rate**; `Present` rate
   ≈ op rate (~1 op per present). ⇒ the pacing quantity is the **wall-clock op rate**, not a per-frame budget.
-- **Implication for the port:** throttle our VM to ~**1,800 ops/sec** wall-clock (≈30 ops per 60 fps Godot
-  `_Process`, tunable), ~4× under a future Ctrl multiplier; Godot's 60 fps compositor + wall-clock tweens then
-  show the smoothly-advancing state. This *measured* mechanism replaces the earlier present-driven guess
-  (present is rare in our path and uncapped natively).
+- **Corrected implication for the port (2026-07-10):** 1,788/s is an operand-fetch rate, not an opcode rate.
+  `IHost.FrameYield` runs once per completed opcode, so matching those quantities directly overclocked the
+  port by roughly ninefold. The native SC0000 transform lifetime pins the corresponding completed-op cadence
+  at about **200/s**. The limiter must be wall-clock based (not a per-render callback budget), with a future
+  ADV Ctrl multiplier applied to the same unified clock.
 
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 

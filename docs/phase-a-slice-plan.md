@@ -715,3 +715,25 @@ geometry in the capture. It does **not** prove the port's exact matrix calculati
 multiplication order, or 2D projection: normal playback still races past these sections too quickly for a
 reliable visual judgment. Treat that math as provisional until the pacing slice enables slow normal playback
 and a native-versus-port frame comparison.
+
+### A2b — animation pacing + matrix validation ✅ (2026-07-10)
+
+The remaining race was a unit mismatch at the scheduler boundary. Native
+`adv_interpreter_tick` advances one opcode, while the live cadence probe counted calls to
+`vm_operand_fetch` (about 1,788 operand reads/s). The port's `FrameYield` runs once per completed
+opcode, so using 1,800 there overclocked script teardown by roughly ninefold. `FrameClock` now supplies a
+refresh-independent 200 completed-opcode/s allowance; sleep and input waits discard parked-time credit, and
+input is ignored unless the VM is actually at `wait-for-input`. `--speed` scales the unified VM,
+sleep, and animation clock for inspection without `--shot-sequence` auto-advance.
+
+Live native capture recorded the complete `0xcbc0` scale ramp (1→5 over 1,890 ms), including the exact
+composed matrices. The port previously deleted the object at scale 1.44 after 226 ms. At 215/s calibration it
+survived 1,798 ms to scale 4.72; the final 200/s replay retained it for 2,014 virtual ms, past the endpoint.
+Native matrix terms and the port's focused tests agree on row-vector
+`anchor + (point-anchor)*scale + translation`; for base `(0,600)`, anchor `(400,1000)`,
+scale 5, both project to `(-1600,-1000)`. Exact axis-aligned anchor/order/projection is validated;
+cyclic-rotation rasterization remains the next affine-rendering slice.
+
+Verification: engine **92/92** after the opcode-clock reset test, corpus sweep unchanged at
+**284 exit / 13 STEP-LIMIT**, Godot build and threaded `SELFTEST OK`. The transform capture tool and
+transform-aware `--gfx-log` are documented in `docs/tools-reference.md`.

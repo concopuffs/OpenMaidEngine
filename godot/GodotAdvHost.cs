@@ -14,14 +14,16 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly Age.Engine.Hosting.FrameClock _clock;
+    private readonly Age.Engine.Hosting.WallClockOpPacer _opPacer;
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
-    private int _opsSinceYield;
+    private volatile bool _stopping;
     public volatile bool IsWaiting;
     public readonly List<(int Offset, string Text)> Captured = new();
 
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock)
     {
         _main = main; _res = res; _scene = scene; _clock = clock;
+        _opPacer = new Age.Engine.Hosting.WallClockOpPacer(clock);
     }
 
     public void ShowText(int offset, string text)
@@ -39,11 +41,19 @@ public sealed class GodotAdvHost : IHost
         IsWaiting = true;
         _gate.Wait();
         IsWaiting = false;
+        _opPacer.Reset();
         _main.CallDeferred("ClearPage");
     }
 
     // called from the main thread (click) or the selftest auto-clicker
-    public void SignalInput() { if (_gate.CurrentCount == 0) _gate.Release(); }
+    public void SignalInput() { if (IsWaiting && _gate.CurrentCount == 0) _gate.Release(); }
+
+    public void Stop()
+    {
+        _stopping = true;
+        if (_gate.CurrentCount == 0) _gate.Release();
+        _frameSignal.Set();
+    }
 
     // Main thread, once per rendered frame: releases a VM thread parked in FrameYield/Sleep.
     public void PulseFrame() => _frameSignal.Set();
@@ -53,11 +63,9 @@ public sealed class GodotAdvHost : IHost
     // interpreter to ~budget ops per rendered frame (the native engine's rate-limited cadence).
     public void FrameYield()
     {
-        if (++_opsSinceYield < _clock.EffectiveBudget) return;
-        _opsSinceYield = 0;
-        long start = _clock.NowMs;
-        while (_clock.NowMs == start)                 // wait until a real _Process advanced the clock
-            if (!_frameSignal.WaitOne(50)) break;     // 50ms safety cap: never hang if _Process stalls
+        _opPacer.OpcodeCompleted();
+        while (!_opPacer.CanRunNext && !_stopping)
+            _frameSignal.WaitOne(50);
     }
 
     // op 0xc8: block the VM background thread so the main-thread compositor (Main.Recomposite in _Process)
@@ -73,7 +81,11 @@ public sealed class GodotAdvHost : IHost
         long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
         long deadline = _clock.NowMs + ms;
         while (_clock.NowMs < deadline)
-            if (!_frameSignal.WaitOne(2000)) break;   // safety cap
+        {
+            if (_stopping) break;
+            _frameSignal.WaitOne(50);
+        }
+        _opPacer.Reset();
     }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
