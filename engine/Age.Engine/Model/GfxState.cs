@@ -2,13 +2,13 @@ using System.Linq;
 
 namespace Age.Engine.Model;
 
-/// <summary>Per-object animation channel snapshot for the compositor (cluster 0x21c-0x243). Enabled = the
-/// object has an active anim channel; (TX,TY,TZ) = the transform target it animates toward; Normalized = the
-/// 0x21e ~percent variant; DurationTicks = the object's own duration (anim-start op2). The GLOBAL clock timebase
-/// (duration + generation) is read separately off <see cref="GfxState.AnimClockDurationTicks"/>. Generation bumps
-/// on each anim-start — the compositor re-triggers its wall-clock tween when it changes.</summary>
-public readonly record struct AnimState(bool Enabled, bool Normalized, long TX, long TY, long TZ,
-                                        long DurationTicks, long Generation);
+/// <summary>The sampled native matrix channels carried to the compositor. Op 0x21e owns scale; op 0x220 owns
+/// translation. Z is retained for model fidelity even though the current 2D compositor uses X/Y only.</summary>
+public readonly record struct TransformState(double ScaleX, double ScaleY, double ScaleZ,
+                                             double TranslateX, double TranslateY, double TranslateZ,
+                                             double AnchorX, double AnchorY, double AnchorZ);
+
+public readonly record struct RotationCycleState(bool Enabled, long PeriodMs, long AxisX, long AxisY, long AxisZ);
 
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
@@ -20,7 +20,8 @@ public readonly record struct AnimState(bool Enabled, bool Normalized, long TX, 
 /// vanish — the grey-background bug).</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
-                                           AnimState Anim, int Alpha, long Tint, int TintStrength, BlendKind Blend);
+                                           TransformState Transform, RotationCycleState Rotation,
+                                           int Alpha, long Tint, int TintStrength, BlendKind Blend);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -50,16 +51,22 @@ public sealed class GfxState
         public (int X, int Y, int W, int H) SrcRect;
         public bool Visible;
 
-        // ---- animation channel (cluster 0x21c-0x243; see docs/engine-re.md "sprite transform / ANIMATION").
-        // 0x21e/0x220 set the transform directly (worker gfx_anim_set_channel@0x47eaa0: obj+0x3c=p1, +0x50=p2,
-        // +0xac=target, +0x68=enable); 0x234 anim-start animates toward a target over the GLOBAL clock (0x238).
-        // Passive: recorded here, interpolated by the Godot compositor over wall-clock. ----
-        public (long X, long Y, long Z) AnimTarget;
-        public long AnimParam1, AnimParam2;
-        public bool AnimNormalized;         // 0x21e (operands ~percent, /_DAT_00571c28) vs 0x220 (absolute)
-        public bool AnimEnabled;            // obj+0x68
-        public long AnimDurationTicks;      // 0x234 anim-start op2 (this object's duration; maxed into the clock)
-        public long AnimGeneration;         // bumped by anim-start (0x234); the compositor's per-object re-trigger
+        // ---- independent one-shot matrix channels (gfx_object_apply_transform_channels@0x472f00). ----
+        // Scale: current obj+0x6c, target obj+0xac, delay obj+0x3c, duration obj+0x50.
+        public (double X, double Y, double Z) ScaleCurrent = (1, 1, 1), ScaleTarget = (1, 1, 1);
+        public long ScaleDelayMs, ScaleDurationMs;
+        public bool ScaleEnabled;
+        // Translation: current obj+0x16c, target obj+0x1ac, delay obj+0x44, duration obj+0x58.
+        public (double X, double Y, double Z) TranslationCurrent, TranslationTarget;
+        public long TranslationDelayMs, TranslationDurationMs;
+        public bool TranslationEnabled;
+        // Shared matrix-channel start timestamp obj+0x34, seeded from frame-time ctx+0xb550.
+        public long MatrixStartMs = -1;
+
+        // Op 0x234 is a separate cyclic rotation channel (period obj+0x228, axis obj+0x244..0x24c).
+        public long RotationPeriodMs;
+        public (long X, long Y, long Z) RotationAxis;
+        public bool RotationEnabled;
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
@@ -75,10 +82,8 @@ public sealed class GfxState
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
 
-    // ---- GLOBAL animation clock (op 0x238 set-anim-clock; native ctx+0x51b7c total / +0x51b78 elapsed).
-    // Non-blocking: the op only configures duration; the host advances elapsed per-frame and tweens all armed
-    // objects over it (docs/engine-re.md, "anim_start/set_anim_clock decoded"). Generation bumps on each set so
-    // the compositor resets its wall-clock elapsed. ----
+    // ---- Separate global animation service clock (op 0x238; ctx+0x51b7c total / +0x51b78 elapsed).
+    // Retained for its opcode family; 0x21e scale and 0x220 translation use frame-time directly instead. ----
     public long AnimClockDurationTicks { get; private set; }
     public long AnimClockGeneration { get; private set; }
 
@@ -188,35 +193,42 @@ public sealed class GfxState
         }
     }
 
-    /// <summary>Op 0x21e/0x220 (set-anim-transform): record the transform target + two scalar params on the
-    /// object and enable its animation channel. normalized = 0x21e (operands ~percent, /_DAT_00571c28);
-    /// absolute = 0x220. Native worker gfx_anim_set_channel@0x47eaa0 sets obj+0x3c=p1, +0x50=p2, +0xac=target,
-    /// +0x68=1.</summary>
-    public void SetAnimTransform(long handle, long p1, long p2, (long X, long Y, long Z) target, bool normalized)
+    /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
+    public void SetScaleChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
-            o.AnimParam1 = p1; o.AnimParam2 = p2; o.AnimTarget = target;
-            o.AnimNormalized = normalized; o.AnimEnabled = true;
+            o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
+            o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+            o.ScaleEnabled = durationMs > 0; o.MatrixStartMs = -1;
         }
     }
 
-    /// <summary>Op 0x234 (anim-start): animate the object toward <paramref name="target"/> over the global
-    /// clock; <paramref name="durationTicks"/> is this object's duration (native label_1235a maxes them into
-    /// the clock). Bumps AnimGeneration — the compositor's per-object re-trigger.</summary>
-    public void StartAnim(long handle, long durationTicks, (long X, long Y, long Z) target)
+    /// <summary>Op 0x220: absolute translation target, with independent delay/duration.</summary>
+    public void SetTranslationChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) target)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
-            o.AnimTarget = target; o.AnimDurationTicks = durationTicks;
-            o.AnimEnabled = true; o.AnimGeneration++;
+            o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
+            o.TranslationTarget = target;
+            o.TranslationEnabled = durationMs > 0; o.MatrixStartMs = -1;
         }
     }
 
-    /// <summary>Op 0x238 (set-anim-clock): set the GLOBAL animation duration (game ticks) and bump the clock
-    /// generation so the host resets its wall-clock elapsed. Non-blocking (the render loop advances it).</summary>
+    /// <summary>Op 0x234: retain the cyclic rotation period and axis separately. Native interpolation uses
+    /// frame-time ctx+0xb550 and rotates through 360 degrees per period; affine rendering is deferred.</summary>
+    public void SetRotationCycle(long handle, long periodMs, (long X, long Y, long Z) axis)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.RotationPeriodMs = periodMs; o.RotationAxis = axis; o.RotationEnabled = periodMs > 0;
+        }
+    }
+
+    /// <summary>Op 0x238: set its separate global animation-service duration and reset marker.</summary>
     public void SetAnimClock(long durationTicks)
     {
         lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
@@ -227,8 +239,8 @@ public sealed class GfxState
     public IReadOnlyList<RenderObject> SnapshotVisibleObjects() => SnapshotVisibleObjects(0);
 
     /// <summary>Visible objects in ascending-handle order (= z-order), each with its source surface resolved
-    /// and its active anim channels interpolated at <paramref name="nowMs"/> (the port of
-    /// gfx_object_anim_interpolate). Position is the base V24 (a direct transform, ops 0x22f/0x229). The
+    /// and its active channels interpolated at <paramref name="nowMs"/>. Position is the base V24 (a direct
+    /// transform, ops 0x22f/0x229); scale and translation are independent one-shot matrix channels. The
     /// src-rect channel (0x239/0x231) selects the spritesheet cell; the color channel (0x232) ping-pongs the
     /// alpha/tint. Channel Start fields seed to nowMs on first sight.</summary>
     public IReadOnlyList<RenderObject> SnapshotVisibleObjects(long nowMs)
@@ -280,15 +292,47 @@ public sealed class GfxState
                     w = cellW; h = cellH;
                 }
 
+                // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
+                if ((o.ScaleEnabled || o.TranslationEnabled) && o.MatrixStartMs < 0) o.MatrixStartMs = nowMs;
+                var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
+                                                o.ScaleDurationMs, o.MatrixStartMs, ref o.ScaleEnabled, nowMs);
+                var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
+                                                      o.TranslationDelayMs, o.TranslationDurationMs,
+                                                      o.MatrixStartMs, ref o.TranslationEnabled, nowMs);
+                if (!o.ScaleEnabled && !o.TranslationEnabled) o.MatrixStartMs = -1;
+
                 list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
-                                          new AnimState(o.AnimEnabled, o.AnimNormalized,
-                                                        o.AnimTarget.X, o.AnimTarget.Y, o.AnimTarget.Z,
-                                                        o.AnimDurationTicks, o.AnimGeneration),
+                                          new TransformState(scale.X, scale.Y, scale.Z,
+                                                             translation.X, translation.Y, translation.Z,
+                                                             o.V18.X, o.V18.Y, o.V18.Z),
+                                          new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
+                                                                 o.RotationAxis.X, o.RotationAxis.Y,
+                                                                 o.RotationAxis.Z),
                                           alpha, tint, strength, blend));
             }
             return list;
         }
+    }
+
+    private static (double X, double Y, double Z) SampleMatrixChannel(
+        ref (double X, double Y, double Z) current,
+        (double X, double Y, double Z) target,
+        long delayMs, long durationMs, long startMs, ref bool enabled, long nowMs)
+    {
+        if (!enabled || durationMs <= 0 || startMs < 0) return current;
+        long elapsed = nowMs - startMs - delayMs;
+        if (elapsed <= 0) return current;
+        if (elapsed >= durationMs)
+        {
+            current = target;
+            enabled = false;
+            return current;
+        }
+        double t = (double)elapsed / durationMs;
+        return (current.X + (target.X - current.X) * t,
+                current.Y + (target.Y - current.Y) * t,
+                current.Z + (target.Z - current.Z) * t);
     }
 
     /// <summary>Ping-pong interpolation weight in [0,1] toward the target: 0 at cycle start, 1 at half-period.</summary>

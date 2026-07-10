@@ -161,7 +161,6 @@ public partial class Main : Godot.Control
 
     public override void _Process(double delta)
     {
-        _lastDelta = delta;
         _clock.Advance(delta);
         _host?.PulseFrame();
         if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
@@ -234,39 +233,21 @@ public partial class Main : Godot.Control
     // ---- retained per-frame compositor (main thread, from _Process) ----
     // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
     // engine's z-order), each blitting its live surface's rect at its position. Surfaces are cached by BMP
-    // path (this runs every frame). Animated objects tween over the global anim-clock (0x238); their opacity
-    // is applied by the alpha-aware BlitLayer. See docs/engine-re.md "sprite transform / ANIMATION cluster".
+    // path (this runs every frame). Native scale/translation matrix channels are sampled independently by
+    // GfxState and applied here; object opacity comes only from the actual blend/color path.
     private readonly System.Collections.Generic.Dictionary<(string Path, long Key), Image?> _imgCache = new();
-
-    // Legacy host approximation: per-handle wall-clock tween using Anim.TZ as opacity. Native RE now proves
-    // op 0x21e is a scale matrix and 0x220 is a separate translation matrix, so TZ is NOT opacity. Keep this
-    // behavior isolated here until the transform compositor is split; it is unrelated to retained-object
-    // teardown (0x215/0x1f7/0x1fa), which now removes the magic-circle object correctly.
-    private sealed class TweenState
-    {
-        public long Generation = long.MinValue;
-        public bool Initialized;
-        public double Elapsed, Duration;
-        public double StartA, TargetA, CurrentA = 1.0;
-    }
-    private readonly System.Collections.Generic.Dictionary<long, TweenState> _tweens = new();
-    private long _lastClockGen = long.MinValue;
-    private double _lastDelta;
-    private const double GameTickSeconds = 1.0 / 60.0;   // anim-clock ticks -> seconds (game runs ~60fps)
 
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
-        long clockGen = _vm.Gfx.AnimClockGeneration;
-        double clockDur = System.Math.Max(1, _vm.Gfx.AnimClockDurationTicks) * GameTickSeconds;
-        bool clockReset = clockGen != _lastClockGen;
-        _lastClockGen = clockGen;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null ? new() : null;
         int z = 0;
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
         {
-            float animA = AlphaFor(v, clockReset, clockDur);
-            float opacity = animA * (v.Alpha / 255f);        // object opacity (color-op alpha is NOT opacity)
+            var t = v.Transform;
+            int dstX = (int)System.Math.Round(t.AnchorX + (v.DstX - t.AnchorX) * t.ScaleX + t.TranslateX);
+            int dstY = (int)System.Math.Round(t.AnchorY + (v.DstY - t.AnchorY) * t.ScaleY + t.TranslateY);
+            float opacity = v.Alpha / 255f;                  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
             string outcome;
             if (v.SurfaceResId == 0)
@@ -276,10 +257,16 @@ public partial class Main : Godot.Control
                 // objects are render targets — still skipped (slice C).
                 if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
                 {
-                    int fw = v.W > 0 ? v.W : 800, fh = v.H > 0 ? v.H : 600;
+                    int baseW = v.W > 0 ? v.W : 800, baseH = v.H > 0 ? v.H : 600;
+                    int fw = (int)System.Math.Round(System.Math.Abs(t.ScaleX) * baseW);
+                    int fh = (int)System.Math.Round(System.Math.Abs(t.ScaleY) * baseH);
+                    int fillX = t.ScaleX >= 0 ? dstX : dstX - fw;
+                    int fillY = t.ScaleY >= 0 ? dstY : dstY - fh;
                     float fillA = opacity * strength;
-                    FillQuad(v.DstX, v.DstY, fw, fh, v.Tint, fillA);
-                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {fw}x{fh}@({v.DstX},{v.DstY})";
+                    FillQuad(fillX, fillY, fw, fh, v.Tint, fillA);
+                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {fw}x{fh}@({fillX},{fillY}) " +
+                              $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
+                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0})";
                 }
                 else outcome = "SKIP(no-resId, opaque render-target)";
             }
@@ -289,10 +276,12 @@ public partial class Main : Godot.Control
                 if (bmp == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
                 else
                 {
-                    BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H, v.DstX, v.DstY, opacity);
+                    BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
+                              dstX, dstY, t.ScaleX, t.ScaleY, opacity);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
-                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY}) " +
+                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({dstX},{dstY}) " +
+                              $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
                               $"op={opacity:0.00} tintStr={strength:0.00}";
                 }
             }
@@ -308,7 +297,12 @@ public partial class Main : Godot.Control
     // the frame where the background drops out — and WHY — stands out. See systematic-debugging of the grey-BG.
     private void LogGfxDecisionChanges(System.Collections.Generic.Dictionary<long, string> curr)
     {
-        _gfxLog ??= new System.IO.StreamWriter(_gfxLogPath!) { AutoFlush = true };
+        if (_gfxLog == null)
+        {
+            var dir = System.IO.Path.GetDirectoryName(_gfxLogPath);
+            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+            _gfxLog = new System.IO.StreamWriter(_gfxLogPath!) { AutoFlush = true };
+        }
         _gfxLogFrame++;
         var lines = new System.Collections.Generic.List<string>();
         foreach (var kv in curr)
@@ -326,33 +320,12 @@ public partial class Main : Godot.Control
         foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
     }
 
-    // Current legacy opacity approximation. TODO(transform compositor): replace this with independent native
-    // scale/translation matrices and source opacity only from the actual color/blend channel.
-    private float AlphaFor(Age.Engine.Model.RenderObject v, bool clockReset, double clockDur)
-    {
-        if (!v.Anim.Enabled) return 1f;
-        var tw = _tweens.TryGetValue(v.Handle, out var t) ? t : (_tweens[v.Handle] = new TweenState());
-        double targetA = System.Math.Clamp(v.Anim.TZ / 100.0, 0, 1);
-        if (clockReset || tw.Generation != v.Anim.Generation)
-        {
-            tw.Generation = v.Anim.Generation;
-            tw.Elapsed = 0; tw.Duration = clockDur;
-            tw.StartA = tw.Initialized ? tw.CurrentA : 1.0;   // hold previous on-screen alpha; first sight opaque
-            tw.TargetA = targetA;
-            tw.Initialized = true;
-        }
-        tw.Elapsed += _lastDelta * _clock.Speed;   // Speed==1 now => identical; future Ctrl scales the tween
-        double p = tw.Duration > 0 ? System.Math.Clamp(tw.Elapsed / tw.Duration, 0, 1) : 1;
-        tw.CurrentA = tw.StartA + (tw.TargetA - tw.StartA) * p;
-        return (float)tw.CurrentA;
-    }
-
     // Blit one object's surface rect. The source Image is cached per (path, colorKey): on first load, texels
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
     // tintStrength (0..1, the op 0x202/0x203 alpha) LERPs the texel RGB toward tint (0=keep texel, 1=full tint;
     // fade-to-black uses tint=black, strength=1); alpha is the object's OPACITY (independent of the tint).
     private void BlitLayer(string bmpPath, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           int dstX, int dstY, float alpha = 1f)
+                           int dstX, int dstY, double scaleX = 1, double scaleY = 1, float alpha = 1f)
     {
         var cacheKey = (bmpPath, colorKey);
         if (!_imgCache.TryGetValue(cacheKey, out var src))
@@ -374,9 +347,16 @@ public partial class Main : Godot.Control
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
+        double absScaleX = System.Math.Abs(scaleX), absScaleY = System.Math.Abs(scaleY);
+        int outW = (int)System.Math.Round(sw * absScaleX), outH = (int)System.Math.Round(sh * absScaleY);
+        if (outW <= 0 || outH <= 0) return;
+        int outX = scaleX >= 0 ? dstX : dstX - outW;
+        int outY = scaleY >= 0 ? dstY : dstY - outH;
 
         int istr = (int)(System.Math.Clamp(tintStrength, 0f, 1f) * 255);
-        bool plainOpaque = alpha >= 0.999f && istr == 0 && !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
+        bool unscaled = System.Math.Abs(scaleX - 1) < 0.0001 && System.Math.Abs(scaleY - 1) < 0.0001;
+        bool plainOpaque = unscaled && alpha >= 0.999f && istr == 0 &&
+                           !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
         if (plainOpaque)   // fast path: opaque, un-keyed, un-tinted layer (the common CG case)
         {
             _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
@@ -387,13 +367,17 @@ public partial class Main : Godot.Control
         byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
         int dw = _screen.GetWidth(), dh = _screen.GetHeight(), sfw = src.GetWidth();
         int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
-        for (int y = 0; y < sh; y++)
-            for (int x = 0; x < sw; x++)
+        for (int y = 0; y < outH; y++)
+            for (int x = 0; x < outW; x++)
             {
-                int dxp = dstX + x, dyp = dstY + y;
+                int sampleX = System.Math.Min(sw - 1, (int)(x / absScaleX));
+                int sampleY = System.Math.Min(sh - 1, (int)(y / absScaleY));
+                if (scaleX < 0) sampleX = sw - 1 - sampleX;
+                if (scaleY < 0) sampleY = sh - 1 - sampleY;
+                int dxp = outX + x, dyp = outY + y;
                 if (dxp < 0 || dyp < 0 || dxp >= dw || dyp >= dh) continue;
                 int di = (dyp * dw + dxp) * 4;
-                int si = ((srcY + y) * sfw + (srcX + x)) * 4;
+                int si = ((srcY + sampleY) * sfw + (srcX + sampleX)) * 4;
                 int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object opacity
                 if (sa == 0) continue;
                 // tint = LERP texel toward tint by strength (0=keep texel, 255=full tint), NOT a multiply

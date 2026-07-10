@@ -406,7 +406,7 @@ Worker functions decoded + annotated in the Ghidra project (updated 2026-07-09):
 `gfx_object_init_default`@`0x472810`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
 `gfx_get_vec18/24`(`0x47f360/f2e0`).
 
-#### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-07, recon — implementation pending)
+#### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-10, partial implementation)
 
 The scene-completeness tracker (`tools/scene_opcode_coverage.py`) flagged a dense band of GAP ops in
 `0x21c–0x243` (+ `0x2bd/0x2bf`) — the **largest remaining rendering unknown** in SC0000 (e.g. `0x220`×66,
@@ -429,14 +429,14 @@ animation/tween** — and two members were already named in prior RE (`0x234 gfx
 | `0x224` | `0x417550` (417xxx) | `0x231` | `0x423be0` | `0x23e` | `0x42a4a0` |
 | `0x225` | `0x4236a0` | `0x232` | `0x423c30` | `0x23f` | `0x42a520` |
 | `0x226` | `0x42a230` | `0x233` | `0x423cf0` | `0x240` | `0x4245f0` |
-| `0x227` | `0x42a2e0` | `0x234` | **anim_start ✎** | `0x241` | `0x4247e0` |
+| `0x227` | `0x42a2e0` | `0x234` | **set_rotation_cycle ✎** | `0x241` | `0x4247e0` |
 | `0x228` | `0x42a3a0` | `0x235` | `0x423e40` | `0x242` | `0x4249d0` |
 |  |  |  |  | `0x243` | `0x4182d0` (417xxx) |
 
 (`0x2bd`→`0x4251c0`, `0x2bf`→`0x425240`. The handful of `0x417xxx` handlers are trivial/marker-shaped — the
 default-handler neighbourhood — and are almost certainly no-ops or arg-poppers; triage before modelling.)
 
-**Contract (corrected 2026-07-09, representative ops `0x21e`/`0x220`, both `argc 6`):** these are
+**Contract (completed 2026-07-10, representative ops `0x21e`/`0x220`, both `argc 6`):** these are
 independent matrix channels, not two encodings of one vec3 property.
 
 - `0x21e` normalizes operands 4–6, then `gfx_object_set_scale_channel` (`0x47eaa0`) stores timing at
@@ -445,13 +445,16 @@ independent matrix channels, not two encodings of one vec3 property.
 - `0x220` passes raw operands 4–6 to `gfx_object_set_translation_channel` (`0x47ecc0`), stores timing at
   `obj+0x44/+0x58`, and calls `0x48afb1`, which writes them into matrix entries 12–14 at
   `obj+0x1ac`: a **translation matrix**.
-- `gfx_object_apply_transform_channels` (`0x472f00`) interpolates and combines both matrices separately.
+- `gfx_object_apply_transform_channels` (`0x472f00`) supplies the timing contract. Both channels use
+  shared start timestamp `obj+0x34` and global frame-time `ctx+0xb550`, but have independent delay/duration:
+  scale `obj+0x3c/+0x50`, translation `obj+0x44/+0x58`. Each holds its current matrix through the
+  delay, linearly interpolates current→target for its duration, then commits the target and clears its own timing.
   Neither third component is opacity.
 
-**Port implication:** `GfxState` must ultimately retain separate scale and translation matrices/timing.
-The current single `AnimTarget` plus Godot `TZ/100 = opacity` approximation is native-inaccurate and is
-now tracked as transform-compositor debt. It was not the cause of the lingering circle: that was the skipped
-`0x215`/`0x1f7`/`0x1fa` teardown above.
+**Port result (2026-07-10):** `GfxState` now retains separate current/target scale and translation
+channels with the native shared-start/independent-timing model. Godot scales around `V18` (anchor),
+applies translation independently, and never derives opacity from transform Z. The shared `AnimTarget`
+and `TZ/100` alpha tween are gone.
 
 ##### `anim_start`/`set_anim_clock` decoded + opening confirmed (2026-07-07, animation-slice Task 1)
 
@@ -464,22 +467,21 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
   objects. Its own plate comment states the payoff: "our port can drive animation in the host's per-frame loop
   while the VM is parked at wait-for-input; no VM/host frame-lockstep." → **validates the wall-clock-tween
   architecture directly.** SC0000: `set-anim-clock(G[0x624bb])` @`0x123bd`, `set-anim-clock(0x190=400)` @`0x13858`.
-- **`0x234 anim_start` (argc 5, cmd-type 0xb):** `gfx_anim_start(op1=handle, op2, (float)op3, (float)op4,
-  (float)op5)`. `op2` = *this object's* animation duration (`label_1235a` maxes the per-object durations into the
-  global clock); `(op3,op4,op5)` = the target transform vec3 the object animates **toward**. SC0000 opening
-  @`0x00daf`: `anim_start(G[0x62457], 0x2328, 0, 0, local2)` on the INIT2 CG handles, then `call label_1235a`.
+- **`0x234 anim_start` (legacy mnemonic; argc 5, cmd-type 0xb):** following worker
+  `gfx_object_set_rotation_cycle` (`0x47f060`) into `gfx_object_anim_interpolate` (`0x473ed0`)
+  corrects its ABI to `(handle)(period_ms)(axis_x)(axis_y)(axis_z)`. Period is `obj+0x228`, axis is
+  `obj+0x244..0x24c`, and the frame-clock consumer applies
+  `360*((now-start)%period)/period` degrees. This is a cyclic **rotation** channel, not a target vec3
+  for scale/translation and not opacity.
 - **The opening path uses the whole subsystem, early.** `0x21e`/`0x220` transform-sets fire from `0x00f73`
   onward (`0x21e (G[0x6245b]) 0 0x12c l0 l1 0x64`, `0x220 (G[0x62457]) 0x96 0x3e8 l1 l3 0`), on the same INIT2 CG
   handles (`G[0x62457]`,`0x6245b`,`0x6245c`) — this is the opening, **not** battle/debug. So the slice's ops are
   real and verifiable on screen.
 
-**Corrected host model (supersedes the "per-object clock" wording above):**
-- **Global clock** (from `0x238`): one `AnimClockDurationTicks` + a generation/reset marker the host watches to
-  reset its wall-clock `elapsed` to 0. The host tweens all armed objects over this duration.
-- **Per-object correction:** `0x21e` is scale and `0x220` is translation; they occupy distinct matrices and
-  timing fields. No component of either channel is opacity.
-- **Residual:** finish separating these channels in `GfxState`/Godot and identify the remaining color/alpha
-  channel consumers. Do not reuse transform Z as alpha.
+**Corrected host model:** `0x21e` scale and `0x220` translation run directly from frame-time
+`ctx+0xb550` using their own delay/duration; they do not use op `0x238` as their duration.
+Op `0x234` is the independent rotation cycle above. Op `0x238` still configures the separate
+`ctx+0x51b78/+0x51b7c` animation service used by its own family.
 
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
 
@@ -637,11 +639,11 @@ missing-default bug). See `docs/phase-a-slice-plan.md` A2b-Geometry.
 
 The `AE*` flash/glow effects (and sprite motion) are a **native time-animated retained render loop**, not
 per-frame bytecode. Reversed + annotated in Ghidra:
-- **Retained objects carry animation state:** an *active* flag (obj`+0` bit 4), a **progress** counter
-  (obj`+0x214`, starts 0), a **duration** (obj`+0x228`), and a **target vector** (obj`+0x244/248/24c`).
-- **`gfx_anim_start`** (`0x47f060`, worker for op **`0x234`**) configures a per-object animation: sets the
-  flag, resets progress, stores duration + target. Op **`0x1fd`** (`gfx_op_0x1fd_set_vec_scaled`) sets a
-  scaled 3-vector.
+- **Retained objects carry cyclic rotation state:** flag value `4` at `obj+0`, start timestamp
+  `obj+0x214`, period `obj+0x228`, and axis `obj+0x244/248/24c`.
+- **`gfx_object_set_rotation_cycle`** (`0x47f060`, worker for legacy op **`0x234`**)
+  configures that channel. `gfx_object_anim_interpolate` consumes it from frame-time `ctx+0xb550`
+  as a repeating 0..360-degree axis rotation. Op **`0x1fd`** is a separate scaled 3-vector setter.
 - **Op `0x238`** (`gfx_op_0x238_set_anim_clock`) sets a **global animation clock**, **non-blocking**:
   `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = duration` (the max per-object duration; SC0000 `label_1235a`
   maxes a table to compute it). It does **not** loop/wait.
@@ -652,9 +654,8 @@ per-frame bytecode. Reversed + annotated in Ghidra:
   VM is parked at wait-for-input — no blocking present op, no VM/host frame-lockstep** (the answer to the
   "frame loop" question).
 
-Consequence: reproducing the fades needs a **retained per-frame animated compositor** — the current
-immediate-mode permanent canvas can neither fade nor clear. Design: `docs/superpowers/specs/2026-07-07-
-animated-compositor-design.md`.
+Consequence: animation needs a retained per-frame compositor. That architecture is live; the 2026-07-10
+matrix slice adds native one-shot scale/translation, while cyclic rotation remains a later affine step.
 
 ### The full gfx render model — surfaces + objects + composite (2026-07-07)
 
@@ -672,8 +673,8 @@ and snapshotted textures at draw time; symptoms: alternating grey, glow over bac
   op `0x1fb` draw-texture) → `gfx_object_bind_draw` (`0x47e870`): sets the object's **source slot** (`obj+4`),
   **source rect** (`obj+8..0x14` = left,top,right,bottom), **position** (`obj+0x24/28/2c` = V24), and the
   **visible** flag (bit 0). The object references its surface **by slot index, live** (re-resolved each frame),
-  NOT a snapshot. Objects also carry anchor V18 (`obj+0x18`), animation (flag bit 2 + progress `obj+0x214` /
-  duration `obj+0x228` / target `obj+0x244..`), and color/alpha (`0x202/0x203`).
+  NOT a snapshot. Objects also carry anchor V18 (`obj+0x18`), independent scale and translation
+  matrices/timing, cyclic rotation state, and color/alpha (`0x202/0x203`).
 
 **Render frame** — `gfx_render_frame` (`0x4820b0`), driven by op `0x20c` present (`gfx_op_0x20c_present_frame`
 `0x4174a0`, which also updates the frame timer `ctx+0x51b64/68`): iterate the object registry **in ascending
@@ -685,9 +686,8 @@ buffers (present). **Slot 0 is NOT special** — a normal slot; several objects 
 **⇒ Faithful port:** a `SurfaceStore` (`slot → {image, colorkey}`, from create/set-texture) + an `ObjectStore`
 (`handle → {slot, srcRect, position, anchor, scale, anim, alpha, visible}`, from draw-texture + the gfx ops) +
 a host per-frame compositor that draws visible objects **in ascending-handle order** from their live surface,
-interpolating animations by elapsed time. No VM/host lockstep (op `0x238` clock is non-blocking; animations
-play during the wait-for-input park). Open detail for implementation: the exact scale/transform math in
-`gfx_object_composite` (`FUN_00472f00`/`FUN_00473ed0`).
+interpolating animations by elapsed time. No VM/host lockstep: animations play during the wait-for-input park.
+Scale/translation timing and anchored composition are implemented; full affine rotation remains deferred.
 
 ### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
 

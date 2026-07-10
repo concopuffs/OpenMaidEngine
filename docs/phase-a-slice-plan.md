@@ -348,17 +348,12 @@ Spec `docs/superpowers/specs/2026-07-07-gfx-animation-subsystem-design.md`; plan
 completeness gauge flagged.
 
 **Implemented (VM records, engine 50/50, full parity — sweep 284 exit/13 STEP-LIMIT unchanged):** the four
-opening-path anim ops — `0x21e set-anim-transform-norm` / `0x220 set-anim-transform-abs` (per-object transform
-channel: target vec3 + 2 params + enable), `0x234 anim-start` (animate toward a target vec3 over the clock),
-`0x238 set-anim-clock` (**GLOBAL, non-blocking** duration). `GfxState` gained the per-object anim channel + a
-global clock (passive — non-Godot hosts read none of it, so trace parity holds); `RenderObject.AnimState` carries
-it to the compositor. **RE correction:** the clock is global 1-operand (not per-object), and `anim-start` carries
-the target — the `set_anim_clock` handler's own comment confirms the wall-clock design ("drive animation in the
-host's per-frame loop while the VM is parked at wait-for-input").
+opening-path anim ops — `0x21e`, `0x220`, `0x234`, and `0x238` — were first retained in
+the port here. **Superseded by the 2026-07-10 matrix slice below:** the original shared-target interpretation was
+wrong; `0x21e` is scale, `0x220` is translation, and `0x234` is cyclic rotation.
 
-**Compositor (Godot):** a per-handle wall-clock alpha tween over the global clock + an alpha-aware `BlitLayer`
-(3rd vec component = opacity), plus `--shot-settle <frames>` to capture mid-tween. **Non-regressing:** SC0000
-opening page 2 is pixel-identical to baseline at settle 3 and 300; Godot selftest OK.
+**Historical compositor:** this slice temporarily used transform Z as alpha. The 2026-07-10 follow-up removes
+that approximation and applies the native separate scale/translation channels instead.
 
 **Tracker delta (`scene_opcode_coverage.py SC0000`):** GAP 68→**64** ops (836→**741** instrs), impl 49→**53**,
 correctly-handled 60→**65/129 (50.4%)**.
@@ -371,8 +366,8 @@ engine-re.md "opening render path is RETAINED"). `draw-texture` binds a retained
 handle array `G[0x62455..]`) and a per-object working slot `G[0x62452]`, with `sleep` (`0x64`/`0x3e8`/`0x2ee`)
 between steps. Our VM executes the whole load/draw/`sleep` burst **instantly** (no timing, no per-frame present),
 so we only ever see the *final* retained state; the intermediate `AE*` frames never get a frame to display. This
-per-object alpha channel is the correct foundation for **retained-sprite** animation (character fades/scales via
-the handle system), but the opening explosion needs **frame-pacing** — modeling the scene-coroutine / `sleep 0xc8`
+retained-object channel was the correct architectural seam, but the opening explosion needs **frame-pacing** —
+modeling the scene-coroutine / `sleep 0xc8`
 timing (`0x7b`/`0x140`/`0xc8`, still GAP) so the burst is *not* collapsed. That is the clearly-scoped next chunk
 for the visible opening animation, and a genuinely different subsystem than the transform/alpha channel landed
 here. (**Correction:** an earlier draft of this note called it "immediate-mode slot-0 blits" — wrong; the engine
@@ -695,3 +690,24 @@ handles, so SC0000 skipped its explicit `0x1f7(handle,10)` + `0x1fa(slot)` clean
 `0x1f7` erases retained objects, and `0x1fa` clears the surface. A booted SC0000 integration regression
 asserts no visible resource `0x37` remains; engine suite **86/86**. **Live clicked-path validation
 confirmed the fix on 2026-07-10:** the magic circle now disappears at the intended transition.
+
+### A2b — native scale/translation matrix channels ✅ DONE (2026-07-10)
+
+Replaced the legacy shared `AnimTarget` / transform-Z-as-opacity approximation with the native channel
+split proven in Ghidra. Op `0x21e` now owns normalized scale (100 = identity; current `obj+0x6c`,
+target `obj+0xac`, delay/duration `obj+0x3c/+0x50`). Op `0x220` owns absolute translation
+(current `obj+0x16c`, target `obj+0x1ac`, delay/duration `obj+0x44/+0x58`). Consumer
+`gfx_object_apply_transform_channels` (`0x472f00`) establishes a shared first-frame start
+timestamp, independent delayed linear interpolation, and target commit on completion.
+
+`GfxState` samples both channels from `FrameClock`; Godot applies scale around V18 plus independent
+translation, including nearest-neighbor scaling/flips in the software blitter. Op `0x234` no longer
+overwrites either matrix: the completed consumer RE corrected it to a separate cyclic rotation period+axis
+channel (retained now; affine rendering deferred). No transform Z value contributes to opacity.
+
+**Focused validation:** six matrix/rotation tests cover channel independence, VM dispatch, shared-start
+delay/duration sampling, target commit, and non-opacity Z values. Engine **86/86** and Godot build pass.
+Booted SC0000 with `--shot-sequence` + `--gfx-log`: 180/180 PNGs, 152 log lines, and zero
+unresolved/error/NaN/Infinity outcomes. The visible circle expands around its anchor through sampled scales
+`1.00 → 1.22 → 1.44 → 1.66` while remaining `op=1.00`, then the retained object is logged
+`GONE`. This directly validates that scale is rendered as geometry rather than opacity.

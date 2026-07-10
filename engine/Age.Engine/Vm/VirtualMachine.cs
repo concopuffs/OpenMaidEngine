@@ -367,14 +367,14 @@ public sealed class VirtualMachine
             case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — static alpha/tint
                 Gfx.SetObjectColor(Read(a[0]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;
             // ---- sprite transform / animation cluster (docs/engine-re.md "0x21c-0x243 ... ANIMATION") ----
-            case "set-anim-transform-abs":   // 0x220 (handle)(p1)(p2)(x)(y)(z) — set transform directly
-                Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
-                    (Read(a[3]), Read(a[4]), Read(a[5])), normalized: false); return pc + 1;
-            case "set-anim-transform-norm":  // 0x21e — same, operands are ~percent (/_DAT_00571c28)
-                Gfx.SetAnimTransform(Read(a[0]), Read(a[1]), Read(a[2]),
-                    (Read(a[3]), Read(a[4]), Read(a[5])), normalized: true); return pc + 1;
-            case "anim-start":   // 0x234 (handle)(duration)(x)(y)(z) — animate toward target over the global clock
-                Gfx.StartAnim(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
+            case "set-anim-transform-abs":   // 0x220 (handle)(delay)(duration)(tx)(ty)(tz)
+                Gfx.SetTranslationChannel(Read(a[0]), Read(a[1]), Read(a[2]),
+                    (Read(a[3]), Read(a[4]), Read(a[5]))); return pc + 1;
+            case "set-anim-transform-norm":  // 0x21e (handle)(delay)(duration)(sx%)(sy%)(sz%)
+                Gfx.SetScaleChannel(Read(a[0]), Read(a[1]), Read(a[2]),
+                    (Read(a[3]), Read(a[4]), Read(a[5]))); return pc + 1;
+            case "anim-start":   // 0x234 legacy name: (handle)(period)(axis x/y/z), cyclic rotation channel
+                Gfx.SetRotationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "set-anim-clock":   // 0x238 (duration) — global, non-blocking (host advances it per-frame)
                 Gfx.SetAnimClock(Read(a[0])); return pc + 1;
             default:

@@ -5510,12 +5510,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-transform-norm"
 category = "draw"
-summary = "(handle)(delay)(duration)(sx)(sy)(sz) — set the normalized SCALE-matrix channel. Handler 0x423350 normalizes sx/sy/sz; gfx_object_set_scale_channel@0x47eaa0 stores timing at obj+0x3c/+0x50 and constructs a diagonal 4x4 scale matrix at obj+0xac. Separate from op 0x220 translation; neither channel is opacity."
+summary = "(handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra 0x47eaa0 calls matrix builder 0x48af1d, which writes sx/sy/sz to diagonal entries 0/5/10 and identity entry 15. gfx_object_apply_transform_channels@0x472f00 consumes this independently of obj+0x1ac."
+evidence = "Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and frame-time ctx+0xb550."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5607,12 +5607,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-transform-abs"
 category = "draw"
-summary = "(handle)(delay)(duration)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Handler 0x4234e0 passes raw floats to gfx_object_set_translation_channel@0x47ecc0, which stores timing at obj+0x44/+0x58 and constructs an identity 4x4 matrix with translation at obj+0x1ac. Separate from op 0x21e scale; neither channel is opacity."
+summary = "(handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra 0x47ecc0 calls matrix builder 0x48afb1, which writes identity diagonal and tx/ty/tz to entries 12/13/14. gfx_object_apply_transform_channels@0x472f00 combines this independently of obj+0xac."
+evidence = "Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6111,12 +6111,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "anim-start"
 category = "draw"
-summary = "(handle)(duration)(x)(y)(z) — animate object toward target vec3 (x,y,z) over the GLOBAL clock; cmd-type 0xb, worker gfx_anim_start. op2=this object's duration (label_1235a maxes into the clock). SC0000 opening @0xdaf on INIT2 CG handles. Handler 0x423da0; Kelebek VA 0x422060 is drift."
+summary = "(handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure a cyclic ROTATION channel. Worker gfx_object_set_rotation_cycle@0x47f060 stores period obj+0x228 and axis obj+0x244..0x24c; interpolator 0x473ed0 applies 0..360 degrees from frame-time ctx+0xb550. Separate from scale, translation, opacity, and op 0x238's clock."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x423da0 -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/0x244 on ctx+0xb550 and builds an axis-angle rotation matrix with angle 360*((now-start)%period)/period."
 
 [[opcode.semantics.args]]
 i = 1

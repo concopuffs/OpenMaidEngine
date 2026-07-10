@@ -179,14 +179,14 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **evidence:** Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2/3/4). label_12649 site 0x00c86 handle=G[0x62457] → G[0x62498/9/a].
 
 ### 0x21e `set-anim-transform-norm` (set-anim-transform-norm, argc 6)
-- **summary:** (handle)(delay)(duration)(sx)(sy)(sz) — set the normalized SCALE-matrix channel. Handler 0x423350 normalizes sx/sy/sz; gfx_object_set_scale_channel@0x47eaa0 stores timing at obj+0x3c/+0x50 and constructs a diagonal 4x4 scale matrix at obj+0xac. Separate from op 0x220 translation; neither channel is opacity.
+- **summary:** (handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra 0x47eaa0 calls matrix builder 0x48af1d, which writes sx/sy/sz to diagonal entries 0/5/10 and identity entry 15. gfx_object_apply_transform_channels@0x472f00 consumes this independently of obj+0x1ac.
+- **evidence:** Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and frame-time ctx+0xb550.
 
 ### 0x220 `set-anim-transform-abs` (set-anim-transform-abs, argc 6)
-- **summary:** (handle)(delay)(duration)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Handler 0x4234e0 passes raw floats to gfx_object_set_translation_channel@0x47ecc0, which stores timing at obj+0x44/+0x58 and constructs an identity 4x4 matrix with translation at obj+0x1ac. Separate from op 0x21e scale; neither channel is opacity.
+- **summary:** (handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1, which writes identity diagonal and tx/ty/tz to entries 12/13/14. gfx_object_apply_transform_channels@0x472f00 combines this independently of obj+0xac.
+- **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550.
 
 ### 0x228 `u00421940` (u00421940, argc 5)
 - **summary:** 0x228 query-position (succ)(handle)(outX)(outY)(outZ): read the object's current computed position into vars (worker FUN_0047cdd0). C# VM: writes V24 + success flag. See docs/engine-re.md §SC0000 anim cluster.
@@ -209,8 +209,9 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x234 `anim-start` (anim-start, argc 5)
-- **summary:** (handle)(duration)(x)(y)(z) — animate object toward target vec3 (x,y,z) over the GLOBAL clock; cmd-type 0xb, worker gfx_anim_start. op2=this object's duration (label_1235a maxes into the clock). SC0000 opening @0xdaf on INIT2 CG handles. Handler 0x423da0; Kelebek VA 0x422060 is drift.
+- **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure a cyclic ROTATION channel. Worker gfx_object_set_rotation_cycle@0x47f060 stores period obj+0x228 and axis obj+0x244..0x24c; interpolator 0x473ed0 applies 0..360 degrees from frame-time ctx+0xb550. Separate from scale, translation, opacity, and op 0x238's clock.
 - **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x423da0 -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/0x244 on ctx+0xb550 and builds an axis-angle rotation matrix with angle 360*((now-start)%period)/period.
 
 ### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
 - **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
