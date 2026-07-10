@@ -691,7 +691,7 @@ handles, so SC0000 skipped its explicit `0x1f7(handle,10)` + `0x1fa(slot)` clean
 asserts no visible resource `0x37` remains; engine suite **86/86**. **Live clicked-path validation
 confirmed the fix on 2026-07-10:** the magic circle now disappears at the intended transition.
 
-### A2b — native scale/translation matrix channels ✅ DONE (2026-07-10)
+### A2b — native scale/translation channel split ✅ IMPLEMENTED; exact visual math provisional (2026-07-10)
 
 Replaced the legacy shared `AnimTarget` / transform-Z-as-opacity approximation with the native channel
 split proven in Ghidra. Op `0x21e` now owns normalized scale (100 = identity; current `obj+0x6c`,
@@ -710,4 +710,8 @@ delay/duration sampling, target commit, and non-opacity Z values. Engine **86/86
 Booted SC0000 with `--shot-sequence` + `--gfx-log`: 180/180 PNGs, 152 log lines, and zero
 unresolved/error/NaN/Infinity outcomes. The visible circle expands around its anchor through sampled scales
 `1.00 → 1.22 → 1.44 → 1.66` while remaining `op=1.00`, then the retained object is logged
-`GONE`. This directly validates that scale is rendered as geometry rather than opacity.
+`GONE`. This validates removal of the transform-Z opacity shortcut and shows the scale channel affecting
+geometry in the capture. It does **not** prove the port's exact matrix calculation, anchor interpretation,
+multiplication order, or 2D projection: normal playback still races past these sections too quickly for a
+reliable visual judgment. Treat that math as provisional until the pacing slice enables slow normal playback
+and a native-versus-port frame comparison.

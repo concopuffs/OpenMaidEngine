@@ -687,7 +687,9 @@ buffers (present). **Slot 0 is NOT special** — a normal slot; several objects 
 (`handle → {slot, srcRect, position, anchor, scale, anim, alpha, visible}`, from draw-texture + the gfx ops) +
 a host per-frame compositor that draws visible objects **in ascending-handle order** from their live surface,
 interpolating animations by elapsed time. No VM/host lockstep: animations play during the wait-for-input park.
-Scale/translation timing and anchored composition are implemented; full affine rotation remains deferred.
+Separate scale/translation state and timing are implemented. The current anchored 2D composition is provisional:
+exact anchor semantics, multiplication order, and projection still need slow native-versus-port frame comparison.
+Full affine rotation remains deferred.
 
 ### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
 
