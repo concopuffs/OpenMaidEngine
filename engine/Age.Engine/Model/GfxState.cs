@@ -2,13 +2,17 @@ using System.Linq;
 
 namespace Age.Engine.Model;
 
-/// <summary>The sampled native matrix channels carried to the compositor. Op 0x21e owns scale; op 0x220 owns
-/// translation. Z is retained for model fidelity even though the current 2D compositor uses X/Y only.</summary>
+/// <summary>The sampled native one-shot channels carried to the compositor: op 0x21e scale, op 0x21f
+/// axis-angle rotation, and op 0x220 translation. Z is retained through full 4x4 composition.</summary>
 public readonly record struct TransformState(double ScaleX, double ScaleY, double ScaleZ,
                                              double TranslateX, double TranslateY, double TranslateZ,
-                                             double AnchorX, double AnchorY, double AnchorZ);
+                                             double AnchorX, double AnchorY, double AnchorZ,
+                                             double RotationAxisX = 0, double RotationAxisY = 0,
+                                             double RotationAxisZ = 0, double RotationAngleDegrees = 0);
 
-public readonly record struct RotationCycleState(bool Enabled, long PeriodMs, long AxisX, long AxisY, long AxisZ);
+public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
+                                                 double AxisX, double AxisY, double AxisZ,
+                                                 double AngleDegrees = 0);
 
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
@@ -60,6 +64,10 @@ public sealed class GfxState
         public (double X, double Y, double Z) TranslationCurrent, TranslationTarget;
         public long TranslationDelayMs, TranslationDurationMs;
         public bool TranslationEnabled;
+        public (double X, double Y, double Z, double Angle) RotationCurrent;
+        public (double X, double Y, double Z, double Angle) RotationTarget;
+        public long RotationDelayMs, RotationDurationMs;
+        public bool RotationChannelEnabled;
         // Shared matrix-channel start timestamp obj+0x34, seeded from frame-time ctx+0xb550.
         public long MatrixStartMs = -1;
 
@@ -67,6 +75,7 @@ public sealed class GfxState
         public long RotationPeriodMs;
         public (long X, long Y, long Z) RotationAxis;
         public bool RotationEnabled;
+        public long RotationStartMs = -1;
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
@@ -217,6 +226,19 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x21f: delayed one-shot axis-angle rotation target, sharing obj+0x34's start timestamp.</summary>
+    public void SetRotationChannel(long handle, long delayMs, long durationMs,
+                                   (long X, long Y, long Z) axis, long angleDegrees)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
+            o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
+            o.RotationChannelEnabled = durationMs > 0; o.MatrixStartMs = -1;
+        }
+    }
+
     /// <summary>Op 0x234: retain the cyclic rotation period and axis separately. Native interpolation uses
     /// frame-time ctx+0xb550 and rotates through 360 degrees per period; affine rendering is deferred.</summary>
     public void SetRotationCycle(long handle, long periodMs, (long X, long Y, long Z) axis)
@@ -225,6 +247,7 @@ public sealed class GfxState
         {
             var o = GetOrCreate(handle);
             o.RotationPeriodMs = periodMs; o.RotationAxis = axis; o.RotationEnabled = periodMs > 0;
+            o.RotationStartMs = -1;
         }
     }
 
@@ -299,22 +322,35 @@ public sealed class GfxState
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                if ((o.ScaleEnabled || o.TranslationEnabled) && o.MatrixStartMs < 0) o.MatrixStartMs = nowMs;
+                if ((o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled) && o.MatrixStartMs < 0)
+                    o.MatrixStartMs = nowMs;
                 var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
                                                 o.ScaleDurationMs, o.MatrixStartMs, ref o.ScaleEnabled, nowMs);
+                var rotation = SampleRotationChannel(ref o.RotationCurrent, o.RotationTarget,
+                                                     o.RotationDelayMs, o.RotationDurationMs,
+                                                     o.MatrixStartMs, ref o.RotationChannelEnabled, nowMs);
                 var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
                                                       o.TranslationDelayMs, o.TranslationDurationMs,
                                                       o.MatrixStartMs, ref o.TranslationEnabled, nowMs);
-                if (!o.ScaleEnabled && !o.TranslationEnabled) o.MatrixStartMs = -1;
+                if (!o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled) o.MatrixStartMs = -1;
+
+                double cycleAngle = 0;
+                if (o.RotationEnabled && o.RotationPeriodMs > 0)
+                {
+                    if (o.RotationStartMs < 0) o.RotationStartMs = nowMs;
+                    long elapsed = System.Math.Max(0, nowMs - o.RotationStartMs);
+                    cycleAngle = ((elapsed % o.RotationPeriodMs) * 360) / o.RotationPeriodMs;
+                }
 
                 list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new TransformState(scale.X, scale.Y, scale.Z,
                                                              translation.X, translation.Y, translation.Z,
-                                                             o.V18.X, o.V18.Y, o.V18.Z),
+                                                             o.V18.X, o.V18.Y, o.V18.Z,
+                                                             rotation.X, rotation.Y, rotation.Z, rotation.Angle),
                                           new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
-                                                                 o.RotationAxis.Z),
+                                                                 o.RotationAxis.Z, cycleAngle),
                                           alpha, tint, strength, blend));
             }
             return list;
@@ -339,6 +375,22 @@ public sealed class GfxState
         return (current.X + (target.X - current.X) * t,
                 current.Y + (target.Y - current.Y) * t,
                 current.Z + (target.Z - current.Z) * t);
+    }
+
+    private static (double X, double Y, double Z, double Angle) SampleRotationChannel(
+        ref (double X, double Y, double Z, double Angle) current,
+        (double X, double Y, double Z, double Angle) target,
+        long delayMs, long durationMs, long startMs, ref bool enabled, long nowMs)
+    {
+        if (!enabled || durationMs <= 0 || startMs < 0) return current;
+        long elapsed = nowMs - startMs - delayMs;
+        if (elapsed <= 0) return current;
+        if (elapsed >= durationMs) { current = target; enabled = false; return current; }
+        double t = (double)elapsed / durationMs;
+        return (current.X + (target.X - current.X) * t,
+                current.Y + (target.Y - current.Y) * t,
+                current.Z + (target.Z - current.Z) * t,
+                current.Angle + (target.Angle - current.Angle) * t);
     }
 
     /// <summary>Ping-pong interpolation weight in [0,1] toward the target: 0 at cycle start, 1 at half-period.</summary>

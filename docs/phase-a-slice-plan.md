@@ -737,3 +737,161 @@ cyclic-rotation rasterization remains the next affine-rendering slice.
 Verification: engine **92/92** after the opcode-clock reset test, corpus sweep unchanged at
 **284 exit / 13 STEP-LIMIT**, Godot build and threaded `SELFTEST OK`. The transform capture tool and
 transform-aware `--gfx-log` are documented in `docs/tools-reference.md`.
+
+### A2b — ADV transition/lifecycle diagnosis plan ⏳ OPEN (2026-07-10)
+
+This is the next SC0000 correctness slice. It is driven by live A/B observations, not by static opcode
+coverage alone. The direct SC0000 histogram is currently **80/129 distinct ops handled (62.0%)** and
+**96.2% instruction-weighted**, but a rare query, scheduler op, or render worker can still control an
+entire visible section. Coverage also excludes called scripts; this slice follows only callees actually
+entered on the failing path rather than expanding into blanket subscript completion.
+
+**Observed native ADV contract (client behavior):** foreground presentation changes are transitions even
+when they are only in-place fades. SC0000 begins black and fades into the first CG; the message window then
+fades in before text reveals. During a CG swap, the window transitions out, one or more CG transitions run,
+then the window transitions back in. A click during an active foreground transition completes it immediately
+and lets the next presentation step start; a click at a stable `wait-for-input` advances the script. Ambient
+retained animation is a separate class and must not all be completed by that click.
+
+**Current port failures (2026-07-10):**
+
+- The initial black state holds and then the first CG pops in instead of fading. This is consistent with the
+  port applying op `0x202`'s endpoint as a static tint while its native animated-color consumer remains
+  unmodeled.
+- The retained textbox artwork appears to begin fading in, then disappears. The Godot `Label` shortcut stays
+  visible; it is deliberately out of scope for this slice because native `draw-string`/text presentation will
+  replace it before SC0000 is called complete. Diagnose the **box object's** lifetime, not the shortcut text.
+- The late animation burst before the first music change is badly wrong, then the screen becomes white and
+  interactive play does not proceed to the music change.
+
+**Concrete failing boundary.** `BGM005` begins at SC0000 offset `0x7fa`; the expected first change to
+`BGM008` is `play-bgm 0x8` at **`0x1728`**. The immediately preceding block `0x133f..0x1725` exercises
+repeated `0x202/0x203` color operations and the implemented geometry/scale family, but also directly executes
+three still-stubbed gfx ops: **`0x236`** at `0x13c8`, **`0x1fd`** at `0x14f3`, and **`0x21f`** at `0x159a`.
+It calls the shared animation finalizer `label_1235a` several times, including at `0x1725`; that finalizer
+sets op `0x238`'s duration, then reads still-unimplemented **`0x1c7 get-message-skip`** and
+**`0x1cc get-adv-service-state`** to choose its present/yield path. Therefore the white stall could be an
+object/compositor error, an unmodeled foreground-transition gate, or wrong control flow caused by a stubbed
+output—not safely assumed to be “just interpolation.”
+
+#### Investigation order
+
+1. **Make the failure boundary deterministic before changing semantics.** Reproduce from `--boot` with
+   auto-input and a long enough `--shot-sequence`, plus `--gfx-log`. Add a single synchronized diagnostic
+   timeline if the existing logs cannot answer the boundary: frame/virtual time; active script + PC/opcode;
+   VM state (`running`, sleep, transition, input wait, halt); BGM event; and every changed visible object's
+   handle, surface slot/resId, tint/alpha, transform, and lifecycle event. Use `play-bgm 0x8 @ 0x1728` as the
+   reachability sentinel. Do not judge progress from the white pixels alone.
+
+2. **Classify before fixing.** If the VM reaches/passes `0x1728` while the frame stays white, identify the
+   topmost white/fill object and whether its handle remains visible, loses/rebinds its live surface, or has a
+   stuck color endpoint. If the VM never reaches `0x1728`, record the last PC and whether it is sleeping,
+   input-waiting, transition-waiting, polling, halted, or still executing. If the executed path itself is
+   suspect, capture the same native passage with `trace_engine_ops.py` and use `diff_optrace.py` to find the
+   first engine/port offset divergence.
+
+3. **Track the textbox artwork as an AGE object.** From its first visible frame, identify its retained handle
+   and follow bind, color/animation, present, erase, release, and surface-rebind events through the first CG
+   swap. The key result is one of: `GONE` (premature erase), still present but covered (z/lifecycle input),
+   still present but transparent/tinted (color channel), or bound to a replaced slot (surface lifetime).
+   Compare only those corresponding native object events; do not spend this slice synchronizing the Godot
+   text overlay.
+
+4. **Recover the foreground ADV transition contract.** Reverse/capture the producer behind
+   `get-adv-service-state` (`0x1cc`), implement the already-known `get-message-skip` output (`0x1c7`), and
+   observe what a click changes during the initial fade and the pre-`0x1728` burst. Establish an explicit
+   host-level foreground transition with `start → per-frame progress → natural/forced completion → resume`.
+   Click completes and consumes the active foreground transition; only a stable input wait advances content.
+   The wall clock remains the progress source and opcode pacing remains a guard within runnable bursts, not
+   the mechanism that decides how long a presentation state lives.
+
+5. **Reverse only the executed missing gfx dependency that remains causal.** Triage the three direct gaps in
+   failing-order: `0x236` (timed/animated-surface worker), `0x1fd` (scaled vector/animation setter), and
+   `0x21f` (affine/matrix channel). For each, capture native inputs, retained fields, and sampled output at the
+   exact SC0000 site; implement it with a focused VM/state/compositor test. Do not declare a stub harmless
+   merely because it is rare, and do not implement the whole remaining opcode list without evidence.
+
+6. **Validate as presentation checkpoints.** Native/manual observation remains the final visual oracle, but
+   each check should first have machine evidence (PC reached, object identity/lifetime, transition progress,
+   and final state). Required checkpoints: black visibly ramps into the first CG; the textbox artwork survives
+   until its intended transition-out; a CG swap orders window-out → CG transition(s) → window-in; clicking an
+   active transition snaps to its endpoint without also advancing a stable page; the late burst has no stuck
+   white owner; and execution reaches `BGM008 @ 0x1728`. Re-run engine tests, corpus sweep, Godot threaded
+   self-test, and the SC0000 coverage report after each landed opcode or scheduler change.
+
+**Stop conditions / scope guard:** this slice is complete when the port reaches `0x1728` interactively and
+the above foreground transitions have correct lifecycle/click behavior. Native glyph rendering, configurable
+text reveal speed, and unrelated subscript opcode completeness remain separate work. Any called script proven
+to own the first divergence becomes an explicit dependency of this slice; otherwise it stays out of scope.
+
+#### Investigation 1 result — deterministic boundary classification (2026-07-10)
+
+Added the observe-only Godot `--timeline-log <jsonl>` diagnostic so VM steps (real byte offsets), virtual
+time/frame, host state, BGM events, and changed visible-object outcomes share one ordered stream. The
+reproduction was `SC0000 --boot`, stable-wait auto-input via a long `--shot-sequence`, `--gfx-log`, and a
+uniform diagnostic `--speed 8`; speed scales VM, sleeps, and animation clocks together and does not inject
+input outside `wait-for-input`.
+
+**Classification: not a VM/control-flow stall on the deterministic path.** The run executed all three direct
+gaps (`0x236 @ 0x13c8`, `0x1fd @ 0x14f3`, `0x21f @ 0x159a`), called the finalizer at `0x1725`, then executed
+`play-bgm 0x8 @ 0x1728` in `running` state at frame 818 / virtual `70,262 ms`. The BGM event resolved to
+`BGM008.OGG` in the same synchronized event and execution continued through `0x172b` and beyond; the full
+1,800-frame run reached page 80 and five BGM events. Therefore a native offset-path diff is not warranted for
+this boundary unless a separately reproducible manual-input path fails to reach the sentinel.
+
+The full-screen fill owner is retained handle **`0xcf08`**, but it is not stuck at this boundary. It was a
+transparent white `800x600` fill (`a=0.00`) when `0x1728` executed. Later, `0x203 @ 0x1337f` made it solid
+white for one sampled diagnostic frame (frame 911); the following `label_1235a` path executed `0x1c7`,
+`0x1cc`, and `0x21c`, and the compositor sampled the same handle back at `a=0.00` on frame 912. This is
+evidence of a likely incorrect flash/color presentation contract, not evidence for the reported pre-BGM
+infinite stall. No opcode, scheduler, or compositor semantic fix was made in this investigation step.
+
+Validation after adding the diagnostic: engine **92/92**, Godot build clean, threaded `SELFTEST OK`, and
+`git diff --check` clean. The headless `--shot-sequence` PNG capture path emits dummy-renderer `GetImage`
+errors, but the CPU compositor/timeline completed and the same path already had this limitation; use a
+windowed sequence when pixel files rather than object-state evidence are required.
+
+### A2b — cyclic rotation and affine rasterization ✅ DONE (2026-07-10)
+
+This bounded slice followed the non-reproduced white-stall classification above; it did not resume that
+investigation and does not claim the interactive symptom is fixed.
+
+**Native contracts.** Op `0x21f` is a delayed one-shot axis-angle rotation, not a generic matrix row:
+`(handle,delay,duration,axisX,axisY,axisZ,angleDegrees)`. It shares `obj+0x34`'s start with scale/translation,
+uses delay/duration `+0x40/+0x54`, and linearly samples current axis/angle `+0x1ec/+0x204` to target
+`+0x1f8/+0x208`. Op `0x234` is separately anchored cyclic rotation with integer-degree phase
+`floor(((now-start)%period)*360/period)`. The native call order reduces to
+`T(-anchor)*scale*oneShotRotation*translation*cyclicRotation*T(anchor)`, so the cycle rotates translation.
+
+Op `0x223` was also closed out but deliberately not implemented here: it inserts a type-0 timed-alpha record
+in the surface command map, containing a target surface slot and two object ranges. SC0000's shared site
+`0x129e7` passes `(handle+2, slot, handle+1,1,handle,1,delay,duration)`. This belongs to render-target/
+foreground-transition presentation, not affine object state, and remains a visible GAP rather than receiving
+an uncertain approximation.
+
+**Native matrix oracle.** The retained trace's handle `0xcb8e` sample (anchor `(700,600)`, scale from 0.9,
+axis `(0,0,1)`, 30° target, sampled 11 ms into a 390 ms ramp after 500 ms delay) is
+`[0.9055,0.0134;-0.0134,0.9055]`, translation `(74.1449,47.3127)`; the focused port test matches it.
+The two executed SC0000 cycle sites use periods 9000/13000 ms and axes `+Z/-Z`. A windowed port capture
+advanced 563 ms from their first sample to phase angles `22°/15°`, exactly the native integer formula.
+
+**Port result.** `GfxState` now retains/samples the one-shot rotation and cyclic start/phase. `Transform2DMath`
+composes a row-vector 4×4 matrix and projects it to an invertible 2D affine transform. The Godot compositor
+uses a pure inverse-mapped nearest-neighbour RGBA8 rasterizer for both textures and solid fills, preserving
+the existing colorkey, tint-strength, opacity, clipping, flipping, and z-order paths. Native D3D9 filtering
+can still differ at subpixels; the matrix/order is oracle-backed rather than approximated.
+
+The windowed `--shot-sequence` run wrote 454 PNGs with 102 pixel-state transitions; the first cyclic passage
+produced distinct affine frames as `0xcb8e/0xcb98` advanced. There is no corresponding native PNG sequence in
+the workspace, so validation is matrix/phase exact plus port-pixel coverage—not a false claim of pixel-perfect
+native frame equality.
+
+**Ghidra.** Renamed/commented `gfx_object_set_rotation_channel` (`0x47eb70`),
+`gfx_queue_surface_alpha_transition` (`0x47f440`), the surface-command map helpers, and
+`matrix4_make_axis_angle` (`0x48b215`); corrected comments on the one-shot consumer, cyclic interpolator,
+and composite call order; named useful parameters; saved `/v2`.
+
+**Validation:** engine **97/97**; full sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot build clean
+apart from the pre-existing nullable warning and threaded `SELFTEST OK`; opcode tooling and focused Python
+tests clean; transform tool compiles; SC0000 coverage **81/129 handled (62.8%)**, 48 GAP ops / 602 GAP
+instructions; windowed affine capture clean. Final whitespace/diff validation is recorded with the handoff.

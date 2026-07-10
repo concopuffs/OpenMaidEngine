@@ -445,26 +445,45 @@ independent matrix channels, not two encodings of one vec3 property.
 - `0x220` passes raw operands 4–6 to `gfx_object_set_translation_channel` (`0x47ecc0`), stores timing at
   `obj+0x44/+0x58`, and calls `0x48afb1`, which writes them into matrix entries 12–14 at
   `obj+0x1ac`: a **translation matrix**.
-- `gfx_object_apply_transform_channels` (`0x472f00`) supplies the timing contract. Both channels use
+- `0x21f` converts operands 4–7 to floats and calls `gfx_object_set_rotation_channel` (`0x47eb70`). It
+  stores delay/duration at `obj+0x40/+0x54`, target axis at `obj+0x1f8..0x200`, target angle (degrees)
+  at `obj+0x208`, and the target axis-angle matrix at `obj+0x12c`. Current axis/angle are
+  `obj+0x1ec..0x1f4/+0x204`, with current matrix `obj+0xec`.
+- `gfx_object_apply_transform_channels` (`0x472f00`) supplies the timing contract. All three channels use
   shared start timestamp `obj+0x34` and global frame-time `ctx+0xb550`, but have independent delay/duration:
-  scale `obj+0x3c/+0x50`, translation `obj+0x44/+0x58`. Each holds its current matrix through the
+  scale `obj+0x3c/+0x50`, rotation `obj+0x40/+0x54`, translation `obj+0x44/+0x58`. Each holds current through the
   delay, linearly interpolates current→target for its duration, then commits the target and clears its own timing.
   Neither third component is opacity.
 
-**Exact composition and 2D reduction (live-validated 2026-07-10).** The consumer starts from identity and
-right-multiplies `T(-V18) → scale-current → middle/rotation → translation-current → T(+V18)`;
+**Exact composition and 2D reduction (live-validated 2026-07-10).** The one-shot consumer starts from identity and
+right-multiplies `T(-V18) → scale-current → rotation-current → translation-current → T(+V18)`;
 `matrix4_multiply` at `0x4ee2a4` computes `out = left * right`. AGE uses row vectors. With no
 rotation/perspective, the screen projection is therefore exactly
 `V18.xy + (point.xy - V18.xy) * scale.xy + translation.xy`. The captured SC0000 handle `0xcbc0`
 has base `(0,600)`, anchor `(400,1000)`, and final scale `(5,5)`; native matrix translation
 terms are `(-1600,-4000)`, projecting the base point to `(-1600,-1000)`. The port's focused
-projection test and transform-aware gfx log reproduce those values. Rotation projection and final D3D
-raster/rounding details remain deferred; the axis-aligned anchor/order/projection no longer are provisional.
+projection test and transform-aware gfx log reproduce those values.
 
-**Port result (2026-07-10):** `GfxState` now retains separate current/target scale and translation
-channels with the native shared-start/independent-timing model. Godot scales around `V18` (anchor),
-applies translation independently, and never derives opacity from transform Z. The shared `AnimTarget`
-and `TZ/100` alpha tween are gone.
+`gfx_object_composite` then right-multiplies `gfx_object_anim_interpolate`'s separately anchored product,
+which contains op `0x234`'s cyclic rotation. With the other oscillating matrices at identity, adjacent anchors
+cancel and the full order is
+`T(-V18) * scale * one-shot-rotation * translation * cyclic-rotation * T(+V18)`. Thus cyclic rotation
+also rotates the translation vector. The cyclic angle is integer degrees
+`floor(((frameTime-start) % period) * 360 / period)`; it wraps to zero without ping-pong. Positive Z produces
+`m01=+sin, m10=-sin`, clockwise on the Y-down screen.
+
+Native matrix oracle: handle `0xcb8e`, anchor `(700,600)`, scale current `0.9`, op `0x21f` target axis
+`(0,0,1)`/30° after 500 ms for 390 ms, sampled 11 ms into the ramp as
+`[0.9055,0.0134;-0.0134,0.9055]` with translation `(74.1449,47.3127)`. The port focused test matches
+those terms. In the windowed port capture, the two SC0000 `0x234` sites (periods 9000/13000 ms, Z axes
+`+1/-1`) advanced after 563 ms to integer angles `22/15`, exactly the native formula, and produced distinct
+affine PNG frames. Nearest-neighbour inverse mapping is the deliberate software raster sampling policy;
+native D3D9 subpixel filtering remains a possible pixel-level difference, not an uncertain matrix approximation.
+
+**Port result (2026-07-10):** `GfxState` retains scale, one-shot rotation, translation, and cyclic rotation
+with their native clocks/order. `Transform2DMath` composes the full row-vector 4×4 transform before 2D
+projection. Godot uses an inverse-mapped affine RGBA8 rasterizer for textured objects and solid fills,
+preserving colorkey/tint/opacity behavior and never deriving opacity from transform Z.
 
 ##### `anim_start`/`set_anim_clock` decoded + opening confirmed (2026-07-07, animation-slice Task 1)
 
@@ -687,8 +706,8 @@ per-frame bytecode. Reversed + annotated in Ghidra:
   VM is parked at wait-for-input — no blocking present op, no VM/host frame-lockstep** (the answer to the
   "frame loop" question).
 
-Consequence: animation needs a retained per-frame compositor. That architecture is live; the 2026-07-10
-matrix slice adds native one-shot scale/translation, while cyclic rotation remains a later affine step.
+Consequence: animation needs a retained per-frame compositor. That architecture is live; scale,
+one-shot rotation/translation, and cyclic rotation now rasterize through the affine software path.
 
 ### The full gfx render model — surfaces + objects + composite (2026-07-07)
 
@@ -720,9 +739,9 @@ buffers (present). **Slot 0 is NOT special** — a normal slot; several objects 
 (`handle → {slot, srcRect, position, anchor, scale, anim, alpha, visible}`, from draw-texture + the gfx ops) +
 a host per-frame compositor that draws visible objects **in ascending-handle order** from their live surface,
 interpolating animations by elapsed time. No VM/host lockstep: animations play during the wait-for-input park.
-Separate scale/translation state and timing are implemented. The current anchored 2D composition is provisional:
-exact anchor semantics, multiplication order, and projection still need slow native-versus-port frame comparison.
-Full affine rotation remains deferred.
+Separate scale/rotation/translation state and timing are implemented. Anchor semantics, multiplication order,
+cyclic wrapping, 2D projection, and affine raster coverage have focused native-oracle tests. Native D3D9 filtering
+and render-target command execution remain separate fidelity work.
 
 ### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
 
@@ -778,8 +797,15 @@ annotated in Ghidra, saved.
 | `0x228` | `gfx_op_0x228_query_position` (`FUN_0047cdd0`) | **query** current computed (x,y,z) → operand slots 3/4/5 (script logic, not render) |
 | `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
 
-**Deferred (own follow-ups, per scope decision):** `0x21f` (`FUN_0047eb70`, 4-float scale/matrix), `0x223`
-(`FUN_0047f440`, 8-arg matrix row) → need **affine rendering**; `0x236` (`gfx_op_0x236` @`0x423ee0`) a
+**Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
+affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
+a type-0 command-map record keyed by arg 1: start `+4`, delay/duration `+8/+0xc`, target surface slot `+0x10`,
+and two object handle ranges at `+0x14/+0x1c` and `+0x18/+0x20`. `gfx_render_frame` composites those ranges
+into the target and ramps alpha 0→1. Its SC0000 site `0x129e7` passes `(handle+2, transition slot,
+handle+1,1,handle,1,G[0x6249f],G[0x624a0])`. It remains a render-target/transition slice dependency rather
+than being approximated in the affine object compositor.
+
+**Still deferred:** `0x236` (`gfx_op_0x236` @`0x423ee0`) a
 **timed/animated-surface (movie-like) op**; plus the unclassified `0x21c/0x21d/0x224/0x242/0x23d/0x20a/0x20e/0x243`
 tail (2-arg flags / inline). These stay GAP until a follow-up slice or are safe-noop'd if the opening tolerates it.
 

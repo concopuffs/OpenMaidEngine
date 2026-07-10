@@ -193,10 +193,20 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and frame-time ctx+0xb550.
 
+### 0x21f `set-anim-rotation-axis-angle` (set-anim-rotation-axis-angle, argc 7)
+- **summary:** (handle)(delay_ms)(duration_ms)(axis_x)(axis_y)(axis_z)(angle_deg) — set the delayed one-shot axis-angle rotation channel. Handler converts axis/angle integers to floats; worker stores target axis obj+0x1f8 and angle obj+0x208 and builds target matrix obj+0x12c. gfx_object_apply_transform_channels samples current axis/angle linearly on shared start obj+0x34 and composes T(-anchor)*scale*rotation*translation*T(anchor).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x423410 -> gfx_object_set_rotation_channel@0x47eb70; consumer gfx_object_apply_transform_channels@0x472f00 uses delay +0x40, duration +0x54, current axis +0x1ec/angle +0x204, target axis +0x1f8/angle +0x208, current matrix +0xec and target +0x12c. Native SC0000 handle 0xcb8e sample at 11/390 of axis (0,0,1), 30deg matches matrix [0.9055,0.0134;-0.0134,0.9055] and translation (74.1449,47.3127).
+
 ### 0x220 `set-anim-transform-abs` (set-anim-transform-abs, argc 6)
 - **summary:** (handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550.
+
+### 0x223 `queue-surface-alpha-transition` (queue-surface-alpha-transition, argc 8)
+- **summary:** (command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7.
 
 ### 0x224 `clear-gfx-command-queue` (clear-gfx-command-queue, argc 0)
 - **summary:** Clear the native gfx command queue rooted at ctx+0x418. Host-implicit because the port composites retained state directly.
@@ -224,9 +234,9 @@ Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_r
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x234 `anim-start` (anim-start, argc 5)
-- **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure a cyclic ROTATION channel. Worker gfx_object_set_rotation_cycle@0x47f060 stores period obj+0x228 and axis obj+0x244..0x24c; interpolator 0x473ed0 applies 0..360 degrees from frame-time ctx+0xb550. Separate from scale, translation, opacity, and op 0x238's clock.
+- **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure cyclic rotation. Worker stores period obj+0x228, start obj+0x214=0, and float axis obj+0x244; each frame uses integer degrees floor(((now-start)%period)*360/period). gfx_object_composite right-multiplies this separately anchored transform after the one-shot scale/rotation/translation product, so cyclic rotation also rotates the translation vector.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x423da0 -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/0x244 on ctx+0xb550 and builds an axis-angle rotation matrix with angle 360*((now-start)%period)/period.
+- **evidence:** Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on ctx+0xb550 and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second.
 
 ### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
 - **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
@@ -991,15 +1001,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x21f `u00421510` (u00421510, argc 7)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x222 `u004216C0` (u004216C0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x223 `u00421700` (u00421700, argc 8)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

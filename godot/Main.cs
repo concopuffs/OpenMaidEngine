@@ -42,6 +42,9 @@ public partial class Main : Godot.Control
     private System.IO.StreamWriter? _gfxLog;
     private readonly System.Collections.Generic.Dictionary<long, string> _lastGfxDecision = new();
     private int _gfxLogFrame;
+    private string? _timelineLogPath;            // --timeline-log <jsonl>: synchronized VM/host/compositor evidence
+    private GodotTimelineLog? _timeline;
+    private int _timelineFrame;
 
     public override void _Ready()
     {
@@ -104,6 +107,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--shot-settle" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _shotSettleTarget);
             if (userArgs[i] == "--shot-sequence" && i + 1 < userArgs.Length) _seqDir = userArgs[i + 1];
             if (userArgs[i] == "--gfx-log" && i + 1 < userArgs.Length) _gfxLogPath = userArgs[i + 1];
+            if (userArgs[i] == "--timeline-log" && i + 1 < userArgs.Length) _timelineLogPath = userArgs[i + 1];
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
@@ -130,8 +134,9 @@ public partial class Main : Godot.Control
         IScriptProvider provider;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
-        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
-        _trace = new GodotTraceSink();
+        if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
+        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
+        _trace = new GodotTraceSink(_timeline);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
         _table = table;
@@ -167,6 +172,7 @@ public partial class Main : Godot.Control
     public override void _Process(double delta)
     {
         _clock.Advance(delta);
+        _timeline?.SetFrame(++_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
         if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
@@ -216,7 +222,7 @@ public partial class Main : Godot.Control
             _host.SignalInput();
     }
 
-    public override void _ExitTree() { DumpHistogram(); _host?.Stop(); }
+    public override void _ExitTree() { DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); }
 
     // Write the real-run op/call-site histogram to --trace-histogram <file>. Idempotent; called when the
     // scene ends or the window closes (the opening parks at wait-for-input, so closing is the usual trigger).
@@ -245,12 +251,14 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
-        System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null ? new() : null;
+        System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
         foreach (var v in _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs))   // interpolate at the throttled clock
         {
             var t = v.Transform;
-            var projected = Age.Engine.Model.Transform2DMath.Apply(v.DstX, v.DstY, t);
+            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);
+            var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
+            var projected = localToDest.Apply(0, 0);
             int dstX = (int)System.Math.Round(projected.X);
             int dstY = (int)System.Math.Round(projected.Y);
             float opacity = v.Alpha / 255f;                  // transform Z is never opacity
@@ -264,16 +272,12 @@ public partial class Main : Godot.Control
                 if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
                 {
                     int baseW = v.W > 0 ? v.W : 800, baseH = v.H > 0 ? v.H : 600;
-                    int fw = (int)System.Math.Round(System.Math.Abs(t.ScaleX) * baseW);
-                    int fh = (int)System.Math.Round(System.Math.Abs(t.ScaleY) * baseH);
-                    int fillX = t.ScaleX >= 0 ? dstX : dstX - fw;
-                    int fillY = t.ScaleY >= 0 ? dstY : dstY - fh;
                     float fillA = opacity * strength;
-                    FillQuad(fillX, fillY, fw, fh, v.Tint, fillA);
-                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {fw}x{fh}@({fillX},{fillY}) " +
+                    FillAffineQuad(baseW, baseH, localToDest, v.Tint, fillA);
+                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
                               $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
-                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0})";
+                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}";
                 }
                 else outcome = "SKIP(no-resId, opaque render-target)";
             }
@@ -284,12 +288,13 @@ public partial class Main : Godot.Control
                 else
                 {
                     BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
-                              dstX, dstY, t.ScaleX, t.ScaleY, opacity);
+                              localToDest, opacity);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
                               $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
+                              $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
                               $"op={opacity:0.00} tintStr={strength:0.00}";
                 }
             }
@@ -305,7 +310,7 @@ public partial class Main : Godot.Control
     // the frame where the background drops out — and WHY — stands out. See systematic-debugging of the grey-BG.
     private void LogGfxDecisionChanges(System.Collections.Generic.Dictionary<long, string> curr)
     {
-        if (_gfxLog == null)
+        if (_gfxLogPath != null && _gfxLog == null)
         {
             var dir = System.IO.Path.GetDirectoryName(_gfxLogPath);
             if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
@@ -319,11 +324,13 @@ public partial class Main : Godot.Control
         foreach (var kv in _lastGfxDecision)
             if (!curr.ContainsKey(kv.Key))
                 lines.Add($"  0x{kv.Key:x}: GONE (was {kv.Value})");
-        if (lines.Count > 0)
+        if (lines.Count > 0 && _gfxLog != null)
         {
             _gfxLog.WriteLine($"[frame {_gfxLogFrame} nowMs={_clock.NowMs} page={_pageCount}] {curr.Count} visible, {lines.Count} changes:");
             foreach (var l in lines) _gfxLog.WriteLine(l);
         }
+        if (lines.Count > 0)
+            _timeline?.Event("objects", new() { ["visible_count"] = curr.Count, ["changes"] = lines.ToArray() });
         _lastGfxDecision.Clear();
         foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
     }
@@ -333,7 +340,7 @@ public partial class Main : Godot.Control
     // tintStrength (0..1, the op 0x202/0x203 alpha) LERPs the texel RGB toward tint (0=keep texel, 1=full tint;
     // fade-to-black uses tint=black, strength=1); alpha is the object's OPACITY (independent of the tint).
     private void BlitLayer(string bmpPath, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           int dstX, int dstY, double scaleX = 1, double scaleY = 1, float alpha = 1f)
+                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f)
     {
         var cacheKey = (bmpPath, colorKey);
         if (!_imgCache.TryGetValue(cacheKey, out var src))
@@ -355,51 +362,19 @@ public partial class Main : Godot.Control
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
-        double absScaleX = System.Math.Abs(scaleX), absScaleY = System.Math.Abs(scaleY);
-        int outW = (int)System.Math.Round(sw * absScaleX), outH = (int)System.Math.Round(sh * absScaleY);
-        if (outW <= 0 || outH <= 0) return;
-        int outX = scaleX >= 0 ? dstX : dstX - outW;
-        int outY = scaleY >= 0 ? dstY : dstY - outH;
-
-        int istr = (int)(System.Math.Clamp(tintStrength, 0f, 1f) * 255);
-        bool unscaled = System.Math.Abs(scaleX - 1) < 0.0001 && System.Math.Abs(scaleY - 1) < 0.0001;
-        bool plainOpaque = unscaled && alpha >= 0.999f && istr == 0 &&
-                           !Age.Engine.Model.BlendMath.HasColorKey(colorKey);
-        if (plainOpaque)   // fast path: opaque, un-keyed, un-tinted layer (the common CG case)
-        {
-            _screen.BlitRect(src, new Rect2I(srcX, srcY, sw, sh), new Vector2I(dstX, dstY));
-            return;
-        }
-
-        int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
         byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
-        int dw = _screen.GetWidth(), dh = _screen.GetHeight(), sfw = src.GetWidth();
-        int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
-        int x0 = System.Math.Max(0, -outX), x1 = System.Math.Min(outW, dw - outX);
-        int y0 = System.Math.Max(0, -outY), y1 = System.Math.Min(outH, dh - outY);
-        if (x1 <= x0 || y1 <= y0) return;
-        for (int y = y0; y < y1; y++)
-            for (int x = x0; x < x1; x++)
-            {
-                int sampleX = System.Math.Min(sw - 1, (int)(x / absScaleX));
-                int sampleY = System.Math.Min(sh - 1, (int)(y / absScaleY));
-                if (scaleX < 0) sampleX = sw - 1 - sampleX;
-                if (scaleY < 0) sampleY = sh - 1 - sampleY;
-                int dxp = outX + x, dyp = outY + y;
-                int di = (dyp * dw + dxp) * 4;
-                int si = ((srcY + sampleY) * sfw + (srcX + sampleX)) * 4;
-                int sa = ss[si + 3] * ia / 255;                 // texel alpha (colorkey already 0) × object opacity
-                if (sa == 0) continue;
-                // tint = LERP texel toward tint by strength (0=keep texel, 255=full tint), NOT a multiply
-                int sr = (ss[si]     * (255 - istr) + tr * istr) / 255;
-                int sg = (ss[si + 1] * (255 - istr) + tg * istr) / 255;
-                int sb = (ss[si + 2] * (255 - istr) + tb * istr) / 255;
-                dst[di]     = (byte)((sr * sa + dst[di]     * (255 - sa)) / 255);
-                dst[di + 1] = (byte)((sg * sa + dst[di + 1] * (255 - sa)) / 255);
-                dst[di + 2] = (byte)((sb * sa + dst[di + 2] * (255 - sa)) / 255);
-                dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + sa);
-            }
-        _screen.SetData(dw, dh, false, _screen.GetFormat(), dst);
+        Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
+            dst, _screen.GetWidth(), _screen.GetHeight(), ss, src.GetWidth(), src.GetHeight(),
+            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha);
+        _screen.SetData(_screen.GetWidth(), _screen.GetHeight(), false, _screen.GetFormat(), dst);
+    }
+
+    private void FillAffineQuad(int w, int h, Age.Engine.Model.Affine2D localToDest, long tint, float alpha)
+    {
+        byte[] dst = _screen.GetData();
+        Age.Engine.Model.SoftwareAffineRasterizer.FillRgba(
+            dst, _screen.GetWidth(), _screen.GetHeight(), w, h, localToDest, tint, alpha);
+        _screen.SetData(_screen.GetWidth(), _screen.GetHeight(), false, _screen.GetFormat(), dst);
     }
 
     // Alpha-blend a solid tint (0xRRGGBB) rectangle over the screen — the surfaceless fade/flash fill.

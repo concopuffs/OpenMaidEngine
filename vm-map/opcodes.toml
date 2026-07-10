@@ -5549,53 +5549,53 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x21f
-label = "u00421510"
+label = "set-anim-rotation-axis-angle"
 argc = 7
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421510"
-category = "unknown"
-summary = ""
+name = "set-anim-rotation-axis-angle"
+category = "draw"
+summary = "(handle)(delay_ms)(duration_ms)(axis_x)(axis_y)(axis_z)(angle_deg) — set the delayed one-shot axis-angle rotation channel. Handler converts axis/angle integers to floats; worker stores target axis obj+0x1f8 and angle obj+0x208 and builds target matrix obj+0x12c. gfx_object_apply_transform_channels samples current axis/angle linearly on shared start obj+0x34 and composes T(-anchor)*scale*rotation*translation*T(anchor)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x423410 -> gfx_object_set_rotation_channel@0x47eb70; consumer gfx_object_apply_transform_channels@0x472f00 uses delay +0x40, duration +0x54, current axis +0x1ec/angle +0x204, target axis +0x1f8/angle +0x208, current matrix +0xec and target +0x12c. Native SC0000 handle 0xcb8e sample at 11/390 of axis (0,0,1), 30deg matches matrix [0.9055,0.0134;-0.0134,0.9055] and translation (74.1449,47.3127)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "object handle"
 observed_types = ["imm", "g-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "delay milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "duration milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "rotation axis X"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "rotation axis Y"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "rotation axis Z"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "target angle degrees"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -5672,58 +5672,58 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x223
-label = "u00421700"
+label = "queue-surface-alpha-transition"
 argc = 8
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421700"
-category = "unknown"
-summary = ""
+name = "queue-surface-alpha-transition"
+category = "draw"
+summary = "(command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "command record key"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "target surface slot"
 observed_types = ["imm", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "first object range start handle"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "first object range count"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "second object range start handle"
 observed_types = ["imm", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "second object range count"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "delay milliseconds"
 observed_types = ["imm", "g-int"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "duration milliseconds"
 observed_types = ["imm", "g-int"]
 
 [[opcode]]
@@ -6111,12 +6111,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "anim-start"
 category = "draw"
-summary = "(handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure a cyclic ROTATION channel. Worker gfx_object_set_rotation_cycle@0x47f060 stores period obj+0x228 and axis obj+0x244..0x24c; interpolator 0x473ed0 applies 0..360 degrees from frame-time ctx+0xb550. Separate from scale, translation, opacity, and op 0x238's clock."
+summary = "(handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure cyclic rotation. Worker stores period obj+0x228, start obj+0x214=0, and float axis obj+0x244; each frame uses integer degrees floor(((now-start)%period)*360/period). gfx_object_composite right-multiplies this separately anchored transform after the one-shot scale/rotation/translation product, so cyclic rotation also rotates the translation vector."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x423da0 -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/0x244 on ctx+0xb550 and builds an axis-angle rotation matrix with angle 360*((now-start)%period)/period."
+evidence = "Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on ctx+0xb550 and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second."
 
 [[opcode.semantics.args]]
 i = 1

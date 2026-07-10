@@ -15,14 +15,17 @@ public sealed class GodotAdvHost : IHost
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly Age.Engine.Hosting.FrameClock _clock;
     private readonly Age.Engine.Hosting.WallClockOpPacer _opPacer;
+    private readonly GodotTimelineLog? _timeline;
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
     public volatile bool IsWaiting;
     public readonly List<(int Offset, string Text)> Captured = new();
 
-    public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock)
+    public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
+                        GodotTimelineLog? timeline = null)
     {
         _main = main; _res = res; _scene = scene; _clock = clock;
+        _timeline = timeline;
         _opPacer = new Age.Engine.Hosting.WallClockOpPacer(clock);
     }
 
@@ -39,8 +42,10 @@ public sealed class GodotAdvHost : IHost
         Pages++;
         _main.CallDeferred("PageBreak");
         IsWaiting = true;
+        _timeline?.State("input-wait", new() { ["page"] = Pages });
         _gate.Wait();
         IsWaiting = false;
+        _timeline?.State("running", new() { ["input"] = "auto-or-user" });
         _opPacer.Reset();
         _main.CallDeferred("ClearPage");
     }
@@ -80,12 +85,14 @@ public sealed class GodotAdvHost : IHost
     {
         long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
         long deadline = _clock.NowMs + ms;
+        _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
         while (_clock.NowMs < deadline)
         {
             if (_stopping) break;
             _frameSignal.WaitOne(50);
         }
         _opPacer.Reset();
+        _timeline?.State("running", new() { ["sleep_complete"] = true });
     }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
@@ -128,6 +135,7 @@ public sealed class GodotAdvHost : IHost
     public void PlayBgm(long id)
     {
         var path = _res.BgmPathById(id);
+        _timeline?.Event("bgm", new() { ["id"] = id, ["file"] = path != null ? System.IO.Path.GetFileName(path) : null });
         if (path != null) _main.CallDeferred("PlayBgm", path);
     }
 

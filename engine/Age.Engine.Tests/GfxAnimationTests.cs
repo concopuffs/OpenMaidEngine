@@ -40,6 +40,36 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void OneShotRotation_SharesMatrixClockAndMatchesNativeSample()
+    {
+        var g = new GfxState();
+        g.SetSurface(6, 1, -1); g.BindDraw(0xcb8e, 6, 0, 0, 800, 800, 300, 200);
+        g.GetOrCreate(0xcb8e).V18 = (700, 600, 0);
+        g.SetScaleChannel(0xcb8e, 500, 390, (110, 110, 100));
+        g.GetOrCreate(0xcb8e).ScaleCurrent = (0.9, 0.9, 1);
+        g.SetRotationChannel(0xcb8e, 500, 390, (0, 0, 1), 30);
+        g.SnapshotVisibleObjects(1000);
+        var sample = g.SnapshotVisibleObjects(1511).Single();
+        var m = Transform2DMath.Build(sample.Transform);
+        Assert.Equal(0.9055, m.XX, 4);
+        Assert.Equal(0.0134, m.XY, 4);
+        Assert.Equal(-0.0134, m.YX, 4);
+        Assert.Equal(74.1449, m.TX, 3);
+        Assert.Equal(47.3127, m.TY, 3);
+    }
+
+    [Fact]
+    public void CyclicRotation_FloorsDegreesAndWrapsAtPeriod()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 1, -1); g.BindDraw(7, 1, 0, 0, 1, 1, 0, 0);
+        g.SetRotationCycle(7, 1000, (0, 0, -1));
+        Assert.Equal(0, g.SnapshotVisibleObjects(5000).Single().Rotation.AngleDegrees);
+        Assert.Equal(89, g.SnapshotVisibleObjects(5249).Single().Rotation.AngleDegrees);
+        Assert.Equal(0, g.SnapshotVisibleObjects(6000).Single().Rotation.AngleDegrees);
+    }
+
+    [Fact]
     public void SetAnimClock_SetsGlobalDurationAndBumpsClockGeneration()
     {
         var g = new GfxState();
@@ -68,6 +98,8 @@ public class GfxAnimationTests
             (0x220, new[] { G(1), G(2), G(3), G(4), G(5), G(6) }),
             MovGI(4, 200), MovGI(5, 50), MovGI(6, 100),
             (0x21e, new[] { G(1), G(2), G(3), G(4), G(5), G(6) }),
+            MovGI(4, 0), MovGI(5, 0), MovGI(6, 1), MovGI(7, 30),
+            (0x21f, new[] { G(1), G(2), G(3), G(4), G(5), G(6), G(7) }),
             Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
@@ -77,6 +109,8 @@ public class GfxAnimationTests
         Assert.Equal((2.0, 0.5, 1.0), o.ScaleTarget);
         Assert.True(o.TranslationEnabled);
         Assert.True(o.ScaleEnabled);
+        Assert.Equal((0.0, 0.0, 1.0, 30.0), o.RotationTarget);
+        Assert.True(o.RotationChannelEnabled);
     }
 
     [Fact]
@@ -180,5 +214,15 @@ public class GfxAnimationTests
         // Native handle 0xcbc0: base=(0,600), anchor=(400,1000), scale=5.
         var t = new TransformState(5, 5, 1, 0, 0, 0, 400, 1000, 0);
         Assert.Equal((-1600.0, -1000.0), Transform2DMath.Apply(0, 600, t));
+    }
+
+    [Fact]
+    public void Transform2D_CyclicRotationOccursAfterTranslation()
+    {
+        var t = new TransformState(2, 1, 1, 10, 0, 0, 100, 50, 0);
+        var cycle = new RotationCycleState(true, 1000, 0, 0, 1, 90);
+        var p = Transform2DMath.Apply(120, 50, t, cycle);
+        Assert.Equal(100.0, p.X, 10);
+        Assert.Equal(100.0, p.Y, 10);
     }
 }

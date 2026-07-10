@@ -373,6 +373,9 @@ public sealed class VirtualMachine
             case "set-anim-transform-norm":  // 0x21e (handle)(delay)(duration)(sx%)(sy%)(sz%)
                 Gfx.SetScaleChannel(Read(a[0]), Read(a[1]), Read(a[2]),
                     (Read(a[3]), Read(a[4]), Read(a[5]))); return pc + 1;
+            case "set-anim-rotation-axis-angle": // 0x21f (handle)(delay)(duration)(axis x/y/z)(angle deg)
+                Gfx.SetRotationChannel(Read(a[0]), Read(a[1]), Read(a[2]),
+                    (Read(a[3]), Read(a[4]), Read(a[5])), Read(a[6])); return pc + 1;
             case "anim-start":   // 0x234 legacy name: (handle)(period)(axis x/y/z), cyclic rotation channel
                 Gfx.SetRotationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "set-anim-clock":   // 0x238 (duration) — global, non-blocking (host advances it per-frame)
