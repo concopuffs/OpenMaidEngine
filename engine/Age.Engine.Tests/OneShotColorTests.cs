@@ -4,6 +4,21 @@ namespace Age.Engine.Tests;
 
 public class OneShotColorTests
 {
+    [Fact]
+    public void TimedPresentation_TracksOnlyVisibleFiniteChannelsUntilSampledComplete()
+    {
+        var visible = Visible(GfxState.PackColor(0, 0xffffff));
+        visible.SetAnimatedObjectColorResolved(0x100, 0, 100, 0xff, 0xffffff);
+        Assert.True(visible.HasActiveTimedPresentation(1000));
+        visible.SnapshotVisibleObjects(1000);
+        visible.SnapshotVisibleObjects(1100);
+        Assert.False(visible.HasActiveTimedPresentation(1100));
+
+        var unbound = new GfxState();
+        unbound.SetAnimatedObjectColorResolved(0x200, 0, 100, 0xff, 0xffffff);
+        Assert.False(unbound.HasActiveTimedPresentation(1000));
+    }
+
     private static GfxState Visible(long current)
     {
         var gfx = new GfxState();

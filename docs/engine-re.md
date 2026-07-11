@@ -522,18 +522,23 @@ Both branches finish with
 `0x224`, which clears the native gfx command queue at `ctx+0x418`. These handlers are now named,
 commented, and saved in the Ghidra image.
 
-None of `0x21c/0x224/0x243` waits for the per-object transform duration. The normal-path boundary is
-the engine's rate-limited one-op interpreter cadence plus continuous retained compositing. This matters because
-the earlier Frida probe hooked `vm_operand_fetch`: its ~1,788/s result counts **operand reads**, commonly
-several per completed opcode. Feeding that number to the port's per-completed-opcode `FrameYield` made
-the `0xcbc0` section reach only scale 1.44 in 226 ms before teardown.
+The matching native presentation trace corrects the earlier cadence model. Ordinary opcode execution is
+**burst-fast between presentation services**, while `0x21c` is the render/wait boundary: it parks the
+interpreter and `gfx_render_frame` repeatedly samples visible finite one-shot channels and queued surface
+commands until dirty presentation state clears; `0x224` then clears the command queue. `0x20c` is a single
+explicit publication on the skip branch.
 
-The corrected host limiter is refresh-independent and runs at 200 completed opcodes/s. It resets accumulated
-credit after sleep/input parking, and clicks are accepted only while actually waiting, so clicks during a
-visible animation cannot pre-arm the next wait. A normal-clock replay retained `0xcbc0` for 1,798 ms at
-the intermediate 215/s calibration; the final 200/s replay kept it alive for 2,014 virtual ms, beyond the native
-1,890 ms endpoint. `--speed` scales VM, sleep, and animation clocks together for comparison without
-changing these virtual-time relationships or auto-advancing waits.
+At the opening AE001D passage, native `0x125a6` rendered the preceding state, then both object binds plus
+mode-1 `0x203` and target `0x202` writes (`0xd5a/0xd63/0xd73/0xd8a`) completed in about 5 ms with **no render
+between them**. Their first composition was the following repeated `gfx_render_frame` loop at `0x21c`.
+Likewise, the explicitly presented mode-0 white CG at `0x125a6` survived only about 10 ms before that next
+boundary. The port's former 200-completed-op/s throttle stretched the same burst across many display frames;
+that average had folded service waits into execution time and was not an opcode scheduler rate.
+
+The Godot host therefore leaves ordinary `FrameYield` non-blocking and publishes retained mutations only at
+`0x20c`, `0x21c`, sleep, and stable input waits. `0x21c` waits for visible finite color/matrix channels plus
+`0x223`; ambient cyclic/spritesheet pulses do not block, and click forcing remains restricted to `0x223`.
+This is a native-evidenced scheduler correction, not a guessed duration sleep.
 
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
 

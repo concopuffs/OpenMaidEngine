@@ -5110,7 +5110,7 @@ abi_source = "kelebek+decode-validated"
 name = "present-frame"
 category = "draw"
 summary = "Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately."
-details = "Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0. Godot composites continuously. In label_1235a the OR of 0x1c7/0x1cc is nonzero on the read/message-skip branch, which resets the animation service then presents; the port starts and snaps any pending 0x223 transition to its endpoint here. Normal zero-state playback branches to 0x21c, which owns wait/resume. Headless hosts remain non-blocking. Kelebek label u00416200 was VA-drift."
+details = "Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5468,13 +5468,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "mark-frame-yield"
 category = "control"
-summary = "Set native run-state bit 0x400; in normal ADV playback this is the queued foreground-transition yield/resume boundary."
-details = "SC0000 label_1235a reaches this when the OR of 0x1c7 message-skip and 0x1cc read-skip state is zero (normal playback). Native run-state bit 0x400 yields the interpreter while the queued foreground presentation advances. The interactive port starts pending 0x223 commands here, parks only the VM thread while per-frame compositing continues, and resumes after natural or click-forced completion."
+summary = "Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary."
+details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here. The port publishes and waits for visible finite one-shot channels or 0x223 commands; click forcing remains limited to the latter."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x223, 0x1c7, 0x1cc]
-evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a's jcc reaches it when the OR of op 0x1c7/0x1cc is zero; synchronized port trace confirmed this is the normal path after 0x223."
+evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10."
 
 [[opcode]]
 op = 0x21d

@@ -187,7 +187,8 @@ public partial class Main : Godot.Control
         _clock.Advance(delta);
         _timeline?.SetFrame(++_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
-        if (!_selftest && _vm != null) Recomposite();   // retained per-frame compositor (surface+object model)
+        if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite())
+            Recomposite();   // native publishes retained mutations only at present/service boundaries
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
         // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
         if (_seqDir != null && _seqIdx < _seqFrames && !_done)

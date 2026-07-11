@@ -324,6 +324,17 @@ public sealed class GfxState
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0);
     }
 
+    /// <summary>Native op 0x21c keeps presenting until both queued surface commands and finite one-shot
+    /// object channels have completed. Ambient cyclic/spritesheet/color pulses are deliberately excluded.</summary>
+    public bool HasActiveTimedPresentation(long nowMs)
+    {
+        lock (_lock)
+            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _objects.Values.Any(o => o.Visible &&
+                                            (o.OneShotColorEnabled || o.ScaleEnabled ||
+                                             o.RotationChannelEnabled || o.TranslationEnabled));
+    }
+
     /// <summary>Click completion affects only type-0 foreground transitions, never ambient object channels.</summary>
     public int CompleteForegroundTransitions(long nowMs)
     {

@@ -86,13 +86,13 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Producer recovered 2026-07-10: adv_update_read_text_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message_ReadTextSkip plus current-PC read-history lookup; adv_interpreter_tick consumes it in click/read-skip control. It is not the 0x223 surface-transition progress flag.
 
 ### 0x21c `mark-frame-yield` (mark-frame-yield, argc 0)
-- **summary:** Set native run-state bit 0x400; in normal ADV playback this is the queued foreground-transition yield/resume boundary.
+- **summary:** Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
 - **depended on by:** 0x223
-- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. SC0000 label_1235a's jcc reaches it when the OR of op 0x1c7/0x1cc is zero; synchronized port trace confirmed this is the normal path after 0x223.
+- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10.
 
-SC0000 label_1235a reaches this when the OR of 0x1c7 message-skip and 0x1cc read-skip state is zero (normal playback). Native run-state bit 0x400 yields the interpreter while the queued foreground presentation advances. The interactive port starts pending 0x223 commands here, parks only the VM thread while per-frame compositing continues, and resumes after natural or click-forced completion.
+SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here. The port publishes and waits for visible finite one-shot channels or 0x223 commands; click forcing remains limited to the latter.
 
 ## draw
 
@@ -153,7 +153,7 @@ SC0000 label_1235a reaches this when the OR of 0x1c7 message-skip and 0x1cc read
 - **depended on by:** 0x20d, 0x223
 - **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
 
-Native handler gfx_op_0x20c_present_frame (dispatch ctx[0x26c93+0x20c]) -> gfx_render_frame @0x4820b0. Godot composites continuously. In label_1235a the OR of 0x1c7/0x1cc is nonzero on the read/message-skip branch, which resets the animation service then presents; the port starts and snaps any pending 0x223 transition to its endpoint here. Normal zero-state playback branches to 0x21c, which owns wait/resume. Headless hosts remain non-blocking. Kelebek label u00416200 was VA-drift.
+Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
 - **summary:** 0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table.

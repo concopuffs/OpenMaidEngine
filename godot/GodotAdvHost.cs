@@ -15,13 +15,14 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly Age.Engine.Hosting.FrameClock _clock;
-    private readonly Age.Engine.Hosting.WallClockOpPacer _opPacer;
     private readonly GodotTimelineLog? _timeline;
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
+    public volatile bool IsSleeping;
+    private int _presentRequested = 1;
     private long _transitionStartedAtMs = -1;
     public long TransitionStartedAtMs => System.Threading.Interlocked.Read(ref _transitionStartedAtMs);
     public readonly List<(int Offset, string Text)> Captured = new();
@@ -31,7 +32,6 @@ public sealed class GodotAdvHost : IHost
     {
         _main = main; _res = res; _scene = scene; _clock = clock;
         _timeline = timeline;
-        _opPacer = new Age.Engine.Hosting.WallClockOpPacer(clock);
     }
 
     public void ShowText(int offset, string text)
@@ -51,7 +51,6 @@ public sealed class GodotAdvHost : IHost
         _gate.Wait();
         IsWaiting = false;
         _timeline?.State("running", new() { ["input"] = "auto-or-user" });
-        _opPacer.Reset();
         _main.CallDeferred("ClearPage");
     }
 
@@ -75,13 +74,13 @@ public sealed class GodotAdvHost : IHost
     public void WaitForForegroundTransition(GfxState gfx)
     {
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
-        if (started == 0 && !gfx.HasActiveForegroundTransitions(_clock.NowMs)) return;
+        if (started == 0 && !gfx.HasActiveTimedPresentation(_clock.NowMs)) return;
         _foregroundGfx = gfx;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
         IsTransitionWaiting = true;
         _timeline?.State("transition-start", new() { ["count"] = started });
         int lastBucket = -1;
-        while (gfx.HasActiveForegroundTransitions(_clock.NowMs) && !_stopping)
+        while (gfx.HasActiveTimedPresentation(_clock.NowMs) && !_stopping)
         {
             var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
             int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
@@ -99,7 +98,6 @@ public sealed class GodotAdvHost : IHost
         IsTransitionWaiting = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         _foregroundGfx = null;
-        _opPacer.Reset();
         _timeline?.State("running", new() { ["transition_complete"] = true });
     }
 
@@ -112,7 +110,14 @@ public sealed class GodotAdvHost : IHost
             {
                 ["started"] = started, ["completed"] = completed,
             });
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
+
+    // Native retained-object writes are not front-buffer writes. The renderer publishes them only at an
+    // explicit present or while the interpreter is parked in a presentation-capable service boundary.
+    public bool ShouldRecomposite()
+        => IsWaiting || IsTransitionWaiting || IsSleeping ||
+           System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0;
 
     public void Stop()
     {
@@ -124,15 +129,9 @@ public sealed class GodotAdvHost : IHost
     // Main thread, once per rendered frame: releases a VM thread parked in FrameYield/Sleep.
     public void PulseFrame() => _frameSignal.Set();
 
-    // Called once per executed opcode (IHost.FrameYield). After a frame's worth of ops (the clock's
-    // budget), block the VM background thread until Main._Process advances the clock — throttling the
-    // interpreter to ~budget ops per rendered frame (the native engine's rate-limited cadence).
-    public void FrameYield()
-    {
-        _opPacer.OpcodeCompleted();
-        while (!_opPacer.CanRunNext && !_stopping)
-            _frameSignal.WaitOne(50);
-    }
+    // Native presentation trace: ordinary opcode bursts run to the next service boundary in a few
+    // milliseconds and are not frame-paced. Pacing belongs to 0x21c, sleep, and input waits below.
+    public void FrameYield() { }
 
     // op 0xc8: block the VM background thread so the main-thread compositor (Main.Recomposite in _Process)
     // presents the current retained GfxState — this is what makes the sleep-paced opening burst animate.
@@ -147,12 +146,13 @@ public sealed class GodotAdvHost : IHost
         long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
+        IsSleeping = true;
         while (_clock.NowMs < deadline)
         {
             if (_stopping) break;
             _frameSignal.WaitOne(50);
         }
-        _opPacer.Reset();
+        IsSleeping = false;
         _timeline?.State("running", new() { ["sleep_complete"] = true });
     }
 

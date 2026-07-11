@@ -980,3 +980,31 @@ opcode/ctx lint, 481-script decode validation, and RECOVER clean. SC0000 coverag
 (65.9%)**, 44 GAP ops / 598 GAP instructions. The differential oracle retains its prior branch-state
 divergence after `0x12031`; it agrees through the executed `0x202`/`0x203` sequence and does not implicate
 this slice. Windows CR-aware whitespace validation is clean.
+
+### A2b — retained presentation batching / native scheduler boundary ✅ DONE (2026-07-10)
+
+The synchronized native trace resolves the white-hold residual. At the AE001D passage, the native engine
+binds `0xcb8e/0xcb98`, applies mode 1 at `0xd5a/0xd63`, and arms `0x202` at `0xd73/0xd8a` within one
+roughly 5 ms opcode burst. No `gfx_render_frame` occurs between those mutations; the first composition is
+the following `0x21c` service loop. The preceding explicit `0x20c`/`0x125a6` mode-0 white frame lasts only
+about 10 ms. The port's 200-completed-op/s throttle had stretched that between-present burst across multiple
+window frames, making retained intermediate state look like a long white stall.
+
+Godot now leaves ordinary opcode `FrameYield` unthrottled and publishes retained state only at proven
+presentation-capable boundaries: `0x20c`, `0x21c`, sleep, and input wait. `0x21c` renders while visible finite
+one-shot channels or `0x223` commands remain active; hidden stale records and ambient cyclic channels cannot
+hold it open. The first implementation incorrectly included hidden records and parked at the first CG; the
+visible-only correction was re-run through 14 pages and the full AE burst.
+
+Windowed before/after evidence at the same SC0000 sites: the old capture exposed AE001D in mode 0 for six
+compositor frames and held one identical white PNG state for 25 frames. The corrected capture executes bind,
+mode 1, and color targets in frame 64 and first publishes AE001D already in mode 1 at `0x21c`; the old mode-0
+AE object state is absent from the object/pixel timeline. Remaining short white flashes are explicit native
+present/color effects, not the prior between-op hold. Draw-string `0x204/0x7a`, movie `0x236`, and SFX remain
+separate slices.
+
+**Validation:** engine **109/109**; full sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot build and
+threaded `SELFTEST OK`; all seven Python suites, opcode/ctx lint, 481-script decode, and RECOVER clean.
+Normal-speed windowed capture wrote 220 PNGs and progressed through the complete AE sequence; at the target
+frame, bind + mode-1 + `0x202` setup share one VM frame and the first published object state is mode 1.
+Ghidra `/v2` comments were updated and saved. No commit was made.
