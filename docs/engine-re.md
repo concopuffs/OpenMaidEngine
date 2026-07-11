@@ -845,9 +845,44 @@ while `0x21c` is parked completes only the active foreground surface transition 
 not pre-arm the following `wait-for-input`, and it does not complete independent retained rotation,
 matrix, spritesheet, or color-animation channels.
 
-**Still deferred:** `0x236` (`gfx_op_0x236` @`0x423ee0`) a
-**timed/animated-surface (movie-like) op**; plus the unclassified `0x242/0x23d/0x20a/0x20e`
-tail (2-arg flags / inline). These stay GAP until a follow-up slice or are safe-noop'd if the opening tolerates it.
+**Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. The unclassified
+`0x242/0x23d/0x20a/0x20e` tail (2-arg flags / inline) remains GAP and outside this slice.
+
+### Movie-to-surface opcode `0x236` (2026-07-11)
+
+The exact ABI is `play-movie-to-surface(resource_id, surface_slot, movie_flags, sync_mask)`. Handler
+`op_0x236_play_movie_to_surface@0x423ee0` is command type 9 and requires the destination texture to exist.
+It allocates/reuses a 0x478-byte `CMovieToTexture` object, binds the D3D device/backing texture, opens
+operand 1 through `asset_open_indexed_entry`, constructs a DirectShow FilterGraph, and starts it. The graph
+queries `IGraphBuilder`, `IMediaControl`, `IMediaPosition`, `IMediaEvent`, and `IBasicAudio`; its custom
+`CMovieTextureRenderer` accepts RGB samples and copies the bottom-up frame into the retained texture.
+
+Operand 3 is retained movie mode plus sound-route policy. Bits `0x10000/0x20000/0x40000/0x80000` force
+sound route 0/1/2/3; without an override, native setting `set:DependMovieSound` supplies the route. This
+slice deliberately does not implement the audio branch. Operand 4 is stored at movie object `+0x42c` as
+the sync/device mask; it is not a duration or loop count. Replacing or releasing the owning surface stops
+the graph and detaches the renderer.
+
+Graph construction/open is synchronous, but playback and sample delivery are asynchronous. The handler
+returns normally and the interpreter advances one instruction: at SC0000 `0x13c8`, the native operand
+capture evaluates `(0x33, 0, 2, 0)` and the next executed bytecode is `0x13d1`. The movie therefore does
+not itself block the VM. SC0000 prepares additional static layers, then reaches `0x21c` through
+`label_1235a@0x1574`. That opcode sets run-state bit `0x400` and yields the interpreter; the presentation
+service continues sampling the retained movie until DirectShow EOF, after which the following script
+cleanup releases it. The static preparation before `0x21c` is not a movie teardown boundary.
+
+**Manual-test correction (2026-07-11):** the initial port incorrectly treated those pre-yield static loads
+as surface replacement, producing start/first-frame/stop all in render frame 0. The bounded host now keeps
+the movie as an independently updating retained layer, parks `0x21c` until the DirectShow completion event,
+then permits cleanup. A real-render lifecycle run records first frame 98 and stop frame 181. The screenshot
+sequence's known stale-CG/transition behavior can obscure this layer, so screenshot appearance is not used
+as the visual oracle. **Manual recheck remains unresolved:** normal interactive SC0000 logs start, changing
+frame delivery, EOF, and delayed stop, but the movie is not visibly presented in the application. The next
+slice must diagnose compositor/layer publication rather than reopening decode or VM-lifecycle timing.
+
+The `/v2` image names/comments the handler; movie ctor/interface/open/play/volume/release workers; sound
+route helpers; renderer media-type/sample workers; and stop/detach/destructor lifecycle. The image was
+saved after annotation.
 
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
 

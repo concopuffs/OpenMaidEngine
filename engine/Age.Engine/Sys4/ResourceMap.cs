@@ -60,9 +60,23 @@ public sealed class ResourceMap
         return new AudioPayload(entry.Name, _store.ReadAll(entry));
     }
 
+    /// <summary>Read a catalog-resolved MPEG program-stream movie through the same loose-first VFS as
+    /// scripts, graphics, and audio. AGE uses an .AGF basename for these payloads; the MPEG pack start
+    /// code, rather than the extension, distinguishes them from still-image AGF.</summary>
+    public MoviePayload ReadMovie(AssetEntry entry)
+    {
+        if (entry.IsPlaceholder)
+            throw new InvalidDataException($"placeholder movie asset: {entry.Name}");
+        byte[] bytes = _store.ReadAll(entry);
+        if (bytes.Length < 4 || bytes[0] != 0 || bytes[1] != 0 || bytes[2] != 1 || bytes[3] != 0xba)
+            throw new InvalidDataException($"not an MPEG program stream: {entry.Name}");
+        return new MoviePayload(entry.Name, bytes);
+    }
+
     private static bool IsAudio(AssetEntry entry)
         => entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase)
         || entry.Name.EndsWith(".WAV", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record AudioPayload(string Name, byte[] Bytes);
+public sealed record MoviePayload(string Name, byte[] Bytes);

@@ -278,6 +278,13 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on ctx+0xb550 and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second.
 
+### 0x236 `play-movie-to-surface` (play-movie-to-surface, argc 4)
+- **summary:** (resource_id)(surface_slot)(movie_flags)(sync_mask) - synchronously resolve/open an archive movie and construct its DirectShow graph, then start asynchronous frame delivery into the retained destination surface. The opcode itself is non-blocking: the VM advances to the next instruction. SC0000's native site evaluates (0x33, 0, 2, 0) at 0x13c8 and resumes at bytecode 0x13d1; its later 0x21c service boundary yields until movie EOF before cleanup.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Native handler 0x423ee0 and helpers 0x463c50/0x463aa0/0x463e20/0x4625e0; SC0000 native operand capture; exact 0x13c8->0x13d1 trace; archive-only changing-frame decoder and Godot lifecycle tests.
+
+The handler requires an existing destination texture, allocates/reuses a 0x478-byte movie-to-texture object for the surface, opens operand 1 through the native indexed-asset reader, builds FilterGraph/IGraphBuilder/IMediaControl/IMediaPosition/IMediaEvent/IBasicAudio, and presents bottom-up RGB samples through the movie texture renderer. Operand 3 selects movie/sound routing policy: bits 0x10000/0x20000/0x40000/0x80000 force sound route 0/1/2/3, otherwise set:DependMovieSound is used; SC0000's low value 2 is retained as native movie mode state. Operand 4 is stored as the movie sync/device mask at object+0x42c; SC0000 passes 0. Static layer preparation after 0x236 does not terminate the retained movie; 0x21c services it through EOF and subsequent surface cleanup stops/detaches it.
+
 ### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
 - **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
 - **grounding:** source=investigation, confidence=high
@@ -1040,10 +1047,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x233 `u00421FB0` (u00421FB0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x236 `u004221A0` (u004221A0, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

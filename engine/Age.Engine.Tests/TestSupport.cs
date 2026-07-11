@@ -21,6 +21,7 @@ internal sealed class RecordingHost : IHost
     public readonly List<int> SfxStarts = new();
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
+    public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -52,6 +53,8 @@ internal sealed class RecordingHost : IHost
     public void StartSoundEffect(int channel) => SfxStarts.Add(channel);
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
+    public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+        => Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
 }
 
 internal sealed class MapProvider : IScriptProvider

@@ -133,7 +133,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). Scene-local SFX WAV entries use
    the same byte path while retaining the existing channel lifecycle. See `docs/phase-a-slice-plan.md`.
    Diagnostic: `Age.Cli audio <SCENE>`.
-5. **Movies** (`OP`/`MVB`, MPEG) — a separate video-playback path; deferred.
+5. **Movies** (`OP`/`MVB`, MPEG) — SC0000 `0x236` now resolves its scene-local id through the same catalog
+   and reads owned payload bytes through `IAssetStore`; see the movie section below.
 
 ## Validation reality (why this is the big haul)
 
@@ -177,7 +178,7 @@ behavior:
 Native evidence already proves this ordering for scripts: `resource_open_by_raw_id@0x44f390` indexes the
 80-byte SYS4 record and calls `CreateFileA(record.name)` before opening `record.archive`, seeking to
 `record.offset`, and reading `record.size`. The same service is the correct common seam for scripts,
-graphics, voice/SFX, and later movie bytes. Resolution and opening must remain separate: scene-local ids and
+graphics, voice/SFX, and movie bytes. Resolution and opening must remain separate: scene-local ids and
 universal `raw_index` ids select a record differently, but both records flow through the same loose-first
 store.
 
@@ -256,8 +257,34 @@ Audio byte migration passes its bounded gate in `Sys4AssetStoreTests`: archive-o
 `BGM005.OGG` and `MAN999.OGG` as Ogg streams and `E0808.WAV` as RIFF/WAVE without consulting `extracted/`.
 A windowed SC0000 run with `extracted/` moved aside crossed both voice sites and the first SFX sequence,
 recording BGM005 plus `E0808.WAV` load/start/preload on channels 0/0/4 with no Godot OGG/WAV decode errors.
-Channel, loop, interruption, timing, fade, load/start, and release behavior is unchanged. Movie `0x236`
-remains unimplemented.
+Channel, loop, interruption, timing, fade, load/start, and release behavior is unchanged.
+
+### SC0000 movie payload and presentation (2026-07-11)
+
+The only implemented site is SC0000 `0x236@0x13c8`. Scene-local resource `0x33` resolves through the
+authoritative catalog to `DATA1.ALF:CHAPTER.AGF` (archive offset 3,908,816; size 8,194,052). Despite the
+`.AGF` name, its payload begins with MPEG program-stream pack start code `00 00 01 BA`; the installed asset
+is MPEG-1 program stream video at 800x600, 29.97 fps, approximately 11.98 seconds, with video stream `E0`
+and audio stream `C0`.
+
+`ResourceMap.ReadMovie` accepts the resolved `AssetEntry`, reads it through the injected `IAssetStore`, and
+rejects a non-MPEG-pack payload. Godot has no built-in MPEG decoder suitable for this asset, so the
+Windows backend adapts those already-owned VFS bytes to the system DirectShow MPEG source using a private
+temporary file. DirectShow decodes RGB32 on an MTA thread; the sample-grabber callback converts bottom-up
+BGRA to top-down RGBA and publishes only the newest frame to the retained compositor surface. The temporary
+file is an implementation adapter, never an alternate resolver or dependency on `extracted/`. The audio pin
+is intentionally left unrendered for this bounded slice.
+
+Archive-only tests verify the exact catalog entry, payload size/header, and an actual decoded 800x600 RGBA
+frame; both still pass with the entire `extracted/` tree physically moved aside and restored afterward.
+SC0000's native capture verifies operands `(0x33, 0, 2, 0)` and immediate VM continuation at `0x13d1`.
+In Godot the real site opens the same 8,194,052 VFS bytes, publishes changing 800x600 frames, and retains
+them across pre-yield static surface preparation. The later `0x21c` presentation service remains parked
+until DirectShow EOF, then scene cleanup stops the movie. Manual interactive validation still does not show
+the movie despite those successful lifecycle logs; visible compositor/layer publication is the next bounded
+investigation. The real-scene trace remains a separate extracted-present test
+because the current `Paths.Scripts()` test bootstrap still locates its root `*.BIN` fixtures there; migrating
+that test/bootstrap path is unrelated to movie asset loading and was not folded into this slice.
 
 VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
@@ -270,7 +297,8 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 ### Deliberate non-goals
 
 - Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
-- AGF encoding or movie/video decoding for MPEG-like `OP/MVB*.AGF`.
+- AGF encoding, movie audio, or generalized video APIs. The implemented movie path is deliberately limited
+  to SC0000's existing `0x236` site and Windows' native DirectShow MPEG decoder.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
   ordered mod roots can be layered onto the same store later.
 - Removing the extraction/conversion tools immediately. They remain independent parity oracles until the

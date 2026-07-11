@@ -21,6 +21,7 @@ public interface IHost
     void PresentFrame(GfxState gfx) { }
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
+    void ReleaseSurface(int slot) { }
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
     (int Width, int Height) GetTextureSize(int slot);
     void PlayBgm(long id);
@@ -29,4 +30,7 @@ public interface IHost
     void StartSoundEffect(int channel) { }
     void ReleaseSoundEffect(int channel) { }
     void FadeBgm(int targetPercent, long durationMs) { }
+    // Native op 0x236 binds a DirectShow movie decoder to an existing retained texture surface.
+    // Playback is non-modal: the VM advances to the following instruction while the host publishes frames.
+    void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) { }
 }

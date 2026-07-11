@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Age.Engine\Age.Engine.csproj" />
+    <Compile Include="..\..\godot\DirectShowMovieDecoder.cs" Link="DirectShowMovieDecoder.cs" />
   </ItemGroup>
 
 </Project>

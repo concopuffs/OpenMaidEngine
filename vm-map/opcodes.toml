@@ -6146,38 +6146,39 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x236
-label = "u004221A0"
+label = "play-movie-to-surface"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004221A0"
-category = "unknown"
-summary = ""
+name = "play-movie-to-surface"
+category = "draw"
+summary = "(resource_id)(surface_slot)(movie_flags)(sync_mask) - synchronously resolve/open an archive movie and construct its DirectShow graph, then start asynchronous frame delivery into the retained destination surface. The opcode itself is non-blocking: the VM advances to the next instruction. SC0000's native site evaluates (0x33, 0, 2, 0) at 0x13c8 and resumes at bytecode 0x13d1; its later 0x21c service boundary yields until movie EOF before cleanup."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Native handler 0x423ee0 and helpers 0x463c50/0x463aa0/0x463e20/0x4625e0; SC0000 native operand capture; exact 0x13c8->0x13d1 trace; archive-only changing-frame decoder and Godot lifecycle tests."
+details = "The handler requires an existing destination texture, allocates/reuses a 0x478-byte movie-to-texture object for the surface, opens operand 1 through the native indexed-asset reader, builds FilterGraph/IGraphBuilder/IMediaControl/IMediaPosition/IMediaEvent/IBasicAudio, and presents bottom-up RGB samples through the movie texture renderer. Operand 3 selects movie/sound routing policy: bits 0x10000/0x20000/0x40000/0x80000 force sound route 0/1/2/3, otherwise set:DependMovieSound is used; SC0000's low value 2 is retained as native movie mode state. Operand 4 is stored as the movie sync/device mask at object+0x42c; SC0000 passes 0. Static layer preparation after 0x236 does not terminate the retained movie; 0x21c services it through EOF and subsequent surface cleanup stops/detaches it."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "resource_id"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "movie_flags"
 observed_types = ["imm", "g-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "sync_mask"
 observed_types = ["imm", "l-ptr"]
 
 [[opcode]]

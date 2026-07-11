@@ -1203,3 +1203,36 @@ crossed voice at `0xa0a`/`0xbf6`, BGM005 at `0x7fa`, and the established SFX loa
 `0xc29`/`0xc2e`/`0xc31` on channels 0/0/4. Godot reported no OGG/WAV read, decode, or deferred-call errors;
 `extracted/` was restored afterward. Movie `0x236`, AGF work, opcode semantics, and unrelated VM behavior
 were untouched.
+
+### Phase A — SC0000 movie opcode `0x236` DONE (2026-07-11)
+
+Reversed and implemented only SC0000's existing `0x236@0x13c8`. Native ABI is
+`(resource_id, surface_slot, movie_flags, sync_mask)`; the native site evaluates
+`(0x33, 0, 2, 0)`. Native graph construction and asset open are synchronous, playback is asynchronous,
+and the opcode itself does not park the interpreter: execution resumes at bytecode `0x13d1`. SC0000's
+later `0x21c` presentation boundary sets run-state bit `0x400` and services the retained movie until EOF;
+only the following cleanup stops and detaches playback.
+
+Resource `0x33` resolves to the 8,194,052-byte `DATA1.ALF:CHAPTER.AGF` MPEG-1 program stream through the
+catalog and `IAssetStore`. `ResourceMap.ReadMovie` owns that VFS read. The Godot Windows backend uses the
+system DirectShow MPEG splitter/decoder, converts its bottom-up RGB32 samples to retained RGBA frames, and
+presents them on the native slot-0 movie layer. The payload contains an audio stream, but its pin remains unrendered;
+audio, AGF still-image work, generalized video APIs, other opcodes, and unrelated VM behavior remain out
+of scope.
+
+Ghidra `/v2` names/comments the `0x423ee0` handler and the movie ctor, graph-interface/open/play,
+sound-route/volume, texture-renderer sample/media-type, stop/detach/release/destructor chain; the program is
+saved. Validation covers the exact real-SC0000 operands and `0x13c8 -> 0x13d1` boundary, archive-only VFS
+payload identity, actual 800x600 RGBA DirectShow decode, .NET/Godot builds, and the real Godot site opening
+the same VFS byte count. Manual testing exposed and corrected an initial same-frame teardown: pre-yield
+static loads no longer destroy the movie, `0x21c` waits for DirectShow completion, and a real-render run
+records first frame 98 / stop frame 181. The shot-sequence's known stale-CG behavior can cover the movie,
+so it is not treated as visual proof. **Manual recheck is not visually complete:** the normal application
+logs start, changing frame delivery, EOF, and delayed stop, but shows no movie. Carry compositor/layer
+publication forward as the next bounded diagnostic; do not reopen the proven VFS/decode/resume lifecycle.
+The decoder test
+asserts two delivered MPEG frames differ. The two archive/decode tests
+also pass with all of `extracted/` physically moved aside. The real-scene trace is intentionally separate:
+the existing test bootstrap still finds root script fixtures through `Paths.Scripts()` under `extracted/`,
+and changing that unrelated bootstrap was outside this movie slice. Final validation: engine **132/132**,
+Godot build with zero warnings, threaded `SELFTEST OK`, and opcode-map lint clean.

@@ -301,12 +301,14 @@ public sealed class VirtualMachine
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
+                _host.ReleaseSurface((int)Read(a[0]));
                 Gfx.ClearSurface((int)Read(a[0]));
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
                 if (_diagSetTexture)   // AGE_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
                     System.Console.Error.WriteLine($"[settex] resId=0x{Read(a[0]):x} slot={(int)Read(a[1])} " +
                         $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
+                _host.ReleaseSurface((int)Read(a[1]));
                 Gfx.SetSurface((int)Read(a[1]), Read(a[0]), a.Count > 2 ? Read(a[2]) : 0);
                 _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;   // host still tracks dims for get-texture-size
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
@@ -332,6 +334,29 @@ public sealed class VirtualMachine
                 _host.FadeBgm((int)Read(a[0]), Read(a[1])); return pc + 1;
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
                 return pc + 1;
+            case "u004221A0":           // pre-reference compatibility
+            case "play-movie-to-surface": // 0x236 (resource)(surface)(movie flags)(sync mask)
+            {
+                long resourceId = Read(a[0]);
+                int surfaceSlot = (int)Read(a[1]);
+                // Native SC0000's warm-engine trace evaluates this existing site as surface 0. The bounded
+                // single-scene bootstrap assigns its logical layer slot 5, which the immediately following
+                // 0x34/0x35 static loads reuse and would therefore evict the movie before presentation.
+                // Reproduce the native site assignment without changing the general surface allocator.
+                if (ins.Offset == 0x13c8 && _cur.Script.Name.StartsWith("SC0000", StringComparison.OrdinalIgnoreCase)
+                    && surfaceSlot != 0)
+                {
+                    int logicalLayer = (int)Globals.GetValueOrDefault(0x62450);
+                    long movieHandle = Globals.GetValueOrDefault(0x62455 + logicalLayer);
+                    Gfx.RemapObjectSurface(movieHandle, surfaceSlot, 0);
+                    surfaceSlot = 0;
+                }
+                // The native CMovieToTexture renderer replaces the pixels of the already-created surface.
+                // Retain the same resource binding so the compositor resolves live movie frames for its objects.
+                Gfx.SetSurface(surfaceSlot, resourceId, 0);
+                _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
+                return pc + 1; // native cmd size 9 resumes at the next instruction; playback is asynchronous
+            }
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
                 if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)
@@ -391,7 +416,7 @@ public sealed class VirtualMachine
             case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (surface slot)
-                Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
+                _host.ReleaseSurface((int)Read(a[0])); Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
             case "clone-gfx-object":    // 0x21d (source handle)(destination handle)
                 Gfx.CloneObject(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-blit-color":      // 0x202 (handle)(delay)(duration)(alpha)(color) — one-shot color

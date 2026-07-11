@@ -11,6 +11,9 @@ public sealed class GodotAdvHost : IHost
     private readonly string _scene;                       // e.g. "SC0000" — for section_base
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
+    private readonly Dictionary<long, (RgbaImage Image, string Name, int RawIndex)> _movieFrames = new();
+    private readonly Dictionary<int, long> _movieBySurface = new();
+    private readonly HashSet<long> _completedMovies = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
@@ -143,13 +146,13 @@ public sealed class GodotAdvHost : IHost
     public void WaitForForegroundTransition(GfxState gfx)
     {
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
-        if (started == 0 && !gfx.HasActiveTimedPresentation(_clock.NowMs)) return;
+        if (started == 0 && !gfx.HasActiveTimedPresentation(_clock.NowMs) && !HasActiveMoviePresentation()) return;
         _foregroundGfx = gfx;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
         IsTransitionWaiting = true;
         _timeline?.State("transition-start", new() { ["count"] = started });
         int lastBucket = -1;
-        while (gfx.HasActiveTimedPresentation(_clock.NowMs) && !_stopping)
+        while ((gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation()) && !_stopping)
         {
             var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
             int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
@@ -256,9 +259,91 @@ public sealed class GodotAdvHost : IHost
     /// from the loose-first asset store.</summary>
     public (RgbaImage Image, string Name, int AssetId)? ResolveResIdTexture(long resId)
     {
+        lock (_imageLock)
+            if (_movieFrames.TryGetValue(resId, out var movie))
+                return (movie.Image, movie.Name, movie.RawIndex);
         var asset = _res.ResolveTexture(_scene, resId);
         var image = asset != null ? Decode(asset) : null;
         return asset != null && image != null ? (image, asset.Name, asset.RawIndex) : null;
+    }
+
+    public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+    {
+        var asset = _res.Resolve(_scene, resourceId);
+        if (asset == null) { Godot.GD.Print($"movie unresolved {_scene}:0x{resourceId:x}"); return; }
+        try
+        {
+            var movie = _res.ReadMovie(asset);
+            ReleaseSurface(surfaceSlot);
+            lock (_imageLock)
+            {
+                _movieBySurface[surfaceSlot] = resourceId;
+                _completedMovies.Remove(resourceId);
+            }
+            _slotDims[surfaceSlot] = (800, 600); // SC0000 creates this native-sized surface immediately beforehand.
+            _timeline?.Event("movie-start", new()
+            {
+                ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
+                ["flags"] = movieFlags, ["sync_mask"] = syncMask,
+            });
+            _main.CallDeferred("PlayMovie", movie.Bytes, movie.Name, resourceId, asset.RawIndex);
+        }
+        catch (System.Exception e) { Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}"); }
+    }
+
+    public void ReleaseSurface(int slot)
+    {
+        long resourceId;
+        lock (_imageLock)
+        {
+            if (!_movieBySurface.Remove(slot, out resourceId)) return;
+            if (!_completedMovies.Contains(resourceId))
+            {
+                _movieBySurface[slot] = resourceId;
+                return; // SC0000 prepares following static surfaces before 0x21c; the movie remains retained.
+            }
+            _movieFrames.Remove(resourceId);
+            _completedMovies.Remove(resourceId);
+        }
+        _timeline?.Event("movie-stop", new() { ["resource"] = resourceId, ["surface"] = slot });
+        _main.CallDeferred("StopMovie", resourceId);
+    }
+
+    // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's
+    // sample callback: the retained object keeps its surface binding while only the surface pixels change.
+    public void PublishMovieFrame(long resourceId, string name, int rawIndex, RgbaImage frame)
+    {
+        lock (_imageLock) _movieFrames[resourceId] = (frame, name, rawIndex);
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+    }
+
+    public void NotifyMovieCompleted(long resourceId)
+    {
+        lock (_imageLock)
+            if (!_completedMovies.Add(resourceId)) return;
+        _timeline?.Event("movie-complete", new() { ["resource"] = resourceId });
+        _frameSignal.Set();
+    }
+
+    private bool HasActiveMoviePresentation()
+    {
+        lock (_imageLock)
+            foreach (long resourceId in _movieBySurface.Values)
+                if (!_completedMovies.Contains(resourceId)) return true;
+        return false;
+    }
+
+    public bool TryGetActiveMovieFrame(out RgbaImage frame)
+    {
+        lock (_imageLock)
+            foreach (long resourceId in _movieBySurface.Values)
+                if (_movieFrames.TryGetValue(resourceId, out var movie))
+                {
+                    frame = movie.Image;
+                    return true;
+                }
+        frame = default!;
+        return false;
     }
 
     private RgbaImage? Decode(AssetEntry asset)

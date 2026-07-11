@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
@@ -8,6 +9,7 @@ using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
+[SupportedOSPlatform("windows")]
 public partial class Main : Godot.Control
 {
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
@@ -22,6 +24,8 @@ public partial class Main : Godot.Control
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
+    private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
+    private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private GodotTraceSink _trace = null!;
     private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
     private string? _histFile;
@@ -214,8 +218,10 @@ public partial class Main : Godot.Control
     public override void _Process(double delta)
     {
         _clock.Advance(delta);
-        _timeline?.SetFrame(++_timelineFrame, _clock.NowMs);
+        _timelineFrame++;
+        _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
+        UpdateMovieFrames();
         if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite())
             Recomposite();   // native publishes retained mutations only at present/service boundaries
         if (!_selftest && _host != null) UpdateAdvTextPresentation();
@@ -266,7 +272,12 @@ public partial class Main : Godot.Control
             _host.SignalInput();
     }
 
-    public override void _ExitTree() { DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); }
+    public override void _ExitTree()
+    {
+        DumpHistogram(); _host?.Stop(); _timeline?.Dispose();
+        foreach (var movie in _movies.Values) movie.Decoder.Dispose();
+        _movies.Clear();
+    }
 
     // Write the real-run op/call-site histogram to --trace-histogram <file>. Idempotent; called when the
     // scene ends or the window closes (the opening parks at wait-for-input, so closing is the usual trigger).
@@ -295,6 +306,11 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
+        // SC0000's movie is an independently updating retained background. The script prepares later
+        // static surfaces before its 0x21c yield; those layers composite above the current movie sample.
+        if (_host.TryGetActiveMovieFrame(out var movieFrame) &&
+            movieFrame.Width == _screen.GetWidth() && movieFrame.Height == _screen.GetHeight())
+            _screen.SetData(movieFrame.Width, movieFrame.Height, false, Image.Format.Rgba8, movieFrame.Pixels);
         _speaker.Visible = false;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
@@ -565,6 +581,49 @@ public partial class Main : Godot.Control
         if (realDurationSeconds <= 0) { _bgm.VolumeDb = targetDb; return; }
         CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
     }
+
+    public void PlayMovie(byte[] mpegBytes, string assetName, long resourceId, int rawIndex)
+    {
+        if (_movies.Remove(resourceId, out var prior)) prior.Decoder.Dispose();
+        try
+        {
+            var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
+            _movies[resourceId] = new MovieRuntime(assetName, rawIndex, new DirectShowMovieDecoder(payload));
+            GD.Print($"movie started {assetName} ({mpegBytes.Length} bytes from VFS)");
+        }
+        catch (System.Exception e)
+        {
+            GD.Print($"movie decode failed {assetName}: {e.Message}");
+            _host.NotifyMovieCompleted(resourceId); // release a pending 0x21c boundary on deterministic load failure
+        }
+    }
+
+    private void UpdateMovieFrames()
+    {
+        if (_host == null) return;
+        foreach (var (resourceId, movie) in _movies)
+        {
+            if (movie.Decoder.TryTakeFrame(out var frame))
+            {
+                _host.PublishMovieFrame(resourceId, movie.Name, movie.RawIndex, frame);
+                if (_movieFrameSeen.Add(resourceId))
+                    GD.Print($"movie first frame {movie.Name}: {frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
+            }
+            if (movie.Decoder.IsCompleted) _host.NotifyMovieCompleted(resourceId);
+        }
+    }
+
+    public void StopMovie(long resourceId)
+    {
+        if (_movies.Remove(resourceId, out var movie))
+        {
+            movie.Decoder.Dispose();
+            GD.Print($"movie stopped {movie.Name} at render frame {_timelineFrame}");
+        }
+        _movieFrameSeen.Remove(resourceId);
+    }
+
+    private sealed record MovieRuntime(string Name, int RawIndex, DirectShowMovieDecoder Decoder);
 
     public void AppendLine(string text) => _text.Text += text + "\n";
     public void PageBreak() { _pageCount++; _status.Text = ""; }
