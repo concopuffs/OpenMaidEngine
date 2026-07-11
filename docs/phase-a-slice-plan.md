@@ -1049,3 +1049,43 @@ clean apart from the pre-existing nullable warning and threaded `SELFTEST OK`; a
 opcode/ctx lint, 481-script decode, RECOVER, and `git diff --check` clean. SC0000 coverage rises from
 **85/129 to 87/129 handled (67.4%)**, with 42 GAP ops / 188 GAP instructions. Movie `0x236` and SFX remain
 separate slices. No implementation commit was made.
+
+### Candidate foundation track — native asset VFS + ALF/AAI/AGF readers (SCOPED 2026-07-10; NOT STARTED)
+
+This is an optional high-leverage detour before movie `0x236` or SFX. It replaces the Phase-A
+pre-extracted/pre-converted asset bootstrap with the native loose-override/archive-fallback model and removes
+the runtime dependency on `extracted/` plus `build/textures/`. Canonical format/architecture detail and source
+references live in `docs/asset-resolution-re.md` §“Candidate runtime asset-VFS track”; this section defines
+slice boundaries only.
+
+Land it as three bounded slices, not one archive/codec rewrite:
+
+VFS-A is the common prerequisite. VFS-B and VFS-C may be swapped afterward: choose A→C→B for the fastest
+SC0000 textbox/chrome payoff, or A→B→C when complete base+append archive mounting is the priority.
+
+1. **VFS-A — base SYS4 catalog + ALF byte reads.** Runtime-parse SYS4INI into raw-id, scene-local, and name
+   lookup views; preserve placeholders; expose bounded asset streams. Apply native precedence
+   `loose root/<record.name> → indexed ALF range`. Convert `Sys4Loader`/`Sys4ScriptProvider` to consume bytes
+   from this seam first, proving the existing 52 patched root BINs still shadow archive copies. Gate: sampled
+   and corpus-size/range validation against `extracted/`, plus synthetic loose-override tests.
+2. **VFS-B — APPEND01 AAI mount.** Parse `S4AC422` and read `APPEND01.ALF`. Use Ghidra/native observation
+   only as needed to settle pack selection/mount precedence; compare the entire parsed directory and sampled
+   payloads with `BinExtractALF.exe`. Gate: no guessed name override or high-byte-id behavior reaches runtime.
+3. **VFS-C — in-process AGF → RGBA8.** Port the MIT GARbro decode algorithm into platform-neutral engine
+   code with a focused LZSS primitive, palette/truecolor expansion, stride/orientation handling, and optional
+   ACIF alpha. Replace BMP-path texture loading with decoded pixel surfaces. Gate: codec sample matrix plus
+   exact SO001 dimensions/alpha, then windowed SC0000 textbox/button pixels with `extracted/` and
+   `build/textures/` unavailable to the runtime.
+
+After those gates, move OGG/WAV consumers onto the same byte store as a small follow-up. That prepares SFX
+without conflating its channel/timing semantics with archive access. Movie `0x236` may likewise consume raw
+AGF/MPEG bytes later, but video decoding remains explicitly outside this track.
+
+Expected authored seams (names provisional): `Sys4AssetCatalog`, `IAssetStore`/`Sys4AssetStore`, bounded
+archive stream/reader, `LzssDecoder`, and `AgfDecoder`; focused tests belong in `Age.Engine.Tests`. Runtime
+caches should key decoded assets by catalog identity plus loose-file timestamp, while tests use synthetic
+fixtures and installed-game integration checks rather than committing proprietary assets.
+
+**Decision point:** this track is worthwhile before broadening beyond SC0000 because it establishes the
+modding contract and benefits scripts, UI chrome, SFX, and movies. It is not required to continue opcode
+coverage immediately, so choosing movie/SFX next remains valid.

@@ -191,6 +191,24 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 | `engine_ctx_build.py` | Build the `EngineCtx` struct artifacts from `vm-map/engine-ctx.toml` (canonical `ctx`-field registry). `--lint` = overlap/OOB/dup/type checks. The struct is then applied to the `/v2` image via `run_script_inline` (creates `EngineCtx`, retypes all dispatch-handler `this` → `EngineCtx *`) so handlers decompile `ctx->field` not `param_1+0x…`. Grows one `[[field]]` at a time. | `engine_ctx_build.py --build` · `--lint` | ⚙ `vm-map/engine-ctx.toml` → ⚙ `build/engine-ctx.json`, ⚙ `docs/engine-ctx-reference.md` |
 | `test_engine_ctx.py` | Unit tests for the ctx builder (load/lint/emit; plain runner). | `test_engine_ctx.py` | — |
 
+## Tooling improvement backlog
+
+Prioritized from the 2026-07-10 Phase-A retrospective. These are proposed capabilities, not tools that
+already exist. Prefer additions that produce reusable, offset-keyed evidence over one-off capture scripts.
+
+| Priority | Improvement | Payoff / acceptance boundary |
+|---|---|---|
+| P0 | **Native/port checkpoint harness** | Launch either runtime windowed, identify the process/window, record script offset + timestamp, capture a screenshot and retained-state/trace excerpt, and classify normal exit vs harness stop vs crash. A checkpoint should produce one comparable artifact bundle for the same bytecode offset in both runtimes. |
+| P0 | **Sanctioned Windows GUI automation** (small Win32 helper, AutoHotkey, or pywinauto) | Repeatably focus the game, capture window geometry, and inject only explicitly requested clicks/keys. Manual input remains the independent oracle; automation removes capture/setup repetition. |
+| P0 | **Scriptable 32-bit debugger** (x32dbg or WinDbg) | Breakpoints and memory snapshots for hot render/audio workers that are unsafe to hook densely with Frida. Keep Frida probes on known low-frequency handlers; never restore hot interpreter/glyph/render hooks merely for convenience. |
+| P1 | **Timestamped video capture** (ffmpeg desktop capture or command-controlled OBS) | Frame-by-frame native/port evidence for movie `0x236`, fades, and short animation boundaries without PNG-per-frame overhead. |
+| P1 | **WASAPI loopback/audio capture** | Objective SFX/BGM/voice start time, channel reuse, volume, stop, and waveform comparison. This is the main evidence upgrade for the pending SFX slice. |
+| P1 | **One-command validation driver** | Run engine tests with shared compilation disabled, sweep, Godot build/selftest, Python suites, generated-reference lints, decode/RECOVER checks, `git diff --check`, and report leaked child processes in one summarized result. |
+| P1 | **Golden SC0000 checkpoint corpus** | Preserve the first 10-15 native pages as offset-keyed screenshots, click/wait events, retained-state summaries, and trace excerpts. Port regressions should be comparable without replaying the entire investigation. |
+| P2 | **Opcode dossier generator** | Combine corpus callsites/operands, native handler/worker addresses, runtime samples, Ghidra names, opcode provenance, and port coverage into a per-op investigation packet. |
+| P2 | **More typed Ghidra state** | Materialize retained-object, surface-slot, text-layout, and audio-channel structures so related handlers decompile against shared named fields. |
+| P2 | **Narrow write access for cross-session memory** | Let mandatory milestone closeout update `MEMORY.md` and `himegari-port-status.md` directly; the current out-of-workspace copy/approval path adds avoidable handoff friction. |
+
 ## Historical / one-off
 
 | Tool | Purpose |

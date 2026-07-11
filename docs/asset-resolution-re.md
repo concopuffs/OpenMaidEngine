@@ -54,7 +54,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    all 13206 `offset+size` fit inside their real `.ALF`; 837 name-matched files → 0 size mismatches.
    `files[]` preserves directory order (feeds step 2's order-correlation). Re-run:
    `py -3.11 -X utf8 tools/parse_sys4ini.py --check`. (Ref: asmodean's `exs4alf` / GARbro Eushully `ArcALF.cs`.)
-2. **Resolve `resId → asset file`.** **✅ SOLVED (2026-07-06) — fully static & general; NO runtime capture.**
+2. **Resolve `resId → asset file`.** **✅ SOLVED for scene-manifest references (2026-07-06);
+   system/global raw ids are a separate path identified 2026-07-10.**
 
    **The rule:** SYS4INI's file list is organized into **SECTIONS, one per scene** — each is a
    `SCxxxx.BIN` script entry followed by that scene's **asset MANIFEST**: every asset it references,
@@ -73,6 +74,14 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    (all sections) satisfy `files[base+fn]==name`. This is the derivable rule that generalizes to any
    AGE game with the same container — **the "scope" was just which SYS4INI section the scene lives in.**
    (The old `play-bgm 5→BGM006` validation point was a mis-attribution — the real game plays BGM005.)
+
+   **System/global-id exception (identified 2026-07-10; not yet implemented).** Some SYSTEM4 loads use
+   the SYS4INI record's universal `raw_index` directly, including the two `@` placeholder records, rather
+   than a scene-local manifest index. `SYSTEM4.BIN` writes `G[0x69b]=0x337e`, then
+   `set-texture(G[0x69b], slot=0x11)`. SYS4INI `raw_index 0x337e` is `DATA1/SO001.AGF`, the shared
+   800×300 RGBA system-chrome sheet. The filtered `files[]` list omits placeholders, so treating `0x337e`
+   as a `files[]` position currently mis-resolves it to `SETROUTE.BIN`. This path needs a distinct
+   `raw_index → entry` lookup; the scene-manifest rule above remains correct for SC texture/voice ids.
 
    *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
    for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
@@ -94,6 +103,17 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    (`AE*`) drew opaque (no alpha); the slot
    model approximated the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
    (A2b section) for the implementation history and current retained-object model.
+
+   **Current system-chrome shortcut/gap (confirmed 2026-07-10).** `Main --boot` executes only
+   `INITCONFIG/INIT2/INIT` through `CaptureHost` and copies their globals into the scene VM; it does not
+   replay SYSTEM4's graphics side effects through `GodotAdvHost`. `convert_agf.py --scene SC0000` also
+   converts only SC0000's manifest, so `build/textures/SO001.BMP` is absent. `CALLBACK_WINDOW.BIN` expects
+   slot `0x11` to already contain SO001, draws the 800×227 textbox from `(0,0)`, and crops the lower-right
+   buttons from the same sheet. In the port slot 17 is unpopulated, so retained handle `0xd2f0` resolves as
+   a colored surfaceless object and the compositor draws the observed opaque black fill. A temporary decode
+   verified SO001 is 800×300, 32-bpp, with substantial per-pixel alpha; the current rasterizer already
+   consumes source alpha. The missing prerequisites are system-asset resolution/conversion and retained
+   slot initialization, not new textbox drawing or button interaction.
 4. **Audio.** **✅ WIRED (2026-07-06) — no Frida needed.** Same rule as textures:
    `play-bgm(id)`/`play-voice(id)` → `files[section_base(scene)+id]` → OGG. `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.AudioPath` → loose
@@ -134,3 +154,72 @@ layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphi
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
 uses the manifest** (`files[base+id]`); **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
+
+## Candidate runtime asset-VFS track (scoped 2026-07-10; not started)
+
+The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
+runtime. The native-compatible target is a read-only virtual filesystem that preserves AGE's translation/mod
+behavior:
+
+> resolve the resource record → try a loose file with that record's name in the game/mod root → otherwise
+> read exactly `offset..offset+size` from the record's ALF → decode the contained format in process.
+
+Native evidence already proves this ordering for scripts: `resource_open_by_raw_id@0x44f390` indexes the
+80-byte SYS4 record and calls `CreateFileA(record.name)` before opening `record.archive`, seeking to
+`record.offset`, and reading `record.size`. The same service is the correct common seam for scripts,
+graphics, voice/SFX, and later movie bytes. Resolution and opening must remain separate: scene-local ids and
+universal `raw_index` ids select a record differently, but both records flow through the same loose-first
+store.
+
+### Proposed layers
+
+1. **Catalog + read-only ALF store.** Parse SYS4INI at runtime while preserving all 13208 raw records
+   (including the two `@` placeholders), archive names, scene sections, and the existing three lookup modes:
+   universal raw id, scene-local manifest id, and direct name where the opcode family genuinely uses one.
+   An ALF is a payload container at this layer: open the named archive and return a bounded stream/byte range
+   at the indexed offset/size. Before that fallback, probe the configured loose override roots by the record's
+   exact basename. Keep `build/asset-index.json` as a diagnostic artifact, not a runtime dependency.
+2. **AAI append mount.** Parse the installed `APPEND01.AAI` (`S4AC422`) and its paired `APPEND01.ALF` with
+   the same catalog abstractions. First prove whether Himegari joins append records by a separate pack/tag,
+   by name replacement, or by another table selected by the native high-byte-id path; do not invent mount
+   precedence. Validate every parsed append entry against `BinExtractALF.exe` output before exposing it to
+   the runtime.
+3. **AGF decoder.** Decode an opened AGF stream directly to width/height + RGBA8. The MIT-licensed GARbro
+   `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,
+   LZSS-or-raw header section, 4/8/truecolor source pixels, LZSS-or-raw pixel section, bottom-up row/stride
+   conversion, and optional `ACIF` LZSS alpha plane. Port only the algorithm and attribution into
+   platform-neutral .NET code; do not carry GARbro's WPF/GameRes dependencies. Kelebek's extractor and the
+   on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
+   so its code should not be copied without clarification.
+4. **Runtime consumers.** Make script loading accept streams/bytes from the store, make texture surfaces own
+   decoded RGBA pixels rather than BMP paths, and load OGG/WAV from store bytes. Migrate one consumer at a
+   time; retain extraction/conversion tools as diagnostics until parity is established.
+
+### Acceptance gates
+
+- Catalog: 13208 raw slots / 13206 real base entries; every ALF range is in bounds; scene-local mappings
+  remain identical to the current resolver and `raw_index 0x337e` resolves to `SO001.AGF`.
+- Store: representative base reads are byte-identical to `extracted/`; a temporary loose file with the same
+  record name wins, and removing it deterministically reveals the archive bytes. Root path traversal is
+  rejected and archive reads are bounded/thread-safe.
+- AAI: entry names/counts/ranges and representative bytes match a disposable `BinExtractALF APPEND01.AAI`
+  extraction; the native mount/selection rule is documented before integration.
+- AGF: a sample matrix covers compressed/uncompressed sections, 4/8/24-bit source pixels, type 1/2, and
+  alpha/no-alpha. Decoded dimensions and RGBA hashes/pixels match GARbro or `AGF2BMP2AGF`; `SO001.AGF`
+  specifically decodes as 800×300 with its alpha plane intact.
+- End to end: SC0000 can run without consulting `extracted/` or `build/textures`; slot 17 receives SO001,
+  the translucent textbox/button chrome appears, root `.BIN` overrides still win, and the standard VM/Godot
+  validation matrix remains green.
+
+### Deliberate non-goals
+
+- Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
+- AGF encoding, movie/video decoding for MPEG-like `OP/MVB*.AGF`, or SFX channel semantics.
+- A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
+  ordered mod roots can be layered onto the same store later.
+- Removing the extraction/conversion tools immediately. They remain independent parity oracles until the
+  runtime readers have broad corpus coverage.
+
+Primary implementation reference: [GARbro's Eushully AGF reader](https://github.com/morkt/GARbro/blob/master/ArcFormats/Eushully/ImageAGF.cs)
+and [ALF reader](https://github.com/morkt/GARbro/blob/master/ArcFormats/Eushully/ArcALF.cs), MIT licensed.
+Secondary validation reference: [Kelebek's extractor](https://github.com/Kelebek1/Eushully-Decompiler/blob/master/extract_alf.py).
