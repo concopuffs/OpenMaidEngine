@@ -1337,3 +1337,28 @@ The normal-speed FPS samples were effectively unchanged from quick win 2 (54/26/
 backbuffer landed. The cleanup removes needless Godot objects/copies and helps future layer-heavy scenes,
 but the measured next target is the general inverse-affine per-pixel path—especially identity-transform,
 opaque-copy, and axis-aligned fill fast paths.
+
+**Quick win 4 initial raster fast path implemented (2026-07-11).** `SoftwareAffineRasterizer` now detects
+exact identity matrices with integral translation and bypasses inverse-matrix construction, floating-point
+coordinate application, `Floor`, and per-pixel geometric rejection. Both `BlitRgba` and `FillRgba` use
+direct clipped integer indexing for that case while retaining the exact existing tint, multiplicative tint,
+source alpha, object opacity, destination blend, and alpha-accumulation arithmetic. Scale, rotation,
+fractional translation, singular transforms, and all other geometry retain the original affine fallback.
+Zero-opacity draws also return before scanning pixels.
+
+Six new differential cases compare the fast paths byte-for-byte against a retained copy of the pre-fast-path
+algorithm across positive/negative clipping, existing destination pixels, ordinary and multiplicative tint,
+partial source/object alpha, and solid fills. The full engine suite is **141/141**; Godot builds with zero
+warnings and threaded `SELFTEST OK`. The differential SC0000 page image retains SHA-256
+`E669355772D4D9118BE80AC93595F78BB467B088659DEA4CC2D2B7D0F05B62BE`, subject to the automated-shot
+presentation-state caveat above.
+
+Because the console SC0000 state does not match the user's ordinary interactive CG presentation, no
+whole-scene FPS claim is made for this slice. An isolated Release-mode 800x600 tinted/alpha identity-blit
+kernel comparison measured **2.737 ms** for the new path versus **4.217 ms** for the retained general loop,
+or **1.54x** for that layer type. Manual-path fade responsiveness is validated below. A later bounded step
+may add a fully opaque/unmodulated row-copy path as optional incremental work.
+
+**Manual validation:** the user tested the ordinary interactive path—the path whose CG state and fade
+cadence differ from the console capture—and reported a **massive improvement**. This confirms the identity
+blit/fill fast path materially improves real fade responsiveness, not merely the isolated kernel benchmark.
