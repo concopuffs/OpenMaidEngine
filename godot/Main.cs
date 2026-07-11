@@ -306,11 +306,6 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
-        // SC0000's movie is an independently updating retained background. The script prepares later
-        // static surfaces before its 0x21c yield; those layers composite above the current movie sample.
-        if (_host.TryGetActiveMovieFrame(out var movieFrame) &&
-            movieFrame.Width == _screen.GetWidth() && movieFrame.Height == _screen.GetHeight())
-            _screen.SetData(movieFrame.Width, movieFrame.Height, false, Image.Format.Rgba8, movieFrame.Pixels);
         _speaker.Visible = false;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
@@ -357,7 +352,7 @@ public partial class Main : Godot.Control
                 else
                 {
                     BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
-                              localToDest, opacity, v.MultiplyTint);
+                              localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
@@ -422,7 +417,8 @@ public partial class Main : Godot.Control
                 var texture = _host.ResolveResIdTexture(source.SurfaceResId);
                 if (texture == null) continue;
                 BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
-                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint);
+                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,
+                          texture.Value.IsDynamic);
             }
             drawn++;
         }
@@ -464,10 +460,19 @@ public partial class Main : Godot.Control
     // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 sets multiplyTint and uses packed RGB as
     // multiplicative modulation while alpha is object opacity.
     private void BlitLayer(RgbaImage decoded, int assetId, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false)
+                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
+                           bool dynamic = false)
     {
         var cacheKey = (assetId, colorKey);
-        if (!_imgCache.TryGetValue(cacheKey, out var src))
+        Image? src;
+        if (dynamic)
+        {
+            // Decoder samples replace the pixels of one retained surface. Catalog identity is stable across
+            // those samples, so the static AGF cache key would otherwise freeze the very first movie frame.
+            src = Image.CreateFromData(decoded.Width, decoded.Height, false, Image.Format.Rgba8, decoded.Pixels);
+            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
+        }
+        else if (!_imgCache.TryGetValue(cacheKey, out src))
         {
             src = Image.CreateFromData(decoded.Width, decoded.Height, false, Image.Format.Rgba8, decoded.Pixels);
             if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);

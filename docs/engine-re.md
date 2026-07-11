@@ -871,14 +871,15 @@ not itself block the VM. SC0000 prepares additional static layers, then reaches 
 service continues sampling the retained movie until DirectShow EOF, after which the following script
 cleanup releases it. The static preparation before `0x21c` is not a movie teardown boundary.
 
-**Manual-test correction (2026-07-11):** the initial port incorrectly treated those pre-yield static loads
-as surface replacement, producing start/first-frame/stop all in render frame 0. The bounded host now keeps
-the movie as an independently updating retained layer, parks `0x21c` until the DirectShow completion event,
-then permits cleanup. A real-render lifecycle run records first frame 98 and stop frame 181. The screenshot
-sequence's known stale-CG/transition behavior can obscure this layer, so screenshot appearance is not used
-as the visual oracle. **Manual recheck remains unresolved:** normal interactive SC0000 logs start, changing
-frame delivery, EOF, and delayed stop, but the movie is not visibly presented in the application. The next
-slice must diagnose compositor/layer publication rather than reopening decode or VM-lifecycle timing.
+**Manual-test corrections (2026-07-11):** the initial port incorrectly treated pre-yield static loads as
+surface replacement, producing start/first-frame/stop all in render frame 0. The bounded host now retains
+the movie through `0x21c` until DirectShow completion. A follow-up compositor trace proved the movie object
+was present at the correct z-position, but the static AGF cache reused the first decoded sample forever
+because every sample has the same `(assetId,colorKey)`. An unconditional current-sample backbuffer copy did
+not help because normal retained composition immediately covered it with that cached first sample. Movie
+surfaces now bypass the static cache and publish only through the retained object. A windowed run records
+first frame 101 and stop frame 190; the user manually confirmed visible playback. The separate lower white
+textbox-area object remains outside this finding, as does the deliberately unrendered movie audio stream.
 
 The `/v2` image names/comments the handler; movie ctor/interface/open/play/volume/release workers; sound
 route helpers; renderer media-type/sample workers; and stop/detach/destructor lifecycle. The image was

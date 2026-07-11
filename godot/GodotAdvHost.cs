@@ -257,14 +257,14 @@ public sealed class GodotAdvHost : IHost
 
     /// <summary>Resolve a gfx surface through scene-local or universal raw-id addressing and decode it
     /// from the loose-first asset store.</summary>
-    public (RgbaImage Image, string Name, int AssetId)? ResolveResIdTexture(long resId)
+    public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveResIdTexture(long resId)
     {
         lock (_imageLock)
             if (_movieFrames.TryGetValue(resId, out var movie))
-                return (movie.Image, movie.Name, movie.RawIndex);
+                return (movie.Image, movie.Name, movie.RawIndex, true);
         var asset = _res.ResolveTexture(_scene, resId);
         var image = asset != null ? Decode(asset) : null;
-        return asset != null && image != null ? (image, asset.Name, asset.RawIndex) : null;
+        return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
     }
 
     public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
@@ -330,19 +330,6 @@ public sealed class GodotAdvHost : IHost
         lock (_imageLock)
             foreach (long resourceId in _movieBySurface.Values)
                 if (!_completedMovies.Contains(resourceId)) return true;
-        return false;
-    }
-
-    public bool TryGetActiveMovieFrame(out RgbaImage frame)
-    {
-        lock (_imageLock)
-            foreach (long resourceId in _movieBySurface.Values)
-                if (_movieFrames.TryGetValue(resourceId, out var movie))
-                {
-                    frame = movie.Image;
-                    return true;
-                }
-        frame = default!;
         return false;
     }
 

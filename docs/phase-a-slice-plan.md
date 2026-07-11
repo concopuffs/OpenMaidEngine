@@ -1226,10 +1226,13 @@ saved. Validation covers the exact real-SC0000 operands and `0x13c8 -> 0x13d1` b
 payload identity, actual 800x600 RGBA DirectShow decode, .NET/Godot builds, and the real Godot site opening
 the same VFS byte count. Manual testing exposed and corrected an initial same-frame teardown: pre-yield
 static loads no longer destroy the movie, `0x21c` waits for DirectShow completion, and a real-render run
-records first frame 98 / stop frame 181. The shot-sequence's known stale-CG behavior can cover the movie,
-so it is not treated as visual proof. **Manual recheck is not visually complete:** the normal application
-logs start, changing frame delivery, EOF, and delayed stop, but shows no movie. Carry compositor/layer
-publication forward as the next bounded diagnostic; do not reopen the proven VFS/decode/resume lifecycle.
+records first frame 98 / stop frame 181. A follow-up compositor-only investigation found that the movie
+object was present at the correct retained z-position, but the static AGF image cache keyed by
+`(assetId,colorKey)` froze its first sample. A duplicate unconditional backbuffer copy of the current sample
+was then covered by that same retained object. Dynamic movie surfaces now bypass the static-image cache and
+publish only through their retained object. A windowed auto-play run recorded first frame 101 / stop frame
+190, and the user manually confirmed that the video visibly played. The known lower white/textbox panel is
+an unrelated retained-object issue. Movie audio remains deliberately unrendered and out of scope.
 The decoder test
 asserts two delivered MPEG frames differ. The two archive/decode tests
 also pass with all of `extracted/` physically moved aside. The real-scene trace is intentionally separate:

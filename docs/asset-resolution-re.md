@@ -280,9 +280,12 @@ frame; both still pass with the entire `extracted/` tree physically moved aside 
 SC0000's native capture verifies operands `(0x33, 0, 2, 0)` and immediate VM continuation at `0x13d1`.
 In Godot the real site opens the same 8,194,052 VFS bytes, publishes changing 800x600 frames, and retains
 them across pre-yield static surface preparation. The later `0x21c` presentation service remains parked
-until DirectShow EOF, then scene cleanup stops the movie. Manual interactive validation still does not show
-the movie despite those successful lifecycle logs; visible compositor/layer publication is the next bounded
-investigation. The real-scene trace remains a separate extracted-present test
+until DirectShow EOF, then scene cleanup stops the movie. The initial invisible result was compositor-only:
+the static `(assetId,colorKey)` image cache froze the first movie sample, while an extra current-sample
+background copy was covered by the correctly positioned retained movie object. Dynamic movie surfaces now
+bypass that cache and publish only at their retained z-position. A windowed run reached first frame 101 and
+stop frame 190, and manual observation confirmed visible changing video. Movie audio remains intentionally
+unrendered. The real-scene trace remains a separate extracted-present test
 because the current `Paths.Scripts()` test bootstrap still locates its root `*.BIN` fixtures there; migrating
 that test/bootstrap path is unrelated to movie asset loading and was not folded into this slice.
 
