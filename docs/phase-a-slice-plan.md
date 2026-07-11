@@ -1294,3 +1294,27 @@ builds with zero warnings and threaded `SELFTEST OK`. A matching hidden-window V
 using `--speed 8` only to reach the static state quickly, held **60 FPS / 16.66 ms per frame** for all eight
 reported samples, versus the pre-change 23-25 FPS. Buffer batching/source-pixel caching and rasterizer fast
 paths remain independent follow-ups.
+
+**Quick win 2 implemented (2026-07-11).** The Godot compositor now owns one reusable 800x600 RGBA8
+managed backbuffer. `Recomposite()` clears it once, every image/fill/transition layer mutates that same
+array in z-order through the unchanged `SoftwareAffineRasterizer`, and only the completed frame crosses the
+Godot boundary via one `Image.SetData()` plus one `ImageTexture.Update()`. The former per-layer screen
+`Image.GetData()` / `Image.SetData()` round trip is gone. Static source images still call `GetData()` per
+draw; source-pixel caching remains the next independent optimization.
+
+Visual validation used the same SC0000 page-1 command before and after the refactor (`--speed 8 --shot-page
+1 --shot-settle 3`). The two PNG files are byte-identical, both SHA-256
+`E669355772D4D9118BE80AC93595F78BB467B088659DEA4CC2D2B7D0F05B62BE`. A 12-second normal-speed windowed
+Vulkan probe now reported 53, 26, and 39 FPS through the initial heavier active intervals, then 59-60 FPS
+through lighter/static intervals; the old compositor had remained around 23-25 FPS. Validation also holds
+at engine **135/135**, zero-warning Godot build, and threaded `SELFTEST OK`. The general per-pixel affine
+loop is now the clearest remaining active-frame cost.
+
+The byte-identical page-1 capture is a **differential compositor oracle only**, not a claim that the
+automated `--shot` path has the correct interactive presentation state. Both the pre- and post-refactor
+captures show fallback `SO013A` rather than the expected first event CG. The matching gfx log proves this is
+not resource-load failure: `EV049AA.AGF` resolves and loads into slot 3, but at capture its handle `0x0` is
+positioned at `(-400,-600)` and the full-screen `0xcf08` copy has completed its fade to alpha zero. The user
+confirmed that ordinary manual play displays the correct CGs. Keep this shot-path state discrepancy open
+and do not use page 1 as an absolute scene-fidelity oracle; it predates and is pixel-identical across quick
+win 2.

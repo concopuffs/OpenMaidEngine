@@ -12,9 +12,14 @@ using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 [SupportedOSPlatform("windows")]
 public partial class Main : Godot.Control
 {
+    private const int ScreenWidth = 800;
+    private const int ScreenHeight = 600;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
+    // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
+    // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
+    private readonly byte[] _screenPixels = new byte[ScreenWidth * ScreenHeight * 4];
     private Label _text = null!;
     private Label _speaker = null!;
     private Label _status = null!;
@@ -55,7 +60,7 @@ public partial class Main : Godot.Control
     public override void _Ready()
     {
         // Screen backbuffer: one 800x600 canvas that draw-texture blits into, shown behind the dialogue.
-        _screen = Image.CreateEmpty(800, 600, false, Image.Format.Rgba8);
+        _screen = Image.CreateEmpty(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8);
         _screenTex = ImageTexture.CreateFromImage(_screen);
         _screenView = new TextureRect
         {
@@ -305,7 +310,7 @@ public partial class Main : Godot.Control
 
     private void Recomposite()
     {
-        _screen.Fill(new Color(0, 0, 0, 0));
+        System.Array.Clear(_screenPixels);
         _speaker.Visible = false;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
@@ -377,6 +382,7 @@ public partial class Main : Godot.Control
             }
             z++;
         }
+        _screen.SetData(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8, _screenPixels);
         _screenTex.Update(_screen);
         if (decisions != null) LogGfxDecisionChanges(decisions);
     }
@@ -487,19 +493,16 @@ public partial class Main : Godot.Control
         sw = System.Math.Min(sw, src.GetWidth() - srcX);
         sh = System.Math.Min(sh, src.GetHeight() - srcY);
         if (sw <= 0 || sh <= 0) return;
-        byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
+        byte[] ss = src.GetData();
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
-            dst, _screen.GetWidth(), _screen.GetHeight(), ss, src.GetWidth(), src.GetHeight(),
+            _screenPixels, ScreenWidth, ScreenHeight, ss, src.GetWidth(), src.GetHeight(),
             srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint);
-        _screen.SetData(_screen.GetWidth(), _screen.GetHeight(), false, _screen.GetFormat(), dst);
     }
 
     private void FillAffineQuad(int w, int h, Age.Engine.Model.Affine2D localToDest, long tint, float alpha)
     {
-        byte[] dst = _screen.GetData();
         Age.Engine.Model.SoftwareAffineRasterizer.FillRgba(
-            dst, _screen.GetWidth(), _screen.GetHeight(), w, h, localToDest, tint, alpha);
-        _screen.SetData(_screen.GetWidth(), _screen.GetHeight(), false, _screen.GetFormat(), dst);
+            _screenPixels, ScreenWidth, ScreenHeight, w, h, localToDest, tint, alpha);
     }
 
     // Alpha-blend a solid tint (0xRRGGBB) rectangle over the screen — the surfaceless fade/flash fill.
@@ -508,8 +511,8 @@ public partial class Main : Godot.Control
         int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
         if (ia == 0) return;
         int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
-        byte[] dst = _screen.GetData();
-        int dw = _screen.GetWidth(), dh = _screen.GetHeight();
+        byte[] dst = _screenPixels;
+        int dw = ScreenWidth, dh = ScreenHeight;
         int x0 = System.Math.Max(0, -dstX), x1 = System.Math.Min(w, dw - dstX);
         int y0 = System.Math.Max(0, -dstY), y1 = System.Math.Min(h, dh - dstY);
         if (x1 <= x0 || y1 <= y0) return;
@@ -523,7 +526,6 @@ public partial class Main : Godot.Control
                 dst[di + 2] = (byte)((tb * ia + dst[di + 2] * (255 - ia)) / 255);
                 dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + ia);
             }
-        _screen.SetData(dw, dh, false, _screen.GetFormat(), dst);
     }
 
     // Make colorkey-matching texels transparent (native colorkey is baked at surface load).
