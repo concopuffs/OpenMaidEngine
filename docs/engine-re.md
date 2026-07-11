@@ -957,6 +957,17 @@ VM until the 50 ms/glyph service completes or a click forces completion, so the 
 pre-arm the following `wait-for-input`. Local/global string-pointer operand tags (8/14) are now resolved by
 the VM, which is required for SC0000's `lookup-array local-string-ptr -> draw-string` name path.
 
+**Deliberate Phase-A fidelity gap — Label rendering instead of native glyph objects.** The native engine
+GDI-rasterizes CP932 glyph bitmaps and publishes retained 20-byte records one glyph at a time; the port
+collapses that representation into Godot `Label` nodes for the ADV body and surface-bound speaker name.
+Coordinates, layout origin/cursor, reveal timing, click consumption, and retained surface/object placement
+are native-backed, but the final glyph rasterizer and object granularity are not. Consequences can include
+small differences in glyph shape, advance/kerning, baseline, wrapping, clipping, and outline pixels, plus
+missing behavior if a later scene depends on per-glyph color/effects, transforms, z-order, lifetime, or
+furigana interaction. Treat any such discrepancy as debt in the text renderer, not evidence that `0x7a`,
+`0x204`, or the ADV scheduler coordinates are inherently wrong. A future fidelity pass can replace the
+Label backend with decoded glyph surfaces/retained glyph records behind the existing VM/host contract.
+
 Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captures at `0x834`, `0x9b2`,
 `0x9d3`, and `0xa0d`. Windowed page-1 pixels place glyphs at x=100 and native y=477; voiced page 7 has
 non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
