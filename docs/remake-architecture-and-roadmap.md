@@ -69,6 +69,10 @@ Three layers, cleanly separated:
   the offline analysis/authoring chain; they were the reference implementation and stay useful for
   modders. They share the *format spec* (documented), not code — acceptable for a small, stable
   container format.
+- **Native content foundation status (2026-07-11).** VFS-A runtime-parses the base SYS4 catalog and
+  applies loose-first bounded ALF reads; VFS-C decodes AGF directly to platform-neutral RGBA8 and feeds
+  Godot without pre-extracted or pre-converted texture files. APPEND01/AAI mounting and audio-byte consumers
+  remain separate follow-ups.
 - **Profile = manifest.** Adding a game = a new profile + its maps. Adding an engine version = a new
   front-end plugin + profiles that reference it. See §5.
 

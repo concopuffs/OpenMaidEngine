@@ -9,8 +9,13 @@ namespace Age.Engine.Sys4;
 public sealed class ResourceMap
 {
     private readonly Sys4AssetCatalog _catalog;
+    private readonly IAssetStore _store;
 
-    public ResourceMap(Sys4AssetCatalog catalog) => _catalog = catalog;
+    public ResourceMap(Sys4AssetCatalog catalog, IAssetStore? store = null)
+    {
+        _catalog = catalog;
+        _store = store ?? new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
+    }
 
     public static ResourceMap Load() => new(Sys4AssetCatalog.Load(Paths.Sys4Ini));
 
@@ -20,13 +25,19 @@ public sealed class ResourceMap
         return _catalog.ResolveScene(scene, resId);
     }
 
-    /// <summary>Pre-converted BMP path for an AGF asset (see tools/convert_agf.py).</summary>
-    public static string? TexturePath(AssetEntry a)
+    /// <summary>Resolve graphics normally through the scene manifest, with the universal raw-id
+    /// fallback used by SYSTEM4-owned assets such as SO001.</summary>
+    public AssetEntry? ResolveTexture(string scene, long resId)
     {
-        if (!a.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase)) return null;
-        var bmp = Path.Combine(Paths.Textures, Path.GetFileNameWithoutExtension(a.Name) + ".BMP");
-        return File.Exists(bmp) ? bmp : null;
+        var entry = _catalog.ResolveScene(scene, resId) ?? _catalog.ResolveRaw(resId);
+        return entry is { IsPlaceholder: false } &&
+               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
+
+    /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
+    public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
+
+    public AssetEntry? ResolveName(string name) => _catalog.ResolveName(name);
 
     /// <summary>
     /// Resolve a BGM id to its OGG path. BGM is addressed by DIRECT LITERAL NAME (BGM{id:D3}.OGG), NOT the

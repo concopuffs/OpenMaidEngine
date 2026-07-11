@@ -1050,7 +1050,7 @@ opcode/ctx lint, 481-script decode, RECOVER, and `git diff --check` clean. SC000
 **85/129 to 87/129 handled (67.4%)**, with 42 GAP ops / 188 GAP instructions. Movie `0x236` and SFX remain
 separate slices. No implementation commit was made.
 
-### Candidate foundation track — native asset VFS + ALF/AAI/AGF readers (SCOPED 2026-07-10; NOT STARTED)
+### Foundation track — native asset VFS + ALF/AAI/AGF readers (VFS-A/C DONE; VFS-B PENDING)
 
 This is an optional high-leverage detour before movie `0x236` or SFX. It replaces the Phase-A
 pre-extracted/pre-converted asset bootstrap with the native loose-override/archive-fallback model and removes
@@ -1104,6 +1104,26 @@ range, traversal, and concurrency tests; CLI SC0000 run; Godot build/selftest. T
 archive-backed script overrides and two root-only BIN engine files, not the historically reported 52
 shadowing scripts; all 49 were byte-proven to win and differ from their archive payload. VFS-B APPEND01/AAI,
 VFS-C AGF, audio migration, and movie `0x236` remain separate.
+
+### VFS-C — in-process AGF to RGBA8 + SC0000 system chrome DONE (2026-07-11)
+
+`AgfDecoder` now consumes `IAssetStore` bytes and emits a platform-neutral, tightly packed top-down RGBA8
+surface. Its shared 4 KiB-ring `LzssDecoder` covers raw/compressed information, pixel, and optional ACIF
+alpha sections; expansion covers 4/8-bit palettes, 24/32-bit truecolor, DIB row padding, and bottom-up
+orientation. Synthetic fixtures exercise the whole format matrix. Installed `AE000A`, `AE001A`,
+`BG030A`, `EV052CA`, and `SO001` match the existing converter's pixels exactly; SO001 is 800×300
+with non-binary per-pixel alpha.
+
+`ResourceMap` now resolves texture ids through the scene manifest with a universal raw-id fallback,
+then decodes through the loose-first VFS. Godot and the CLI no longer use `BmpHeader`, `TexturePath`, or
+pre-converted BMPs. SYSTEM4's inherited SO001 surface is seeded into slot `0x11` before SC0000, allowing
+the existing callback-window crops to render the textbox and control icons. Windowed page-1 validation
+passed with `build/textures/` temporarily unavailable; source alpha produced the translucent upper edge
+and the bottom-right control row was visible.
+
+Validation: 124/124 engine tests, CLI/Godot builds, Godot threaded selftest, pixel parity for five installed
+assets, and the windowed no-BMP capture. VFS-B APPEND01/AAI, OGG/WAV migration, movie `0x236`, and unrelated
+opcode work remain separate.
 
 ### Phase A — native SC0000 SFX family (`0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9`) DONE (2026-07-11)
 

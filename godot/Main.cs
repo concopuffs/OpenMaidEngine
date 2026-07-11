@@ -154,7 +154,8 @@ public partial class Main : Godot.Control
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
-        _host = new GodotAdvHost(this, scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load(), scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
+        var resources = scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load();
+        _host = new GodotAdvHost(this, resources, scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
         _trace = new GodotTraceSink(_timeline);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
@@ -164,6 +165,13 @@ public partial class Main : Godot.Control
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, sink);
+        // SYSTEM4 loads the shared SO001 chrome sheet into surface slot 17 before any scene runs.
+        // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
+        if (!_selftest && resources.ResolveName("SO001.AGF") is { } systemChrome)
+        {
+            _host.SetTexture(systemChrome.RawIndex, 0x11);
+            _vm.Gfx.SetSurface(0x11, systemChrome.RawIndex, 0);
+        }
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
         if (boot && !_selftest)
@@ -279,10 +287,10 @@ public partial class Main : Godot.Control
 
     // ---- retained per-frame compositor (main thread, from _Process) ----
     // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
-    // engine's z-order), each blitting its live surface's rect at its position. Surfaces are cached by BMP
-    // path (this runs every frame). Native scale/translation matrix channels are sampled independently by
+    // engine's z-order), each blitting its live surface's rect at its position. Decoded AGF surfaces are cached
+    // by catalog identity (this runs every frame). Native scale/translation matrix channels are sampled independently by
     // GfxState and applied here; object opacity comes only from the actual blend/color path.
-    private readonly System.Collections.Generic.Dictionary<(string Path, long Key), Image?> _imgCache = new();
+    private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), Image?> _imgCache = new();
 
     private void Recomposite()
     {
@@ -328,14 +336,14 @@ public partial class Main : Godot.Control
             }
             else
             {
-                var bmp = _host.ResolveResIdTexture(v.SurfaceResId);
-                if (bmp == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
+                var texture = _host.ResolveResIdTexture(v.SurfaceResId);
+                if (texture == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
                 else
                 {
-                    BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
+                    BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
                               localToDest, opacity, v.MultiplyTint);
                     var raw = _vm.Gfx.TryGet(v.Handle);
-                    outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
+                    outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
                               $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
@@ -395,9 +403,9 @@ public partial class Main : Godot.Control
             }
             else
             {
-                var bmp = _host.ResolveResIdTexture(source.SurfaceResId);
-                if (bmp == null) continue;
-                BlitLayer(bmp, source.ColorKey, source.Tint, source.TintStrength / 255f,
+                var texture = _host.ResolveResIdTexture(source.SurfaceResId);
+                if (texture == null) continue;
+                BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
                           source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint);
             }
             drawn++;
@@ -439,20 +447,14 @@ public partial class Main : Godot.Control
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
     // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 sets multiplyTint and uses packed RGB as
     // multiplicative modulation while alpha is object opacity.
-    private void BlitLayer(string bmpPath, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
+    private void BlitLayer(RgbaImage decoded, int assetId, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
                            Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false)
     {
-        var cacheKey = (bmpPath, colorKey);
+        var cacheKey = (assetId, colorKey);
         if (!_imgCache.TryGetValue(cacheKey, out var src))
         {
-            src = new Image();
-            if (src.LoadBmpFromBuffer(System.IO.File.ReadAllBytes(bmpPath)) != Error.Ok)
-            { GD.Print($"BMP load failed {bmpPath}"); src = null; }
-            else
-            {
-                if (src.GetFormat() != Image.Format.Rgba8) src.Convert(Image.Format.Rgba8);
-                if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
-            }
+            src = Image.CreateFromData(decoded.Width, decoded.Height, false, Image.Format.Rgba8, decoded.Pixels);
+            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
             _imgCache[cacheKey] = src;
         }
         if (src == null) return;

@@ -55,8 +55,8 @@ public sealed class Sys4AssetCatalog
         if (expandedSize == 0 || expandedSize > int.MaxValue)
             throw new InvalidDataException($"{name}: invalid expanded size {expandedSize}");
 
-        var blob = DecompressLzss(data.AsSpan(PackedSizeOffset + 4, checked((int)packedSize)),
-                                  checked((int)expandedSize), name);
+        var blob = LzssDecoder.Decode(data.AsSpan(PackedSizeOffset + 4, checked((int)packedSize)),
+                                      checked((int)expandedSize), name);
         int p = 0;
         uint ReadU32()
         {
@@ -145,41 +145,4 @@ public sealed class Sys4AssetCatalog
         return Encoding.GetEncoding(932).GetString(bytes);
     }
 
-    private static byte[] DecompressLzss(ReadOnlySpan<byte> source, int expectedSize, string name)
-    {
-        var frame = new byte[0x1000];
-        int framePos = 0xfee, input = 0, output = 0;
-        var result = new byte[expectedSize];
-        while (output < expectedSize)
-        {
-            if (input >= source.Length) throw new InvalidDataException($"{name}: LZSS stream ended early");
-            int control = source[input++];
-            for (int bit = 1; bit <= 0x80 && output < expectedSize; bit <<= 1)
-            {
-                if ((control & bit) != 0)
-                {
-                    if (input >= source.Length) throw new InvalidDataException($"{name}: truncated LZSS literal");
-                    byte value = source[input++];
-                    result[output++] = value;
-                    frame[framePos] = value;
-                    framePos = (framePos + 1) & 0xfff;
-                }
-                else
-                {
-                    if (input > source.Length - 2) throw new InvalidDataException($"{name}: truncated LZSS back-reference");
-                    int lo = source[input++], hi = source[input++];
-                    int readPos = ((hi & 0xf0) << 4) | lo;
-                    int length = 3 + (hi & 0x0f);
-                    for (int j = 0; j < length && output < expectedSize; j++)
-                    {
-                        byte value = frame[readPos++ & 0xfff];
-                        result[output++] = value;
-                        frame[framePos] = value;
-                        framePos = (framePos + 1) & 0xfff;
-                    }
-                }
-            }
-        }
-        return result;
-    }
 }

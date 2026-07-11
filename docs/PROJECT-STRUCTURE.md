@@ -85,7 +85,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   │   └── strings.jsonl                    every string, tagged by source opcode
     │   ├── data/                              parsed data tables (*INIT → JSON)
     │   ├── scripts-json/                      machine-readable full dumps (on demand via --json)
-    │   ├── textures/                          AGF→BMP stills (convert_agf.py) — feeds the Godot render
+    │   ├── textures/                          AGF-to-BMP stills (convert_agf.py) - diagnostic pixel oracle only
     │   ├── engine-dump/                       UNPACKED engine dump (frida/dump_engine.py): range_<base>.bin + manifest.json
     │   ├── asset-index.json, asset-sections.json   asset resolver data (parse_sys4ini / resolve_asset)
     │   ├── global-var-map.{json,md}           partial global-variable name map (auto shape inference; feeds globals.toml merge)
@@ -97,7 +97,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
     │   └── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
-    │                                       script provider, and temporary resource facade
+    │                                       script provider, AGF-to-RGBA8/LZSS decoder, and resource facade
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
 ```

@@ -9,7 +9,8 @@ public sealed class GodotAdvHost : IHost
     private readonly Main _main;
     private readonly ResourceMap _res;
     private readonly string _scene;                       // e.g. "SC0000" — for section_base
-    private readonly Dictionary<int, string?> _slotBmp = new();          // slot -> pre-converted BMP path
+    private readonly object _imageLock = new();
+    private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
     private readonly string?[] _sfxPaths = new string?[10];              // SC0000 native channel subset
     // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
@@ -230,22 +231,20 @@ public sealed class GodotAdvHost : IHost
     public void CreateTexture(int slot, int width, int height)
     {
         lock (_textLock) _surfaceText.Remove(slot);
-        _slotBmp[slot] = null; _slotDims[slot] = (width, height);
+        _slotDims[slot] = (width, height);
         if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
     }
 
     public void SetTexture(long resourceId, int slot)
     {
         lock (_textLock) _surfaceText.Remove(slot);
-        var asset = _res.Resolve(_scene, resourceId);
-        var bmp = asset != null ? ResourceMap.TexturePath(asset) : null;
-        _slotBmp[slot] = bmp;
-        _slotDims[slot] = BmpHeader.ReadDims(bmp);   // synchronous: dims from the header, no Godot Image
-        if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(bmp != null ? System.IO.Path.GetFileName(bmp) : "<none>")}");
+        var asset = _res.ResolveTexture(_scene, resourceId);
+        var image = asset != null ? Decode(asset) : null;
+        _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
+        if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(asset?.Name ?? "<none>")}");
     }
 
-    // Dims are read from the BMP header on the VM thread so the bytecode's geometry math (which calls this
-    // synchronously right after set-texture) sees the real size. Pixels are blitted later on the main thread.
+    // AGF is decoded synchronously on the VM thread so geometry queried immediately afterward sees real dims.
     public (int Width, int Height) GetTextureSize(int slot)
         => _slotDims.TryGetValue(slot, out var d) ? (d.W, d.H) : (0, 0);
 
@@ -253,12 +252,28 @@ public sealed class GodotAdvHost : IHost
     // the visible objects each frame in ascending-handle order. No immediate blit here.
     public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
 
-    /// <summary>Resolve a gfx surface's resId to its pre-converted BMP path (Main's per-frame compositor
-    /// resolves each visible object's surface through this).</summary>
-    public string? ResolveResIdTexture(long resId)
+    /// <summary>Resolve a gfx surface through scene-local or universal raw-id addressing and decode it
+    /// from the loose-first asset store.</summary>
+    public (RgbaImage Image, string Name, int AssetId)? ResolveResIdTexture(long resId)
     {
-        var asset = _res.Resolve(_scene, resId);
-        return asset != null ? ResourceMap.TexturePath(asset) : null;
+        var asset = _res.ResolveTexture(_scene, resId);
+        var image = asset != null ? Decode(asset) : null;
+        return asset != null && image != null ? (image, asset.Name, asset.RawIndex) : null;
+    }
+
+    private RgbaImage? Decode(AssetEntry asset)
+    {
+        lock (_imageLock)
+        {
+            if (_images.TryGetValue(asset.RawIndex, out var cached)) return cached;
+            try { return _images[asset.RawIndex] = _res.DecodeTexture(asset); }
+            catch (System.Exception e)
+            {
+                Godot.GD.Print($"AGF decode failed {asset.Name}: {e.Message}");
+                _images[asset.RawIndex] = null;
+                return null;
+            }
+        }
     }
 
     // ---- audio ops (OGG plays natively in Godot) ----

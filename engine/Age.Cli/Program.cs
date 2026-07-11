@@ -373,7 +373,7 @@ sealed class GfxTraceHost : IHost
 {
     private readonly ResourceMap _res;
     private readonly string _scene;
-    private readonly Dictionary<int, string?> _slotBmp = new();   // slot -> resolved BMP path (or null)
+    private readonly Dictionary<int, string?> _slotAsset = new(); // slot -> resolved AGF name (or null)
     // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
@@ -389,19 +389,19 @@ sealed class GfxTraceHost : IHost
 
     public void SetTexture(long resId, int slot)
     {
-        var e = _res.Resolve(_scene, resId);
-        var bmp = e != null ? ResourceMap.TexturePath(e) : null;
-        _slotBmp[slot] = bmp;
-        _slotDims[slot] = BmpHeader.ReadDims(bmp);
+        var e = _res.ResolveTexture(_scene, resId);
+        RgbaImage? image = e != null ? _res.DecodeTexture(e) : null;
+        _slotAsset[slot] = e?.Name;
+        _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
         Events.Add($"set-texture slot={slot} res=0x{resId:x} -> {(e?.Name ?? "<unresolved>")}"
-                   + (bmp == null ? " [NO BMP]" : ""));
+                   + (image == null ? " [NO AGF]" : ""));
     }
 
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
     {
-        _slotBmp.TryGetValue(slot, out var bmp);
+        _slotAsset.TryGetValue(slot, out var asset);
         Events.Add($"draw-texture slot={slot} src=({sx},{sy} {w}x{h}) dst=({dx},{dy}) "
-                   + $"file={(bmp != null ? System.IO.Path.GetFileName(bmp) : "<none>")}");
+                   + $"file={(asset ?? "<none>")}");
     }
 
     public void CreateTexture(int slot, int width, int height)

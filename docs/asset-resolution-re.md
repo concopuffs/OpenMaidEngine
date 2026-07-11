@@ -166,7 +166,7 @@ The current Phase-A backend deliberately continues through the extracted-file bo
 accepts both OGG and WAV and Godot loads the WAV bytes into its fixed SC0000 channel pool. This does not change
 the scoped VFS plan below: ALF/AAI mounting and in-process asset reads remain a separate foundation track.
 
-## Runtime asset-VFS track (VFS-A complete 2026-07-11)
+## Runtime asset-VFS track (VFS-A and VFS-C complete 2026-07-11)
 
 The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
 runtime. The native-compatible target is a read-only virtual filesystem that preserves AGE's translation/mod
@@ -199,16 +199,20 @@ store.
    by name replacement, or by another table selected by the native high-byte-id path; do not invent mount
    precedence. Validate every parsed append entry against `BinExtractALF.exe` output before exposing it to
    the runtime.
-3. **AGF decoder.** Decode an opened AGF stream directly to width/height + RGBA8. The MIT-licensed GARbro
+3. **AGF decoder (VFS-C DONE).** `Age.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
+   to a tightly packed, top-down width/height + RGBA8 surface. The MIT-licensed GARbro
    `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,
    LZSS-or-raw header section, 4/8/truecolor source pixels, LZSS-or-raw pixel section, bottom-up row/stride
    conversion, and optional `ACIF` LZSS alpha plane. Port only the algorithm and attribution into
    platform-neutral .NET code; do not carry GARbro's WPF/GameRes dependencies. Kelebek's extractor and the
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
-   so its code should not be copied without clarification.
-4. **Runtime consumers.** Script loading is complete. Next make texture surfaces own
-   decoded RGBA pixels rather than BMP paths, and load OGG/WAV from store bytes. Migrate one consumer at a
-   time; retain extraction/conversion tools as diagnostics until parity is established.
+   so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
+   `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
+4. **Runtime consumers.** Script and texture loading are complete. `ResourceMap.ResolveTexture` preserves
+   scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
+   decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
+   Godot no longer reads `build/textures/*.BMP`. OGG/WAV byte migration remains a separate follow-up;
+   retain extraction/conversion tools as diagnostics until parity is established.
 
 ### Acceptance gates
 
@@ -233,8 +237,17 @@ are byte-identical to `extracted/`, and synthetic removal of a loose override re
 Traversal, past-range seek/read, and concurrent reads are covered. Installed override enumeration corrected
 an older inventory error: this tree contains 51 loose root BINs, comprising **49 archive-backed v1.03 script
 overrides** (all byte-proven to win and differ from DATA1) plus root-only `SYS4INI.BIN` and `SYS4AB.BIN`.
-There are not 52 archive copies available to shadow. APPEND01/AAI, AGF decode, audio consumers, and movie
-`0x236` remain unimplemented by design.
+There are not 52 archive copies available to shadow.
+
+VFS-C passes its bounded gates in `AgfDecoderTests`: synthesized fixtures cover raw/compressed sections,
+4/8-bit palettes, 24/32-bit truecolor expansion, padded bottom-up rows, type 1/2, and ACIF/no-ACIF alpha.
+Five installed assets spanning raw/compressed metadata and pixel/alpha combinations match the existing
+`AGF2BMP2AGF` BMP oracle pixel-for-pixel. SO001 resolves through universal raw id `0x337e`, decodes to
+800×300 with intermediate alpha values, and is inherited in surface slot 17 before SC0000. A windowed
+page-1 capture with `build/textures/` moved aside showed the translucent textbox edge and bottom-right
+controls. Texture runtime no longer consults `extracted/` or `build/textures/`; current audio consumers
+still use extracted OGG/WAV paths by design. APPEND01/AAI, audio migration, and movie `0x236` remain
+unimplemented by this slice.
 
 ### Deliberate non-goals
 
