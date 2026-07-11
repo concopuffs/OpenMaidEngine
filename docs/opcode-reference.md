@@ -5,10 +5,15 @@
 
 ## adv
 
-### 0x7a `text-param?` (u0041AD70, argc 3)
-- **summary:** 3 args (imm/computed/imm); sub computes a value then 0x7a then show-text — text speed/wait/window param
-- **grounding:** source=inference, confidence=med
-- **evidence:** confirm via frida
+### 0x7a `set-adv-text-cursor` (set-adv-text-cursor, argc 3)
+- **summary:** (layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and calls adv_text_set_cursor@0x4530f0 on text manager ctx+0x14940. Slot 0 resolves manager+0x4c8; manager+0x414[slot] selects the layout; text_layout_set_cursor@0x452530 writes x/y to +4/+8 of its last 0x14-byte record. SC0000 0x9d3 computes slot 1, x=75, y=47 before voiced show-text.
+
+### 0x204 `draw-string` (draw-string, argc 4)
+- **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string, fetches surface/x/y, then calls draw_string_to_surface@0x450150 on text manager ctx+0x14940. The worker validates and locks gfx-manager surface table +0xa590[slot], chooses text_raster_string_uncached@0x459d90 or cached/effect path @0x45b600, rasterizes GDI GetGlyphOutlineA bitmaps through text_blit_glyph_bitmap@0x458c80 using font/color state +0x4d0/+0x458, then unlocks. SC0000 0x9b2 draws the speaker name into 400x30 surface 0xd at (1,1); following 0x1fb binds it to retained object 0xe678 at (74,444).
 
 ## audio
 
@@ -980,10 +985,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1fe `u004206C0` (u004206C0, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x204 `draw-string` (draw-string, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x205 `u00420A60` (u00420A60, argc 6)
 - **summary:** —

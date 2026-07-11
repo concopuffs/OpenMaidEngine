@@ -4,6 +4,10 @@ namespace Age.Engine.Hosting;
 public interface IHost
 {
     void ShowText(int offset, string text);
+    // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
+    // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
+    void SetAdvTextCursor(int layoutSlot, int x, int y) { }
+    void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
     void WaitForInput();
     void Sleep(long duration);
     void FrameYield();

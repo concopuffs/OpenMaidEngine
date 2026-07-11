@@ -923,6 +923,45 @@ NOT the predicted coroutine yield (`0x140`/`~0x50f`); the oracle reports whateve
 surfaced an earlier state hole. **This is now the repeatable way to localize a mis-modeled op/state.**
 Phase-2 extension (deferred): effects-diff (global-bank / gfx-registry writes) for branchy scenes.
 
+### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
+
+The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:
+
+- **Op `0x7a` (`op_0x7a_handler@0x41eba0`) is `set-adv-text-cursor(layoutSlot,x,y)`.**
+  `adv_text_set_cursor@0x4530f0` treats slot 0 as the current slot at manager `+0x4c8`, resolves
+  `manager+0x414[slot]`, and `text_layout_set_cursor@0x452530` writes x/y to `+4/+8` of that
+  layout's last 20-byte record. SC0000 `0x9d3` and `0xbbf` set slot 1 to `(75,47)` for voiced
+  pages. The reset narration record is `(100,47,720,147,0)`.
+- **Op `0x204` (`op_0x204_handler@0x422a60`) is immediate `draw-string(surface,x,y,string)`.**
+  `draw_string_to_surface@0x450150` locks the numbered D3D surface, selects the uncached or cached/effect
+  raster worker, consumes CP932 characters through GDI `GetGlyphOutlineA`, blends the bitmap in
+  `text_blit_glyph_bitmap@0x458c80`, and unlocks. Font/color/effect state is retained around manager
+  `+0x450/+0x458/+0x4d0/+0x544/+0x558`; the observed ADV glyph is white with a one-pixel `0x606060`
+  outline and advances 25 pixels. At SC0000 `0x9b2`, surface 13 is 400x30 and receives `"魔王"` at
+  `(1,1)`; the following `0x1fb` binds it to retained object `0xe678` at `(74,444)`, so the name begins
+  at screen `(75,445)`.
+
+Show-text (`0x6e`) is the timed companion, not an immediate Label write. `adv_text_build_glyph_records`
+`@0x4576c0` measures and rasterizes the complete CP932 line into one 20-byte record per glyph. Layout slot
+1 has origin `(0,430)`, bounds `(720,147)`, reveal handle base `55000` (`0xd6d8`), and source surface
+`slot+0x14 = 21`. `adv_text_publish_next_glyph@0x451220` advances the reveal index and publishes each
+record with `gfx_object_bind_draw`. Native SC0000 records `ctx+0x14e9c = 50 ms`: page 1 builds 13 records
+at `0x834`, then publishes them one at a time before reaching wait `0x83c`. A click during reveal completes
+the remaining records and is consumed; the next click releases the stable wait.
+
+The port retains the SC0000-visible contract without exposing thousands of individual host glyph objects:
+surface strings remain associated with blank surface slots for later retained-object binding, while ADV
+lines retain cursor/origin, start time, visible-glyph count, and completion state. The compositor renders
+the surface-13 name at the bound `0xe678` transform and the dialogue at origin+cursor. `ShowText` parks the
+VM until the 50 ms/glyph service completes or a click forces completion, so the completion click cannot
+pre-arm the following `wait-for-input`. Local/global string-pointer operand tags (8/14) are now resolved by
+the VM, which is required for SC0000's `lookup-array local-string-ptr -> draw-string` name path.
+
+Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captures at `0x834`, `0x9b2`,
+`0x9d3`, and `0xa0d`. Windowed page-1 pixels place glyphs at x=100 and native y=477; voiced page 7 has
+non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
+11 clicks completed active reveals and 14 later clicks released 14 distinct waits through `0xe0c`.
+
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 
 **Problem the oracle surfaced:** single-scene VM runs diverge from the engine because they lack the

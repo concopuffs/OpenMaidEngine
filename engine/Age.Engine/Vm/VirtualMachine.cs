@@ -10,7 +10,8 @@ public sealed class VirtualMachine
     private const int FRAME_RETURN = int.MinValue + 1;
     private const int SceneEntryCoroutineGate = 0xaba5c;
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
-                      T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12;
+                      T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
+                      T_LSTRPTR = 14;
 
     private readonly Script _s;
     private readonly OpcodeTable _t;
@@ -40,7 +41,7 @@ public sealed class VirtualMachine
     private static long PyDiv(long a, long b) { if (b == 0) return 0; long q = a / b, r = a % b; if (r != 0 && (r < 0) != (b < 0)) q--; return q; }
     private static long PyMod(long a, long b) { if (b == 0) return 0; long r = a % b; if (r != 0 && (r < 0) != (b < 0)) r += b; return r; }
 
-    private static bool IsStr(Operand o) => o.Type == T_STR || o.Type == T_GSTR || o.Type == T_LSTR;
+    private static bool IsStr(Operand o) => o.Type is T_STR or T_GSTR or T_GSTRPTR or T_LSTR or T_LSTRPTR;
     private static bool SameOperand(Operand a, Operand b) => a.Type == b.Type && a.Value == b.Value;
 
     private static bool IsAdvLabeledYield(Script script, Instruction ins)
@@ -96,7 +97,9 @@ public sealed class VirtualMachine
     {
         T_STR => _cur.Script.GetString((int)op.Value),
         T_GSTR => Gs(GlobalStrings, (int)op.Value),
+        T_GSTRPTR => Gs(GlobalStrings, (int)Gi(Globals, (int)op.Value)),
         T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
+        T_LSTRPTR => Gs(GlobalStrings, (int)Gi(_cur.Locals.SP, (int)op.Value)),
         _ => "",
     };
 
@@ -105,13 +108,15 @@ public sealed class VirtualMachine
         switch (op.Type)
         {
             case T_GSTR: GlobalStrings[(int)op.Value] = val; break;
+            case T_GSTRPTR: GlobalStrings[(int)Gi(Globals, (int)op.Value)] = val; break;
             case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
+            case T_LSTRPTR: GlobalStrings[(int)Gi(_cur.Locals.SP, (int)op.Value)] = val; break;
         }
     }
 
     private long BaseAddr(Operand op) => op.Type switch
     {
-        T_IMM or T_GINT or T_GFLOAT or T_GSTR or T_GPTR => op.Value,
+        T_IMM or T_GINT or T_GFLOAT or T_GSTR or T_GPTR or T_GSTRPTR => op.Value,
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
         T_LPTR => Gi(_cur.Locals.P, (int)op.Value),
         _ => op.Value,
@@ -122,7 +127,9 @@ public sealed class VirtualMachine
         switch (dst.Type)
         {
             case T_LPTR: _cur.Locals.P[(int)dst.Value] = addr; break;
+            case T_LSTRPTR: _cur.Locals.SP[(int)dst.Value] = addr; break;
             case T_GPTR: Globals[(int)dst.Value] = addr; break;
+            case T_GSTRPTR: Globals[(int)dst.Value] = addr; break;
             default: Write(dst, Gi(Globals, (int)addr)); break;
         }
     }
@@ -270,6 +277,11 @@ public sealed class VirtualMachine
                     Emitted.Add((off, text, _cur.Script.Name));
                     _host.ShowText(off, text);
                 }
+                return pc + 1;
+            case "set-adv-text-cursor": // 0x7a (layout slot, x, y); slot 0 means current natively
+                _host.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
+            case "draw-string": // 0x204 (surface slot, x, y, string)
+                _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]));
                 return pc + 1;
             case "wait-for-input":
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).

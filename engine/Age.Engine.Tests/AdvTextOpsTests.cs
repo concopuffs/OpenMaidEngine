@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+using Age.Engine.Model;
+using Age.Engine.Sys4;
+using Age.Engine.Vm;
+using Xunit;
+
+public class AdvTextOpsTests
+{
+    [Fact]
+    public void TextCursorAndDrawStringReachHostWithLocalStringPointer()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        int lookup = table.ByLabel("lookup-array")!.Value;
+        var script = ScriptAssembler.Assemble(table, "ADVTEXT",
+            new List<(int, Operand[])>
+            {
+                (lookup, new[] { new Operand(14, 0), new Operand(5, 0x315), new Operand(0, 2) }),
+                (0x204, new[] { new Operand(0, 13), new Operand(0, 1), new Operand(0, 1), new Operand(14, 0) }),
+                (0x7a, new[] { new Operand(0, 1), new Operand(0, 75), new Operand(0, 47) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+        vm.GlobalStrings[0x317] = "speaker";
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((1, 75, 47), Assert.Single(host.TextCursors));
+        Assert.Equal((13, 1, 1, "speaker"), Assert.Single(host.SurfaceStrings));
+    }
+}

@@ -18,10 +18,17 @@ public sealed class GodotAdvHost : IHost
     private readonly GodotTimelineLog? _timeline;
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
+    private readonly object _textLock = new();
+    private readonly Dictionary<int, SurfaceTextDraw> _surfaceText = new();
+    private string _advText = "";
+    private int _advTextX = 100, _advTextY = 47;
+    private long _advTextStartedMs;
+    private bool _advTextForceComplete;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
     public volatile bool IsSleeping;
+    public volatile bool IsTextRevealing;
     private int _presentRequested = 1;
     private long _transitionStartedAtMs = -1;
     public long TransitionStartedAtMs => System.Threading.Interlocked.Read(ref _transitionStartedAtMs);
@@ -37,8 +44,55 @@ public sealed class GodotAdvHost : IHost
     public void ShowText(int offset, string text)
     {
         Captured.Add((offset, text));
-        _main.CallDeferred("AppendLine", text);
+        lock (_textLock)
+        {
+            _advText = text;
+            _advTextStartedMs = _clock.NowMs;
+            _advTextForceComplete = false;
+            IsTextRevealing = text.Length > 0;
+        }
+        _timeline?.State("text-reveal", new()
+        {
+            ["offset"] = $"0x{offset:x}", ["x"] = _advTextX, ["y"] = _advTextY,
+            ["glyphs"] = text.Length, ["delay_ms"] = 50,
+        });
+        while (IsTextRevealing && !_stopping)
+        {
+            lock (_textLock)
+            {
+                if (_advTextForceComplete || _clock.NowMs - _advTextStartedMs >= text.Length * 50L)
+                    IsTextRevealing = false;
+            }
+            if (IsTextRevealing) _frameSignal.WaitOne(50);
+        }
+        _timeline?.State("running", new() { ["text_reveal_complete"] = true });
     }
+
+    public void SetAdvTextCursor(int layoutSlot, int x, int y)
+    {
+        lock (_textLock) { _advTextX = x; _advTextY = y; }
+        _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
+    }
+
+    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
+    {
+        lock (_textLock) _surfaceText[surfaceSlot] = new SurfaceTextDraw(x, y, text);
+        _timeline?.Event("draw-string", new() { ["surface"] = surfaceSlot, ["x"] = x, ["y"] = y, ["text"] = text });
+    }
+
+    public (string Text, int X, int Y, int VisibleGlyphs, bool Revealing) SnapshotAdvText()
+    {
+        lock (_textLock)
+        {
+            int visible = _advTextForceComplete || !IsTextRevealing
+                ? _advText.Length
+                : (int)System.Math.Clamp((_clock.NowMs - _advTextStartedMs) / 50L + 1, 0, _advText.Length);
+            return (_advText, _advTextX, _advTextY, visible, IsTextRevealing);
+        }
+    }
+
+    public bool TryGetSurfaceText(int surfaceSlot, out SurfaceTextDraw draw)
+    { lock (_textLock) return _surfaceText.TryGetValue(surfaceSlot, out draw); }
 
     public volatile int Pages;   // VM-thread page counter (incremented before IsWaiting so shot-gating can't race)
 
@@ -51,6 +105,12 @@ public sealed class GodotAdvHost : IHost
         _gate.Wait();
         IsWaiting = false;
         _timeline?.State("running", new() { ["input"] = "auto-or-user" });
+        lock (_textLock)
+        {
+            _advText = "";
+            _advTextX = 100;
+            _advTextY = 47;
+        }
         _main.CallDeferred("ClearPage");
     }
 
@@ -58,6 +118,13 @@ public sealed class GodotAdvHost : IHost
     // the foreground lifecycle; it never pre-arms or advances the following stable input wait.
     public void SignalInput()
     {
+        if (IsTextRevealing)
+        {
+            lock (_textLock) _advTextForceComplete = true;
+            _timeline?.State("text-reveal-forced-complete", new());
+            _frameSignal.Set();
+            return;
+        }
         if (IsTransitionWaiting && _foregroundGfx != null)
         {
             int completed = _foregroundGfx.CompleteForegroundTransitions(_clock.NowMs);
@@ -116,12 +183,13 @@ public sealed class GodotAdvHost : IHost
     // Native retained-object writes are not front-buffer writes. The renderer publishes them only at an
     // explicit present or while the interpreter is parked in a presentation-capable service boundary.
     public bool ShouldRecomposite()
-        => IsWaiting || IsTransitionWaiting || IsSleeping ||
+        => IsWaiting || IsTransitionWaiting || IsSleeping || IsTextRevealing ||
            System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0;
 
     public void Stop()
     {
         _stopping = true;
+        lock (_textLock) _advTextForceComplete = true;
         if (_gate.CurrentCount == 0) _gate.Release();
         _frameSignal.Set();
     }
@@ -160,12 +228,14 @@ public sealed class GodotAdvHost : IHost
 
     public void CreateTexture(int slot, int width, int height)
     {
+        lock (_textLock) _surfaceText.Remove(slot);
         _slotBmp[slot] = null; _slotDims[slot] = (width, height);
         if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
     }
 
     public void SetTexture(long resourceId, int slot)
     {
+        lock (_textLock) _surfaceText.Remove(slot);
         var asset = _res.Resolve(_scene, resourceId);
         var bmp = asset != null ? ResourceMap.TexturePath(asset) : null;
         _slotBmp[slot] = bmp;
@@ -206,3 +276,5 @@ public sealed class GodotAdvHost : IHost
         if (path != null) _main.CallDeferred("PlayVoice", path);
     }
 }
+
+public readonly record struct SurfaceTextDraw(int X, int Y, string Text);

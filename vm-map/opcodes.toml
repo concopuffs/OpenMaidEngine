@@ -1210,33 +1210,33 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x7a
-label = "u0041AD70"
+label = "set-adv-text-cursor"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "text-param?"
+name = "set-adv-text-cursor"
 category = "adv"
-summary = "3 args (imm/computed/imm); sub computes a value then 0x7a then show-text — text speed/wait/window param"
+summary = "(layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout."
 noop_headless = false
-source = "inference"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "confirm via frida"
+evidence = "Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and calls adv_text_set_cursor@0x4530f0 on text manager ctx+0x14940. Slot 0 resolves manager+0x4c8; manager+0x414[slot] selects the layout; text_layout_set_cursor@0x452530 writes x/y to +4/+8 of its last 0x14-byte record. SC0000 0x9d3 computes slot 1, x=75, y=47 before voiced show-text."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "cursor x"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "cursor y"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -4867,32 +4867,32 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "draw-string"
-category = "unknown"
-summary = ""
+category = "adv"
+summary = "(surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string, fetches surface/x/y, then calls draw_string_to_surface@0x450150 on text manager ctx+0x14940. The worker validates and locks gfx-manager surface table +0xa590[slot], chooses text_raster_string_uncached@0x459d90 or cached/effect path @0x45b600, rasterizes GDI GetGlyphOutlineA bitmaps through text_blit_glyph_bitmap@0x458c80 using font/color state +0x4d0/+0x458, then unlocks. SC0000 0x9b2 draws the speaker name into 400x30 surface 0xd at (1,1); following 0x1fb binds it to retained object 0xe678 at (74,444)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination surface slot"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "y"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "CP932 string"
 observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
 
 [[opcode]]

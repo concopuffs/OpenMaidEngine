@@ -1016,3 +1016,36 @@ threaded `SELFTEST OK`; all seven Python suites, opcode/ctx lint, 481-script dec
 Normal-speed windowed capture wrote 220 PNGs and progressed through the complete AE sequence; at the target
 frame, bind + mode-1 + `0x202` setup share one VM frame and the first published object state is mode 1.
 Ghidra `/v2` comments were updated and saved. This slice was committed as `85fc07d`.
+
+### A2b — native ADV retained text (`0x7a` / `0x204`) ✅ DONE (2026-07-10)
+
+The prerequisite input check passed before text work: the unmodified port reached page-1
+`wait-for-input@0x83c` in about 2.0 seconds and a manual run released 14 consecutive waits through page 15.
+Clicks were independently healthy, so no scheduler/input workaround was folded into this slice.
+
+Native `/v2` dispatch resolves `0x7a` to `op_0x7a_handler@0x41eba0` and `0x204` to
+`op_0x204_handler@0x422a60`. Op `0x7a` selects layout slot 1 and writes the last 20-byte record's cursor;
+SC0000 voiced pages compute `(75,47)`, while narration resets to `(100,47)`. Layout origin is `(0,430)`,
+bounds are `(720,147)`, retained glyph handles begin at `0xd6d8`, and glyph source surface is 21.
+Op `0x204` locks a numbered D3D surface and GDI-rasterizes its CP932 string with retained font/color/effect
+state. SC0000 `0x9b2` draws `"魔王"` to 400x30 surface 13 at `(1,1)`; `0x1fb@0x9bb` binds that surface to
+object `0xe678` at `(74,444)`. Show-text builds all glyph records, then publishes one every 50 ms; a click
+completes and consumes an active reveal before the VM can reach the following stable wait.
+
+The port now handles both opcodes and string-pointer types 8/14. Blank-surface text is retained by slot and
+drawn through the bound object's transform (the SC0000 speaker-name path), while ADV text retains cursor,
+origin, 50 ms/glyph progress, and forced completion. The prior top-left dev Label/status presentation is
+gone. Page-1 window pixels show the black 800x227 textbox with text at native `(100,477)`; voiced page 7
+has separate name/dialogue bands at y=447–468, 478–500, and 507–530. Final manual validation progressed
+14 pages, with 11 completion clicks consumed during reveal and 14 later clicks releasing 14 waits.
+
+Ghidra `/v2` was renamed/commented throughout the handler, layout, raster, surface-lock, and publication
+chain and saved. The new low-frequency `capture_adv_text_trace.py` records matching native offsets/state;
+an initial experimental version combining a D3D device scan with hot per-glyph/render hooks crashed in
+`frida-agent.dll` at teardown, so those hooks were removed and the safe narrowed rerun left AGE alive.
+
+**Validation:** engine **110/110**; corpus sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot build
+clean apart from the pre-existing nullable warning and threaded `SELFTEST OK`; all seven Python suites,
+opcode/ctx lint, 481-script decode, RECOVER, and `git diff --check` clean. SC0000 coverage rises from
+**85/129 to 87/129 handled (67.4%)**, with 42 GAP ops / 188 GAP instructions. Movie `0x236` and SFX remain
+separate slices. No implementation commit was made.

@@ -14,8 +14,13 @@ internal sealed class RecordingHost : IHost
     public bool MessageSkip;
     public bool AdvReadSkip;
     public readonly List<(int Offset, string Text)> Lines = new();
+    public readonly List<(int Slot, int X, int Y)> TextCursors = new();
+    public readonly List<(int Surface, int X, int Y, string Text)> SurfaceStrings = new();
     public readonly List<long> SleptDurations = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
+    public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
+    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
+        => SurfaceStrings.Add((surfaceSlot, x, y, text));
     public void WaitForInput() => Waits++;
     public void Sleep(long duration) => SleptDurations.Add(duration);
     public void FrameYield() { }

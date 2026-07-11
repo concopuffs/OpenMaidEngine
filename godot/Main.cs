@@ -14,6 +14,7 @@ public partial class Main : Godot.Control
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
     private Label _text = null!;
+    private Label _speaker = null!;
     private Label _status = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
@@ -61,26 +62,35 @@ public partial class Main : Godot.Control
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_screenView);   // added first -> draws behind the text/status labels
 
-        _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
         _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _text.OffsetLeft = 40; _text.OffsetTop = 40; _text.OffsetRight = -40; _text.OffsetBottom = -80;
         AddChild(_text);
+        _speaker = new Label { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+        _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_speaker);
         _status = new Label();
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
         AddChild(_status);
 
         // Best-effort CJK font so the visual isn't tofu (headless self-test doesn't depend on it).
-        foreach (var fp in new[] { "C:/Windows/Fonts/YuGothM.ttc", "C:/Windows/Fonts/YuGothR.ttc",
-                                   "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/meiryo.ttc" })
+        foreach (var fp in new[] { "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/YuGothM.ttc",
+                                   "C:/Windows/Fonts/YuGothR.ttc", "C:/Windows/Fonts/meiryo.ttc" })
         {
             if (!System.IO.File.Exists(fp)) continue;
             try
             {
                 var ff = new FontFile { Data = System.IO.File.ReadAllBytes(fp) };
                 _text.AddThemeFontOverride("font", ff);
+                _speaker.AddThemeFontOverride("font", ff);
                 _status.AddThemeFontOverride("font", ff);
-                _text.AddThemeFontSizeOverride("font_size", 22);
+                _text.AddThemeFontSizeOverride("font_size", 25);
+                _speaker.AddThemeFontSizeOverride("font_size", 25);
+                _text.AddThemeConstantOverride("outline_size", 1);
+                _speaker.AddThemeConstantOverride("outline_size", 1);
+                var outline = new Color(0x60 / 255f, 0x60 / 255f, 0x60 / 255f, 1);
+                _text.AddThemeColorOverride("font_outline_color", outline);
+                _speaker.AddThemeColorOverride("font_outline_color", outline);
                 break;
             }
             catch { /* fall back to the default font */ }
@@ -189,6 +199,7 @@ public partial class Main : Godot.Control
         _host?.PulseFrame();
         if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite())
             Recomposite();   // native publishes retained mutations only at present/service boundaries
+        if (!_selftest && _host != null) UpdateAdvTextPresentation();
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
         // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
         if (_seqDir != null && _seqIdx < _seqFrames && !_done)
@@ -265,6 +276,7 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         _screen.Fill(new Color(0, 0, 0, 0));
+        _speaker.Visible = false;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
         var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // one synchronized sample for objects + ranges
@@ -322,10 +334,28 @@ public partial class Main : Godot.Control
                 }
             }
             decisions?.Add(v.Handle, $"z{z} {outcome}");
+            var rawObject = _vm.Gfx.TryGet(v.Handle);
+            if (rawObject != null && _host.TryGetSurfaceText(rawObject.SourceSlot, out var surfaceText))
+            {
+                var textPos = localToDest.Apply(surfaceText.X, surfaceText.Y);
+                _speaker.Position = new Vector2((float)textPos.X, (float)textPos.Y);
+                _speaker.Size = new Vector2(System.Math.Max(1, v.W - surfaceText.X), System.Math.Max(1, v.H - surfaceText.Y));
+                _speaker.Text = surfaceText.Text;
+                _speaker.Visible = true;
+            }
             z++;
         }
         _screenTex.Update(_screen);
         if (decisions != null) LogGfxDecisionChanges(decisions);
+    }
+
+    private void UpdateAdvTextPresentation()
+    {
+        var t = _host.SnapshotAdvText();
+        _text.Position = new Vector2(t.X, 430 + t.Y);
+        _text.Size = new Vector2(System.Math.Max(1, 720 - t.X), System.Math.Max(1, 147 - t.Y));
+        int count = System.Math.Clamp(t.VisibleGlyphs, 0, t.Text.Length);
+        _text.Text = count == 0 ? "" : t.Text[..count];
     }
 
     private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)
@@ -491,7 +521,7 @@ public partial class Main : Godot.Control
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";
-    public void PageBreak() { _pageCount++; _status.Text = "▼ click / Enter"; }
+    public void PageBreak() { _pageCount++; _status.Text = ""; }
     public void ClearPage() { _text.Text = ""; _status.Text = ""; }
     public void ShowEnd() => _status.Text = "— end —";
 
