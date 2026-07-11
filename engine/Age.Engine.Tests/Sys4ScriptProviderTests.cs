@@ -19,6 +19,21 @@ public class Sys4ScriptProviderTests
     }
 
     [Fact]
+    public void HighByteSelectsAppendPackWithoutReplacingBaseNames()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var provider = Sys4ScriptProvider.Load(table);
+        var append = provider.Catalog.AppendPacks[1];
+        var entry = append.Files.Single(e => e.Name == "$1$SC1260.BIN");
+        long packedId = 0x01000000L | (uint)entry.RawIndex;
+
+        var script = provider.GetById(packedId);
+        Assert.NotNull(script);
+        Assert.True(script!.Instructions.Count > 0);
+        Assert.Null(provider.GetByName("$1$SC1260.BIN"));
+    }
+
+    [Fact]
     public void RootScriptLoadingUsesTheSameAssetStoreAndLoosePrecedence()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

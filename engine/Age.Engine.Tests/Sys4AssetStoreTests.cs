@@ -1,9 +1,91 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Diagnostics;
 using Age.Engine.Sys4;
 using Xunit;
 
 public class Sys4AssetStoreTests
 {
+    [Fact]
+    public void InstalledAppendCatalogHasNativePackSelectionAndStableDirectory()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var append = Assert.Single(catalog.AppendPacks).Value;
+
+        Assert.Equal(1, append.PackId);
+        Assert.Equal("S4AC422 ", append.Magic);
+        Assert.Equal(catalog.Title, append.Title);
+        Assert.Equal(new[] { "APPEND01.ALF" }, append.Archives);
+        Assert.Equal(81, append.RawSlots.Count);
+        Assert.Equal(81, append.Files.Count);
+        Assert.All(append.Files, entry =>
+        {
+            Assert.Equal(1, entry.PackId);
+            Assert.StartsWith("$1$", entry.Name);
+            Assert.Equal("APPEND01.ALF", entry.Archive);
+        });
+
+        Assert.Same(append.RawSlots[0], catalog.ResolvePacked(0x01000000));
+        Assert.Same(append.RawSlots[^1], catalog.ResolvePacked(0x01000050));
+        Assert.Null(catalog.ResolvePacked(0x02000000));
+        Assert.Null(catalog.ResolvePacked(0x80000000));
+        Assert.Null(catalog.ResolveName(append.RawSlots[0].Name));
+
+        string directory = string.Join("\n", append.RawSlots.Select(e =>
+            $"{e.RawIndex}|{e.Name}|{e.ArchiveId}|{e.Archive}|{e.FileNumber}|{e.Offset}|{e.Size}"));
+        string digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(directory)));
+        Assert.Equal("23F0C104A45C099CEFB7D333362716EDE6F20B9EC53E4C3705A8E3A87063708E", digest);
+    }
+
+    [Fact]
+    public void CompleteAppendDirectoryAndPayloadsMatchBinExtractAlf()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "age-vfsb-oracle-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            var start = new ProcessStartInfo(Paths.BinExtractAlf)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            start.ArgumentList.Add(Paths.Append01Aai);
+            start.ArgumentList.Add(temp);
+            using var process = Process.Start(start)!;
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.True(process.ExitCode == 0, stdout + stderr);
+
+            var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+            var append = catalog.AppendPacks[1];
+            var store = new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
+            string output = Path.Combine(temp, "APPEND01");
+            var oracleNames = Directory.EnumerateFiles(output).Select(Path.GetFileName)
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            var actualNames = append.Files.Select(e => e.Name)
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            Assert.Equal(actualNames, oracleNames);
+
+            long archiveLength = new FileInfo(Path.Combine(Paths.GameDir, "APPEND01.ALF")).Length;
+            foreach (var entry in append.Files)
+            {
+                Assert.InRange(entry.Offset, 0, archiveLength);
+                Assert.InRange(entry.Size, 0, archiveLength - entry.Offset);
+                byte[] oracle = File.ReadAllBytes(Path.Combine(output, entry.Name));
+                Assert.Equal(entry.Size, oracle.LongLength);
+                Assert.Equal(oracle, store.ReadAll(entry));
+            }
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
     [Fact]
     public void RuntimeCatalogMatchesDiagnosticCatalogAndSceneViews()
     {

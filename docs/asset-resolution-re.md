@@ -166,7 +166,7 @@ The current Phase-A backend deliberately continues through the extracted-file bo
 accepts both OGG and WAV and Godot loads the WAV bytes into its fixed SC0000 channel pool. This does not change
 the scoped VFS plan below: ALF/AAI mounting and in-process asset reads remain a separate foundation track.
 
-## Runtime asset-VFS track (VFS-A and VFS-C complete 2026-07-11)
+## Runtime asset-VFS track (VFS-A/B/C complete 2026-07-11)
 
 The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
 runtime. The native-compatible target is a read-only virtual filesystem that preserves AGE's translation/mod
@@ -194,11 +194,16 @@ store.
    `call-script` targets through this seam; `ResourceMap` uses the same live catalog. `build/asset-index.json`,
    `build/asset-sections.json`, `build/callscript-names.json`, and `extracted/` are validation/temporary
    graphics-audio artifacts, not script-runtime dependencies.
-2. **AAI append mount.** Parse the installed `APPEND01.AAI` (`S4AC422`) and its paired `APPEND01.ALF` with
-   the same catalog abstractions. First prove whether Himegari joins append records by a separate pack/tag,
-   by name replacement, or by another table selected by the native high-byte-id path; do not invent mount
-   precedence. Validate every parsed append entry against `BinExtractALF.exe` output before exposing it to
-   the runtime.
+2. **AAI append mount (VFS-B DONE).** `Sys4AssetCatalog` also parses the installed `APPEND01.AAI`
+   (`S4AC422`) and mounts its paired `APPEND01.ALF`. This is a separate selector-keyed catalog, not a
+   filename overlay: AGE scans `*.AAI`, reads the selector at AAI header offset `0x108`, and stores the
+   successfully loaded catalog in `mounted_aai[selector]`. A resource id with a nonzero high byte selects
+   that slot; its low 24 bits index only the selected append table. Installed `APPEND01` is selector 1.
+   Within that catalog the ordinary exact loose-record-name then ALF-range precedence still applies, so the
+   literal `$1$...` names are preserved. A later successfully enumerated AAI with the same selector replaces
+   the earlier pointer in the native loop; no base/append name replacement occurs. Native extracts the
+   selector with arithmetic `SAR 24`; the port rejects sign-bit selectors rather than guessing behavior for
+   ids that would index before AGE's mount table.
 3. **AGF decoder (VFS-C DONE).** `Age.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
    to a tightly packed, top-down width/height + RGBA8 surface. The MIT-licensed GARbro
    `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,
@@ -246,8 +251,15 @@ Five installed assets spanning raw/compressed metadata and pixel/alpha combinati
 800×300 with intermediate alpha values, and is inherited in surface slot 17 before SC0000. A windowed
 page-1 capture with `build/textures/` moved aside showed the translucent textbox edge and bottom-right
 controls. Texture runtime no longer consults `extracted/` or `build/textures/`; current audio consumers
-still use extracted OGG/WAV paths by design. APPEND01/AAI, audio migration, and movie `0x236` remain
-unimplemented by this slice.
+still use extracted OGG/WAV paths by design. Audio migration and movie `0x236` remain unimplemented.
+
+VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
+`0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
+records. All records carry selector 1 and literal `$1$` names. The full directory has stable SHA-256
+`23F0C104A45C099CEFB7D333362716EDE6F20B9EC53E4C3705A8E3A87063708E` over its ordered record fields.
+The integration gate runs `BinExtractALF.exe` into a disposable directory, compares all 81 names, validates
+every range and size, and byte-compares all 81 payloads. `Sys4ScriptProvider` resolves a real append script
+through `0x01xxxxxx`; direct base-name lookup deliberately does not see append records.
 
 ### Deliberate non-goals
 

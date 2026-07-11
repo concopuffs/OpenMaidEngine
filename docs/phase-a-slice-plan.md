@@ -1050,7 +1050,7 @@ opcode/ctx lint, 481-script decode, RECOVER, and `git diff --check` clean. SC000
 **85/129 to 87/129 handled (67.4%)**, with 42 GAP ops / 188 GAP instructions. Movie `0x236` and SFX remain
 separate slices. No implementation commit was made.
 
-### Foundation track — native asset VFS + ALF/AAI/AGF readers (VFS-A/C DONE; VFS-B PENDING)
+### Foundation track — native asset VFS + ALF/AAI/AGF readers (VFS-A/B/C DONE)
 
 This is an optional high-leverage detour before movie `0x236` or SFX. It replaces the Phase-A
 pre-extracted/pre-converted asset bootstrap with the native loose-override/archive-fallback model and removes
@@ -1124,6 +1124,28 @@ and the bottom-right control row was visible.
 Validation: 124/124 engine tests, CLI/Godot builds, Godot threaded selftest, pixel parity for five installed
 assets, and the windowed no-BMP capture. VFS-B APPEND01/AAI, OGG/WAV migration, movie `0x236`, and unrelated
 opcode work remain separate.
+
+### VFS-B — APPEND01 AAI mount DONE (2026-07-11)
+
+`Sys4AssetCatalog.Load` now discovers installed `*.AAI` files beside `SYS4INI.BIN`, parses the `S4AC`
+directory at its native offsets, and mounts each catalog by the selector stored at header offset `0x108`.
+For Himegari, `APPEND01.AAI` mounts selector 1, names one `APPEND01.ALF`, and contains 81 records whose
+literal names all begin `$1$`. `AssetEntry` retains the pack id, `ResolvePacked` applies the evidenced
+`high byte -> mounted catalog; low 24 bits -> record` rule, and `Sys4ScriptProvider` routes append call ids
+through the existing `IAssetStore`. Base direct-name lookup remains base-only: append records are not guessed
+name replacements. The selected catalog still probes the record's exact loose basename before its ALF range.
+
+Native `/v2` now names/comments the AAI constructor/load/table/open/get chain and
+`asset_mount_append_catalogs@0x44f120`; `asset_open_indexed_entry@0x44f390` documents the packed-id split.
+The native scan stores each successful catalog directly into its selector slot, so a later enumerated AAI
+with the same selector replaces the earlier pointer. Its `SAR 24` selector extraction makes sign-bit high
+bytes negative table indexes, so the port rejects them rather than inventing `0x80..0xff` behavior. Only
+selector 1 is installed and exercised here.
+
+Validation: 127/127 engine tests; stable complete-directory digest; all 81 ranges fit; a disposable
+`BinExtractALF.exe APPEND01.AAI` extraction matches all 81 names, sizes, and payload bytes; real
+`$1$SC1260.BIN` loads through its packed id; CLI/Godot builds and threaded `SELFTEST OK`. Audio migration,
+movie `0x236`, AGF work, and unrelated opcodes were untouched.
 
 ### Phase A — native SC0000 SFX family (`0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9`) DONE (2026-07-11)
 

@@ -70,9 +70,9 @@ Three layers, cleanly separated:
   modders. They share the *format spec* (documented), not code — acceptable for a small, stable
   container format.
 - **Native content foundation status (2026-07-11).** VFS-A runtime-parses the base SYS4 catalog and
-  applies loose-first bounded ALF reads; VFS-C decodes AGF directly to platform-neutral RGBA8 and feeds
-  Godot without pre-extracted or pre-converted texture files. APPEND01/AAI mounting and audio-byte consumers
-  remain separate follow-ups.
+  applies loose-first bounded ALF reads; VFS-B mounts selector-keyed S4AC append catalogs and resolves the
+  native high-byte/low-24-bit id split; VFS-C decodes AGF directly to platform-neutral RGBA8 and feeds Godot
+  without pre-extracted or pre-converted texture files. Audio-byte consumers remain a separate follow-up.
 - **Profile = manifest.** Adding a game = a new profile + its maps. Adding an engine version = a new
   front-end plugin + profiles that reference it. See §5.
 

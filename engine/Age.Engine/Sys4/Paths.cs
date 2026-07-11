@@ -13,6 +13,8 @@ public static class Paths
     public static string CallscriptNamesJson => Path.Combine(Build, "callscript-names.json");
     public static string Textures => Path.Combine(Build, "textures");
     public static string Sys4Ini => Path.Combine(GameDir, "SYS4INI.BIN");
+    public static string Append01Aai => Path.Combine(GameDir, "APPEND01.AAI");
+    public static string BinExtractAlf => Path.Combine(Repo, "bin", "BinExtractALF.exe");
 
     private static string FindRepo()
     {

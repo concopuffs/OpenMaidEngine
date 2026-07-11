@@ -1045,6 +1045,25 @@ includes the scene's own early writes (can exclude by codebase for a pure pre-sc
 
 ---
 
+### S4AC append catalogs and packed resource ids (2026-07-11)
+
+`asset_mount_append_catalogs@0x44f120` scans `*.AAI`, constructs `AAIFileDB` objects, and calls
+`aai_catalog_load@0x401110`. Installed `S4AC422` uses selector `1` at header offset `0x108`, expanded size
+at `0x110`, packed size at `0x114`, and an LZSS directory stream at `0x118`. The expanded directory is the
+same archive-count / 256-byte archive-name / file-count / 80-byte-record layout as SYS4INI. Its 81 names are
+literal `$1$...` basenames in `APPEND01.ALF`.
+
+After a successful load, the scan writes the catalog pointer to `FileDB+0x3028 + selector*4`; a later
+successful discovery of the same selector overwrites that slot. `asset_open_indexed_entry@0x44f390` splits
+nonzero-high-byte ids into `mounted_aai[id >> 24]` and record index `id & 0xffffff`, while high-byte-zero ids
+stay in the base SYS4 table. `aai_open_indexed_entry@0x401630` then applies the same exact loose basename
+before indexed ALF fallback as the base path. Thus append selection is explicit pack selection, not filename
+replacement. The selector extraction is an arithmetic `SAR 24`, so ids whose high byte has its sign bit set
+index before the mount table rather than slots `0x80..0xff`; the port rejects those selectors instead of
+inventing unsigned behavior. `/v2` names/comments this mount/load/open chain and is saved.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.

@@ -27,7 +27,7 @@ public sealed class Sys4ScriptProvider : IScriptProvider
     public Script? GetById(long id)
     {
         if (_cache.TryGetValue(id, out var cached)) return cached;
-        var entry = Catalog.ResolveRaw(id);
+        var entry = Catalog.ResolvePacked(id);
         Script? script = entry is { IsPlaceholder: false }
                         && entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
             ? Parse(entry) : null;
