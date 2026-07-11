@@ -73,7 +73,9 @@ public class GfxCommandBufferTests
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.Equal(0x80_112233L, vm.Gfx.TryGet(0x1000)!.Color);
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.Equal(0x80_112233L, o.OneShotColorTarget);
+        Assert.True(o.OneShotColorEnabled);
     }
 
     [Fact]

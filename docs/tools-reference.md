@@ -138,7 +138,9 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 - `--speed <f>` — scale the unified runtime clock (VM cadence, sleeps, and retained animation) without auto-advancing input waits. Values 0.05–8 are accepted; `--speed 0.25` is useful for transform inspection, while 1.0 is normal playback.
 - `--gfx-log <file>` — **compositor + op diagnostic** (the tool that root-caused the grey background). Logs, per rendered frame, only the objects whose draw outcome **CHANGED** (drawn↔skip↔gone, resId, resolved file, `slot`, `src`/`dst`, `op`acity, `tintStr`ength) — quiet until something actually changes, so the exact frame a layer drops out (and why) stands out. Also traces every `set-texture`/`create-texture` **slot assignment** (via `GodotAdvHost.TraceOps`). Works live or with `--shot-sequence`. Use it before theorising about layering/blend/geometry: it showed the grey BG = the slot-selecting globals resolving to 0 → every texture collapsing into slot 0 (see engine-re.md §"Grey-background root cause"). e.g. `godot --path godot -- --boot --gfx-log out/gfx.log` then click to the bad page.
   Matrix-channel outcomes also include `base`, `anchor`, projected `dst`, sampled `scale`/`trans`, and
-  one-shot-plus-cyclic `rot`ation angles. Parent directories are created automatically.
+  one-shot-plus-cyclic `rot`ation angles. Active op-`0x202` outcomes include packed `color=current->target`
+  and `colorProgress`, synchronized with the same frame/clock in `--timeline-log`. Parent directories are
+  created automatically.
 - `--transition-click-ms <n>` — diagnostic-only input injector: after a foreground transition has been active for `n` virtual milliseconds, send one click through the real input lifecycle. The click completes/consumes the transition and does not advance a stable page. Use with `--timeline-log`, `--gfx-log`, and windowed `--shot-sequence`; omit for normal play.
 - `--timeline-log <jsonl>` — diagnostic-only synchronized event stream for a real Godot run. Records every
   executed script byte offset/opcode, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,

@@ -297,7 +297,8 @@ public partial class Main : Godot.Control
                     outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
                               $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
-                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}";
+                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}" +
+                              ColorTimeline(v.ColorTransition);
                 }
                 else outcome = "SKIP(no-resId, opaque render-target)";
             }
@@ -308,14 +309,15 @@ public partial class Main : Godot.Control
                 else
                 {
                     BlitLayer(bmp, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
-                              localToDest, opacity);
+                              localToDest, opacity, v.MultiplyTint);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {System.IO.Path.GetFileName(bmp)} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
                               $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
                               $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
-                              $"op={opacity:0.00} tintStr={strength:0.00}";
+                              $"mode={raw?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
+                              ColorTimeline(v.ColorTransition);
                 }
             }
             decisions?.Add(v.Handle, $"z{z} {outcome}");
@@ -324,6 +326,11 @@ public partial class Main : Godot.Control
         _screenTex.Update(_screen);
         if (decisions != null) LogGfxDecisionChanges(decisions);
     }
+
+    private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)
+        => state is { } c
+            ? $" color=0x{c.Current:x8}->0x{c.Target:x8} colorProgress={c.Progress:0.000}"
+            : "";
 
     // Native type-0 surface commands first leave range A in normal z-order, then alpha-composite range B
     // into the target surface. SC0000 binds that target to handle+2, above both source handles, so drawing
@@ -349,7 +356,7 @@ public partial class Main : Godot.Control
                 var bmp = _host.ResolveResIdTexture(source.SurfaceResId);
                 if (bmp == null) continue;
                 BlitLayer(bmp, source.ColorKey, source.Tint, source.TintStrength / 255f,
-                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity);
+                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint);
             }
             drawn++;
         }
@@ -388,10 +395,10 @@ public partial class Main : Godot.Control
 
     // Blit one object's surface rect. The source Image is cached per (path, colorKey): on first load, texels
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
-    // tintStrength (0..1, the op 0x202/0x203 alpha) LERPs the texel RGB toward tint (0=keep texel, 1=full tint;
-    // fade-to-black uses tint=black, strength=1); alpha is the object's OPACITY (independent of the tint).
+    // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 sets multiplyTint and uses packed RGB as
+    // multiplicative modulation while alpha is object opacity.
     private void BlitLayer(string bmpPath, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f)
+                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false)
     {
         var cacheKey = (bmpPath, colorKey);
         if (!_imgCache.TryGetValue(cacheKey, out var src))
@@ -416,7 +423,7 @@ public partial class Main : Godot.Control
         byte[] dst = _screen.GetData(); byte[] ss = src.GetData();
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
             dst, _screen.GetWidth(), _screen.GetHeight(), ss, src.GetWidth(), src.GetHeight(),
-            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha);
+            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint);
         _screen.SetData(_screen.GetWidth(), _screen.GetHeight(), false, _screen.GetFormat(), dst);
     }
 

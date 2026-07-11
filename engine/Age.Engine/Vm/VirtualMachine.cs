@@ -369,8 +369,9 @@ public sealed class VirtualMachine
                 Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
             case "clone-gfx-object":    // 0x21d (source handle)(destination handle)
                 Gfx.CloneObject(Read(a[0]), Read(a[1])); return pc + 1;
-            case "gfx-blit-color":      // 0x202 (handle)(x)(y)(alpha)(color) — static alpha/tint (anim interp deferred)
-                Gfx.SetObjectColorResolved(Read(a[0]), Read(a[3]), Read(a[4])); return pc + 1;
+            case "gfx-blit-color":      // 0x202 (handle)(delay)(duration)(alpha)(color) — one-shot color
+                Gfx.SetAnimatedObjectColorResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3]), Read(a[4]));
+                return pc + 1;
             case "gfx-draw-color":      // 0x203 (handle)(v)(alpha)(color) — static alpha/tint
                 Gfx.SetStaticObjectColorResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             // ---- sprite transform / animation cluster (docs/engine-re.md "0x21c-0x243 ... ANIMATION") ----

@@ -756,14 +756,15 @@ Ghidra functions renamed + plate-commented, saved).
   RGB888; `<0` = none; else texels whose `(R,G,B)` equal the key become transparent when the surface image
   is loaded/cached.
 - **`0x202` (`gfx_op_0x202_worker_set_color_anim` `0x47ea00`)**: sets an **animated** color/alpha target
-  `obj+0x64 = packedARGB`, the color-anim active bit, resets progress `obj+0x34=0`. Animates over the global
-  clock (`0x238`).
+  `obj+0x64 = packedARGB`, the color-anim active bit, and resets shared start `obj+0x34=0`. Operands 2/3
+  are delay/duration at `obj+0x38/+0x4c`; sampling uses frame clock `ctx+0xb550`, not op `0x238`.
 - **`0x203` (`gfx_op_0x203_worker_set_color` `0x47e9b0`)**: sets a **static** color/alpha `obj+0x60`, no anim
   bit. Immediate per-object modulation.
 - **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** (`local_2c`: 0 opaque, 1 alpha
   `SRCALPHA/INVSRCALPHA`, 2/3 additive/special for glow/flash) and passes a modulation color/alpha to the
   device draw. Slice A ports the **alpha** path (fades); additive (glow) is deferred (its `local_2c` source
-  field is not yet pinned).
+  field is `obj+0x30`, the value written by op `0x203`. Mode 1 uses packed ARGB alpha as opacity and RGB
+  as multiplicative D3D modulation. Modes 2/3 remain separately scoped beyond the completed mode-1 path.
 
 **Interpolation RE pass (2026-07-08, stalled → both deferrals confirmed).** Attempted to pin how a `0x202`
 fade animates so smooth ramping could join slice A. Findings (Ghidra `gfx_object_anim_interpolate`
@@ -777,6 +778,20 @@ one-shot fade's exact source→target→easing is still unresolved and would tak
 `obj+0x64` consumer + the color→`obj+0x240` path + the clock advance). ⇒ **smooth color-anim interpolation
 stays deferred**; slice A ships the static end-state (which reaches the correct final alpha/tint and fixes
 the stuck-opaque bug), with interpolation as a scoped follow-up.
+
+**Resolution (2026-07-10 — supersedes the deferral above).** The missing consumer was the bit-1 branch in
+`gfx_object_apply_transform_channels` (`0x472f00`), before its matrix channels. It seeds shared start
+`obj+0x34` from `ctx+0xb550`; holds current packed ARGB `obj+0x60` through delay `+0x38`; then performs an
+integer, bytewise linear interpolation to target `+0x64` for duration `+0x4c`. At natural completion—or
+when `ctx+0xb55c == 1` requests forced completion—the target commits to current, delay/duration clear,
+target becomes `0xffffffff`, and the one-shot active bit clears when no color/matrix/src-rect sibling remains.
+The object-local override bit at `+0x2d0` suppresses the global force. Negative alpha/RGB target operands
+independently preserve their bytes from current `+0x60`.
+
+The port now carries current and target separately and samples them from the unified `FrameClock`; an op
+`0x203` static write after `0x202` therefore becomes the ramp's current value rather than overwriting its
+target. Mode 0 retains the established CG/tint/fill behavior; mode 1 now uses native alpha opacity plus RGB
+modulation. `draw-string 0x204`/`0x7a` remains a separate dependency.
 
 ### SC0000 anim/transform/spritesheet cluster — op→field map (2026-07-08)
 

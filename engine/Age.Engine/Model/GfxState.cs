@@ -20,19 +20,24 @@ public readonly record struct SurfaceTransitionState(long CommandKey, int Target
     long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
 
+/// <summary>One synchronized sample of op 0x202's native one-shot packed-color channel.</summary>
+public readonly record struct ColorTransitionState(long Current, long Target,
+    long DelayMs, long DurationMs, long StartMs, double Progress, bool Active);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
 /// "The full gfx render model").</summary>
-/// <summary><paramref name="Alpha"/> is the object's OPACITY (0-255). <paramref name="TintStrength"/> is how
-/// strongly <paramref name="Tint"/> (RGB) is blended into the texel (0=keep texel, 255=full tint) — this is the
-/// op 0x202/0x203/0x232 "alpha" byte, which is a tint strength, NOT opacity (conflating them made opaque CGs
-/// vanish — the grey-background bug).</summary>
+/// <summary>The packed-color channel is mode-dependent. Mode 0 uses <paramref name="TintStrength"/> to blend
+/// <paramref name="Tint"/> into the texel; mode 1 uses <paramref name="Alpha"/> as opacity and multiplies the
+/// texel by <paramref name="Tint"/>. <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
                                            TransformState Transform, RotationCycleState Rotation,
                                            int Alpha, long Tint, int TintStrength, BlendKind Blend,
-                                           SurfaceTransitionState? SurfaceTransition = null);
+                                           bool MultiplyTint,
+                                           SurfaceTransitionState? SurfaceTransition = null,
+                                           ColorTransitionState? ColorTransition = null);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -56,6 +61,10 @@ public sealed class GfxState
         public long Color;
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
         public long StaticColorMode; // op 0x203 operand 2 -> obj+0x30; mode 2 is transition alpha/identity
+        // Op 0x202 one-shot packed-color channel: current +0x60, target +0x64, delay +0x38,
+        // duration +0x4c. It shares obj+0x34's start timestamp with the one-shot matrix channels.
+        public long OneShotColorTarget = -1, ColorDelayMs, ColorDurationMs;
+        public bool OneShotColorEnabled;
 
         // ---- src-rect / spritesheet-cell channel (ops 0x239 static cell, 0x231 animate). Interpolator
         // SRC-RECT SCROLL channel: period obj+0x230, start obj+0x21c, grid obj+0x238/0x23c. ----
@@ -84,7 +93,7 @@ public sealed class GfxState
         public long RotationDelayMs, RotationDurationMs;
         public bool RotationChannelEnabled;
         // Shared matrix-channel start timestamp obj+0x34, seeded from frame-time ctx+0xb550.
-        public long MatrixStartMs = -1;
+        public long OneShotStartMs = -1;
 
         // Op 0x234 is a separate cyclic rotation channel (period obj+0x228, axis obj+0x244..0x24c).
         public long RotationPeriodMs;
@@ -141,6 +150,8 @@ public sealed class GfxState
                 V18 = s.V18, V24 = s.V24, V16c = s.V16c,
                 Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
                 Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
+                OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
+                ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
                 SrcGridW = s.SrcGridW, SrcGridH = s.SrcGridH, SrcCell = s.SrcCell,
                 SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
                 ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
@@ -152,7 +163,7 @@ public sealed class GfxState
                 TranslationEnabled = s.TranslationEnabled,
                 RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
                 RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
-                RotationChannelEnabled = s.RotationChannelEnabled, MatrixStartMs = s.MatrixStartMs,
+                RotationChannelEnabled = s.RotationChannelEnabled, OneShotStartMs = s.OneShotStartMs,
                 RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
                 RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
             };
@@ -226,6 +237,25 @@ public sealed class GfxState
             long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
             o.Color = PackColor(resolvedAlpha, resolvedRgb);
             o.HasColor = true;
+        }
+    }
+
+    /// <summary>Op 0x202: arm the delayed one-shot packed-color interpolation without replacing the
+    /// current static color. Negative alpha/RGB operands resolve from current obj+0x60 independently.</summary>
+    public void SetAnimatedObjectColorResolved(long handle, long delayMs, long durationMs, long alpha, long rgb)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            long current = o.HasColor ? o.Color : 0xffffffff;
+            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+            if (!o.HasColor) { o.Color = current; o.HasColor = true; }
+            o.OneShotColorTarget = PackColor(resolvedAlpha, resolvedRgb);
+            o.ColorDelayMs = delayMs;
+            o.ColorDurationMs = durationMs;
+            o.OneShotColorEnabled = true;
+            o.OneShotStartMs = -1;
         }
     }
 
@@ -345,7 +375,7 @@ public sealed class GfxState
             var o = GetOrCreate(handle);
             o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
             o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-            o.ScaleEnabled = durationMs > 0; o.MatrixStartMs = -1;
+            o.ScaleEnabled = durationMs > 0; o.OneShotStartMs = -1;
         }
     }
 
@@ -357,7 +387,7 @@ public sealed class GfxState
             var o = GetOrCreate(handle);
             o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
             o.TranslationTarget = target;
-            o.TranslationEnabled = durationMs > 0; o.MatrixStartMs = -1;
+            o.TranslationEnabled = durationMs > 0; o.OneShotStartMs = -1;
         }
     }
 
@@ -370,7 +400,7 @@ public sealed class GfxState
             var o = GetOrCreate(handle);
             o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
             o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
-            o.RotationChannelEnabled = durationMs > 0; o.MatrixStartMs = -1;
+            o.RotationChannelEnabled = durationMs > 0; o.OneShotStartMs = -1;
         }
     }
 
@@ -418,14 +448,28 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
 
-                // ---- color: object stays OPAQUE; the op-0x202/0x203 alpha is a TINT STRENGTH (0=keep texel,
-                // 255=full tint), NOT opacity. 0x232 ping-pongs the strength (+tint) toward the target (glow). ----
+                // ---- packed color: mode 0 treats alpha as tint/fill strength; mode 1 treats it as opacity and
+                // RGB as multiplicative source modulation. 0x232 ping-pongs the mode-0 strength/tint. ----
                 int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
+                bool multiplyTint = false;
+                long sampledColor = o.Color;
+                ColorTransitionState? colorTransition = null;
+                if (o.OneShotColorEnabled)
+                {
+                    if (o.OneShotStartMs < 0) o.OneShotStartMs = nowMs;
+                    (sampledColor, colorTransition) = SampleOneShotColor(o, nowMs);
+                }
                 if (o.HasColor)
                 {
-                    var (a, r, g, b) = BlendMath.UnpackArgb(o.Color);
+                    var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
                     tint = ((long)r << 16) | ((long)g << 8) | (long)b;
-                    if (o.StaticColorMode == 2)
+                    if (o.StaticColorMode == 1)
+                    {
+                        // Native mode 1 enables SRCALPHA/INVSRCALPHA and passes packed ARGB as D3D
+                        // modulation. Its high byte is opacity, not mode-0 tint/fill strength.
+                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                    }
+                    else if (o.StaticColorMode == 2)
                     {
                         // Native transition-source mode: 0xffffffff is opaque identity modulation,
                         // not a request to replace every texel with white.
@@ -467,17 +511,19 @@ public sealed class GfxState
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                if ((o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled) && o.MatrixStartMs < 0)
-                    o.MatrixStartMs = nowMs;
+                if ((o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled)
+                    && o.OneShotStartMs < 0)
+                    o.OneShotStartMs = nowMs;
                 var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
-                                                o.ScaleDurationMs, o.MatrixStartMs, ref o.ScaleEnabled, nowMs);
+                                                o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs);
                 var rotation = SampleRotationChannel(ref o.RotationCurrent, o.RotationTarget,
                                                      o.RotationDelayMs, o.RotationDurationMs,
-                                                     o.MatrixStartMs, ref o.RotationChannelEnabled, nowMs);
+                                                     o.OneShotStartMs, ref o.RotationChannelEnabled, nowMs);
                 var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
                                                       o.TranslationDelayMs, o.TranslationDurationMs,
-                                                      o.MatrixStartMs, ref o.TranslationEnabled, nowMs);
-                if (!o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled) o.MatrixStartMs = -1;
+                                                      o.OneShotStartMs, ref o.TranslationEnabled, nowMs);
+                if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled)
+                    o.OneShotStartMs = -1;
 
                 double cycleAngle = 0;
                 if (o.RotationEnabled && o.RotationPeriodMs > 0)
@@ -498,10 +544,42 @@ public sealed class GfxState
                                           new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
                                                                  o.RotationAxis.Z, cycleAngle),
-                                          alpha, tint, strength, blend, transition));
+                                          alpha, tint, strength, blend, multiplyTint, transition, colorTransition));
             }
             return list;
         }
+    }
+
+    private static (long Packed, ColorTransitionState State) SampleOneShotColor(GfxObject o, long nowMs)
+    {
+        long current = o.Color & 0xffffffff;
+        long target = o.OneShotColorTarget & 0xffffffff;
+        long start = o.OneShotStartMs;
+        long elapsed = nowMs - start - o.ColorDelayMs;
+        if (o.ColorDurationMs <= 0 || elapsed >= o.ColorDurationMs)
+        {
+            long delay = o.ColorDelayMs, duration = o.ColorDurationMs;
+            o.Color = target;
+            o.ColorDelayMs = 0;
+            o.ColorDurationMs = 0;
+            o.OneShotColorTarget = -1;
+            o.OneShotColorEnabled = false;
+            return (target, new ColorTransitionState(current, target, delay, duration, start, 1.0, false));
+        }
+        if (elapsed <= 0)
+            return (current, new ColorTransitionState(current, target, o.ColorDelayMs,
+                o.ColorDurationMs, start, 0.0, true));
+
+        long packed = 0;
+        long remaining = o.ColorDurationMs - elapsed;
+        for (int shift = 0; shift <= 24; shift += 8)
+        {
+            long c = (current >> shift) & 0xff;
+            long t = (target >> shift) & 0xff;
+            packed |= ((c * remaining + t * elapsed) / o.ColorDurationMs & 0xff) << shift;
+        }
+        return (packed, new ColorTransitionState(current, target, o.ColorDelayMs,
+            o.ColorDurationMs, start, elapsed / (double)o.ColorDurationMs, true));
     }
 
     private static (double X, double Y, double Z) SampleMatrixChannel(

@@ -939,3 +939,44 @@ apart from the pre-existing nullable warning and threaded `SELFTEST OK`; all six
 opcode/ctx lint, 481-script decode validation, RECOVER, and Windows CR-aware `git diff --check` clean.
 The plain check reports only the generated reference's CRLF on its newly added row. SC0000 coverage is
 **85/129 handled (65.9%)**, 44 GAP ops / 598 GAP instructions. No commit was made.
+
+### A2b — op 0x202 one-shot color/presentation ✅ DONE (2026-07-10)
+
+**Native contract.** `gfx_op_0x202_worker_set_color_anim@0x47ea00` writes target packed ARGB at
+`obj+0x64`, delay/duration at `+0x38/+0x4c`, and resets the one-shot family's shared start `+0x34`.
+The missing consumer is the bit-1 path in `gfx_object_apply_transform_channels@0x472f00`: it seeds start
+from frame time `ctx+0xb550`, performs an integer bytewise current-`+0x60` to target-`+0x64` LERP, then
+commits target, clears timing, writes target `-1`, and clears the active bit once all sibling one-shot
+channels finish. This is ordinary presentation-clock coupling, not op `0x238`'s separate service clock.
+`ctx+0xb55c == 1` forces completion unless the object-local `+0x2d0` override bit is set. `/v2` comments
+were corrected and saved.
+
+**Port and endpoint diagnosis.** `GfxState` now retains current/target/delay/duration separately, shares
+the start timestamp with scale/rotation/translation, and exposes synchronized `color=current->target` plus
+progress in the compositor/timeline log. This fixes the initial black-to-EV049AA cut: windowed frames sample
+the full-screen `0xcf08` black owner through 11 monotonically decreasing states from `1.00` to `0.00` instead
+of installing the transparent endpoint immediately. The ADV textbox backing `0xd2f0` is a real 800×227 black
+fill at `(0,373)`; repeated show/hide passages now produce intermediate samples (for example
+`0.00, 0.26, 0.54, 0.82, 1.00` and the reverse), synchronized to the executing `0x202` sites around
+`0x12283..0x12342`.
+
+The remaining full-white runs are not a stuck color clock or d2f0 endpoint: pixel windows place them after
+d2f0 is transparent, while object timelines show `AE*` handles first becoming visible in mode 0 with default
+`0xffffffff` before their later mode-1 initializer. Native call-site disassembly proves op `0x203`'s
+`obj+0x30` is passed directly as the D3D blend selector and mode 1 uses `SRCALPHA/INVSRCALPHA`; the port now
+uses ARGB alpha as opacity and RGB as multiplicative modulation for that mode. The long white intervals did
+not disappear, which localizes the residual to when intermediate retained state is presented/batched, not to
+0x202 interpolation. Altering that scheduler boundary without a matching native present trace would exceed
+this bounded slice. `draw-string 0x204`/`0x7a` was not pulled in.
+
+Windowed evidence: 340 PNGs, 107 distinct pixel states; black-to-first-CG and d2f0 ramps agree with synchronized
+object progress. Focused tests cover exact integer midpoint math, delay, natural completion field cleanup,
+negative sentinel resolution, the 0x202-then-0x203 current/target pattern, shared color/matrix clock start,
+mode-1 opacity/modulation, and the software rasterizer.
+
+**Validation:** engine **108/108**; full sweep unchanged at **284 exit / 13 STEP-LIMIT**; Godot build clean
+apart from the pre-existing nullable warning and threaded `SELFTEST OK`; all seven Python test scripts,
+opcode/ctx lint, 481-script decode validation, and RECOVER clean. SC0000 coverage remains **85/129 handled
+(65.9%)**, 44 GAP ops / 598 GAP instructions. The differential oracle retains its prior branch-state
+divergence after `0x12031`; it agrees through the executed `0x202`/`0x203` sequence and does not implicate
+this slice. Windows CR-aware whitespace validation is clean.

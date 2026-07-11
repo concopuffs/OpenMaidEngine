@@ -5,7 +5,7 @@ public static class SoftwareAffineRasterizer
 {
     public static void BlitRgba(byte[] dst, int dstW, int dstH, byte[] src, int srcW, int srcH,
                                 int srcX, int srcY, int width, int height, Affine2D localToDest,
-                                long tint, float tintStrength, float opacity)
+                                long tint, float tintStrength, float opacity, bool multiplyTint = false)
     {
         if (width <= 0 || height <= 0 || !localToDest.TryInverse(out var inv)) return;
         Bounds(localToDest, width, height, dstW, dstH, out int x0, out int y0, out int x1, out int y1);
@@ -19,9 +19,9 @@ public static class SoftwareAffineRasterizer
             if ((uint)u >= (uint)width || (uint)v >= (uint)height) continue;
             int si=((srcY+v)*srcW+(srcX+u))*4, di=(y*dstW+x)*4;
             int sa=src[si+3]*ia/255; if(sa==0) continue;
-            int sr=(src[si]*(255-istr)+tr*istr)/255;
-            int sg=(src[si+1]*(255-istr)+tg*istr)/255;
-            int sb=(src[si+2]*(255-istr)+tb*istr)/255;
+            int sr=multiplyTint ? src[si]*tr/255 : (src[si]*(255-istr)+tr*istr)/255;
+            int sg=multiplyTint ? src[si+1]*tg/255 : (src[si+1]*(255-istr)+tg*istr)/255;
+            int sb=multiplyTint ? src[si+2]*tb/255 : (src[si+2]*(255-istr)+tb*istr)/255;
             Blend(dst,di,sr,sg,sb,sa);
         }
     }

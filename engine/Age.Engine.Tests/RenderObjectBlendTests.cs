@@ -65,6 +65,19 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
+    public void Mode1_UsesArgbAlphaAsOpacityAndRgbAsMultiplicativeModulation()
+    {
+        var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
+        g.SetStaticObjectColorResolved(0x100, 1, 0x40, 0x80ff40);
+        var ro = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(0x40, ro.Alpha);
+        Assert.Equal(0, ro.TintStrength);
+        Assert.Equal(0x80ff40, ro.Tint);
+        Assert.True(ro.MultiplyTint);
+        Assert.Equal(BlendKind.Alpha, ro.Blend);
+    }
+
+    [Fact]
     public void ColorKey_IsCarriedThrough()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: 0x000000);   // key black

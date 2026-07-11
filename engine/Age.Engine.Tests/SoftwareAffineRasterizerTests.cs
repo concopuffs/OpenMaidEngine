@@ -27,4 +27,17 @@ public class SoftwareAffineRasterizerTests
         Assert.InRange(colored, 3, 5);
         Assert.Equal(0, dst[(1*5+1)*4+3]);
     }
+
+    [Fact]
+    public void BlitRgba_MultiplyTintUsesD3dStyleRgbModulationAndOpacity()
+    {
+        byte[] src = { 200, 100, 50, 255 };
+        byte[] dst = new byte[4];
+        SoftwareAffineRasterizer.BlitRgba(dst, 1, 1, src, 1, 1, 0, 0, 1, 1,
+            new Affine2D(1, 0, 0, 1, 0, 0), 0x80ff40, 0, 0.5f, multiplyTint: true);
+        Assert.InRange(dst[0], 49, 50);
+        Assert.InRange(dst[1], 49, 50);
+        Assert.InRange(dst[2], 5, 7);
+        Assert.InRange(dst[3], 126, 127);
+    }
 }
