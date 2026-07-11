@@ -16,9 +16,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 │   ├── AGE.EXE, AGERC.DLL, *.dll             shipped engine (packed). Stays intact and
 │   │                                         runnable in place — Frida launches it if needed.
 │   ├── DATA1-5.ALF, APPEND01.ALF/.AAI        shipped archives (~2.3 GB).
-│   ├── *.BIN                                 52 loose patch-override scripts (v1.03) —
-│   │                                         AUTHORITATIVE over their DATA1 copies. Plus
-│   │                                         non-script indices (SYS4INI=S4IC, SYS4AB=S4AB).
+│   ├── *.BIN                                 49 loose patch-override scripts (v1.03) —
+│   │                                         AUTHORITATIVE over DATA1. Plus two root-only
+│   │                                         engine files (SYS4INI=S4IC, SYS4AB=S4AB).
 │   └── *.exe (uninstallers), SAS0099.OGG …   other shipped files.
 │
 ├── extracted/                               ← DERIVED (game-side) — extracted ALF contents,
@@ -96,6 +96,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
+    │   └── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
+    │                                       script provider, and temporary resource facade
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
 ```

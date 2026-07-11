@@ -150,10 +150,11 @@ public partial class Main : Godot.Control
         // runs a SYNTHESIZED scene (not a real scene in a crippled mode) so its output is deterministic.
         Script script;
         IScriptProvider provider;
+        Sys4ScriptProvider? scripts = null;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
-        else { script = Sys4Loader.Load(Paths.Scripts()[scene.ToUpperInvariant() + ".BIN"], table); provider = Sys4ScriptProvider.Load(table); }
+        else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
-        _host = new GodotAdvHost(this, ResourceMap.Load(), scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
+        _host = new GodotAdvHost(this, scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load(), scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
         _trace = new GodotTraceSink(_timeline);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
@@ -169,7 +170,7 @@ public partial class Main : Godot.Control
         {
             var session = new GameSession();
             foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
-                session.RunScene(Sys4Loader.Load(Paths.Scripts()[b], table), table, new CaptureHost(), null, provider);
+                session.RunScene(scripts!.RequireByName(b), table, new CaptureHost(), null, provider);
             foreach (var kv in session.Globals) _vm.Globals[kv.Key] = kv.Value;
             foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
             GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");

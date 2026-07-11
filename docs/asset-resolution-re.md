@@ -166,7 +166,7 @@ The current Phase-A backend deliberately continues through the extracted-file bo
 accepts both OGG and WAV and Godot loads the WAV bytes into its fixed SC0000 channel pool. This does not change
 the scoped VFS plan below: ALF/AAI mounting and in-process asset reads remain a separate foundation track.
 
-## Candidate runtime asset-VFS track (scoped 2026-07-10; not started)
+## Runtime asset-VFS track (VFS-A complete 2026-07-11)
 
 The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
 runtime. The native-compatible target is a read-only virtual filesystem that preserves AGE's translation/mod
@@ -184,12 +184,16 @@ store.
 
 ### Proposed layers
 
-1. **Catalog + read-only ALF store.** Parse SYS4INI at runtime while preserving all 13208 raw records
+1. **Catalog + read-only ALF store (VFS-A DONE).** `Sys4AssetCatalog` parses SYS4INI at runtime while preserving all 13208 raw records
    (including the two `@` placeholders), archive names, scene sections, and the existing three lookup modes:
    universal raw id, scene-local manifest id, and direct name where the opcode family genuinely uses one.
    An ALF is a payload container at this layer: open the named archive and return a bounded stream/byte range
    at the indexed offset/size. Before that fallback, probe the configured loose override roots by the record's
-   exact basename. Keep `build/asset-index.json` as a diagnostic artifact, not a runtime dependency.
+   exact basename. `Sys4AssetStore` opens a separate read-only file handle per request and constrains archive
+   seek/read operations to the record range. `Sys4ScriptProvider` now loads both root scenes and nested
+   `call-script` targets through this seam; `ResourceMap` uses the same live catalog. `build/asset-index.json`,
+   `build/asset-sections.json`, `build/callscript-names.json`, and `extracted/` are validation/temporary
+   graphics-audio artifacts, not script-runtime dependencies.
 2. **AAI append mount.** Parse the installed `APPEND01.AAI` (`S4AC422`) and its paired `APPEND01.ALF` with
    the same catalog abstractions. First prove whether Himegari joins append records by a separate pack/tag,
    by name replacement, or by another table selected by the native high-byte-id path; do not invent mount
@@ -202,7 +206,7 @@ store.
    platform-neutral .NET code; do not carry GARbro's WPF/GameRes dependencies. Kelebek's extractor and the
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification.
-4. **Runtime consumers.** Make script loading accept streams/bytes from the store, make texture surfaces own
+4. **Runtime consumers.** Script loading is complete. Next make texture surfaces own
    decoded RGBA pixels rather than BMP paths, and load OGG/WAV from store bytes. Migrate one consumer at a
    time; retain extraction/conversion tools as diagnostics until parity is established.
 
@@ -221,6 +225,16 @@ store.
 - End to end: SC0000 can run without consulting `extracted/` or `build/textures`; slot 17 receives SO001,
   the translucent textbox/button chrome appears, root `.BIN` overrides still win, and the standard VM/Godot
   validation matrix remains green.
+
+VFS-A passes these bounded gates in `Sys4AssetStoreTests`: every catalog field matches the generated
+diagnostic index, all 136 scene views match the generated section oracle without cross-section spill, all
+13206 archive ranges fit, `raw_index 0x337e` is `SO001.AGF`, representative payloads from every base archive
+are byte-identical to `extracted/`, and synthetic removal of a loose override reveals the bounded ALF bytes.
+Traversal, past-range seek/read, and concurrent reads are covered. Installed override enumeration corrected
+an older inventory error: this tree contains 51 loose root BINs, comprising **49 archive-backed v1.03 script
+overrides** (all byte-proven to win and differ from DATA1) plus root-only `SYS4INI.BIN` and `SYS4AB.BIN`.
+There are not 52 archive copies available to shadow. APPEND01/AAI, AGF decode, audio consumers, and movie
+`0x236` remain unimplemented by design.
 
 ### Deliberate non-goals
 

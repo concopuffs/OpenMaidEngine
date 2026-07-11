@@ -28,7 +28,7 @@
 ## Global constraints
 
 - **Python:** `py -3.11 -X utf8 …` always (Shift-JIS output needs utf8 mode on Windows).
-- **Authoritative copies:** the 52 loose game-folder `.BIN` shadow their `extracted/DATA1/` copies at runtime — target the game-folder copy where both exist. `sys4load.load()` is copy-agnostic; `paths.scripts()` resolves the override.
+- **Authoritative copies:** 49 loose game-folder script `.BIN` files shadow `extracted/DATA1/` copies at runtime; two engine BINs are root-only. Target the game-folder copy where both exist. `sys4load.load()` is copy-agnostic; `paths.scripts()` resolves the override.
 - **Units:** all script offsets/counts are DWORDS (×4 bytes), relative to body start `0x3C`.
 - **Instruction rule:** `len_dwords = 1 + 2*argc`; args are `(type,value)`; **stop code decode at the first inline-string/array offset**, not blindly at `F8`.
 - Record confidence per finding (confirmed-by-bytes / confirmed-by-runtime / hypothesis).

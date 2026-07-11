@@ -12,6 +12,7 @@ public static class Paths
     public static string AssetIndexJson => Path.Combine(Build, "asset-index.json");
     public static string CallscriptNamesJson => Path.Combine(Build, "callscript-names.json");
     public static string Textures => Path.Combine(Build, "textures");
+    public static string Sys4Ini => Path.Combine(GameDir, "SYS4INI.BIN");
 
     private static string FindRepo()
     {

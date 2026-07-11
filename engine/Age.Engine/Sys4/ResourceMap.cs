@@ -1,56 +1,23 @@
-using System.Text.Json;
-
 namespace Age.Engine.Sys4;
 
-/// <summary>One SYS4INI asset entry.</summary>
-public sealed record AssetEntry(string Name, string Archive, long Offset, long Size);
-
 /// <summary>
-/// Static asset resolver. SYS4INI's file list is sectioned (one per scene: SCxxxx.BIN + its
+/// Compatibility facade over the runtime SYS4 catalog. SYS4INI's file list is sectioned (one per scene: SCxxxx.BIN + its
 /// cross-archive asset manifest); file_number is the index within a section. So a bytecode
 /// resId resolves as files[section_base(scene) + resId] -- unified for graphics and audio.
-/// See docs/asset-resolution-re.md. Built from build/asset-index.json + build/asset-sections.json.
+/// See docs/asset-resolution-re.md. Extracted paths remain temporary graphics/audio backends only.
 /// </summary>
 public sealed class ResourceMap
 {
-    private readonly IReadOnlyList<AssetEntry> _files;
-    private readonly IReadOnlyDictionary<string, int> _sceneBase;   // "SC0000" -> section base index
+    private readonly Sys4AssetCatalog _catalog;
 
-    public ResourceMap(IReadOnlyList<AssetEntry> files, IReadOnlyDictionary<string, int> sceneBase)
-    {
-        _files = files;
-        _sceneBase = sceneBase;
-    }
+    public ResourceMap(Sys4AssetCatalog catalog) => _catalog = catalog;
 
-    public static ResourceMap Load(string indexPath, string sectionsPath)
-    {
-        var files = new List<AssetEntry>();
-        using (var idx = JsonDocument.Parse(File.ReadAllText(indexPath)))
-            foreach (var f in idx.RootElement.GetProperty("files").EnumerateArray())
-                files.Add(new AssetEntry(
-                    f.GetProperty("name").GetString()!,
-                    f.GetProperty("archive").GetString()!,
-                    f.GetProperty("offset").GetInt64(),
-                    f.GetProperty("size").GetInt64()));
-
-        var sceneBase = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        using (var sec = JsonDocument.Parse(File.ReadAllText(sectionsPath)))
-            foreach (var p in sec.RootElement.GetProperty("scene_base").EnumerateObject())
-                sceneBase[p.Name] = p.Value.GetInt32();
-
-        return new ResourceMap(files, sceneBase);
-    }
-
-    public static ResourceMap Load() => Load(Paths.AssetIndexJson, Paths.AssetSectionsJson);
+    public static ResourceMap Load() => new(Sys4AssetCatalog.Load(Paths.Sys4Ini));
 
     /// <summary>Resolve a scene-local resId to its asset, or null if out of range / unknown scene.</summary>
     public AssetEntry? Resolve(string scene, long resId)
     {
-        var key = scene.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
-            ? scene[..^4] : scene;
-        if (!_sceneBase.TryGetValue(key, out var b)) return null;
-        long p = b + resId;
-        return p >= 0 && p < _files.Count ? _files[(int)p] : null;
+        return _catalog.ResolveScene(scene, resId);
     }
 
     /// <summary>Pre-converted BMP path for an AGF asset (see tools/convert_agf.py).</summary>
@@ -70,10 +37,8 @@ public sealed class ResourceMap
     public string? BgmPathById(long id)
     {
         var name = $"BGM{id:D3}.OGG";
-        foreach (var f in _files)
-            if (f.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-                return AudioPath(f);
-        return null;
+        var f = _catalog.ResolveName(name);
+        return f == null ? null : AudioPath(f);
     }
 
     /// <summary>Loose extracted OGG/WAV path for an audio asset (extracted/DATA{n}/{name}), or null.

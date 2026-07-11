@@ -17,4 +17,18 @@ public class Sys4ScriptProviderTests
         Assert.Same(additem, provider.GetById(0x1ab));   // cached: same instance
         Assert.Null(provider.GetById(long.MaxValue));    // unknown id
     }
+
+    [Fact]
+    public void RootScriptLoadingUsesTheSameAssetStoreAndLoosePrecedence()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var provider = Sys4ScriptProvider.Load(table);
+        var patched = provider.RequireByName("FIELD.BIN");
+        var directLoose = Sys4Loader.Load(Path.Combine(Paths.GameDir, "FIELD.BIN"), table);
+
+        Assert.Equal(directLoose.Instructions.Count, patched.Instructions.Count);
+        Assert.Same(patched, provider.RequireByName("field.bin"));
+        Assert.Null(provider.GetByName("../FIELD.BIN"));
+        Assert.Equal(481, provider.ScriptNames.Count);
+    }
 }

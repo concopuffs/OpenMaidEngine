@@ -7,11 +7,12 @@ during disassembler work).
 
 Source: `extracted\DATA1\` (extracted from `DATA1.ALF`).
 
-**Patch overrides:** 52 loose `.BIN` files sit in the game root directory and shadow
-their DATA1 counterparts at runtime (sizes differ slightly — e.g. `FIELD.BIN` root
-200,536 vs archive 200,224). These are the v1.03 / append-patch versions and should be
-treated as **authoritative** over the archive copies. Two engine files exist only in
-the root: `SYS4INI.BIN` (272 KB) and `SYS4AB.BIN` (1.08 MB).
+**Patch overrides (runtime re-counted 2026-07-11):** 49 loose `.BIN` scripts sit in the game root and
+shadow DATA1 counterparts at runtime (sizes differ slightly — e.g. `FIELD.BIN` root 200,536 vs archive
+200,224). These v1.03 / append-patch versions are **authoritative**. Two additional engine BINs exist only
+in the root: `SYS4INI.BIN` (272 KB) and `SYS4AB.BIN` (1.08 MB), for 51 root BINs total. The earlier count of
+52 shadowing scripts conflated this inventory and was not reproducible; VFS-A enumerates and byte-checks all
+49 real catalog/name intersections.
 
 ---
 
@@ -100,8 +101,8 @@ outside scenes lives.
 `call-script <id>` (opcode 0x03) loads another script by a **raw index into the SYS4INI file table**
 (id = the entry's `raw_index` = its global position in SYS4INI). This is the resolved call-graph
 registry — there is no separate id→code table; SYS4INI is it. Mechanism: `engine-re.md` (op 0x03
-section); id→name single source: `build/callscript-names.json` (from `parse_sys4ini.py`); `sys4load`
-and the regenerated `build/disasm/*.asm` corpus now render targets by name
+section); the runtime source is `Sys4AssetCatalog` over SYS4INI, while the mechanically generated
+`build/callscript-names.json` feeds `sys4load` diagnostics. The regenerated `build/disasm/*.asm` corpus renders targets by name
 (`call-script 0x1ab =ADDITEM.BIN`). **297 distinct scripts are called** across the corpus (3002 sites);
 the hottest are `HISTORY` (backlog), `MENU`, `HIDEWIN`, `BUNKI` (branch), `MES` (message), `ADDITEM`,
 `ADDEN`, `LOOK`, `RENDERMAP`. Scenes (`SCxxxx.BIN`) load through the *same* id-indexed loader.
@@ -126,4 +127,4 @@ derivable on demand from the corpus; materialize a doc only if a consumer needs 
    (176 B) → `MENU.BIN` (3 KB) → `CALCDMG` → a mid-size `SC####`.
 3. **The `*INIT` giants are likely data tables**, decodable early even with a
    partial opcode map — instant win for extracting item/skill/enemy/stage databases.
-4. **Use root-directory overrides, not archive copies**, for the 52 patched scripts.
+4. **Use root-directory overrides, not archive copies**, for the 49 archive-backed patched scripts.

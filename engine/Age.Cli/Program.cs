@@ -10,6 +10,7 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson);
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var provider = Sys4ScriptProvider.Load(table);
+Script ScriptByName(string name) => provider.RequireByName(name);
 
 // Diagnostics flags (see the TraceSetup class below): --trace (text flow), --trace-steps (every op),
 // --trace-ops <csv> (only these mnemonics/hex, tagged with their script), --trace-histogram (op +
@@ -43,7 +44,7 @@ if (args[0] == "audio")
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = ResourceMap.Load();
     var host = new AudioTraceHost(res, sceneKey);
-    var vm = new VirtualMachine(Sys4Loader.Load(Paths.Scripts()[sceneName.ToUpperInvariant()], table), table, host);
+    var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
     foreach (var s in args.Skip(2))
     {
@@ -81,10 +82,10 @@ if (args[0] == "gfx")
     if (boot)
         foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
         {
-            var bs = session.RunScene(Sys4Loader.Load(Paths.Scripts()[b], table), table, new CaptureHost(), null, provider);
+            var bs = session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
             Console.WriteLine($"[boot] {b}: {bs.Steps} steps (halt: {bs.Halt})");
         }
-    var target = Sys4Loader.Load(Paths.Scripts()[sceneName.ToUpperInvariant()], table);
+    var target = ScriptByName(sceneName);
     // With --boot, run the target like the real engine (call-scripts on) so subroutine-driven setup runs.
     var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider)
                   : new VirtualMachine(target, table, host);
@@ -111,7 +112,6 @@ if (args[0] == "play")
     // The *INIT boot set — all run clean (halt: exit) and populate the game's data tables into globals.
     string[] bootScripts = { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
                              "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" };
-    var scripts = Paths.Scripts();
     bool boot = args.Contains("--boot");
     var userScenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
     if (userScenes.Count == 0) { Console.WriteLine("usage: play [--boot] <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
@@ -134,7 +134,7 @@ if (args[0] == "play")
     var playOpts = new VmOptions(HaltAtWaitForInput: !args.Contains("--plow"));   // faithful by default
     foreach (var name in scenes)
     {
-        var script = Sys4Loader.Load(scripts[name.ToUpperInvariant()], table);
+        var script = ScriptByName(name);
         var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
@@ -151,8 +151,7 @@ if (args[0] == "sweep")
     // baseline) and report halt distribution + line counts. Validates the VM + state substrate at scale and
     // surfaces how booted real data affects the corpus. Headless.
     var sceneRe = new Regex(@"^S[CP]\d{4}\.BIN$");
-    var scripts = Paths.Scripts();
-    var names = scripts.Keys.Where(n => sceneRe.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+    var names = provider.ScriptNames.Where(n => sceneRe.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
     bool boot = args.Contains("--boot");
     // Sweep DEFAULTS to plow (walk every page) — it's the dialogue-coverage oracle. --halt-at-wait opts into
     // the faithful "stop at the first prompt" semantics (VmOptions.HaltAtWaitForInput).
@@ -163,7 +162,7 @@ if (args[0] == "sweep")
         var bootSession = new GameSession();
         foreach (var s in new[] { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
                                   "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" })
-            bootSession.RunScene(Sys4Loader.Load(scripts[s], table), table, new CaptureHost(), null, provider);
+            bootSession.RunScene(ScriptByName(s), table, new CaptureHost(), null, provider);
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
     }
@@ -182,7 +181,7 @@ if (args[0] == "sweep")
     {
         var session = Fresh();
         if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
-        return session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), sweepOpts, provider).Emitted.Count;
+        return session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider).Emitted.Count;
     }
 
     if (seeds.Count > 0)
@@ -205,7 +204,7 @@ if (args[0] == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(Sys4Loader.Load(scripts[name], table), table, new CaptureHost(), sweepOpts, provider, trace.Sink);
+        var r = session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, trace.Sink);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;
@@ -233,8 +232,7 @@ if (args[0] == "trace")
         var outPath = args[tji + 1];
         var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
         bool boot = args.Contains("--boot");
-        var jscripts = Paths.Scripts();
-        var target = Sys4Loader.Load(jscripts[sceneName.ToUpperInvariant()], table);
+        var target = ScriptByName(sceneName);
         // --state <file>: start from a captured scene-entry snapshot (Frida global-write log →
         // capture_global_writes.py) — the real engine's full pre-scene state, superseding the partial
         // --boot. Otherwise fresh + optional --boot.
@@ -252,7 +250,7 @@ if (args[0] == "trace")
         }
         if (boot && si < 0)   // --state already carries boot state; don't re-run the *INIT prefix
             foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
-                session.RunScene(Sys4Loader.Load(jscripts[b], table), table, new CaptureHost(), null, provider);
+                session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
         var sink = new JsonOffsetTraceSink(target.Name);
         var vm = new VirtualMachine(target, table, new CaptureHost(),
                                     new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink);
@@ -269,11 +267,10 @@ if (args[0] == "trace")
     }
 
     var scene = new Regex(@"^S[CP]\d{4}\.BIN$");
-    var scripts = Paths.Scripts();
     var trace = new SortedDictionary<string, object>(StringComparer.Ordinal);
-    foreach (var name in scripts.Keys.Where(n => scene.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal))
+    foreach (var name in provider.ScriptNames.Where(n => scene.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal))
     {
-        var vm = new VirtualMachine(Sys4Loader.Load(scripts[name], table), table, new CaptureHost());
+        var vm = new VirtualMachine(ScriptByName(name), table, new CaptureHost());
         vm.Run();
         trace[name] = new { offsets = vm.Emitted.Select(e => e.Offset).ToArray(), halt = vm.HaltReason, steps = vm.Steps };
     }

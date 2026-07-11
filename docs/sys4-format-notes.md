@@ -112,8 +112,8 @@ task. These tags give a head start on labeling the disassembly.*
 
 ## Patch-override caveat (re-confirmed)
 
-52 loose `.BIN` in the game root shadow their DATA1 copies at runtime and differ
-slightly in size. The disassembler should target the **root** copies where present.
+49 loose script `.BIN` files in the game root shadow DATA1 copies at runtime and differ slightly in size;
+two additional root-only engine BINs bring the root total to 51. The disassembler should target the **root** copies where present.
 The header format is identical (same magic/layout) so tooling is copy-agnostic.
 
 ## What's solid vs. what needs Ghidra

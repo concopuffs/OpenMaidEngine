@@ -1055,7 +1055,7 @@ separate slices. No implementation commit was made.
 This is an optional high-leverage detour before movie `0x236` or SFX. It replaces the Phase-A
 pre-extracted/pre-converted asset bootstrap with the native loose-override/archive-fallback model and removes
 the runtime dependency on `extracted/` plus `build/textures/`. Canonical format/architecture detail and source
-references live in `docs/asset-resolution-re.md` §“Candidate runtime asset-VFS track”; this section defines
+references live in `docs/asset-resolution-re.md` §“Runtime asset-VFS track”; this section defines
 slice boundaries only.
 
 Land it as three bounded slices, not one archive/codec rewrite:
@@ -1089,6 +1089,21 @@ fixtures and installed-game integration checks rather than committing proprietar
 **Decision point:** this track is worthwhile before broadening beyond SC0000 because it establishes the
 modding contract and benefits scripts, UI chrome, SFX, and movies. It is not required to continue opcode
 coverage immediately, so choosing movie/SFX next remains valid.
+
+### VFS-A — base SYS4 catalog + ALF byte reads DONE (2026-07-11)
+
+`Sys4AssetCatalog` now runtime-parses `SYS4INI.BIN` into all 13208 raw slots (including two `@`
+placeholders), 13206 real/name records, bounded scene sections, and universal raw-id lookup.
+`Sys4AssetStore` applies native `loose exact-basename -> ALF offset/size` precedence with traversal rejection,
+per-open file handles, and a seek/read boundary. `Sys4ScriptProvider` and all CLI/Godot root-script paths use
+store bytes; `ResourceMap` consumes the live catalog instead of generated asset JSON.
+
+Validation: 116 engine tests; every field against `build/asset-index.json`; all 136 generated scene views;
+all 13206 archive ranges; representative bytes across DATA1..5 against `extracted/`; synthetic precedence,
+range, traversal, and concurrency tests; CLI SC0000 run; Godot build/selftest. The installed root has 49
+archive-backed script overrides and two root-only BIN engine files, not the historically reported 52
+shadowing scripts; all 49 were byte-proven to win and differ from their archive payload. VFS-B APPEND01/AAI,
+VFS-C AGF, audio migration, and movie `0x236` remain separate.
 
 ### Phase A — native SC0000 SFX family (`0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9`) DONE (2026-07-11)
 

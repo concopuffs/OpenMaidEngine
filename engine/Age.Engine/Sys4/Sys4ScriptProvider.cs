@@ -1,39 +1,54 @@
-using System.Text.Json;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+
 namespace Age.Engine.Sys4;
 
-/// <summary>Resolves call-script ids (raw SYS4INI file indices) to loaded scripts, using
-/// build/callscript-names.json (id→name) + Paths.Scripts() (name→path). Cached per id.
-/// The native resolver prefers a loose override before the archive; Paths.Scripts() already
-/// shadows extracted/DATA1 with root overrides, so that behavior is preserved.</summary>
+/// <summary>Loads root and call-script bytecode through the native loose-first asset-store seam.</summary>
 public sealed class Sys4ScriptProvider : IScriptProvider
 {
     private readonly OpcodeTable _table;
-    private readonly IReadOnlyDictionary<long, string> _idToName;
-    private readonly Dictionary<string, string> _byName;      // NAME(UPPER) -> path
+    private readonly IAssetStore _store;
     private readonly Dictionary<long, Script?> _cache = new();
+    private readonly Dictionary<string, Script?> _nameCache = new(StringComparer.OrdinalIgnoreCase);
 
-    public Sys4ScriptProvider(OpcodeTable table, IReadOnlyDictionary<long, string> idToName,
-                              Dictionary<string, string> byName)
-    { _table = table; _idToName = idToName; _byName = byName; }
+    public Sys4AssetCatalog Catalog { get; }
+    public IReadOnlyList<string> ScriptNames => Catalog.ScriptNames;
+
+    public Sys4ScriptProvider(OpcodeTable table, Sys4AssetCatalog catalog, IAssetStore store)
+    { _table = table; Catalog = catalog; _store = store; }
 
     public static Sys4ScriptProvider Load(OpcodeTable table)
     {
-        var raw = JsonSerializer.Deserialize<Dictionary<string, string>>(
-            File.ReadAllText(Paths.CallscriptNamesJson)) ?? new();
-        var idToName = raw.ToDictionary(kv => long.Parse(kv.Key), kv => kv.Value);
-        return new Sys4ScriptProvider(table, idToName, Paths.Scripts());
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        return new Sys4ScriptProvider(table, catalog,
+            new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir));
     }
 
     public Script? GetById(long id)
     {
         if (_cache.TryGetValue(id, out var cached)) return cached;
-        Script? s = null;
-        if (_idToName.TryGetValue(id, out var name) &&
-            _byName.TryGetValue(name.ToUpperInvariant(), out var path))
-            s = Sys4Loader.Load(path, _table);
-        _cache[id] = s;
-        return s;
+        var entry = Catalog.ResolveRaw(id);
+        Script? script = entry is { IsPlaceholder: false }
+                        && entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
+            ? Parse(entry) : null;
+        _cache[id] = script;
+        return script;
     }
+
+    public Script? GetByName(string name)
+    {
+        string key = name;
+        if (_nameCache.TryGetValue(key, out var cached)) return cached;
+        var entry = Catalog.ResolveName(key);
+        Script? script = entry != null && entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
+            ? Parse(entry) : null;
+        _nameCache[key] = script;
+        return script;
+    }
+
+    public Script RequireByName(string name)
+        => GetByName(name) ?? throw new FileNotFoundException($"script is not in SYS4INI: {name}", name);
+
+    private Script Parse(AssetEntry entry)
+        => Sys4Loader.Parse(_store.ReadAll(entry), _table, entry.Name);
 }

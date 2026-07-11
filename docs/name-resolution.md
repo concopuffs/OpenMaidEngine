@@ -24,10 +24,11 @@ mechanism in `engine-re.md` (“op 0x03 (call-script)…”). Tooling: `parse_sy
 `build/callscript-names.json` (id→name); `sys4load` renders `call-script 0x1ab =ADDITEM.BIN`; the
 `build/disasm/*.asm` call graph now reads by name. The one caveat: index the RAW SYS4INI records
 (*including* the 2 `@` placeholders) — `asset-index.json` carries each entry's `raw_index` (= the id)
-for exactly this. **Remaining (functional, not naming):** the C# VM still stubs `call-script`
-execution; implementing it (load `.BIN` by id, push frame, run, return) is the follow-up. The original
-analysis (kept below for provenance) had concluded this was engine-level and deferred — it was, and
-the Ghidra loop is what resolved it.
+for exactly this. **Runtime (VFS-A):** `Sys4AssetCatalog` now reads that raw table directly and
+`Sys4ScriptProvider` opens the selected record through loose-first/bounded-ALF storage; generated JSON is
+only the disassembler annotation and parity oracle. The VM executes the loaded target as a nested frame.
+The original analysis (kept below for provenance) had concluded this was engine-level and deferred — it
+was, and the Ghidra loop is what resolved it.
 
 **What it is (original framing).** `call-script N` (Kelebek opcode 0x03) carries a bare number —
 `0x329d`, `0x2ade` — the id of an engine entry point. To render `call RECOVER` instead of
