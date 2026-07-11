@@ -35,17 +35,19 @@ public class OneShotColorTests
         gfx.SetAnimatedObjectColorResolved(0x100, 100, 400, 0xff, 0x90a0b0);
 
         var start = gfx.SnapshotVisibleObjects(1000).Single();
-        Assert.Equal(0, start.TintStrength);
+        Assert.Equal(0, start.Alpha);
+        Assert.True(start.MultiplyTint);
         Assert.Equal(0.0, start.ColorTransition!.Value.Progress);
-        Assert.Equal(0, gfx.SnapshotVisibleObjects(1100).Single().TintStrength);
+        Assert.Equal(0, gfx.SnapshotVisibleObjects(1100).Single().Alpha);
 
         var half = gfx.SnapshotVisibleObjects(1300).Single();
-        Assert.Equal(0x7f, half.TintStrength);
+        Assert.Equal(0x7f, half.Alpha);
         Assert.Equal(0x506070, half.Tint);
         Assert.Equal(0.5, half.ColorTransition!.Value.Progress, 3);
 
         var end = gfx.SnapshotVisibleObjects(1500).Single();
-        Assert.Equal(0xff, end.TintStrength);
+        Assert.Equal(0xff, end.Alpha);
+        Assert.True(end.MultiplyTint); // committed endpoints keep the op-0x202 blend contract
         Assert.Equal(0x90a0b0, end.Tint);
         Assert.False(gfx.TryGet(0x100)!.OneShotColorEnabled);
         Assert.Equal(-1, gfx.TryGet(0x100)!.OneShotColorTarget);
@@ -59,10 +61,10 @@ public class OneShotColorTests
         gfx.SetStaticObjectColorResolved(0x100, 0, 0xff, 0xffffff);
 
         var start = gfx.SnapshotVisibleObjects(2000).Single();
-        Assert.Equal(0xff, start.TintStrength);
+        Assert.Equal(0xff, start.Alpha);
         Assert.Equal(0xffffff, start.Tint);
         var half = gfx.SnapshotVisibleObjects(2150).Single();
-        Assert.Equal(0x7f, half.TintStrength);
+        Assert.Equal(0x7f, half.Alpha);
         Assert.Equal(0xffffff, half.Tint);
     }
 
@@ -75,7 +77,7 @@ public class OneShotColorTests
 
         gfx.SnapshotVisibleObjects(5000);
         var half = gfx.SnapshotVisibleObjects(5500).Single();
-        Assert.Equal(0x7f, half.TintStrength);
+        Assert.Equal(0x7f, half.Alpha);
         Assert.Equal(1.5, half.Transform.ScaleX, 3);
         Assert.Equal(5000, half.ColorTransition!.Value.StartMs);
     }

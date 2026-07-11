@@ -40,4 +40,20 @@ public class SoftwareAffineRasterizerTests
         Assert.InRange(dst[2], 5, 7);
         Assert.InRange(dst[3], 126, 127);
     }
+
+    [Fact]
+    public void BlitRgba_WhiteModulationPreservesYellowAndZeroOpacityHidesIt()
+    {
+        byte[] src = { 240, 192, 16, 255 };
+        byte[] visible = new byte[4];
+        var identity = new Affine2D(1, 0, 0, 1, 0, 0);
+        SoftwareAffineRasterizer.BlitRgba(visible, 1, 1, src, 1, 1, 0, 0, 1, 1,
+            identity, 0xffffff, 0, 1, multiplyTint: true);
+        Assert.Equal(new byte[] { 240, 192, 16, 255 }, visible);
+
+        byte[] hidden = new byte[4];
+        SoftwareAffineRasterizer.BlitRgba(hidden, 1, 1, src, 1, 1, 0, 0, 1, 1,
+            identity, 0xffffff, 0, 0, multiplyTint: true);
+        Assert.Equal(new byte[4], hidden);
+    }
 }

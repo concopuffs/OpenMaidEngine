@@ -792,6 +792,16 @@ The port now carries current and target separately and samples them from the uni
 target. Mode 0 retains the established CG/tint/fill behavior; mode 1 now uses native alpha opacity plus RGB
 modulation. `draw-string 0x204`/`0x7a` remains a separate dependency.
 
+**ADV chrome correction (2026-07-11).** Mode 0 cannot be classified from the final packed color alone.
+Static `0x203(mode=0, alpha=0, rgb=white)` remains the established opaque/no-tint CG initializer, but a
+mode-0 object whose current/target channel was armed by `0x202` consumes that sampled ARGB as opacity plus
+multiplicative RGB modulation, including after target commit. SC0000 proves the distinction with SYSTEM4's
+SO001 surface: backing object `0xd2f0` ramps `0x00000000 <-> 0xff000000`, while control-strip object
+`0xd2f1` ramps `0x00ffffff <-> 0xffffffff`. Treating alpha as tint strength made the visible controls solid
+white and the hidden backing expose SO001's raw white crop. Preserving one-shot provenance makes white an
+identity modulation for the yellow controls and alpha zero fully transparent. A matching windowed capture
+and user manual check confirmed both endpoints.
+
 ### SC0000 anim/transform/spritesheet cluster — op→field map (2026-07-08)
 
 Reversed for the animation cluster slice (spec `docs/superpowers/specs/2026-07-08-sc0000-anim-transform-cluster-design.md`).

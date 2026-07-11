@@ -1239,3 +1239,20 @@ also pass with all of `extracted/` physically moved aside. The real-scene trace 
 the existing test bootstrap still finds root script fixtures through `Paths.Scripts()` under `extracted/`,
 and changing that unrelated bootstrap was outside this movie slice. Final validation: engine **132/132**,
 Godot build with zero warnings, threaded `SELFTEST OK`, and opcode-map lint clean.
+
+### Phase A — SC0000 textbox/control-strip one-shot blend correction DONE (2026-07-11)
+
+The lower white panel noted after movie publication and the white-outline controls had one shared cause,
+not a movie or AGF-alpha fault. SYSTEM4's inherited SO001 surface is cropped by ADV backing object `0xd2f0`
+and control-strip object `0xd2f1`; both use a mode-0 `0x202` one-shot color transition. The port discarded
+that one-shot provenance after sampling and interpreted the packed alpha as static tint strength. As a
+result, full-strength white replaced the controls' yellow pixels, while zero strength exposed the raw
+mostly-white backing crop instead of hiding it.
+
+`GfxState` now distinguishes static mode-0 `0x203` state from mode-0 color state which has passed through
+`0x202`. The latter retains ARGB-opacity plus multiplicative-RGB semantics after target commit. This keeps
+the established `0x00ffffff` static CG initializer opaque, preserves yellow under white identity modulation,
+and makes a committed alpha-zero ADV crop transparent. Focused model/raster tests cover the committed
+endpoint, identity modulation, and zero-opacity output. Validation: engine **134/134**, Godot build with
+zero warnings, matching windowed capture, and user manual confirmation that the box disappears fully and
+the controls retain their normal color while visible.

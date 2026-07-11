@@ -335,7 +335,9 @@ public partial class Main : Godot.Control
                 if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
                 {
                     int baseW = v.W > 0 ? v.W : 800, baseH = v.H > 0 ? v.H : 600;
-                    float fillA = opacity * strength;
+                    // One-shot/mode-1 packed color supplies opacity directly. Static mode-0 fills retain
+                    // the tint-strength convention used by the existing effect objects.
+                    float fillA = v.MultiplyTint ? opacity : opacity * strength;
                     FillAffineQuad(baseW, baseH, localToDest, v.Tint, fillA);
                     outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
                               $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +

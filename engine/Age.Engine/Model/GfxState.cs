@@ -28,9 +28,10 @@ public readonly record struct ColorTransitionState(long Current, long Target,
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
 /// "The full gfx render model").</summary>
-/// <summary>The packed-color channel is mode-dependent. Mode 0 uses <paramref name="TintStrength"/> to blend
-/// <paramref name="Tint"/> into the texel; mode 1 uses <paramref name="Alpha"/> as opacity and multiplies the
-/// texel by <paramref name="Tint"/>. <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
+/// <summary>The packed-color channel is mode-dependent. Static mode 0 uses <paramref name="TintStrength"/>
+/// to blend <paramref name="Tint"/> into the texel. A mode-0 color which has passed through op 0x202, and
+/// mode 1, use <paramref name="Alpha"/> as opacity and multiply the texel by <paramref name="Tint"/>.
+/// <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
                                            TransformState Transform, RotationCycleState Rotation,
@@ -65,6 +66,10 @@ public sealed class GfxState
         // duration +0x4c. It shares obj+0x34's start timestamp with the one-shot matrix channels.
         public long OneShotColorTarget = -1, ColorDelayMs, ColorDurationMs;
         public bool OneShotColorEnabled;
+        // Once op 0x202 arms this object's color channel, its sampled/current ARGB is consumed as D3D
+        // opacity + multiplicative modulation even after the target commits. This distinguishes ADV chrome
+        // fades from a static mode-0 0x203 such as a CG initialized with 0x00ffffff (opaque identity).
+        public bool OneShotColorBlend;
 
         // ---- src-rect / spritesheet-cell channel (ops 0x239 static cell, 0x231 animate). Interpolator
         // SRC-RECT SCROLL channel: period obj+0x230, start obj+0x21c, grid obj+0x238/0x23c. ----
@@ -152,6 +157,7 @@ public sealed class GfxState
                 Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
                 OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
                 ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
+                OneShotColorBlend = s.OneShotColorBlend,
                 SrcGridW = s.SrcGridW, SrcGridH = s.SrcGridH, SrcCell = s.SrcCell,
                 SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
                 ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
@@ -265,6 +271,7 @@ public sealed class GfxState
             o.ColorDelayMs = delayMs;
             o.ColorDurationMs = durationMs;
             o.OneShotColorEnabled = true;
+            o.OneShotColorBlend = true;
             o.OneShotStartMs = -1;
         }
     }
@@ -469,8 +476,10 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
 
-                // ---- packed color: mode 0 treats alpha as tint/fill strength; mode 1 treats it as opacity and
-                // RGB as multiplicative source modulation. 0x232 ping-pongs the mode-0 strength/tint. ----
+                // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
+                // armed the one-shot channel, its current/target ARGB instead supplies opacity and D3D-style
+                // multiplicative RGB modulation (including after target commit). Mode 1 uses the same blend.
+                // 0x232 remains the separate ping-pong mode-0 strength/tint channel. ----
                 int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
                 bool multiplyTint = false;
                 long sampledColor = o.Color;
@@ -484,7 +493,7 @@ public sealed class GfxState
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
                     tint = ((long)r << 16) | ((long)g << 8) | (long)b;
-                    if (o.StaticColorMode == 1)
+                    if (o.StaticColorMode == 1 || (o.StaticColorMode == 0 && o.OneShotColorBlend))
                     {
                         // Native mode 1 enables SRCALPHA/INVSRCALPHA and passes packed ARGB as D3D
                         // modulation. Its high byte is opacity, not mode-0 tint/fill strength.

@@ -78,6 +78,21 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
+    public void Mode0_OneShotColor_UsesOpacityAndMultiplicativeRgbAfterCommit()
+    {
+        var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
+        g.SetAnimatedObjectColorResolved(0x100, 0, 100, 0x00, 0xffffff);
+        g.SetStaticObjectColorResolved(0x100, 0, 0xff, 0xffffff);
+
+        g.SnapshotVisibleObjects(1000); // seed
+        var hidden = g.SnapshotVisibleObjects(1100).Single();
+        Assert.Equal(0, hidden.Alpha);
+        Assert.Equal(0, hidden.TintStrength);
+        Assert.True(hidden.MultiplyTint);
+        Assert.False(g.TryGet(0x100)!.OneShotColorEnabled);
+    }
+
+    [Fact]
     public void ColorKey_IsCarriedThrough()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: 0x000000);   // key black
