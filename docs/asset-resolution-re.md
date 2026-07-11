@@ -155,6 +155,17 @@ subsystem** — native geometry ops (`0x208` + sprite position/animation) so spr
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
 uses the manifest** (`files[base+id]`); **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
 
+## Native SFX resource proof (2026-07-11)
+
+SFX uses the same scene-local rule as graphics and voice: `files[section_base(scene)+resource_id]`.
+The matching native trace at SC0000 `0xc29` captures resource `0x28`, channel 0; static resolution yields
+`DATA1/E0808.WAV`, and the port trace resolves the same file. The following `0xc31` preload uses the same
+resource on native secondary channel 4. `play-bgm` remains the separate direct-name exception.
+
+The current Phase-A backend deliberately continues through the extracted-file bootstrap: `ResourceMap.AudioPath`
+accepts both OGG and WAV and Godot loads the WAV bytes into its fixed SC0000 channel pool. This does not change
+the scoped VFS plan below: ALF/AAI mounting and in-process asset reads remain a separate foundation track.
+
 ## Candidate runtime asset-VFS track (scoped 2026-07-10; not started)
 
 The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final

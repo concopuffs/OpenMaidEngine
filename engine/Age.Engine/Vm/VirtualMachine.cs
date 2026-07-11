@@ -25,6 +25,8 @@ public sealed class VirtualMachine
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
+    /// <summary>Native/profile-owned values read by scripts but maintained outside script-visible writes.</summary>
+    public Dictionary<int, long> ExternalGlobals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
     public GfxState Gfx { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
@@ -37,6 +39,7 @@ public sealed class VirtualMachine
       _sink = sink ?? NullTraceSink.Instance; }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
+    private long ReadGlobal(int k) => ExternalGlobals.TryGetValue(k, out var v) ? v : Gi(Globals, k);
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
     private static long PyDiv(long a, long b) { if (b == 0) return 0; long q = a / b, r = a % b; if (r != 0 && (r < 0) != (b < 0)) q--; return q; }
     private static long PyMod(long a, long b) { if (b == 0) return 0; long r = a % b; if (r != 0 && (r < 0) != (b < 0)) r += b; return r; }
@@ -73,7 +76,7 @@ public sealed class VirtualMachine
     private long Read(Operand op) => op.Type switch
     {
         T_IMM => op.Value,
-        T_GINT or T_GFLOAT => Gi(Globals, (int)op.Value),
+        T_GINT or T_GFLOAT => ReadGlobal((int)op.Value),
         T_GPTR => Gi(Globals, (int)Gi(Globals, (int)op.Value)),
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
         T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
@@ -319,6 +322,16 @@ public sealed class VirtualMachine
             }
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
+            case "play-sound-effect":   // 0xb4 / semantics: sfx-load
+                _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
+            case "u0041D050":           // 0xb5 / semantics: sfx-start
+                _host.StartSoundEffect((int)Read(a[0])); return pc + 1;
+            case "u0041D080":           // 0xb6 / semantics: sfx-release
+                _host.ReleaseSoundEffect((int)Read(a[0])); return pc + 1;
+            case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
+                _host.FadeBgm((int)Read(a[0]), Read(a[1])); return pc + 1;
+            case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
+                return pc + 1;
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
                 if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)

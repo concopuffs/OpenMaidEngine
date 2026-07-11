@@ -25,4 +25,8 @@ public interface IHost
     (int Width, int Height) GetTextureSize(int slot);
     void PlayBgm(long id);
     void PlayVoice(long id);
+    void LoadSoundEffect(long resourceId, int channel) { }
+    void StartSoundEffect(int channel) { }
+    void ReleaseSoundEffect(int channel) { }
+    void FadeBgm(int targetPercent, long durationMs) { }
 }

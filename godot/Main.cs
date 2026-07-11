@@ -18,6 +18,7 @@ public partial class Main : Godot.Control
     private Label _status = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
+    private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
@@ -100,6 +101,11 @@ public partial class Main : Godot.Control
         _voice = new AudioStreamPlayer();
         AddChild(_bgm);
         AddChild(_voice);
+        for (int i = 0; i < _sfx.Length; i++)
+        {
+            _sfx[i] = new AudioStreamPlayer();
+            AddChild(_sfx[i]);
+        }
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
@@ -168,6 +174,10 @@ public partial class Main : Godot.Control
             foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
             GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");
         }
+        // Native AGE owns this transient secondary-SFX channel outside script-visible writes.
+        // The matching SC0000 trace has value 4 at 0xc31; seed only this proven profile/slice.
+        if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
+            _vm.ExternalGlobals[0x6242d] = 4;
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
         _ = Task.Run(() => { _vm.Run(); _done = true; });
 
@@ -214,7 +224,7 @@ public partial class Main : Godot.Control
             return;
         }
         // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
-        if (_shotPath != null && !_shotDone && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
+        if (_shotPath != null && !_shotDone && _host != null && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
         {
             if (++_shotSettle >= _shotSettleTarget)
             {
@@ -507,6 +517,7 @@ public partial class Main : Godot.Control
         var stream = AudioStreamOggVorbis.LoadFromBuffer(System.IO.File.ReadAllBytes(oggPath));
         if (stream == null) { GD.Print($"OGG load failed {oggPath}"); return; }
         stream.Loop = true;
+        _bgm.VolumeDb = 0;
         _bgm.Stream = stream;
         _bgm.Play();
     }
@@ -518,6 +529,38 @@ public partial class Main : Godot.Control
         stream.Loop = false;
         _voice.Stream = stream;
         _voice.Play();
+    }
+
+    public void LoadSoundEffect(string wavPath, int channel)
+    {
+        if ((uint)channel >= (uint)_sfx.Length) return;
+        var stream = AudioStreamWav.LoadFromBuffer(System.IO.File.ReadAllBytes(wavPath));
+        if (stream == null) { GD.Print($"WAV load failed {wavPath}"); return; }
+        stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
+        _sfx[channel].Stop();
+        _sfx[channel].VolumeDb = 0;
+        _sfx[channel].Stream = stream;
+    }
+
+    public void StartSoundEffect(int channel)
+    {
+        if ((uint)channel < (uint)_sfx.Length && _sfx[channel].Stream != null)
+            _sfx[channel].Play();
+    }
+
+    public void ReleaseSoundEffect(int channel)
+    {
+        if ((uint)channel >= (uint)_sfx.Length) return;
+        _sfx[channel].Stop();
+        _sfx[channel].Stream = null;
+    }
+
+    public void FadeBgm(int targetPercent, double realDurationSeconds)
+    {
+        float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
+        float targetDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
+        if (realDurationSeconds <= 0) { _bgm.VolumeDb = targetDb; return; }
+        CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";

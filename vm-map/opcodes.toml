@@ -1721,23 +1721,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "play-sound-effect"
-category = "unknown"
-summary = ""
+name = "sfx-load"
+category = "audio"
+summary = "(resource_id)(channel) — synchronously resolve/open the scene-manifest asset and replace the channel's decoded sound buffer without starting playback. Native manager supports channels 0..12; SC0000 uses 0..9."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op 0xb4 handler 0x4201d0 -> sfx_channel_load@0x482500 -> asset_open@0x44f390 + sound_decode_channel@0x483360. Native trace: SC0000 0xc29 loads resource 0x28 into channel 0; resource resolves by section_base+id to E0808.WAV; completion precedes 0xb5 in the same millisecond."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "resource_id"
 observed_types = ["imm", "g-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "channel"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
@@ -1747,18 +1747,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D050"
-category = "unknown"
-summary = ""
+name = "sfx-start"
+category = "audio"
+summary = "(channel) — start the already-loaded channel once (logical loop=false). DirectSound publishes synchronously through Play(0,0,DSBPLAY_LOOPING); the low-level flag loops only the streaming ring, while decoder EOF stops logical playback."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op 0xb5 handler 0x420210 passes mode 0 to sfx_channel_start@0x4825d0; mode 1 belongs to op 0xba. sound_buffer_start@0x484270 primes four quarter-buffer notifications then calls IDirectSoundBuffer::Play with flag 1 before returning. Native trace at SC0000 0xc2e: E0808 channel 0 start enters/leaves in the same ms, preloaded 1->0 and playing 0->1."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "channel"
 observed_types = ["imm", "g-int"]
 
 [[opcode]]
@@ -1768,18 +1768,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "snd-ctrl?"
+name = "sfx-release"
 category = "audio"
-summary = "1 imm; self-chains, 0x41D family near play-sound-effect/0xb5 — sound channel/volume/stop control"
+summary = "(channel) - stop/destroy the channel decoder and DirectSound buffer, clear its retained resource id, and leave the slot empty. Idempotent for an unused channel."
 noop_headless = false
-source = "inference"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "confirm via frida"
+evidence = "Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> sound_buffer_destroy@0x4831a0, which releases the per-channel object under its critical section and clears the slot. Native trace captured SC0000's channels 0..9 release sweep in consecutive calls."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "channel"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -1910,23 +1910,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D2B0"
-category = "unknown"
-summary = ""
+name = "fade-bgm"
+category = "audio"
+summary = "(target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Target 0 releases the current BGM source at completion."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op 0xc2 handler 0x4204c0 sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830; bgm_fade_tick@0x464960 interpolates current/target percent and applies volume, releasing at target 0. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "target_percent"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "duration_ms"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2193,14 +2193,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415880"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "clear-run-state-0x1000"
+category = "control"
+summary = "Clear native run/service bit 0x1000; if the secondary context is active, clear the same bit there. SC0000 executes it once after the initial SFX-channel reset, with no VM-visible result."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op 0xd9 handler 0x416da0: ctx->run_state_flags &= ~0x1000; when ctx+0x6f8b8 is nonzero, also clears bit 0x1000 at ctx+0x53d20. No operands, calls, or return value."
 
 [[opcode]]
 op = 0xfb

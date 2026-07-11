@@ -17,15 +17,30 @@
 
 ## audio
 
-### 0xb6 `snd-ctrl?` (u0041D080, argc 1)
-- **summary:** 1 imm; self-chains, 0x41D family near play-sound-effect/0xb5 — sound channel/volume/stop control
-- **grounding:** source=inference, confidence=low
-- **evidence:** confirm via frida
+### 0xb4 `sfx-load` (play-sound-effect, argc 2)
+- **summary:** (resource_id)(channel) — synchronously resolve/open the scene-manifest asset and replace the channel's decoded sound buffer without starting playback. Native manager supports channels 0..12; SC0000 uses 0..9.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op 0xb4 handler 0x4201d0 -> sfx_channel_load@0x482500 -> asset_open@0x44f390 + sound_decode_channel@0x483360. Native trace: SC0000 0xc29 loads resource 0x28 into channel 0; resource resolves by section_base+id to E0808.WAV; completion precedes 0xb5 in the same millisecond.
+
+### 0xb5 `sfx-start` (u0041D050, argc 1)
+- **summary:** (channel) — start the already-loaded channel once (logical loop=false). DirectSound publishes synchronously through Play(0,0,DSBPLAY_LOOPING); the low-level flag loops only the streaming ring, while decoder EOF stops logical playback.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op 0xb5 handler 0x420210 passes mode 0 to sfx_channel_start@0x4825d0; mode 1 belongs to op 0xba. sound_buffer_start@0x484270 primes four quarter-buffer notifications then calls IDirectSoundBuffer::Play with flag 1 before returning. Native trace at SC0000 0xc2e: E0808 channel 0 start enters/leaves in the same ms, preloaded 1->0 and playing 0->1.
+
+### 0xb6 `sfx-release` (u0041D080, argc 1)
+- **summary:** (channel) - stop/destroy the channel decoder and DirectSound buffer, clear its retained resource id, and leave the slot empty. Idempotent for an unused channel.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> sound_buffer_destroy@0x4831a0, which releases the per-channel object under its critical section and clears the slot. Native trace captured SC0000's channels 0..9 release sweep in consecutive calls.
 
 ### 0xbf `play-bgm` (play-bgm, argc 1)
 - **summary:** Play background music by id. BGM is addressed by DIRECT LITERAL NAME: id -> BGM{id:03d}.OGG (in DATA3), NOT the per-scene section manifest (that's voices/textures). E.g. play-bgm 5 -> BGM005.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for play-bgm 0x5 and BGM008 for play-bgm 0x8 (we initially mis-played BGM006/BGM009 via the manifest = off-by-one). Direct-name proven by play-bgm 0x23 -> BGM035.OGG, a real standalone track (BGM set skips 030-034) that the manifest mis-resolved to a graphics entry (EV049AA.AGF). CORRECTS the earlier 'unified manifest / Frida BGM006' claim, which was wrong by one. Voices/textures still use the manifest (files[base+id], offset 0). Diagnostic: `Age.Cli audio SC0000.BIN`.
+
+### 0xc2 `fade-bgm` (u0041D2B0, argc 2)
+- **summary:** (target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Target 0 releases the current BGM source at completion.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op 0xc2 handler 0x4204c0 sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830; bgm_fade_tick@0x464960 interpolates current/target percent and applies volume, releasing at target 0. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms.
 
 ### 0xc4 `play-voice` (play-voice, argc 1)
 - **summary:** Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d}).
@@ -78,6 +93,11 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **evidence:** Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section.
 
 Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity).
+
+### 0xd9 `clear-run-state-0x1000` (u00415880, argc 0)
+- **summary:** Clear native run/service bit 0x1000; if the secondary context is active, clear the same bit there. SC0000 executes it once after the initial SFX-channel reset, with no VM-visible result.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra op 0xd9 handler 0x416da0: ctx->run_state_flags &= ~0x1000; when ctx+0x6f8b8 is nonzero, also clears bit 0x1000 at ctx+0x53d20. No operands, calls, or return value.
 
 ### 0x140 `coroutine-label-yield` (u0041F9C0, argc 4)
 - **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
@@ -578,14 +598,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xb4 `play-sound-effect` (play-sound-effect, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0xb5 `u0041D050` (u0041D050, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0xb7 `u0041D0E0` (u0041D0E0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -603,10 +615,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xc0 `u00415620` (u00415620, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xc2 `u0041D2B0` (u0041D2B0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -643,10 +651,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xd5 `u004262C0` (u004262C0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xd9 `u00415880` (u00415880, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

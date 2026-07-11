@@ -973,6 +973,46 @@ Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captur
 non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
 11 clicks completed active reveals and 14 later clicks released 14 distinct waits through `0xe0c`.
 
+### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9` (2026-07-11)
+
+The three SFX opcodes are a retained channel lifecycle, not immediate fire-and-forget calls. Handler
+resolution and the saved `/v2` names are:
+
+- `0xb4` `op_0xb4_sfx_load@0x4201d0` -> `sfx_channel_load@0x482500`: `(resource_id, channel)` opens the
+  scene-local SYS4 entry and replaces the channel decoder/buffer without starting it. The manager supports
+  13 slots (`0..12`); SC0000 deliberately resets and uses the `0..9` subset.
+- `0xb5` `op_0xb5_sfx_start_once@0x420210` -> `sfx_channel_start@0x4825d0`: starts the loaded channel with
+  logical loop mode 0. Adjacent op `0xba`, not this slice, passes mode 1.
+- `0xb6` `op_0xb6_sfx_release@0x420250` -> `sfx_channel_release@0x482600` ->
+  `sound_buffer_destroy@0x4831a0`: stop/release and clear the retained resource/decoder; empty release is
+  safe. SC0000's `0x62b..0x646` and `0x120d..0x1228` are ten-channel reset sweeps.
+
+`sound_decode_channel@0x483360` selects the decoder by file signature, constructs a DirectSound buffer, and
+installs four quarter-buffer notifications. `sound_buffer_start@0x484270` primes the ring and synchronously
+calls `IDirectSoundBuffer::Play(0,0,DSBPLAY_LOOPING)` before returning. That flag loops the streaming ring,
+not the logical clip: `sound_stream_fill_quarter@0x483b70` rewinds the decoder only for logical mode 1;
+otherwise it pads after EOF and `sound_buffer_stop@0x483aa0` stops playback. This family carries no volume or
+pan operands. It inherits configured SFX volume and centered pan: the first-pair capture applies DirectSound
+attenuation `-2377` to both channel loads, and the shared audio service later records centered `SetPan(0)`.
+`sound_buffer_set_volume@0x483f80` computes that inherited attenuation; neither value is supplied by these
+five handlers. The bounded port does not yet import native audio preferences, so its extracted-WAV bootstrap
+uses unity gain and centered pan rather than hard-coding the captured user's setting.
+
+The native trace in `build/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
+resource `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
+`0xb4@0xc31` preloads the same WAV into engine-owned secondary channel 4 for a later service start. The
+scratch global `G[0x6242d]` is maintained outside script-visible writes; the SC0000 port profile exposes it
+as an external value of 4 rather than pretending the script assigned it.
+
+Normal-speed windowed validation reached `wait-for-input@0x1a58` after 45.6 seconds without an audio stall;
+the user confirmed the opening effects were audible and sounded good.
+
+`0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
+and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
+durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
+The VM is parked for the requested duration. `0xd9` is adjacent startup control, not audio data: it clears
+run/service bit `0x1000` in the primary and, when active, secondary context and has no VM-visible result.
+
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 
 **Problem the oracle surfaced:** single-scene VM runs diverge from the engine because they lack the

@@ -10,6 +10,7 @@ public sealed class GodotAdvHost : IHost
     private readonly ResourceMap _res;
     private readonly string _scene;                       // e.g. "SC0000" — for section_base
     private readonly Dictionary<int, string?> _slotBmp = new();          // slot -> pre-converted BMP path
+    private readonly string?[] _sfxPaths = new string?[10];              // SC0000 native channel subset
     // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
@@ -274,6 +275,47 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.Resolve(_scene, id);
         var path = asset != null ? ResourceMap.AudioPath(asset) : null;
         if (path != null) _main.CallDeferred("PlayVoice", path);
+    }
+
+    public void LoadSoundEffect(long resourceId, int channel)
+    {
+        if ((uint)channel >= (uint)_sfxPaths.Length) return;
+        var asset = _res.Resolve(_scene, resourceId);
+        var path = asset != null ? ResourceMap.AudioPath(asset) : null;
+        _sfxPaths[channel] = path;
+        _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel,
+            ["file"] = path != null ? System.IO.Path.GetFileName(path) : null });
+        if (path != null) _main.CallDeferred("LoadSoundEffect", path, channel);
+    }
+
+    public void StartSoundEffect(int channel)
+    {
+        if ((uint)channel >= (uint)_sfxPaths.Length || _sfxPaths[channel] == null) return;
+        _timeline?.Event("sfx-start", new() { ["channel"] = channel,
+            ["file"] = System.IO.Path.GetFileName(_sfxPaths[channel]) });
+        _main.CallDeferred("StartSoundEffect", channel);
+    }
+
+    public void ReleaseSoundEffect(int channel)
+    {
+        if ((uint)channel >= (uint)_sfxPaths.Length) return;
+        _timeline?.Event("sfx-release", new() { ["channel"] = channel,
+            ["file"] = _sfxPaths[channel] != null ? System.IO.Path.GetFileName(_sfxPaths[channel]) : null });
+        _sfxPaths[channel] = null;
+        _main.CallDeferred("ReleaseSoundEffect", channel);
+    }
+
+    public void FadeBgm(int targetPercent, long durationMs)
+    {
+        long ms = System.Math.Clamp(durationMs, 0, 60_000);
+        double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
+        _timeline?.State("bgm-fade", new() { ["target_percent"] = targetPercent, ["duration_ms"] = ms });
+        _main.CallDeferred("FadeBgm", targetPercent, realSeconds);
+        long deadline = _clock.NowMs + ms;
+        IsSleeping = true;
+        while (_clock.NowMs < deadline && !_stopping) _frameSignal.WaitOne(50);
+        IsSleeping = false;
+        _timeline?.State("running", new() { ["bgm_fade_complete"] = true });
     }
 }
 

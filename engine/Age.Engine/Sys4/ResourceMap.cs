@@ -76,14 +76,15 @@ public sealed class ResourceMap
         return null;
     }
 
-    /// <summary>Loose extracted OGG path for an audio asset (extracted/DATA{n}/{name}), or null.
-    /// OGG plays natively in Godot. Used for voices (which DO use the per-scene manifest via Resolve).</summary>
+    /// <summary>Loose extracted OGG/WAV path for an audio asset (extracted/DATA{n}/{name}), or null.
+    /// Used by the current bootstrap audio backend; voices and SFX use the scene manifest via Resolve.</summary>
     public static string? AudioPath(AssetEntry a)
     {
-        if (!a.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase)) return null;
+        if (!a.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase) &&
+            !a.Name.EndsWith(".WAV", StringComparison.OrdinalIgnoreCase)) return null;
         var dir = a.Archive.EndsWith(".ALF", StringComparison.OrdinalIgnoreCase)
             ? a.Archive[..^4] : a.Archive;                       // "DATA3.ALF" -> "DATA3"
-        var ogg = Path.Combine(Paths.Extracted, dir, a.Name);
-        return File.Exists(ogg) ? ogg : null;
+        var audio = Path.Combine(Paths.Extracted, dir, a.Name);
+        return File.Exists(audio) ? audio : null;
     }
 }

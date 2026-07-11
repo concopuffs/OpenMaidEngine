@@ -1089,3 +1089,43 @@ fixtures and installed-game integration checks rather than committing proprietar
 **Decision point:** this track is worthwhile before broadening beyond SC0000 because it establishes the
 modding contract and benefits scripts, UI chrome, SFX, and movies. It is not required to continue opcode
 coverage immediately, so choosing movie/SFX next remains valid.
+
+### Phase A — native SC0000 SFX family (`0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9`) DONE (2026-07-11)
+
+Native RE and the matching trace resolve the bounded family. `0xb4(resource,channel)` synchronously loads
+and retains a scene-manifest sound; `0xb5(channel)` starts that loaded sound once; `0xb6(channel)` destroys
+and clears it. The manager supports 13 native slots, while SC0000 uses a fixed `0..9` pool. Native playback
+is a notification-fed DirectSound ring: `Play(...,DSBPLAY_LOOPING)` keeps the ring alive, but logical mode 0
+stops at decoder EOF. Mode 1 belongs to adjacent op `0xba` and remains outside this slice. These five ops do
+not set pan or SFX volume; SC0000 inherits centered pan and configured SFX volume. The captured loads both
+apply DirectSound attenuation `-2377`; because native audio-preference import is outside this slice, the
+bounded extracted-WAV port uses unity gain and centered pan instead of treating that user setting as opcode
+semantics.
+
+At the requested first site, `0xb4@0xc29` resolves `0x28` to `E0808.WAV` and loads channel 0;
+`0xb5@0xc2e` publishes playback in the same native millisecond. `0xb4@0xc31` preloads the same WAV into
+engine-owned secondary channel 4. `G[0x6242d]` is native/profile-owned rather than script-written, so the
+port exposes value 4 through the new external-global seam for SC0000. The matching port timeline now records
+the same `(load ch0, start ch0, preload ch4)` sequence in one frame. Startup `0x62b..0x646` and the later
+`0x120d..0x1228` both release channels 0..9 in order.
+
+`0xc2(target,duration)` is the adjacent blocking BGM fade: 100 linear steps for durations at least 1000 ms,
+10 steps below that, with target zero releasing the source. `0xd9` only clears native service bit `0x1000`;
+the isolated VM recognizes it with no host-visible effect. The Godot backend retains ten `AudioStreamPlayer`
+channels, loads the existing extracted WAV bytes, separates load from start, releases buffers deterministically,
+and parks BGM fades on the unified virtual clock. ALF/AAI/AGF VFS work and movie `0x236` remain separate.
+
+Ghidra `/v2` now names/comments all five handlers plus the asset-open, decode, DirectSound start/refill/stop/
+volume/release, and BGM fade workers; the program is saved. Evidence is
+`build/native-sfx-trace.jsonl` and `godot/build/sfx-port-timeline4.jsonl` (the latter is the final rebuilt
+channel-4 trace; earlier diagnostic reruns captured the missing external-state mismatch).
+
+**Automated validation:** engine **111/111**; corpus sweep unchanged at **284 exit / 13 STEP-LIMIT**;
+Godot build and threaded `SELFTEST OK`; all seven Python suites, opcode/ctx lint, 481-script decode, RECOVER,
+and tracer bytecode compilation clean. SC0000 coverage rises from **87/129 to 92/129 handled (71.3%)**,
+leaving 37 GAP ops / 101 GAP instructions. Headless sequence capture still emits the known dummy-renderer
+`GetImage` diagnostics while completing successfully; it is not an audio failure.
+
+**Manual validation:** the normal-speed windowed port advanced through `wait-for-input@0x1a58` at 45.6 s,
+well past the first effects and dialogue pages, with no audio-related stall. The user confirmed the effects
+were audible and sounded good.
