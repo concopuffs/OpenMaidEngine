@@ -11,7 +11,7 @@ public sealed class GodotAdvHost : IHost
     private readonly string _scene;                       // e.g. "SC0000" — for section_base
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
-    private readonly string?[] _sfxPaths = new string?[10];              // SC0000 native channel subset
+    private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
     // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
@@ -280,44 +280,55 @@ public sealed class GodotAdvHost : IHost
     // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: via the per-scene manifest.
     public void PlayBgm(long id)
     {
-        var path = _res.BgmPathById(id);
-        _timeline?.Event("bgm", new() { ["id"] = id, ["file"] = path != null ? System.IO.Path.GetFileName(path) : null });
-        if (path != null) _main.CallDeferred("PlayBgm", path);
+        var asset = _res.ResolveBgm(id);
+        var audio = asset != null ? LoadAudio(asset) : null;
+        _timeline?.Event("bgm", new() { ["id"] = id, ["file"] = audio?.Name });
+        if (audio != null) _main.CallDeferred("PlayBgm", audio.Bytes, audio.Name);
     }
 
     public void PlayVoice(long id)
     {
         var asset = _res.Resolve(_scene, id);
-        var path = asset != null ? ResourceMap.AudioPath(asset) : null;
-        if (path != null) _main.CallDeferred("PlayVoice", path);
+        var audio = asset != null ? LoadAudio(asset) : null;
+        if (audio != null) _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name);
     }
 
     public void LoadSoundEffect(long resourceId, int channel)
     {
-        if ((uint)channel >= (uint)_sfxPaths.Length) return;
+        if ((uint)channel >= (uint)_sfxNames.Length) return;
         var asset = _res.Resolve(_scene, resourceId);
-        var path = asset != null ? ResourceMap.AudioPath(asset) : null;
-        _sfxPaths[channel] = path;
+        var audio = asset != null ? LoadAudio(asset) : null;
+        _sfxNames[channel] = audio?.Name;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel,
-            ["file"] = path != null ? System.IO.Path.GetFileName(path) : null });
-        if (path != null) _main.CallDeferred("LoadSoundEffect", path, channel);
+            ["file"] = audio?.Name });
+        if (audio != null) _main.CallDeferred("LoadSoundEffect", audio.Bytes, audio.Name, channel);
     }
 
     public void StartSoundEffect(int channel)
     {
-        if ((uint)channel >= (uint)_sfxPaths.Length || _sfxPaths[channel] == null) return;
+        if ((uint)channel >= (uint)_sfxNames.Length || _sfxNames[channel] == null) return;
         _timeline?.Event("sfx-start", new() { ["channel"] = channel,
-            ["file"] = System.IO.Path.GetFileName(_sfxPaths[channel]) });
+            ["file"] = _sfxNames[channel] });
         _main.CallDeferred("StartSoundEffect", channel);
     }
 
     public void ReleaseSoundEffect(int channel)
     {
-        if ((uint)channel >= (uint)_sfxPaths.Length) return;
+        if ((uint)channel >= (uint)_sfxNames.Length) return;
         _timeline?.Event("sfx-release", new() { ["channel"] = channel,
-            ["file"] = _sfxPaths[channel] != null ? System.IO.Path.GetFileName(_sfxPaths[channel]) : null });
-        _sfxPaths[channel] = null;
+            ["file"] = _sfxNames[channel] });
+        _sfxNames[channel] = null;
         _main.CallDeferred("ReleaseSoundEffect", channel);
+    }
+
+    private AudioPayload? LoadAudio(AssetEntry asset)
+    {
+        try { return _res.ReadAudio(asset); }
+        catch (System.Exception e)
+        {
+            Godot.GD.Print($"audio read failed {asset.Name}: {e.Message}");
+            return null;
+        }
     }
 
     public void FadeBgm(int targetPercent, long durationMs)

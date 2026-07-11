@@ -350,14 +350,13 @@ sealed class AudioTraceHost : IHost
     public AudioTraceHost(ResourceMap res, string scene) { _res = res; _scene = scene; }
     public void PlayBgm(long id)                        // BGM: direct name, not the manifest
     {
-        var path = _res.BgmPathById(id);
-        Events.Add(("play-bgm", id, path != null ? $"DATA3 {System.IO.Path.GetFileName(path)}" : $"BGM{id:D3}.OGG <missing>"));
+        var entry = _res.ResolveBgm(id);
+        Events.Add(("play-bgm", id, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>"));
     }
     public void PlayVoice(long id)                      // voice: per-scene manifest
     {
         var e = _res.Resolve(_scene, id);
-        Events.Add(("play-voice", id, e == null ? "<unresolved>"
-            : $"{e.Archive} {e.Name}" + (ResourceMap.AudioPath(e) == null ? " [NO FILE]" : "")));
+        Events.Add(("play-voice", id, e == null ? "<unresolved>" : $"{e.Archive} {e.Name}"));
     }
     public void ShowText(int offset, string text) { }
     public void WaitForInput() { }

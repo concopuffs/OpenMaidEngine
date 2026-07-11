@@ -114,10 +114,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    verified SO001 is 800×300, 32-bpp, with substantial per-pixel alpha; the current rasterizer already
    consumes source alpha. The missing prerequisites are system-asset resolution/conversion and retained
    slot initialization, not new textbox drawing or button interaction.
-4. **Audio.** **✅ WIRED (2026-07-06) — no Frida needed.** Same rule as textures:
-   `play-bgm(id)`/`play-voice(id)` → `files[section_base(scene)+id]` → OGG. `IHost.PlayBgm/PlayVoice` +
-   VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.AudioPath` → loose
-   `extracted/DATA{n}/{name}.OGG`; `GodotAdvHost` → `Main`'s two `AudioStreamPlayer` nodes
+4. **Audio.** **✅ WIRED (2026-07-06), VFS bytes complete (2026-07-11).** `IHost.PlayBgm/PlayVoice` +
+   VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
+   resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
    (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
    → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
    (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
@@ -128,12 +127,12 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), NOT the manifest.
      Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`; the manifest gave BGM006/009 = off-by-one) and proven
      by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the manifest mis-resolved
-     to a graphics entry. Implemented as `ResourceMap.BgmPathById(id)`; `GodotAdvHost.PlayBgm` uses it.
+     to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `GodotAdvHost.PlayBgm` uses it.
      The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
 
-   Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). `play-sound-effect` (0xb4, argc 2)
-   left stubbed — arg roles unconfirmed. See `docs/phase-a-slice-plan.md` (A2b-Audio). Diagnostic: `Age.Cli
-   audio <SCENE>`.
+   Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). Scene-local SFX WAV entries use
+   the same byte path while retaining the existing channel lifecycle. See `docs/phase-a-slice-plan.md`.
+   Diagnostic: `Age.Cli audio <SCENE>`.
 5. **Movies** (`OP`/`MVB`, MPEG) — a separate video-playback path; deferred.
 
 ## Validation reality (why this is the big haul)
@@ -162,9 +161,9 @@ The matching native trace at SC0000 `0xc29` captures resource `0x28`, channel 0;
 `DATA1/E0808.WAV`, and the port trace resolves the same file. The following `0xc31` preload uses the same
 resource on native secondary channel 4. `play-bgm` remains the separate direct-name exception.
 
-The current Phase-A backend deliberately continues through the extracted-file bootstrap: `ResourceMap.AudioPath`
-accepts both OGG and WAV and Godot loads the WAV bytes into its fixed SC0000 channel pool. This does not change
-the scoped VFS plan below: ALF/AAI mounting and in-process asset reads remain a separate foundation track.
+The Phase-A backend now resolves the OGG/WAV catalog entry and opens it through `IAssetStore`; Godot decodes
+the returned bytes into its existing BGM, voice, and fixed SC0000 SFX channel players. The earlier
+`ResourceMap.AudioPath` extracted-file bootstrap is retired.
 
 ## Runtime asset-VFS track (VFS-A/B/C complete 2026-07-11)
 
@@ -213,11 +212,12 @@ store.
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
-4. **Runtime consumers.** Script and texture loading are complete. `ResourceMap.ResolveTexture` preserves
+4. **Runtime consumers (complete for scripts, textures, and audio).** `ResourceMap.ResolveTexture` preserves
    scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
    decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
-   Godot no longer reads `build/textures/*.BMP`. OGG/WAV byte migration remains a separate follow-up;
-   retain extraction/conversion tools as diagnostics until parity is established.
+   Godot no longer reads `build/textures/*.BMP`. BGM direct-name entries plus scene-local voice/SFX entries
+   are opened through the same `IAssetStore`; Godot decodes their OGG/WAV bytes in process. Extraction and
+   conversion tools remain diagnostics.
 
 ### Acceptance gates
 
@@ -250,8 +250,14 @@ Five installed assets spanning raw/compressed metadata and pixel/alpha combinati
 `AGF2BMP2AGF` BMP oracle pixel-for-pixel. SO001 resolves through universal raw id `0x337e`, decodes to
 800×300 with intermediate alpha values, and is inherited in surface slot 17 before SC0000. A windowed
 page-1 capture with `build/textures/` moved aside showed the translucent textbox edge and bottom-right
-controls. Texture runtime no longer consults `extracted/` or `build/textures/`; current audio consumers
-still use extracted OGG/WAV paths by design. Audio migration and movie `0x236` remain unimplemented.
+controls. Texture runtime no longer consults `extracted/` or `build/textures/`.
+
+Audio byte migration passes its bounded gate in `Sys4AssetStoreTests`: archive-only SC0000 reads identify
+`BGM005.OGG` and `MAN999.OGG` as Ogg streams and `E0808.WAV` as RIFF/WAVE without consulting `extracted/`.
+A windowed SC0000 run with `extracted/` moved aside crossed both voice sites and the first SFX sequence,
+recording BGM005 plus `E0808.WAV` load/start/preload on channels 0/0/4 with no Godot OGG/WAV decode errors.
+Channel, loop, interruption, timing, fade, load/start, and release behavior is unchanged. Movie `0x236`
+remains unimplemented.
 
 VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
@@ -264,7 +270,7 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 ### Deliberate non-goals
 
 - Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
-- AGF encoding, movie/video decoding for MPEG-like `OP/MVB*.AGF`, or SFX channel semantics.
+- AGF encoding or movie/video decoding for MPEG-like `OP/MVB*.AGF`.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
   ordered mod roots can be layered onto the same store later.
 - Removing the extraction/conversion tools immediately. They remain independent parity oracles until the

@@ -1169,7 +1169,7 @@ the same `(load ch0, start ch0, preload ch4)` sequence in one frame. Startup `0x
 `0xc2(target,duration)` is the adjacent blocking BGM fade: 100 linear steps for durations at least 1000 ms,
 10 steps below that, with target zero releasing the source. `0xd9` only clears native service bit `0x1000`;
 the isolated VM recognizes it with no host-visible effect. The Godot backend retains ten `AudioStreamPlayer`
-channels, loads the existing extracted WAV bytes, separates load from start, releases buffers deterministically,
+channels, loads catalog-resolved WAV bytes, separates load from start, releases buffers deterministically,
 and parks BGM fades on the unified virtual clock. ALF/AAI/AGF VFS work and movie `0x236` remain separate.
 
 Ghidra `/v2` now names/comments all five handlers plus the asset-open, decode, DirectSound start/refill/stop/
@@ -1186,3 +1186,20 @@ leaving 37 GAP ops / 101 GAP instructions. Headless sequence capture still emits
 **Manual validation:** the normal-speed windowed port advanced through `wait-for-input@0x1a58` at 45.6 s,
 well past the first effects and dialogue pages, with no audio-related stall. The user confirmed the effects
 were audible and sounded good.
+
+### Audio-byte migration onto the asset VFS DONE (2026-07-11)
+
+`ResourceMap.BgmPathById` and `ResourceMap.AudioPath` are removed. BGM direct-name resolution now returns a
+catalog entry, while voice and SFX retain their scene-local resolution; all three flow through
+`ResourceMap.ReadAudio` and the injected `IAssetStore`. `GodotAdvHost` passes owned byte arrays across the
+existing deferred main-thread boundary, and `Main` decodes them with
+`AudioStreamOggVorbis.LoadFromBuffer` / `AudioStreamWav.LoadFromBuffer`. The existing BGM loop and fade,
+voice interruption, ten-channel SFX load/start/release, clock pacing, and gain behavior are unchanged.
+
+Validation: engine **128/128** and both .NET/Godot builds pass. An archive-only SC0000 regression verifies
+the Ogg signatures for `BGM005.OGG` and `MAN999.OGG` plus the RIFF/WAVE signature for `E0808.WAV`. With
+`extracted/` physically moved aside, the CLI completed SC0000's 127-op audio trace and a windowed Godot run
+crossed voice at `0xa0a`/`0xbf6`, BGM005 at `0x7fa`, and the established SFX load/start/preload sequence at
+`0xc29`/`0xc2e`/`0xc31` on channels 0/0/4. Godot reported no OGG/WAV read, decode, or deferred-call errors;
+`extracted/` was restored afterward. Movie `0x236`, AGF work, opcode semantics, and unrelated VM behavior
+were untouched.

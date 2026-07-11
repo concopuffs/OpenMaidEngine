@@ -168,6 +168,31 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    public void Sc0000BgmVoiceAndSfxPayloadsReadDirectlyFromArchives()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var archiveOnly = new Sys4AssetStore(catalog, Paths.GameDir);
+        var resources = new ResourceMap(catalog, archiveOnly);
+
+        var bgm = resources.ResolveBgm(5);
+        Assert.Equal("BGM005.OGG", bgm?.Name);
+        AssertOgg(resources.ReadAudio(bgm!));
+
+        var voice = resources.Resolve("SC0000", 0x24);
+        Assert.Equal("MAN999.OGG", voice?.Name);
+        AssertOgg(resources.ReadAudio(voice!));
+
+        var sfx = resources.Resolve("SC0000", 0x28);
+        Assert.Equal("E0808.WAV", sfx?.Name);
+        var wav = resources.ReadAudio(sfx!);
+        Assert.Equal("E0808.WAV", wav.Name);
+        Assert.Equal("RIFF", Encoding.ASCII.GetString(wav.Bytes, 0, 4));
+        Assert.Equal("WAVE", Encoding.ASCII.GetString(wav.Bytes, 8, 4));
+
+        Assert.Throws<InvalidDataException>(() => resources.ReadAudio(catalog.ResolveName("SO001.AGF")!));
+    }
+
+    [Fact]
     public void AllInstalledLooseScriptOverridesShadowArchiveCopies()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -234,5 +259,11 @@ public class Sys4AssetStoreTests
         using var copy = new MemoryStream();
         stream.CopyTo(copy);
         return copy.ToArray();
+    }
+
+    private static void AssertOgg(AudioPayload payload)
+    {
+        Assert.EndsWith(".OGG", payload.Name, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("OggS", Encoding.ASCII.GetString(payload.Bytes, 0, 4));
     }
 }

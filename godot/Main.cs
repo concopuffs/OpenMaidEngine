@@ -514,31 +514,31 @@ public partial class Main : Godot.Control
         img.SetData(w, h, false, img.GetFormat(), px);
     }
 
-    // Load an OGG off disk and play it. BGM loops; voice plays once, cutting off any prior line.
-    public void PlayBgm(string oggPath)
+    // Decode VFS-owned bytes in Godot. BGM loops; voice plays once, cutting off any prior line.
+    public void PlayBgm(byte[] oggBytes, string assetName)
     {
-        var stream = AudioStreamOggVorbis.LoadFromBuffer(System.IO.File.ReadAllBytes(oggPath));
-        if (stream == null) { GD.Print($"OGG load failed {oggPath}"); return; }
+        var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
+        if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
         stream.Loop = true;
         _bgm.VolumeDb = 0;
         _bgm.Stream = stream;
         _bgm.Play();
     }
 
-    public void PlayVoice(string oggPath)
+    public void PlayVoice(byte[] oggBytes, string assetName)
     {
-        var stream = AudioStreamOggVorbis.LoadFromBuffer(System.IO.File.ReadAllBytes(oggPath));
-        if (stream == null) { GD.Print($"OGG load failed {oggPath}"); return; }
+        var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
+        if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
         stream.Loop = false;
         _voice.Stream = stream;
         _voice.Play();
     }
 
-    public void LoadSoundEffect(string wavPath, int channel)
+    public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel)
     {
         if ((uint)channel >= (uint)_sfx.Length) return;
-        var stream = AudioStreamWav.LoadFromBuffer(System.IO.File.ReadAllBytes(wavPath));
-        if (stream == null) { GD.Print($"WAV load failed {wavPath}"); return; }
+        var stream = AudioStreamWav.LoadFromBuffer(wavBytes);
+        if (stream == null) { GD.Print($"WAV load failed {assetName}"); return; }
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
         _sfx[channel].Stop();
         _sfx[channel].VolumeDb = 0;
