@@ -1318,3 +1318,22 @@ positioned at `(-400,-600)` and the full-screen `0xcf08` copy has completed its 
 confirmed that ordinary manual play displays the correct CGs. Keep this shot-path state discrepancy open
 and do not use page 1 as an absolute scene-fidelity oracle; it predates and is pixel-identical across quick
 win 2.
+
+**Quick win 3 implemented (2026-07-11).** Static compositor sources no longer round-trip through Godot
+`Image.CreateFromData()` / `Image.GetData()`. The cache now retains `(width,height,RGBA)` directly under
+`(assetId,colorKey)`: unkeyed assets reuse their decoded `RgbaImage.Pixels`, while keyed variants clone and
+bake transparency once so the canonical decoded asset remains reusable under other keys. Dynamic movie
+samples never enter this cache; they use the decoder-owned newest-frame bytes directly, cloning only if a
+color key must be applied.
+
+The differential page-1 PNG remains byte-identical at SHA-256
+`E669355772D4D9118BE80AC93595F78BB467B088659DEA4CC2D2B7D0F05B62BE` (subject to the shot-path oracle
+caveat above). A bounded 220-frame sequence reached VFS movie publication at render frame 141 and captured
+multiple distinct movie-frame hashes, confirming dynamic samples still change rather than freezing in the
+static cache. Engine **135/135**, zero-warning Godot build, and threaded `SELFTEST OK` remain clean.
+
+The normal-speed FPS samples were effectively unchanged from quick win 2 (54/26/38, then 58-60, versus
+53/26/39, then 59-60). Source copying was therefore no longer a material bottleneck after the shared
+backbuffer landed. The cleanup removes needless Godot objects/copies and helps future layer-heavy scenes,
+but the measured next target is the general inverse-affine per-pixel path—especially identity-transform,
+opaque-copy, and axis-aligned fill fast paths.

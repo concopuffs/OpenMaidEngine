@@ -303,10 +303,11 @@ public partial class Main : Godot.Control
 
     // ---- retained per-frame compositor (main thread, from _Process) ----
     // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
-    // engine's z-order), each blitting its live surface's rect at its position. Decoded AGF surfaces are cached
+    // engine's z-order), each blitting its live surface's rect at its position. Decoded AGF pixels are cached
     // by catalog identity (this runs every frame). Native scale/translation matrix channels are sampled independently by
     // GfxState and applied here; object opacity comes only from the actual blend/color path.
-    private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), Image?> _imgCache = new();
+    private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
+    private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
 
     private void Recomposite()
     {
@@ -463,7 +464,7 @@ public partial class Main : Godot.Control
         foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
     }
 
-    // Blit one object's surface rect. The source Image is cached per (path, colorKey): on first load, texels
+    // Blit one object's surface rect. Static source pixels are cached per (assetId, colorKey): on first use, texels
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
     // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 sets multiplyTint and uses packed RGB as
     // multiplicative modulation while alpha is object opacity.
@@ -472,30 +473,46 @@ public partial class Main : Godot.Control
                            bool dynamic = false)
     {
         var cacheKey = (assetId, colorKey);
-        Image? src;
+        int sourceWidth, sourceHeight;
+        byte[] sourcePixels;
         if (dynamic)
         {
-            // Decoder samples replace the pixels of one retained surface. Catalog identity is stable across
-            // those samples, so the static AGF cache key would otherwise freeze the very first movie frame.
-            src = Image.CreateFromData(decoded.Width, decoded.Height, false, Image.Format.Rgba8, decoded.Pixels);
-            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
+            // Decoder samples replace the pixels of one retained surface. Never enter them in the static cache.
+            // Clone only when applying a key so the decoder-owned newest-frame buffer remains untouched.
+            sourceWidth = decoded.Width;
+            sourceHeight = decoded.Height;
+            sourcePixels = decoded.Pixels;
+            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey))
+            {
+                sourcePixels = (byte[])sourcePixels.Clone();
+                BakeColorKey(sourcePixels, colorKey);
+            }
         }
-        else if (!_imgCache.TryGetValue(cacheKey, out src))
+        else
         {
-            src = Image.CreateFromData(decoded.Width, decoded.Height, false, Image.Format.Rgba8, decoded.Pixels);
-            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey)) BakeColorKey(src, colorKey);
-            _imgCache[cacheKey] = src;
+            if (!_pixelCache.TryGetValue(cacheKey, out var cached))
+            {
+                byte[] pixels = decoded.Pixels;
+                if (Age.Engine.Model.BlendMath.HasColorKey(colorKey))
+                {
+                    pixels = (byte[])pixels.Clone();
+                    BakeColorKey(pixels, colorKey);
+                }
+                cached = new CachedPixels(decoded.Width, decoded.Height, pixels);
+                _pixelCache[cacheKey] = cached;
+            }
+            sourceWidth = cached.Width;
+            sourceHeight = cached.Height;
+            sourcePixels = cached.Rgba;
         }
-        if (src == null) return;
 
-        int sw = w > 0 ? w : src.GetWidth();
-        int sh = h > 0 ? h : src.GetHeight();
-        sw = System.Math.Min(sw, src.GetWidth() - srcX);
-        sh = System.Math.Min(sh, src.GetHeight() - srcY);
+        int sw = w > 0 ? w : sourceWidth;
+        int sh = h > 0 ? h : sourceHeight;
+        sw = System.Math.Min(sw, sourceWidth - srcX);
+        sh = System.Math.Min(sh, sourceHeight - srcY);
         if (sw <= 0 || sh <= 0) return;
-        byte[] ss = src.GetData();
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
-            _screenPixels, ScreenWidth, ScreenHeight, ss, src.GetWidth(), src.GetHeight(),
+            _screenPixels, ScreenWidth, ScreenHeight, sourcePixels, sourceWidth, sourceHeight,
             srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint);
     }
 
@@ -529,14 +546,11 @@ public partial class Main : Godot.Control
     }
 
     // Make colorkey-matching texels transparent (native colorkey is baked at surface load).
-    private static void BakeColorKey(Image img, long colorKey)
+    private static void BakeColorKey(byte[] px, long colorKey)
     {
-        byte[] px = img.GetData();
-        int w = img.GetWidth(), h = img.GetHeight();
         for (int i = 0; i < px.Length; i += 4)
             if (Age.Engine.Model.BlendMath.ColorKeyMatches(px[i], px[i + 1], px[i + 2], colorKey))
                 px[i + 3] = 0;
-        img.SetData(w, h, false, img.GetFormat(), px);
     }
 
     // Decode VFS-owned bytes in Godot. BGM loops; voice plays once, cutting off any prior line.
