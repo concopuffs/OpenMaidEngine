@@ -1256,3 +1256,41 @@ and makes a committed alpha-zero ADV crop transparent. Focused model/raster test
 endpoint, identity modulation, and zero-opacity output. Validation: engine **134/134**, Godot build with
 zero warnings, matching windowed capture, and user manual confirmation that the box disappears fully and
 the controls retain their normal color while visible.
+
+### Godot window jitter / compositor performance investigation (2026-07-11)
+
+The visible window jitter is main-thread compositor pressure, not `FrameClock.Speed`, coroutine pacing,
+or GPU throughput. A bounded windowed run on the Vulkan backend (RTX 4080 SUPER, `--max-fps 60
+--print-fps`) sustained only **23–25 FPS / 40–43 ms per frame** while SC0000 approached its first ADV
+input wait. The retained frontend currently makes `ShouldRecomposite()` true throughout input waits,
+explicit sleeps, foreground waits, and text reveal. Each recomposite clears the 800x600 canvas, then for
+every visible layer calls `Image.GetData()`, runs the C# per-pixel inverse-affine rasterizer, calls
+`Image.SetData()`, and finally uploads the full canvas with `ImageTexture.Update()`. An unchanged input-wait
+screen therefore consumes the same expensive path every rendered frame; dragging the OS window stutters
+because this work runs on Godot's main thread.
+
+Continuous presentation itself is partly load-bearing: one-shot transitions, movies, and ambient cyclic
+channels must continue sampling `FrameClock` while active. The *unconditional* redraw implied by
+`IsWaiting`/`IsTextRevealing` is not. The existing gfx-change log showed real one-shot color changes through
+render frame 121, then no retained-object changes, while the separate steady-state FPS probe remained near
+23 FPS. A safe correction should preserve time-based presentation but distinguish dirty/static waits from
+active visual channels, and should avoid copying the full Godot `Image` out and back once per layer. Likely
+implementation boundaries are: (1) explicit compositor dirty generation plus an active-animation/movie
+query, and (2) one CPU backbuffer acquisition/update per recomposite or migration of ordinary layers to
+Godot/GPU-native drawing. Merely changing `--speed`, sleep/coroutine behavior, or the 60 FPS cap will not
+remove the underlying frame cost.
+
+**Quick win 1 implemented (2026-07-11).** `GfxState.HasActiveVisualPresentation(nowMs)` now reports
+only retained pixels that can change without another VM mutation: finite surface/one-shot channels plus
+visible spritesheet, color, and cyclic-rotation channels with positive periods. Godot consumes explicit
+presentation dirtiness once and otherwise recomposites only while that query is true. Entering input wait
+or `sleep` requests one publish so preceding retained writes remain visible; the wait/sleep state itself and
+ADV text reveal no longer rebuild the background. Movie frames retain their existing per-sample dirty
+publication. This preserves the clock, VM suspension model, active transitions, ambient animation, and
+movie lifecycle.
+
+Validation: the focused static-vs-ambient query regression brings the engine suite to **135/135**; Godot
+builds with zero warnings and threaded `SELFTEST OK`. A matching hidden-window Vulkan run capped at 60 FPS,
+using `--speed 8` only to reach the static state quickly, held **60 FPS / 16.66 ms per frame** for all eight
+reported samples, versus the pre-change 23-25 FPS. Buffer batching/source-pixel caching and rasterizer fast
+paths remain independent follow-ups.

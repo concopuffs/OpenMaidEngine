@@ -105,6 +105,9 @@ public sealed class GodotAdvHost : IHost
     {
         Pages++;
         _main.CallDeferred("PageBreak");
+        // Publish retained mutations accumulated before the wait once. A static input wait is not itself a
+        // reason to rebuild the 800x600 background every frame; ambient channels are queried separately.
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsWaiting = true;
         _timeline?.State("input-wait", new() { ["page"] = Pages });
         _gate.Wait();
@@ -167,6 +170,9 @@ public sealed class GodotAdvHost : IHost
             }
             _frameSignal.WaitOne(50);
         }
+        // The active query becomes false at the exact transition/movie endpoint. Publish that terminal sample
+        // once so the last visible frame cannot remain fractionally incomplete.
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsTransitionWaiting = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         _foregroundGfx = null;
@@ -185,11 +191,12 @@ public sealed class GodotAdvHost : IHost
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
 
-    // Native retained-object writes are not front-buffer writes. The renderer publishes them only at an
-    // explicit present or while the interpreter is parked in a presentation-capable service boundary.
-    public bool ShouldRecomposite()
-        => IsWaiting || IsTransitionWaiting || IsSleeping || IsTextRevealing ||
-           System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0;
+    // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
+    // once, then continue only while the sampled retained scene can actually change. Text reveal is a separate
+    // Godot Label; waiting/sleeping alone do not alter background pixels.
+    public bool ShouldRecomposite(GfxState gfx)
+        => System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0 ||
+           gfx.HasActiveVisualPresentation(_clock.NowMs);
 
     public void Stop()
     {
@@ -218,6 +225,9 @@ public sealed class GodotAdvHost : IHost
         long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
+        // A sleep is a service boundary: make preceding retained writes visible once even when no animation
+        // channel is active during the hold.
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsSleeping = true;
         while (_clock.NowMs < deadline)
         {

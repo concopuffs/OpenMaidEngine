@@ -40,6 +40,33 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void ActiveVisualPresentation_ExcludesStaticWaits_ButIncludesAmbientChannels()
+    {
+        static GfxState VisibleObject()
+        {
+            var state = new GfxState();
+            state.SetSurface(1, 5, -1);
+            state.BindDraw(7, 1, 0, 0, 64, 64, 0, 0);
+            return state;
+        }
+
+        var unchanged = VisibleObject();
+        Assert.False(unchanged.HasActiveVisualPresentation(1000));
+
+        var spritesheet = VisibleObject();
+        spritesheet.SetSrcRect(7, 4, 1, 0, 800);
+        Assert.True(spritesheet.HasActiveVisualPresentation(1000));
+
+        var color = VisibleObject();
+        color.SetColorAnim(7, 1000, GfxState.PackColor(0x80, 0xff0000));
+        Assert.True(color.HasActiveVisualPresentation(1000));
+
+        var rotation = VisibleObject();
+        rotation.SetRotationCycle(7, 1000, (0, 0, 1));
+        Assert.True(rotation.HasActiveVisualPresentation(1000));
+    }
+
+    [Fact]
     public void OneShotRotation_SharesMatrixClockAndMatchesNativeSample()
     {
         var g = new GfxState();

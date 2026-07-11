@@ -352,6 +352,21 @@ public sealed class GfxState
                                              o.RotationChannelEnabled || o.TranslationEnabled));
     }
 
+    /// <summary>Whether sampling the retained scene at a later frame can change its pixels without another
+    /// VM mutation. Includes finite presentation work plus the ambient channels that may remain active while
+    /// the interpreter is parked at an input wait. Static waits themselves are deliberately not animation.</summary>
+    public bool HasActiveVisualPresentation(long nowMs)
+    {
+        lock (_lock)
+            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _objects.Values.Any(o => o.Visible &&
+                       (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                        o.TranslationEnabled ||
+                        (o.SrcAnim && o.SrcPeriod > 0) ||
+                        (o.ColorAnim && o.ColorPeriod > 0) ||
+                        (o.RotationEnabled && o.RotationPeriodMs > 0)));
+    }
+
     /// <summary>Click completion affects only type-0 foreground transitions, never ambient object channels.</summary>
     public int CompleteForegroundTransitions(long nowMs)
     {

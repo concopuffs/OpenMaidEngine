@@ -222,7 +222,7 @@ public partial class Main : Godot.Control
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
         UpdateMovieFrames();
-        if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite())
+        if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite(_vm.Gfx))
             Recomposite();   // native publishes retained mutations only at present/service boundaries
         if (!_selftest && _host != null) UpdateAdvTextPresentation();
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
