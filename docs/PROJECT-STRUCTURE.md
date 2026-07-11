@@ -67,6 +67,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)
     │   ├── remake-architecture-and-roadmap.md  THE direction doc (phases A–E)
     │   ├── phase-a-slice-plan.md               the current slice (A0/A1/A2)
+    │   ├── platform-portability.md             OS dependencies + future cross-platform readiness
     │   ├── vm-mapping-plan.md                  the phased decode plan
     │   ├── himegari-port-reference.md          master reference + engine background
     │   ├── name-resolution.md                  call-script + global-var name recovery (+ globals.toml registry)

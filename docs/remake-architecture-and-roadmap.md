@@ -64,7 +64,8 @@ Three layers, cleanly separated:
   loop is too hot for GDScript. Presentation, UI, mod tooling, and export targets use Godot. This
   is why **Godot now fits**: under the earlier "faithful port" framing it was overkill (you'd use
   ~10% of it); under *remake/enhance/mod* its editor, UI toolkit, asset pipeline, GDScript modding,
-  and multi-platform export all earn their keep.
+  and multi-platform export all earn their keep. Current OS dependencies and the gates for future exports
+  are tracked in `docs/platform-portability.md`; they do not expand the active Phase A scope.
 - **Toolchain vs runtime.** The runtime owns the canonical parser+VM (C#). The Python tools remain
   the offline analysis/authoring chain; they were the reference implementation and stay useful for
   modders. They share the *format spec* (documented), not code — acceptable for a small, stable
