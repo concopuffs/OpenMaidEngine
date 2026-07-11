@@ -138,6 +138,8 @@ Forces, and thereby de-risks, every core unknown at once:
 - Treat the classified no-op markers as skips; validate the tentative-no-op ops via the dialogue diff.
 
 ### Phase B — Broaden coverage (playable ADV, then systems)
+Execution order and decision gates are tracked in `docs/phase-b-framework.md`; Phase A completion remains
+the entry condition.
 - Implement the remaining effectful ops; Frida sessions for the opaque ones (the shortlist in
   `build/opcode-coverage.md`); Unicorn for `0x215`-style computational ops.
 - Grow the **global-var map** (side-task 2.5: `*MES` writers → record-table readers → Frida field
