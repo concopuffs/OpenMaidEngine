@@ -391,6 +391,9 @@ The chunk the animation-subsystem note above flagged as "the clearly-scoped next
 > pauses, the `GfxState` race fix, and the tooling. Related: the "493k sleeps" that confused me were a **headless
 > artifact** (the name-entry poll loop), since fixed — see the "Headless divergence" note below.
 
+> **Later resolution (2026-07-10):** the matching native presentation trace below established that ordinary
+> mutations run burst-fast and first become visible at `0x20c`, `0x21c`, sleep, or stable input boundaries.
+
 **What `sleep` actually is (RE-confirmed, correct):** the Godot compositor (`Main.Recomposite` in `_Process`)
 presents live `GfxState` every frame; `sleep` (`0xc8`) was a GAP so the VM ran the whole burst in microseconds.
 Implementing it makes the **explicit one-shot sleeps** (1000/750/200 ms) pause correctly — but those are the
@@ -560,6 +563,11 @@ yield/sync point) instead of the free-running thread. Confirm any fix against **
 
 ### A2b — Frame-stepped VM ✅ DONE & MERGED (2026-07-08)
 
+**Historical implementation, superseded on 2026-07-10 by the native retained-presentation trace below.**
+The validation recorded here was accurate for that slice, but the inferred native per-op cadence was not:
+service waits had been folded into an operand-fetch average. Commit `85fc07d` removed the production opcode
+throttle; ordinary work now runs burst-fast to proven publication/pacing boundaries.
+
 Executed the "Next (open)" list above (option 3: a per-frame yield/sync point). Spec
 `docs/superpowers/specs/2026-07-08-frame-stepped-vm-design.md`, plan
 `docs/superpowers/plans/2026-07-08-frame-stepped-vm.md`; merged to `main` (`74a4221`).
@@ -665,7 +673,7 @@ video service behind op `0x140`.
    stale prior-scene `out` value and avoids hardcoding SC0000's `0x45e`; all 138 corpus ADV sites share the
    same shape.
 4. Record op `0x7b`'s two saved handler PCs as frame metadata. Consume op `0x7c` as the host-scheduler
-   resume marker: the port's existing `IHost.FrameYield`/`FrameClock` path supplies per-frame pacing, so it
+   resume marker: the host supplies service-boundary suspension and retained presentation, so it
    does not recursively execute the native render/poll/yield bytecode handlers.
 
 **Acceptance gates:** a synthetic stale-terminal scene runs its setup body once and reaches content; a
@@ -716,19 +724,18 @@ multiplication order, or 2D projection: normal playback still races past these s
 reliable visual judgment. Treat that math as provisional until the pacing slice enables slow normal playback
 and a native-versus-port frame comparison.
 
-### A2b — animation pacing + matrix validation ✅ (2026-07-10)
+### A2b — animation pacing + matrix validation ✅ (2026-07-10; pacing model superseded)
 
-The remaining race was a unit mismatch at the scheduler boundary. Native
-`adv_interpreter_tick` advances one opcode, while the live cadence probe counted calls to
-`vm_operand_fetch` (about 1,788 operand reads/s). The port's `FrameYield` runs once per completed
-opcode, so using 1,800 there overclocked script teardown by roughly ninefold. `FrameClock` now supplies a
-refresh-independent 200 completed-opcode/s allowance; sleep and input waits discard parked-time credit, and
-input is ignored unless the VM is actually at `wait-for-input`. `--speed` scales the unified VM,
-sleep, and animation clock for inspection without `--shot-sequence` auto-advance.
+This slice initially interpreted roughly 1,788 `vm_operand_fetch` calls/s as evidence for a
+refresh-independent 200 completed-opcode/s allowance. That scheduler interpretation is **superseded**:
+the probe counted operand reads and mixed burst execution with time parked in native services. The matching
+presentation trace below proves ordinary work is burst-fast; `--speed` now scales sleeps and retained
+presentation clocks, not opcode throughput. Input remains ignored unless the VM is actually at
+`wait-for-input`.
 
 Live native capture recorded the complete `0xcbc0` scale ramp (1→5 over 1,890 ms), including the exact
-composed matrices. The port previously deleted the object at scale 1.44 after 226 ms. At 215/s calibration it
-survived 1,798 ms to scale 4.72; the final 200/s replay retained it for 2,014 virtual ms, past the endpoint.
+composed matrices. The 215/s and 200/s port replays were useful historical diagnostics showing that object
+lifetime had been coupled incorrectly to script progress, but those rates are not native scheduler constants.
 Native matrix terms and the port's focused tests agree on row-vector
 `anchor + (point-anchor)*scale + translation`; for base `(0,600)`, anchor `(400,1000)`,
 scale 5, both project to `(-1600,-1000)`. Exact axis-aligned anchor/order/projection is validated;
@@ -738,7 +745,7 @@ Verification: engine **92/92** after the opcode-clock reset test, corpus sweep u
 **284 exit / 13 STEP-LIMIT**, Godot build and threaded `SELFTEST OK`. The transform capture tool and
 transform-aware `--gfx-log` are documented in `docs/tools-reference.md`.
 
-### A2b — ADV transition/lifecycle diagnosis plan ⏳ OPEN (2026-07-10)
+### A2b — ADV transition/lifecycle diagnosis plan ✅ COMPLETED BELOW (2026-07-10)
 
 This is the next SC0000 correctness slice. It is driven by live A/B observations, not by static opcode
 coverage alone. The direct SC0000 histogram is currently **80/129 distinct ops handled (62.0%)** and
@@ -938,7 +945,7 @@ in the object timeline and are not being mistaken for foreground CG transition c
 apart from the pre-existing nullable warning and threaded `SELFTEST OK`; all six Python test scripts,
 opcode/ctx lint, 481-script decode validation, RECOVER, and Windows CR-aware `git diff --check` clean.
 The plain check reports only the generated reference's CRLF on its newly added row. SC0000 coverage is
-**85/129 handled (65.9%)**, 44 GAP ops / 598 GAP instructions. No commit was made.
+**85/129 handled (65.9%)**, 44 GAP ops / 598 GAP instructions. This slice was later committed as `c9be9c5`.
 
 ### A2b — op 0x202 one-shot color/presentation ✅ DONE (2026-07-10)
 
@@ -960,7 +967,8 @@ fill at `(0,373)`; repeated show/hide passages now produce intermediate samples 
 `0.00, 0.26, 0.54, 0.82, 1.00` and the reverse), synchronized to the executing `0x202` sites around
 `0x12283..0x12342`.
 
-The remaining full-white runs are not a stuck color clock or d2f0 endpoint: pixel windows place them after
+**Predecessor diagnosis, resolved by the next subsection.** The remaining full-white runs were not a stuck
+color clock or d2f0 endpoint: pixel windows place them after
 d2f0 is transparent, while object timelines show `AE*` handles first becoming visible in mode 0 with default
 `0xffffffff` before their later mode-1 initializer. Native call-site disassembly proves op `0x203`'s
 `obj+0x30` is passed directly as the D3D blend selector and mode 1 uses `SRCALPHA/INVSRCALPHA`; the port now
@@ -1007,4 +1015,4 @@ separate slices.
 threaded `SELFTEST OK`; all seven Python suites, opcode/ctx lint, 481-script decode, and RECOVER clean.
 Normal-speed windowed capture wrote 220 PNGs and progressed through the complete AE sequence; at the target
 frame, bind + mode-1 + `0x202` setup share one VM frame and the first published object state is mode 1.
-Ghidra `/v2` comments were updated and saved. No commit was made.
+Ghidra `/v2` comments were updated and saved. This slice was committed as `85fc07d`.

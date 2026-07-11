@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Live frame-cadence probe (docs/engine-re.md "Frame cadence"). Pins the native cadence — execution
-rate vs displayed-frame rate, and frame timing — so the frame-stepped-VM fix picks its mechanism from
-data instead of by feel.
+"""Live frame-activity probe (docs/engine-re.md "Frame cadence"). Compares operand-fetch activity,
+message-pump timing, and Ctrl state. It does not measure completed opcodes or establish an opcode budget;
+the later matching presentation trace proved ordinary execution is burst-fast between service boundaries.
 
 SAFE pattern (matches capture_gfx_objects.py, which runs without crashing): plain-JS hooks only, no
 CModule; the only engine-code hook is the PROVEN operand-fetch helper `0x41b940` (fires once per
@@ -148,7 +148,7 @@ def report(samples):
         rows.append(r)
     tot_ops = samples[-1]["ops"] - samples[0]["ops"]
     print(f"\n=== frame-cadence report ({len(rows)} intervals, {tot_ops} operand-fetches) ===")
-    # candidate frame signals: prefer a timing source that sits ~30-120/sec (loop reads clock once/frame)
+    # Candidate loop/presentation signals only; these do not imply a completed-opcode cadence.
     for label, want in (("NORMAL", False), ("FAST-FWD (Ctrl / skip-bit)", True)):
         b = [r for r in rows if r["ff"] == want]
         # for cadence, use only ACTIVE intervals (ops>0) so parked time doesn't dilute the numbers
@@ -170,13 +170,14 @@ def report(samples):
               ", ".join(f"{nm}={v:.1f}" for nm, v in cand.items()))
         if frame_name:
             print(f"    -> frame signal ~ {frame_name} @ {frame_rate:.1f}/sec ; "
-                  f"exec/frame = {ops_active/frame_rate:.1f} (peak {peak/frame_rate:.1f})")
+                  f"operand-fetches/signal = {ops_active/frame_rate:.1f} (peak {peak/frame_rate:.1f})")
         else:
-            print("    -> no timing source in 20-200/sec band; frame rate still unresolved.")
+            print("    -> no timing-source candidate in the sampled band; use probe_present.py for presentation.")
         flg = [f"0x{r['flags']:x}" for r in b if isinstance(r["flags"], int)]
         print(f"    flags seen: {sorted(set(flg))}")
-    print("\n  Stable exec/frame => fixed op-budget cadence; peak >> active-avg with parking => run-until-yield.")
-    print("  FAST-FWD vs NORMAL exec/frame shows how the ADV governor scales the slice.")
+    print("\n  Counts are operand fetches, not completed opcodes or a scheduler budget.")
+    print("  Native presentation tracing later proved burst-fast execution between 0x20c/0x21c/sleep/input boundaries.")
+    print("  FAST-FWD vs NORMAL still measures how Ctrl changes operand-fetch activity.")
 
 
 def main():

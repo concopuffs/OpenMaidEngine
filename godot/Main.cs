@@ -96,8 +96,8 @@ public partial class Main : Godot.Control
         bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0;   // run SYSTEM4's state prefix first
         string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
-        double sleepScale = 1.0;                         // --sleep-scale <f>: slow/speed the paced opening for inspection
-        double speed = 1.0;                              // --speed <f>: whole-runtime diagnostic speed
+        double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
+        double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
         long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         for (int i = 0; i < userArgs.Length; i++)
@@ -268,7 +268,7 @@ public partial class Main : Godot.Control
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
         var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // one synchronized sample for objects + ranges
-        foreach (var v in visible)   // interpolate at the throttled clock
+        foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
             var t = v.Transform;
             var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);

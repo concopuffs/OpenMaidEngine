@@ -1,7 +1,8 @@
 namespace Age.Engine.Hosting;
 
-/// <summary>Host-owned virtual clock. Godot advances it from real elapsed time; VM pacing, sleeps, and
-/// retained graphics all consume this same timebase. Fractional milliseconds are retained so diagnostic
+/// <summary>Host-owned virtual clock. Godot advances it from real elapsed time; presentation-service waits,
+/// sleeps, and retained graphics consume this timebase. Ordinary opcode bursts are not clock-throttled.
+/// Fractional milliseconds are retained so diagnostic
 /// slow motion does not stall on high-refresh displays.</summary>
 public sealed class FrameClock
 {
@@ -11,14 +12,12 @@ public sealed class FrameClock
     /// <summary>Monotonic virtual time in milliseconds (scaled by Speed).</summary>
     public long NowMs => System.Threading.Interlocked.Read(ref _nowMs);
 
-    /// <summary>Speed multiplier. 1.0 = normal. A lower diagnostic value slows VM progress, sleeps, and
-    /// graphics together; a future ADV-scoped Ctrl hook can drive the same seam.</summary>
+    /// <summary>Speed multiplier. 1.0 = normal. A lower diagnostic value slows sleeps and retained
+    /// presentation clocks; ordinary opcode bursts still run to the next service boundary.</summary>
     public double Speed = 1.0;
 
-    /// <summary>Native normal-playback interpreter cadence. The old 1,800 figure counted calls to
-    /// vm_operand_fetch, not completed opcodes. A live 1,890 ms transform section executes about 407
-    /// port opcodes. A normal-speed replay at 215/s retained the object for 1,798 ms; 200/s reaches
-    /// the native 1,890 ms endpoint before the same teardown path.</summary>
+    /// <summary>Legacy calibration retained for the isolated WallClockOpPacer tests. Production Godot no
+    /// longer uses an opcode-rate limiter; native presentation tracing disproved this as scheduler state.</summary>
     public double OpsPerSecond = 200.0;
 
     /// <summary>Advance the clock by one rendered frame's real delta (seconds), scaled by Speed.</summary>
@@ -31,9 +30,8 @@ public sealed class FrameClock
     }
 }
 
-/// <summary>Pure wall-clock opcode rate limiter. The VM thread records completed opcodes and waits whenever
-/// it has consumed the allowance earned from <see cref=FrameClock.NowMs/>. Reset after a blocking wait so
-/// parked time never turns into a catch-up burst.</summary>
+/// <summary>Legacy isolated rate-limiter utility. It is not used by production hosts; ordinary native opcode
+/// execution is burst-fast between explicit presentation/sleep/input service boundaries.</summary>
 public sealed class WallClockOpPacer
 {
     private readonly FrameClock _clock;

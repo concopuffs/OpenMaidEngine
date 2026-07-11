@@ -88,11 +88,12 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    (Resolve + BMP path) + `GodotAdvHost` texture ops → `TextureRect` compositing behind the dialogue;
    `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
    scene's manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed
-   bytecode. **Limitations (next chunk = graphics geometry/blend):** sprites + `BG*` (routed through the
-   CG-load subroutine) have garbage geometry because native graphics ops are stubbed (`0x208`
-   get-texture-size + the sprite position/animation chain); fades (`AE*`) draw opaque (no alpha); slot
-   model approximates the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
-   (A2b section) for the full write-up + the graphics-subsystem plan.
+   bytecode. **Historical limitations at first landing (subsequently resolved in the Phase-A graphics
+   slices):** sprites + `BG*` (routed through the CG-load subroutine) had garbage geometry because native
+   graphics ops were stubbed (`0x208` get-texture-size + the sprite position/animation chain); fades
+   (`AE*`) drew opaque (no alpha); the slot
+   model approximated the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
+   (A2b section) for the implementation history and current retained-object model.
 4. **Audio.** **✅ WIRED (2026-07-06) — no Frida needed.** Same rule as textures:
    `play-bgm(id)`/`play-voice(id)` → `files[section_base(scene)+id]` → OGG. `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.AudioPath` → loose

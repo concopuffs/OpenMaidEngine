@@ -126,21 +126,20 @@ public sealed class GodotAdvHost : IHost
         _frameSignal.Set();
     }
 
-    // Main thread, once per rendered frame: releases a VM thread parked in FrameYield/Sleep.
+    // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
     public void PulseFrame() => _frameSignal.Set();
 
     // Native presentation trace: ordinary opcode bursts run to the next service boundary in a few
     // milliseconds and are not frame-paced. Pacing belongs to 0x21c, sleep, and input waits below.
     public void FrameYield() { }
 
-    // op 0xc8: block the VM background thread so the main-thread compositor (Main.Recomposite in _Process)
-    // presents the current retained GfxState — this is what makes the sleep-paced opening burst animate.
+    // op 0xc8: block the VM background thread while the main-thread compositor keeps presenting retained state.
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;
     // blocking this throwaway task thread is behaviorally equivalent given our threading model. Operand is
     // MILLISECONDS (docs/engine-re.md sleep section + opcodes.toml 0xc8). Headless CLI hosts no-op it (parity).
-    public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier to slow/speed the paced opening for inspection
-    // Wait on the unified FrameClock timebase (not Thread.Sleep) so a future Speed multiplier scales
-    // sleeps together with the throttle and the tween. Main._Process advances the clock + pulses each frame.
+    public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier for explicit op-0xc8 holds only
+    // Wait on the unified FrameClock timebase (not Thread.Sleep) so the Speed multiplier scales
+    // sleeps together with retained presentation clocks. Main._Process advances the clock + pulses each frame.
     public void Sleep(long duration)
     {
         long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window

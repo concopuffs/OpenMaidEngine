@@ -341,8 +341,8 @@ inside the loop (it lives in the native video service) — we approximate it hos
 (138 corpus scripts; all have the same terminal-check shape), synthesizes `G[0xaba5c]=1` on top-level
 scene entry, forces one setup-body pass even if `G[0x6be]` is stale, then returns the terminal immediate
 discovered from the following `mov`/`eq` pair. Thus no SC0000 offset is hardcoded. Op `0x7b` retains the
-saved handler PCs as frame metadata; op `0x7c` is a host-scheduler marker because `IHost.FrameYield` and
-`FrameClock` already own per-frame pacing. `TITLE.BIN`'s unrelated `"BIN","SC????.BIN"` service remains
+saved handler PCs as frame metadata; op `0x7c` is a host-scheduler marker because the host already owns
+service-boundary suspension and retained presentation. `TITLE.BIN`'s unrelated `"BIN","SC????.BIN"` service remains
 stubbed. The real video-service timing remains intentionally unmodeled.
 
 **Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
@@ -409,7 +409,8 @@ Worker functions decoded + annotated in the Ghidra project (updated 2026-07-09):
 #### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-10, partial implementation)
 
 The scene-completeness tracker (`tools/scene_opcode_coverage.py`) flagged a dense band of GAP ops in
-`0x21c–0x243` (+ `0x2bd/0x2bf`) — the **largest remaining rendering unknown** in SC0000 (e.g. `0x220`×66,
+`0x21c–0x243` (+ `0x2bd/0x2bf`) — at that point the **largest remaining rendering unknown** in SC0000
+(e.g. `0x220`×66,
 `0x22f`×34, `0x228`×33, `0x21e`×25 static sites). Resolving every one through the dispatch table
 (`ctx[0x26c93+op]`, read from `FUN_00413860`) shows it is **one coherent subsystem: sprite transform +
 animation/tween** — and two members were already named in prior RE (`0x234 gfx_op_0x234_anim_start`,
@@ -587,24 +588,22 @@ Handler resolved via the dispatch table (`ctx[0x26c93+0xc8]` = `param_1[0x26d5b]
 thread for `duration` ms while the main-thread compositor (`Main.Recomposite` in `_Process`) keeps presenting is
 behaviorally equivalent to the native non-blocking timer. This correctly reproduces the **explicit one-shot
 sleeps** (the dramatic 1000/750/200 ms holds). Headless/CLI hosts no-op `Sleep` (parity). `IHost.Sleep(long)` +
-VM `case "sleep"`; see `vm-map/opcodes.toml` 0xc8. **⚠ It does NOT make the rapid opening `AE*` burst animate**
-— execution trace shows the back-to-back `set-texture→draw-texture` swaps have no `sleep`/`wait`/`present`/
-coroutine between them, so bare `sleep` was never their pacer; what advances that burst is still unknown (an
-earlier claim that "the opening is sleep-paced" was inherited from this doc and never execution-verified —
-corrected). Profile the real Godot run (`--trace-histogram`) to find it.
+VM `case "sleep"`; see `vm-map/opcodes.toml` 0xc8. **It does not pace ordinary opcode bursts.** The later
+native presentation trace proved that back-to-back retained mutations execute within milliseconds and are
+first published at the following `0x20c`/`0x21c`, sleep, or stable input boundary. An earlier claim that the
+opening was generally sleep-paced was inherited without execution evidence and is superseded.
 
 **Related — `present-frame` (op `0x20c`):** dispatch `param_1[0x26e9f] = gfx_op_0x20c_present_frame` →
-`gfx_render_frame`@`0x4820b0` (buffer flip). Our compositor presents every frame regardless, so `0x20c` is a VM
-no-op (`noop_headless=true`); the Kelebek label `u00416200` was VA-drift. This corrects the earlier open item
-("no per-frame present") above — present is host-implicit; only `sleep` timing was missing.
+`gfx_render_frame`@`0x4820b0` (buffer flip). The port treats `0x20c` as an explicit retained-state publication
+boundary in the interactive host while keeping it `noop_headless=true`; the Kelebek label `u00416200` was
+VA-drift. This supersedes the earlier host-implicit/no-op presentation model.
 
 ### Frame cadence — the interpreter tick, and why our port "speeds through" (2026-07-08)
 
-Answers the open question the `sleep` section above left ("what advances the rapid opening burst is still
-unknown"). The pace is an **engine-level execution cadence**, not any bytecode primitive. Corroborated in-game
-by Ctrl fast-forwarding ADV (a speed governor). Motivated by the user's observation that our port visibly
-speeds through the opening — which contradicted, and correctly overturned, an earlier same-day overclaim that
-"there is no missing pacer" (that was inferred from headless op-counts, which cannot render).
+**Historical reconstruction, corrected by the synchronized presentation trace below.** This pass correctly
+identified the one-op interpreter tick and ADV Ctrl state, but incorrectly inferred a constant engine-level
+opcode cadence. The outer native service invokes that tick in bursts and publishes retained state only at
+specific service boundaries.
 
 **Confirmed from the engine image (annotated in Ghidra):**
 
@@ -626,7 +625,8 @@ speeds through the opening — which contradicted, and correctly overturned, an 
   and the anim clock (0x238) advance per frame. A CG transition therefore spreads over many real frames.
 - **Timing source** = the ms-clock function pointer `*DAT_0056f3d4` (`timeGetTime`-class), used throughout.
 
-**Model:** single-threaded, vsync-timed frame loop; each frame it steps opcodes until the context **yields**
+**Model proposed at this stage (partially superseded):** single-threaded frame loop; each service pass steps
+opcodes until the context **yields**
 (`sleep` armed / `wait-for-input` 0x72 / active frame-stepped transition/anim / present), renders
 (`gfx_render_frame`), waits on the clock, continues. Back-to-back draws inside one page compose into a single
 frame (fine); the opening's CG-to-CG advances are gated by frame-stepped transitions + sleeps, which spread
@@ -641,12 +641,10 @@ statement above is a **reconstruction** from those pieces, not a line read from 
 loop + its exact per-frame step budget / vsync wait needs a **live-debugger break** (attach + break in the
 frame loop), or a wider memory dump that includes the mode object.
 
-**Port relevance (the speed-through root cause).** Our Godot VM runs on a **free-running background thread**
-(`Task.Run(() => vm.Run())` in `Main.cs`) with no frame binding — it executes an entire page's ops in
-microseconds; only `WaitForInput` and `Sleep` pause it, and the compositor merely samples `GfxState` at 60fps.
-So every no-`sleep` CG/state advance collapses to its end state → the speed-through. **Fix shape:** throttle
-the VM to a bounded wall-clock op rate (see the measured numbers below) via a per-opcode host yield; retire the
-free-running thread. Spec: `docs/superpowers/specs/2026-07-08-frame-stepped-vm-design.md`.
+**Historical port conclusion (superseded):** this pass prescribed a bounded wall-clock opcode rate and led to
+the frame-stepped implementation documented in the historical spec. The 2026-07-10 native trace disproved that
+rate model: ordinary opcode work must remain burst-fast, while `0x20c`, `0x21c`, sleep, and stable input waits
+own publication/pacing. Commit `85fc07d` implements the corrected boundary model.
 
 ### Frame cadence — live measurement (2026-07-08, Frida read-only)
 
@@ -657,23 +655,19 @@ way:** a first attempt with a **CModule** hook on the hyper-hot `adv_interpreter
 instantly (bad native callback into the hottest path — *not* anti-tamper; our other scripts hook engine code
 via plain JS and survive). Use plain-JS hooks on proven addresses + memory polling.
 
-Findings:
-- **Execution is rate-limited, not free-running.** Normal active rate ≈ **1,788 operand-fetches/sec** (peak
-  ~5,796) — far below an unthrottled interpreter (millions/sec), so the engine paces itself. Execution is
-  bursty (parked at `wait-for-input` prompts, then a bounded burst), confirming per-iteration op-budgeting.
-- **Fast-forward (Ctrl) scales the rate ~4×** (≈7,738/sec avg, peak ~15,572), gated by the engine skip bit
-  **`ctx+0xa0ce4 & 0x8000000`** (set only while fast-forwarding). It runs *more ops per unit time* — it does
-  not skip content. (Ctrl is **ADV-scoped**; it does not speed up gameplay/menus.)
-- **Rendering = Direct3D 9, UNCAPPED.** `ddraw.dll` is not loaded; the game uses `d3d9.dll` (+ `nvd3dum.dll`).
-  `IDirect3DDevice9::Present` (device vtable slot 17, found by scanning ctx for a d3d9-vtable object with a
-  full ~119-method table) fires ~**1,908/sec** with **no vsync**; `BeginScene`/`EndScene` never fire → a **2D
-  StretchRect-style compositor**, not a 3D scene. So there is **no fixed display-frame rate**; `Present` rate
-  ≈ op rate (~1 op per present). ⇒ the pacing quantity is the **wall-clock op rate**, not a per-frame budget.
-- **Corrected implication for the port (2026-07-10):** 1,788/s is an operand-fetch rate, not an opcode rate.
-  `IHost.FrameYield` runs once per completed opcode, so matching those quantities directly overclocked the
-  port by roughly ninefold. The native SC0000 transform lifetime pins the corresponding completed-op cadence
-  at about **200/s**. The limiter must be wall-clock based (not a per-render callback budget), with a future
-  ADV Ctrl multiplier applied to the same unified clock.
+Findings, corrected by the later synchronized presentation trace:
+- Normal active capture measured about **1,788 operand fetches/sec** (peak ~5,796). This is neither a
+  completed-opcode count nor a scheduler budget; it mixes burst execution with native-service parking.
+- **Fast-forward (Ctrl)** raised operand-fetch activity about 4× (≈7,738/sec avg, peak ~15,572), gated by
+  **`ctx+0xa0ce4 & 0x8000000`**. This remains useful evidence that Ctrl is ADV-scoped, but it does not define
+  a constant opcode cadence.
+- Rendering is Direct3D 9 and uncapped. The candidate D3D9 `Present` hook fired around 1,908/sec in the
+  original probe; there is no fixed display refresh boundary to copy into the port.
+- **Final scheduler implication (2026-07-10):** ordinary opcode work is burst-fast between explicit native
+  service boundaries. AE001D bind + mode + color-target writes completed within ~5 ms with no
+  `gfx_render_frame`; rendering began only at `0x21c`. The old 200-completed-op/s calibration folded service
+  waits into script time and is discarded. Godot `FrameYield` is non-blocking; `0x20c`, `0x21c`, sleep, and
+  input own publication/pacing.
 
 ### The render drift's SECOND half: missing system-boot state (2026-07-07, resolved)
 
@@ -688,10 +682,10 @@ the CGs **de-collapse and render correctly** (screenshot-confirmed). **This is t
 (a)-vs-(b) debate: the drift needed BOTH the native gfx ops (b) AND boot state (a) — specifically INIT2's
 handle array, never before identified (it is not a story flag).** Note two distinct boots: our Phase-B
 `--boot` runs the *data* `*INIT` scripts (skills/items/…); this is the *system* boot (`SYSTEM4` prefix) — a
-"full boot" should run both. **Residual:** the `AE*` fade/flash effects still draw opaque (alpha/blend
-deferred — Phase 2 scope), and some object-slot CGs start with a zero anchor (cold gfx objects vs the real
-game's warm ones; default object geometry is confirmed `(0,0)` in `gfx_object_init_default`, so it is not a
-missing-default bug). See `docs/phase-a-slice-plan.md` A2b-Geometry.
+"full boot" should run both. **Historical residual (subsequently resolved):** this capture still had opaque
+`AE*` fade/flash effects and zero-anchor object-slot CGs. The later blend, geometry, animation, and retained-
+presentation subsections below supersede that state; default object geometry remains confirmed `(0,0)` in
+`gfx_object_init_default`.
 
 ### The gfx animation/effects subsystem — the `AE*` fades (2026-07-07)
 
@@ -971,4 +965,5 @@ includes the scene's own early writes (can exclude by codebase for a pure pre-sc
 - ~~**gfx command-buffer**~~ — **DONE** (the `0x212–0x21a` positioned-object subsystem = the rendering
   drift): all 14 ops reversed + implemented against a host-side `GfxState`, and the missing INIT2 boot
   state supplied via `--boot`. CGs render (screenshot-confirmed). See the op `0x215` finding + "The render
-  drift's SECOND half" above. Remaining: `AE*` alpha/blend (deferred) and cold-object anchors.
+  drift's SECOND half" above. The then-remaining `AE*` blend and cold-anchor work is resolved by the later
+  blend, geometry, animation, and retained-presentation sections.

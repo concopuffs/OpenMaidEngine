@@ -2037,8 +2037,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "sleep"
 category = "control"
-summary = "Pause the script for <duration> milliseconds while rendering continues (frame pacing)."
-details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host blocks the VM background thread <duration> ms while the per-frame compositor keeps presenting -> correctly reproduces the explicit one-shot dramatic pauses. NOTE: does NOT pace the rapid opening AE* burst (those draws have no sleep between them; their real pacer is unknown). Headless hosts no-op it (parity)."
+summary = "Pause the current script for <duration> milliseconds while retained presentation continues."
+details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity)."
 noop_headless = false
 source = "investigation"
 confidence = "high"
