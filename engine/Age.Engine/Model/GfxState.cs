@@ -410,6 +410,17 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x1fd: immediately replace the object's current scale matrix. Script operands are
+    /// integer percentages; native divides them by 100 before matrix4_make_scale at obj+0x6c.</summary>
+    public void SetCurrentScale(long handle, (long X, long Y, long Z) percent)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        }
+    }
+
     /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
     public void SetScaleChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
@@ -520,8 +531,16 @@ public sealed class GfxState
                         // not a request to replace every texel with white.
                         alpha = a; strength = 0; blend = BlendKind.Alpha;
                     }
+                    else if (resId != 0)
+                    {
+                        // Native mode 0 is the opaque textured path. RGB modulates the source and the
+                        // packed alpha byte does not become tint strength; in particular 0xffffffff is
+                        // identity after the foreground-transition cleanup write.
+                        alpha = 255; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                    }
                     else
                     {
+                        // A surfaceless mode-0 object is a solid fill, whose high byte remains fill strength.
                         strength = a; blend = BlendKind.Alpha;
                     }
                 }

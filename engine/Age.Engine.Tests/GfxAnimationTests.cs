@@ -25,6 +25,22 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void CurrentScaleSetter_ExpandsGlowAroundItsAnchor()
+    {
+        var g = new GfxState();
+        g.SetSurface(6, 0x29, -1);
+        g.BindDraw(0xcb8e, 6, 0, 0, 800, 800, 0, 550);
+        g.GetOrCreate(0xcb8e).V18 = (400, 950, 0);
+        g.SetCurrentScale(0xcb8e, (210, 210, 100));
+
+        var v = g.SnapshotVisibleObjects().Single();
+        var top = Transform2DMath.Build(v.Transform).FromLocalOrigin(v.DstX, v.DstY).Apply(400, 0);
+        Assert.Equal(2.1, v.Transform.ScaleX, 3);
+        Assert.Equal(2.1, v.Transform.ScaleY, 3);
+        Assert.Equal(110, top.Y, 3);
+    }
+
+    [Fact]
     public void RotationCycle_DoesNotOverwriteMatrixChannels()
     {
         var g = new GfxState();
@@ -138,6 +154,20 @@ public class GfxAnimationTests
         Assert.True(o.ScaleEnabled);
         Assert.Equal((0.0, 0.0, 1.0, 30.0), o.RotationTarget);
         Assert.True(o.RotationChannelEnabled);
+    }
+
+    [Fact]
+    public void Op0x1fd_SetsCurrentScalePercentages()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "STATIC_SCALE", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xcb8e), MovGI(2, 210), MovGI(3, 240), MovGI(4, 100),
+            (0x1fd, new[] { G(1), G(2), G(3), G(4) }), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        Assert.Equal((2.1, 2.4, 1.0), vm.Gfx.TryGet(0xcb8e)!.ScaleCurrent);
     }
 
     [Fact]

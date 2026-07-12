@@ -46,22 +46,51 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
-    public void DrawColor_0x203_IsTintStrength_ObjectStaysOpaque()
+    public void TexturedMode0_UsesOpaqueMultiplicativeRgbAndIgnoresPackedAlpha()
     {
-        // Op 0x203/0x202 alpha is TINT-BLEND STRENGTH, not object opacity (evidence: a CG drawn with
-        // (alpha=0, color=white) must stay fully OPAQUE + untinted, not vanish). Root cause of the grey-BG.
+        // Mode 0 is the native opaque textured path. Its packed alpha byte is neither object opacity nor
+        // tint strength; RGB multiplicatively modulates the source, so white is identity.
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
         g.SetObjectColor(0x100, GfxState.PackColor(0x00, 0xFFFFFF));   // "no tint" — the grey-BG case
         var ro = g.SnapshotVisibleObjects().Single();
-        Assert.Equal(255, ro.Alpha);          // OBJECT STAYS OPAQUE (was wrongly 0 -> invisible)
+        Assert.Equal(255, ro.Alpha);          // opaque
         Assert.Equal(0, ro.TintStrength);     // zero tint strength
+        Assert.True(ro.MultiplyTint);
 
-        g.SetObjectColor(0x100, GfxState.PackColor(0x80, 0x102030));   // half-strength tint toward 0x102030
+        g.SetObjectColor(0x100, GfxState.PackColor(0x80, 0x102030));
         var ro2 = g.SnapshotVisibleObjects().Single();
-        Assert.Equal(255, ro2.Alpha);         // still opaque
-        Assert.Equal(0x80, ro2.TintStrength); // strength from the alpha byte
+        Assert.Equal(255, ro2.Alpha);         // packed alpha remains ignored
+        Assert.Equal(0, ro2.TintStrength);
         Assert.Equal(0x102030, ro2.Tint);
+        Assert.True(ro2.MultiplyTint);
         Assert.Equal(BlendKind.Alpha, ro2.Blend);
+    }
+
+    [Fact]
+    public void TransitionCleanup_Mode2ToMode0PreservedWhite_RemainsIdentity()
+    {
+        var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);
+        g.SetStaticObjectColorResolved(0x100, 2, -1, -1); // 0x128de: transition source
+        Assert.Equal(0, g.SnapshotVisibleObjects().Single().TintStrength);
+
+        g.SetStaticObjectColorResolved(0x100, 0, -1, -1); // 0x12478: transition cleanup
+        var rendered = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(255, rendered.Alpha);
+        Assert.Equal(0xffffff, rendered.Tint);
+        Assert.Equal(0, rendered.TintStrength);
+        Assert.True(rendered.MultiplyTint);
+    }
+
+    [Fact]
+    public void SurfacelessMode0_RetainsFillStrength()
+    {
+        var g = new GfxState();
+        g.BindDraw(0x100, 1, 0, 0, 10, 10, 0, 0);
+        g.SetObjectColor(0x100, GfxState.PackColor(0x80, 0x102030));
+        var rendered = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(255, rendered.Alpha);
+        Assert.Equal(0x80, rendered.TintStrength);
+        Assert.False(rendered.MultiplyTint);
     }
 
     [Fact]

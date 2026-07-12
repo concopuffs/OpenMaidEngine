@@ -1362,3 +1362,23 @@ may add a fully opaque/unmodulated row-copy path as optional incremental work.
 **Manual validation:** the user tested the ordinary interactive path—the path whose CG state and fade
 cadence differ from the console capture—and reported a **massive improvement**. This confirms the identity
 blit/fill fast path materially improves real fade responsiveness, not merely the isolated kernel benchmark.
+
+### SC0000 third-CG white screen and AE001D glow fixed (2026-07-11)
+
+The page-14 screenshot path reproduced the user's all-white EV052DA page exactly. Synchronized compositor
+and opcode evidence excluded the animated glow assets as the white owner: both AE001D layers load
+successfully, retain their AGF alpha, rotate, and render in mode 1 at 6-8% opacity. Base handle `0xcb2a`
+was correct through the
+`0x223` EV052CA→EV052DA transition (`mode=2`, identity), then `0x203@0x12478` restores it to textured mode 0
+with preserved `0xffffffff`. The old port resolved that endpoint as `tintStr=1.00`, whitening every EV052DA
+pixel. Textured mode 0 now uses opaque multiplicative RGB modulation, while surfaceless mode-0 fills retain
+their existing strength behavior. The transition cleanup regression covers mode 2 → mode 0 `(-1,-1)`.
+
+The resulting non-white capture then proved the glow itself still contributed no visible pixels. Native RE
+closed the causal gap: `0x1fd(handle,x%,y%,z%)` immediately writes the current scale matrix at `obj+0x6c`,
+distinct from `0x21e`'s one-shot target. SC0000 scales the two AE001D circles to 210% and 240%; the stub left
+them at 100%, almost entirely below the viewport. `GfxState.SetCurrentScale` and VM dispatch now reproduce
+the native matrices, with focused geometry/dispatch tests. Validation: engine **145/145**, opcode build/lint,
+Godot build/capture, Ghidra annotations saved, and user confirmation that the CG and animated glow are both
+visible. This AE001D path is a retained scaled/rotating texture; later missing `0x231` spritesheet-cell
+effects remain separately scoped.

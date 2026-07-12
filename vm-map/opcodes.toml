@@ -4676,33 +4676,33 @@ argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420620"
-category = "unknown"
-summary = ""
+name = "gfx-set-scale-current"
+category = "draw"
+summary = "(handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each integer operand by 100.0 before calling matrix4_make_scale; this is distinct from 0x21e's delayed one-shot target scale."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches operands 2..4, divides each by the 100.0 constant, and calls gfx_object_set_scale_current@0x47e6b0. The worker gets/creates the object, marks obj+0x68, and calls matrix4_make_scale on obj+0x6c. SC0000 sets AE001D handles to 210/210/100 and 240/240/100; without this setter their 800x800 alpha circles remain below the viewport. Both functions annotated and /v2 saved 2026-07-11."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "retained object handle"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "current X scale percent"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "current Y scale percent"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "current Z scale percent"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -4832,12 +4832,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-draw-color"
 category = "draw"
-summary = "0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 retains established opaque CG/tint/fill behavior; mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path."
+summary = "0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9; mode 1 sets D3DRS SRCALPHA/INVSRCALPHA and the packed color is the device draw modulation. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white."
+evidence = "Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9; mode 1 sets D3DRS SRCALPHA/INVSRCALPHA and the packed color is the device draw modulation. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white."
 
 [[opcode.semantics.args]]
 i = 1

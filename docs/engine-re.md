@@ -695,7 +695,10 @@ per-frame bytecode. Reversed + annotated in Ghidra:
   `obj+0x214`, period `obj+0x228`, and axis `obj+0x244/248/24c`.
 - **`gfx_object_set_rotation_cycle`** (`0x47f060`, worker for legacy op **`0x234`**)
   configures that channel. `gfx_object_anim_interpolate` consumes it from frame-time `ctx+0xb550`
-  as a repeating 0..360-degree axis rotation. Op **`0x1fd`** is a separate scaled 3-vector setter.
+  as a repeating 0..360-degree axis rotation. Op **`0x1fd`**
+  (`gfx_op_0x1fd_set_vec_scaled@0x422650` → `gfx_object_set_scale_current@0x47e6b0`) is an immediate
+  current-scale setter: it divides integer X/Y/Z percentages by 100, marks scale state at `obj+0x68`, and
+  writes `matrix4_make_scale` at `obj+0x6c`.
 - **Op `0x238`** (`gfx_op_0x238_set_anim_clock`) sets a **global animation clock**, **non-blocking**:
   `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = duration` (the max per-object duration; SC0000 `label_1235a`
   maxes a table to compute it). It does **not** loop/wait.
@@ -763,7 +766,28 @@ Ghidra functions renamed + plate-commented, saved).
   `SRCALPHA/INVSRCALPHA`, 2/3 additive/special for glow/flash) and passes a modulation color/alpha to the
   device draw. Slice A ports the **alpha** path (fades); additive (glow) is deferred (its `local_2c` source
   field is `obj+0x30`, the value written by op `0x203`. Mode 1 uses packed ARGB alpha as opacity and RGB
-  as multiplicative D3D modulation. Modes 2/3 remain separately scoped beyond the completed mode-1 path.
+  as multiplicative D3D modulation. For a **textured mode-0** object, preserved `0xffffffff` is opaque
+  identity, not a request to replace the texture with white; the packed alpha byte is therefore not a
+  generic tint-strength control. Modes 2/3 remain separately scoped beyond the completed mode-1 path, and
+  surfaceless mode-0 fills remain a distinct consumer case.
+
+**SC0000 third-CG white-screen and missing-glow fix (2026-07-11).** The page containing
+`大役を担ったのは…` reaches the intended EV052DA image and both animated AE001D layers. A synchronized
+Godot capture proved AE001D is correctly alpha-bearing and drawn in mode 1 at only 6-8% object opacity;
+it was not the white wall. During the preceding `0x223` EV052CA→EV052DA crossfade, base handle `0xcb2a`
+renders EV052DA in mode 2 with identity modulation. When the transition ends, `0x203@0x12478` restores that
+same textured object to mode 0 with negative color operands, preserving `0xffffffff`. Native keeps EV052DA
+visible; the old port resolved the state as `tintStr=1.00` and lerped every source texel to white. Textured
+mode 0 now resolves as opaque multiplicative RGB, making white identity, while surfaceless mode-0 fill
+strength remains separate.
+
+The first corrected capture exposed a second independent gap: AE001D was submitted and rotating but had no
+visible pixel contribution. Its 800×800 circle was based at `(0,550)` around anchor `(400,950)` and remained
+at the port's default 100% scale, almost wholly below the viewport. SC0000 executes `0x1fd` with
+`210/210/100` and `240/240/100`; implementing the native immediate current-scale setter expands the circles
+into the viewport (the first top edge reaches y=110). The user positively confirmed both the restored CG and
+visible glow on the ordinary interactive path. This glow is a retained scaled/rotating texture, not an
+`0x231` spritesheet-cell animation; later missing spritesheet effects remain a separate issue.
 
 **Interpolation RE pass (2026-07-08, stalled → both deferrals confirmed).** Attempted to pin how a `0x202`
 fade animates so smooth ramping could join slice A. Findings (Ghidra `gfx_object_anim_interpolate`

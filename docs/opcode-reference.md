@@ -151,6 +151,11 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **grounding:** source=investigation, confidence=med
 - **evidence:** SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 0 (w) (h) (dstx) (dsty)`; full-screen slot-3 draws use 0x320x0x258 (800x600).
 
+### 0x1fd `gfx-set-scale-current` (u00420620, argc 4)
+- **summary:** (handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each integer operand by 100.0 before calling matrix4_make_scale; this is distinct from 0x21e's delayed one-shot target scale.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches operands 2..4, divides each by the 100.0 constant, and calls gfx_object_set_scale_current@0x47e6b0. The worker gets/creates the object, marks obj+0x68, and calls matrix4_make_scale on obj+0x6c. SC0000 sets AE001D handles to 210/210/100 and 240/240/100; without this setter their 800x800 alpha circles remain below the viewport. Both functions annotated and /v2 saved 2026-07-11.
+
 ### 0x1ff `set-gfx-geom3-c` (set-gfx-geom3-c, argc 4)
 - **summary:** 0x1ff (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x1ff_set_geom3 @0x4227b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e800 (sibling of 0x217/0x219, a distinct per-object vector). See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
@@ -162,9 +167,9 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **evidence:** Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock ctx+0xb550; bytewise integer LERP; natural or ctx+0xb55c forced completion. /v2 annotated and saved 2026-07-10.
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
-- **summary:** 0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 retains established opaque CG/tint/fill behavior; mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path.
+- **summary:** 0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9; mode 1 sets D3DRS SRCALPHA/INVSRCALPHA and the packed color is the device draw modulation. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white.
+- **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9; mode 1 sets D3DRS SRCALPHA/INVSRCALPHA and the packed color is the device draw modulation. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white.
 
 ### 0x208 `get-texture-size` (get-texture-size, argc 3)
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
@@ -986,10 +991,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1f6 `u00416170` (u00416170, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1fd `u00420620` (u00420620, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
