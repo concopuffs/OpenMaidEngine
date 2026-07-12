@@ -8,7 +8,7 @@ public class AnimInterpolatorTests
     {
         var g = new GfxState();
         g.SetSurface(1, resId: 5, colorKey: -1);
-        g.BindDraw(handle, 1, 0, 0, 256, 64, 100, 100);   // 256x64 sheet, base pos (100,100)
+        g.BindDraw(handle, 1, 0, 0, 64, 64, 100, 100);   // one 64x64 cell, base pos (100,100)
         return g;
     }
 
@@ -24,22 +24,24 @@ public class AnimInterpolatorTests
     public void SrcRect_StaticCell_SelectsSubRect()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, gridW: 4, gridH: 1, cell: 2, period: 0);   // static cell 2 of 4 across 256px
+        g.SetSrcRect(0x100, frameCount: 4, columns: 4, cell: 2, period: 0);
         var ro = g.SnapshotVisibleObjects(0).Single();
         Assert.Equal(128, ro.SrcX);   // cell 2 * 64
         Assert.Equal(64, ro.W);
     }
 
     [Fact]
-    public void SrcRect_Animated_PingPongsCellAcrossGrid()
+    public void SrcRect_Animated_AdvancesOneCellPerPeriodAndWraps()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, gridW: 4, gridH: 1, cell: 0, period: 1000);
+        g.SetSrcRect(0x100, frameCount: 4, columns: 4, cell: 0, period: 100);
         g.SnapshotVisibleObjects(0);                       // seeds start=0
-        var half = g.SnapshotVisibleObjects(500).Single();
-        Assert.Equal(192, half.SrcX);                      // t=1 -> last cell (3) * 64
-        var back = g.SnapshotVisibleObjects(1000).Single();
-        Assert.Equal(0, back.SrcX);                        // ping-ponged back to cell 0
+        var second = g.SnapshotVisibleObjects(100).Single();
+        Assert.Equal(64, second.SrcX);
+        var fourth = g.SnapshotVisibleObjects(300).Single();
+        Assert.Equal(192, fourth.SrcX);
+        var wrapped = g.SnapshotVisibleObjects(400).Single();
+        Assert.Equal(0, wrapped.SrcX);
     }
 
     [Fact]

@@ -387,9 +387,9 @@ public sealed class VirtualMachine
             case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
             case "u004219E0":   // 0x229 set-position2: same shape, direct position
                 Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[2]), Read(a[3]), Read(a[4])); return pc + 1;
-            case "u004223C0":   // 0x239 spritesheet cell: (handle)(p3)(p4)(gridW)(gridH)(cell) — static cell
+            case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
-            case "u00421EA0":   // 0x231 anim spritesheet: (handle)(period)(gridW)(gridH) — ping-pong the cell
+            case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[2]), Read(a[3]), 0, Read(a[1])); return pc + 1;
             case "u00421EF0":   // 0x232 anim color/glow: (handle)(period)(alpha)(color) — ping-pong the color
                 Gfx.SetColorAnim(Read(a[0]), Read(a[1]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;

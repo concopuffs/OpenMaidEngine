@@ -83,6 +83,27 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void LoopingSpritesheet_PreservesCellSize_AdvancesRowMajor_AndWraps()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x37, -1);
+        g.BindDraw(0xcf3a, 4, 0, 0, 200, 200, 300, 100); // AE001H: 800x400, eight 200x200 cells
+        g.SetSrcRect(0xcf3a, frameCount: 8, columns: 4, cell: 0, period: 100);
+
+        var first = g.SnapshotVisibleObjects(1000).Single();
+        var second = g.SnapshotVisibleObjects(1100).Single();
+        var fifth = g.SnapshotVisibleObjects(1400).Single();
+        var eighth = g.SnapshotVisibleObjects(1700).Single();
+        var wrapped = g.SnapshotVisibleObjects(1800).Single();
+
+        Assert.Equal((0, 0, 200, 200), (first.SrcX, first.SrcY, first.W, first.H));
+        Assert.Equal((200, 0, 200, 200), (second.SrcX, second.SrcY, second.W, second.H));
+        Assert.Equal((0, 200, 200, 200), (fifth.SrcX, fifth.SrcY, fifth.W, fifth.H));
+        Assert.Equal((600, 200, 200, 200), (eighth.SrcX, eighth.SrcY, eighth.W, eighth.H));
+        Assert.Equal((0, 0, 200, 200), (wrapped.SrcX, wrapped.SrcY, wrapped.W, wrapped.H));
+    }
+
+    [Fact]
     public void OneShotRotation_SharesMatrixClockAndMatchesNativeSample()
     {
         var g = new GfxState();

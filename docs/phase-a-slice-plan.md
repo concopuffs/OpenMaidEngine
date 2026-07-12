@@ -646,7 +646,7 @@ plan `.../plans/2026-07-08-sc0000-anim-transform-cluster.md`, branch `feat/anim-
 **Built (hybrid: engine resolves, host blits):**
 - `GfxObject` gains src-rect (spritesheet) + animated-color channels; `GfxState.SetSrcRect` / `SetColorAnim`;
   `BlendMath.PingPong`; `SnapshotVisibleObjects(long nowMs)` = a port of `gfx_object_anim_interpolate`
-  (ping-pong the spritesheet cell + color/glow), driven by the **`FrameClock`** (the "mach 5" pacing fix).
+  (looping row-major spritesheet cells + ping-pong color/glow), driven by the **`FrameClock`** (the "mach 5" pacing fix).
 - Wired 7 ops: `0x22f`/`0x229` position (direct V24 set), `0x239`/`0x231` spritesheet (static cell / animate),
   `0x232` color glow (ping-pong), `0x228`/`0x23f` queries (geometry back to script vars).
 
@@ -1380,5 +1380,16 @@ distinct from `0x21e`'s one-shot target. SC0000 scales the two AE001D circles to
 them at 100%, almost entirely below the viewport. `GfxState.SetCurrentScale` and VM dispatch now reproduce
 the native matrices, with focused geometry/dispatch tests. Validation: engine **145/145**, opcode build/lint,
 Godot build/capture, Ghidra annotations saved, and user confirmation that the CG and animated glow are both
-visible. This AE001D path is a retained scaled/rotating texture; later missing `0x231` spritesheet-cell
-effects remain separately scoped.
+visible. This AE001D path is a retained scaled/rotating texture; the later `0x231` spritesheet-cell issue
+was separately resolved by preserving draw-texture's 200x200 cell and interpreting `(8,4)` as total
+frames/columns rather than a grid divisor.
+
+### A2b -- SC0000 post-movie AE001H spritesheet correction ✅ DONE (2026-07-11)
+
+The reported missing cave spirit was the `0x231` path, independent of the earlier AE001D retained glow.
+Native interpolation proved `(period, 8, 4)` means milliseconds per frame, total frames, and columns;
+the existing 200x200 draw-texture rectangle is one cell and must not be divided again. The retained model
+now cycles the eight AE001H cells row-major and wraps. Focused tests cover the exact 800x400/4x2 layout.
+Validation: engine **146/146**, opcode sources regenerated, Godot zero-warning build and threaded selftest,
+real-scene compositor trace across all eight cells, Ghidra `/v2` annotations saved, and user confirmation
+on the normal client path. The automated-shot wrong-CG state remains the pre-existing separate gotcha.

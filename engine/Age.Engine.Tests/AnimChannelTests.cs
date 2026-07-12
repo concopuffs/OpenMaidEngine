@@ -62,7 +62,8 @@ public class AnimChannelTests
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.True(o.SrcAnim);
-        Assert.Equal(4, o.SrcGridW);
+        Assert.Equal(4, o.SrcFrameCount);
+        Assert.Equal(1, o.SrcColumns);
         Assert.Equal(2, o.SrcCell);
     }
 
@@ -78,9 +79,9 @@ public class AnimChannelTests
     public void SetSrcRect_StoresGridCellPeriod()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, gridW: 4, gridH: 1, cell: 2, period: 800);
+        g.SetSrcRect(0x100, frameCount: 4, columns: 1, cell: 2, period: 800);
         var o = g.TryGet(0x100)!;
-        Assert.Equal(4, o.SrcGridW);
+        Assert.Equal(4, o.SrcFrameCount);
         Assert.Equal(2, o.SrcCell);
         Assert.Equal(800, o.SrcPeriod);
         Assert.True(o.SrcAnim);
@@ -91,10 +92,10 @@ public class AnimChannelTests
     public void SetSrcRect_ClampsGridToAtLeastOne()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, gridW: 0, gridH: 0, cell: 0, period: 0);
+        g.SetSrcRect(0x100, frameCount: 0, columns: 0, cell: 0, period: 0);
         var o = g.TryGet(0x100)!;
-        Assert.Equal(1, o.SrcGridW);
-        Assert.Equal(1, o.SrcGridH);
+        Assert.Equal(1, o.SrcFrameCount);
+        Assert.Equal(1, o.SrcColumns);
     }
 
     [Fact]

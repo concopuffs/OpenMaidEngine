@@ -840,8 +840,8 @@ annotated in Ghidra, saved.
 |---|---|---|
 | `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel |
 | `0x229` | `gfx_op_0x229_set_position` (`FUN_00472bb0`+`FUN_00472be0`) | set object **position/geometry** immediately (`obj+0x420/0x424` + vec `obj+0x440..0x448`) |
-| `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | set **spritesheet** grid `obj+0x238/0x23c` + static cell `obj+0x234` |
-| `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | **animate spritesheet cell**: bit2 active, period `obj+0x230`, grid `obj+0x238/0x23c` → interpolator SRC-RECT SCROLL channel (ping-pong across the row) |
+| `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
+| `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
 | `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color** (pulsing GLOW): bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Distinct from static `0x202`/`0x203` (`obj+0x60/0x64`) |
 | `0x228` | `gfx_op_0x228_query_position` (`FUN_0047cdd0`) | **query** current computed (x,y,z) → operand slots 3/4/5 (script logic, not render) |
 | `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
@@ -878,6 +878,13 @@ The port mirrors this with an explicit pending/start/progress/natural-or-forced-
 while `0x21c` is parked completes only the active foreground surface transition and is consumed; it does
 not pre-arm the following `wait-for-input`, and it does not complete independent retained rotation,
 matrix, spritesheet, or color-animation channels.
+
+**Source-rectangle correction (2026-07-11):** `gfx_object_anim_interpolate` preserves the source rectangle
+set by `draw-texture`; `0x231` does not divide that rectangle by its operands. It computes
+`frame = floor(elapsed / frame_period) % frame_count`, then offsets both X bounds by
+`rect_width * (frame % columns)` and both Y bounds by `rect_height * (frame / columns)`. SC0000 passes
+`(100, 8, 4)` for AE001H: eight 200x200 cells in an 800x400, 4x2 sheet. Treating 8 and 4 as grid width
+and height shrank the crop to 25x50 and made the intended cave spirit effectively disappear.
 
 **Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. The unclassified
 `0x242/0x23d/0x20a/0x20e` tail (2-arg flags / inline) remains GAP and outside this slice.

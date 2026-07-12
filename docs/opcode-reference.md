@@ -271,8 +271,9 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x231 `u00421EA0` (u00421EA0, argc 4)
-- **summary:** 0x231 anim-srcrect (handle)(period)(gridW)(gridH): ping-pong the spritesheet cell across the grid over period ms. Worker gfx_worker_anim_srcrect @0x47eec0 -> interpolator SRC-RECT SCROLL channel. C# VM: GfxState.SetSrcRect. See docs/engine-re.md §SC0000 anim cluster.
-- **grounding:** source=kelebek, confidence=low
+- **summary:** (handle)(frame_period_ms)(frame_count)(column_count) — loop row-major through the spritesheet. Every frame preserves draw-texture's source-rectangle width/height; frame=floor(elapsed/frame_period)%frame_count, src offset=(frame%columns*width, frame/columns*height). Worker gfx_worker_anim_srcrect @0x47eec0; consumer gfx_object_anim_interpolate @0x473ed0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Native /v2 decompile: worker stores period at obj+0x230, frame_count at +0x238, columns at +0x23c. Interpolator computes ((now-start)/period)%frame_count, then offsets both source-rect X bounds by rect_width*(frame%columns) and Y bounds by rect_height*(frame/columns). SC0000 uses (100,8,4) with AE001H's eight 200x200 cells in a 4x2 800x400 sheet.
 
 ### 0x232 `u00421EF0` (u00421EF0, argc 4)
 - **summary:** 0x232 anim-color (handle)(period)(alpha)(color): ping-pong the object color/alpha toward the packed target over period ms (pulsing GLOW). Worker gfx_worker_anim_color @0x47ef50 -> interpolator COLOR channel. C# VM: GfxState.SetColorAnim. See docs/engine-re.md §SC0000 anim cluster.
@@ -295,8 +296,9 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **grounding:** source=investigation, confidence=high
 
 ### 0x239 `u004223C0` (u004223C0, argc 6)
-- **summary:** 0x239 set-srcrect-cell (handle)(p3)(p4)(gridW)(gridH)(cell): set the spritesheet grid + static visible cell. Worker gfx_worker_set_srcrect_cell @0x47ed90. C# VM: GfxState.SetSrcRect (period 0). See docs/engine-re.md §SC0000 anim cluster.
-- **grounding:** source=kelebek, confidence=low
+- **summary:** (handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint.
 
 ### 0x23f `u00422930` (u00422930, argc 2)
 - **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.

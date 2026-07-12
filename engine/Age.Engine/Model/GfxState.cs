@@ -71,9 +71,10 @@ public sealed class GfxState
         // fades from a static mode-0 0x203 such as a CG initialized with 0x00ffffff (opaque identity).
         public bool OneShotColorBlend;
 
-        // ---- src-rect / spritesheet-cell channel (ops 0x239 static cell, 0x231 animate). Interpolator
-        // SRC-RECT SCROLL channel: period obj+0x230, start obj+0x21c, grid obj+0x238/0x23c. ----
-        public long SrcGridW = 1, SrcGridH = 1, SrcCell, SrcPeriod, SrcStart = -1;
+        // ---- src-rect / spritesheet-cell channel (ops 0x239 one-shot cell, 0x231 looping animation).
+        // Native obj+0x238 is the TOTAL FRAME COUNT and +0x23c is the COLUMN COUNT. Each frame keeps
+        // draw-texture's original source-rect size; those operands are not a grid to divide it by. ----
+        public long SrcFrameCount = 1, SrcColumns = 1, SrcCell, SrcPeriod, SrcStart = -1;
         public bool SrcAnim;
         // ---- animated color/glow channel (op 0x232). Interpolator COLOR channel: period obj+0x220,
         // start obj+0x20c, target obj+0x240 — PING-PONG (distinct from static 0x202/0x203). ----
@@ -158,7 +159,7 @@ public sealed class GfxState
                 OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
                 ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
                 OneShotColorBlend = s.OneShotColorBlend,
-                SrcGridW = s.SrcGridW, SrcGridH = s.SrcGridH, SrcCell = s.SrcCell,
+                SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
                 SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
                 ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
                 ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
@@ -282,14 +283,16 @@ public sealed class GfxState
         lock (_lock) GetOrCreate(handle).StaticColorMode = mode;
     }
 
-    /// <summary>Ops 0x239 (static cell, period=0) / 0x231 (animate, period&gt;0): set the spritesheet grid +
-    /// the visible cell. When animated, the interpolator ping-pongs the cell across the grid over the period.</summary>
-    public void SetSrcRect(long handle, long gridW, long gridH, long cell, long period)
+    /// <summary>Ops 0x239 (one-shot cell endpoint, period=0 in this retained model) / 0x231 (looping):
+    /// set total frame count, column count, and visible cell. Every frame retains draw-texture's source
+    /// rectangle dimensions. For 0x231, <paramref name="period"/> is milliseconds per frame.</summary>
+    public void SetSrcRect(long handle, long frameCount, long columns, long cell, long period)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
-            o.SrcGridW = gridW < 1 ? 1 : gridW; o.SrcGridH = gridH < 1 ? 1 : gridH;
+            o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
+            o.SrcColumns = columns < 1 ? 1 : columns;
             o.SrcCell = cell; o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
         }
     }
@@ -555,23 +558,18 @@ public sealed class GfxState
                     blend = BlendKind.Alpha;
                 }
 
-                // ---- src-rect: pick the spritesheet cell (static or ping-ponged across the grid) ----
+                // ---- src-rect: preserve cell dimensions and offset it row-major through the sheet ----
                 int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
-                if (o.SrcAnim && o.SrcGridW >= 1)
+                if (o.SrcAnim && o.SrcFrameCount >= 1)
                 {
-                    int cellW = (int)(o.SrcRect.W / o.SrcGridW);
-                    int cellH = o.SrcGridH >= 1 ? (int)(o.SrcRect.H / o.SrcGridH) : o.SrcRect.H;
                     long cell = o.SrcCell;
                     if (o.SrcPeriod > 0)
                     {
                         if (o.SrcStart < 0) o.SrcStart = nowMs;
-                        double t = PingPongWeight(nowMs, o.SrcStart, o.SrcPeriod);
-                        cell = (long)System.Math.Round(t * (o.SrcGridW - 1));
+                        cell = ((nowMs - o.SrcStart) / o.SrcPeriod) % o.SrcFrameCount;
                     }
-                    long cols = o.SrcGridW;
-                    srcX = o.SrcRect.X + (int)(cell % cols) * cellW;
-                    srcY = o.SrcRect.Y + (int)(cell / cols) * cellH;
-                    w = cellW; h = cellH;
+                    srcX = o.SrcRect.X + (int)(cell % o.SrcColumns) * o.SrcRect.W;
+                    srcY = o.SrcRect.Y + (int)(cell / o.SrcColumns) * o.SrcRect.H;
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
