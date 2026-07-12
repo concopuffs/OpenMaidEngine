@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="Himegari (age-reimpl A2a)"
+config/name="Open Maid Engine"
 run/main_scene="res://Main.tscn"
 
 [display]
