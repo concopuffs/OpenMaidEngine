@@ -843,7 +843,7 @@ annotated in Ghidra, saved.
 | `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
 | `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color** (pulsing GLOW): bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Distinct from static `0x202`/`0x203` (`obj+0x60/0x64`) |
-| `0x228` | `gfx_op_0x228_query_position` (`FUN_0047cdd0`) | **query** current computed (x,y,z) → operand slots 3/4/5 (script logic, not render) |
+| `0x228` | `gfx_op_0x228_query_position` → `gfx_object_query_translation_target` (`0x47cdd0`) | **query** the decomposed target-translation matrix (x,y,z), `obj+0x1ac/+0x1b0/+0x1b4`, → operand slots 3/4/5; success is 0 and missing is 1 |
 | `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
 
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
@@ -885,6 +885,19 @@ set by `draw-texture`; `0x231` does not divide that rectangle by its operands. I
 `rect_width * (frame % columns)` and both Y bounds by `rect_height * (frame / columns)`. SC0000 passes
 `(100, 8, 4)` for AE001H: eight 200x200 cells in an 800x400, 4x2 sheet. Treating 8 and 4 as grid width
 and height shrank the crop to 25x50 and made the intended cave spirit effectively disappear.
+
+**AE001H travel-path correction (2026-07-11):** the three post-movie movement legs exposed a separate
+port bug from the source-rectangle correction. Native `0x228` copies the full retained-object record and
+decomposes the target matrix beginning at `obj+0x17c`; the returned translation comes from
+`obj+0x1ac/+0x1b0/+0x1b4`. It does **not** return the draw/base position at `obj+0x24` (`V24`). SC0000 uses
+that query before each `0x220` to derive the next translation target. AE001H's draw base is `(360,20)` and
+its initial translation target is `(0,0)`, so the first native leg targets `(40,-20)`. The current C#
+`0x228` implementation instead returns `(360,20)`, producing `(400,0)`; the compositor then adds that
+translation to the unchanged draw base, placing the object near `(760,20)` before its cyclic rotation.
+That explained the observed immediate off-screen movement and why later legs never visibly returned. The
+port now queries `TranslationTarget` independently of `V24`, returns the native status convention, and
+leaves output operands untouched when the object is absent. A bytecode-level regression reproduces the
+three SC0000 targets `(40,-20)`, `(50,-80)`, and `(130,-100)` while retaining base `V24=(360,20)`.
 
 **Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. The unclassified
 `0x242/0x23d/0x20a/0x20e` tail (2-arg flags / inline) remains GAP and outside this slice.

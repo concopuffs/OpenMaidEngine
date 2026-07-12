@@ -8,26 +8,83 @@ public class AnimChannelTests
 {
     private static OpcodeTable T() => OpcodeTableJson.Load(Paths.OpcodesJson);
     private static Operand G(int addr) => new(3, addr);
+    private static Operand I(long value) => new(0, value);
     private static (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
 
     [Fact]
-    public void Op0x22f_SetsPosition_Op0x228_QueriesItBack()
+    public void Op0x228_QueriesTranslationTarget_NotBasePosition()
     {
         var t = T();
-        // g1=handle, g3=x=50, g4=y=60, g5=z=0; op 0x22f sets V24; op 0x228 reads it into g11/g12/g13.
+        // AE001H has draw/base V24=(360,20), independent of its op-0x220 translation target (40,-20).
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
-            (0x55, new[]{G(1), new Operand(0,0x1000)}), (0x55, new[]{G(2), new Operand(0,0)}),
-            (0x55, new[]{G(3), new Operand(0,50)}), (0x55, new[]{G(4), new Operand(0,60)}), (0x55, new[]{G(5), new Operand(0,0)}),
-            (0x22f, new[]{G(1), G(2), G(3), G(4), G(5)}),      // set position
-            (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}),  // query position -> g11,g12,g13
+            (0x55, new[]{G(1), I(0xcf3a)}), (0x55, new[]{G(2), I(0)}),
+            (0x55, new[]{G(3), I(360)}), (0x55, new[]{G(4), I(20)}), (0x55, new[]{G(5), I(0)}),
+            (0x22f, new[]{G(1), G(2), G(3), G(4), G(5)}),
+            (0x55, new[]{G(6), I(300)}), (0x55, new[]{G(7), I(40)}),
+            (0x55, new[]{G(8), I(20)}), (0x51, new[]{G(8), I(0), G(8)}),
+            (0x220, new[]{G(1), G(2), G(6), G(7), G(8), G(5)}),
+            (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}),
             Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.Equal(50, vm.Globals[11]);
-        Assert.Equal(60, vm.Globals[12]);
+        Assert.Equal(40, vm.Globals[11]);
+        Assert.Equal(-20, vm.Globals[12]);
+        Assert.Equal(0, vm.Globals[13]);
         Assert.Equal(0, vm.Globals[10]);   // success flag
+        Assert.Equal((360L, 20L, 0L), vm.Gfx.TryGet(0xcf3a)!.V24);
+    }
+
+    [Fact]
+    public void Op0x228_MissingObject_SetsFailureAndPreservesOutputs()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "GFX_MISSING", new List<(int, Operand[])>
+        {
+            (0x55, new[]{G(1), I(0xdead)}), (0x55, new[]{G(11), I(7)}),
+            (0x55, new[]{G(12), I(8)}), (0x55, new[]{G(13), I(9)}),
+            (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        Assert.Equal(1, vm.Globals[10]);
+        Assert.Equal((7L, 8L, 9L), (vm.Globals[11], vm.Globals[12], vm.Globals[13]));
+    }
+
+    [Fact]
+    public void Ae001hThreeLegSequence_BuildsEachTargetFromPreviousTranslationTarget()
+    {
+        var t = T();
+        var ops = new List<(int, Operand[])>
+        {
+            (0x55, new[]{G(1), I(0xcf3a)}), (0x55, new[]{G(2), I(0)}), (0x55, new[]{G(3), I(300)}),
+            (0x55, new[]{G(4), I(360)}), (0x55, new[]{G(5), I(20)}), (0x55, new[]{G(6), I(0)}),
+            (0x55, new[]{G(40), I(20)}), (0x51, new[]{G(40), I(0), G(40)}),
+            (0x55, new[]{G(41), I(60)}), (0x51, new[]{G(41), I(0), G(41)}),
+            (0x22f, new[]{G(1), G(2), G(4), G(5), G(6)}),
+
+            (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}),
+            (0x50, new[]{G(11), G(11), I(40)}), (0x50, new[]{G(12), G(12), G(40)}),
+            (0x220, new[]{G(1), G(2), G(3), G(11), G(12), G(13)}),
+
+            (0x228, new[]{G(20), G(1), G(21), G(22), G(23)}),
+            (0x50, new[]{G(21), G(21), I(10)}), (0x50, new[]{G(22), G(22), G(41)}),
+            (0x220, new[]{G(1), G(2), G(3), G(21), G(22), G(23)}),
+
+            (0x228, new[]{G(30), G(1), G(31), G(32), G(33)}),
+            (0x50, new[]{G(31), G(31), I(80)}), (0x50, new[]{G(32), G(32), G(40)}),
+            (0x220, new[]{G(1), G(2), G(3), G(31), G(32), G(33)}),
+            Exit(),
+        };
+        var vm = new VirtualMachine(ScriptAssembler.Assemble(t, "AE001H_TRAVEL", ops,
+            System.Array.Empty<string>()), t, new RecordingHost());
+        vm.Run();
+
+        Assert.Equal((40L, -20L, 0L), (vm.Globals[11], vm.Globals[12], vm.Globals[13]));
+        Assert.Equal((50L, -80L, 0L), (vm.Globals[21], vm.Globals[22], vm.Globals[23]));
+        Assert.Equal((130L, -100L, 0L), (vm.Globals[31], vm.Globals[32], vm.Globals[33]));
+        Assert.Equal((130.0, -100.0, 0.0), vm.Gfx.TryGet(0xcf3a)!.TranslationTarget);
     }
 
     [Fact]

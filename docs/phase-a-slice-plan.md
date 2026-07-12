@@ -1405,3 +1405,17 @@ now cycles the eight AE001H cells row-major and wraps. Focused tests cover the e
 Validation: engine **146/146**, opcode sources regenerated, Godot zero-warning build and threaded selftest,
 real-scene compositor trace across all eight cells, Ghidra `/v2` annotations saved, and user confirmation
 on the normal client path. The automated-shot wrong-CG state remains the pre-existing separate gotcha.
+
+### A2b -- SC0000 post-movie AE001H travel-path correction ✅ DONE (2026-07-11)
+
+The remaining off-screen motion is a separate `0x228` query-model bug, not part of the spritesheet crop.
+Native `0x228` decomposes and returns the retained object's target translation (`obj+0x1ac..+0x1b4`), while
+the C# VM currently returns its static draw/base position `V24`. For AE001H this changes the first `0x220`
+target from `(40,-20)` to `(400,0)`; because the compositor also retains the `(360,20)` draw base, the
+sprite was displaced to approximately x=760 before cyclic rotation. `GfxState.TryQueryTranslationTarget`
+now exposes the retained target independently of `V24`; VM dispatch matches the native 0/1 status convention
+and preserves output operands on a miss. Bytecode-level tests cover the exact three targets `(40,-20)`,
+`(50,-80)`, `(130,-100)` plus missing-object behavior. Validation: engine **149/149**, zero-warning Godot
+build, and threaded `SELFTEST OK`. Current static SC0000 coverage is **94/129 distinct ops handled
+(72.9%)**: 82 implemented + 12 safe no-ops, leaving 35 GAP ops / 88 GAP instructions. By instruction
+frequency, 16,169/16,257 are handled (**99.5%**); this gauge does not replace manual end-to-end fidelity.

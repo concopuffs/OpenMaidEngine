@@ -448,6 +448,22 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x228: query the translation target decomposed from the native target matrix at
+    /// obj+0x17c (translation obj+0x1ac/+0x1b0/+0x1b4). This is independent of draw/base position V24.</summary>
+    public bool TryQueryTranslationTarget(long handle, out (double X, double Y, double Z) target)
+    {
+        lock (_lock)
+        {
+            if (_objects.TryGetValue(handle, out var o))
+            {
+                target = o.TranslationTarget;
+                return true;
+            }
+            target = default;
+            return false;
+        }
+    }
+
     /// <summary>Op 0x21f: delayed one-shot axis-angle rotation target, sharing obj+0x34's start timestamp.</summary>
     public void SetRotationChannel(long handle, long delayMs, long durationMs,
                                    (long X, long Y, long Z) axis, long angleDegrees)
