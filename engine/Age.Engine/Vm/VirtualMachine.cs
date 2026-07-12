@@ -397,8 +397,8 @@ public sealed class VirtualMachine
                 Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
             case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[2]), Read(a[3]), 0, Read(a[1])); return pc + 1;
-            case "u00421EF0":   // 0x232 anim color/glow: (handle)(period)(alpha)(color) — ping-pong the color
-                Gfx.SetColorAnim(Read(a[0]), Read(a[1]), GfxState.PackColor(Read(a[2]), Read(a[3]))); return pc + 1;
+            case "u00421EF0":   // 0x232 cyclic packed ARGB; negative alpha/RGB preserve static obj color
+                Gfx.SetColorAnimResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- target translation matrix
             {
                 if (Gfx.TryQueryTranslationTarget(Read(a[1]), out var v))

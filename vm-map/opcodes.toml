@@ -6035,12 +6035,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "u00421EF0"
 category = "draw"
-summary = "0x232 anim-color (handle)(period)(alpha)(color): ping-pong the object color/alpha toward the packed target over period ms (pulsing GLOW). Worker gfx_worker_anim_color @0x47ef50 -> interpolator COLOR channel. C# VM: GfxState.SetColorAnim. See docs/engine-re.md §SC0000 anim cluster."
+summary = "0x232 anim-color (handle)(period)(alpha)(color): ping-pong the temporary packed ARGB passed to the normal object blit. Handler resolves negative alpha/RGB from static color obj+0x60 and clamps alpha above 255. Blend selector obj+0x30 is unchanged: mode 0 keeps default opaque blending (animated alpha is inert; RGB is vertex modulation), while mode 1 consumes ARGB alpha as opacity. Fresh static color is 0xffffffff. The C# VM resolves sentinels and consumes sampled ARGB through the unchanged mode-specific path. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: gfx_op_0x232_anim_color@0x423c30 resolves sentinels then calls gfx_worker_anim_color@0x47ef50; gfx_object_anim_interpolate@0x473ed0 samples static obj+0x60 toward target obj+0x240 into a temporary packed color; gfx_object_composite@0x47f650 passes that color plus unchanged selector obj+0x30 to gfx_object_blit_d3d9@0x4774c0. Blit mode 0 enables no alpha blend and passes RGB as modulation; mode 1 enables SRCALPHA/INVSRCALPHA. gfx_object_init_default@0x472810 initializes obj+0x60=0xffffffff. SC0000 0x1a0e (handle,1200,224,-1) is therefore 0xffffffff<->0xe0ffffff with inert alpha and identity RGB: no visible pulse. C# regressions cover exact AE001H visual invariance, negative-RGB preservation, mode-0 RGB modulation, and mode-1 alpha opacity."
 
 [[opcode.semantics.args]]
 i = 1

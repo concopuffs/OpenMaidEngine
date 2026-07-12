@@ -28,9 +28,9 @@ public readonly record struct ColorTransitionState(long Current, long Target,
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
 /// "The full gfx render model").</summary>
-/// <summary>The packed-color channel is mode-dependent. Static mode 0 uses <paramref name="TintStrength"/>
-/// to blend <paramref name="Tint"/> into the texel. A mode-0 color which has passed through op 0x202, and
-/// mode 1, use <paramref name="Alpha"/> as opacity and multiply the texel by <paramref name="Tint"/>.
+/// <summary>The packed-color channel is mode-dependent. Textured mode 0 ignores packed alpha and
+/// multiplicatively modulates by <paramref name="Tint"/>; surfaceless mode 0 uses <paramref name="TintStrength"/>.
+/// A mode-0 color which has passed through op 0x202, and mode 1, use <paramref name="Alpha"/> as opacity.
 /// <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, int DstX, int DstY,
@@ -59,7 +59,7 @@ public sealed class GfxState
     {
         public (long X, long Y, long Z) V18, V24, V16c;
         public long Field64, Field68, Field6c;
-        public long Color;
+        public long Color = 0xffffffff; // native gfx_object_init_default obj+0x60: identity packed ARGB
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
         public long StaticColorMode; // op 0x203 operand 2 -> obj+0x30; mode 2 is transition alpha/identity
         // Op 0x202 one-shot packed-color channel: current +0x60, target +0x64, delay +0x38,
@@ -297,14 +297,31 @@ public sealed class GfxState
         }
     }
 
-    /// <summary>Op 0x232 (anim-color): ping-pong the object's color/alpha toward <paramref name="target"/>
-    /// (packed 0xAARRGGBB) over <paramref name="period"/> ms — the pulsing glow. Distinct from static 0x202/0x203.</summary>
+    /// <summary>Op 0x232 worker contract: ping-pong a temporary copy of static packed ARGB toward
+    /// <paramref name="target"/>. The sampled value is consumed by the object's unchanged blend mode.</summary>
     public void SetColorAnim(long handle, long period, long target)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
             o.ColorPeriod = period; o.ColorTarget = target; o.ColorStart = -1; o.ColorAnim = true;
+        }
+    }
+
+    /// <summary>Op 0x232 handler contract: resolve negative alpha/RGB sentinels from static obj+0x60,
+    /// clamp alpha above 255, then arm the cyclic packed-color channel without changing blend mode.</summary>
+    public void SetColorAnimResolved(long handle, long period, long alpha, long rgb)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            long current = o.Color & 0xffffffff;
+            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+            o.ColorPeriod = period;
+            o.ColorTarget = PackColor(resolvedAlpha, resolvedRgb);
+            o.ColorStart = -1;
+            o.ColorAnim = true;
         }
     }
     public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }   // create-texture (blank)
@@ -524,17 +541,23 @@ public sealed class GfxState
                 // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
                 // armed the one-shot channel, its current/target ARGB instead supplies opacity and D3D-style
                 // multiplicative RGB modulation (including after target commit). Mode 1 uses the same blend.
-                // 0x232 remains the separate ping-pong mode-0 strength/tint channel. ----
+                // Op 0x232 modifies this temporary packed color before the unchanged mode consumes it. ----
                 int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
                 bool multiplyTint = false;
-                long sampledColor = o.Color;
+                long sampledColor = o.HasColor ? o.Color : 0xffffffff;
                 ColorTransitionState? colorTransition = null;
                 if (o.OneShotColorEnabled)
                 {
                     if (o.OneShotStartMs < 0) o.OneShotStartMs = nowMs;
                     (sampledColor, colorTransition) = SampleOneShotColor(o, nowMs);
                 }
-                if (o.HasColor)
+                if (o.ColorAnim)
+                {
+                    if (o.ColorStart < 0) o.ColorStart = nowMs;
+                    sampledColor = InterpolatePackedColor(sampledColor, o.ColorTarget,
+                        PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod));
+                }
+                if (o.HasColor || o.ColorAnim)
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
                     tint = ((long)r << 16) | ((long)g << 8) | (long)b;
@@ -563,17 +586,6 @@ public sealed class GfxState
                         strength = a; blend = BlendKind.Alpha;
                     }
                 }
-                if (o.ColorAnim)
-                {
-                    if (o.ColorStart < 0) o.ColorStart = nowMs;
-                    double t = PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod);
-                    var (ta, tr, tg, tb) = BlendMath.UnpackArgb(o.ColorTarget);
-                    var (br, bg, bb) = ((int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff), (int)(tint & 0xff));
-                    strength = (int)(strength + (ta - strength) * t);
-                    tint = ((long)(br + (tr - br) * t) << 16) | ((long)(bg + (tg - bg) * t) << 8) | (long)(bb + (tb - bb) * t);
-                    blend = BlendKind.Alpha;
-                }
-
                 // ---- src-rect: preserve cell dimensions and offset it row-major through the sheet ----
                 int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
                 if (o.SrcAnim && o.SrcFrameCount >= 1)
@@ -694,6 +706,19 @@ public sealed class GfxState
                 current.Y + (target.Y - current.Y) * t,
                 current.Z + (target.Z - current.Z) * t,
                 current.Angle + (target.Angle - current.Angle) * t);
+    }
+
+    private static long InterpolatePackedColor(long current, long target, double t)
+    {
+        t = System.Math.Clamp(t, 0.0, 1.0);
+        long packed = 0;
+        for (int shift = 0; shift <= 24; shift += 8)
+        {
+            long c = (current >> shift) & 0xff;
+            long v = (target >> shift) & 0xff;
+            packed |= ((long)(c + (v - c) * t) & 0xff) << shift;
+        }
+        return packed;
     }
 
     /// <summary>Ping-pong interpolation weight in [0,1] toward the target: 0 at cycle start, 1 at half-period.</summary>

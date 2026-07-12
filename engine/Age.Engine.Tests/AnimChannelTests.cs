@@ -106,6 +106,25 @@ public class AnimChannelTests
     }
 
     [Fact]
+    public void Op0x232_NegativeRgbPreservesNativeDefaultStaticColor()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "AE001H_COLOR", new List<(int, Operand[])>
+        {
+            (0x55, new[]{G(1), I(0xcb8e)}), (0x55, new[]{G(2), I(1200)}),
+            (0x55, new[]{G(3), I(224)}), (0x55, new[]{G(4), I(1)}),
+            (0x51, new[]{G(4), I(0), G(4)}),
+            (0x232, new[]{G(1), G(2), G(3), G(4)}), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var o = vm.Gfx.TryGet(0xcb8e)!;
+        Assert.Equal(0xffffffff, o.Color);
+        Assert.Equal(0xe0ffffff, o.ColorTarget);
+        Assert.Equal(0, o.StaticColorMode);
+    }
+
+    [Fact]
     public void Op0x239_SetsSpritesheetGridCell()
     {
         var t = T();

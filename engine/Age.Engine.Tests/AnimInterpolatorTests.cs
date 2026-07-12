@@ -45,17 +45,43 @@ public class AnimInterpolatorTests
     }
 
     [Fact]
-    public void ColorAnim_PingPongsTintStrength_ObjectStaysOpaque()
+    public void ColorAnim_Mode0Textured_UsesRgbModulationAndIgnoresAlpha()
     {
         var g = VisibleObj(0x100);
-        // base = no tint (strength 0); target = full-strength (alpha 0xff) red glow => strength pulses 0<->255
-        g.SetColorAnim(0x100, period: 1000, target: GfxState.PackColor(0xFF, 0xFF0000));
+        g.SetColorAnim(0x100, period: 1000, target: GfxState.PackColor(0x80, 0xFF0000));
         g.SnapshotVisibleObjects(0);                       // seeds start=0
         var baseFrame = g.SnapshotVisibleObjects(0).Single();
-        Assert.Equal(255, baseFrame.Alpha);                // object opacity ALWAYS opaque (never the color alpha)
-        Assert.Equal(0, baseFrame.TintStrength);           // t=0 -> no tint
         var peak = g.SnapshotVisibleObjects(500).Single();
-        Assert.Equal(255, peak.Alpha);                     // still opaque
-        Assert.Equal(255, peak.TintStrength);              // t=1 -> full tint strength (the glow peak)
+        Assert.Equal((255, 0xffffffL, 0, true),
+            (baseFrame.Alpha, baseFrame.Tint, baseFrame.TintStrength, baseFrame.MultiplyTint));
+        Assert.Equal((255, 0xff0000L, 0, true),
+            (peak.Alpha, peak.Tint, peak.TintStrength, peak.MultiplyTint));
+    }
+
+    [Fact]
+    public void ColorAnim_Mode1_UsesSampledAlphaAsOpacity()
+    {
+        var g = VisibleObj(0x100);
+        g.SetStaticObjectColorResolved(0x100, mode: 1, alpha: 255, rgb: 0xffffff);
+        g.SetColorAnim(0x100, period: 1000, target: GfxState.PackColor(0x80, 0xffffff));
+        g.SnapshotVisibleObjects(0);
+        var peak = g.SnapshotVisibleObjects(500).Single();
+        Assert.Equal(0x80, peak.Alpha);
+        Assert.Equal(0, peak.TintStrength);
+        Assert.True(peak.MultiplyTint);
+    }
+
+    [Fact]
+    public void Ae001hMode0AlphaCycle_IsVisuallyInert()
+    {
+        var g = VisibleObj(0x100);
+        g.SetColorAnimResolved(0x100, period: 1200, alpha: 224, rgb: -1);
+        var start = g.SnapshotVisibleObjects(1000).Single();
+        var peak = g.SnapshotVisibleObjects(1600).Single();
+        Assert.Equal(0xe0ffffff, g.TryGet(0x100)!.ColorTarget);
+        Assert.Equal((255, 0xffffffL, 0, true),
+            (start.Alpha, start.Tint, start.TintStrength, start.MultiplyTint));
+        Assert.Equal((start.Alpha, start.Tint, start.TintStrength, start.MultiplyTint),
+            (peak.Alpha, peak.Tint, peak.TintStrength, peak.MultiplyTint));
     }
 }

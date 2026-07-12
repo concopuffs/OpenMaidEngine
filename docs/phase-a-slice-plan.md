@@ -1419,3 +1419,17 @@ and preserves output operands on a miss. Bytecode-level tests cover the exact th
 build, and threaded `SELFTEST OK`. Current static SC0000 coverage is **94/129 distinct ops handled
 (72.9%)**: 82 implemented + 12 safe no-ops, leaving 35 GAP ops / 88 GAP instructions. By instruction
 frequency, 16,169/16,257 are handled (**99.5%**); this gauge does not replace manual end-to-end fidelity.
+
+### A2b -- SC0000 AE001H white-pulse correction ✅ DONE (2026-07-11)
+
+Manual movement confirmation exposed a separate color artifact. The sheet itself has no white frames.
+SC0000 later calls `0x232(handle,1200,224,-1)`; native treats RGB `-1` as "preserve current static RGB,"
+whereas the port masks it to white and drives mode-0 tint strength from the animated alpha. The compositor
+log correspondingly cycles `tintStr` from 0 to about 0.82 and back. This identifies the white wash as a port
+bug, not intended artwork. Native dataflow confirms fresh static color is `0xffffffff`; `0x232` samples
+`0xffffffff ↔ 0xe0ffffff` and passes it through unchanged blend mode 0, whose alpha is inert and whose
+white RGB is identity modulation. The port now resolves native default/static color and negative sentinels,
+samples packed ARGB, and applies it through normal mode-specific blending rather than a separate tint-strength
+convention. Focused tests cover exact AE001H invariance, mode-0 RGB modulation, and mode-1 alpha opacity.
+Validation: engine **152/152**, zero-warning Godot build, and threaded `SELFTEST OK`; manual confirmation is
+the remaining visual gate.

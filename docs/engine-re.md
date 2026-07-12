@@ -842,7 +842,7 @@ annotated in Ghidra, saved.
 | `0x229` | `gfx_op_0x229_set_position` (`FUN_00472bb0`+`FUN_00472be0`) | set object **position/geometry** immediately (`obj+0x420/0x424` + vec `obj+0x440..0x448`) |
 | `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
-| `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color** (pulsing GLOW): bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Distinct from static `0x202`/`0x203` (`obj+0x60/0x64`) |
+| `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color**: bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Negative alpha/RGB preserve corresponding bytes from static color `obj+0x60`; alpha >255 clamps. Distinct from one-shot `0x202`/static `0x203` |
 | `0x228` | `gfx_op_0x228_query_position` → `gfx_object_query_translation_target` (`0x47cdd0`) | **query** the decomposed target-translation matrix (x,y,z), `obj+0x1ac/+0x1b0/+0x1b4`, → operand slots 3/4/5; success is 0 and missing is 1 |
 | `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
 
@@ -898,6 +898,25 @@ That explained the observed immediate off-screen movement and why later legs nev
 port now queries `TranslationTarget` independently of `V24`, returns the native status convention, and
 leaves output operands untouched when the object is absent. A bytecode-level regression reproduces the
 three SC0000 targets `(40,-20)`, `(50,-80)`, and `(130,-100)` while retaining base `V24=(360,20)`.
+
+**AE001H white-pulse verification (2026-07-11):** the eight source frames contain only the expected
+purple artwork; the white wash is introduced by the port's `0x232` path. SC0000 `0x1a0e` explicitly arms
+`0x232(handle,1200,224,-1)`. Native `gfx_op_0x232_anim_color` treats negative RGB as a sentinel and fetches
+the object's current static packed color before constructing the target. The C# dispatch instead calls
+`PackColor(224,-1)`, whose RGB mask becomes `0xffffff`, and `SnapshotVisibleObjects` maps animated alpha
+to mode-0 tint strength. Existing retained-state evidence shows `tintStr` cycling `0 → 0.82 → 0` on
+AE001H, exactly matching the reported white pulse. Follow-up native dataflow closes the remaining question:
+fresh objects initialize static color `obj+0x60` to `0xffffffff`; the interpolator samples that temporary
+color toward target `obj+0x240`, then `gfx_object_composite` passes the sample and the unchanged blend
+selector `obj+0x30` to `gfx_object_blit_d3d9`. Mode 0 enables no alpha blending and uses RGB only as vertex
+modulation, while mode 1 enables SRCALPHA/INVSRCALPHA. AE001H therefore cycles
+`0xffffffff ↔ 0xe0ffffff`: identity RGB throughout, with alpha intentionally inert in mode 0, so native has
+no visible pulse. The faithful fix is now fully bounded: initialize/resolve static color correctly, sample
+packed ARGB, and consume it through the existing mode-specific blend path instead of converting animated
+alpha into tint strength. The port now initializes static color to native identity `0xffffffff`, resolves
+negative operands in `SetColorAnimResolved`, samples packed ARGB before blend selection, and feeds it through
+the existing mode-specific path. Exact AE001H, mode-0 RGB-modulation, and mode-1 alpha regressions cover the
+contract; the white pulse is removed without suppressing the scripted channel.
 
 **Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. The unclassified
 `0x242/0x23d/0x20a/0x20e` tail (2-arg flags / inline) remains GAP and outside this slice.
