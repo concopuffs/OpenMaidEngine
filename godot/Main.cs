@@ -27,6 +27,7 @@ public partial class Main : Godot.Control
     private Label _text = null!;
     private Label _speaker = null!;
     private Label _status = null!;
+    private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
@@ -36,6 +37,8 @@ public partial class Main : Godot.Control
     private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private GodotTraceSink _trace = null!;
+    private PageLocatorState _locator = null!;
+    private bool _locatorHudVisible;
     private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
     private string? _histFile;
     private Age.Engine.Model.OpcodeTable? _table;
@@ -97,6 +100,9 @@ public partial class Main : Godot.Control
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
         AddChild(_status);
+        _locatorHud = new Label { Visible = false, MouseFilter = MouseFilterEnum.Ignore };
+        _locatorHud.Position = new Vector2(8, 8);
+        AddChild(_locatorHud);
 
         // Best-effort CJK font so the visual isn't tofu (headless self-test doesn't depend on it).
         foreach (var fp in new[] { "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/YuGothM.ttc",
@@ -109,6 +115,7 @@ public partial class Main : Godot.Control
                 _text.AddThemeFontOverride("font", ff);
                 _speaker.AddThemeFontOverride("font", ff);
                 _status.AddThemeFontOverride("font", ff);
+                _locatorHud.AddThemeFontOverride("font", ff);
                 _text.AddThemeFontSizeOverride("font_size", 25);
                 _speaker.AddThemeFontSizeOverride("font_size", 25);
                 _text.AddThemeConstantOverride("outline_size", 1);
@@ -140,6 +147,7 @@ public partial class Main : Godot.Control
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
         long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
+        string? pageMapPath = null;                      // --page-map <jsonl>: override default build/page-map-SCxxxx.jsonl
         for (int i = 0; i < userArgs.Length; i++)
         {
             if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];
@@ -154,6 +162,8 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
             if (userArgs[i] == "--transition-click-ms" && i + 1 < userArgs.Length) long.TryParse(userArgs[i + 1], out transitionClickMs);
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
+            if (userArgs[i] == "--page-map" && i + 1 < userArgs.Length) pageMapPath = userArgs[i + 1];
+            if (userArgs[i] == "--locator-hud") _locatorHudVisible = true;
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');
@@ -178,9 +188,13 @@ public partial class Main : Godot.Control
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
+        if (!_selftest && pageMapPath == null)
+            pageMapPath = System.IO.Path.Combine(Paths.Build, $"page-map-{scene.ToUpperInvariant()}.jsonl");
+        _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
+        _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load();
-        _host = new GodotAdvHost(this, resources, scene, _clock, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
-        _trace = new GodotTraceSink(_timeline);
+        _host = new GodotAdvHost(this, resources, scene, _clock, _locator, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
+        _trace = new GodotTraceSink(_locator, _timeline);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
         _table = table;
@@ -298,6 +312,19 @@ public partial class Main : Godot.Control
     public override void _Input(InputEvent e)
     {
         if (_selftest) return;
+        if (e is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F2)
+        {
+            _locatorHudVisible = !_locatorHudVisible;
+            _locatorHud.Visible = _locatorHudVisible;
+            if (_locatorHudVisible) _locatorHud.Text = _locator.CurrentDisplay;
+            return;
+        }
+        if (e is InputEventKey copy && copy.Pressed && !copy.Echo && copy.Keycode == Key.F3)
+        {
+            DisplayServer.ClipboardSet(_locator.CurrentDisplay);
+            _locatorHud.Text = _locator.CurrentDisplay + " · copied";
+            return;
+        }
         if (e.IsActionPressed("ui_accept") ||
             (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left))
             _host.SignalInput();
@@ -305,7 +332,7 @@ public partial class Main : Godot.Control
 
     public override void _ExitTree()
     {
-        DumpHistogram(); _host?.Stop(); _timeline?.Dispose();
+        DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); _locator?.Dispose();
         foreach (var movie in _movies.Values) movie.Decoder.Dispose();
         _movies.Clear();
     }
@@ -702,7 +729,12 @@ public partial class Main : Godot.Control
     private sealed record MovieRuntime(string Name, int RawIndex, DirectShowMovieDecoder Decoder);
 
     public void AppendLine(string text) => _text.Text += text + "\n";
-    public void PageBreak() { _pageCount++; _status.Text = ""; }
+    public void PageBreak()
+    {
+        _pageCount++;
+        _status.Text = "";
+        if (_locatorHudVisible) _locatorHud.Text = _locator.CurrentDisplay;
+    }
     public void ClearPage() { _text.Text = ""; _status.Text = ""; }
     public void ShowEnd() => _status.Text = "— end —";
 

@@ -104,6 +104,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
 ```
 
+The disposable `build/page-map-<SCENE>.jsonl` files are produced by normal Godot runs and map runtime ADV
+page ordinals to their authoritative script offsets for `tools/locate_page.py`.
+
 ## Conventions
 
 - **Three-way separation.** `姫狩りダンジョンマイスター/` = untouched originals; `extracted/` =

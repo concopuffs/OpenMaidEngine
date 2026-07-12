@@ -66,6 +66,12 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `correlate_scope.py` | Align the VM's `set-texture(resId)` trace with the game's Frida load order → tag each load's DATA2 package, flag package transitions, dump the significant ops in each transition span (the **scope selector** hunt). | `correlate_scope.py <SCENE>` | `build/settex-<SCENE>.json` + `build/frida-load-order-result.json` + index → stdout |
 | `diff_optrace.py` | **Differential offset-path oracle** (`docs/engine-re.md`): diff the engine's executed offset path (`trace_engine_ops.py`) against the VM's (`Age.Cli trace --trace-json`) → first divergence = the mis-modeled branch/op/state, with opcode + ±3 ops of context. Identifies the scene's codebase by longest-common-prefix; filters the VM trace to argc≥1 (operand-capture parity). Pure core unit-tested (`test_diff_optrace.py`). | `py -3.11 -X utf8 tools/diff_optrace.py SC0000 [--full]` | `build/engine-optrace.jsonl` + `build/vm-optrace.json` + disasm → stdout |
 
+### Runtime page locator
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py SC0000 14 [--map <jsonl>] [--context N]` | `build/page-map-<SCENE>.jsonl` + script corpus → stdout |
+
 ## Engine (C#) — VM core, CLI, Godot frontend
 
 The `engine/` .NET solution (`AgeEngine.sln`) is the runtime VM; `godot/` is the ADV frontend. Not
@@ -151,6 +157,14 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
   `halted`), BGM events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
   `--boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
+
+**Godot page locator:** every normal run recreates `build/page-map-<SCENE>.jsonl`, adding one record per
+`wait-for-input` with the run-relative page, page-start location, canonical wait script/offset, last
+show-text instruction and string offsets, text, and nested call stack. Use `--page-map <jsonl>` to override
+the output. `--locator-hud` shows `SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
+toggles it and **F3** copies the current locator to the clipboard. The offset remains authoritative because
+branching/state can shift page ordinals between runs. Resolve a reported page with
+`py -3.11 -X utf8 tools/locate_page.py SC0000 14`.
 
 ## Asset resolution / graphics
 

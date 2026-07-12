@@ -22,6 +22,7 @@ public sealed class GodotAdvHost : IHost
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly Age.Engine.Hosting.FrameClock _clock;
     private readonly GodotTimelineLog? _timeline;
+    private readonly PageLocatorState _locator;
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
     private readonly object _textLock = new();
@@ -45,15 +46,16 @@ public sealed class GodotAdvHost : IHost
     public readonly List<(int Offset, string Text)> Captured = new();
 
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
-                        GodotTimelineLog? timeline = null)
+                        PageLocatorState locator, GodotTimelineLog? timeline = null)
     {
         _main = main; _res = res; _scene = scene; _clock = clock;
-        _timeline = timeline;
+        _locator = locator; _timeline = timeline;
     }
 
     public void ShowText(int offset, string text)
     {
         Captured.Add((offset, text));
+        _locator.Text(offset, text);
         lock (_textLock)
         {
             _advText = text;
@@ -147,6 +149,7 @@ public sealed class GodotAdvHost : IHost
     public void WaitForInput(int layoutSlot)
     {
         Pages++;
+        _locator.Wait(Pages);
         _main.CallDeferred("PageBreak");
         // Publish retained mutations accumulated before the wait once. A static input wait is not itself a
         // reason to rebuild the 800x600 background every frame; ambient channels are queried separately.

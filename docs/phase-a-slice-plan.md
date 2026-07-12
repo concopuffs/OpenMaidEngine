@@ -1433,3 +1433,15 @@ samples packed ARGB, and applies it through normal mode-specific blending rather
 convention. Focused tests cover exact AE001H invariance, mode-0 RGB modulation, and mode-1 alpha opacity.
 Validation: engine **152/152**, zero-warning Godot build, and threaded `SELFTEST OK`; manual confirmation is
 the remaining visual gate.
+
+### ADV page-to-script locator implemented (2026-07-11)
+
+Godot now turns each stable `wait-for-input` into a shared human/tool coordinate. A normal run recreates
+`build/page-map-<SCENE>.jsonl` and records the run-relative page number, page-start location, canonical wait
+script/offset, last show-text instruction and inline-string offsets, dialogue text, and nested call stack.
+The optional HUD uses the compact form `SC0000 P014 · wait SC0000@0x… · text SC0000@0x…`; F2 toggles it
+and F3 copies it. `tools/locate_page.py SC0000 14` resolves that record and prints authoritative disassembly
+around the wait. Page number is deliberately only the friendly coordinate because state and branches can
+shift ordinals; the script/offset remains authoritative. A live SC0000 run verified page 1 as
+`show-text@0x834`, string `0x14963`, and `wait-for-input@0x83c`. Validation: focused Python tests,
+engine **152/152**, zero-warning Godot build, threaded `SELFTEST OK`, and the live lookup all pass.

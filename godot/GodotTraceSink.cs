@@ -9,19 +9,40 @@ using Age.Engine.Diagnostics;
 public sealed class GodotTraceSink : ITraceSink
 {
     private readonly GodotTimelineLog? _timeline;
+    private readonly PageLocatorState _locator;
     private readonly Stack<string> _scripts = new();
-    public GodotTraceSink(GodotTimelineLog? timeline = null) => _timeline = timeline;
-    public bool TracingSteps => _timeline != null;
+    public GodotTraceSink(PageLocatorState locator, GodotTimelineLog? timeline = null)
+    { _locator = locator; _timeline = timeline; }
+    // The page locator needs the exact script/offset even when the heavier timeline log is disabled.
+    public bool TracingSteps => true;
     public readonly ConcurrentQueue<long> CallScripts = new();
     public void Emit(in TraceEvent e)
     {
         if (e.Kind == TraceEventKind.CallScript) CallScripts.Enqueue(e.Id);
-        if (_timeline == null) return;
-        if (e.Kind == TraceEventKind.FrameEnter && e.Name != null) _scripts.Push(e.Name);
-        else if (e.Kind == TraceEventKind.FrameExit && _scripts.Count > 0) _scripts.Pop();
+        if (e.Kind == TraceEventKind.FrameEnter && e.Name != null)
+        {
+            _scripts.Push(e.Name);
+            PublishCallStack();
+        }
+        else if (e.Kind == TraceEventKind.FrameExit && _scripts.Count > 0)
+        {
+            _scripts.Pop();
+            PublishCallStack();
+        }
         else if (e.Kind == TraceEventKind.Step && e.Ins != null)
-            _timeline.Step(_scripts.Count > 0 ? _scripts.Peek() : "<unknown>", e.Ins.Offset, e.Opcode, e.Depth);
+        {
+            string script = _scripts.Count > 0 ? _scripts.Peek() : "<unknown>";
+            _locator.Step(script, e.Ins.Offset);
+            _timeline?.Step(script, e.Ins.Offset, e.Opcode, e.Depth);
+        }
         else if (e.Kind == TraceEventKind.Halt)
-            _timeline.State("halted", new() { ["reason"] = e.Text, ["steps"] = e.Steps });
+            _timeline?.State("halted", new() { ["reason"] = e.Text, ["steps"] = e.Steps });
+    }
+
+    private void PublishCallStack()
+    {
+        var stack = _scripts.ToArray();
+        System.Array.Reverse(stack);
+        _locator.CallStack(stack);
     }
 }
