@@ -166,10 +166,10 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches operands 2..4, divides each by the 100.0 constant, and calls gfx_object_set_scale_current@0x47e6b0. The worker gets/creates the object, marks obj+0x68, and calls matrix4_make_scale on obj+0x6c. SC0000 sets AE001D handles to 210/210/100 and 240/240/100; without this setter their 800x800 alpha circles remain below the viewport. Both functions annotated and /v2 saved 2026-07-11.
 
-### 0x1ff `set-gfx-geom3-c` (set-gfx-geom3-c, argc 4)
-- **summary:** 0x1ff (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x1ff_set_geom3 @0x4227b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e800 (sibling of 0x217/0x219, a distinct per-object vector). See docs/engine-re.md gfx op-contract table.
+### 0x1ff `set-current-translation` (set-gfx-geom3-c, argc 4)
+- **summary:** 0x1ff (handle)(x)(y)(z) — immediately replace the retained object's current translation matrix at obj+0x16c. This is the direct-current companion to 0x220's delayed target at obj+0x1ac.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4227b0 (dispatch ctx[0x26c93+0x1ff]); FUN_0047e800(op1,(float)op2,(float)op3,(float)op4).
+- **evidence:** Ghidra /v2: handler gfx_op_0x1ff_set_geom3@0x4227b0 converts operands 2..4 to float and calls gfx_object_set_translation_current@0x47e800. The worker gets/creates the object, marks obj+0x168, and calls matrix4_make_translation on obj+0x16c. SC0000 uses (0,0,0) before animating BG001A. Annotated and saved 2026-07-11.
 
 ### 0x202 `gfx-blit-color` (gfx-blit-color, argc 5)
 - **summary:** 0x202 (handle)(delay_ms)(duration_ms)(alpha)(color) — arm the one-shot packed-ARGB channel. Worker gfx_op_0x202_worker_set_color_anim @0x47ea00 resets shared start obj+0x34, writes delay +0x38, duration +0x4c, and target +0x64. gfx_object_apply_transform_channels @0x472f00 linearly interpolates each byte from current +0x60 on frame clock ctx+0xb550, commits the target, clears timing, writes target -1, and clears the one-shot active bit when all sibling channels finish. Negative alpha/RGB independently preserve current bytes. Implemented in GfxState with synchronized current/target timeline evidence; draw-string 0x204/0x7a remains separate.
@@ -206,9 +206,9 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **evidence:** Ghidra handler 0x423110; writes obj+0x68/+0x6c from operands 2/3, obj from ctx+0x14d54[operand1*4].
 
 ### 0x215 `query-gfx-object?` (query-gfx-object?, argc 2)
-- **summary:** 0x215 (out_slot)(handle) — query the retained gfx-object map. Handler gfx_op_0x215_query_source_slot@0x42a0b0 calls gfx_object_query_source_slot@0x47f280 with owner ctx+0x46614. The worker searches owner+0x408, the same map populated by geometry/draw workers, and returns obj+4: the live source-surface slot written by draw-texture, or -1 if absent. A geometry-only object remains unbound and returns -1. SC0000 uses a successful result for existing-object geometry and query-guarded teardown: op 0x1f7 erases the object group and op 0x1fa releases this slot. VM fix 2026-07-09 restores AE001H magic-circle cleanup.
+- **summary:** 0x215 (out_slot)(handle) — query the retained gfx-object map. Handler gfx_op_0x215_query_source_slot@0x42a0b0 calls gfx_object_query_source_slot@0x47f280 with owner ctx+0x46614. The worker searches owner+0x408, the same map populated by geometry/draw workers, and returns obj+4: the live source-surface slot written by draw-texture, or -1 if absent. gfx_object_init_default zeroes obj+4, so a geometry/animation-created but draw-unbound object returns slot 0, not -1. SC0000 uses a successful result for query-guarded teardown: op 0x1f7 erases the object group and op 0x1fa releases this slot. Matching the zero default prevents stale transforms from surviving into the EV050EA CG at SC0000 page 58.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra asm: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280. That worker searches ECX+0x408 and returns resolved object+4. gfx_object_bind_draw@0x47e870, called with the same owner, get-or-creates in owner+0x408 and writes source slot to object+4. SC0000 post-effect cleanup 0x3321 queries G[0x62457], sign-tests, then executes 0x1f7(handle,10) + 0x1fa(returned_slot); AE001H res 0x37 was bound to that handle.
+- **evidence:** Ghidra: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280, which searches ECX+0x408 and returns object+4. gfx_object_bind_draw@0x47e870 writes the bound slot there; gfx_object_init_default@0x472810 explicitly writes zero to dword index 1. SC0000 page-58 trace: the old -1 default skipped cleanup of transform-created handle 0xcb2a, then EV050EA inherited translation (-100,0), rotation -90, and alpha 0; the native zero default makes the guard succeed and the reused object is identity/opaque.
 
 ### 0x216 `query-gfx-field?` (query-gfx-field?, argc 2)
 - **summary:** 0x216 (out)(idx) — gfx cmd-type 5. Handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table.
@@ -315,6 +315,11 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 ### 0x23f `u00422930` (u00422930, argc 2)
 - **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=kelebek, confidence=low
+
+### 0x242 `set-gfx-field2d0` (set-gfx-field2d0, argc 2)
+- **summary:** 0x242 (handle)(value) — command type 5. Get-or-create the retained gfx object and write value to obj+0x2d0. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x242_set_object_field2d0@0x4249d0 fetches operands 2 and 1 and calls gfx_object_set_field2d0@0x47f1a0; the worker calls gfx_object_get_or_create then stores operand 2 at returned object+0x2d0.
 
 ### 0x243 `reset-anim-clock` (reset-anim-clock, argc 0)
 - **summary:** Reset the native global animation-service elapsed and duration fields to zero when service flag bit 1 is clear.
@@ -1074,10 +1079,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x241 `u00422B80` (u00422B80, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x242 `u00422D60` (u00422D60, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

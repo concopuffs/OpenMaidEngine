@@ -13,6 +13,7 @@ public class GfxAnimationTests
     public void ScaleAndTranslationChannels_AreIndependent()
     {
         var g = new GfxState();
+        g.BindDraw(0x1000, 1, 0, 0, 1, 1, 0, 0);
         g.SetScaleChannel(0x1000, delayMs: 7, durationMs: 900, percent: (200, 50, 100));
         g.SetTranslationChannel(0x1000, delayMs: 9, durationMs: 1200, target: (80, -25, 6));
         var o = g.TryGet(0x1000)!;
@@ -44,6 +45,7 @@ public class GfxAnimationTests
     public void RotationCycle_DoesNotOverwriteMatrixChannels()
     {
         var g = new GfxState();
+        g.BindDraw(0x1000, 1, 0, 0, 1, 1, 0, 0);
         g.SetScaleChannel(0x1000, 0, 100, (150, 150, 100));
         g.SetTranslationChannel(0x1000, 0, 100, (10, 20, 0));
         g.SetRotationCycle(0x1000, periodMs: 30, axis: (0, 0, 5));
@@ -53,6 +55,30 @@ public class GfxAnimationTests
         Assert.Equal((0L, 0L, 5L), o.RotationAxis);
         Assert.Equal(30, o.RotationPeriodMs);
         Assert.True(o.RotationEnabled);
+    }
+
+    [Fact]
+    public void PreBindMatrixChannels_CreateNeutralPlaceholderWithoutLatentMotion()
+    {
+        // SC0000 calls op 0x220 on background handle 0xcb20 before BG001A is bound. Native creates the
+        // object (so op 0x215 returns slot 0) but ignores all three matrix setters while visible bit 0 is clear.
+        var g = new GfxState();
+        g.SetScaleChannel(0xcb20, 0, 500, (200, 200, 100));
+        g.SetRotationChannel(0xcb20, 0, 500, (0, 0, 1), 90);
+        g.SetTranslationChannel(0xcb20, 0, 500, (0, 600, 0));
+
+        var placeholder = g.TryGet(0xcb20)!;
+        Assert.Equal(0, g.QuerySlot(0xcb20));
+        Assert.False(placeholder.Visible);
+        Assert.False(placeholder.ScaleEnabled);
+        Assert.False(placeholder.RotationChannelEnabled);
+        Assert.False(placeholder.TranslationEnabled);
+        Assert.Equal((0.0, 0.0, 0.0), placeholder.TranslationTarget);
+
+        g.BindDraw(0xcb20, 4, 0, 0, 800, 500, 0, -500);
+        g.SetTranslationChannel(0xcb20, 0, 500, (0, 600, 0));
+        Assert.True(placeholder.TranslationEnabled);
+        Assert.Equal((0.0, 600.0, 0.0), placeholder.TranslationTarget);
     }
 
     [Fact]
@@ -159,6 +185,7 @@ public class GfxAnimationTests
         var scene = ScriptAssembler.Assemble(t, "ANIM", new List<(int, Operand[])>
         {
             MovGI(1, 0x1000), MovGI(2, 7), MovGI(3, 9), MovGI(4, 800), MovGI(5, 500), MovGI(6, 0),
+            (0x1fb, new[] { G(1), I(0), I(0), I(0), I(1), I(1), I(0), I(0) }),
             (0x220, new[] { G(1), G(2), G(3), G(4), G(5), G(6) }),
             MovGI(4, 200), MovGI(5, 50), MovGI(6, 100),
             (0x21e, new[] { G(1), G(2), G(3), G(4), G(5), G(6) }),
@@ -213,6 +240,23 @@ public class GfxAnimationTests
         Assert.Equal((0.0, 0.0, 0.0), o.TranslationCurrent);
         Assert.Equal(400, vm.Gfx.AnimClockDurationTicks);
         Assert.Equal(1, vm.Gfx.AnimClockGeneration);
+    }
+
+    [Fact]
+    public void CurrentTranslationSetter_ReplacesTheLiveMatrixImmediately()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "CURRENTTRANSLATION", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xcb20), MovGI(2, 12), MovGI(3, 34), MovGI(4, 5),
+            (0x1ff, new[] { G(1), G(2), G(3), G(4) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var o = vm.Gfx.TryGet(0xcb20)!;
+        Assert.Equal((12.0, 34.0, 5.0), o.TranslationCurrent);
+        Assert.Equal((12L, 34L, 5L), o.V16c);
     }
 
     [Fact]

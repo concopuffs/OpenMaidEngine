@@ -39,10 +39,10 @@ public class GfxCommandBufferTests
     private static (int, Operand[]) Register(int handle) => (0x1a2, new[] { G(handle) });
 
     [Fact]
-    public void QueryReturnsMinusOneUntilDrawBound_ThenSourceSlot()
+    public void QueryReturnsZeroForCreatedUnboundObject_ThenBoundSourceSlot()
     {
-        // Op 0x215 returns obj+4 from the retained gfx object. Geometry creates the object but leaves it unbound;
-        // op 0x1a2's descriptor registry is unrelated. Draw-texture binds the source slot returned by the query.
+        // Op 0x215 returns obj+4 from the retained gfx object. Native initialization leaves an unbound object's
+        // field at zero; op 0x1a2 is unrelated. Draw-texture replaces it with the bound source slot.
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
@@ -55,7 +55,7 @@ public class GfxCommandBufferTests
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.Equal(-1, vm.Globals[10]);
+        Assert.Equal(0, vm.Globals[10]);
         Assert.Equal(6, vm.Globals[11]);
     }
 

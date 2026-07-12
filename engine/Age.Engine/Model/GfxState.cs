@@ -81,7 +81,9 @@ public sealed class GfxState
         public long ColorPeriod, ColorStart = -1, ColorTarget;
         public bool ColorAnim;
         // draw-texture bind (gfx_object_bind_draw): the surface to draw + its source rect + the visible flag.
-        public int SourceSlot = -1;
+        // Native gfx_object_init_default zeroes obj+4. Querying an object created by a geometry/animation
+        // setter therefore returns slot 0 even before draw-texture binds it; only an absent object returns -1.
+        public int SourceSlot;
         public (int X, int Y, int W, int H) SrcRect;
         public bool Visible;
 
@@ -441,12 +443,26 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x1ff: immediately replace the object's current translation matrix at obj+0x16c.</summary>
+    public void SetCurrentTranslation(long handle, (long X, long Y, long Z) translation)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.V16c = translation;
+            o.TranslationCurrent = translation;
+        }
+    }
+
     /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
     public void SetScaleChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            // Native setters get-or-create first, then require object flag bit 0 (draw-bound/visible).
+            // Pre-bind calls leave a neutral, queryable placeholder and do not queue latent motion.
+            if (!o.Visible) return;
             o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
             o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
             o.ScaleEnabled = durationMs > 0; o.OneShotStartMs = -1;
@@ -459,6 +475,7 @@ public sealed class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            if (!o.Visible) return;
             o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
             o.TranslationTarget = target;
             o.TranslationEnabled = durationMs > 0; o.OneShotStartMs = -1;
@@ -488,6 +505,7 @@ public sealed class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            if (!o.Visible) return;
             o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
             o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
             o.RotationChannelEnabled = durationMs > 0; o.OneShotStartMs = -1;

@@ -411,8 +411,8 @@ public sealed class VirtualMachine
             }
             case "u00422930":   // 0x23f query-object: (out)(handle) <- 0 if the object exists, else -1
                 Write(a[0], Gfx.TryGet(Read(a[1])) != null ? 0 : -1); return pc + 1;
-            case "set-gfx-geom3-c":     // 0x1ff (handle)(a)(b)(c) -> V16c
-                Gfx.GetOrCreate(Read(a[0])).V16c = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "set-gfx-geom3-c":     // 0x1ff: set current translation matrix
+                Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "u00420620":             // upstream ABI label
             case "gfx-set-scale-current": // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
                 Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;

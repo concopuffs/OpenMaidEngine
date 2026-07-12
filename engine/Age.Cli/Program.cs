@@ -373,8 +373,7 @@ sealed class GfxTraceHost : IHost
     private readonly ResourceMap _res;
     private readonly string _scene;
     private readonly Dictionary<int, string?> _slotAsset = new(); // slot -> resolved AGF name (or null)
-    // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
-    // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
+    // slot -> dimensions of the currently allocated surface. Slot 0 starts as the engine's primary surface.
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     public List<string> Events { get; } = new();
     public GfxTraceHost(ResourceMap res, string scene) { _res = res; _scene = scene; }
@@ -407,6 +406,12 @@ sealed class GfxTraceHost : IHost
     {
         _slotDims[slot] = (width, height);
         Events.Add($"create-texture slot={slot} {width}x{height}");
+    }
+    public void ReleaseSurface(int slot)
+    {
+        _slotAsset.Remove(slot);
+        _slotDims.Remove(slot);
+        Events.Add($"release-surface slot={slot}");
     }
     public void ShowText(int offset, string text) { }
     public void WaitForInput() { }

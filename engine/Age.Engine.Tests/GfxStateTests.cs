@@ -6,18 +6,39 @@ public class GfxStateTests
     [Fact]
     public void QueryReturnsBoundSourceSlot_NotOperandRegistryValue()
     {
-        // Native op 0x215 queries the retained-object map and returns obj+4, the source slot set by draw-texture.
-        // Geometry alone creates an object but leaves obj+4 at -1. Op 0x1a2 is a separate descriptor registry.
+        // Native op 0x215 queries the retained-object map and returns obj+4. The default initializer zeroes
+        // that field, while draw-texture replaces it with the bound slot. Op 0x1a2 is a separate registry.
         var g = new GfxState();
         g.GetOrCreate(0xcb2a).V18 = (400, 600, 0);
-        Assert.Equal(-1, g.QuerySlot(0xcb2a));
+        Assert.Equal(0, g.QuerySlot(0xcb2a));
 
         g.Register(0xcb2a);
-        Assert.Equal(-1, g.QuerySlot(0xcb2a));
+        Assert.Equal(0, g.QuerySlot(0xcb2a));
 
         g.BindDraw(0xcb2a, 6, 0, 0, 200, 200, 10, 20);
         Assert.Equal(6, g.QuerySlot(0xcb2a));
         Assert.Equal(-1, g.QuerySlot(0x9999));
+    }
+
+    [Fact]
+    public void UnboundMatrixSetterCreatesQueryableObjectForCleanupBeforeReuse()
+    {
+        // Native matrix setters create a neutral placeholder even when they ignore the channel because it is
+        // not draw-bound. obj+4 still defaults to slot 0, so the later query >= 0 cleanup erases the object.
+        var g = new GfxState();
+        g.SetTranslationChannel(0xcb2a, 0, 150, (-100, 0, 0));
+        g.SetRotationChannel(0xcb2a, 0, 150, (0, 0, 1), -90);
+        Assert.Equal(0, g.QuerySlot(0xcb2a));
+
+        if (g.QuerySlot(0xcb2a) >= 0)
+            g.EraseRange(0xcb2a, 10);
+
+        g.SetSurface(5, 0x7a, 0);
+        g.BindDraw(0xcb2a, 5, 0, 0, 800, 600, 0, 0);
+        var reused = Assert.Single(g.SnapshotVisibleObjects(1000));
+        Assert.Equal((0.0, 0.0, 0.0),
+            (reused.Transform.TranslateX, reused.Transform.TranslateY, reused.Transform.RotationAngleDegrees));
+        Assert.Equal(255, reused.Alpha);
     }
 
     [Fact]

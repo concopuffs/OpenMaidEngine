@@ -4753,14 +4753,14 @@ argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "set-gfx-geom3-c"
+name = "set-current-translation"
 category = "draw"
-summary = "0x1ff (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x1ff_set_geom3 @0x4227b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e800 (sibling of 0x217/0x219, a distinct per-object vector). See docs/engine-re.md gfx op-contract table."
+summary = "0x1ff (handle)(x)(y)(z) — immediately replace the retained object's current translation matrix at obj+0x16c. This is the direct-current companion to 0x220's delayed target at obj+0x1ac."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4227b0 (dispatch ctx[0x26c93+0x1ff]); FUN_0047e800(op1,(float)op2,(float)op3,(float)op4)."
+evidence = "Ghidra /v2: handler gfx_op_0x1ff_set_geom3@0x4227b0 converts operands 2..4 to float and calls gfx_object_set_translation_current@0x47e800. The worker gets/creates the object, marks obj+0x168, and calls matrix4_make_translation on obj+0x16c. SC0000 uses (0,0,0) before animating BG001A. Annotated and saved 2026-07-11."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5251,12 +5251,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "query-gfx-object?"
 category = "draw"
-summary = "0x215 (out_slot)(handle) — query the retained gfx-object map. Handler gfx_op_0x215_query_source_slot@0x42a0b0 calls gfx_object_query_source_slot@0x47f280 with owner ctx+0x46614. The worker searches owner+0x408, the same map populated by geometry/draw workers, and returns obj+4: the live source-surface slot written by draw-texture, or -1 if absent. A geometry-only object remains unbound and returns -1. SC0000 uses a successful result for existing-object geometry and query-guarded teardown: op 0x1f7 erases the object group and op 0x1fa releases this slot. VM fix 2026-07-09 restores AE001H magic-circle cleanup."
+summary = "0x215 (out_slot)(handle) — query the retained gfx-object map. Handler gfx_op_0x215_query_source_slot@0x42a0b0 calls gfx_object_query_source_slot@0x47f280 with owner ctx+0x46614. The worker searches owner+0x408, the same map populated by geometry/draw workers, and returns obj+4: the live source-surface slot written by draw-texture, or -1 if absent. gfx_object_init_default zeroes obj+4, so a geometry/animation-created but draw-unbound object returns slot 0, not -1. SC0000 uses a successful result for query-guarded teardown: op 0x1f7 erases the object group and op 0x1fa releases this slot. Matching the zero default prevents stale transforms from surviving into the EV050EA CG at SC0000 page 58."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra asm: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280. That worker searches ECX+0x408 and returns resolved object+4. gfx_object_bind_draw@0x47e870, called with the same owner, get-or-creates in owner+0x408 and writes source slot to object+4. SC0000 post-effect cleanup 0x3321 queries G[0x62457], sign-tests, then executes 0x1f7(handle,10) + 0x1fa(returned_slot); AE001H res 0x37 was bound to that handle."
+evidence = "Ghidra: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280, which searches ECX+0x408 and returns object+4. gfx_object_bind_draw@0x47e870 writes the bound slot there; gfx_object_init_default@0x472810 explicitly writes zero to dword index 1. SC0000 page-58 trace: the old -1 default skipped cleanup of transform-created handle 0xcb2a, then EV050EA inherited translation (-100,0), rotation -90, and alpha 0; the native zero default makes the guard succeed and the reused object is identity/opaque."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6426,28 +6426,28 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x242
-label = "u00422D60"
+label = "set-gfx-field2d0"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422D60"
-category = "unknown"
-summary = ""
+name = "set-gfx-field2d0"
+category = "draw"
+summary = "0x242 (handle)(value) — command type 5. Get-or-create the retained gfx object and write value to obj+0x2d0. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x242_set_object_field2d0@0x4249d0 fetches operands 2 and 1 and calls gfx_object_set_field2d0@0x47f1a0; the worker calls gfx_object_get_or_create then stores operand 2 at returned object+0x2d0."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "handle_id"
 observed_types = ["l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "field2d0_value"
 observed_types = ["imm"]
 
 [[opcode]]

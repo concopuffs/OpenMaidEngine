@@ -1445,3 +1445,27 @@ around the wait. Page number is deliberately only the friendly coordinate becaus
 shift ordinals; the script/offset remains authoritative. A live SC0000 run verified page 1 as
 `show-text@0x834`, string `0x14963`, and `wait-for-input@0x83c`. Validation: focused Python tests,
 engine **152/152**, zero-warning Godot build, threaded `SELFTEST OK`, and the live lookup all pass.
+
+### SC0000 page-58 EV050EA background restored (2026-07-11)
+
+The first user-supplied locator, `SC0000 P058 / wait@0x6545 / text@0x653d`, led directly to the missing
+full-screen CG. Resource `0x7a` resolves to `EV050EA.AGF` and was loaded into slot 5, but retained handle
+`0xcb2a` inherited an older `(-100,0)` translation, `-90 degree` rotation, and alpha-zero endpoint. Native
+RE showed why cleanup diverged: `gfx_object_init_default` zeroes source slot `obj+4`, so op `0x215` returns
+0 for a created-but-unbound object; only a missing handle returns -1. The port's `SourceSlot=-1` default made
+the sign-tested cleanup skip that object. The model now uses native slot 0, allowing erase/recreate to restore
+identity state. A lifecycle regression reproduces the transform-create, query-cleanup, and CG-reuse sequence.
+Validation: engine **153/153**, zero-warning Godot build, and a synchronized real-scene compositor trace at
+page 58 showing `EV050EA.AGF` at `(0,0)`, scale 1, translation 0, rotation 0, and opacity 1.
+
+### SC0000 page-89 BG004D background restored (2026-07-11)
+
+Locator `SC0000 P089 / wait@0x89e9 / text@0x89e1` identified `BG004D.AGF` as loaded but offscreen at
+`(400,650)`. The prior BG001A animation intentionally leaves translation y=550; the erroneous extra
+`(400,600)` came from `GodotAdvHost` retaining slot 0's seeded 800x600 dimensions after op `0x1fa` released
+the surface. Native release frees and nulls the slot. Static releases now remove the host resource and size
+state (while the existing in-flight movie retention remains unchanged), and the CLI graphics trace mirrors
+that lifecycle. The loader consequently builds base `(0,-500)`, so the retained translation places BG004D
+at `(0,50)`. Op `0x1ff` was also completed as the native immediate current-translation setter at obj+0x16c.
+Validation: engine **155/155**, zero-warning Godot and CLI builds, and a full synchronized run reaching the
+exact page-89 wait with `BG004D.AGF` drawn at `(0,50)` alongside the character sprite.

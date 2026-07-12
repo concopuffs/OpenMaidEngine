@@ -403,8 +403,30 @@ correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj 
 Worker functions decoded + annotated in the Ghidra project (updated 2026-07-09): `gfx_object_erase`(`0x47d850`),
 `gfx_object_erase_range`(`0x47d8b0`), `gfx_object_query_source_slot`(`0x47f280`),
 `gfx_object_get_or_create`(`0x47ddb0`, inserts a zeroed default via
-`gfx_object_init_default`@`0x472810`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
+`gfx_object_init_default`@`0x472810`; critically, source slot `obj+4` defaults to **0**, while only an absent
+map entry queries as `-1`), the setters `gfx_set_vec18/24/16c`(`0x47e960/e910/e800`), the getters
 `gfx_get_vec18/24`(`0x47f360/f2e0`).
+
+**Page-58 lifecycle correction (2026-07-11).** Locator `SC0000 P058` resolves to `wait@0x6545`; the loader at
+`0x6470..0x6478` resolves resource `0x7a` to `EV050EA.AGF`. The port loaded and bound it correctly, but handle
+`0xcb2a` inherited an earlier translation target `(-100,0)`, rotation `-90 degrees`, and alpha endpoint zero.
+The preceding query-gated cleanup had skipped this created-but-unbound object because the port initialized
+`SourceSlot=-1`. Native `gfx_object_init_default` zeroes `obj+4`, so op `0x215` returns slot 0, the cleanup
+erases the object, and the later bind recreates identity state. Matching that default leaves EV050EA centered,
+unrotated, and opaque in the synchronized page-58 compositor trace. The adjacent op `0x242(handle,0)` is not
+a reset: `op_0x242_set_object_field2d0@0x4249d0` calls `gfx_object_set_field2d0@0x47f1a0`, which only writes
+the supplied value at `obj+0x2d0`.
+
+**Page-89 surface-lifetime correction (2026-07-11).** Locator `SC0000 P089` resolves to
+`wait@0x89e9`; the loader at `0x8976..0x898a` resolves resource `0x6a` to `BG004D.AGF`. The background
+was bound but composited at `(400,650)`. The remaining 550 pixels were intentional retained motion from
+BG001A; the incorrect `(400,600)` component came from the host keeping slot 0's boot-time 800x600 dimensions
+after op `0x1fa` released that surface. Native op `0x1fa` frees and nulls `ctx+0x52bd4[slot]`, so a subsequent
+op `0x208` size query of the released slot yields no surface dimensions. Clearing the host slot resource and
+dimensions on release makes the script's existing-object geometry path compute base `(0,-500)`; after the
+retained `(0,550)` translation, BG004D lands at `(0,50)`. A synchronized run at the exact wait confirms the
+background and character layers together. This path also established that op `0x1ff` directly replaces the
+current translation matrix at `obj+0x16c`; it is now modeled rather than stored in an inert side vector.
 
 #### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-10, partial implementation)
 
@@ -918,8 +940,8 @@ negative operands in `SetColorAnimResolved`, samples packed ARGB before blend se
 the existing mode-specific path. Exact AE001H, mode-0 RGB-modulation, and mode-1 alpha regressions cover the
 contract; the white pulse is removed without suppressing the scripted channel.
 
-**Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. The unclassified
-`0x242/0x23d/0x20a/0x20e` tail (2-arg flags / inline) remains GAP and outside this slice.
+**Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. `0x242` is now
+classified as the retained-object `+0x2d0` field setter described above; `0x23d/0x20a/0x20e` remain GAP.
 
 ### Movie-to-surface opcode `0x236` (2026-07-11)
 

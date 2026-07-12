@@ -16,8 +16,8 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, long> _movieBySurface = new();
     private readonly HashSet<long> _completedMovies = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
-    // slot -> dims. Slot 0 is the primary/screen surface (800x600), normally created at engine boot which
-    // the single-scene harness skips; seed it so the first CG's anchor math stays correct (not 0x0).
+    // slot -> dimensions of the currently allocated surface. Slot 0 begins as the engine's 800x600
+    // primary surface, but op 0x1fa releases it like any other slot; subsequent size queries must return 0x0.
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly Age.Engine.Hosting.FrameClock _clock;
@@ -359,7 +359,16 @@ public sealed class GodotAdvHost : IHost
         long resourceId;
         lock (_imageLock)
         {
-            if (!_movieBySurface.Remove(slot, out resourceId)) return;
+            if (!_movieBySurface.Remove(slot, out resourceId))
+            {
+                lock (_textLock)
+                {
+                    _surfaceText.Remove(slot);
+                    _surfaceResources.Remove(slot);
+                }
+                _slotDims.Remove(slot);
+                return;
+            }
             if (!_completedMovies.Contains(resourceId))
             {
                 _movieBySurface[slot] = resourceId;
@@ -368,6 +377,12 @@ public sealed class GodotAdvHost : IHost
             _movieFrames.Remove(resourceId);
             _completedMovies.Remove(resourceId);
         }
+        lock (_textLock)
+        {
+            _surfaceText.Remove(slot);
+            _surfaceResources.Remove(slot);
+        }
+        _slotDims.Remove(slot);
         _timeline?.Event("movie-stop", new() { ["resource"] = resourceId, ["surface"] = slot });
         _main.CallDeferred("StopMovie", resourceId);
     }
