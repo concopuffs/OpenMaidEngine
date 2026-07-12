@@ -5,6 +5,16 @@
 
 ## adv
 
+### 0x72 `wait-for-input` (wait-for-input, argc 1)
+- **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activates the wait indicator configured for the selected text layout by op 0x73.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached.
+
+### 0x73 `configure-adv-wait-indicator` (configure-adv-wait-indicator, argc 10)
+- **summary:** (layout_slot)(dst_x)(dst_y)(surface_slot)(src_x)(src_y)(cell_w)(cell_h)(terminal_frame)(frame_period_ms) - configure the animated marker shown while the selected ADV layout waits for input.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x73_configure_wait_indicator@0x41e900 passes operands 1..9 to adv_text_configure_wait_indicator@0x44ff60 and operand 10 to adv_indicator_set_frame_period@0x44d060. The worker writes surface/source rect, layout-relative destination, enabled=1, and terminal/column values to the selected layout at +0x3c..+0x60. SYSTEM4 executes `set-texture 0x337c 0xc 0xff00` (raw id 0x337c = SO000.AGF, a 390x27 strip of thirteen 30x27 bat frames), then `0x73 1 385 140 12 0 0 30 27 12 48`; layout 1 begins at y=430, placing the 30x27 marker at screen (385,570), matching the original. Op 0x72 activates this descriptor only after reveal completion.
+
 ### 0x7a `set-adv-text-cursor` (set-adv-text-cursor, argc 3)
 - **summary:** (layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout.
 - **grounding:** source=investigation, confidence=high
@@ -521,14 +531,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=med
 
 ### 0x70 `u0041A750` (u0041A750, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x72 `wait-for-input` (wait-for-input, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x73 `u0041AB30` (u0041AB30, argc 10)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

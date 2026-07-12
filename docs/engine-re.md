@@ -1050,6 +1050,29 @@ Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captur
 non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
 11 clicks completed active reveals and 14 later clicks released 14 distinct waits through `0xe0c`.
 
+#### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
+
+The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`
+loads universal raw asset `0x337c` (`SO000.AGF`) into surface slot 12. SO000 is a 390x27 strip of thirteen
+30x27 bat frames. It then executes op `0x73` with
+`(layout=1, x=385, y=140, surface=12, src=0,0, cell=30x27, terminalFrame=12, period=48ms)`.
+Layout 1 begins at screen y=430, so the marker lands at `(385,570)`, matching the original screenshot.
+
+Native `op_0x73_configure_wait_indicator@0x41e900` writes this descriptor through
+`adv_text_configure_wait_indicator@0x44ff60` to layout fields `+0x3c..+0x60`; operand 10 configures the
+animation period through `adv_indicator_set_frame_period@0x44d060`. `op_0x72_handler@0x41e690` later calls
+the layout renderer with frame `-1` and arms the input-wait flags, which makes the configured animation
+visible only after show-text has naturally or forcibly completed. The completion click remains consumed;
+the following click releases the wait.
+
+**Port implementation:** the single-scene harness now injects SYSTEM4's exact SO000 surface-12 and op-`0x73`
+configuration alongside its existing SO001 shortcut. The VM forwards all ten operands through the host ABI;
+`GodotAdvHost` retains configurations by layout and resolves slot 0 to the active Phase-A layout. A separate
+Godot atlas overlay advances the inclusive frames `0..12` on the 48 ms host clock only while `IsWaiting`,
+then hides immediately when input releases the wait. Keeping this 30x27 overlay outside the software
+backbuffer preserves the static-wait compositor optimization. Full SYSTEM4 replay remains Phase-B work;
+the shortcut carries the same state in the meantime.
+
 ### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9` (2026-07-11)
 
 The three SFX opcodes are a retained channel lifecycle, not immediate fire-and-forget calls. Handler

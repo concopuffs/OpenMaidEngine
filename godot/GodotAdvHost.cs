@@ -11,6 +11,7 @@ public sealed class GodotAdvHost : IHost
     private readonly string _scene;                       // e.g. "SC0000" — for section_base
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
+    private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> scene/raw resource id
     private readonly Dictionary<long, (RgbaImage Image, string Name, int RawIndex)> _movieFrames = new();
     private readonly Dictionary<int, long> _movieBySurface = new();
     private readonly HashSet<long> _completedMovies = new();
@@ -27,8 +28,12 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, SurfaceTextDraw> _surfaceText = new();
     private string _advText = "";
     private int _advTextX = 100, _advTextY = 47;
+    private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
     private long _advTextStartedMs;
     private bool _advTextForceComplete;
+    private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
+    private int _activeWaitLayout;
+    private long _waitIndicatorStartedMs;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
@@ -75,7 +80,12 @@ public sealed class GodotAdvHost : IHost
 
     public void SetAdvTextCursor(int layoutSlot, int x, int y)
     {
-        lock (_textLock) { _advTextX = x; _advTextY = y; }
+        lock (_textLock)
+        {
+            if (layoutSlot != 0) _currentAdvLayout = layoutSlot;
+            _advTextX = x;
+            _advTextY = y;
+        }
         _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
     }
 
@@ -99,15 +109,50 @@ public sealed class GodotAdvHost : IHost
     public bool TryGetSurfaceText(int surfaceSlot, out SurfaceTextDraw draw)
     { lock (_textLock) return _surfaceText.TryGetValue(surfaceSlot, out draw); }
 
+    public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
+    {
+        lock (_textLock) _waitIndicators[config.LayoutSlot] = config;
+        _timeline?.Event("wait-indicator-config", new()
+        {
+            ["layout"] = config.LayoutSlot, ["x"] = config.X, ["y"] = config.Y,
+            ["surface"] = config.SurfaceSlot, ["cell_w"] = config.CellWidth,
+            ["cell_h"] = config.CellHeight, ["terminal_frame"] = config.TerminalFrame,
+            ["period_ms"] = config.FramePeriodMs,
+        });
+    }
+
+    public AdvWaitIndicatorSnapshot? SnapshotAdvWaitIndicator()
+    {
+        if (!IsWaiting) return null;
+        AdvWaitIndicatorConfig config;
+        long resourceId;
+        lock (_textLock)
+        {
+            if (!_waitIndicators.TryGetValue(_activeWaitLayout, out config)) return null;
+            if (!_surfaceResources.TryGetValue(config.SurfaceSlot, out resourceId)) return null;
+        }
+        var asset = _res.ResolveTexture(_scene, resourceId);
+        var image = asset != null ? Decode(asset) : null;
+        if (asset == null || image == null || config.CellWidth <= 0 || config.CellHeight <= 0) return null;
+        int frames = System.Math.Max(1, config.TerminalFrame + 1);
+        long period = System.Math.Max(1, config.FramePeriodMs);
+        int frame = (int)((_clock.NowMs - _waitIndicatorStartedMs) / period % frames);
+        return new AdvWaitIndicatorSnapshot(image, asset.Name, asset.RawIndex, config, frame);
+    }
+
     public volatile int Pages;   // VM-thread page counter (incremented before IsWaiting so shot-gating can't race)
 
-    public void WaitForInput()
+    public void WaitForInput() => WaitForInput(0);
+
+    public void WaitForInput(int layoutSlot)
     {
         Pages++;
         _main.CallDeferred("PageBreak");
         // Publish retained mutations accumulated before the wait once. A static input wait is not itself a
         // reason to rebuild the 800x600 background every frame; ambient channels are queried separately.
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        lock (_textLock) _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+        _waitIndicatorStartedMs = _clock.NowMs;
         IsWaiting = true;
         _timeline?.State("input-wait", new() { ["page"] = Pages });
         _gate.Wait();
@@ -244,13 +289,18 @@ public sealed class GodotAdvHost : IHost
     public void CreateTexture(int slot, int width, int height)
     {
         lock (_textLock) _surfaceText.Remove(slot);
+        lock (_textLock) _surfaceResources.Remove(slot);
         _slotDims[slot] = (width, height);
         if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
     }
 
     public void SetTexture(long resourceId, int slot)
     {
-        lock (_textLock) _surfaceText.Remove(slot);
+        lock (_textLock)
+        {
+            _surfaceText.Remove(slot);
+            _surfaceResources[slot] = resourceId;
+        }
         var asset = _res.ResolveTexture(_scene, resourceId);
         var image = asset != null ? Decode(asset) : null;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
@@ -428,3 +478,5 @@ public sealed class GodotAdvHost : IHost
 }
 
 public readonly record struct SurfaceTextDraw(int X, int Y, string Text);
+public readonly record struct AdvWaitIndicatorSnapshot(
+    RgbaImage Image, string Name, int AssetId, AdvWaitIndicatorConfig Config, int Frame);

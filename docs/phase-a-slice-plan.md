@@ -1384,6 +1384,18 @@ visible. This AE001D path is a retained scaled/rotating texture; the later `0x23
 was separately resolved by preserving draw-texture's 200x200 cell and interpreting `(8,4)` as total
 frames/columns rather than a grid divisor.
 
+### SC0000 ADV wait indicator implemented (2026-07-11)
+
+The missing post-reveal bat is `SO000.AGF`, a 390x27 strip of thirteen 30x27 frames. SYSTEM4 loads raw
+asset `0x337c` into surface slot 12 and configures layout 1 through op `0x73` as a marker at layout-relative
+`(385,140)`, screen `(385,570)`, with terminal frame 12 and a 48 ms period. Native op `0x72` activates that
+layout descriptor after reveal completion. The Phase-A bootstrap now injects SO000 into surface 12 and
+forwards the exact op-`0x73` configuration through `IHost`; `WaitForInput` carries the selected layout and
+starts the marker clock. Godot presents it as a separate 30x27 atlas overlay, advancing inclusive frames
+0..12 every 48 ms only during the stable wait and hiding on release. This avoids recompositing the 800x600
+software backbuffer during otherwise static waits. Validation: engine **147/147**, zero-warning Godot build,
+threaded `SELFTEST OK`, and a real page-1 capture showing the transparent bat at `(385,570)`.
+
 ### A2b -- SC0000 post-movie AE001H spritesheet correction ✅ DONE (2026-07-11)
 
 The reported missing cave spirit was the `0x231` path, independent of the earlier AE001D retained glow.

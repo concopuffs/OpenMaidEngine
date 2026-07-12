@@ -1014,83 +1014,83 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "wait-for-input"
-category = "unknown"
-summary = ""
+category = "adv"
+summary = "(layout_slot) - arm the ADV input wait after text reveal completes; activates the wait indicator configured for the selected text layout by op 0x73."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot (0 = current)"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x73
-label = "u0041AB30"
+label = "configure-adv-wait-indicator"
 argc = 10
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AB30"
-category = "unknown"
-summary = ""
+name = "configure-adv-wait-indicator"
+category = "adv"
+summary = "(layout_slot)(dst_x)(dst_y)(surface_slot)(src_x)(src_y)(cell_w)(cell_h)(terminal_frame)(frame_period_ms) - configure the animated marker shown while the selected ADV layout waits for input."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x73_configure_wait_indicator@0x41e900 passes operands 1..9 to adv_text_configure_wait_indicator@0x44ff60 and operand 10 to adv_indicator_set_frame_period@0x44d060. The worker writes surface/source rect, layout-relative destination, enabled=1, and terminal/column values to the selected layout at +0x3c..+0x60. SYSTEM4 executes `set-texture 0x337c 0xc 0xff00` (raw id 0x337c = SO000.AGF, a 390x27 strip of thirteen 30x27 bat frames), then `0x73 1 385 140 12 0 0 30 27 12 48`; layout 1 begins at y=430, placing the 30x27 marker at screen (385,570), matching the original. Op 0x72 activates this descriptor only after reveal completion."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot (0 = current)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "destination x, layout-relative"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "destination y, layout-relative"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "source surface slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "source x"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "source y"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "cell width"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "cell height"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 9
-role = ""
+role = "terminal frame index / sheet columns"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 10
-role = ""
+role = "frame period (milliseconds)"
 observed_types = ["imm"]
 
 [[opcode]]

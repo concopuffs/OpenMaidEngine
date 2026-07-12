@@ -17,6 +17,10 @@ public partial class Main : Godot.Control
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
+    private TextureRect _waitIndicator = null!;
+    private ImageTexture? _waitIndicatorSheet;
+    private AtlasTexture? _waitIndicatorAtlas;
+    private int _waitIndicatorAssetId = -1;
     // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
     // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
     private readonly byte[] _screenPixels = new byte[ScreenWidth * ScreenHeight * 4];
@@ -71,6 +75,17 @@ public partial class Main : Godot.Control
         };
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_screenView);   // added first -> draws behind the text/status labels
+
+        // Native ADV wait marker: a tiny independently animated atlas region. Keeping it separate from the
+        // 800x600 software backbuffer avoids recompositing the entire retained scene throughout static waits.
+        _waitIndicator = new TextureRect
+        {
+            Visible = false,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Keep,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        AddChild(_waitIndicator);
 
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
         _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -181,6 +196,16 @@ public partial class Main : Godot.Control
             _host.SetTexture(systemChrome.RawIndex, 0x11);
             _vm.Gfx.SetSurface(0x11, systemChrome.RawIndex, 0);
         }
+        // SYSTEM4 also loads SO000 and configures op 0x73 before entering scene code. The Phase-A
+        // single-scene harness does not replay those graphics side effects, so inject their exact state
+        // alongside the existing SO001 bootstrap until Phase B runs the complete SYSTEM4 entrypoint.
+        if (!_selftest && resources.ResolveName("SO000.AGF") is { } waitIndicator)
+        {
+            _host.SetTexture(waitIndicator.RawIndex, 0x0c);
+            _vm.Gfx.SetSurface(0x0c, waitIndicator.RawIndex, 0xff00);
+            _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
+                1, 385, 140, 0x0c, 0, 0, 30, 27, 12, 48));
+        }
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
         if (boot && !_selftest)
@@ -230,6 +255,7 @@ public partial class Main : Godot.Control
         if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite(_vm.Gfx))
             Recomposite();   // native publishes retained mutations only at present/service boundaries
         if (!_selftest && _host != null) UpdateAdvTextPresentation();
+        if (!_selftest && _host != null) UpdateAdvWaitIndicatorPresentation();
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
         // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
         if (_seqDir != null && _seqIdx < _seqFrames && !_done)
@@ -395,6 +421,33 @@ public partial class Main : Godot.Control
         _text.Size = new Vector2(System.Math.Max(1, 720 - t.X), System.Math.Max(1, 147 - t.Y));
         int count = System.Math.Clamp(t.VisibleGlyphs, 0, t.Text.Length);
         _text.Text = count == 0 ? "" : t.Text[..count];
+    }
+
+    private void UpdateAdvWaitIndicatorPresentation()
+    {
+        var snapshot = _host.SnapshotAdvWaitIndicator();
+        if (snapshot == null)
+        {
+            _waitIndicator.Visible = false;
+            return;
+        }
+
+        var s = snapshot.Value;
+        if (_waitIndicatorAssetId != s.AssetId)
+        {
+            var image = Image.CreateFromData(s.Image.Width, s.Image.Height, false, Image.Format.Rgba8, s.Image.Pixels);
+            _waitIndicatorSheet = ImageTexture.CreateFromImage(image);
+            _waitIndicatorAtlas = new AtlasTexture { Atlas = _waitIndicatorSheet };
+            _waitIndicator.Texture = _waitIndicatorAtlas;
+            _waitIndicatorAssetId = s.AssetId;
+        }
+
+        var c = s.Config;
+        _waitIndicatorAtlas!.Region = new Rect2(
+            c.SourceX + s.Frame * c.CellWidth, c.SourceY, c.CellWidth, c.CellHeight);
+        _waitIndicator.Position = new Vector2(c.X, 430 + c.Y);
+        _waitIndicator.Size = new Vector2(c.CellWidth, c.CellHeight);
+        _waitIndicator.Visible = true;
     }
 
     private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)

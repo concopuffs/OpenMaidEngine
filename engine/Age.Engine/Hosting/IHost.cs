@@ -1,6 +1,12 @@
 using Age.Engine.Model;
 
 namespace Age.Engine.Hosting;
+
+public readonly record struct AdvWaitIndicatorConfig(
+    int LayoutSlot, int X, int Y, int SurfaceSlot,
+    int SourceX, int SourceY, int CellWidth, int CellHeight,
+    int TerminalFrame, long FramePeriodMs);
+
 public interface IHost
 {
     void ShowText(int offset, string text);
@@ -8,7 +14,9 @@ public interface IHost
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
     void SetAdvTextCursor(int layoutSlot, int x, int y) { }
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
+    void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
     void WaitForInput();
+    void WaitForInput(int layoutSlot) => WaitForInput();
     void Sleep(long duration);
     void FrameYield();
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive

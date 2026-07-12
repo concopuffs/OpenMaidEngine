@@ -283,13 +283,19 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "set-adv-text-cursor": // 0x7a (layout slot, x, y); slot 0 means current natively
                 _host.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
+            case "configure-adv-wait-indicator": // 0x73: per-layout animated input-wait marker
+                _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
+                    (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                    (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
+                    (int)Read(a[8]), Read(a[9])));
+                return pc + 1;
             case "draw-string": // 0x204 (surface slot, x, y, string)
                 _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]));
                 return pc + 1;
             case "wait-for-input":
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
-                _host.WaitForInput(); return pc + 1;
+                _host.WaitForInput((int)Read(a[0])); return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "get-message-skip": // 0x1c7: Ctrl/message fast-forward run-state bit

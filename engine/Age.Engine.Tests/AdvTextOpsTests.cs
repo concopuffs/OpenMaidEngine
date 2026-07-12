@@ -30,4 +30,27 @@ public class AdvTextOpsTests
         Assert.Equal((1, 75, 47), Assert.Single(host.TextCursors));
         Assert.Equal((13, 1, 1, "speaker"), Assert.Single(host.SurfaceStrings));
     }
+
+    [Fact]
+    public void WaitIndicatorConfigurationReachesHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "WAITMARK",
+            new List<(int, Operand[])>
+            {
+                (0x73, new[]
+                {
+                    new Operand(0, 1), new Operand(0, 385), new Operand(0, 140), new Operand(0, 12),
+                    new Operand(0, 0), new Operand(0, 0), new Operand(0, 30), new Operand(0, 27),
+                    new Operand(0, 12), new Operand(0, 48),
+                }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new Age.Engine.Hosting.AdvWaitIndicatorConfig(1, 385, 140, 12, 0, 0, 30, 27, 12, 48),
+                     Assert.Single(host.WaitIndicators));
+    }
 }
