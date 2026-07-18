@@ -30,6 +30,7 @@ public sealed class VirtualMachine
     private long _autoMessageTime0Ms = 500;
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
+    private volatile bool _messageSkipEnabled;
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
@@ -41,6 +42,7 @@ public sealed class VirtualMachine
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
+    public bool MessageSkipEnabled => _messageSkipEnabled;
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null)
@@ -426,8 +428,17 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
-            case "get-message-skip": // 0x1c7: Ctrl/message fast-forward run-state bit
-                Write(a[0], _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
+            case "u0041B290":
+            case "set-message-skip": // 0x88: persistent all-message fast-forward service state
+                _messageSkipEnabled = Read(a[0]) != 0;
+                _host.SetMessageSkipActive(_messageSkipEnabled);
+                return pc + 1;
+            case "u00414E50": // 0x19a: persistent state used by the SO001 active overlay
+                Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
+            case "get-message-skip": // 0x1c7: persistent Skip or host-supplied Ctrl fast-forward
+                // The native per-op tick continually re-arms the transient run-state bit while op 0x88's
+                // persistent flag is set. The host channel carries the physically held Ctrl/input source.
+                Write(a[0], _messageSkipEnabled || _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
             case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
             case "get-adv-service-state":   // compatibility with pre-recovery generated tables
                 Write(a[0], _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;
@@ -449,6 +460,9 @@ public sealed class VirtualMachine
             case "block-mark":
             case "reset-message-voice-state": // 0x1bc resets native per-message voice/queued-voice state
                 _autoVoicePending = false; return pc + 1;
+            case "u00415BF0":
+            case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
+                return pc + 1;
             case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;

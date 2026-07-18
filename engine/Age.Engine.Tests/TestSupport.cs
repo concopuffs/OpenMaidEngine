@@ -24,6 +24,7 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public readonly List<bool> MessageSkipChanges = new();
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -42,6 +43,11 @@ internal class RecordingHost : IHost
     public void Sleep(long duration) => SleptDurations.Add(duration);
     public void FrameYield() { }
     public bool IsMessageSkipActive => MessageSkip;
+    public void SetMessageSkipActive(bool active)
+    {
+        MessageSkip = active;
+        MessageSkipChanges.Add(active);
+    }
     public bool IsAdvReadSkipActive => AdvReadSkip;
     public void PresentFrame(GfxState gfx)
     {

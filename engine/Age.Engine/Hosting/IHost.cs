@@ -36,6 +36,7 @@ public interface IHost
     void FrameYield();
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
     // hosts default to normal playback; the Godot host supplies the live interactive values.
+    void SetMessageSkipActive(bool active) { }
     bool IsMessageSkipActive => false;
     bool IsAdvReadSkipActive => false;
     // Normal playback reaches op 0x21c and parks until a queued 0x223 transition completes. The

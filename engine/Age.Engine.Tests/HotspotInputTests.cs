@@ -53,6 +53,21 @@ public class HotspotInputTests
         }
     }
 
+    private sealed class Sc0000MessageSkipHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                                          Func<AdvAutoWaitState> autoWaitState)
+        {
+            Vm.UpdatePointer(728, 572);
+            while (serviceInputCallback()) { }
+            Assert.True(Vm.TryActivatePointer(728, 572));
+            while (serviceInputCallback()) { }
+            throw new StopAtFirstWaitException();
+        }
+    }
+
     private sealed class AutoStateHost : RecordingHost
     {
         public AdvAutoWaitState State;
@@ -207,6 +222,51 @@ public class HotspotInputTests
 
         Assert.True(voicedHost.State.VoicePending);
         Assert.False(resetHost.State.VoicePending);
+    }
+
+    [Fact]
+    public void MessageSkipOpcodes_RetainStateAcrossTransientResetUntilExplicitlyDisabled()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19a, new[] { G(0x140) }),
+            (0x1c7, new[] { G(0x141) }),
+            (0x101, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x142) }),
+            (0x88, new[] { I(0) }),
+            (0x19a, new[] { G(0x143) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x140));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x141));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x142));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x143));
+        Assert.False(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void Sc0000MessageSkipButton_EnablesPersistentServiceState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var host = new Sc0000MessageSkipHost();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000_000));
+        host.Vm = vm;
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.True(host.MessageSkip);
+        Assert.Contains(true, host.MessageSkipChanges);
     }
 
     private static Operand I(long value) => new(0, value);

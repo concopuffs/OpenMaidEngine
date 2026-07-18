@@ -1156,6 +1156,43 @@ injection. Timer and VM regressions cover both paths, exact deadlines, disable/r
 fallback, `0x1b8`/`0x1b9`, and the `0xc4`/`0x1bc` voice-state lifecycle. The `/v2` handlers and input poller
 are named/commented and saved.
 
+### ADV all-message Skip service (2026-07-18)
+
+The x=728 control enables a persistent interpreter service; it is not a one-page advance and its active
+overlay is not the transient run-state bit. `op_0x88_set_message_skip@0x41f130` writes the requested value to
+`ctx+0x13dc` (`message_skip_enabled`) and `ctx+0x550fc` (`message_skip_display_enabled`). While the former is
+nonzero, `adv_interpreter_tick@0x410fb0` injects input bit `0x40` on every interpreter tick. The input service
+turns that into `run_state_flags & 0x08000000`, completing text/input waits and selecting the already-reversed
+skip endpoints for retained transitions.
+
+The state queries are deliberately different:
+
+- op `0x19a` returns persistent `message_skip_display_enabled` for SO001's active x=728 overlay;
+- op `0x1c7` returns the transient skip run-state bit, which may be driven by persistent op-`0x88` state or
+  a physical fast-forward input such as Ctrl;
+- op `0x101` clears transient input/run-state fields after an ADV chrome action, but does not touch either
+  persistent op-`0x88` field. The following interpreter tick therefore re-arms Skip.
+
+All 301 ordinary ADV button callbacks call `0x88(1)`. `CALLBACK_LOAD.BIN` contains the corpus's only
+`0x88(0)` reset. The engine supports an optional click-cancel state machine, but
+`engine_settings_register_defaults@0x46be30` registers `set:CancelMesSkipOnClick=0`; a nonzero loaded engine
+configuration is required to enable its press/release cancellation path. The port preserves that default
+instead of unconditionally inventing click-to-cancel.
+
+Voice playback also has a native Skip queue. `op_0xc4_handler@0x420610` plays immediately while the skip bit
+is clear. While it is set, the handler replaces `ctx+0x6dbf4/+0x6dbf8` with the latest requested voice instead
+of starting it. When Skip/read-skip input ends, `adv_interpreter_tick` starts that latest voice and clears the
+queue; skipped voices do not accumulate.
+
+**Port implementation.** The VM owns persistent op-`0x88` state and keeps op `0x19a` separate from the
+combined op-`0x1c7` persistent/host-input query. `GodotAdvHost` completes text reveal and stable message waits
+while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
+Voice requests replace one host-side deferred payload during Skip and the latest payload starts when
+`0x88(0)` arrives. Enabling Skip through the real SC0000 hotspot callback wakes the parked wait without
+creating a synthetic pointer click. Focused tests cover `0x88` enable/disable, `0x19a`, `0x1c7`, transient
+`0x101`, retained host state, and the actual x=728 callback. The new EngineCtx fields are applied to `/v2`;
+the affected handlers, interpreter tick, and settings-default initializer are named/commented and saved.
+
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 
 The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:

@@ -1385,12 +1385,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-message-skip"
 category = "input"
-summary = "(enabled) - set the all-message skip state. Nonzero arms ADV fast-forward; zero clears the associated native run-state bit."
+summary = "(enabled) - set persistent all-message Skip state. Nonzero makes the interpreter inject ADV fast-forward input every tick; zero stops injection and clears the transient skip run-state bit."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ctx+0x13dc and ctx+0x550fc; nonzero also sets ctx+0x6da78=1, while zero clears run-state bit 0x08000000. adv_interpreter_tick injects input bit 0x40 while ctx+0x13dc is nonzero and cancels the state according to set:CancelMesSkipOnClick. SC0000's Message-skip button passes 1."
+evidence = "Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ctx+0x13dc and ctx+0x550fc; nonzero also sets ctx+0x6da78=1, while zero clears run-state bit 0x08000000. adv_interpreter_tick injects input bit 0x40 on every tick while ctx+0x13dc is nonzero. engine_settings_register_defaults@0x46be30 initializes set:CancelMesSkipOnClick to 0; only a nonzero override enables its press/release cancellation path. All 301 ADV button callbacks pass 1; CALLBACK_LOAD.BIN is the sole corpus 0x88(0) reset."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1945,12 +1945,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "play-voice"
 category = "audio"
-summary = "Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). Same rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d})."
+summary = "Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). While all-message Skip is active, retain/replace the queued voice id instead of starting it; playback resumes from the latest queued id after Skip clears. Same resolver rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d})."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug."
+evidence = "By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it starts the voice immediately; while set it stores the latest id/zero arg at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active."
 
 [[opcode.semantics.args]]
 i = 1
@@ -2297,12 +2297,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "reset-message-skip-input"
 category = "input"
-summary = "Reset transient message-skip/input service state after an ADV chrome action."
+summary = "Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag."
 noop_headless = false
 source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = "Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. The Auto, Message-skip, Read-skip, and Hide-window click callbacks invoke it after their 100 ms cursor re-arm sequence."
+evidence = "Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. It does not touch ctx+0x13dc or ctx+0x550fc, so adv_interpreter_tick re-injects Skip on the following tick while persistent state remains enabled. The Auto, Message-skip, Read-skip, and Hide-window callbacks invoke it after their 100 ms cursor re-arm sequence."
 
 [[opcode]]
 op = 0x107

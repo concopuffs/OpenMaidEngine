@@ -37,6 +37,8 @@ public sealed class GodotAdvHost : IHost
     private long _advTextStartedMs;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
+    private volatile bool _messageSkipActive;
+    private AudioPayload? _queuedSkippedVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
     private GfxState? _foregroundGfx;
@@ -64,8 +66,8 @@ public sealed class GodotAdvHost : IHost
         {
             _advText = text;
             _advTextStartedMs = _clock.NowMs;
-            _advTextForceComplete = false;
-            IsTextRevealing = text.Length > 0;
+            _advTextForceComplete = _messageSkipActive;
+            IsTextRevealing = text.Length > 0 && !_messageSkipActive;
         }
         _timeline?.State("text-reveal", new()
         {
@@ -171,9 +173,15 @@ public sealed class GodotAdvHost : IHost
         _timeline?.State("input-wait", new() { ["page"] = Pages });
         var autoTimer = new AdvAutoAdvanceTimer();
         bool autoAdvanced = false;
+        bool messageSkipped = false;
         while (!_stopping)
         {
             while (serviceInputCallback()) { }
+            if (_messageSkipActive)
+            {
+                messageSkipped = true;
+                break;
+            }
             if (autoTimer.Poll(autoWaitState(), _main.IsVoicePlaybackActive, _clock.NowMs))
             {
                 autoAdvanced = true;
@@ -184,7 +192,10 @@ public sealed class GodotAdvHost : IHost
             if (_gate.Wait(0)) break;
         }
         IsWaiting = false;
-        _timeline?.State("running", new() { ["input"] = autoAdvanced ? "auto" : "user" });
+        _timeline?.State("running", new()
+        {
+            ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
+        });
         lock (_textLock)
         {
             _advText = "";
@@ -216,6 +227,25 @@ public sealed class GodotAdvHost : IHost
             }
         }
         if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
+    }
+
+    public bool IsMessageSkipActive => _messageSkipActive;
+
+    public void SetMessageSkipActive(bool active)
+    {
+        _messageSkipActive = active;
+        _timeline?.State("message-skip", new() { ["enabled"] = active });
+        if (active)
+        {
+            lock (_textLock) _advTextForceComplete = true;
+            _frameSignal.Set();
+            _inputCallbackSignal.Set();
+            return;
+        }
+
+        var queued = _queuedSkippedVoice;
+        _queuedSkippedVoice = null;
+        if (queued != null) DispatchVoice(queued);
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
@@ -470,11 +500,21 @@ public sealed class GodotAdvHost : IHost
     {
         var asset = _res.Resolve(_scene, id);
         var audio = asset != null ? LoadAudio(asset) : null;
-        if (audio != null)
+        if (audio == null) return;
+        if (_messageSkipActive)
         {
-            int generation = _main.QueueVoicePlayback();
-            _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation);
+            bool firstQueued = _queuedSkippedVoice == null;
+            _queuedSkippedVoice = audio;
+            if (firstQueued) _main.CallDeferred("StopVoiceForMessageSkip");
+            return;
         }
+        DispatchVoice(audio);
+    }
+
+    private void DispatchVoice(AudioPayload audio)
+    {
+        int generation = _main.QueueVoicePlayback();
+        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation);
     }
 
     public void LoadSoundEffect(long resourceId, int channel)

@@ -697,6 +697,12 @@ public partial class Main : Godot.Control
         _voice.Play();
     }
 
+    public void StopVoiceForMessageSkip()
+    {
+        _voice.Stop();
+        CompleteVoiceGeneration(System.Threading.Volatile.Read(ref _voiceQueuedGeneration));
+    }
+
     private void UpdateVoicePlaybackState()
     {
         int started = System.Threading.Volatile.Read(ref _voiceStartedGeneration);

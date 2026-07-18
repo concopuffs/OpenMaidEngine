@@ -1532,3 +1532,22 @@ warnings, and threaded `SELFTEST OK`.
 
 **Next:** manually validate Auto advancing both an unvoiced page and a voiced page, then take the remaining
 History/all-message-skip/read-message-skip/Hide actions as separate bounded services.
+
+### ADV all-message Skip implemented (2026-07-18)
+
+The x=728 action now enables the native persistent Skip service through op `0x88`. The VM distinguishes
+persistent button/display state (op `0x19a`) from the live skip query (op `0x1c7`, persistent state OR the
+existing host fast-forward channel), and op `0x101` resets only transient input state. Godot completes text
+reveal and stable waits while Skip is active; the existing skip-aware transition branches publish their final
+endpoints. Voice calls follow the native latest-only queue: requests replace one deferred voice while Skip is
+active, and the most recent request starts when op `0x88(0)` clears the service.
+
+Native `set:CancelMesSkipOnClick` defaults to zero, so this slice deliberately does not turn arbitrary clicks
+into a port-only cancel gesture. A future settings-profile implementation can expose the native nonzero
+press/release policy without changing the Skip state seam. Regressions exercise the opcode lifecycle and the
+real SC0000 x=728 callback. Validation: engine 167/167, zero-warning Godot build, opcode and EngineCtx
+generators/tests/lints clean, and threaded `SELFTEST OK`.
+
+**Next:** manually validate that x=728 fast-forwards text and transitions and that a later `0x88(0)` boundary
+returns to normal pacing. Then implement Read-message Skip on the same service seam, adding the required
+per-script-offset read-history model rather than treating it as another global all-skip toggle.
