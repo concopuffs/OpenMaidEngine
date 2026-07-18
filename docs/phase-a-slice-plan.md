@@ -1469,3 +1469,66 @@ that lifecycle. The loader consequently builds base `(0,-500)`, so the retained 
 at `(0,50)`. Op `0x1ff` was also completed as the native immediate current-translation setter at obj+0x16c.
 Validation: engine **155/155**, zero-warning Godot and CLI builds, and a full synchronized run reaching the
 exact page-89 wait with `BG004D.AGF` drawn at `(0,50)` alongside the character sprite.
+
+### ADV control-strip button investigation complete (2026-07-18)
+
+Native RE and the shared SC0000 routine now establish the implementation contract for the five visible
+lower-right controls: op `0x90` registers enter/leave/activation callbacks, SO001 supplies the base icons,
+tooltips, generic alpha-0x80 hover overlay, and persistent state overlays, and the activation callbacks map
+left-to-right to History, Auto message, all-message Skip, read-message Skip, and Hide window. Manual
+correction confirms the controls are silent on hover, matching the absence of any audio call in the path.
+Relevant input/state opcodes and `G[0x6c9..0x6cd]` are named in their canonical registries; the `/v2`
+Ghidra image is annotated and saved. Full native evidence is in
+[`engine-re.md`](engine-re.md#adv-control-strip-buttons-and-native-hotspot-callbacks-2026-07-18).
+
+### ADV control-strip pointer callbacks + Auto bridge implemented (2026-07-18)
+
+The first bounded runtime slice is now live. `ExecFrame` owns the native-style hotspot registry populated by
+ops `0x90`, `0x94`, and `0x97`; Godot routes 800x600 virtual pointer motion into it and consumes an armed
+hotspot click before the ordinary ADV page-advance path. Enter, leave, and activation targets execute as
+temporary local callbacks on the VM thread while the enclosing `wait-for-input` remains parked. A dedicated
+host wake channel services those callbacks without releasing the page semaphore. Inclusive bounds, direct
+enter/leave dispatch, activation/re-arm, nested local calls, click consumption, and registry lifetime have
+focused regressions. Callback completion requests one retained-frame publication, so static waits show the
+new tooltip/glow immediately without continuously recompositing the 800x600 canvas.
+
+This does not introduce duplicate Godot widgets or hover assets: the callbacks already present in every ADV
+script redraw the retained SO001 tooltip/glow/state layers. Ops `0x1b6`/`0x1b7` now retain Auto-message state,
+so the x=706 action toggles and redraws its active overlay. Auto's timed page advance is not part of this
+slice; nor are keyboard/pad activation and the remaining four action services. Validation: engine 157/157,
+zero-warning Godot build, threaded `SELFTEST OK`, and SC0000 static coverage 100/129 handled (77.5%;
+88 implemented + 12 safe no-ops, 29 GAP ops / 70 instructions).
+
+**Next:** manually validate hover and repeated Auto clicks in a normal SC0000 run, then add Auto timing and
+the History/all-skip/read-skip/Hide service behavior one bounded action at a time. No hover-audio work is
+required.
+
+**Manual-validation correction (2026-07-18).** The first build displayed the SO001 strip but did not hover.
+Its cold profile state took `jcc@0x8d` with `G[0x6c1]==0`, skipping the five visible registrations at
+`0x94..0xd0`; later op `0x93@0x622` also canceled the one early registration pass before the first dialogue
+wait. Native SYSTEM4 supplies `G[0x6c1]=1`, and its ADV coroutine republishes the shared definitions at the
+stable wait. The single-scene bootstrap now supplies that exact inherited flag, retains canceled definitions
+as inactive coroutine templates, and re-arms them at `wait-for-input`. Called-script frame exit also restores
+the parent's armed registry. A real-SC0000 regression reaches the first wait, moves to History `(684,572)`,
+executes `label_1a0`, observes `G[0x6c9]=1`, and verifies callback-frame publication. Validation is now engine
+159/159, zero-warning Godot build, and threaded `SELFTEST OK`; manual recheck remains the visual gate.
+
+### ADV Auto timing implemented (2026-07-18)
+
+The follow-up manual check confirms hover and the script-owned toggles work; Auto previously changed only its
+SO001 active overlay because timed release had not yet been implemented. Native RE closes that gap without a
+scene-specific shortcut. Auto now uses the engine's two configuration channels: unvoiced pages wait
+`AutoMessageTime1` (CONFIG default 2000 ms), while voiced pages wait for real voice completion and then apply
+`AutoMessageTime0` (default 500 ms). Ops `0x1b8`/`0x1b9` read/write those delays, op `0xc4` marks a queued
+voice, and op `0x1bc` resets the per-message voice state. A configured zero retains the native 100-ms
+fallback.
+
+The implementation keeps VM-owned settings separate from host-owned clock/audio state. The Godot wait loop
+polls the existing monotonic frame clock and an interrupt-safe voice generation counter; it does not enqueue
+a fake click or sleep the VM thread for a hard-coded duration. Focused regressions cover unvoiced and voiced
+deadlines, live Auto disable/re-enable, zero fallback, the time-setting ABI, and voice-state reset. Validation:
+engine 165/165, opcode and EngineCtx generators/tests/lints clean, Godot build has no compiler/analyzer
+warnings, and threaded `SELFTEST OK`.
+
+**Next:** manually validate Auto advancing both an unvoiced page and a voiced page, then take the remaining
+History/all-message-skip/read-message-skip/Hide actions as separate bounded services.

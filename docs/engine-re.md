@@ -1054,6 +1054,108 @@ NOT the predicted coroutine yield (`0x140`/`~0x50f`); the oracle reports whateve
 surfaced an earlier state hole. **This is now the repeatable way to localize a mis-modeled op/state.**
 Phase-2 extension (deferred): effects-diff (global-bank / gfx-registry writes) for branchy scenes.
 
+### ADV control-strip buttons and native hotspot callbacks (2026-07-18)
+
+The five controls at the lower right of ordinary ADV scenes are script-driven retained UI, backed by
+`SO001.AGF` in system surface slot 17. They are not Godot-style widgets and opcode `0x90` is not an
+immediate hit-test branch. The shared ADV routine copied into all 301 ADV scripts registers five rectangles
+at `(684|706|728|750|772,572)`, nominally `20x20`, plus three keyboard/pad records. Native
+`op_0x90_handler@0x41fc80` stores `(x,y,x+w,y+h)` and three callback PCs through
+`input_hotspot_register_rect_callbacks@0x403d70`; `op 0x94` then arms the input service. The bounds are
+compared inclusively.
+
+`input_hotspot_update_cursor_hit@0x403e90` publishes the first matching record index.
+`input_hotspot_poll_hover_callback@0x4040b0` maps the stored PCs exactly: operand 5 on pointer entry and
+operand 6 on pointer exit. A direct move from one hotspot to another dispatches the old record's exit first
+and the new record's entry on the next poll. `input_hotspot_take_click_callback@0x404330` resets the
+registry and returns operand 7 on activation. The interpreter temporarily redirects the current script PC
+to these callbacks; registration itself returns normally. Companion op `0x97` finds an identical registered
+rectangle and binds its fifth operand as an input-bit index; SC0000 uses bits 0, 8, and 7 for its three
+`1x1` keyed records.
+
+The five entry callbacks set `G[0x6c9..0x6cd]` one at a time and call the common redraw routine at SC0000
+`label_11ffa`; exit clears the corresponding flag and redraws. The redraw takes three pieces from SO001:
+
+- the always-visible base strip from source `(0,254,114,25)` to screen `(681,570)`;
+- one 132x27 textual tooltip from source y=227; and
+- the same generic 20x20 hover overlay from source `(114,254)` over the selected icon, rendered through
+  mode-1 `0x203` at alpha `0x80`.
+
+This gives the exact left-to-right behavior:
+
+| x | Hover flag | SO001 tooltip source x | Label/action on activation |
+|---:|---|---:|---|
+| 684 | `G[0x6c9]` | 396 | **History** — cancel hotspot wait, call `HISTORY.BIN`, then rebuild chrome |
+| 706 | `G[0x6ca]` | 264 | **Auto message** — `0x1b6` read, toggle, `0x1b7` write |
+| 728 | `G[0x6cb]` | 0 | **Message skip** — `0x88(1)` enables all-message skip |
+| 750 | `G[0x6cc]` | 132 | **Read-message skip** — `0x1cb` read, toggle, `0x1ca` write `message:ReadTextSkip` |
+| 772 | `G[0x6cd]` | 528 | **Hide window** — `0x199` yields into the ADV/HIDEWIN coroutine flow |
+
+The redraw also overlays persistent active-state cells for Auto, Message skip, and Read-message skip from
+SO001 source x `154/174/194` at y=254. After the four state/coroutine actions, the script waits 100 ms,
+reads the virtual cursor with `0x109`, alternates its y by one pixel, writes it with `0x10a`, and resets
+transient skip/input state through `0x101`. That deliberate cursor jiggle re-arms entry/exit processing.
+
+**No hover sound.** Manual correction on 2026-07-18 confirms these five ADV controls are silent on hover.
+This matches the static evidence: none of the entry/exit callbacks executes `0xb4/0xb5` or another script
+audio opcode, and the decoded native registration/hover-dispatch chain contains no audio call. The port
+should not invent a sound asset or host audio event for this interaction.
+
+The `/v2` Ghidra image names/comments the opcode handlers, registry/hit-test/dispatch helpers, message-skip,
+auto-message, read-skip, cursor, and coroutine operations described above; saved 2026-07-18.
+
+**Port implementation (2026-07-18).** The C# VM now models the per-frame registry and dispatches its three
+local callbacks on the VM thread through a callback-only host wake channel, leaving the surrounding ADV input
+wait parked. Godot feeds scaled native-screen pointer coordinates and consumes activation before ordinary
+page advance. The blocking-host model retains the registered definitions across a normal action callback to
+represent the native scheduler's subsequent shared-registration pass; explicit op `0x93` still clears them,
+and callbacks such as History rebuild through their script path. The existing bytecode therefore owns the
+SO001 hover/active redraw rather than a parallel widget layer; callback completion publishes one retained
+frame even though the enclosing wait remains static. `0x1b6`/`0x1b7` are implemented as VM service
+state for the first Auto action bridge; timed automatic page advance remains separate follow-up work.
+
+**Port correction from manual validation (2026-07-18).** Merely implementing op `0x90` was insufficient in
+the cold single-scene harness. The visible SO001 strip is drawn independently, while `jcc@0x8d` skips its five
+rectangles when inherited `G[0x6c1]` is zero; the existing trace did exactly that. Even with the native value
+one, `cancel-hotspot-wait@0x622` clears the early pass before page-one `wait-for-input@0x83c`, and the native
+ADV coroutine later republishes it. Godot now seeds `adv_chrome_enabled=1` as part of the same bounded
+SYSTEM4 chrome bootstrap as SO000/SO001. The blocking VM retains canceled definitions only as inactive
+coroutine templates, replaces them if script registration runs first, and otherwise re-arms them at a stable
+message wait. A full SC0000 regression proves the real History enter callback and retained-frame publication,
+not just a synthetic registry path.
+
+### ADV Auto-message timing and voice completion (2026-07-18)
+
+Auto advance is a native input-service policy, not a script sleep or a fixed synthetic click. The native
+state is split between `ctx+0x55104` (`auto_message_enabled`) and `ctx+0x6dbe4`
+(`adv_auto_voice_pending`). `op_0xc4_handler@0x420610` sets the latter when it queues voice playback, while
+`op_0x1bc_handler@0x416c20` clears it at the next message boundary.
+
+`op_0x72_handler@0x41e690` arms `message:AutoMessageTime1` when Auto is enabled and the current message has
+no queued voice. For a voiced message, `adv_input_service_poll@0x411230` instead waits until the native voice
+service reports playback complete, clears `adv_auto_voice_pending`, and then arms
+`message:AutoMessageTime0`. Expiry follows the same wait-release path as ordinary ADV input. Both branches
+substitute 100 ms when their configuration getter returns zero.
+
+The two settings are script-visible rather than constants embedded in the wait handler:
+
+- op `0x1b8` reads selector 0 = post-voice `AutoMessageTime0`, selector 1 = unvoiced
+  `AutoMessageTime1`;
+- op `0x1b9` writes the same selectors;
+- `CONFIG.BIN` initializes them to 500 ms and 2000 ms respectively, and its UI adjusts either setting in
+  500-ms steps over 500..9500 ms.
+
+**Port implementation.** The VM retains the enable bit, both configured delays, and per-message voice flag,
+then supplies their live state to the blocking host wait. `GodotAdvHost` polls a small deterministic timer
+from the existing monotonic frame clock. Unvoiced pages wait Time1; voiced pages remain parked through actual
+`AudioStreamPlayer` playback and then wait Time0. A queued/started/completed generation counter closes the
+deferred-call race between the VM thread queuing a voice and Godot beginning playback. Turning Auto off
+cancels an armed deadline, and turning it back on starts a fresh one. This keeps timing in the host service
+boundary and configuration in the VM, without scene offsets, wall-clock sleeps, or Auto-specific input
+injection. Timer and VM regressions cover both paths, exact deadlines, disable/re-enable, the native zero
+fallback, `0x1b8`/`0x1b9`, and the `0xc4`/`0x1bc` voice-state lifecycle. The `/v2` handlers and input poller
+are named/commented and saved.
+
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 
 The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:

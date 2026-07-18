@@ -108,6 +108,11 @@ name = "cmd_type_table"
 type = "int"
 note = "per-object cmd-type column base (write *(0x53d88 + curCtx*0x78))"
 [[field]]
+offset = 0x55104
+name = "auto_message_enabled"
+type = "int"
+note = "ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes"
+[[field]]
 offset = 0x55120
 name = "anti_tamper_a"
 type = "int"
@@ -162,6 +167,11 @@ offset = 0x6dbd4
 name = "adv_read_skip_state"
 type = "int"
 note = "current ADV read/click-skip service state; queried by op 0x1cc, maintained from ReadTextSkip + per-PC read history"
+[[field]]
+offset = 0x6dbe4
+name = "adv_auto_voice_pending"
+type = "int"
+note = "set by play-voice ops when voice service exists; Auto waits for voice completion then arms AutoMessageTime0; op 0x1bc resets"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"

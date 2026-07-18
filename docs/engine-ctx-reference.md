@@ -26,6 +26,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x53d60` | `ctx_record_base` | `void*` | 0x78-byte context-record array base (coroutine/script contexts) |
 | `0x53d64` | `gfx_obj_record_array` | `void*` | gfx object-record array (field[0]=0xffffffff free; cmd-type at rec+0x24) |
 | `0x53d88` | `cmd_type_table` | `int` | per-object cmd-type column base (write *(0x53d88 + curCtx*0x78)) |
+| `0x55104` | `auto_message_enabled` | `int` | ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes |
 | `0x55120` | `anti_tamper_a` | `int` | anti-tamper checksum operand |
 | `0x55124` | `anti_tamper_b` | `int` | anti-tamper checksum operand |
 | `0x5512c` | `anti_tamper_fp` | `int` | anti-tamper (import fn ptr / result) |
@@ -37,6 +38,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x6dbc8` | `coroutine_runstate` | `int` | op 0x7c resume gate (run-state bit 0x2000000) |
 | `0x6dbcc` | `coroutine_resume_off` | `int` | op 0x7c resume PC offset |
 | `0x6dbd4` | `adv_read_skip_state` | `int` | current ADV read/click-skip service state; queried by op 0x1cc, maintained from ReadTextSkip + per-PC read history |
+| `0x6dbe4` | `adv_auto_voice_pending` | `int` | set by play-voice ops when voice service exists; Auto waits for voice completion then arms AutoMessageTime0; op 0x1bc resets |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
 | `0xa0cc0` | `screen_w` | `int` | screen width (640) |
 | `0xa0cc4` | `screen_h` | `int` | screen height (480) |

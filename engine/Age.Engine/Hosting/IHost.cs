@@ -7,6 +7,9 @@ public readonly record struct AdvWaitIndicatorConfig(
     int SourceX, int SourceY, int CellWidth, int CellHeight,
     int TerminalFrame, long FramePeriodMs);
 
+public readonly record struct AdvAutoWaitState(
+    bool Enabled, bool VoicePending, long PostVoiceDelayMs, long UnvoicedDelayMs);
+
 public interface IHost
 {
     void ShowText(int offset, string text);
@@ -17,6 +20,18 @@ public interface IHost
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
     void WaitForInput();
     void WaitForInput(int layoutSlot) => WaitForInput();
+    // Interactive hosts service script callbacks on the VM thread while the enclosing ADV page remains
+    // parked. The callback returns true while another queued input callback is ready to run.
+    void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+    {
+        while (serviceInputCallback()) { }
+        WaitForInput(layoutSlot);
+    }
+    void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                      Func<AdvAutoWaitState> autoWaitState)
+        => WaitForInput(layoutSlot, serviceInputCallback);
+    void WakeInputCallbackService() { }
+    void InputCallbackCompleted(GfxState gfx) { }
     void Sleep(long duration);
     void FrameYield();
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive

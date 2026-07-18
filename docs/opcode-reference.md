@@ -6,9 +6,9 @@
 ## adv
 
 ### 0x72 `wait-for-input` (wait-for-input, argc 1)
-- **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activates the wait indicator configured for the selected text layout by op 0x73.
+- **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached.
+- **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached. The handler also checks ctx+0x55104 (Auto enabled): when ctx+0x6dbe4 has no pending voice it arms the timer with message:AutoMessageTime1, substituting 100 ms for configuration value zero. adv_input_service_poll@0x411230 waits for an active voice to finish and then arms AutoMessageTime0, likewise with a 100-ms zero fallback.
 
 ### 0x73 `configure-adv-wait-indicator` (configure-adv-wait-indicator, argc 10)
 - **summary:** (layout_slot)(dst_x)(dst_y)(surface_slot)(src_x)(src_y)(cell_w)(cell_h)(terminal_frame)(frame_period_ms) - configure the animated marker shown while the selected ADV layout waits for input.
@@ -113,6 +113,11 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Writes gfx cmd-type 9; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
+
+### 0x199 `yield-adv-coroutine` (u00414D50, argc 0)
+- **summary:** Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
 
 ### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
 - **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
@@ -328,31 +333,97 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 
 ## input
 
-### 0x90 `hotspot-branch` (u0041BEB0, argc 7)
-- **summary:** cursor/input hotspot hit-test: rect (x,y,w,h) -> 3-way branch on interaction, else fall through to pc+1
+### 0x88 `set-message-skip` (u0041B290, argc 1)
+- **summary:** (enabled) - set the all-message skip state. Nonzero arms ADV fast-forward; zero clears the associated native run-state bit.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ctx+0x13dc and ctx+0x550fc; nonzero also sets ctx+0x6da78=1, while zero clears run-state bit 0x08000000. adv_interpreter_tick injects input bit 0x40 while ctx+0x13dc is nonzero and cancels the state according to set:CancelMesSkipOnClick. SC0000's Message-skip button passes 1.
+
+### 0x90 `register-hotspot-callbacks` (u0041BEB0, argc 7)
+- **summary:** (x)(y)(w)(h)(on_enter_pc)(on_leave_pc)(on_activate_pc) - append an inclusive cursor rectangle and three callback PCs to the current script frame's native input registry. This opcode only registers; the ADV input service dispatches callbacks later.
 - **grounding:** source=investigation, confidence=high, noop_headless=True
-- **depends on:** 0x1f4, 0x1f5
 - **depended on by:** 0x97
-- **evidence:** all 301 ADV scripts contain the identical 8 sites; enc.len 15 lands pc+1 on the fall-through stmt (design-confirmed); fall-through = correct headless no-input path, proven by 279 CLEAN dialogue scenes
+- **evidence:** Ghidra /v2: op_0x90_handler@0x41fc80 fetches x/y/w/h, forms x+w/y+h, fetches operands 5/6/7, and calls input_hotspot_register_rect_callbacks@0x403d70 on the current frame registry. The worker appends rect + callbacks to arrays and returns without changing PC. input_hotspot_poll_hover_callback@0x4040b0 returns operand 5 on entry and operand 6 on exit; input_hotspot_take_click_callback@0x404330 resets the registry and returns operand 7 on activation. All 301 ADV scripts contain the identical five control-strip records plus three keyed records.
 
 op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "ukn" noting args
-5-7 are code locations. Corpus analysis (all 301 ADV scripts) resolves it:
+5-7 are code locations. Native RE plus corpus analysis resolves it:
+- The opcode APPENDS a record; it is not an immediate branch. Rect bounds are stored as
+  `(x,y,x+w,y+h)` and the cursor hit-test compares them inclusively.
+- The later input service maps targets exactly: target A = pointer enter, target B = pointer leave,
+  target C = activation/click. Moving directly between records emits leave first, then enter on the
+  next service poll. Activation consumes/resets the registry before dispatching target C.
 - Two forms, both ONLY in one shared ADV-chrome subroutine copied into every ADV script:
   * Mode A (1505 = 5x301): immediate x,y,w,h with w=h=20; the five on-screen buttons at
-    (684|706|728|750|772, 572), each setting one of G[0x6c9..0x6cd] to 1 / 0 / 0+run-action
-    (reads as hover-enter / hover-leave / click). All 3 targets real.
-  * Mode B (903 = 3x301): local-int operands, w=h=1, only tgt_c real -- a keyed 2-way input test.
+    (684|706|728|750|772, 572): History, Auto message, Message skip, Read-message skip, and
+    Hide window. Their enter/leave callbacks set G[0x6c9..0x6cd] to 1/0 and redraw SO001's
+    tooltip + generic 20x20 translucent hover overlay; target C runs the per-button action.
+  * Mode B (903 = 3x301): local-int operands, w=h=1, only tgt_c real. Companion op 0x97 binds
+    input-bit ids 0, 8, and 7 to these records for keyboard/pad activation.
 - Every one of the 301 scripts has EXACTLY 8 sites (5 A + 3 B); zero scene-specific use.
-- Falls through (pc+1) when nothing matches -- design-confirmed (0xd0 + 15 dwords = 0xdf = label_df).
-- Headless (no cursor/input) => fall through => vm0 stub already correct; the 12 EMPTY sweep scenes
+- Registration returns normally to pc+1; later callbacks temporarily redirect execution.
+- Headless (no cursor/input) can ignore registration; the 12 EMPTY sweep scenes
   are gated by state + this input-wait chrome, NOT by unmodelled 0x90. Model live in A2.
 
 
-### 0x97 `hotspot-reg?` (u0041C150, argc 5)
-- **summary:** companion register-hotspot / set-widget-action (argc5: v1 v2 1 1 <action-id>; NO code targets)
-- **grounding:** source=inference, confidence=med, noop_headless=True
+### 0x93 `cancel-hotspot-wait` (u00415040, argc 0)
+- **summary:** Reset the current frame's hotspot registry/input wait and clear native run-state bit 0x00800000. Used before opening History, Menu, or HIDEWIN flows.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra /v2: op_0x93_cancel_hotspot_wait@0x416670 clears run-state bit 0x00800000, calls input_hotspot_reset@0x404130, and clears the active flag at ctx+0xc6e4 (or sets the pending flag at +0xc6e0 when already inactive).
+
+### 0x94 `arm-hotspot-wait` (u00415090, argc 0)
+- **summary:** Arm native hotspot input processing after the script has registered its rectangles.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra /v2: op_0x94_arm_hotspot_wait@0x4166d0 sets ctx+0xc6e4=1 and calls input_hotspot_arm_cursor_tracking@0x404230 with 10000. SC0000 executes it immediately after the five control-strip and three keyed registrations.
+
+### 0x97 `bind-hotspot-key` (u0041C150, argc 5)
+- **summary:** (x)(y)(w)(h)(input_bit) - find the already-registered rectangle with identical bounds and bind an input/key bit number to it.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
 - **depends on:** 0x90
-- **evidence:** interleaves with 0x90 in the shared ADV-chrome subroutine; trailing imm = action id 0x0/0x7/0x8; same widget cluster as 0x90/0x91/0x92/0x95; confirm via frida
+- **evidence:** Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's key-bit array. SC0000 binds bits 0, 8, and 7 to its three 1x1 keyed records.
+
+### 0x101 `reset-message-skip-input` (u00415BF0, argc 0)
+- **summary:** Reset transient message-skip/input service state after an ADV chrome action.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. The Auto, Message-skip, Read-skip, and Hide-window click callbacks invoke it after their 100 ms cursor re-arm sequence.
+
+### 0x109 `get-cursor-virtual` (u00415EC0, argc 2)
+- **summary:** (out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra /v2: op_0x109_get_cursor_virtual@0x428bb0 calls the cursor-position helper, converts client/display coordinates through the active VirtualFullScreen transform, and writes x/y to operands 1/2. The ADV chrome callbacks preserve x and then move y by alternating -1/+1 before op 0x10a.
+
+### 0x10a `set-cursor-virtual` (u0041E540, argc 2)
+- **summary:** (x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly.
+
+### 0x19a `get-message-skip` (u00414E50, argc 1)
+- **summary:** (out) - return the current all-message skip state set by op 0x88.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19a_get_message_skip@0x4271b0 writes ctx+0x550fc to operand 1. The shared ADV redraw routine uses it to select SO001's active Message-skip icon at x=728.
+
+### 0x1b6 `get-auto-message` (u00414F60, argc 1)
+- **summary:** (out) - return whether automatic message advance is enabled.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1b6_get_auto_message@0x4271e0 writes `(ctx+0x55104 != 0)` to operand 1. FUN_00411230 consumes the same field to arm AutoMessageTime0/1 timers; the shared ADV redraw routine uses it for the active Auto icon.
+
+### 0x1b7 `set-auto-message` (u0041B640, argc 1)
+- **summary:** (enabled) - enable or disable automatic message advance.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1b7_set_auto_message@0x41f560 stores `(operand1 != 0)` at ctx+0x55104. SC0000's x=706 Auto button reads the current value through 0x1b6, toggles modulo 2, then writes it through this opcode.
+
+### 0x1b8 `get-auto-message-time` (u0041B670, argc 2)
+- **summary:** (selector)(out) - read an Auto-message delay from engine configuration: selector 0 = post-voice AutoMessageTime0, selector 1 = unvoiced AutoMessageTime1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1b8_handler@0x427210 dispatches selector 0 to config key message:AutoMessageTime0 and selector 1 to message:AutoMessageTime1, then writes the result to operand 2. CONFIG.BIN uses it to bound the two UI settings.
+
+### 0x1b9 `set-auto-message-time` (u0041B710, argc 2)
+- **summary:** (selector)(milliseconds) - write an Auto-message delay to engine configuration: selector 0 = post-voice AutoMessageTime0, selector 1 = unvoiced AutoMessageTime1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1b9_handler@0x41f5a0 dispatches selector 0/1 to config setters for message:AutoMessageTime0/1. CONFIG.BIN initializes them to 500/2000 ms and adjusts each in 500-ms steps within 500..9500.
+
+### 0x1bc `reset-message-voice-state` (u00415670, argc 0)
+- **summary:** Reset the per-message queued-voice flag used by ADV Auto timing.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1bc_handler@0x416c20 writes zero to ctx+0x6dbe4 (adv_auto_voice_pending). Opcode 0xc4 sets that field when voice playback is queued; adv_input_service_poll consumes it to select the post-voice AutoMessageTime0 path.
 
 ### 0x1c7 `get-message-skip` (get-message-skip, argc 1)
 - **summary:** (out) - write 1 iff ADV message-skip run-state bit 0x08000000 is set, otherwise 0.
@@ -360,11 +431,17 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **depended on by:** 0x20c, 0x20d, 0x21c, 0x223
 - **evidence:** Ghidra handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). SC0000 label_1235a ORs it with op 0x1cc.
 
-## marker
+### 0x1ca `set-read-message-skip` (u0041B9B0, argc 1)
+- **summary:** (enabled) - set the engine setting `message:ReadTextSkip`, which skips only previously read text.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ca_set_read_message_skip@0x41f880 calls the engine setting interface's setter for `message:ReadTextSkip` with operand 1. SC0000's x=750 Read-message-skip button toggles the value read by op 0x1cb.
 
-### 0x1bc `block-mark` (u00415670, argc 0)
-- **summary:** zero-arg; follows jcc/mov, precedes mov/ret — block boundary
-- **grounding:** source=inference, confidence=high, noop_headless=True
+### 0x1cb `get-read-message-skip` (u00414FD0, argc 1)
+- **summary:** (out) - read the engine setting `message:ReadTextSkip`.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine setting interface's getter for `message:ReadTextSkip` and writes the result to operand 1. The shared ADV redraw routine uses it for the active Read-message-skip icon.
+
+## marker
 
 ### 0x1bf `call-end` (u004156C0, argc 0)
 - **summary:** zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker
@@ -381,12 +458,10 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1f4 `stmt-begin` (u004160D0, argc 0)
 - **summary:** zero-arg; opens scripts, pairs with stmt-end 0x1f5
 - **grounding:** source=investigation, confidence=high, noop_headless=True
-- **depended on by:** 0x90
 
 ### 0x1f5 `stmt-end` (u00416120, argc 0)
 - **summary:** zero-arg; precedes exit/next-stmt, pairs with 0x1f4
 - **grounding:** source=investigation, confidence=high, noop_headless=True
-- **depended on by:** 0x90
 
 ### 0x21b `line-id?` (u004213E0, argc 1)
 - **summary:** 1 imm; mov->0x21b->stmt-end; near save/load-messkip — likely line/stmt id, verify not msg-control
@@ -581,10 +656,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x88 `u0041B290` (u0041B290, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x8b `u0041B3D0` (u0041B3D0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -592,14 +663,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x8c `jmp` (jmp, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x93 `u00415040` (u00415040, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x94 `u00415090` (u00415090, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0xa0 `jcc` (jcc, argc 3)
 - **summary:** —
@@ -693,23 +756,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x101 `u00415BF0` (u00415BF0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x107 `u0041E500` (u0041E500, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x108 `u00415E70` (u00415E70, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x109 `u00415EC0` (u00415EC0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x10a `u0041E540` (u0041E540, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -829,14 +880,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x199 `u00414D50` (u00414D50, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x19a `u00414E50` (u00414E50, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x19b `u00414E80` (u00414E80, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -933,22 +976,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1b6 `u00414F60` (u00414F60, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b7 `u0041B640` (u0041B640, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b8 `u0041B670` (u0041B670, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b9 `u0041B710` (u0041B710, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1ba `u0041D850` (u0041D850, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -968,14 +995,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1c8 `toString` (toString, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x1ca `u0041B9B0` (u0041B9B0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1cb `u00414FD0` (u00414FD0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1ce `u0041B9F0` (u0041B9F0, argc 1)
 - **summary:** —

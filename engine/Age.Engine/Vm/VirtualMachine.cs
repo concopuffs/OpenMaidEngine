@@ -8,6 +8,7 @@ public sealed class VirtualMachine
     private const long NoJump = 0xFFFFFFFF;
     private const int HALT = int.MinValue;
     private const int FRAME_RETURN = int.MinValue + 1;
+    private const int HOTSPOT_RETURN = int.MinValue + 2;
     private const int SceneEntryCoroutineGate = 0xaba5c;
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
@@ -22,6 +23,13 @@ public sealed class VirtualMachine
     private ExecFrame _cur = null!;
     private int _depth;
     private readonly ITraceSink _sink;
+    private readonly object _interactiveLock = new();
+    private ExecFrame? _interactiveFrame;
+    private int _pointerX = int.MinValue, _pointerY = int.MinValue;
+    private bool _autoMessageEnabled;
+    private long _autoMessageTime0Ms = 500;
+    private long _autoMessageTime1Ms = 2000;
+    private bool _autoVoicePending;
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
@@ -32,11 +40,42 @@ public sealed class VirtualMachine
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
+    public bool AutoMessageEnabled => _autoMessageEnabled;
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null)
     { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
       _sink = sink ?? NullTraceSink.Instance; }
+
+    /// <summary>Update the native 800x600 cursor coordinate without advancing the current ADV page.</summary>
+    public void UpdatePointer(int x, int y)
+    {
+        bool wake = false;
+        lock (_interactiveLock)
+        {
+            _pointerX = x; _pointerY = y;
+            if (_interactiveFrame != null)
+                wake = _interactiveFrame.Hotspots.UpdatePointer(x, y);
+        }
+        if (wake) _host.WakeInputCallbackService();
+    }
+
+    /// <summary>Queue an armed hotspot's activation callback. True means the click was consumed.</summary>
+    public bool TryActivatePointer(int x, int y)
+    {
+        bool consumed = false;
+        lock (_interactiveLock)
+        {
+            _pointerX = x; _pointerY = y;
+            if (_interactiveFrame != null)
+            {
+                _interactiveFrame.Hotspots.UpdatePointer(x, y);
+                consumed = _interactiveFrame.Hotspots.Activate(x, y);
+            }
+        }
+        if (consumed) _host.WakeInputCallbackService();
+        return consumed;
+    }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private long ReadGlobal(int k) => ExternalGlobals.TryGetValue(k, out var v) ? v : Gi(Globals, k);
@@ -156,6 +195,8 @@ public sealed class VirtualMachine
 
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
+        ExecFrame? previousInteractiveFrame;
+        lock (_interactiveLock) previousInteractiveFrame = _interactiveFrame;
         var prev = _cur; _cur = frame; _depth++;
         _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
         var outcome = FrameOutcome.RanOff;
@@ -172,8 +213,47 @@ public sealed class VirtualMachine
             pc = next;
         }
         _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
+        lock (_interactiveLock)
+        {
+            if (cause == FrameCause.CallScript)
+                _interactiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
+                    ? previousInteractiveFrame : null;
+            else if (ReferenceEquals(_interactiveFrame, frame))
+                _interactiveFrame = null;
+        }
         _cur = prev; _depth--;
         return outcome;
+    }
+
+    private bool ServiceHotspotCallback()
+    {
+        int target;
+        lock (_interactiveLock)
+        {
+            if (_interactiveFrame == null || !_interactiveFrame.Hotspots.TryDequeue(out target)) return false;
+        }
+        if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
+        {
+            _cur.CallStack.Add(HOTSPOT_RETURN);
+            while (pc >= 0 && pc < _cur.Script.Instructions.Count)
+            {
+                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
+                Steps++;
+                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
+                int next = Step(_cur.Script.Instructions[pc], pc);
+                _host.FrameYield();
+                if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
+                if (next == HALT) break;
+                pc = next;
+            }
+            // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.
+            int sentinel = _cur.CallStack.LastIndexOf(HOTSPOT_RETURN);
+            if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
+        }
+        lock (_interactiveLock)
+            _interactiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
+        _host.InputCallbackCompleted(Gfx);
+        return true;
     }
 
     private int Step(Instruction ins, int pc)
@@ -295,7 +375,55 @@ public sealed class VirtualMachine
             case "wait-for-input":
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
-                _host.WaitForInput((int)Read(a[0])); return pc + 1;
+                // The native ADV chrome is a coroutine: after an earlier 0x93 cancellation its shared
+                // registration pass runs again before a stable message wait. Our blocking host models that
+                // scheduler boundary by re-arming the frame's retained definitions here.
+                bool wakeAtWait = false;
+                lock (_interactiveLock)
+                {
+                    if (_cur.Hotspots.HasDefinitions && !_cur.Hotspots.Armed)
+                    {
+                        _interactiveFrame = _cur;
+                        wakeAtWait = _cur.Hotspots.Arm(_pointerX, _pointerY);
+                    }
+                }
+                if (wakeAtWait) _host.WakeInputCallbackService();
+                _host.WaitForInput((int)Read(a[0]), ServiceHotspotCallback,
+                    () => new AdvAutoWaitState(_autoMessageEnabled, _autoVoicePending,
+                                               _autoMessageTime0Ms, _autoMessageTime1Ms));
+                return pc + 1;
+            case "u0041BEB0":
+            case "register-hotspot-callbacks": // 0x90: inclusive rect + enter/leave/activate local callbacks
+                lock (_interactiveLock)
+                    _cur.Hotspots.Register((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                                           (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]));
+                return pc + 1;
+            case "u00415040":
+            case "cancel-hotspot-wait": // 0x93
+                lock (_interactiveLock)
+                {
+                    _cur.Hotspots.Reset();
+                    if (ReferenceEquals(_interactiveFrame, _cur)) _interactiveFrame = null;
+                }
+                return pc + 1;
+            case "u00415090":
+            case "arm-hotspot-wait": // 0x94
+            {
+                bool wake;
+                lock (_interactiveLock)
+                {
+                    _interactiveFrame = _cur;
+                    wake = _cur.Hotspots.Arm(_pointerX, _pointerY);
+                }
+                if (wake) _host.WakeInputCallbackService();
+                return pc + 1;
+            }
+            case "u0041C150":
+            case "bind-hotspot-key": // 0x97: keyboard/pad routing is a later host-input slice
+                lock (_interactiveLock)
+                    _cur.Hotspots.BindKey((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
+                                          (int)Read(a[3]), (int)Read(a[4]));
+                return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "get-message-skip": // 0x1c7: Ctrl/message fast-forward run-state bit
@@ -303,6 +431,24 @@ public sealed class VirtualMachine
             case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
             case "get-adv-service-state":   // compatibility with pre-recovery generated tables
                 Write(a[0], _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;
+            case "u00414F60":
+            case "get-auto-message": // 0x1b6: VM service state used by the ADV redraw callback
+                Write(a[0], _autoMessageEnabled ? 1 : 0); return pc + 1;
+            case "u0041B640":
+            case "set-auto-message": // 0x1b7
+                _autoMessageEnabled = Read(a[0]) != 0; return pc + 1;
+            case "u0041B670":
+            case "get-auto-message-time": // 0x1b8 (selector 0=post-voice Time0, 1=unvoiced Time1, out)
+                Write(a[1], Read(a[0]) == 0 ? _autoMessageTime0Ms : _autoMessageTime1Ms); return pc + 1;
+            case "u0041B710":
+            case "set-auto-message-time": // 0x1b9 (selector, milliseconds)
+                if (Read(a[0]) == 0) _autoMessageTime0Ms = Read(a[1]);
+                else if (Read(a[0]) == 1) _autoMessageTime1Ms = Read(a[1]);
+                return pc + 1;
+            case "u00415670":
+            case "block-mark":
+            case "reset-message-voice-state": // 0x1bc resets native per-message voice/queued-voice state
+                _autoVoicePending = false; return pc + 1;
             case "end-text-line": case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
@@ -329,7 +475,9 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
-            case "play-voice": _host.PlayVoice(Read(a[0])); return pc + 1;
+            case "play-voice":
+                _autoVoicePending = true;
+                _host.PlayVoice(Read(a[0])); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
                 _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "u0041D050":           // 0xb5 / semantics: sfx-start

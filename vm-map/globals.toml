@@ -51,59 +51,70 @@ confidence = "high"
 depends_on = ["0xa57", "0xa58"]
 
 [[global]]
-address = "0x6c9"
-name = "ui_toggle_0"
+address = "0x6c1"
+name = "adv_chrome_enabled"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "ADV-chrome hotspot button toggle (op 0x90 site, near-universal across scenes)."
+usage = "Inherited SYSTEM4 UI-boot flag. Standard ADV scripts register the five visible SO001 control-strip pointer rectangles only while nonzero; zero skips directly to the three off-screen keyboard/pad records. The Phase-A single-scene Godot bootstrap seeds the native observed value 1."
 source = "investigation"
-confidence = "med"
-depends_on = []
+confidence = "high"
+depends_on = ["0x6c9", "0x6ca", "0x6cb", "0x6cc", "0x6cd"]
+
+[[global]]
+address = "0x6c9"
+name = "adv_hover_history"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "Pointer-hover flag for the standard ADV History button at (684,572). Its op 0x90 enter/leave callbacks set 1/0; the shared SO001 redraw shows the History tooltip plus generic hover overlay while set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6ca", "0x6cb", "0x6cc", "0x6cd"]
 
 [[global]]
 address = "0x6ca"
-name = "ui_toggle_1"
+name = "adv_hover_auto_message"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+usage = "Pointer-hover flag for the standard ADV Auto-message button at (706,572). See adv_hover_history."
 source = "investigation"
-confidence = "med"
-depends_on = []
+confidence = "high"
+depends_on = ["0x6c9"]
 
 [[global]]
 address = "0x6cb"
-name = "ui_toggle_2"
+name = "adv_hover_message_skip"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+usage = "Pointer-hover flag for the standard ADV all-message Skip button at (728,572). See adv_hover_history."
 source = "investigation"
-confidence = "med"
-depends_on = []
+confidence = "high"
+depends_on = ["0x6c9"]
 
 [[global]]
 address = "0x6cc"
-name = "ui_toggle_3"
+name = "adv_hover_read_message_skip"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+usage = "Pointer-hover flag for the standard ADV read-message-only Skip button at (750,572). See adv_hover_history."
 source = "investigation"
-confidence = "med"
-depends_on = []
+confidence = "high"
+depends_on = ["0x6c9"]
 
 [[global]]
 address = "0x6cd"
-name = "ui_toggle_4"
+name = "adv_hover_hide_window"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "ADV-chrome hotspot button toggle. See ui_toggle_0."
+usage = "Pointer-hover flag for the standard ADV Hide-window button at (772,572). See adv_hover_history."
 source = "investigation"
-confidence = "med"
-depends_on = []
+confidence = "high"
+depends_on = ["0x6c9"]
 
 [[global]]
 address = "0x62ccf"

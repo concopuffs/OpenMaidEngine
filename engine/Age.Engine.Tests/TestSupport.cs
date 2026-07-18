@@ -6,11 +6,12 @@ using Age.Engine.Model;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets.</summary>
-internal sealed class RecordingHost : IHost
+internal class RecordingHost : IHost
 {
     public int Waits;
     public int Presents;
     public int TransitionWaits;
+    public int InputCallbackFrames;
     public bool MessageSkip;
     public bool AdvReadSkip;
     public readonly List<(int Offset, string Text)> Lines = new();
@@ -29,6 +30,15 @@ internal sealed class RecordingHost : IHost
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
     public void WaitForInput() => Waits++;
+    public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+    {
+        while (serviceInputCallback()) { }
+        WaitForInput();
+    }
+    public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                                     Func<AdvAutoWaitState> autoWaitState)
+        => WaitForInput(layoutSlot, serviceInputCallback);
+    public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
     public void Sleep(long duration) => SleptDurations.Add(duration);
     public void FrameYield() { }
     public bool IsMessageSkipActive => MessageSkip;

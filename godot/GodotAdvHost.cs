@@ -1,9 +1,12 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 using System.Threading;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 
+[SupportedOSPlatform("windows")]
 public sealed class GodotAdvHost : IHost
 {
     private readonly Main _main;
@@ -20,6 +23,7 @@ public sealed class GodotAdvHost : IHost
     // primary surface, but op 0x1fa releases it like any other slot; subsequent size queries must return 0x0.
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     private readonly SemaphoreSlim _gate = new(0, 1);
+    private readonly AutoResetEvent _inputCallbackSignal = new(false);
     private readonly Age.Engine.Hosting.FrameClock _clock;
     private readonly GodotTimelineLog? _timeline;
     private readonly PageLocatorState _locator;
@@ -147,6 +151,13 @@ public sealed class GodotAdvHost : IHost
     public void WaitForInput() => WaitForInput(0);
 
     public void WaitForInput(int layoutSlot)
+        => WaitForInput(layoutSlot, static () => false, static () => default);
+
+    public void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        => WaitForInput(layoutSlot, serviceInputCallback, static () => default);
+
+    public void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                             Func<AdvAutoWaitState> autoWaitState)
     {
         Pages++;
         _locator.Wait(Pages);
@@ -158,9 +169,22 @@ public sealed class GodotAdvHost : IHost
         _waitIndicatorStartedMs = _clock.NowMs;
         IsWaiting = true;
         _timeline?.State("input-wait", new() { ["page"] = Pages });
-        _gate.Wait();
+        var autoTimer = new AdvAutoAdvanceTimer();
+        bool autoAdvanced = false;
+        while (!_stopping)
+        {
+            while (serviceInputCallback()) { }
+            if (autoTimer.Poll(autoWaitState(), _main.IsVoicePlaybackActive, _clock.NowMs))
+            {
+                autoAdvanced = true;
+                break;
+            }
+            if (_gate.Wait(0)) break;
+            WaitHandle.WaitAny(new[] { _gate.AvailableWaitHandle, _inputCallbackSignal, _frameSignal });
+            if (_gate.Wait(0)) break;
+        }
         IsWaiting = false;
-        _timeline?.State("running", new() { ["input"] = "auto-or-user" });
+        _timeline?.State("running", new() { ["input"] = autoAdvanced ? "auto" : "user" });
         lock (_textLock)
         {
             _advText = "";
@@ -193,6 +217,11 @@ public sealed class GodotAdvHost : IHost
         }
         if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
     }
+
+    public void WakeInputCallbackService() => _inputCallbackSignal.Set();
+
+    public void InputCallbackCompleted(GfxState gfx)
+        => Interlocked.Exchange(ref _presentRequested, 1);
 
     public void WaitForForegroundTransition(GfxState gfx)
     {
@@ -251,6 +280,7 @@ public sealed class GodotAdvHost : IHost
         _stopping = true;
         lock (_textLock) _advTextForceComplete = true;
         if (_gate.CurrentCount == 0) _gate.Release();
+        _inputCallbackSignal.Set();
         _frameSignal.Set();
     }
 
@@ -440,7 +470,11 @@ public sealed class GodotAdvHost : IHost
     {
         var asset = _res.Resolve(_scene, id);
         var audio = asset != null ? LoadAudio(asset) : null;
-        if (audio != null) _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name);
+        if (audio != null)
+        {
+            int generation = _main.QueueVoicePlayback();
+            _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation);
+        }
     }
 
     public void LoadSoundEffect(long resourceId, int channel)

@@ -30,6 +30,9 @@ public partial class Main : Godot.Control
     private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
+    private int _voiceQueuedGeneration;
+    private int _voiceStartedGeneration;
+    private int _voiceCompletedGeneration;
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
@@ -231,6 +234,10 @@ public partial class Main : Godot.Control
             foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
             GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");
         }
+        // The native SYSTEM4 UI boot enables standard ADV chrome after the data-only *INIT prefix above.
+        // Without this inherited value the visible SO001 strip is still drawn, but every ADV script skips
+        // its five pointer rectangles and registers only the off-screen keyboard/pad records.
+        if (!_selftest) _vm.Globals[0x6c1] = 1;
         // Native AGE owns this transient secondary-SFX channel outside script-visible writes.
         // The matching SC0000 trace has value 4 at 0xc31; seed only this proven profile/slice.
         if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
@@ -265,6 +272,7 @@ public partial class Main : Godot.Control
         _timelineFrame++;
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
+        UpdateVoicePlaybackState();
         UpdateMovieFrames();
         if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite(_vm.Gfx))
             Recomposite();   // native publishes retained mutations only at present/service boundaries
@@ -325,9 +333,32 @@ public partial class Main : Godot.Control
             _locatorHud.Text = _locator.CurrentDisplay + " · copied";
             return;
         }
-        if (e.IsActionPressed("ui_accept") ||
-            (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left))
+        if (e is InputEventMouseMotion motion)
+        {
+            var p = ToNativeScreen(motion.Position);
+            _vm.UpdatePointer(p.X, p.Y);
+            return;
+        }
+        if (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+        {
+            var p = ToNativeScreen(mb.Position);
+            if (_vm.TryActivatePointer(p.X, p.Y))
+            {
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             _host.SignalInput();
+            return;
+        }
+        if (e.IsActionPressed("ui_accept")) _host.SignalInput();
+    }
+
+    private (int X, int Y) ToNativeScreen(Vector2 position)
+    {
+        Vector2 size = GetViewportRect().Size;
+        if (size.X <= 0 || size.Y <= 0) return (0, 0);
+        return ((int)System.Math.Floor(position.X * ScreenWidth / size.X),
+                (int)System.Math.Floor(position.Y * ScreenHeight / size.Y));
     }
 
     public override void _ExitTree()
@@ -644,13 +675,45 @@ public partial class Main : Godot.Control
         _bgm.Play();
     }
 
-    public void PlayVoice(byte[] oggBytes, string assetName)
+    public int QueueVoicePlayback()
+        => System.Threading.Interlocked.Increment(ref _voiceQueuedGeneration);
+
+    public bool IsVoicePlaybackActive
+        => System.Threading.Volatile.Read(ref _voiceCompletedGeneration)
+           < System.Threading.Volatile.Read(ref _voiceQueuedGeneration);
+
+    public void PlayVoice(byte[] oggBytes, string assetName, int generation)
     {
         var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
-        if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
+        if (stream == null)
+        {
+            GD.Print($"OGG load failed {assetName}");
+            CompleteVoiceGeneration(generation);
+            return;
+        }
         stream.Loop = false;
         _voice.Stream = stream;
+        System.Threading.Volatile.Write(ref _voiceStartedGeneration, generation);
         _voice.Play();
+    }
+
+    private void UpdateVoicePlaybackState()
+    {
+        int started = System.Threading.Volatile.Read(ref _voiceStartedGeneration);
+        if (started > System.Threading.Volatile.Read(ref _voiceCompletedGeneration) && !_voice.Playing)
+            CompleteVoiceGeneration(started);
+    }
+
+    private void CompleteVoiceGeneration(int generation)
+    {
+        int current;
+        do
+        {
+            current = System.Threading.Volatile.Read(ref _voiceCompletedGeneration);
+            if (current >= generation) return;
+        }
+        while (System.Threading.Interlocked.CompareExchange(
+                   ref _voiceCompletedGeneration, generation, current) != current);
     }
 
     public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel)

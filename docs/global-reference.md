@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16415 globals (70 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16416 globals (71 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -3522,12 +3522,13 @@
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x6be` | — | low | inference | ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (passed to render helpers u0041F9C0/u00415F70 alongside 0x6c3). NOT a story flag — high scene-reach is from the shared render chrome. Branch-read in 146 scenes. |
+| `0x6c1` | adv_chrome_enabled | high | investigation | Inherited SYSTEM4 UI-boot flag. Standard ADV scripts register the five visible SO001 control-strip pointer rectangles only while nonzero; zero skips directly to the three off-screen keyboard/pad records. The Phase-A single-scene Godot bootstrap seeds the native observed value 1. |
 | `0x6c3` | — | low | inference | ADV message-window / text-render state in the 0x6bx-0x6cx chrome cluster (`mov 0x6c3,<val>` then `u00415F70(0x6c3)` right after draw-texture; paired with 0x6be). NOT a story flag. Branch-read in 136 scenes. |
-| `0x6c9` | ui_toggle_0 | med | investigation | ADV-chrome hotspot button toggle (op 0x90 site, near-universal across scenes). |
-| `0x6ca` | ui_toggle_1 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
-| `0x6cb` | ui_toggle_2 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
-| `0x6cc` | ui_toggle_3 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
-| `0x6cd` | ui_toggle_4 | med | investigation | ADV-chrome hotspot button toggle. See ui_toggle_0. |
+| `0x6c9` | adv_hover_history | high | investigation | Pointer-hover flag for the standard ADV History button at (684,572). Its op 0x90 enter/leave callbacks set 1/0; the shared SO001 redraw shows the History tooltip plus generic hover overlay while set. |
+| `0x6ca` | adv_hover_auto_message | high | investigation | Pointer-hover flag for the standard ADV Auto-message button at (706,572). See adv_hover_history. |
+| `0x6cb` | adv_hover_message_skip | high | investigation | Pointer-hover flag for the standard ADV all-message Skip button at (728,572). See adv_hover_history. |
+| `0x6cc` | adv_hover_read_message_skip | high | investigation | Pointer-hover flag for the standard ADV read-message-only Skip button at (750,572). See adv_hover_history. |
+| `0x6cd` | adv_hover_hide_window | high | investigation | Pointer-hover flag for the standard ADV Hide-window button at (772,572). See adv_hover_history. |
 
 ## unknown
 

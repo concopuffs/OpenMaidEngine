@@ -1015,12 +1015,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "wait-for-input"
 category = "adv"
-summary = "(layout_slot) - arm the ADV input wait after text reveal completes; activates the wait indicator configured for the selected text layout by op 0x73."
+summary = "(layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached."
+evidence = "Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached. The handler also checks ctx+0x55104 (Auto enabled): when ctx+0x6dbe4 has no pending voice it arms the timer with message:AutoMessageTime1, substituting 100 ms for configuration value zero. adv_input_service_poll@0x411230 waits for an active voice to finish and then arms AutoMessageTime0, likewise with a 100-ms zero fallback."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1383,18 +1383,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B290"
-category = "unknown"
-summary = ""
+name = "set-message-skip"
+category = "input"
+summary = "(enabled) - set the all-message skip state. Nonzero arms ADV fast-forward; zero clears the associated native run-state bit."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ctx+0x13dc and ctx+0x550fc; nonzero also sets ctx+0x6da78=1, while zero clears run-state bit 0x08000000. adv_interpreter_tick injects input bit 0x40 while ctx+0x13dc is nonzero and cancels the state according to set:CancelMesSkipOnClick. SC0000's Message-skip button passes 1."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "enabled"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -1468,62 +1468,69 @@ argc = 7
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "hotspot-branch"
+name = "register-hotspot-callbacks"
 category = "input"
-summary = "cursor/input hotspot hit-test: rect (x,y,w,h) -> 3-way branch on interaction, else fall through to pc+1"
+summary = "(x)(y)(w)(h)(on_enter_pc)(on_leave_pc)(on_activate_pc) - append an inclusive cursor rectangle and three callback PCs to the current script frame's native input registry. This opcode only registers; the ADV input service dispatches callbacks later."
 noop_headless = true
 source = "investigation"
 confidence = "high"
-depends_on = [0x1f4, 0x1f5]
-evidence = "all 301 ADV scripts contain the identical 8 sites; enc.len 15 lands pc+1 on the fall-through stmt (design-confirmed); fall-through = correct headless no-input path, proven by 279 CLEAN dialogue scenes"
-confirm_by = "target->interaction-state mapping (hover-enter/leave/click) via live input capture or Frida in A2"
+depends_on = []
+evidence = "Ghidra /v2: op_0x90_handler@0x41fc80 fetches x/y/w/h, forms x+w/y+h, fetches operands 5/6/7, and calls input_hotspot_register_rect_callbacks@0x403d70 on the current frame registry. The worker appends rect + callbacks to arrays and returns without changing PC. input_hotspot_poll_hover_callback@0x4040b0 returns operand 5 on entry and operand 6 on exit; input_hotspot_take_click_callback@0x404330 resets the registry and returns operand 7 on activation. All 301 ADV scripts contain the identical five control-strip records plus three keyed records."
+confirm_by = ""
 details = """
 op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "ukn" noting args
-5-7 are code locations. Corpus analysis (all 301 ADV scripts) resolves it:
+5-7 are code locations. Native RE plus corpus analysis resolves it:
+- The opcode APPENDS a record; it is not an immediate branch. Rect bounds are stored as
+  `(x,y,x+w,y+h)` and the cursor hit-test compares them inclusively.
+- The later input service maps targets exactly: target A = pointer enter, target B = pointer leave,
+  target C = activation/click. Moving directly between records emits leave first, then enter on the
+  next service poll. Activation consumes/resets the registry before dispatching target C.
 - Two forms, both ONLY in one shared ADV-chrome subroutine copied into every ADV script:
   * Mode A (1505 = 5x301): immediate x,y,w,h with w=h=20; the five on-screen buttons at
-    (684|706|728|750|772, 572), each setting one of G[0x6c9..0x6cd] to 1 / 0 / 0+run-action
-    (reads as hover-enter / hover-leave / click). All 3 targets real.
-  * Mode B (903 = 3x301): local-int operands, w=h=1, only tgt_c real -- a keyed 2-way input test.
+    (684|706|728|750|772, 572): History, Auto message, Message skip, Read-message skip, and
+    Hide window. Their enter/leave callbacks set G[0x6c9..0x6cd] to 1/0 and redraw SO001's
+    tooltip + generic 20x20 translucent hover overlay; target C runs the per-button action.
+  * Mode B (903 = 3x301): local-int operands, w=h=1, only tgt_c real. Companion op 0x97 binds
+    input-bit ids 0, 8, and 7 to these records for keyboard/pad activation.
 - Every one of the 301 scripts has EXACTLY 8 sites (5 A + 3 B); zero scene-specific use.
-- Falls through (pc+1) when nothing matches -- design-confirmed (0xd0 + 15 dwords = 0xdf = label_df).
-- Headless (no cursor/input) => fall through => vm0 stub already correct; the 12 EMPTY sweep scenes
+- Registration returns normally to pc+1; later callbacks temporarily redirect execution.
+- Headless (no cursor/input) can ignore registration; the 12 EMPTY sweep scenes
   are gated by state + this input-wait chrome, NOT by unmodelled 0x90. Model live in A2.
 """
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "rectangle left x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "rectangle top y"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "rectangle width added to x for inclusive right bound"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "rectangle height added to y for inclusive bottom bound"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "target:pointer enter"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "target:pointer leave"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "target:activate/click"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -1533,14 +1540,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415040"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "cancel-hotspot-wait"
+category = "input"
+summary = "Reset the current frame's hotspot registry/input wait and clear native run-state bit 0x00800000. Used before opening History, Menu, or HIDEWIN flows."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x93_cancel_hotspot_wait@0x416670 clears run-state bit 0x00800000, calls input_hotspot_reset@0x404130, and clears the active flag at ctx+0xc6e4 (or sets the pending flag at +0xc6e0 when already inactive)."
 
 [[opcode]]
 op = 0x94
@@ -1549,14 +1556,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415090"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "arm-hotspot-wait"
+category = "input"
+summary = "Arm native hotspot input processing after the script has registered its rectangles."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x94_arm_hotspot_wait@0x4166d0 sets ctx+0xc6e4=1 and calls input_hotspot_arm_cursor_tracking@0x404230 with 10000. SC0000 executes it immediately after the five control-strip and three keyed registrations."
 
 [[opcode]]
 op = 0x97
@@ -1565,38 +1572,38 @@ argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "hotspot-reg?"
+name = "bind-hotspot-key"
 category = "input"
-summary = "companion register-hotspot / set-widget-action (argc5: v1 v2 1 1 <action-id>; NO code targets)"
+summary = "(x)(y)(w)(h)(input_bit) - find the already-registered rectangle with identical bounds and bind an input/key bit number to it."
 noop_headless = true
-source = "inference"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = [0x90]
-evidence = "interleaves with 0x90 in the shared ADV-chrome subroutine; trailing imm = action id 0x0/0x7/0x8; same widget cluster as 0x90/0x91/0x92/0x95; confirm via frida"
+evidence = "Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's key-bit array. SC0000 binds bits 0, 8, and 7 to its three 1x1 keyed records."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "rectangle left x"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "rectangle top y"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "rectangle width"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "rectangle height"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "input/key bit index"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2288,14 +2295,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415BF0"
-category = "unknown"
-summary = ""
+name = "reset-message-skip-input"
+category = "input"
+summary = "Reset transient message-skip/input service state after an ADV chrome action."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. The Auto, Message-skip, Read-skip, and Hide-window click callbacks invoke it after their 100 ms cursor re-arm sequence."
 
 [[opcode]]
 op = 0x107
@@ -2351,23 +2358,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415EC0"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "get-cursor-virtual"
+category = "input"
+summary = "(out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x109_get_cursor_virtual@0x428bb0 calls the cursor-position helper, converts client/display coordinates through the active VirtualFullScreen transform, and writes x/y to operands 1/2. The ADV chrome callbacks preserve x and then move y by alternating -1/+1 before op 0x10a."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "output virtual x"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "output virtual y"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
@@ -2377,23 +2384,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041E540"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "set-cursor-virtual"
+category = "input"
+summary = "(x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "virtual x"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "virtual y"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3248,14 +3255,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414D50"
-category = "unknown"
-summary = ""
+name = "yield-adv-coroutine"
+category = "control"
+summary = "Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN."
 
 [[opcode]]
 op = 0x19a
@@ -3264,18 +3271,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414E50"
-category = "unknown"
-summary = ""
+name = "get-message-skip"
+category = "input"
+summary = "(out) - return the current all-message skip state set by op 0x88."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x19a_get_message_skip@0x4271b0 writes ctx+0x550fc to operand 1. The shared ADV redraw routine uses it to select SO001's active Message-skip icon at x=728."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "output enabled"
 observed_types = ["g-int"]
 
 [[opcode]]
@@ -3890,18 +3897,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414F60"
-category = "unknown"
-summary = ""
+name = "get-auto-message"
+category = "input"
+summary = "(out) - return whether automatic message advance is enabled."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1b6_get_auto_message@0x4271e0 writes `(ctx+0x55104 != 0)` to operand 1. FUN_00411230 consumes the same field to arm AutoMessageTime0/1 timers; the shared ADV redraw routine uses it for the active Auto icon."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "output enabled"
 observed_types = ["g-int"]
 
 [[opcode]]
@@ -3911,18 +3918,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B640"
-category = "unknown"
-summary = ""
+name = "set-auto-message"
+category = "input"
+summary = "(enabled) - enable or disable automatic message advance."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1b7_set_auto_message@0x41f560 stores `(operand1 != 0)` at ctx+0x55104. SC0000's x=706 Auto button reads the current value through 0x1b6, toggles modulo 2, then writes it through this opcode."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "enabled"
 observed_types = ["g-int"]
 
 [[opcode]]
@@ -3932,23 +3939,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B670"
-category = "unknown"
-summary = ""
+name = "get-auto-message-time"
+category = "input"
+summary = "(selector)(out) - read an Auto-message delay from engine configuration: selector 0 = post-voice AutoMessageTime0, selector 1 = unvoiced AutoMessageTime1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1b8_handler@0x427210 dispatches selector 0 to config key message:AutoMessageTime0 and selector 1 to message:AutoMessageTime1, then writes the result to operand 2. CONFIG.BIN uses it to bound the two UI settings."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "timer selector: 0=post-voice Time0, 1=unvoiced Time1"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "output milliseconds"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3958,23 +3965,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B710"
-category = "unknown"
-summary = ""
+name = "set-auto-message-time"
+category = "input"
+summary = "(selector)(milliseconds) - write an Auto-message delay to engine configuration: selector 0 = post-voice AutoMessageTime0, selector 1 = unvoiced AutoMessageTime1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1b9_handler@0x41f5a0 dispatches selector 0/1 to config setters for message:AutoMessageTime0/1. CONFIG.BIN initializes them to 500/2000 ms and adjusts each in 500-ms steps within 500..9500."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "timer selector: 0=post-voice Time0, 1=unvoiced Time1"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "milliseconds"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -4031,14 +4038,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "block-mark"
-category = "marker"
-summary = "zero-arg; follows jcc/mov, precedes mov/ret — block boundary"
-noop_headless = true
-source = "inference"
+name = "reset-message-voice-state"
+category = "input"
+summary = "Reset the per-message queued-voice flag used by ADV Auto timing."
+noop_headless = false
+source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1bc_handler@0x416c20 writes zero to ctx+0x6dbe4 (adv_auto_voice_pending). Opcode 0xc4 sets that field when voice playback is queued; adv_input_service_poll consumes it to select the post-voice AutoMessageTime0 path."
 
 [[opcode]]
 op = 0x1bd
@@ -4162,18 +4169,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B9B0"
-category = "unknown"
-summary = ""
+name = "set-read-message-skip"
+category = "input"
+summary = "(enabled) - set the engine setting `message:ReadTextSkip`, which skips only previously read text."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ca_set_read_message_skip@0x41f880 calls the engine setting interface's setter for `message:ReadTextSkip` with operand 1. SC0000's x=750 Read-message-skip button toggles the value read by op 0x1cb."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "enabled"
 observed_types = ["imm", "g-int"]
 
 [[opcode]]
@@ -4183,18 +4190,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414FD0"
-category = "unknown"
-summary = ""
+name = "get-read-message-skip"
+category = "input"
+summary = "(out) - read the engine setting `message:ReadTextSkip`."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine setting interface's getter for `message:ReadTextSkip` and writes the result to operand 1. The shared ADV redraw routine uses it for the active Read-message-skip icon."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "output enabled"
 observed_types = ["g-int"]
 
 [[opcode]]

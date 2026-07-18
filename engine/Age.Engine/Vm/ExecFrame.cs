@@ -14,5 +14,6 @@ internal sealed class ExecFrame
     public int? CoroutineYieldHandlerA;                  // op 0x7b: native per-frame handler PCs
     public int? CoroutineYieldHandlerB;
     public readonly Dictionary<int, int> CoroutineYieldVisits = new(); // instruction index -> visits
+    public readonly HotspotRegistry Hotspots = new();
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }
