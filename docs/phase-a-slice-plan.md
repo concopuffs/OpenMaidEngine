@@ -1551,3 +1551,10 @@ generators/tests/lints clean, and threaded `SELFTEST OK`.
 **Next:** manually validate that x=728 fast-forwards text and transitions and that a later `0x88(0)` boundary
 returns to normal pacing. Then implement Read-message Skip on the same service seam, adding the required
 per-script-offset read-history model rather than treating it as another global all-skip toggle.
+
+**Manual-validation correction (2026-07-18).** The initial Skip build collapsed each formerly blocking
+message span into a free-running VM burst, so playback teleported to explicit sleeps and then teleported
+again. Native still executes one opcode per interpreter tick during Skip. Godot now waits for one rendered
+frame pulse at each `FrameYield` only while persistent message Skip is enabled, retaining normal free-running
+bursts outside Skip. Validation: engine 168/168, zero-warning Godot build, threaded `SELFTEST OK`; repeat the
+x=728 pacing check before starting Read-message Skip.

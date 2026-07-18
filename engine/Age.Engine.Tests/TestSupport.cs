@@ -41,7 +41,7 @@ internal class RecordingHost : IHost
         => WaitForInput(layoutSlot, serviceInputCallback);
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
     public void Sleep(long duration) => SleptDurations.Add(duration);
-    public void FrameYield() { }
+    public virtual void FrameYield() { }
     public bool IsMessageSkipActive => MessageSkip;
     public void SetMessageSkipActive(bool active)
     {

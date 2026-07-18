@@ -81,6 +81,15 @@ public class HotspotInputTests
         }
     }
 
+    private sealed class MessageSkipCadenceHost : RecordingHost
+    {
+        public int ActiveSkipYields;
+        public override void FrameYield()
+        {
+            if (MessageSkip) ActiveSkipYields++;
+        }
+    }
+
     [Fact]
     public void ArmedHotspot_DispatchesHoverAndConsumesActivationWithoutAdvancingPage()
     {
@@ -267,6 +276,25 @@ public class HotspotInputTests
         Assert.True(vm.MessageSkipEnabled);
         Assert.True(host.MessageSkip);
         Assert.Contains(true, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void MessageSkipState_ReachesHostBeforeFollowingOpcodeCadenceYields()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_CADENCE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x55, new[] { G(0x150), I(1) }),
+            (0x55, new[] { G(0x151), I(1) }),
+            (0x88, new[] { I(0) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new MessageSkipCadenceHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(3, host.ActiveSkipYields);
     }
 
     private static Operand I(long value) => new(0, value);

@@ -317,9 +317,13 @@ public sealed class GodotAdvHost : IHost
     // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
     public void PulseFrame() => _frameSignal.Set();
 
-    // Native presentation trace: ordinary opcode bursts run to the next service boundary in a few
-    // milliseconds and are not frame-paced. Pacing belongs to 0x21c, sleep, and input waits below.
-    public void FrameYield() { }
+    // Ordinary opcode bursts run to the next service boundary without frame pacing. Persistent message
+    // Skip removes most of those boundaries, but native adv_interpreter_tick still executes one opcode per
+    // engine tick; retain that cadence here so Skip advances quickly instead of free-running whole scenes.
+    public void FrameYield()
+    {
+        if (_messageSkipActive && !_stopping) _frameSignal.WaitOne(50);
+    }
 
     // op 0xc8: block the VM background thread while the main-thread compositor keeps presenting retained state.
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;

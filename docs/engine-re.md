@@ -1193,6 +1193,16 @@ creating a synthetic pointer click. Focused tests cover `0x88` enable/disable, `
 `0x101`, retained host state, and the actual x=728 callback. The new EngineCtx fields are applied to `/v2`;
 the affected handlers, interpreter tick, and settings-default initializer are named/commented and saved.
 
+**Manual pacing correction.** The first port build released skipped text/waits correctly but then let the
+background VM free-run to the next non-skipped service boundary. That produced whole-scene bursts separated
+by explicit sleeps: visibly an immediate jump, a slow point, then another immediate jump. Native
+`adv_interpreter_tick` still dispatches exactly one opcode per engine tick while persistent Skip removes the
+ordinary waits. `GodotAdvHost.FrameYield` now consumes one rendered-frame pulse per opcode only while
+message Skip is active. Normal opcode bursts retain the existing run-to-service-boundary model; Skip gains
+the missing native governor and remains fast without teleporting between blocking points. A regression proves
+op `0x88` state reaches the host before the following cadence yields. Validation is engine 168/168,
+zero-warning Godot build, and threaded `SELFTEST OK`.
+
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 
 The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:
