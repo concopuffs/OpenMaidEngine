@@ -27,6 +27,10 @@ public partial class Main : Godot.Control
     private readonly byte[] _screenPixels = new byte[ScreenWidth * ScreenHeight * 4];
     private Label _text = null!;
     private Label _speaker = null!;
+    private readonly System.Collections.Generic.List<Label> _surfaceTextLabels = new();
+    private readonly System.Collections.Generic.Dictionary<int, Label> _historyTextLabels = new();
+    private Font? _presentationRegularFont;
+    private FontVariation? _presentationBoldFont;
     private Label _status = null!;
     private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
@@ -100,6 +104,7 @@ public partial class Main : Godot.Control
         _speaker = new Label { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_speaker);
+        _surfaceTextLabels.Add(_speaker);
         _status = new Label();
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
@@ -285,6 +290,7 @@ public partial class Main : Godot.Control
             Recomposite();   // native publishes retained mutations only at present/service boundaries
         if (!_selftest && _host != null) UpdateAdvTextPresentation();
         if (!_selftest && _host != null) UpdateAdvWaitIndicatorPresentation();
+        if (!_selftest && _host != null) UpdateHistoryTextPresentation();
         // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
         // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
         if (_seqDir != null && _seqIdx < _seqFrames && !_done)
@@ -445,7 +451,8 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         System.Array.Clear(_screenPixels);
-        _speaker.Visible = false;
+        foreach (var label in _surfaceTextLabels) label.Visible = false;
+        int surfaceTextLabelIndex = 0;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         int z = 0;
         var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // one synchronized sample for objects + ranges
@@ -506,13 +513,21 @@ public partial class Main : Godot.Control
             }
             decisions?.Add(v.Handle, $"z{z} {outcome}");
             var rawObject = _vm.Gfx.TryGet(v.Handle);
-            if (rawObject != null && _host.TryGetSurfaceText(rawObject.SourceSlot, out var surfaceText))
+            if (rawObject != null)
             {
-                var textPos = localToDest.Apply(surfaceText.X, surfaceText.Y);
-                _speaker.Position = new Vector2((float)textPos.X, (float)textPos.Y);
-                _speaker.Size = new Vector2(System.Math.Max(1, v.W - surfaceText.X), System.Math.Max(1, v.H - surfaceText.Y));
-                _speaker.Text = surfaceText.Text;
-                _speaker.Visible = true;
+                foreach (var surfaceText in _host.SnapshotSurfaceText(rawObject.SourceSlot))
+                {
+                    if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
+                        surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
+                    var textPos = localToDest.Apply(surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
+                    var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
+                    label.Position = new Vector2((float)textPos.X, (float)textPos.Y);
+                    label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
+                                             System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
+                    label.Text = surfaceText.Text;
+                    ApplyAdvTextStyle(label, surfaceText.Style);
+                    label.Visible = true;
+                }
             }
             z++;
         }
@@ -530,6 +545,76 @@ public partial class Main : Godot.Control
         _text.Size = new Vector2(System.Math.Max(1, 720 - t.X), System.Math.Max(1, 147 - t.Y));
         int count = System.Math.Clamp(t.VisibleGlyphs, 0, t.Text.Length);
         _text.Text = count == 0 ? "" : t.Text[..count];
+    }
+
+    private void UpdateHistoryTextPresentation()
+    {
+        foreach (var label in _historyTextLabels.Values) label.Visible = false;
+        foreach (var batch in _host.SnapshotRenderedTextHistory())
+        {
+            if (batch.Text.Length == 0) continue;
+            if (!_historyTextLabels.TryGetValue(batch.LayoutSlot, out var label))
+            {
+                label = CreateAdvPresentationLabel();
+                _historyTextLabels.Add(batch.LayoutSlot, label);
+            }
+            var layout = batch.Layout;
+            label.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
+            label.Size = new Vector2(System.Math.Max(1, layout.Width - layout.CursorX),
+                                     System.Math.Max(1, layout.Height - layout.CursorY));
+            label.Text = batch.Text;
+            ApplyAdvTextStyle(label, batch.Style);
+            label.Visible = true;
+        }
+    }
+
+    private Label GetSurfaceTextLabel(int index)
+    {
+        while (_surfaceTextLabels.Count <= index) _surfaceTextLabels.Add(CreateAdvPresentationLabel());
+        return _surfaceTextLabels[index];
+    }
+
+    private Label CreateAdvPresentationLabel()
+    {
+        var label = new Label
+        {
+            MouseFilter = MouseFilterEnum.Ignore,
+            Visible = false,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            ClipText = true,
+        };
+        label.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        label.AddThemeFontOverride("font", _text.GetThemeFont("font"));
+        AddChild(label);
+        return label;
+    }
+
+    private void ApplyAdvTextStyle(Label label, AdvTextStyle style)
+    {
+        int fontSize = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
+        _presentationRegularFont ??= _text.GetThemeFont("font");
+        if (style.Bold)
+        {
+            _presentationBoldFont ??= new FontVariation
+            {
+                BaseFont = _presentationRegularFont,
+                VariationEmbolden = 1.2f,
+            };
+            label.AddThemeFontOverride("font", _presentationBoldFont);
+        }
+        else label.AddThemeFontOverride("font", _presentationRegularFont);
+        label.AddThemeFontSizeOverride("font_size", fontSize);
+        label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
+        label.AddThemeColorOverride("font_outline_color", RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f)));
+        int outline = style.RenderMode == 0 ? 0 : System.Math.Max(1,
+            System.Math.Max(System.Math.Abs(style.EffectOffsetX), System.Math.Abs(style.EffectOffsetY)));
+        label.AddThemeConstantOverride("outline_size", outline);
+    }
+
+    private static Color RgbColor(long rgb, Color fallback)
+    {
+        if ((rgb & 0x00ff_ffff) == 0) return fallback;
+        return new Color(((rgb >> 16) & 0xff) / 255f, ((rgb >> 8) & 0xff) / 255f, (rgb & 0xff) / 255f, 1);
     }
 
     private void UpdateAdvWaitIndicatorPresentation()

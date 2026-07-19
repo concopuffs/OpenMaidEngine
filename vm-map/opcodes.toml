@@ -5070,7 +5070,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 400x30 name strip on temporary surface 0xc1 before draw-string."
+evidence = "Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 600x30 name strip on temporary surface 0xc1 before draw-string."
 
 [[opcode.semantics.args]]
 i = 1

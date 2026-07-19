@@ -10,6 +10,9 @@ public readonly record struct AdvWaitIndicatorConfig(
 public readonly record struct AdvAutoWaitState(
     bool Enabled, bool VoicePending, long PostVoiceDelayMs, long UnvoicedDelayMs);
 
+public readonly record struct SurfaceRectFill(
+    int SurfaceSlot, int X, int Y, int Width, int Height, int Alpha, long Rgb);
+
 public interface IHost
 {
     void ShowText(int offset, string text);
@@ -17,6 +20,13 @@ public interface IHost
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
     void SetAdvTextCursor(int layoutSlot, int x, int y) { }
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
+    void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
+        => DrawStringToSurface(surfaceSlot, x, y, text);
+    void ClearRenderedAdvTextLayout(int layoutSlot) { }
+    void RenderTextHistory(AdvTextHistoryRenderBatch batch) { }
+    int MessageWindowAlphaSetting => 0;
+    void FillSurfaceRect(SurfaceRectFill fill) { }
+    void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
     // Op 0x199 temporarily yields the active ADV page into its registered hide-window coroutine.
     // The retained scene continues to render, but the text layout and its wait marker are suspended

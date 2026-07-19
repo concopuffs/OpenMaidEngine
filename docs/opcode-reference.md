@@ -321,7 +321,7 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 ### 0x20b `fill-surface-rect` (fill-surface-rect, argc 7)
 - **summary:** (surface_slot)(x)(y)(width)(height)(alpha)(rgb) - fill a clipped rectangle on a graphics surface with the supplied color and alpha.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 400x30 name strip on temporary surface 0xc1 before draw-string.
+- **evidence:** Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 600x30 name strip on temporary surface 0xc1 before draw-string.
 
 ### 0x20c `present-frame` (present-frame, argc 0)
 - **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.

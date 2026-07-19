@@ -58,6 +58,15 @@ public sealed record AdvTextHistoryRecord(
 /// <summary>AGE's logical 8-byte history index entry.</summary>
 public readonly record struct AdvTextHistoryEntry(int LayoutSlot, int FirstRecordIndex);
 
+/// <summary>The host-facing result of rendering one retained history group into a target ADV layout.</summary>
+public sealed record AdvTextHistoryRenderBatch(
+    int LayoutSlot,
+    int FirstRecordIndex,
+    int Flags,
+    AdvTextLayoutSnapshot Layout,
+    string Text,
+    AdvTextStyle Style);
+
 /// <summary>
 /// Engine-owned retained ADV backlog. It deliberately has no persistence behavior: native numbered-save
 /// restoration belongs to the future unified save architecture, while live HISTORY.BIN reads this model.
@@ -113,6 +122,14 @@ public sealed class AdvTextHistory
         var layout = GetOrCreateLayout(slot);
         layout.CursorX = x;
         layout.CursorY = y;
+    }
+
+    public void SetLayoutOrigin(int requestedSlot, int x, int y)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        layout.OriginX = x;
+        layout.OriginY = y;
     }
 
     public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style,
@@ -214,6 +231,42 @@ public sealed class AdvTextHistory
         return found;
     }
 
+    /// <summary>
+    /// Build the ordinary bound-text result of native op 0x1d1. The game-facing HISTORY path passes flags
+    /// and colors as zero: metadata and voice records are skipped, while adjacent text records in the same
+    /// group are emitted continuously into the selected target layout.
+    /// </summary>
+    public bool TryBuildRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
+                                    long overrideTextColor, long overrideEffectColor,
+                                    out AdvTextHistoryRenderBatch batch)
+    {
+        batch = null!;
+        if ((uint)firstRecordIndex >= (uint)_records.Count) return false;
+
+        int slot = ResolveLayout(requestedLayoutSlot);
+        var target = SnapshotLayout(slot);
+        var text = new System.Text.StringBuilder();
+        AdvTextStyle style = AdvTextStyle.Default;
+        bool haveStyle = false;
+        foreach (var record in EnumerateGroup(firstRecordIndex))
+        {
+            if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0)
+                break;
+            if (record.Kind != AdvTextHistoryRecordKind.Text) continue;
+            if (!haveStyle)
+            {
+                style = record.Style;
+                haveStyle = true;
+            }
+            text.Append(record.Text);
+        }
+
+        if ((flags & 2) != 0)
+            style = style with { TextColor = overrideTextColor, EffectColor = overrideEffectColor };
+        batch = new AdvTextHistoryRenderBatch(slot, firstRecordIndex, flags, target, text.ToString(), style);
+        return true;
+    }
+
     private int SelectLayout(int requestedSlot)
     {
         int slot = requestedSlot == 0 ? CurrentLayoutSlot : requestedSlot;
@@ -231,6 +284,13 @@ public sealed class AdvTextHistory
             _layouts.Add(slot, layout);
         }
         return layout;
+    }
+
+    private AdvTextLayoutSnapshot SnapshotLayout(int slot)
+    {
+        var layout = GetOrCreateLayout(slot);
+        return new AdvTextLayoutSnapshot(slot, layout.Width, layout.Height,
+            layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY);
     }
 
     private void AppendBoundary(int slot)

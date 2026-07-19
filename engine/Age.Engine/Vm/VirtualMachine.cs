@@ -499,6 +499,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "reset-adv-text-layout": // 0x71: reset layout and begin the next logical retained group
                 TextHistory.ResetLayout((int)Read(a[0]));
+                _host.ClearRenderedAdvTextLayout((int)Read(a[0]));
                 return pc + 1;
             case "set-adv-text-cursor": // 0x7a (layout slot, x, y); slot 0 means current natively
                 TextHistory.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
@@ -510,7 +511,8 @@ public sealed class VirtualMachine
                     (int)Read(a[8]), Read(a[9])));
                 return pc + 1;
             case "draw-string": // 0x204 (surface slot, x, y, string)
-                _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]));
+                _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]),
+                                          _advTextStyle);
                 return pc + 1;
             case "wait-for-input":
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
@@ -680,6 +682,15 @@ public sealed class VirtualMachine
                     Write(a[1], -1);
                 }
                 return pc + 1;
+            case "render-text-history": // 0x1d1: rasterize/bind one retained group to a target layout
+            case "u0041BAE0":
+            {
+                int flags = (int)Read(a[2]);
+                if ((flags & 4) == 0 && TextHistory.TryBuildRenderBatch(
+                        (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), out var batch))
+                    _host.RenderTextHistory(batch);
+                return pc + 1;
+            }
             case "u0041BB90":
             case "find-text-history-value": // 0x1d3: operand 3 is accepted but ignored natively
             {
@@ -715,6 +726,13 @@ public sealed class VirtualMachine
                     EffectOffsetY = (int)Read(a[1])
                 };
                 return pc + 1;
+            case "set-adv-text-layout-origin": // 0x198; slot 0 selects the current layout
+            case "u0041B540":
+                TextHistory.SetLayoutOrigin((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+                return pc + 1;
+            case "get-message-window-alpha": // 0x131: host profile/config seam; default host currently supplies 0
+            case "u00415F70":
+                Write(a[0], _host.MessageWindowAlphaSetting); return pc + 1;
             case "u00415BF0":
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
                 return pc + 1;
@@ -743,6 +761,12 @@ public sealed class VirtualMachine
                 Write(a[1], gw); Write(a[2], gh);
                 return pc + 1;
             }
+            case "fill-surface-rect": // 0x20b: clipped alpha/RGB fill of a mutable surface
+            case "u00420D50":
+                _host.FillSurfaceRect(new SurfaceRectFill(
+                    (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
+                    (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
+                return pc + 1;
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice":
                 _autoVoicePending = true;
@@ -879,6 +903,9 @@ public sealed class VirtualMachine
                 _host.WaitForForegroundTransition(Gfx); return pc + 1;
             case "clear-gfx-command-queue": // 0x224: retained compositor does not use this native queue
                 return pc + 1;
+            case "present-gfx-object-range": // 0x222: publish pending retained changes in the selected range
+            case "u004216C0":
+                _host.PresentObjectRange(Gfx, Read(a[0]), Read(a[1])); return pc + 1;
             default:
                 // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
                 // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.

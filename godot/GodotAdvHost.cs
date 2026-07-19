@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Versioning;
 using System.Threading;
 using Age.Engine.Hosting;
@@ -30,7 +31,8 @@ public sealed class GodotAdvHost : IHost
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
     private readonly object _textLock = new();
-    private readonly Dictionary<int, SurfaceTextDraw> _surfaceText = new();
+    private readonly Dictionary<int, List<SurfaceTextDraw>> _surfaceText = new();
+    private readonly Dictionary<int, AdvTextHistoryRenderBatch> _historyText = new();
     private string _advText = "";
     private int _advTextX = 100, _advTextY = 47;
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
@@ -99,8 +101,17 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
+        => DrawStringToSurface(surfaceSlot, x, y, text, AdvTextStyle.Default);
+
+    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
     {
-        lock (_textLock) _surfaceText[surfaceSlot] = new SurfaceTextDraw(x, y, text);
+        lock (_textLock)
+        {
+            if (!_surfaceText.TryGetValue(surfaceSlot, out var draws))
+                _surfaceText[surfaceSlot] = draws = new List<SurfaceTextDraw>();
+            draws.RemoveAll(draw => draw.X == x && draw.Y == y);
+            draws.Add(new SurfaceTextDraw(x, y, text, style));
+        }
         _timeline?.Event("draw-string", new() { ["surface"] = surfaceSlot, ["x"] = x, ["y"] = y, ["text"] = text });
     }
 
@@ -115,8 +126,57 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
-    public bool TryGetSurfaceText(int surfaceSlot, out SurfaceTextDraw draw)
-    { lock (_textLock) return _surfaceText.TryGetValue(surfaceSlot, out draw); }
+    public IReadOnlyList<SurfaceTextDraw> SnapshotSurfaceText(int surfaceSlot)
+    {
+        lock (_textLock)
+            return _surfaceText.TryGetValue(surfaceSlot, out var draws) ? draws.ToArray() : Array.Empty<SurfaceTextDraw>();
+    }
+
+    public void ClearRenderedAdvTextLayout(int layoutSlot)
+    {
+        lock (_textLock) _historyText.Remove(layoutSlot == 0 ? _currentAdvLayout : layoutSlot);
+    }
+
+    public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
+    {
+        lock (_textLock) _historyText[batch.LayoutSlot] = batch;
+        _timeline?.Event("history-render", new()
+        {
+            ["layout"] = batch.LayoutSlot, ["record"] = batch.FirstRecordIndex,
+            ["x"] = batch.Layout.OriginX + batch.Layout.CursorX,
+            ["y"] = batch.Layout.OriginY + batch.Layout.CursorY,
+            ["text"] = batch.Text,
+        });
+    }
+
+    public IReadOnlyList<AdvTextHistoryRenderBatch> SnapshotRenderedTextHistory()
+    {
+        lock (_textLock) return _historyText.Values.OrderBy(batch => batch.LayoutSlot).ToArray();
+    }
+
+    public int MessageWindowAlphaSetting => 0;
+
+    public void FillSurfaceRect(SurfaceRectFill fill)
+    {
+        lock (_textLock)
+        {
+            if (!_surfaceText.TryGetValue(fill.SurfaceSlot, out var draws)) return;
+            int right = fill.X + System.Math.Max(0, fill.Width);
+            int bottom = fill.Y + System.Math.Max(0, fill.Height);
+            draws.RemoveAll(draw => draw.X >= fill.X && draw.X < right && draw.Y >= fill.Y && draw.Y < bottom);
+        }
+        _timeline?.Event("surface-fill", new()
+        {
+            ["surface"] = fill.SurfaceSlot, ["x"] = fill.X, ["y"] = fill.Y,
+            ["w"] = fill.Width, ["h"] = fill.Height, ["alpha"] = fill.Alpha, ["rgb"] = fill.Rgb,
+        });
+    }
+
+    public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
+    {
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
+    }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
     {
@@ -608,6 +668,6 @@ public sealed class GodotAdvHost : IHost
     }
 }
 
-public readonly record struct SurfaceTextDraw(int X, int Y, string Text);
+public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);
 public readonly record struct AdvWaitIndicatorSnapshot(
     RgbaImage Image, string Name, int AssetId, AdvWaitIndicatorConfig Config, int Frame);

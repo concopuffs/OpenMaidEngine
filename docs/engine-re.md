@@ -1310,11 +1310,11 @@ future numbered-save integration seam, not a reason to choose a shared-profile b
 History button can be complete first, while save/load restoration stays deferred with the wider storage
 architecture decision.
 
-The remaining supporting gaps are ordinary presentation operations: primary/ruby font sizes (`0x75/0x197`),
-font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin (`0x198`), surface
-rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object presentation (`0x222`). The
-`0xd3/0xd4/0xd5` callback-sequence family drives the smooth scrollbar interpolation and is the main
-remaining scheduler detail; omitting it would affect motion fidelity, not the backlog data model.
+History's display support consists of the ordinary presentation operations: primary/ruby font sizes
+(`0x75/0x197`), font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin
+(`0x198`), surface rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object presentation
+(`0x222`). The `0xd3/0xd4/0xd5` callback-sequence family drives the smooth scrollbar interpolation; omitting
+it affects motion fidelity, not the backlog data model.
 
 The first port slice now implements an engine/session-owned `AdvTextHistory` service. `GameSession` carries
 one instance across VM scene runs, while a standalone VM owns its instance for the full top-level and nested
@@ -1333,6 +1333,26 @@ manager `+0xd6c`: layout define/reset updates the latest-entry anchor, while eac
 and does not mutate it. Query scans stop at the next group-start record; their third operands are unused by
 the native helpers. History's remaining work is therefore presentation and interaction rather than backlog
 data access.
+
+The third port slice implements visible History presentation without moving canonical records into Godot.
+Op `0x1d1` asks `AdvTextHistory` to select one retained group, skip metadata/voice records, and build a
+host-facing render batch using the target layout configured by `0x70/0x71`, positioned by `0x198`, and
+seeded by `0x7a`. `HISTORY.BIN` passes zero for flags and both color overrides, so this is its exact ordinary
+binding path; the native flag-4 raster-without-binding and flag-8 side-effect modes remain outside the live
+game call site. Godot owns only replaceable labels keyed by target layout, applies the retained font/color/
+effect snapshot, and clears stale labels whenever `0x71` resets that layout.
+
+The same slice implements the support calls at their natural seams. Op `0x131` reads a host configuration
+property (currently defaulting to zero; choosing a profile/config persistence backend remains deferred),
+`0x20b` clears the addressed region of the mutable name-strip text surface, and `0x222` requests one retained
+recomposition boundary. Surface text is now a list rather than one draw per slot: HISTORY's five 600x30
+source rows therefore retain five independent speaker names, and compositor source-rectangle clipping maps
+each one into its bound object. A real-script regression retains SC0000 page one, runs unmodified
+`HISTORY.BIN`, observes a non-empty rendered row, and reaches its `(0,60000)` presentation call.
+
+History's remaining work is interaction fidelity: `0x12e` rectangle hover/hit selection, stored voice replay
+through `0x1bd`, and the `0xd3/0xd4/0xd5` smooth-scroll callback scheduler. None changes backlog ownership or
+requires choosing a save/profile backend.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

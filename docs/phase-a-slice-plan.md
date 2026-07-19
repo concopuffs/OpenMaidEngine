@@ -1728,3 +1728,27 @@ remaining effectful gaps total 21 instructions.
 **Next:** implement History's display slice around `0x1d1`, layout origin `0x198`, message-window alpha
 `0x131`, surface fill `0x20b`, and retained-object presentation `0x222`. After visible backlog rows render,
 finish rectangle hover/interaction, voice replay, and the `0xd3/0xd4/0xd5` smooth-scroll scheduler details.
+
+### ADV History visible display implemented (2026-07-18)
+
+The third bounded slice is complete. Op `0x1d1` now selects one retained group and produces an engine-owned
+render batch for the requested target text layout. `0x198` updates that layout's origin, `0x71` clears stale
+host presentation, and the existing cursor/style setters provide the target baseline and retained font,
+color, outline, and effect state. The live `HISTORY.BIN` call passes flags/colors as zero, so the port renders
+its ordinary bound-text path without inventing behavior for unused native special modes.
+
+Godot maintains per-layout History labels while the engine remains the canonical backlog owner. The surface-
+text path was generalized from one string per surface to clipped lists, allowing all five speaker-name rows
+drawn into surface `0xc1` to coexist. Op `0x20b` clears each reused 600x30 name region, op `0x131` reads a
+host configuration seam with a backend-neutral default, and op `0x222` explicitly publishes the retained
+rebuild. No persistence, RT.DAT, or port-owned profile format was introduced.
+
+Four focused regressions cover target origin/cursor/style, alpha/fill/present operand shaping, layout reset,
+and an end-to-end real-script path: real SC0000 page-one records are shared into unmodified `HISTORY.BIN`,
+which produces a non-empty visible row and reaches `(0,60000)` presentation without a step-cap halt.
+Validation: engine 194/194, zero-warning Godot build, threaded `SELFTEST OK`. HISTORY is now 68/78 distinct
+opcodes and 840/854 instructions handled or safe-noop; its ten remaining effectful gaps total 14 instructions.
+
+**Next:** implement the basic History interaction slice around rectangle hit/hover (`0x12e`) and clean exit
+using the existing callback layer. Then add stored voice replay (`0x1bd`); leave `0xd3/0xd4/0xd5` smooth
+scroll interpolation as a separate fidelity slice.
