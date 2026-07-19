@@ -1775,3 +1775,20 @@ effectful gaps total 13 instructions.
 
 **Next:** implement stored History voice replay (`0x1bd`) against the existing voice host path. Then take
 `0xd3/0xd4/0xd5` smooth-scroll interpolation as a separate scheduler/fidelity slice.
+
+### ADV History manual layout corrections (2026-07-19)
+
+Manual original/port comparison found that History's fixed rail was correct, but the lookup-driven buttons
+were clustered at the top-left, the hovered-row artwork disagreed with its hit region, and rendered text
+lost its x origin. The common VM cause was op `0x61`: `HISTORY.BIN` uses local-int operands as the bases of
+its copied coordinate arrays, while the port treated the values in those cells as global addresses. Local
+pointers now retain their local/global address domain, with matching dereference and write-through behavior
+in both the C# VM and Python oracle. A real-script regression fixes the seven button coordinates at
+x=768/y=121..549 and confirms every visible row retains layout origin x=65.
+
+Godot's dynamically created History/surface labels also no longer request full-rect anchors before they have
+a parent. They use top-left absolute placement, matching the batch's origin+cursor coordinates and removing
+the associated parent/layout diagnostic.
+
+**Next:** manually recheck History layout and hover against the original screenshot. If it matches, proceed
+with stored History voice replay (`0x1bd`), followed by `0xd3/0xd4/0xd5` smooth-scroll fidelity.

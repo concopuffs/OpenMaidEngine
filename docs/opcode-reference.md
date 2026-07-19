@@ -149,6 +149,13 @@
 
 ## compute
 
+### 0x61 `lookup-array` (lookup-array, argc 3)
+- **summary:** Take a typed reference to base[index], preserving whether the base belongs to local or global storage.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** HISTORY.BIN copies x/y tables into local-int cells 0x4 and 0x68, then lookup-array local-ptr <- local-int base supplies every right-side button and hovered-row draw coordinate. Treating the local operand's current value as a global base collapses those draws to (0,0); retaining the local address yields the native x=768/y=121..549 positions. RECOVER.BIN independently exercises the same pointer destination with global bases.
+
+Operand 2 names the base cell itself: a global-bank operand produces a global reference and a local-bank operand produces a local reference. Operand 3 is added as the element offset. Pointer destinations retain that address domain; reading or writing the pointer dereferences the corresponding bank. Non-pointer destinations receive the addressed value. The same domain-preserving address model applies to lookup-array-2d (0x12c).
+
 ### 0x64 `copy-inline-int-array` (copy-inline-int-array, argc 2)
 - **summary:** (destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination.
 - **grounding:** source=investigation, confidence=high
@@ -759,10 +766,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x60 `u0041A270` (u0041A270, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x61 `lookup-array` (lookup-array, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x63 `u00414A60` (u00414A60, argc 2)
 - **summary:** —

@@ -13,9 +13,9 @@ Purpose (see docs/phase-a-slice-plan.md):
 Memory model:
   * one flat GLOBAL bank G (dict addr->int); globals are raw offsets into one space.
   * per-call local frame with sparse typed banks (int/float/string/ptr).
-  * a `-ptr` variable holds an ADDRESS into G. lookup-array/2d with a ptr dst stores that
-    address (take-reference); reading a ptr derefs (G[addr]); writing through a ptr writes G[addr].
-    This is the model RECOVER forces; the unit test is its litmus.
+  * a `-ptr` variable retains an address plus its local/global storage domain. lookup-array/2d
+    with a ptr dst stores that reference (take-reference); reads/writes dereference the matching
+    bank. RECOVER exercises global references; HISTORY's copied coordinate arrays exercise local ones.
   * jcc(cond, tA, tB): cond truthy -> goto tA else tB; 0xFFFFFFFF = fall through (from RECOVER+SCJUMP).
   * call/ret (0x8F/0x05) are intra-script subroutine calls (shared frame); call-script (0x03) is
     the inter-script one and is stubbed.
@@ -53,7 +53,7 @@ class Frame:
         self.i = collections.defaultdict(int)     # local-int
         self.f = collections.defaultdict(int)     # local-float (stored raw)
         self.s = collections.defaultdict(str)     # local-string
-        self.p = collections.defaultdict(int)     # local-ptr (holds a G address)
+        self.p = collections.defaultdict(lambda: ("g", 0))  # local-ptr: (bank, address)
 
 
 class VM:
@@ -96,7 +96,7 @@ class VM:
         if t == T_LINT:   return self.fr.i[v]
         if t == T_LFLOAT: return self.fr.f[v]
         if t == T_LSTR:   return self.fr.s[v]
-        if t == T_LPTR:   return self.G[self.fr.p[v]]           # deref ptr
+        if t == T_LPTR:   return self.read_cell(self.fr.p[v])   # deref ptr
         self.log[f"read?t{t:#x}"] += 1
         return v
 
@@ -108,23 +108,37 @@ class VM:
         elif t == T_LINT:                 self.fr.i[v] = val
         elif t == T_LFLOAT:               self.fr.f[v] = val
         elif t == T_LSTR:                 self.fr.s[v] = val
-        elif t == T_LPTR:                 self.G[self.fr.p[v]] = val     # write through
+        elif t == T_LPTR:                 self.write_cell(self.fr.p[v], val)
         else:                             self.log[f"write?t{t:#x}"] += 1
+
+    def read_cell(self, address):
+        bank, addr = address
+        if bank == "i": return self.fr.i[addr]
+        if bank == "f": return self.fr.f[addr]
+        return self.G[addr]
+
+    def write_cell(self, address, value):
+        bank, addr = address
+        if bank == "i": self.fr.i[addr] = value
+        elif bank == "f": self.fr.f[addr] = value
+        else: self.G[addr] = value
 
     def base_addr(self, op):
         """The base ADDRESS an operand names, for array lookups."""
         t, v = op
-        if t in (T_IMM, T_GINT, T_GFLOAT, T_GSTR, T_GPTR): return v      # global's own offset
-        if t == T_LINT:  return self.fr.i[v]
+        if t in (T_IMM, T_GINT, T_GFLOAT, T_GSTR, T_GPTR): return ("g", v)
+        if t == T_LINT: return ("i", v)
+        if t == T_LFLOAT: return ("f", v)
+        if t == T_LSTR: return ("s", v)
         if t == T_LPTR:  return self.fr.p[v]
-        return v
+        return ("g", v)
 
     def lookup_store(self, dst, addr):
         """lookup result: ptr dst gets the reference (address); non-ptr gets the element value."""
         t, v = dst
         if t == T_LPTR:   self.fr.p[v] = addr
-        elif t == T_GPTR: self.G[v] = addr
-        else:             self.write(dst, self.G[addr])
+        elif t == T_GPTR: self.G[v] = addr[1]
+        else:             self.write(dst, self.read_cell(addr))
 
     # ---- execution -----------------------------------------------------------
     def run(self, entry_off=0, max_steps=2_000_000):
@@ -171,10 +185,12 @@ class VM:
         if lbl == "set-string":
             self.write(a[0], self.read(a[1]));                             return pc + 1
         if lbl == "lookup-array":                       # dst = base[idx]
-            addr = self.base_addr(a[1]) + self.read(a[2])
+            bank, base = self.base_addr(a[1])
+            addr = (bank, base + self.read(a[2]))
             self.lookup_store(a[0], addr);                                 return pc + 1
         if lbl == "lookup-array-2d":                    # dst = base[i*stride + col]
-            addr = self.base_addr(a[1]) + self.read(a[2]) * self.read(a[3]) + self.read(a[4])
+            bank, base = self.base_addr(a[1])
+            addr = (bank, base + self.read(a[2]) * self.read(a[3]) + self.read(a[4]))
             self.lookup_store(a[0], addr);                                 return pc + 1
         if lbl == "bit-set":
             bit = self.read(a[1])

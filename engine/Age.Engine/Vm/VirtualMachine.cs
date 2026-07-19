@@ -167,7 +167,7 @@ public sealed class VirtualMachine
         T_GPTR => Gi(Globals, (int)Gi(Globals, (int)op.Value)),
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
         T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
-        T_LPTR => Gi(Globals, (int)Gi(_cur.Locals.P, (int)op.Value)),
+        T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)op.Value)),
         _ => op.Value,
     };
 
@@ -179,7 +179,7 @@ public sealed class VirtualMachine
             case T_GPTR: Globals[(int)Gi(Globals, (int)op.Value)] = val; break;
             case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
             case T_LFLOAT: _cur.Locals.F[(int)op.Value] = val; break;
-            case T_LPTR: Globals[(int)Gi(_cur.Locals.P, (int)op.Value)] = val; break;
+            case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)op.Value), val); break;
         }
     }
 
@@ -189,7 +189,7 @@ public sealed class VirtualMachine
         T_GSTR => Gs(GlobalStrings, (int)op.Value),
         T_GSTRPTR => Gs(GlobalStrings, (int)Gi(Globals, (int)op.Value)),
         T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
-        T_LSTRPTR => Gs(GlobalStrings, (int)Gi(_cur.Locals.SP, (int)op.Value)),
+        T_LSTRPTR => ReadStringCell(Ga(_cur.Locals.SP, (int)op.Value)),
         _ => "",
     };
 
@@ -200,27 +200,63 @@ public sealed class VirtualMachine
             case T_GSTR: GlobalStrings[(int)op.Value] = val; break;
             case T_GSTRPTR: GlobalStrings[(int)Gi(Globals, (int)op.Value)] = val; break;
             case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
-            case T_LSTRPTR: GlobalStrings[(int)Gi(_cur.Locals.SP, (int)op.Value)] = val; break;
+            case T_LSTRPTR: WriteStringCell(Ga(_cur.Locals.SP, (int)op.Value), val); break;
         }
     }
 
-    private long BaseAddr(Operand op) => op.Type switch
+    private static VmAddress Ga(Dictionary<int, VmAddress> d, int k)
+        => d.TryGetValue(k, out var value) ? value : VmAddress.Global(0);
+
+    private long ReadIntCell(VmAddress address) => address.Space switch
     {
-        T_IMM or T_GINT or T_GFLOAT or T_GSTR or T_GPTR or T_GSTRPTR => op.Value,
-        T_LINT => Gi(_cur.Locals.I, (int)op.Value),
-        T_LPTR => Gi(_cur.Locals.P, (int)op.Value),
-        _ => op.Value,
+        VmAddressSpace.LocalInteger => Gi(_cur.Locals.I, address.Address),
+        VmAddressSpace.LocalFloat => Gi(_cur.Locals.F, address.Address),
+        _ => Gi(Globals, address.Address),
     };
 
-    private void LookupStore(Operand dst, long addr)
+    private void WriteIntCell(VmAddress address, long value)
+    {
+        switch (address.Space)
+        {
+            case VmAddressSpace.LocalInteger: _cur.Locals.I[address.Address] = value; break;
+            case VmAddressSpace.LocalFloat: _cur.Locals.F[address.Address] = value; break;
+            default: Globals[address.Address] = value; break;
+        }
+    }
+
+    private string ReadStringCell(VmAddress address)
+        => address.Space == VmAddressSpace.LocalString
+            ? Gs(_cur.Locals.S, address.Address)
+            : Gs(GlobalStrings, address.Address);
+
+    private void WriteStringCell(VmAddress address, string value)
+    {
+        if (address.Space == VmAddressSpace.LocalString) _cur.Locals.S[address.Address] = value;
+        else GlobalStrings[address.Address] = value;
+    }
+
+    private VmAddress BaseAddr(Operand op) => op.Type switch
+    {
+        T_LINT => VmAddress.LocalInteger((int)op.Value),
+        T_LFLOAT => VmAddress.LocalFloat((int)op.Value),
+        T_LSTR => VmAddress.LocalString((int)op.Value),
+        T_LPTR => Ga(_cur.Locals.P, (int)op.Value),
+        T_LSTRPTR => Ga(_cur.Locals.SP, (int)op.Value),
+        _ => VmAddress.Global((int)op.Value),
+    };
+
+    private void LookupStore(Operand dst, VmAddress addr)
     {
         switch (dst.Type)
         {
             case T_LPTR: _cur.Locals.P[(int)dst.Value] = addr; break;
             case T_LSTRPTR: _cur.Locals.SP[(int)dst.Value] = addr; break;
-            case T_GPTR: Globals[(int)dst.Value] = addr; break;
-            case T_GSTRPTR: Globals[(int)dst.Value] = addr; break;
-            default: Write(dst, Gi(Globals, (int)addr)); break;
+            case T_GPTR: Globals[(int)dst.Value] = addr.Address; break;
+            case T_GSTRPTR: Globals[(int)dst.Value] = addr.Address; break;
+            default:
+                if (IsStr(dst)) WriteStr(dst, ReadStringCell(addr));
+                else Write(dst, ReadIntCell(addr));
+                break;
         }
     }
 
@@ -233,7 +269,7 @@ public sealed class VirtualMachine
             case T_LINT: _cur.Locals.I[address] = value; break;
             case T_LFLOAT: _cur.Locals.F[address] = value; break;
             case T_GPTR: Globals[checked((int)Gi(Globals, (int)destination.Value) + index)] = value; break;
-            case T_LPTR: Globals[checked((int)Gi(_cur.Locals.P, (int)destination.Value) + index)] = value; break;
+            case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)destination.Value).Offset(index), value); break;
         }
     }
 
@@ -244,20 +280,24 @@ public sealed class VirtualMachine
             T_LINT => Gi(_cur.Locals.I, checked((int)operand.Value + offset)),
             T_LFLOAT => Gi(_cur.Locals.F, checked((int)operand.Value + offset)),
             T_GINT or T_GFLOAT => ReadGlobal(checked((int)operand.Value + offset)),
-            T_LPTR => Gi(Globals, checked((int)Gi(_cur.Locals.P, (int)operand.Value) + offset)),
+            T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
             T_GPTR => Gi(Globals, checked((int)Gi(Globals, (int)operand.Value) + offset)),
             _ => Gi(Globals, checked((int)operand.Value + offset)),
         };
     }
 
-    private (bool IsLocal, int Address) AddressedCellIdentity(Operand operand, int offset)
+    private (VmAddressSpace Space, int Address) AddressedCellIdentity(Operand operand, int offset)
         => operand.Type switch
         {
-            T_LINT or T_LFLOAT => (true, checked((int)operand.Value + offset)),
-            T_LPTR => (false, checked((int)Gi(_cur.Locals.P, (int)operand.Value) + offset)),
-            T_GPTR => (false, checked((int)Gi(Globals, (int)operand.Value) + offset)),
-            _ => (false, checked((int)operand.Value + offset)),
+            T_LINT => (VmAddressSpace.LocalInteger, checked((int)operand.Value + offset)),
+            T_LFLOAT => (VmAddressSpace.LocalFloat, checked((int)operand.Value + offset)),
+            T_LPTR => PointerIdentity(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
+            T_GPTR => (VmAddressSpace.Global, checked((int)Gi(Globals, (int)operand.Value) + offset)),
+            _ => (VmAddressSpace.Global, checked((int)operand.Value + offset)),
         };
+
+    private static (VmAddressSpace Space, int Address) PointerIdentity(VmAddress address)
+        => (address.Space, address.Address);
 
     private string FormatSwitchValue(Operand operand)
         => IsStr(operand)
@@ -383,9 +423,9 @@ public sealed class VirtualMachine
                 else Write(a[0], Read(a[1]));
                 return pc + 1;
             case "lookup-array":
-                LookupStore(a[0], BaseAddr(a[1]) + Read(a[2])); return pc + 1;
+                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]))); return pc + 1;
             case "lookup-array-2d":
-                LookupStore(a[0], BaseAddr(a[1]) + Read(a[2]) * Read(a[3]) + Read(a[4])); return pc + 1;
+                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]) * Read(a[3]) + Read(a[4]))); return pc + 1;
             case "copy-inline-int-array": // 0x64: count dword followed by plain file values
             {
                 int offset = checked((int)Read(a[1]));

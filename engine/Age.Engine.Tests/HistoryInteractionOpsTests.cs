@@ -5,11 +5,12 @@ using Age.Engine.Vm;
 
 public class HistoryInteractionOpsTests
 {
-    private const int T_IMM = 0, T_GINT = 3, T_LINT = 9;
+    private const int T_IMM = 0, T_GINT = 3, T_LINT = 9, T_LPTR = 12;
     private static readonly OpcodeTable Table = OpcodeTableJson.Load(Paths.OpcodesJson);
     private static Operand I(long value) => new(T_IMM, value);
     private static Operand G(int address) => new(T_GINT, address);
     private static Operand L(int address) => new(T_LINT, address);
+    private static Operand P(int address) => new(T_LPTR, address);
 
     private sealed class StopAfterHistoryReturnsException : Exception { }
 
@@ -20,6 +21,7 @@ public class HistoryInteractionOpsTests
         private int _modalSleeps;
         public bool HistoryReturned;
         public bool SawRenderedText;
+        public IReadOnlyList<RenderObject> FirstHistoryFrame = Array.Empty<RenderObject>();
         public override long InputClockMilliseconds => _now;
 
         public override void Sleep(long duration)
@@ -30,6 +32,7 @@ public class HistoryInteractionOpsTests
             _modalSleeps++;
             if (_modalSleeps == 1)
             {
+                FirstHistoryFrame = Vm.Gfx.SnapshotVisibleObjects(_now);
                 Vm.UpdatePointer(790, 570); // HISTORY candidate 8: visible bottom-right close region
                 Vm.UpdateMouseButtonState(0x1, true);
                 Vm.QueueInputCallback(4);
@@ -52,6 +55,28 @@ public class HistoryInteractionOpsTests
             SawRenderedText = HistoryRenders.Any(render => render.Text.Length > 0);
             throw new StopAfterHistoryReturnsException();
         }
+    }
+
+    [Fact]
+    public void LookupArrayPreservesLocalStorageForLocalBases()
+    {
+        var script = ScriptAssembler.Assemble(Table, "LOCAL_LOOKUP",
+            new List<(int, Operand[])>
+            {
+                (0x55, new[] { L(10), I(768) }),
+                (0x55, new[] { L(11), I(121) }),
+                (0x61, new[] { P(0), L(10), I(1) }),
+                (0x55, new[] { G(0x100), P(0) }),
+                (0x55, new[] { P(0), I(179) }),
+                (0x55, new[] { G(0x101), L(11) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, Table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(121, vm.Globals[0x100]);
+        Assert.Equal(179, vm.Globals[0x101]);
     }
 
     [Fact]
@@ -105,5 +130,24 @@ public class HistoryInteractionOpsTests
         Assert.True(host.SawRenderedText);
         Assert.True(host.HistoryReturned);
         Assert.Equal(1, host.Waits); // the enclosing ADV page was never released or re-entered
+
+        var historyButtons = host.FirstHistoryFrame
+            .Where(render => render.Handle >= 0xd2fa && render.Handle <= 0xd300)
+            .OrderBy(render => render.Handle)
+            .ToArray();
+        Assert.Equal(new[]
+        {
+            (0xd2faL, 768, 121), (0xd2fbL, 768, 179), (0xd2fcL, 768, 237),
+            (0xd2fdL, 768, 295), (0xd2feL, 768, 353), (0xd2ffL, 768, 411),
+            (0xd300L, 768, 549),
+        }, historyButtons.Select(render => (render.Handle, render.DstX, render.DstY)).ToArray());
+
+        var visibleRows = host.HistoryRenders
+            .Where(render => render.Text.Length > 0)
+            .GroupBy(render => render.LayoutSlot)
+            .Select(group => group.Last())
+            .ToArray();
+        Assert.NotEmpty(visibleRows);
+        Assert.All(visibleRows, render => Assert.Equal(65, render.Layout.OriginX));
     }
 }

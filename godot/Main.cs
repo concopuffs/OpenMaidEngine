@@ -586,7 +586,6 @@ public partial class Main : Godot.Control
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
             ClipText = true,
         };
-        label.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         label.AddThemeFontOverride("font", _text.GetThemeFont("font"));
         AddChild(label);
         return label;

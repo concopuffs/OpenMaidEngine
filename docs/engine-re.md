@@ -1366,6 +1366,20 @@ page. This is frame-scoped callback state, not a HISTORY name/offset special cas
 existing HIDEWIN scheduler family. A real regression activates x=684 in SC0000, runs unmodified HISTORY,
 selects/closes region 8, observes retained text, and returns to the same single page wait.
 
+Manual comparison exposed a separate typed-address bug in the first display build. `HISTORY.BIN` copies its
+button x/y tables into local integer cells `0x4` and `0x68`, then op `0x61` takes local pointers to selected
+elements for `draw-texture`. A local base operand names that local cell; it is not a local value containing a
+global address. The VM now retains the local/global domain in pointer values, so reads and writes through a
+local pointer reach the correct bank. This restores the six controls at x=768/y=121..411, the close control
+at x=768/y=549, and the hovered-row highlight while preserving RECOVER's global-array pointer behavior.
+The Python A0 oracle uses the same typed-address model.
+
+The History text batches already carry the native x origin 65 and cursor x 45. Their Godot labels were
+created with a full-rect anchor preset before being parented, which discarded the intended absolute
+placement in the live UI and caused a Godot parent/layout diagnostic. Dynamically composited ADV labels now
+use the default top-left anchors and their explicit position/size, yielding the native text x=110 and
+avoiding that diagnostic.
+
 History's remaining work is stored voice replay through `0x1bd` and the `0xd3/0xd4/0xd5` smooth-scroll
 callback scheduler. None changes backlog ownership or requires choosing a save/profile backend.
 
