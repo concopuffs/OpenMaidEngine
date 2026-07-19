@@ -95,6 +95,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         private long _now;
         public int HideLoopSleeps;
+        public bool HideReturned;
         public override long InputClockMilliseconds => _now;
 
         public override void Sleep(long duration)
@@ -104,7 +105,17 @@ public class HotspotInputTests
             if (duration <= 1 && ++HideLoopSleeps == 2)
             {
                 Vm.UpdateMouseButtonState(0x1, false); // release the x=772 activation click
-                Vm.UpdateMouseButtonState(0x2, true);  // native right-click close/restore gesture
+                Vm.QueueInputCallback(10);             // common release callback arms HIDEWIN input
+            }
+            else if (duration <= 1 && HideLoopSleeps == 3)
+            {
+                Vm.UpdateMouseButtonState(0x1, true);  // next primary click is generic action index 4
+                Vm.QueueInputCallback(4);
+            }
+            else if (duration <= 1 && HideLoopSleeps == 4)
+            {
+                Vm.UpdateMouseButtonState(0x1, false);
+                Vm.QueueInputCallback(10);
             }
         }
 
@@ -115,6 +126,7 @@ public class HotspotInputTests
             Vm.UpdateMouseButtonState(0x1, true);
             Assert.True(Vm.TryActivatePointer(772, 572));
             while (serviceInputCallback()) { }
+            HideReturned = true;
             throw new StopAtFirstWaitException();
         }
     }
@@ -341,10 +353,12 @@ public class HotspotInputTests
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
-        Assert.True(host.HideLoopSleeps >= 2,
+        Assert.True(host.HideLoopSleeps >= 4,
             $"hide sleeps={host.HideLoopSleeps}; halt={vm.HaltReason}; frames={string.Join(',', trace.Events.Where(e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter).Select(e => e.Name))}; tail={string.Join(',', trace.Events.Where(e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.Step).TakeLast(30).Select(e => $"{e.Ins!.Offset:x}:{e.Opcode:x}"))}");
         Assert.Contains(trace.Events, e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
                                         && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.True(host.HideReturned);
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
     }
 
     [Fact]
@@ -383,7 +397,8 @@ public class HotspotInputTests
             (0x55, new[] { G(0x162), I(1) }),
             (0x7c, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
 
@@ -391,7 +406,43 @@ public class HotspotInputTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x161));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x162));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x163));
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
         Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    public void BitSetAndReset_UseBitIndicesRatherThanLiteralMasks()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "BIT_INDEX", new List<(int, Operand[])>
+        {
+            (0x135, new[] { G(0x168), I(1) }),
+            (0x135, new[] { G(0x168), I(4) }),
+            (0x136, new[] { G(0x168), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(0x10, vm.Globals.GetValueOrDefault(0x168));
+    }
+
+    [Fact]
+    public void BitSet_RejectsNativeOutOfRangeIndex()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "BIT_RANGE", new List<(int, Operand[])>
+        {
+            (0x135, new[] { G(0x169), I(32) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal("bit-index-out-of-range:32", vm.HaltReason);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x169));
     }
 
     [Fact]

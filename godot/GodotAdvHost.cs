@@ -41,6 +41,7 @@ public sealed class GodotAdvHost : IHost
     private AudioPayload? _queuedSkippedVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
+    private volatile bool _advPagePresentationSuspended;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
@@ -131,7 +132,7 @@ public sealed class GodotAdvHost : IHost
 
     public AdvWaitIndicatorSnapshot? SnapshotAdvWaitIndicator()
     {
-        if (!IsWaiting) return null;
+        if (!IsWaiting || _advPagePresentationSuspended) return null;
         AdvWaitIndicatorConfig config;
         long resourceId;
         lock (_textLock)
@@ -249,6 +250,14 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
+
+    public bool IsAdvPagePresentationSuspended => _advPagePresentationSuspended;
+
+    public void SetAdvPagePresentationSuspended(bool suspended)
+    {
+        _advPagePresentationSuspended = suspended;
+        _timeline?.State(suspended ? "adv-page-suspended" : "adv-page-restored", new());
+    }
 
     public void InputCallbackCompleted(GfxState gfx)
         => Interlocked.Exchange(ref _presentRequested, 1);

@@ -26,12 +26,15 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<long> CursorResources = new();
+    public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
+    public void SetAdvPagePresentationSuspended(bool suspended)
+        => AdvPagePresentationSuspended.Add(suspended);
     public void WaitForInput() => Waits++;
     public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
     {

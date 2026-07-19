@@ -82,6 +82,18 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1bd_play_history_voice@0x420920 stops/replaces the active voice, starts operand 1 through the native voice service when Skip is inactive (or queues it while Skip is active), records the replay in the message voice state when enabled, and sets adv_auto_voice_pending when playback exists. HISTORY.BIN obtains the id from retained text-record metadata before invoking this opcode.
 
+## compute
+
+### 0x135 `bit-set` (bit-set, argc 2)
+- **summary:** (value)(bit_index) - set the indexed bit in the destination integer.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value | (1 << index). HIDEWIN.BIN sets index 1 at 0x13d and later tests mask 0x2 at 0x146.
+
+### 0x136 `bit-reset` (bit-reset, argc 2)
+- **summary:** (value)(bit_index) - clear the indexed bit in the destination integer.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
+
 ## control
 
 ### 0x3 `call-script` (call-script, argc 1)
@@ -432,8 +444,8 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 
 ### 0xff `poll-joy-callback-input` (u00415A10, argc 0)
 - **summary:** Poll the current joy/input callback bitmask and initialize the per-dispatch scan state.
-- **grounding:** source=investigation, confidence=med
-- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through the input poller at 0x4608b0, resets the scan index, and snapshots the current input selector. It pairs with op 0x100.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through input_poll_action_mask@0x4608b0, resets the scan index, and snapshots the current input selector. That poller combines configured keyboard, mouse-action, and joystick bits. input_poll_mouse_action_bits@0x460240 maps VK_LBUTTON to logical bit mouse_map[0]+4 (default index 4) and VK_RBUTTON to mouse_map[1]+4 (default index 5). It pairs with op 0x100.
 
 ### 0x100 `dispatch-joy-callbacks` (u00415A60, argc 0)
 - **summary:** Dispatch registered callbacks for the current or pending joy/input selection.
@@ -448,7 +460,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x108 `get-mouse-button-state` (u00415E70, argc 1)
 - **summary:** (out) - return the current mouse-button state bitmask.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN uses bit 0x1 for left-click edge interaction and bit 0x2 for its close/restore gesture; HISTORY.BIN likewise tests individual bits for transitions.
+- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through input_poll_raw_mouse_buttons@0x4602e0 and writes it to operand 1. The raw mapping is VK_LBUTTON -> 0x1 and VK_RBUTTON -> 0x2. This is distinct from op 0xff's logical action mask: the default mouse mapping also exposes left/right as callback indices 4/5, both registered by HIDEWIN to its close/restore callback.
 
 ### 0x109 `get-cursor-virtual` (u00415EC0, argc 2)
 - **summary:** (out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates.
@@ -841,14 +853,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x134 `u0041F050` (u0041F050, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x135 `bit-set` (bit-set, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x136 `bit-reset` (bit-reset, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x137 `u0041F1C0` (u0041F1C0, argc 1)
 - **summary:** —

@@ -350,15 +350,23 @@ public partial class Main : Godot.Control
             && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {
             var p = ToNativeScreen(mb.Position);
+            bool advPageSuspended = _host.IsAdvPagePresentationSuspended;
             _vm.UpdatePointer(p.X, p.Y);
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
+            // AGE exposes the physical left button twice: raw mask 0x1 for the timed mouse callback,
+            // and the configured primary action (default input callback index 4). During HIDEWIN the
+            // activation click's release arms the script; the next completed left click restores it.
+            if (mb.ButtonIndex == MouseButton.Left && advPageSuspended)
+                _vm.QueueInputCallback(mb.Pressed ? 4 : 10);
             if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed) _host.SignalInput();
+            // A left click owned by the yielded page must return through HIDEWIN's callback/coroutine
+            // path. Releasing the enclosing ADV wait here would also advance the restored dialogue page.
+            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && !advPageSuspended) _host.SignalInput();
             return;
         }
         UpdateAgeInputCallback(e, "ui_down", 0);
@@ -515,6 +523,8 @@ public partial class Main : Godot.Control
 
     private void UpdateAdvTextPresentation()
     {
+        _text.Visible = !_host.IsAdvPagePresentationSuspended;
+        if (!_text.Visible) return;
         var t = _host.SnapshotAdvText();
         _text.Position = new Vector2(t.X, 430 + t.Y);
         _text.Size = new Vector2(System.Math.Max(1, 720 - t.X), System.Math.Max(1, 147 - t.Y));

@@ -18,6 +18,10 @@ public interface IHost
     void SetAdvTextCursor(int layoutSlot, int x, int y) { }
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
+    // Op 0x199 temporarily yields the active ADV page into its registered hide-window coroutine.
+    // The retained scene continues to render, but the text layout and its wait marker are suspended
+    // until op 0x7c restores the saved page PC.
+    void SetAdvPagePresentationSuspended(bool suspended) { }
     void WaitForInput();
     void WaitForInput(int layoutSlot) => WaitForInput();
     // Interactive hosts service script callbacks on the VM thread while the enclosing ADV page remains

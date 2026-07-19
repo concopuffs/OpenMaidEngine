@@ -1308,6 +1308,30 @@ pointer/button reads, cursor host forwarding, and real CUR decoding.
 Validation is engine 175/175, opcode/global generator tests and lints clean, zero-warning Godot build, and
 threaded `SELFTEST OK`.
 
+**Manual-validation correction (2026-07-18).** Native `bit-set`/`bit-reset` operands are bit indices, not
+literal masks: HIDEWIN sets index 1 at `0x13d`, tests mask `0x2` at `0x146`, and clears index 1 at `0x154`.
+The old VM interpretation wrote mask `0x1`, so the right-button release edge could never reach the restore
+path. `/v2` confirms the generic semantics in `op_0x135_handler@0x4296c0` and
+`op_0x136_handler@0x429730`: `value |= 1 << index` and `value &= ~(1 << index)`, with indices 0..31 valid.
+The raw op-`0x108` channel therefore supplies `0x1` for `VK_LBUTTON` and `0x2` for `VK_RBUTTON`, making a
+right-button release one direct restore route. That is not the complete input model, however. Native
+`input_poll_mouse_action_bits@0x460240` also maps the physical left/right buttons through configurable
+logical actions (defaults 0/1) to callback indices 4/5, and HIDEWIN registers both indices to its restore
+callback. A completed ordinary left click therefore restores the textbox as observed in the original game.
+The raw left-button edge branch only supports moving an oversized retained display object while held; it is
+not evidence that dungeon gameplay camera panning is enabled during an ordinary 800x600 VN scene.
+
+The manual run also exposed that ADV text and the op-`0x72` wait indicator are currently Godot presentation
+overlays rather than retained texture objects. The shipped handler correctly faded the textbox/chrome, but
+those overlays ignored the op-`0x199` coroutine lifecycle and remained above the scene. The host now suspends
+both when the first `0x199` saves/yields the active ADV page and restores them only when op `0x7c` restores
+that saved page PC. The enclosing input wait remains parked throughout, so HIDEWIN continues to own mouse and
+mapped action input instead of an overlay click accidentally advancing dialogue.
+The Godot input adapter now queues the native primary-action callback while the ADV page is suspended and
+does not release the enclosing dialogue wait; otherwise the restoring click would also advance the page.
+The `/v2` bit and mouse-input helpers are annotated and saved. Validation: engine 177/177, opcode tests/lints
+and vm0 RECOVER clean, zero-warning Godot build, and threaded `SELFTEST OK`.
+
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 
 The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:

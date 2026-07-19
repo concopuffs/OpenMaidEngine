@@ -1620,3 +1620,20 @@ threaded `SELFTEST OK`.
 **Next:** manually validate x=772 hide/restore and edge cursors in a normal SC0000 run. The next development
 slice should be Read-message Skip's profile-wide ReadTextDB model; History can then reuse both that
 message-completion seam and the generic callback/input layer landed here.
+
+**Manual-validation correction (2026-07-18).** The textbox faded through the shipped retained-graphics path,
+but the port's separate ADV text Label and wait-indicator TextureRect stayed visible. Op `0x199` now suspends
+those two page overlays for the lifetime of the yielded ADV coroutine, and op `0x7c` restores them with the
+saved page. The failed restore interaction was a shared opcode error: `bit-set`/`bit-reset` take a bit index,
+not a literal mask, so HIDEWIN's set-index-1/test-`0x2` raw right-button release never matched. Both the C# VM
+and the Python oracle now use indexed-bit semantics. Follow-up original-game validation corrected an
+over-narrow input conclusion: AGE separately maps physical left/right mouse buttons into logical callback
+indices 4/5, and HIDEWIN registers those actions to restore as well. Godot now queues the primary action for
+a left click while the ADV page is suspended and keeps that click from advancing the enclosing dialogue
+wait. The real-script regression restores through the left-action callback without hitting the step limit
+and records the overlay suspend/restore sequence.
+Validation: engine 177/177, opcode tests/lints and vm0 RECOVER clean, zero-warning Godot build, and threaded
+`SELFTEST OK`; `/v2` bit handlers are annotated and saved.
+
+**Next:** manually recheck x=772 with the original left-click restore gesture, then continue with the
+profile-wide ReadTextDB slice if the visual lifecycle now matches.

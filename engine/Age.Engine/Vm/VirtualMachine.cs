@@ -330,8 +330,18 @@ public sealed class VirtualMachine
                 LookupStore(a[0], BaseAddr(a[1]) + Read(a[2])); return pc + 1;
             case "lookup-array-2d":
                 LookupStore(a[0], BaseAddr(a[1]) + Read(a[2]) * Read(a[3]) + Read(a[4])); return pc + 1;
-            case "bit-set": Write(a[0], Read(a[0]) | Read(a[1])); return pc + 1;
-            case "bit-reset": Write(a[0], Read(a[0]) & ~Read(a[1])); return pc + 1;
+            case "bit-set":
+            {
+                long bit = Read(a[1]);
+                if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return HALT; }
+                Write(a[0], Read(a[0]) | (1L << (int)bit)); return pc + 1;
+            }
+            case "bit-reset":
+            {
+                long bit = Read(a[1]);
+                if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return HALT; }
+                Write(a[0], Read(a[0]) & ~(1L << (int)bit)); return pc + 1;
+            }
             case "check-bit": Write(a[0], (Read(a[1]) >> (int)(Read(a[2]) & 31)) & 1); return pc + 1;
             case "copy-to-global": Write(a[0], Read(a[1])); return pc + 1;
             case "jmp": return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
@@ -357,6 +367,7 @@ public sealed class VirtualMachine
                 {
                     _cur.CoroutineResumePc = pc + 1;
                     _cur.CoroutineYieldActive = true;
+                    _host.SetAdvPagePresentationSuspended(true);
                     targetOffset = _cur.CoroutineYieldHandlerA;
                 }
                 else targetOffset = _cur.CoroutineYieldHandlerB;
@@ -371,6 +382,7 @@ public sealed class VirtualMachine
                 {
                     _cur.CoroutineResumePc = null;
                     _cur.CoroutineYieldActive = false;
+                    _host.SetAdvPagePresentationSuspended(false);
                     return resumePc;
                 }
                 return pc + 1;                       // cold bounded scene-entry path

@@ -177,9 +177,17 @@ class VM:
             addr = self.base_addr(a[1]) + self.read(a[2]) * self.read(a[3]) + self.read(a[4])
             self.lookup_store(a[0], addr);                                 return pc + 1
         if lbl == "bit-set":
-            self.write(a[0], self.read(a[0]) | self.read(a[1]));           return pc + 1
+            bit = self.read(a[1])
+            if not 0 <= bit < 32:
+                self.halt_reason = f"bit-index-out-of-range:{bit}"
+                return None
+            self.write(a[0], self.read(a[0]) | (1 << bit));                return pc + 1
         if lbl == "bit-reset":
-            self.write(a[0], self.read(a[0]) & ~self.read(a[1]));          return pc + 1
+            bit = self.read(a[1])
+            if not 0 <= bit < 32:
+                self.halt_reason = f"bit-index-out-of-range:{bit}"
+                return None
+            self.write(a[0], self.read(a[0]) & ~(1 << bit));               return pc + 1
         if lbl == "check-bit":                          # p1 = (p2 >> p3) & 1
             self.write(a[0], (self.read(a[1]) >> (self.read(a[2]) & 31)) & 1); return pc + 1
         if lbl == "copy-to-global":                     # best-effort: p1 = p2 (single cell)
