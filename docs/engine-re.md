@@ -1325,8 +1325,14 @@ and `0x85` feed it directly; Godot remains only a presentation host and does not
 The model intentionally has no JSON or disk serialization. `GameSession.ToJson()` continues to snapshot
 only the pre-existing global banks, so landing the live backlog does not silently choose a save/profile
 backend. Native numbered-save restoration remains the explicit future integration seam described above.
-The next History slice can now implement generic inline arrays/value dispatch and ops `0x1d0..0x1d4` over
-real retained data before adding host rendering.
+The second port slice implements generic inline-array copying (`0x64`), formatted value dispatch
+(`0xa1/0xa2/0xa3`), cumulative navigation (`0x1d0`), and metadata/voice queries (`0x1d3/0x1d4`). The C#
+loader retains the original body dwords so `0x64` copies the file's plain count-prefixed values; AGE's
+rotate/XOR work belongs to its native in-memory representation, not the SYS4 file format. Navigation mirrors
+manager `+0xd6c`: layout define/reset updates the latest-entry anchor, while each `0x1d0` delta is cumulative
+and does not mutate it. Query scans stop at the next group-start record; their third operands are unused by
+the native helpers. History's remaining work is therefore presentation and interaction rather than backlog
+data access.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

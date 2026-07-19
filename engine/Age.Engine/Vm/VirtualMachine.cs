@@ -35,6 +35,7 @@ public sealed class VirtualMachine
     private bool _autoVoicePending;
     private volatile bool _messageSkipEnabled;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
+    private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
@@ -217,6 +218,24 @@ public sealed class VirtualMachine
         }
     }
 
+    private void WriteConsecutive(Operand destination, int index, long value)
+    {
+        int address = checked((int)destination.Value + index);
+        switch (destination.Type)
+        {
+            case T_GINT: case T_GFLOAT: Globals[address] = value; break;
+            case T_LINT: _cur.Locals.I[address] = value; break;
+            case T_LFLOAT: _cur.Locals.F[address] = value; break;
+            case T_GPTR: Globals[checked((int)Gi(Globals, (int)destination.Value) + index)] = value; break;
+            case T_LPTR: Globals[checked((int)Gi(_cur.Locals.P, (int)destination.Value) + index)] = value; break;
+        }
+    }
+
+    private string FormatSwitchValue(Operand operand)
+        => IsStr(operand)
+            ? ReadStr(operand)
+            : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     private enum FrameOutcome { Returned, Halted, RanOff }
 
     public void Run(int entryOffset = 0)
@@ -333,6 +352,26 @@ public sealed class VirtualMachine
                 LookupStore(a[0], BaseAddr(a[1]) + Read(a[2])); return pc + 1;
             case "lookup-array-2d":
                 LookupStore(a[0], BaseAddr(a[1]) + Read(a[2]) * Read(a[3]) + Read(a[4])); return pc + 1;
+            case "copy-inline-int-array": // 0x64: count dword followed by plain file values
+            {
+                int offset = checked((int)Read(a[1]));
+                if ((uint)offset >= (uint)_cur.Script.BodyDwords.Count)
+                {
+                    HaltReason ??= $"inline-array-offset@0x{offset:x}";
+                    return HALT;
+                }
+                uint rawCount = _cur.Script.BodyDwords[offset];
+                int available = _cur.Script.BodyDwords.Count - offset - 1;
+                if (rawCount > (uint)available)
+                {
+                    HaltReason ??= $"inline-array-length@0x{offset:x}:{rawCount}";
+                    return HALT;
+                }
+                int count = (int)rawCount;
+                for (int i = 0; i < count; i++)
+                    WriteConsecutive(a[0], i, unchecked((int)_cur.Script.BodyDwords[offset + 1 + i]));
+                return pc + 1;
+            }
             case "bit-set":
             {
                 long bit = Read(a[1]);
@@ -356,6 +395,16 @@ public sealed class VirtualMachine
             {
                 long tgt = Read(a[0]) != 0 ? a[1].Value : a[2].Value;
                 return tgt == NoJump ? pc + 1 : _cur.Script.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1);
+            }
+            case "begin-value-switch":
+                _valueSwitchTargets.Clear(); return pc + 1;
+            case "add-value-switch-case":
+                _valueSwitchTargets[FormatSwitchValue(a[0])] = checked((int)Read(a[1])); return pc + 1;
+            case "value-switch-jump":
+            {
+                int target = _valueSwitchTargets.TryGetValue(FormatSwitchValue(a[0]), out int matched)
+                    ? matched : checked((int)Read(a[1]));
+                return _cur.Script.IndexByOffset.GetValueOrDefault(target, pc + 1);
             }
             case "u0041ADB0":
             case "coroutine-save-yield-handlers":   // 0x7b: retain native handler metadata
@@ -619,6 +668,32 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "append-text-history-metadata": // 0x1d2: typed value attached to the current group
                 TextHistory.AppendMetadata(Read(a[0]), Read(a[1]), _advTextStyle); return pc + 1;
+            case "step-text-history": // 0x1d0: cumulative delta from the latest retained boundary
+                if (TextHistory.TryStepGroup((int)Read(a[2]), out var historyEntry))
+                {
+                    Write(a[0], historyEntry.LayoutSlot);
+                    Write(a[1], historyEntry.FirstRecordIndex);
+                }
+                else
+                {
+                    Write(a[0], -1);
+                    Write(a[1], -1);
+                }
+                return pc + 1;
+            case "u0041BB90":
+            case "find-text-history-value": // 0x1d3: operand 3 is accepted but ignored natively
+            {
+                bool found = TextHistory.TryFindMetadata((int)Read(a[3]), Read(a[4]), out long value);
+                Write(a[0], found ? 1 : 0);
+                Write(a[1], value);
+                return pc + 1;
+            }
+            case "u0041BC00":
+            case "find-text-history-pair": // 0x1d4: operand 3 is accepted but ignored natively
+                TextHistory.TryFindVoicePair((int)Read(a[3]), out long voiceId, out long voiceArgument);
+                Write(a[0], voiceId);
+                Write(a[1], voiceArgument);
+                return pc + 1;
             case "clear-text-history": // 0x85: bound the backlog to the current ordinary ADV block
                 TextHistory.Clear(); return pc + 1;
             case "set-font-size":

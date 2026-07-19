@@ -1704,3 +1704,27 @@ safe-noop.
 **Next:** implement generic inline integer arrays (`0x64`) and value-switch dispatch (`0xa1/0xa2/0xa3`),
 then wire History navigation/query ops `0x1d0`, `0x1d3`, and `0x1d4` against this model. Rendering op `0x1d1`
 and its presentation operations can follow once those data-side script paths execute correctly.
+
+### ADV History data-side navigation implemented (2026-07-18)
+
+The second bounded slice is complete. `Script.BodyDwords` retains the original SYS4 body for runtime data
+operands, and op `0x64` copies its plain count-prefixed footer values into consecutive global or local VM
+cells. The native rotate/XOR sequence reverses AGE's loader-created in-memory representation; applying it
+again to the file would corrupt HISTORY's visibly plain rectangle and coordinate arrays. Generic
+`0xa1/0xa2/0xa3` value-switch sequences now use formatted keys and branch to their registered or default PC.
+
+The retained model now exposes native navigation and query behavior. Layout boundaries update a latest-entry
+anchor; op `0x1d0` resolves cumulative deltas from that anchor without mutating it, skipping duplicate first-
+record offsets and navigation-filtered records. Ops `0x1d3/0x1d4` scan from a supplied record through one
+group and return typed metadata or the voice pair with native defaults. Ghidra confirms both opcodes' third
+operands reach unused helper parameters despite HISTORY passing 1.
+
+Eight new focused cases cover signed inline values, real HISTORY footer retention, matched/default value
+switches, cumulative group navigation, duplicate/filter skipping, metadata/voice queries, and missing-value
+defaults. Validation: engine 190/190, opcode generator tests/lint clean, zero-warning Godot build, threaded
+`SELFTEST OK`. HISTORY is now 63/78 distinct opcodes and 833/854 instructions handled or safe-noop; its 15
+remaining effectful gaps total 21 instructions.
+
+**Next:** implement History's display slice around `0x1d1`, layout origin `0x198`, message-window alpha
+`0x131`, surface fill `0x20b`, and retained-object presentation `0x222`. After visible backlog rows render,
+finish rectangle hover/interaction, voice replay, and the `0xd3/0xd4/0xd5` smooth-scroll scheduler details.

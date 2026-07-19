@@ -859,7 +859,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by encoded values from frame_codebase + operand2*4, reverses the engine rotate/XOR encoding with anti_tamper_a, and writes consecutive dwords. HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays."
+evidence = "Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by values from frame_codebase + operand2*4, reverses the native loader's rotate/XOR in-memory representation with anti_tamper_a, and writes consecutive dwords. The original SYS4 file footer stores the count and values plainly; HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4276,12 +4276,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "step-text-history"
 category = "adv"
-summary = "(out_layout_slot)(out_record_index)(delta) - move through retained ADV text-history groups and return the resolved layout slot and first record index, or -1 outputs at a boundary."
+summary = "(out_layout_slot)(out_record_index)(delta) - resolve a cumulative delta from the latest retained ADV boundary and return its layout slot and first record index, or -1 outputs at a boundary."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). The helper walks the 8-byte logical index over 0x48-byte retained records, skips record-flag bit1 for mode mask 2, and returns -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count/page backward and positive deltas to page forward."
+evidence = "Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). Layout define/reset set manager+0xd6c to the newest entry; the helper reads but does not mutate that anchor, so deltas are cumulative. It skips duplicate record offsets and record-flag bit1, and returns -1 outputs at a boundary. HISTORY.BIN uses negative cumulative deltas to count/page backward."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4367,7 +4367,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1d3
-label = "u0041BB90"
+label = "find-text-history-value"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
@@ -4379,7 +4379,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_history_find_typed_value@0x450840 and writes its boolean result plus returned value. The helper scans the 0x48-byte text records within a logical group for flag 0x20000000 and matching type in record+0x18, returning record+0x14. HISTORY.BIN queries types 1 and 2 for line decoration/name metadata."
+evidence = "Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_history_find_typed_value@0x450840 and writes its boolean result plus returned value. The helper scans forward from operand 4 until the next group-start bit for flag 0x20000000 and matching type in record+0x18, returning the last match's record+0x14. Operand 3 reaches an unused helper parameter. HISTORY.BIN passes 1 and queries types 1 and 2 for line decoration/name metadata."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4393,7 +4393,7 @@ observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "reserved (ignored by native helper)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
@@ -4408,7 +4408,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1d4
-label = "u0041BC00"
+label = "find-text-history-pair"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
@@ -4420,7 +4420,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_history_find_pair@0x4509f0 and writes two outputs. The helper scans the logical group for a record flagged 0x40000000 and returns its +0x14/+0x18 pair. HISTORY.BIN uses the pair to expose voice replay for a backlog entry."
+evidence = "Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_history_find_pair@0x4509f0 and writes two outputs. The helper scans forward from operand 4 until the next group-start bit and returns the last 0x40000000 record's +0x14/+0x18 pair, defaulting both outputs to -1. Operand 3 reaches an unused helper parameter. HISTORY.BIN passes 1 and uses the pair to expose voice replay for a backlog entry."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4434,7 +4434,7 @@ observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "reserved (ignored by native helper)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]

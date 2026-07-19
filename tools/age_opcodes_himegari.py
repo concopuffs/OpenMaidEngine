@@ -40,8 +40,6 @@ INFERRED: dict[int, dict] = {
     0x1ca: dict(name='set-read-message-skip', category='input', noop=False, confidence='high', source='investigation', summary='(enabled) - set the engine setting `message:ReadTextSkip`, which skips only previously read text.'),
     0x1cb: dict(name='get-read-message-skip', category='input', noop=False, confidence='high', source='investigation', summary='(out) - read the engine setting `message:ReadTextSkip`.'),
     0x1d1: dict(name='render-text-history', category='adv', noop=False, confidence='high', source='investigation', summary='(layout_slot)(record_index)(flags)(color_a)(color_b) - render retained ADV text records into a selected text layout/surface.'),
-    0x1d3: dict(name='find-text-history-value', category='adv', noop=False, confidence='high', source='investigation', summary='(out_found)(out_value)(direction)(record_index)(value_type) - find typed metadata within one retained ADV message group.'),
-    0x1d4: dict(name='find-text-history-pair', category='adv', noop=False, confidence='high', source='investigation', summary='(out_a)(out_b)(direction)(record_index) - find paired metadata within one retained ADV message group.'),
     0x1d5: dict(name='cond-block', category='marker', noop=True, confidence='high', source='inference', summary='zero-arg; ALWAYS follows jcc — marks conditional body entry'),
     0x1f4: dict(name='stmt-begin', category='marker', noop=True, confidence='high', source='investigation', summary='zero-arg; opens scripts, pairs with stmt-end 0x1f5'),
     0x1f5: dict(name='stmt-end', category='marker', noop=True, confidence='high', source='investigation', summary='zero-arg; precedes exit/next-stmt, pairs with 0x1f4'),

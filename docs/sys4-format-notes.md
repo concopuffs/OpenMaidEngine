@@ -110,6 +110,19 @@ task. These tags give a head start on labeling the disassembly.*
 - Non-scene scripts (`MENU`, `ADDEXP`) contain only a handful of control strings —
   consistent with the inventory's subsystem/data-table categorization.
 
+## Inline integer arrays — CONFIRMED
+
+Opcode `0x64` operand 2 points to a footer blob in the same body-dword coordinate space as strings. The blob
+is `[count:u32, value0:u32, ... valueN:u32]`; these dwords are stored plainly in the original SYS4 file.
+For example, `HISTORY.BIN@0x13d4` is `[4, 0, 5, 0, 538]`, and its fifteen blobs initialize the backlog UI's
+rectangle, coordinate, and lookup arrays. An op-`0x64` reference lowers the executable-code boundary just
+like a type-2 string reference.
+
+Native `AGE.EXE` applies a per-context rotate/XOR representation after loading script data and reverses it
+inside the opcode handler. That transformation is not part of the on-disk format: file readers and the port
+must copy the footer's plain dwords, including two's-complement negative values, without applying the native
+memory-cookie transform.
+
 ## Patch-override caveat (re-confirmed)
 
 49 loose script `.BIN` files in the game root shadow DATA1 copies at runtime and differ slightly in size;

@@ -76,9 +76,9 @@
 - **evidence:** Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x55110 for operand 0 and zero for operand 1, rejecting other values. Text/layout/metadata/voice paths test or propagate that high bit before appending retained history. HISTORY.BIN disables recording at entry and reenables it at exit so the backlog UI does not record itself.
 
 ### 0x1d0 `step-text-history` (step-text-history, argc 3)
-- **summary:** (out_layout_slot)(out_record_index)(delta) - move through retained ADV text-history groups and return the resolved layout slot and first record index, or -1 outputs at a boundary.
+- **summary:** (out_layout_slot)(out_record_index)(delta) - resolve a cumulative delta from the latest retained ADV boundary and return its layout slot and first record index, or -1 outputs at a boundary.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). The helper walks the 8-byte logical index over 0x48-byte retained records, skips record-flag bit1 for mode mask 2, and returns -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count/page backward and positive deltas to page forward.
+- **evidence:** Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). Layout define/reset set manager+0xd6c to the newest entry; the helper reads but does not mutate that anchor, so deltas are cumulative. It skips duplicate record offsets and record-flag bit1, and returns -1 outputs at a boundary. HISTORY.BIN uses negative cumulative deltas to count/page backward.
 
 ### 0x1d1 `render-text-history` (u0041BAE0, argc 5)
 - **summary:** (layout_slot)(record_index)(flags)(color_a)(color_b) - render retained ADV text records into a selected text layout/surface.
@@ -90,15 +90,15 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1d2_handler@0x41f9c0 tests ctx+0x55110 and, when recording is enabled, calls text_history_append_typed_metadata@0x455f00. That appends a 0x48-byte record with flag 0x20000000, operand 1 at +0x14, and operand 2 at +0x18, consuming the pending group-start flag if set. The corpus has 17,323 uses; HISTORY.BIN later queries metadata types 1 and 2 through op 0x1d3. This opcode is effectful, not a statement marker.
 
-### 0x1d3 `find-text-history-value` (u0041BB90, argc 5)
+### 0x1d3 `find-text-history-value` (find-text-history-value, argc 5)
 - **summary:** (out_found)(out_value)(direction)(record_index)(value_type) - find typed metadata within one retained ADV message group.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_history_find_typed_value@0x450840 and writes its boolean result plus returned value. The helper scans the 0x48-byte text records within a logical group for flag 0x20000000 and matching type in record+0x18, returning record+0x14. HISTORY.BIN queries types 1 and 2 for line decoration/name metadata.
+- **evidence:** Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_history_find_typed_value@0x450840 and writes its boolean result plus returned value. The helper scans forward from operand 4 until the next group-start bit for flag 0x20000000 and matching type in record+0x18, returning the last match's record+0x14. Operand 3 reaches an unused helper parameter. HISTORY.BIN passes 1 and queries types 1 and 2 for line decoration/name metadata.
 
-### 0x1d4 `find-text-history-pair` (u0041BC00, argc 4)
+### 0x1d4 `find-text-history-pair` (find-text-history-pair, argc 4)
 - **summary:** (out_a)(out_b)(direction)(record_index) - find paired metadata within one retained ADV message group.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_history_find_pair@0x4509f0 and writes two outputs. The helper scans the logical group for a record flagged 0x40000000 and returns its +0x14/+0x18 pair. HISTORY.BIN uses the pair to expose voice replay for a backlog entry.
+- **evidence:** Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_history_find_pair@0x4509f0 and writes two outputs. The helper scans forward from operand 4 until the next group-start bit and returns the last 0x40000000 record's +0x14/+0x18 pair, defaulting both outputs to -1. Operand 3 reaches an unused helper parameter. HISTORY.BIN passes 1 and uses the pair to expose voice replay for a backlog entry.
 
 ### 0x204 `draw-string` (draw-string, argc 4)
 - **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
@@ -152,7 +152,7 @@
 ### 0x64 `copy-inline-int-array` (copy-inline-int-array, argc 2)
 - **summary:** (destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by encoded values from frame_codebase + operand2*4, reverses the engine rotate/XOR encoding with anti_tamper_a, and writes consecutive dwords. HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays.
+- **evidence:** Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by values from frame_codebase + operand2*4, reverses the native loader's rotate/XOR in-memory representation with anti_tamper_a, and writes consecutive dwords. The original SYS4 file footer stores the count and values plainly; HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays.
 
 ### 0x135 `bit-set` (bit-set, argc 2)
 - **summary:** (value)(bit_index) - set the indexed bit in the destination integer.

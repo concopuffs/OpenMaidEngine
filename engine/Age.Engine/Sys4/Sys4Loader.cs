@@ -22,7 +22,15 @@ public static class Sys4Loader
 
         var header = new ScriptHeader(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
         var (instrs, idxByOff, strings) = DecodeCode(dw, fields, nbody, table);
-        return new Script { Name = name, Header = header, Instructions = instrs, IndexByOffset = idxByOff, Strings = strings };
+        return new Script
+        {
+            Name = name,
+            Header = header,
+            Instructions = instrs,
+            IndexByOffset = idxByOff,
+            Strings = strings,
+            BodyDwords = dw,
+        };
     }
 
     private static (List<Instruction>, Dictionary<int, int>, Dictionary<int, string>)

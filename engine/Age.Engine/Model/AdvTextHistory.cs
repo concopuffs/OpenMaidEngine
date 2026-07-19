@@ -78,6 +78,7 @@ public sealed class AdvTextHistory
     private readonly List<AdvTextHistoryEntry> _entries = new();
     private readonly Dictionary<int, LayoutState> _layouts = new();
     private readonly HashSet<int> _pendingGroupStarts = new();
+    private int _navigationAnchorIndex = -1;
 
     public IReadOnlyList<AdvTextHistoryRecord> Records => _records;
     public IReadOnlyList<AdvTextHistoryEntry> Entries => _entries;
@@ -114,10 +115,11 @@ public sealed class AdvTextHistory
         layout.CursorY = y;
     }
 
-    public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style)
+    public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style,
+                           AdvTextHistoryRecordFlags flags = AdvTextHistoryRecordFlags.None)
     {
         int slot = ResolveLayout(requestedSlot);
-        AppendRecord(slot, AdvTextHistoryRecordKind.Text, AdvTextHistoryRecordFlags.None,
+        AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags,
                      style, text, 0, 0, sourceOffset);
     }
 
@@ -135,6 +137,81 @@ public sealed class AdvTextHistory
         _records.Clear();
         _entries.Clear();
         _pendingGroupStarts.Clear();
+        _navigationAnchorIndex = -1;
+    }
+
+    /// <summary>
+    /// Resolve a logical entry relative to AGE's latest-boundary navigation anchor. Repeated calls do not
+    /// mutate the anchor; HISTORY.BIN supplies cumulative deltas while counting and paging backward.
+    /// </summary>
+    public bool TryStepGroup(int delta, out AdvTextHistoryEntry entry)
+    {
+        entry = new AdvTextHistoryEntry(-1, -1);
+        if ((uint)_navigationAnchorIndex >= (uint)_entries.Count) return false;
+
+        int index = _navigationAnchorIndex;
+        if (delta < 0)
+        {
+            for (int remaining = -delta; remaining > 0; remaining--)
+            {
+                int firstRecord = _entries[index].FirstRecordIndex;
+                do
+                {
+                    if (firstRecord == 0 || index < 1) return false;
+                    index--;
+                }
+                while (IsNavigationFiltered(_entries[index])
+                       || _entries[index].FirstRecordIndex == firstRecord);
+            }
+        }
+        else
+        {
+            for (int remaining = delta; remaining > 0; remaining--)
+            {
+                int firstRecord = _entries[index].FirstRecordIndex;
+                do
+                {
+                    index++;
+                    if (index >= _entries.Count) return false;
+                    // Native treats the last entry's record offset as the forward sentinel.
+                    if (_entries[index].FirstRecordIndex == _entries[^1].FirstRecordIndex) return false;
+                }
+                while (IsNavigationFiltered(_entries[index])
+                       || _entries[index].FirstRecordIndex == firstRecord);
+            }
+        }
+
+        entry = _entries[index];
+        return true;
+    }
+
+    public bool TryFindMetadata(int firstRecordIndex, long metadataType, out long value)
+    {
+        value = 0;
+        bool found = false;
+        foreach (var record in EnumerateGroup(firstRecordIndex))
+        {
+            if (!record.Flags.HasFlag(AdvTextHistoryRecordFlags.TypedMetadata)
+                || record.AuxValue != metadataType) continue;
+            value = record.Value;
+            found = true;
+        }
+        return found;
+    }
+
+    public bool TryFindVoicePair(int firstRecordIndex, out long voiceId, out long voiceArgument)
+    {
+        voiceId = -1;
+        voiceArgument = -1;
+        bool found = false;
+        foreach (var record in EnumerateGroup(firstRecordIndex))
+        {
+            if (!record.Flags.HasFlag(AdvTextHistoryRecordFlags.VoicePair)) continue;
+            voiceId = record.Value;
+            voiceArgument = record.AuxValue;
+            found = true;
+        }
+        return found;
     }
 
     private int SelectLayout(int requestedSlot)
@@ -161,6 +238,22 @@ public sealed class AdvTextHistory
         if (RecordingSuppressed) return;
         _entries.Add(new AdvTextHistoryEntry(slot, _records.Count));
         _pendingGroupStarts.Add(slot);
+        _navigationAnchorIndex = _entries.Count - 1;
+    }
+
+    private bool IsNavigationFiltered(AdvTextHistoryEntry entry)
+        => (uint)entry.FirstRecordIndex < (uint)_records.Count
+           && _records[entry.FirstRecordIndex].Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered);
+
+    private IEnumerable<AdvTextHistoryRecord> EnumerateGroup(int firstRecordIndex)
+    {
+        if ((uint)firstRecordIndex >= (uint)_records.Count) yield break;
+        for (int i = firstRecordIndex; i < _records.Count; i++)
+        {
+            if (i > firstRecordIndex
+                && _records[i].Flags.HasFlag(AdvTextHistoryRecordFlags.GroupStart)) yield break;
+            yield return _records[i];
+        }
     }
 
     private void AppendRecord(int slot, AdvTextHistoryRecordKind kind, AdvTextHistoryRecordFlags flags,
