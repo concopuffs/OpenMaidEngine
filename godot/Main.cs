@@ -357,22 +357,24 @@ public partial class Main : Godot.Control
         {
             var p = ToNativeScreen(mb.Position);
             bool advPageSuspended = _host.IsAdvPagePresentationSuspended;
+            bool rawInputCallbackActive = _vm.IsRawInputCallbackActive;
             _vm.UpdatePointer(p.X, p.Y);
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
             // AGE exposes the physical left button twice: raw mask 0x1 for the timed mouse callback,
-            // and the configured primary action (default input callback index 4). During HIDEWIN the
-            // activation click's release arms the script; the next completed left click restores it.
-            if (mb.ButtonIndex == MouseButton.Left && advPageSuspended)
+            // and the configured primary action (default input callback index 4). Script-owned callback
+            // loops consume both channels without releasing the enclosing ADV page wait.
+            if (mb.ButtonIndex == MouseButton.Left && (advPageSuspended || rawInputCallbackActive))
                 _vm.QueueInputCallback(mb.Pressed ? 4 : 10);
             if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            // A left click owned by the yielded page must return through HIDEWIN's callback/coroutine
-            // path. Releasing the enclosing ADV wait here would also advance the restored dialogue page.
-            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && !advPageSuspended) _host.SignalInput();
+            // Modal callback scripts return through their own bytecode. Signaling the enclosing ADV wait
+            // here would also advance the restored dialogue page after HISTORY/HIDEWIN exits.
+            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed
+                && !advPageSuspended && !rawInputCallbackActive) _host.SignalInput();
             return;
         }
         UpdateAgeInputCallback(e, "ui_down", 0);
@@ -381,7 +383,8 @@ public partial class Main : Godot.Control
         UpdateAgeInputCallback(e, "ui_right", 3);
         UpdateAgeInputCallback(e, "ui_accept", 4);
         UpdateAgeInputCallback(e, "ui_cancel", 5);
-        if (e.IsActionPressed("ui_accept")) _host.SignalInput();
+        if (e.IsActionPressed("ui_accept")
+            && !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive) _host.SignalInput();
     }
 
     private void UpdateAgeInputCallback(InputEvent e, StringName action, int index)

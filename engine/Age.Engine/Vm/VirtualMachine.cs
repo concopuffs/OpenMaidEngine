@@ -25,6 +25,7 @@ public sealed class VirtualMachine
     private readonly ITraceSink _sink;
     private readonly object _interactiveLock = new();
     private ExecFrame? _interactiveFrame;
+    private ExecFrame? _rawInputFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
     private int _mouseButtonState;
     private int _heldInputCallbackMask;
@@ -48,6 +49,11 @@ public sealed class VirtualMachine
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
+    /// <summary>True while a script-owned timed mouse/input callback loop (HISTORY/HIDEWIN family) owns input.</summary>
+    public bool IsRawInputCallbackActive
+    {
+        get { lock (_interactiveLock) return _rawInputFrame != null; }
+    }
     public AdvTextHistory TextHistory { get; }
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
@@ -231,6 +237,28 @@ public sealed class VirtualMachine
         }
     }
 
+    private long ReadAddressedCell(Operand operand, int offset)
+    {
+        return operand.Type switch
+        {
+            T_LINT => Gi(_cur.Locals.I, checked((int)operand.Value + offset)),
+            T_LFLOAT => Gi(_cur.Locals.F, checked((int)operand.Value + offset)),
+            T_GINT or T_GFLOAT => ReadGlobal(checked((int)operand.Value + offset)),
+            T_LPTR => Gi(Globals, checked((int)Gi(_cur.Locals.P, (int)operand.Value) + offset)),
+            T_GPTR => Gi(Globals, checked((int)Gi(Globals, (int)operand.Value) + offset)),
+            _ => Gi(Globals, checked((int)operand.Value + offset)),
+        };
+    }
+
+    private (bool IsLocal, int Address) AddressedCellIdentity(Operand operand, int offset)
+        => operand.Type switch
+        {
+            T_LINT or T_LFLOAT => (true, checked((int)operand.Value + offset)),
+            T_LPTR => (false, checked((int)Gi(_cur.Locals.P, (int)operand.Value) + offset)),
+            T_GPTR => (false, checked((int)Gi(Globals, (int)operand.Value) + offset)),
+            _ => (false, checked((int)operand.Value + offset)),
+        };
+
     private string FormatSwitchValue(Operand operand)
         => IsStr(operand)
             ? ReadStr(operand)
@@ -256,7 +284,12 @@ public sealed class VirtualMachine
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
         ExecFrame? previousInteractiveFrame;
-        lock (_interactiveLock) previousInteractiveFrame = _interactiveFrame;
+        ExecFrame? previousRawInputFrame;
+        lock (_interactiveLock)
+        {
+            previousInteractiveFrame = _interactiveFrame;
+            previousRawInputFrame = _rawInputFrame;
+        }
         var prev = _cur; _cur = frame; _depth++;
         _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
         var outcome = FrameOutcome.RanOff;
@@ -280,6 +313,7 @@ public sealed class VirtualMachine
                     ? previousInteractiveFrame : null;
             else if (ReferenceEquals(_interactiveFrame, frame))
                 _interactiveFrame = null;
+            if (ReferenceEquals(_rawInputFrame, frame)) _rawInputFrame = previousRawInputFrame;
         }
         _cur = prev; _depth--;
         return outcome;
@@ -370,6 +404,37 @@ public sealed class VirtualMachine
                 int count = (int)rawCount;
                 for (int i = 0; i < count; i++)
                     WriteConsecutive(a[0], i, unchecked((int)_cur.Script.BodyDwords[offset + 1 + i]));
+                return pc + 1;
+            }
+            case "find-hit-rectangle": // 0x12e: inclusive rectangle intersection over addressed arrays
+            case "u0041E940":
+            {
+                int previous = (int)Read(a[0]);
+                int count = System.Math.Max(0, (int)Read(a[7]));
+                long refLeft = ReadAddressedCell(a[1], 0);
+                long refRight = ReadAddressedCell(a[1], 1);
+                long refTop = ReadAddressedCell(a[1], 2);
+                long refBottom = ReadAddressedCell(a[1], 3);
+                int match = -1;
+                for (int index = previous + 1; index < count; index++)
+                {
+                    long x = Read(a[2]) - ReadAddressedCell(a[5], index);
+                    long y = Read(a[3]) - ReadAddressedCell(a[6], index);
+                    long left = ReadAddressedCell(a[4], index * 4);
+                    long right = ReadAddressedCell(a[4], index * 4 + 1);
+                    long top = ReadAddressedCell(a[4], index * 4 + 2);
+                    long bottom = ReadAddressedCell(a[4], index * 4 + 3);
+                    bool isReferenceRectangle = AddressedCellIdentity(a[1], 0)
+                        == AddressedCellIdentity(a[4], index * 4);
+                    if (!isReferenceRectangle
+                        && x + refLeft <= right && x + refRight >= left
+                        && y + refTop <= bottom && y + refBottom >= top)
+                    {
+                        match = index;
+                        break;
+                    }
+                }
+                Write(a[0], match);
                 return pc + 1;
             }
             case "bit-set":
@@ -577,6 +642,7 @@ public sealed class VirtualMachine
                 _cur.MouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
                 _cur.MouseCallbackTarget = (int)Read(a[1]);
                 _cur.MouseCallbackNextAtMs = _host.InputClockMilliseconds + _cur.MouseCallbackIntervalMs;
+                lock (_interactiveLock) _rawInputFrame = _cur;
                 return pc + 1;
             case "get-input-type":
             case "dispatch-mouse-callback": // 0xcd

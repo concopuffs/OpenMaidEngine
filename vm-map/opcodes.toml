@@ -2526,12 +2526,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "find-hit-rectangle"
 category = "input"
-summary = "(index_inout)(reference_rect)(pointer_x)(pointer_y)(rect_array)(x_offsets)(y_offsets)(count) - scan forward through encoded rectangles and return the next hit index, or -1."
+summary = "(index_inout)(reference_rect)(pointer_x)(pointer_y)(rect_array)(x_offsets)(y_offsets)(count) - scan after the incoming index for the next inclusive rectangle intersection, or return -1."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, scans candidates after the incoming index, applies per-entry x/y offsets to the pointer coordinates, performs rectangle overlap containment tests, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses it for mouse hover selection over its literal-initialized row rectangles."
+evidence = "Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, and starts at incoming_index+1. Each candidate is [left,right,top,bottom]; the worker subtracts its per-entry x/y offsets from the pointer, inclusively intersects it with the reference rectangle, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses decoded local arrays for scrollbar/control regions, close region 8, and visible text rows 9..13."
 
 [[opcode.semantics.args]]
 i = 1

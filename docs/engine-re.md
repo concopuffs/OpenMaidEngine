@@ -1350,9 +1350,24 @@ source rows therefore retain five independent speaker names, and compositor sour
 each one into its bound object. A real-script regression retains SC0000 page one, runs unmodified
 `HISTORY.BIN`, observes a non-empty rendered row, and reaches its `(0,60000)` presentation call.
 
-History's remaining work is interaction fidelity: `0x12e` rectangle hover/hit selection, stored voice replay
-through `0x1bd`, and the `0xd3/0xd4/0xd5` smooth-scroll callback scheduler. None changes backlog ownership or
-requires choosing a save/profile backend.
+The fourth port slice implements History's basic pointer interaction and clean return. Op `0x12e` treats its
+addressable operands as arrays in their actual VM domain (HISTORY's are local integers), scans from
+`incoming_index+1`, and tests inclusive intersection. Rectangle fields are `[left,right,top,bottom]`; each
+candidate's x/y offset is subtracted from the pointer before comparison with the reference rectangle.
+HISTORY's decoded arrays contain fourteen candidates: scrollbar/control regions, bottom-right close region
+8, and five 650x130 text rows at indices 9..13. Moving the pointer updates the selected index and executes the
+script's existing redraw, while left-button release on region 8 sets the script's exit state and runs its
+normal surface/layout/recording cleanup.
+
+The host input bridge now distinguishes an enclosing ADV page wait from a script-owned timed raw-input loop.
+Registration through op `0xcc` marks the current frame as the raw-input owner until that frame returns;
+Godot routes physical button state and configured callback indices to it without signaling the parked ADV
+page. This is frame-scoped callback state, not a HISTORY name/offset special case, and also matches the
+existing HIDEWIN scheduler family. A real regression activates x=684 in SC0000, runs unmodified HISTORY,
+selects/closes region 8, observes retained text, and returns to the same single page wait.
+
+History's remaining work is stored voice replay through `0x1bd` and the `0xd3/0xd4/0xd5` smooth-scroll
+callback scheduler. None changes backlog ownership or requires choosing a save/profile backend.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

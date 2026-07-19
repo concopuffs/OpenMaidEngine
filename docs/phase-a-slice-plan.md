@@ -1752,3 +1752,26 @@ opcodes and 840/854 instructions handled or safe-noop; its ten remaining effectf
 **Next:** implement the basic History interaction slice around rectangle hit/hover (`0x12e`) and clean exit
 using the existing callback layer. Then add stored voice replay (`0x1bd`); leave `0xd3/0xd4/0xd5` smooth
 scroll interpolation as a separate fidelity slice.
+
+### ADV History basic interaction implemented (2026-07-19)
+
+The fourth bounded slice is complete. Op `0x12e` now performs its native forward scan over addressable VM
+arrays, including HISTORY's local rectangle and offset tables. It begins after the incoming index, applies
+per-candidate offsets, and inclusively intersects `[left,right,top,bottom]` candidates with the supplied
+reference rectangle. The shipped arrays resolve to scrollbar/control regions, bottom-right close candidate
+8, and five 650x130 dialogue rows at candidates 9..13; the script's existing redraw owns hover visuals.
+
+Raw input ownership is now frame-scoped. Registering a timed mouse callback through `0xcc` marks that script
+frame as the input owner until return. Godot continues updating raw mouse bits and input callback indices,
+but does not release the enclosing ADV page semaphore while that modal loop is active. This closes a real
+scheduler hole without a HISTORY filename, scene offset, or synthetic button path.
+
+Two regressions cover inclusive edges/forward scan and the complete live route. The latter reaches SC0000's
+first wait, activates the real x=684 History hotspot, lets unmodified `HISTORY.BIN` render retained text,
+presses/releases its real close region, and proves the script returns with recording restored while the same
+single ADV wait remains parked. Validation: engine 196/196, zero-warning Godot build, threaded `SELFTEST OK`.
+HISTORY is now 69/78 distinct opcodes and 841/854 instructions handled or safe-noop; its nine remaining
+effectful gaps total 13 instructions.
+
+**Next:** implement stored History voice replay (`0x1bd`) against the existing voice host path. Then take
+`0xd3/0xd4/0xd5` smooth-scroll interpolation as a separate scheduler/fidelity slice.
