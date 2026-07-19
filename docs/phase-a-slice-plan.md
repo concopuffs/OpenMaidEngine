@@ -1790,5 +1790,18 @@ Godot's dynamically created History/surface labels also no longer request full-r
 a parent. They use top-left absolute placement, matching the batch's origin+cursor coordinates and removing
 the associated parent/layout diagnostic.
 
-**Next:** manually recheck History layout and hover against the original screenshot. If it matches, proceed
+The next manual run showed that the sole bottom line was actually the enclosing ADV dialogue overlay, while
+the genuine retained batches were clipped to one pixel. The backlog itself is healthy: a new real SC0000
+six-message regression produces multiple non-empty History rows. The missing state was the exact
+`SYSTEM4.BIN` prefix that defines nine shared text layouts before dispatching any scene; HISTORY only resets
+and repositions slots 2..6. The single-scene Godot bootstrap now carries forward all nine definitions, with
+History rows sized 650x150 at x=65 and y increments of 150, until full SYSTEM4 replay replaces this existing
+class of inherited-state bridges.
+
+Godot also suppresses the parked page's ordinary dialogue Label and wait indicator while any nested timed
+raw-input frame owns the modal screen, then restores them on return. Root Control anchor presets are now
+applied after parenting, removing the remaining occurrence of the associated runtime layout diagnostic.
+Validation: engine 198/198, zero-warning Godot build, threaded `SELFTEST OK`, and vm0 RECOVER clean.
+
+**Next:** manually recheck the five History rows and overlay cleanup against the original. If they match, proceed
 with stored History voice replay (`0x1bd`), followed by `0xd3/0xd4/0xd5` smooth-scroll fidelity.

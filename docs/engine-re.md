@@ -1374,11 +1374,24 @@ local pointer reach the correct bank. This restores the six controls at x=768/y=
 at x=768/y=549, and the hovered-row highlight while preserving RECOVER's global-array pointer behavior.
 The Python A0 oracle uses the same typed-address model.
 
-The History text batches already carry the native x origin 65 and cursor x 45. Their Godot labels were
-created with a full-rect anchor preset before being parented, which discarded the intended absolute
-placement in the live UI and caused a Godot parent/layout diagnostic. Dynamically composited ADV labels now
-use the default top-left anchors and their explicit position/size, yielding the native text x=110 and
-avoiding that diagnostic.
+The History text batches already carry the native x origin 65 and cursor x 45. Their Godot labels were first
+created with a full-rect anchor preset before being parented, which discarded the intended absolute placement
+and caused a Godot parent/layout diagnostic. Dynamically composited ADV labels now use top-left anchors, and
+all root Controls apply their presets only after parenting.
+
+A second manual check separated the apparent bottom row from the real History batches: it was the ordinary
+ADV dialogue Label leaking above HISTORY's full-screen retained surface. The real batches contained several
+non-empty retained groups, but their target layouts had width/height zero and Godot clipped each to one pixel.
+`HISTORY.BIN` deliberately only resets and repositions layouts 2..6; `SYSTEM4.BIN@0x7..0x82` defines and
+resets all nine shared layouts before scene dispatch. In particular, slots 2..6 are 650x150 at x=65 and
+y=0/150/300/450/600. The Phase-A single-scene bootstrap now carries forward that exact nine-layout prefix,
+in the same category as its inherited SO000/SO001 state, until full SYSTEM4 replay replaces the bridge.
+The multi-message regression proves that at least two non-empty rows retain 650x150 geometry.
+
+While a nested timed raw-input frame owns the screen, Godot now hides the enclosing page's ordinary dialogue
+Label and independently animated wait marker. Native rendering gets this layering naturally because both are
+part of retained composition; the port must state it explicitly because those two elements are separate
+Godot overlays. They reappear with the same parked page after the modal frame returns.
 
 History's remaining work is stored voice replay through `0x1bd` and the `0xd3/0xd4/0xd5` smooth-scroll
 callback scheduler. None changes backlog ownership or requires choosing a save/profile backend.

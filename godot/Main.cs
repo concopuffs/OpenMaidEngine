@@ -84,8 +84,8 @@ public partial class Main : Godot.Control
             StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = MouseFilterEnum.Ignore,
         };
-        _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_screenView);   // added first -> draws behind the text/status labels
+        _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
         // Native ADV wait marker: a tiny independently animated atlas region. Keeping it separate from the
         // 800x600 software backbuffer avoids recompositing the entire retained scene throughout static waits.
@@ -99,16 +99,16 @@ public partial class Main : Godot.Control
         AddChild(_waitIndicator);
 
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
-        _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_text);
+        _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _speaker = new Label { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
-        _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_speaker);
+        _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _surfaceTextLabels.Add(_speaker);
         _status = new Label();
+        AddChild(_status);
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
-        AddChild(_status);
         _locatorHud = new Label { Visible = false, MouseFilter = MouseFilterEnum.Ignore };
         _locatorHud.Position = new Vector2(8, 8);
         AddChild(_locatorHud);
@@ -212,6 +212,13 @@ public partial class Main : Godot.Control
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, sink);
+        // SYSTEM4.BIN defines these nine shared ADV text layouts before dispatching any scene. The
+        // single-scene harness starts after that prefix, so carry forward its exact script-owned state
+        // alongside the inherited SO000/SO001 state below. Full Phase-B SYSTEM4 replay will replace this
+        // bootstrap as one unit; HISTORY depends on the 650x150 dimensions of layouts 2..6 for clipping.
+        if (!_selftest)
+            AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
+                scripts!.RequireByName("SYSTEM4.BIN"), table, _vm.TextHistory);
         // SYSTEM4 loads the shared SO001 chrome sheet into surface slot 17 before any scene runs.
         // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
         if (!_selftest && resources.ResolveName("SO001.AGF") is { } systemChrome)
@@ -541,7 +548,10 @@ public partial class Main : Godot.Control
 
     private void UpdateAdvTextPresentation()
     {
-        _text.Visible = !_host.IsAdvPagePresentationSuspended;
+        // Modal callback scripts composite their own full-screen UI while the enclosing ADV wait remains
+        // parked. The ordinary dialogue Label is a Godot overlay rather than part of the retained surface,
+        // so hide it while that nested input owner is active or it leaks above HISTORY's background.
+        _text.Visible = !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive;
         if (!_text.Visible) return;
         var t = _host.SnapshotAdvText();
         _text.Position = new Vector2(t.X, 430 + t.Y);
@@ -621,6 +631,13 @@ public partial class Main : Godot.Control
 
     private void UpdateAdvWaitIndicatorPresentation()
     {
+        // As with the ordinary dialogue Label, the enclosing page's separately animated marker must sit
+        // out while HISTORY/HIDEWIN owns raw input; native retained composition naturally covers it.
+        if (_vm.IsRawInputCallbackActive)
+        {
+            _waitIndicator.Visible = false;
+            return;
+        }
         var snapshot = _host.SnapshotAdvWaitIndicator();
         if (snapshot == null)
         {

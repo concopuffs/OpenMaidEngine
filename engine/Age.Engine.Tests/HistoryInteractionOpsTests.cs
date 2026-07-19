@@ -14,15 +14,22 @@ public class HistoryInteractionOpsTests
 
     private sealed class StopAfterHistoryReturnsException : Exception { }
 
+    private static void SeedSystem4AdvLayouts(Sys4ScriptProvider scripts, AdvTextHistory history)
+        => Assert.Equal(9, AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
+            scripts.RequireByName("SYSTEM4.BIN"), Table, history));
+
     private sealed class Sc0000HistoryCloseHost : RecordingHost
     {
         public VirtualMachine Vm = null!;
+        private readonly int _openAtWait;
         private long _now;
         private int _modalSleeps;
         public bool HistoryReturned;
         public bool SawRenderedText;
         public IReadOnlyList<RenderObject> FirstHistoryFrame = Array.Empty<RenderObject>();
         public override long InputClockMilliseconds => _now;
+
+        public Sc0000HistoryCloseHost(int openAtWait = 1) => _openAtWait = openAtWait;
 
         public override void Sleep(long duration)
         {
@@ -47,6 +54,7 @@ public class HistoryInteractionOpsTests
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
         {
             Waits++;
+            if (Waits < _openAtWait) return;
             Vm.UpdatePointer(684, 572);
             while (serviceInputCallback()) { }
             Assert.True(Vm.TryActivatePointer(684, 572));
@@ -55,6 +63,34 @@ public class HistoryInteractionOpsTests
             SawRenderedText = HistoryRenders.Any(render => render.Text.Length > 0);
             throw new StopAfterHistoryReturnsException();
         }
+    }
+
+    [Fact]
+    public void RealHistoryRendersMultipleRowsAfterSeveralSc0000Messages()
+    {
+        var scripts = Sys4ScriptProvider.Load(Table);
+        var host = new Sc0000HistoryCloseHost(openAtWait: 6);
+        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
+            new VmOptions(MaxSteps: 2_000_000), scripts);
+        host.Vm = vm;
+        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
+
+        var visibleRows = host.HistoryRenders
+            .Where(render => render.Text.Length > 0)
+            .GroupBy(render => render.LayoutSlot)
+            .Select(group => group.Last())
+            .ToArray();
+        Assert.True(visibleRows.Length >= 2,
+            $"Expected multiple retained History rows after six messages, got {visibleRows.Length}: "
+            + string.Join(" | ", visibleRows.Select(render => render.Text)));
+        Assert.All(visibleRows, render =>
+        {
+            Assert.Equal(650, render.Layout.Width);
+            Assert.Equal(150, render.Layout.Height);
+        });
     }
 
     [Fact]
@@ -123,6 +159,7 @@ public class HistoryInteractionOpsTests
         var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
+        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
         vm.Globals[0x6c1] = 1;
 
         Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
