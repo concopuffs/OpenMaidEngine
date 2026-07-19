@@ -141,7 +141,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 
 ### 0x199 `yield-adv-coroutine` (u00414D50, argc 0)
 - **summary:** Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow.
-- **grounding:** source=investigation, confidence=med
+- **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
 
 ### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
@@ -448,16 +448,16 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x108 `get-mouse-button-state` (u00415E70, argc 1)
 - **summary:** (out) - return the current mouse-button state bitmask.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN and HISTORY.BIN test individual bits to detect press/release transitions.
+- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN uses bit 0x1 for left-click edge interaction and bit 0x2 for its close/restore gesture; HISTORY.BIN likewise tests individual bits for transitions.
 
 ### 0x109 `get-cursor-virtual` (u00415EC0, argc 2)
 - **summary:** (out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates.
-- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x109_get_cursor_virtual@0x428bb0 calls the cursor-position helper, converts client/display coordinates through the active VirtualFullScreen transform, and writes x/y to operands 1/2. The ADV chrome callbacks preserve x and then move y by alternating -1/+1 before op 0x10a.
 
 ### 0x10a `set-cursor-virtual` (u0041E540, argc 2)
 - **summary:** (x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor.
-- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly.
 
 ### 0x19a `get-message-skip` (u00414E50, argc 1)

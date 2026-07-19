@@ -253,6 +253,31 @@ public sealed class GodotAdvHost : IHost
     public void InputCallbackCompleted(GfxState gfx)
         => Interlocked.Exchange(ref _presentRequested, 1);
 
+    public long InputClockMilliseconds => _clock.NowMs;
+
+    public void SetCursorResource(long resourceId)
+    {
+        var asset = _res.ResolveCursor(resourceId);
+        if (asset == null) return;
+        try
+        {
+            var cursor = _res.DecodeCursor(asset);
+            _main.CallDeferred("SetAgeCursor", cursor.Image.Pixels, cursor.Image.Width, cursor.Image.Height,
+                               cursor.HotspotX, cursor.HotspotY);
+            _timeline?.Event("cursor-set", new() { ["resource"] = resourceId, ["asset"] = asset.Name });
+        }
+        catch (Exception ex)
+        {
+            System.Console.Error.WriteLine($"cursor decode {asset.Name}: {ex.Message}");
+        }
+    }
+
+    public void ClearCursorResource()
+    {
+        _main.CallDeferred("ClearAgeCursor");
+        _timeline?.Event("cursor-clear", new());
+    }
+
     public void WaitForForegroundTransition(GfxState gfx)
     {
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
@@ -308,6 +333,7 @@ public sealed class GodotAdvHost : IHost
     public void Stop()
     {
         _stopping = true;
+        _main.CallDeferred("ClearAgeCursor");
         lock (_textLock) _advTextForceComplete = true;
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();

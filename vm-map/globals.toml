@@ -62,6 +62,17 @@ confidence = "high"
 depends_on = ["0x6c9", "0x6ca", "0x6cb", "0x6cc", "0x6cd"]
 
 [[global]]
+address = "0x62425"
+name = "adv_hide_window_enabled"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "Native ADV-scheduler permission for the standard Hide Window action. After op 0x199 enters the registered yield-A handler, every standard ADV scene calls HIDEWIN.BIN only while this value is nonzero. No script writes it and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native-owned inherited state rather than saved-game or script boot data. The Godot scene bootstrap mirrors the original enabled value 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6c1"]
+
+[[global]]
 address = "0x6c9"
 name = "adv_hover_history"
 category = "ui-toggle"

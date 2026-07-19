@@ -90,6 +90,35 @@ public class HotspotInputTests
         }
     }
 
+    private sealed class Sc0000HideWindowHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private long _now;
+        public int HideLoopSleeps;
+        public override long InputClockMilliseconds => _now;
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += System.Math.Max(16, duration);
+            if (duration <= 1 && ++HideLoopSleeps == 2)
+            {
+                Vm.UpdateMouseButtonState(0x1, false); // release the x=772 activation click
+                Vm.UpdateMouseButtonState(0x2, true);  // native right-click close/restore gesture
+            }
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Vm.UpdatePointer(772, 572);
+            while (serviceInputCallback()) { }
+            Vm.UpdateMouseButtonState(0x1, true);
+            Assert.True(Vm.TryActivatePointer(772, 572));
+            while (serviceInputCallback()) { }
+            throw new StopAtFirstWaitException();
+        }
+    }
+
     [Fact]
     public void ArmedHotspot_DispatchesHoverAndConsumesActivationWithoutAdvancingPage()
     {
@@ -279,6 +308,46 @@ public class HotspotInputTests
     }
 
     [Fact]
+    public void CursorOpcodes_ForwardResourceAndClearToHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "CURSOR", new List<(int, Operand[])>
+        {
+            (0x86, new[] { I(0x3318) }),
+            (0x87, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new long[] { 0x3318 }, host.CursorResources);
+        Assert.Equal(1, host.CursorClearCount);
+    }
+
+    [Fact]
+    public void Sc0000HideWindowButton_RunsRealHidewinAndReturnsToAdvWait()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scene = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var hide = Sys4Loader.Load(Paths.Scripts()["HIDEWIN.BIN"], table);
+        var provider = new MapProvider(new Dictionary<long, Script> { [0x20] = hide });
+        var trace = new RecordingTraceSink { TracingSteps = true };
+        var host = new Sc0000HideWindowHost();
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), provider, trace);
+        host.Vm = vm;
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1; // inherited native ADV scheduler state, mirrored by Godot Main
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.HideLoopSleeps >= 2,
+            $"hide sleeps={host.HideLoopSleeps}; halt={vm.HaltReason}; frames={string.Join(',', trace.Events.Where(e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter).Select(e => e.Name))}; tail={string.Join(',', trace.Events.Where(e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.Step).TakeLast(30).Select(e => $"{e.Ins!.Offset:x}:{e.Opcode:x}"))}");
+        Assert.Contains(trace.Events, e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                                        && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    [Fact]
     public void MessageSkipState_ReachesHostBeforeFollowingOpcodeCadenceYields()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -295,6 +364,81 @@ public class HotspotInputTests
         new VirtualMachine(script, table, host).Run();
 
         Assert.Equal(3, host.ActiveSkipYields);
+    }
+
+    [Fact]
+    public void AdvCoroutineYield_RunsHandlerAThenHandlerBAndResumesAfterOpcode()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int handlerA = 17, handlerB = 23;
+        var script = ScriptAssembler.Assemble(table, "ADV_COROUTINE", new List<(int, Operand[])>
+        {
+            (0x7b, new[] { I(handlerA), I(handlerB) }),
+            (0x55, new[] { G(0x160), I(1) }),
+            (0x199, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x163), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x161), I(1) }),
+            (0x199, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x162), I(1) }),
+            (0x7c, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x160));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x161));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x162));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x163));
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    public void MouseCallback_UsesLivePointerAndButtonState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int callback = 7;
+        var script = ScriptAssembler.Assemble(table, "MOUSE_CALLBACK", new List<(int, Operand[])>
+        {
+            (0xcc, new[] { I(0), I(callback) }),
+            (0xcd, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+            (0x109, new[] { G(0x170), G(0x171) }),
+            (0x108, new[] { G(0x172) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.UpdatePointer(321, 456);
+        vm.UpdateMouseButtonState(0x1, true);
+
+        vm.Run();
+
+        Assert.Equal(321, vm.Globals.GetValueOrDefault(0x170));
+        Assert.Equal(456, vm.Globals.GetValueOrDefault(0x171));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x172));
+    }
+
+    [Fact]
+    public void JoyCallbackTable_DispatchesHeldInput()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int callback = 8;
+        var script = ScriptAssembler.Assemble(table, "JOY_CALLBACK", new List<(int, Operand[])>
+        {
+            (0xfb, new[] { I(0), I(callback) }),
+            (0xff, Array.Empty<Operand>()),
+            (0x100, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x180), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.UpdateInputCallbackState(0, true);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x180));
     }
 
     private static Operand I(long value) => new(0, value);

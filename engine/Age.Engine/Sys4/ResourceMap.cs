@@ -37,6 +37,21 @@ public sealed class ResourceMap
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
     public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
 
+    /// <summary>Resolve a native packed raw id to one of AGE's Windows cursor resources.</summary>
+    public AssetEntry? ResolveCursor(long resourceId)
+    {
+        var entry = _catalog.ResolvePacked(resourceId);
+        return entry is { IsPlaceholder: false }
+            && entry.Name.EndsWith(".CUR", StringComparison.OrdinalIgnoreCase) ? entry : null;
+    }
+
+    public CursorImage DecodeCursor(AssetEntry entry)
+    {
+        if (!entry.Name.EndsWith(".CUR", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"not a CUR asset: {entry.Name}");
+        return CurDecoder.Decode(_store.ReadAll(entry), entry.Name);
+    }
+
     public AssetEntry? ResolveName(string name) => _catalog.ResolveName(name);
 
     /// <summary>

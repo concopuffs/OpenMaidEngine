@@ -99,7 +99,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
     │   └── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
-    │                                       script provider, AGF-to-RGBA8/LZSS decoder, and resource facade
+    │                                       script provider, AGF/LZSS and Windows CUR decoders, and resource facade
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
 ```

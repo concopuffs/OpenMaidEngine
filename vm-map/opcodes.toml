@@ -2344,7 +2344,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN and HISTORY.BIN test individual bits to detect press/release transitions."
+evidence = "Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN uses bit 0x1 for left-click edge interaction and bit 0x2 for its close/restore gesture; HISTORY.BIN likewise tests individual bits for transitions."
 
 [[opcode.semantics.args]]
 i = 1
@@ -2361,7 +2361,7 @@ abi_source = "kelebek+decode-validated"
 name = "get-cursor-virtual"
 category = "input"
 summary = "(out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates."
-noop_headless = true
+noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -2387,7 +2387,7 @@ abi_source = "kelebek+decode-validated"
 name = "set-cursor-virtual"
 category = "input"
 summary = "(x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor."
-noop_headless = true
+noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -3260,7 +3260,7 @@ category = "control"
 summary = "Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow."
 noop_headless = false
 source = "investigation"
-confidence = "med"
+confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN."
 

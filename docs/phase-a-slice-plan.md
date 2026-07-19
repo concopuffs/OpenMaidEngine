@@ -1599,3 +1599,24 @@ land the generic coroutine/input-callback service that History will later reuse.
 the next bounded persistence slice; History should follow after both foundations exist. Full native evidence
 and the difficulty table live in
 [`engine-re.md`](engine-re.md#remaining-adv-control-strip-actions-and-implementation-cost-2026-07-18).
+
+### ADV Hide Window implemented (2026-07-18)
+
+The real x=772 callback now yields through op `0x199`, runs the shipped `HIDEWIN.BIN`, re-enters the second
+ADV coroutine handler, and resumes after the original yield via op `0x7c`. The VM owns frame-local timed
+mouse and 32-entry input callback registrations; Godot supplies virtual coordinates, distinct left/right
+button bits, directional/action indices, and release callbacks. Cursor ids `0x3318..0x331f` resolve from the
+original asset catalog, decode from Windows CUR XOR/AND masks with native hotspots, and install as Godot
+custom cursors.
+
+`G[0x62425]` is now named `adv_hide_window_enabled`. It is not a temporary test seed or save-slot value: all
+ordinary ADV scripts read it, none writes it, and the full VM-write capture misses it because AGE's native
+scheduler owns the inherited state. The bounded Godot scene bootstrap mirrors the original enabled value 1.
+Focused tests cover real SC0000 activation and HIDEWIN return, the two-handler coroutine sequence, timed
+mouse callbacks, held input callbacks, cursor opcode forwarding, and decoding a real CUR asset.
+Validation: engine 175/175, opcode/global generator tests and lints clean, zero-warning Godot build, and
+threaded `SELFTEST OK`.
+
+**Next:** manually validate x=772 hide/restore and edge cursors in a normal SC0000 run. The next development
+slice should be Read-message Skip's profile-wide ReadTextDB model; History can then reuse both that
+message-completion seam and the generic callback/input layer landed here.

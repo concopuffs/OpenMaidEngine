@@ -13,7 +13,15 @@ internal sealed class ExecFrame
     public readonly Dictionary<int, int> EmitSeen = new();
     public int? CoroutineYieldHandlerA;                  // op 0x7b: native per-frame handler PCs
     public int? CoroutineYieldHandlerB;
+    public int? CoroutineResumePc;                      // op 0x199 -> handler A/B -> op 0x7c
+    public bool CoroutineYieldActive;
     public readonly Dictionary<int, int> CoroutineYieldVisits = new(); // instruction index -> visits
+    public readonly int[] InputCallbackTargets = Enumerable.Repeat(-1, 32).ToArray(); // op 0xfb
+    public int PendingInputCallbackMask;                 // op 0xff snapshot consumed by op 0x100
+    public int InputCallbackScanIndex;
+    public int MouseCallbackTarget = -1;                 // op 0xcc target dword offset
+    public long MouseCallbackIntervalMs;
+    public long MouseCallbackNextAtMs;
     public readonly HotspotRegistry Hotspots = new();
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }

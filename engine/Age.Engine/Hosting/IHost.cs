@@ -32,6 +32,11 @@ public interface IHost
         => WaitForInput(layoutSlot, serviceInputCallback);
     void WakeInputCallbackService() { }
     void InputCallbackCompleted(GfxState gfx) { }
+    // Generic AGE input-callback services (ops 0xcc/0xcd, 0xfb/0xff/0x100, 0x108).
+    // Interactive hosts expose the same monotonic clock used by their frame scheduler.
+    long InputClockMilliseconds => Environment.TickCount64;
+    void SetCursorResource(long resourceId) { }
+    void ClearCursorResource() { }
     void Sleep(long duration);
     void FrameYield();
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive

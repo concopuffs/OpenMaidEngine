@@ -17,6 +17,7 @@ public partial class Main : Godot.Control
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
+    private ImageTexture? _ageCursorTexture;
     private TextureRect _waitIndicator = null!;
     private ImageTexture? _waitIndicatorSheet;
     private AtlasTexture? _waitIndicatorAtlas;
@@ -237,7 +238,13 @@ public partial class Main : Godot.Control
         // The native SYSTEM4 UI boot enables standard ADV chrome after the data-only *INIT prefix above.
         // Without this inherited value the visible SO001 strip is still drawn, but every ADV script skips
         // its five pointer rectangles and registers only the off-screen keyboard/pad records.
-        if (!_selftest) _vm.Globals[0x6c1] = 1;
+        if (!_selftest)
+        {
+            _vm.Globals[0x6c1] = 1;
+            // The native ADV scheduler supplies this Hide Window permission outside script-visible
+            // writes. Every ADV scene gates its HIDEWIN call on it after opcode 0x199 re-entry.
+            _vm.Globals[0x62425] = 1;
+        }
         // Native AGE owns this transient secondary-SFX channel outside script-visible writes.
         // The matching SC0000 trace has value 4 at 0xc31; seed only this proven profile/slice.
         if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
@@ -339,18 +346,38 @@ public partial class Main : Godot.Control
             _vm.UpdatePointer(p.X, p.Y);
             return;
         }
-        if (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+        if (e is InputEventMouseButton mb
+            && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {
             var p = ToNativeScreen(mb.Position);
-            if (_vm.TryActivatePointer(p.X, p.Y))
+            _vm.UpdatePointer(p.X, p.Y);
+            int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
+            _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
+            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            _host.SignalInput();
+            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed) _host.SignalInput();
             return;
         }
+        UpdateAgeInputCallback(e, "ui_down", 0);
+        UpdateAgeInputCallback(e, "ui_left", 1);
+        UpdateAgeInputCallback(e, "ui_up", 2);
+        UpdateAgeInputCallback(e, "ui_right", 3);
+        UpdateAgeInputCallback(e, "ui_accept", 4);
+        UpdateAgeInputCallback(e, "ui_cancel", 5);
         if (e.IsActionPressed("ui_accept")) _host.SignalInput();
+    }
+
+    private void UpdateAgeInputCallback(InputEvent e, StringName action, int index)
+    {
+        if (e.IsActionPressed(action)) _vm.UpdateInputCallbackState(index, true);
+        if (e.IsActionReleased(action))
+        {
+            _vm.UpdateInputCallbackState(index, false);
+            _vm.QueueInputCallback(10); // common release callback registered by HISTORY/HIDEWIN
+        }
     }
 
     private (int X, int Y) ToNativeScreen(Vector2 position)
@@ -359,6 +386,20 @@ public partial class Main : Godot.Control
         if (size.X <= 0 || size.Y <= 0) return (0, 0);
         return ((int)System.Math.Floor(position.X * ScreenWidth / size.X),
                 (int)System.Math.Floor(position.Y * ScreenHeight / size.Y));
+    }
+
+    public void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY)
+    {
+        var image = Image.CreateFromData(width, height, false, Image.Format.Rgba8, rgba);
+        _ageCursorTexture = ImageTexture.CreateFromImage(image);
+        Input.SetCustomMouseCursor(_ageCursorTexture, Input.CursorShape.Arrow,
+                                   new Vector2(hotspotX, hotspotY));
+    }
+
+    public void ClearAgeCursor()
+    {
+        Input.SetCustomMouseCursor(null, Input.CursorShape.Arrow);
+        _ageCursorTexture = null;
     }
 
     public override void _ExitTree()

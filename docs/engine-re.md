@@ -1245,25 +1245,23 @@ save/load chain and corrects the relevant function prototypes; saved 2026-07-18.
 
 ### Remaining ADV control-strip actions and implementation cost (2026-07-18)
 
-The five standard controls are now fully inventoried. Auto message and all-message Skip have working host
-services; Read-message Skip is the profile-wide `RT.DAT`/ReadTextDB slice above. The two other actions are
-History and Hide Window, and they exercise different engine subsystems rather than variations of Skip.
+The five standard controls are now fully inventoried. Auto message, all-message Skip, and Hide Window have
+working native-path services; Read-message Skip is the profile-wide `RT.DAT`/ReadTextDB slice above.
+History remains a distinct retained-text subsystem rather than another variation of Skip.
 
 | Control | Native action | Current port boundary | Relative cost |
 |---|---|---|---|
-| History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Hotspot and nested `call-script` work, but retained text-history records, history query/render opcodes, generic mouse/joy callback dispatch, and several UI/font operations do not | High |
+| History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Hotspot, nested `call-script`, and generic callback/input services work; retained text-history records, history query/render opcodes, and several UI/font operations do not | High |
 | Auto (`x=706`) | Toggle the Auto service | Implemented, including timed wait completion | Done |
 | Message Skip (`x=728`) | Enable persistent all-message fast-forward | Implemented; pacing discrepancies remain a later fidelity adjustment | Done |
 | Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Native persistence and queue/commit/query flow investigated; service not implemented | Medium-high, bounded |
-| Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, removes chrome, and runs `HIDEWIN.BIN` | Saved handler metadata and retained scene transforms exist, but op `0x199` and generic callback/input/cursor services do not | Medium |
+| Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, removes chrome, and runs `HIDEWIN.BIN` | Implemented through the native script path, including coroutine re-entry, per-frame callbacks, mouse/joy state, and `.CUR` resources | Done |
 
-`HIDEWIN.BIN` is primarily an input/scheduler slice, not a new renderer. Static coverage is 29/37 distinct
-opcodes handled (251/286 instructions); its eight effectful gaps are cursor selection (`0x86/0x87`), mouse
-callback registration/dispatch (`0xcc/0xcd`), mouse-button state (`0x108`), and joy callback
-registration/poll/dispatch (`0xfb/0xff/0x100`). The script saves retained-object translations, hides the ADV
-chrome through the parent coroutine, allows the scene to be viewed/panned, then restores state. A clean port
-slice therefore needs real op-`0x199` frame redirection plus a per-frame callback table and host input
-snapshot; the existing retained renderer supplies the visual state.
+`HIDEWIN.BIN` is primarily an input/scheduler slice, not a new renderer. Its former eight effectful gaps were
+cursor selection (`0x86/0x87`), mouse callback registration/dispatch (`0xcc/0xcd`), mouse-button state
+(`0x108`), and joy callback registration/poll/dispatch (`0xfb/0xff/0x100`). The implementation below adds
+those services plus real op-`0x199` frame redirection; the existing retained renderer supplies the visual
+state while the script saves translations, hides the ADV chrome, permits view/pan input, and restores state.
 
 `HISTORY.BIN` is a substantially larger subsystem. Static coverage is 41/78 distinct opcodes handled
 (761/854 instructions), leaving 37 effectful opcode kinds. AGE does not build the backlog from `RT.DAT`.
@@ -1274,10 +1272,41 @@ also needs the generic callback/input layer used by Hide Window, local literal-a
 menu/text-surface operations. ReadTextDB can share the point where a message completes, but it cannot serve
 as the backlog data model because it stores only read flags, not text, styling, names, or voice metadata.
 
-Implementation order by dependency and risk is therefore: **Hide Window first**, because it establishes
-the reusable callback/coroutine input layer on an otherwise well-covered script; then Read-message Skip;
-then History after both the input layer and message-completion seam exist. The `/v2` image names/comments
+The dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
+Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is
+now complete; the remaining order is Read-message Skip followed by History. The `/v2` image names/comments
 the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice opcode paths.
+
+### ADV Hide Window implementation (2026-07-18)
+
+The x=772 callback now follows the original control flow rather than a Godot-only visibility shortcut.
+Opcode `0x199` saves the instruction after the yield, enters the handler-A PC registered by `0x7b`, and,
+when HIDEWIN calls `0x199` again, enters handler B. Opcode `0x7c` then restores the saved ADV PC. This keeps
+chrome removal/restoration, nested `call-script 0x20`, retained drawing, and the 100-ms cursor re-arm under
+the shipped SC0000 bytecode.
+
+The reusable input layer implements the eight previously effectful HIDEWIN gaps: `0x86/0x87` select and
+clear indexed cursor resources; `0xcc/0xcd` register and dispatch the timed mouse callback; `0xfb`, `0xff`,
+and `0x100` maintain and dispatch the frame-local 32-entry joy/input callback table; and `0x108` returns the
+live mouse-button mask. Existing cursor coordinate ops `0x109/0x10a` are now effectful in the VM as well.
+Godot supplies virtual-screen pointer coordinates, left/right mouse bits (`0x1`/`0x2`), and the script's
+directional input indices (down/left/up/right = 0/1/2/3; accept/cancel = 4/5). The common index-10 release
+callback is queued on action release.
+
+Raw ids `0x3318..0x331f` resolve through SYS4INI to the game's 32x32 monochrome Windows `.CUR` assets. The
+runtime decodes their DIB XOR/AND masks and hotspots to RGBA textures and installs them through Godot's
+custom-cursor API. This is asset-backed behavior; no replacement cursor art is authored by the port.
+
+Every ordinary ADV script gates the handler-A call to HIDEWIN on `G[0x62425]`. No script writes that global,
+and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native scheduler-owned
+inherited state rather than numbered save data or the data-only `--boot` prefix. The Godot scene bootstrap
+mirrors the original enabled value as `adv_hide_window_enabled=1`, next to the already documented
+`adv_chrome_enabled` state. A real-script regression activates SC0000's x=772 record, enters HIDEWIN.BIN,
+services multiple timed input iterations, closes through the native right-button bit, and returns to the
+parked ADV wait. Synthetic regressions separately cover both coroutine handlers, callback dispatch, live
+pointer/button reads, cursor host forwarding, and real CUR decoding.
+Validation is engine 175/175, opcode/global generator tests and lints clean, zero-warning Godot build, and
+threaded `SELFTEST OK`.
 
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 

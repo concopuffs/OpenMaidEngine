@@ -26,6 +26,9 @@ public sealed class VirtualMachine
     private readonly object _interactiveLock = new();
     private ExecFrame? _interactiveFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
+    private int _mouseButtonState;
+    private int _heldInputCallbackMask;
+    private int _queuedInputCallbackMask;
     private bool _autoMessageEnabled;
     private long _autoMessageTime0Ms = 500;
     private long _autoMessageTime1Ms = 2000;
@@ -77,6 +80,39 @@ public sealed class VirtualMachine
         }
         if (consumed) _host.WakeInputCallbackService();
         return consumed;
+    }
+
+    /// <summary>Update one native mouse-button bit (left=0x1, right=0x2 in Himegari).</summary>
+    public void UpdateMouseButtonState(int bit, bool pressed) => UpdateMaskBit(ref _mouseButtonState, bit, pressed);
+
+    /// <summary>Update one held AGE input-callback index used by ops 0xfb/0xff/0x100.</summary>
+    public void UpdateInputCallbackState(int index, bool pressed)
+    {
+        if ((uint)index >= 32) return;
+        UpdateMaskBit(ref _heldInputCallbackMask, 1 << index, pressed);
+    }
+
+    /// <summary>Queue a one-shot AGE input callback, such as the shared release callback at index 10.</summary>
+    public void QueueInputCallback(int index)
+    {
+        if ((uint)index >= 32) return;
+        int bit = 1 << index;
+        int before, after;
+        do
+        {
+            before = Volatile.Read(ref _queuedInputCallbackMask);
+            after = before | bit;
+        } while (Interlocked.CompareExchange(ref _queuedInputCallbackMask, after, before) != before);
+    }
+
+    private static void UpdateMaskBit(ref int field, int bit, bool set)
+    {
+        int before, after;
+        do
+        {
+            before = Volatile.Read(ref field);
+            after = set ? before | bit : before & ~bit;
+        } while (Interlocked.CompareExchange(ref field, after, before) != before);
     }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
@@ -253,7 +289,13 @@ public sealed class VirtualMachine
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
         }
         lock (_interactiveLock)
+        {
+            // History/Hide callbacks cancel the active registry, run a nested script, then republish the
+            // parent frame's definitions. Nested RunFrame deliberately clears the disarmed interactive
+            // pointer, so restore the still-running parent before rearming its rebuilt registry.
+            if (_interactiveFrame == null && _cur.Hotspots.HasDefinitions) _interactiveFrame = _cur;
             _interactiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
+        }
         _host.InputCallbackCompleted(Gfx);
         return true;
     }
@@ -307,9 +349,31 @@ public sealed class VirtualMachine
                 _cur.CoroutineYieldHandlerA = (int)Read(a[0]);
                 _cur.CoroutineYieldHandlerB = (int)Read(a[1]);
                 return pc + 1;
+            case "u00414D50":
+            case "yield-adv-coroutine":             // 0x199: A -> nested service -> B -> 0x7c resume
+            {
+                int? targetOffset;
+                if (!_cur.CoroutineYieldActive)
+                {
+                    _cur.CoroutineResumePc = pc + 1;
+                    _cur.CoroutineYieldActive = true;
+                    targetOffset = _cur.CoroutineYieldHandlerA;
+                }
+                else targetOffset = _cur.CoroutineYieldHandlerB;
+
+                return targetOffset is int offset
+                    ? _cur.Script.IndexByOffset.GetValueOrDefault(offset, pc + 1)
+                    : pc + 1;
+            }
             case "u00416A90":
-            case "coroutine-resume":                // 0x7c: host FrameYield/FrameClock owns re-entry
-                return pc + 1;
+            case "coroutine-resume":                // 0x7c: restore the PC saved by op 0x199
+                if (_cur.CoroutineResumePc is int resumePc)
+                {
+                    _cur.CoroutineResumePc = null;
+                    _cur.CoroutineYieldActive = false;
+                    return resumePc;
+                }
+                return pc + 1;                       // cold bounded scene-entry path
             case "u0041F9C0":
             case "coroutine-label-yield":           // 0x140: bounded host model for LABEL/J only
             {
@@ -426,6 +490,71 @@ public sealed class VirtualMachine
                     _cur.Hotspots.BindKey((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
                                           (int)Read(a[3]), (int)Read(a[4]));
                 return pc + 1;
+            case "u0041B210":
+            case "set-cursor-resource": // 0x86: raw indexed .CUR resource
+                _host.SetCursorResource(Read(a[0])); return pc + 1;
+            case "u00414D10":
+            case "clear-cursor-resource": // 0x87
+                _host.ClearCursorResource(); return pc + 1;
+            case "mouse_callback":
+            case "register-mouse-callback": // 0xcc (poll interval ms, local target dword offset)
+                _cur.MouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
+                _cur.MouseCallbackTarget = (int)Read(a[1]);
+                _cur.MouseCallbackNextAtMs = _host.InputClockMilliseconds + _cur.MouseCallbackIntervalMs;
+                return pc + 1;
+            case "get-input-type":
+            case "dispatch-mouse-callback": // 0xcd
+            {
+                long now = _host.InputClockMilliseconds;
+                if (_cur.MouseCallbackTarget < 0 || now < _cur.MouseCallbackNextAtMs) return pc + 1;
+                _cur.MouseCallbackNextAtMs = now + _cur.MouseCallbackIntervalMs;
+                if (!_cur.Script.IndexByOffset.TryGetValue(_cur.MouseCallbackTarget, out int target))
+                    return pc + 1;
+                _cur.CallStack.Add(pc + 1);
+                return target;
+            }
+            case "joy_callback":
+            case "register-joy-callback": // 0xfb (input index, local target dword offset)
+            {
+                int index = (int)Read(a[0]);
+                if ((uint)index < 32) _cur.InputCallbackTargets[index] = (int)Read(a[1]);
+                return pc + 1;
+            }
+            case "u00415A10":
+            case "poll-joy-callback-input": // 0xff
+                _cur.PendingInputCallbackMask = Volatile.Read(ref _heldInputCallbackMask)
+                    | Interlocked.Exchange(ref _queuedInputCallbackMask, 0);
+                _cur.InputCallbackScanIndex = 0;
+                return pc + 1;
+            case "u00415A60":
+            case "dispatch-joy-callbacks": // 0x100
+                while (_cur.InputCallbackScanIndex < 32)
+                {
+                    int index = _cur.InputCallbackScanIndex++;
+                    if ((_cur.PendingInputCallbackMask & (1 << index)) == 0) continue;
+                    int targetOffset = _cur.InputCallbackTargets[index];
+                    if (targetOffset < 0 || !_cur.Script.IndexByOffset.TryGetValue(targetOffset, out int target))
+                        continue;
+                    // Resume on op 0x100 so another simultaneously active input can dispatch.
+                    _cur.CallStack.Add(pc);
+                    return target;
+                }
+                return pc + 1;
+            case "u00415E70":
+            case "get-mouse-button-state": // 0x108
+                Write(a[0], Volatile.Read(ref _mouseButtonState)); return pc + 1;
+            case "u00415EC0":
+            case "get-cursor-virtual": // 0x109
+            {
+                int x, y;
+                lock (_interactiveLock) { x = _pointerX; y = _pointerY; }
+                Write(a[0], x == int.MinValue ? 0 : x);
+                Write(a[1], y == int.MinValue ? 0 : y);
+                return pc + 1;
+            }
+            case "u0041E540":
+            case "set-cursor-virtual": // 0x10a; retain the virtual position even without OS warping
+                UpdatePointer((int)Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "u0041B290":

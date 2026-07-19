@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16416 globals (71 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16417 globals (72 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -3529,6 +3529,7 @@
 | `0x6cb` | adv_hover_message_skip | high | investigation | Pointer-hover flag for the standard ADV all-message Skip button at (728,572). See adv_hover_history. |
 | `0x6cc` | adv_hover_read_message_skip | high | investigation | Pointer-hover flag for the standard ADV read-message-only Skip button at (750,572). See adv_hover_history. |
 | `0x6cd` | adv_hover_hide_window | high | investigation | Pointer-hover flag for the standard ADV Hide-window button at (772,572). See adv_hover_history. |
+| `0x62425` | adv_hide_window_enabled | high | investigation | Native ADV-scheduler permission for the standard Hide Window action. After op 0x199 enters the registered yield-A handler, every standard ADV scene calls HIDEWIN.BIN only while this value is nonzero. No script writes it and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native-owned inherited state rather than saved-game or script boot data. The Godot scene bootstrap mirrors the original enabled value 1. |
 
 ## unknown
 

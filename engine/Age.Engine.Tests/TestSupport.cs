@@ -25,6 +25,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public readonly List<bool> MessageSkipChanges = new();
+    public readonly List<long> CursorResources = new();
+    public int CursorClearCount;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -40,7 +42,10 @@ internal class RecordingHost : IHost
                                      Func<AdvAutoWaitState> autoWaitState)
         => WaitForInput(layoutSlot, serviceInputCallback);
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
-    public void Sleep(long duration) => SleptDurations.Add(duration);
+    public virtual long InputClockMilliseconds => Environment.TickCount64;
+    public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
+    public void ClearCursorResource() => CursorClearCount++;
+    public virtual void Sleep(long duration) => SleptDurations.Add(duration);
     public virtual void FrameYield() { }
     public bool IsMessageSkipActive => MessageSkip;
     public void SetMessageSkipActive(bool active)
