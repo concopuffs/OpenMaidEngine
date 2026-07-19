@@ -1272,10 +1272,15 @@ also needs the generic callback/input layer used by Hide Window, local literal-a
 menu/text-surface operations. ReadTextDB can share the point where a message completes, but it cannot serve
 as the backlog data model because it stores only read flags, not text, styling, names, or voice metadata.
 
-The dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
+The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is
-now complete; the remaining order is Read-message Skip followed by History. The `/v2` image names/comments
-the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice opcode paths.
+now complete. Read-message Skip's semantics remain understood, but its implementation is deferred until the
+port can choose storage for numbered saves and shared profile/global data as one architecture rather than
+selecting an isolated ReadTextDB backend. History is therefore the sole remaining control-strip action under
+active consideration; it can already reuse Hide Window's input layer, while any useful sharing with the
+deferred ReadTextDB work should remain a seam rather than a storage dependency. The `/v2` image
+names/comments the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice
+opcode paths.
 
 ### ADV Hide Window implementation (2026-07-18)
 

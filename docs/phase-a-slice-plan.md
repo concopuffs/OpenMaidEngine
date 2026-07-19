@@ -1637,3 +1637,20 @@ Validation: engine 177/177, opcode tests/lints and vm0 RECOVER clean, zero-warni
 
 **Next:** manually recheck x=772 with the original left-click restore gesture, then continue with the
 profile-wide ReadTextDB slice if the visual lifecycle now matches.
+
+### ADV Read-message Skip deferred pending persistence architecture (2026-07-18)
+
+The native behavior and data model established above remain the implementation contract: read state is
+profile-wide, keyed by packed script resource id and per-script message index, with message completion
+queued and committed through the native `0x71` boundary. Implementation is deliberately deferred, however,
+until the port has a fuller picture of numbered saves, shared `SAVE.DAT` state, `RT.DAT`, configuration, and
+other engine-owned profile/global data.
+
+In particular, the earlier suggestion to persist ReadTextDB in a port-owned format first is not an adopted
+storage decision. The port should not choose native `RT.DAT`, a port-owned replacement, or an import/export
+split in isolation from the broader save/profile backend, lifecycle, migration, and interoperability design.
+When that work resumes, the already-reversed semantic model can sit behind whichever backend that wider
+architecture selects.
+
+With Auto, all-message Skip, and Hide Window implemented and Read-message Skip consciously deferred,
+History is the sole remaining unimplemented ADV control-strip action to investigate as a current slice.
