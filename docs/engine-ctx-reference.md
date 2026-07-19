@@ -29,6 +29,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x53d88` | `cmd_type_table` | `int` | per-object cmd-type column base (write *(0x53d88 + curCtx*0x78)) |
 | `0x550fc` | `message_skip_display_enabled` | `int` | persistent all-message Skip state returned by op 0x19a for the ADV control-strip active overlay |
 | `0x55104` | `auto_message_enabled` | `int` | ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes |
+| `0x55110` | `text_history_recording_suppressed` | `uint` | high bit suppresses ADV retained-history index/text/metadata/voice recording; op 0x1bb writes 0x80000000 or zero, and HISTORY.BIN brackets itself with disable/enable |
 | `0x55120` | `anti_tamper_a` | `int` | anti-tamper checksum operand |
 | `0x55124` | `anti_tamper_b` | `int` | anti-tamper checksum operand |
 | `0x5512c` | `anti_tamper_fp` | `int` | anti-tamper (import fn ptr / result) |

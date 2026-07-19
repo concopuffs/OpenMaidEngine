@@ -5,6 +5,16 @@
 
 ## adv
 
+### 0x70 `define-adv-text-layout` (define-adv-text-layout, argc 5)
+- **summary:** (layout_slot)(width)(height)(x)(y) - configure an ADV text layout/surface and, when history recording is enabled, append its logical history index and arm the next retained record as a group start.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x70_handler@0x41e4e0 forwards the five operands and ctx+0x55110 to adv_text_layout_define@0x4550e0. The worker stores width/height/origin, creates or resizes surface slot layout+0x14, appends {layout_slot,current_record_count} to the 8-byte history index unless suppression bit31 is set, and arms manager+0xd40[slot] so the next 0x48-byte record receives group-start flag bit0.
+
+### 0x71 `reset-adv-text-layout` (reset-adv-text-layout, argc 1)
+- **summary:** (layout_slot) - clear/reset an ADV text layout, append a retained-history boundary when recording is enabled, snapshot the current code/text position, and commit pending ReadTextDB records. T1 entries target these structural reset sites.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; the worker clears the selected layout and appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20.
+
 ### 0x72 `wait-for-input` (wait-for-input, argc 1)
 - **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer.
 - **grounding:** source=investigation, confidence=high
@@ -15,20 +25,70 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x73_configure_wait_indicator@0x41e900 passes operands 1..9 to adv_text_configure_wait_indicator@0x44ff60 and operand 10 to adv_indicator_set_frame_period@0x44d060. The worker writes surface/source rect, layout-relative destination, enabled=1, and terminal/column values to the selected layout at +0x3c..+0x60. SYSTEM4 executes `set-texture 0x337c 0xc 0xff00` (raw id 0x337c = SO000.AGF, a 390x27 strip of thirteen 30x27 bat frames), then `0x73 1 385 140 12 0 0 30 27 12 48`; layout 1 begins at y=430, placing the 30x27 marker at screen (385,570), matching the original. Op 0x72 activates this descriptor only after reveal completion.
 
+### 0x75 `set-font-size` (set-font-size, argc 1)
+- **summary:** (pixels) - set the primary text font height and rebuild its native rasterization state.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x75_handler@0x41ea10 calls text_set_primary_font_size@0x415bd0 on ctx+0x14940. The worker writes the negated pixel height to both primary LOGFONT states, derives width, and rebuilds font resources. HISTORY.BIN selects 22 pixels while active and restores 24 on exit.
+
+### 0x76 `set-text-color` (set-text-color, argc 1)
+- **summary:** (rgb) - set the current primary text color.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x76_handler@0x41ea50 byte-swaps operand RGB into text-manager+0x54c and rebuilds text raster state. Retained 0x48-byte history records copy this field to record+0x24; HISTORY.BIN uses white.
+
+### 0x77 `set-text-effect-color` (set-text-effect-color, argc 1)
+- **summary:** (rgb) - set the secondary outline/shadow color used by the current text raster mode.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x77_handler@0x41eab0 byte-swaps operand RGB into text-manager+0x550 and rebuilds text raster state. The rasterizer consumes it beside the primary color and retained history copies it to record+0x1c; HISTORY.BIN uses dark 0x333e52 while active.
+
+### 0x78 `set-text-render-mode` (set-text-render-mode, argc 1)
+- **summary:** (mode) - select the current text raster/effect mode.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x78_handler@0x41eb10 writes operand 1 to text-manager+0x558 and rebuilds font state. Direct draw and text_history_render_records branch on this field (including a distinct mode-3 offset path). HISTORY.BIN selects mode 3 and restores mode 3 with the normal ADV font preset.
+
 ### 0x7a `set-adv-text-cursor` (set-adv-text-cursor, argc 3)
 - **summary:** (layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and calls adv_text_set_cursor@0x4530f0 on text manager ctx+0x14940. Slot 0 resolves manager+0x4c8; manager+0x414[slot] selects the layout; text_layout_set_cursor@0x452530 writes x/y to +4/+8 of its last 0x14-byte record. SC0000 0x9d3 computes slot 1, x=75, y=47 before voiced show-text.
 
-### 0x1d0 `step-text-history` (u0041BA80, argc 3)
-- **summary:** (out_group)(out_record)(delta) - move through retained ADV text-history groups and return the resolved group/record indices, or -1 at a boundary.
+### 0x85 `clear-text-history` (clear-text-history, argc 0)
+- **summary:** Clear both the retained ADV text-record vector and its logical layout/message index.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes two outputs. The helper walks the text manager's 8-byte history index vector over its 0x48-byte retained text records, skipping masked records and returning -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count and page backward and positive deltas to page forward.
+- **evidence:** Ghidra /v2: op_0x85_handler@0x4163d0 calls text_history_clear@0x455d70 on the text manager. The worker destroys the 0x48-byte record vector and clears the 8-byte logical index vector. Corpus: two sites in each of 143 normal ADV scripts bracket the retained backlog lifetime.
+
+### 0x197 `set-ruby-font-size` (set-ruby-font-size, argc 1)
+- **summary:** (pixels) - set the secondary/ruby text font height and rebuild its native rasterization state.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x197_handler@0x41f3b0 calls the parallel secondary-font size worker at 0x415c40 on ctx+0x14940, which updates the second LOGFONT pair and rebuilds it. UI font preset sequences consistently set primary size through 0x75 and the smaller ruby size through 0x197; HISTORY.BIN uses 22/8.
+
+### 0x198 `set-adv-text-layout-origin` (set-adv-text-layout-origin, argc 3)
+- **summary:** (layout_slot)(x)(y) - set the selected ADV text layout's presentation origin; slot 0 selects the current layout.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x198_handler@0x41f3f0 passes all three operands to adv_text_layout_set_origin@0x44ff30 on ctx+0x14940. The worker resolves slot 0 to current and writes x/y to layout+0x0c/+0x10. HISTORY.BIN positions its dynamically selected backlog layout with this opcode.
+
+### 0x1a4 `set-text-effect-offset` (set-text-effect-offset, argc 2)
+- **summary:** (x)(y) - set the horizontal and vertical extent/offset used by the current text effect mode.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a4_handler@0x41f440 writes operands 1/2 to text-manager+0x564/+0x568. Native raster/bounds paths expand or shift text by these values when an effect mode is active; mode 3 subtracts both. HISTORY.BIN uses (1,1).
+
+### 0x1bb `set-text-history-recording` (set-text-history-recording, argc 1)
+- **summary:** (enabled) - enable or suppress retained ADV text-history recording. Zero suppresses recording; one enables it.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x55110 for operand 0 and zero for operand 1, rejecting other values. Text/layout/metadata/voice paths test or propagate that high bit before appending retained history. HISTORY.BIN disables recording at entry and reenables it at exit so the backlog UI does not record itself.
+
+### 0x1d0 `step-text-history` (step-text-history, argc 3)
+- **summary:** (out_layout_slot)(out_record_index)(delta) - move through retained ADV text-history groups and return the resolved layout slot and first record index, or -1 outputs at a boundary.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). The helper walks the 8-byte logical index over 0x48-byte retained records, skips record-flag bit1 for mode mask 2, and returns -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count/page backward and positive deltas to page forward.
 
 ### 0x1d1 `render-text-history` (u0041BAE0, argc 5)
 - **summary:** (layout_slot)(record_index)(flags)(color_a)(color_b) - render retained ADV text records into a selected text layout/surface.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1d1_render_text_history@0x41f950 forwards all five operands plus the text manager at ctx+0x14508 to text_history_render_records@0x4526c0. That helper walks 0x48-byte retained text records, applies record flags/colors/font state, measures strings, and rasterizes/binds them to the chosen layout. HISTORY.BIN uses it to draw each visible backlog line.
+
+### 0x1d2 `append-text-history-metadata` (append-text-history-metadata, argc 2)
+- **summary:** (value)(metadata_type) - append a typed metadata record to the current retained ADV message group when history recording is enabled.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d2_handler@0x41f9c0 tests ctx+0x55110 and, when recording is enabled, calls text_history_append_typed_metadata@0x455f00. That appends a 0x48-byte record with flag 0x20000000, operand 1 at +0x14, and operand 2 at +0x18, consuming the pending group-start flag if set. The corpus has 17,323 uses; HISTORY.BIN later queries metadata types 1 and 2 through op 0x1d3. This opcode is effectful, not a statement marker.
 
 ### 0x1d3 `find-text-history-value` (u0041BB90, argc 5)
 - **summary:** (out_found)(out_value)(direction)(record_index)(value_type) - find typed metadata within one retained ADV message group.
@@ -44,6 +104,11 @@
 - **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string, fetches surface/x/y, then calls draw_string_to_surface@0x450150 on text manager ctx+0x14940. The worker validates and locks gfx-manager surface table +0xa590[slot], chooses text_raster_string_uncached@0x459d90 or cached/effect path @0x45b600, rasterizes GDI GetGlyphOutlineA bitmaps through text_blit_glyph_bitmap@0x458c80 using font/color state +0x4d0/+0x458, then unlocks. SC0000 0x9b2 draws the speaker name into 400x30 surface 0xd at (1,1); following 0x1fb binds it to retained object 0xe678 at (74,444).
+
+### 0x2bd `set-font-bold` (set-font-bold, argc 1)
+- **summary:** (enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x2bd_handler@0x4251c0 writes enabled?700:0 to LOGFONT weight at text-manager+0x4dc and calls the font rebuild worker. It immediately follows set-font throughout the UI corpus; HISTORY.BIN selects the Mincho face with bold enabled.
 
 ## audio
 
@@ -83,6 +148,11 @@
 - **evidence:** Ghidra /v2: op_0x1bd_play_history_voice@0x420920 stops/replaces the active voice, starts operand 1 through the native voice service when Skip is inactive (or queues it while Skip is active), records the replay in the message voice state when enabled, and sets adv_auto_voice_pending when playback exists. HISTORY.BIN obtains the id from retained text-record metadata before invoking this opcode.
 
 ## compute
+
+### 0x64 `copy-inline-int-array` (copy-inline-int-array, argc 2)
+- **summary:** (destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by encoded values from frame_codebase + operand2*4, reverses the engine rotate/XOR encoding with anti_tamper_a, and writes consecutive dwords. HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays.
 
 ### 0x135 `bit-set` (bit-set, argc 2)
 - **summary:** (value)(bit_index) - set the indexed bit in the destination integer.
@@ -134,6 +204,21 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** native-RE (Ghidra): handler FUN_0041fba0 (= ctx[0x26c93+0x8f]) sets [frame PC @+0x53d2c] = [frame codebase @+0x53d28] + operand*4 and pushes ((pc-base)>>2)+3 onto the per-frame return stack ([ctx+0x552e8]/[ctx+0x55248]). Target is a code OFFSET within the current script (matches header table T3 tag 0x8F = local call targets), confirming it is a local JSR, not a script load.
 
+### 0xa1 `begin-value-switch` (begin-value-switch, argc 0)
+- **summary:** Clear and initialize the current value-to-PC dispatch table used by the following case and switch-jump opcodes.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xa1_handler@0x42bd60 resets the engine's open-addressing value-dispatch table with capacity 0xfff. Corpus has 12 canonical sequences of 0xa1, one or more 0xa2 cases, then 0xa3 dispatch.
+
+### 0xa2 `add-value-switch-case` (add-value-switch-case, argc 2)
+- **summary:** (case_value)(target_pc) - format the VM value as a dispatch key and add its branch target to the current switch table.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xa2_handler@0x42d310 formats operand 1 through vm_value_format_string@0x418860 and inserts operand 2 into value_dispatch_insert_case@0x42cf70. HISTORY.BIN maps action values 0,3,4,5,6 to callback branches; it is generic switch/case dispatch, not menu registration.
+
+### 0xa3 `value-switch-jump` (value-switch-jump, argc 2)
+- **summary:** (selector)(default_target) - jump to the target registered for selector, or to the supplied default target when no case matches.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries value_dispatch_lookup@0x419290, writes the matched or operand-2 default PC into the current frame, and clears the command type. Corpus pairs it with 0xa1/0xa2 in 12 generic switch sequences.
+
 ### 0xc8 `sleep` (sleep, argc 1)
 - **summary:** Pause the current script for <duration> milliseconds while retained presentation continues.
 - **grounding:** source=investigation, confidence=high
@@ -172,6 +257,11 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here. The port publishes and waits for visible finite one-shot channels or 0x223 commands; click forcing remains limited to the latter.
 
 ## draw
+
+### 0x131 `get-message-window-alpha` (get-message-window-alpha, argc 1)
+- **summary:** (out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
 
 ### 0x1a2 `gfx-cmd-register` (gfx-cmd-register, argc 1)
 - **summary:** 0x1a2 (value) — gfx cmd-type 3. Handler gfx_op_0x1a2_descriptor_register@0x42d360 builds a key from operand 1's lvalue descriptor and inserts its value into an open-addressing descriptor hash (vm_lvalue_descriptor_hash_insert@0x42cf70). This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query this hash. NOT save/scene.
@@ -227,6 +317,11 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
 - **grounding:** source=inference, confidence=med
 - **evidence:** SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h feeds w/2 horizontal-center + foot-anchor subtraction into draw-texture dst; stubbing yields 0x0 sizes / off-center draws
+
+### 0x20b `fill-surface-rect` (fill-surface-rect, argc 7)
+- **summary:** (surface_slot)(x)(y)(width)(height)(alpha)(rgb) - fill a clipped rectangle on a graphics surface with the supplied color and alpha.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 400x30 name strip on temporary surface 0xc1 before draw-string.
 
 ### 0x20c `present-frame` (present-frame, argc 0)
 - **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
@@ -297,6 +392,11 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **summary:** (handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550.
+
+### 0x222 `present-gfx-object-range` (present-gfx-object-range, argc 2)
+- **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range and clear their pending update flags.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch. HISTORY.BIN uses (0,60000) after rebuilding its retained presentation.
 
 ### 0x223 `queue-surface-alpha-transition` (queue-surface-alpha-transition, argc 8)
 - **summary:** (command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration.
@@ -472,6 +572,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly.
 
+### 0x12e `find-hit-rectangle` (find-hit-rectangle, argc 8)
+- **summary:** (index_inout)(reference_rect)(pointer_x)(pointer_y)(rect_array)(x_offsets)(y_offsets)(count) - scan forward through encoded rectangles and return the next hit index, or -1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, scans candidates after the incoming index, applies per-entry x/y offsets to the pointer coordinates, performs rectangle overlap containment tests, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses it for mouse hover selection over its literal-initialized row rectangles.
+
 ### 0x19a `get-message-skip` (u00414E50, argc 1)
 - **summary:** (out) - return the current all-message skip state set by op 0x88.
 - **grounding:** source=investigation, confidence=high
@@ -524,10 +629,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker
 - **grounding:** source=inference, confidence=med, noop_headless=True
 
-### 0x1d2 `stmt-desc?` (u0041BB40, argc 2)
-- **summary:** 2 imm; immediately after stmt-begin 0x1f4 — statement descriptor?
-- **grounding:** source=harness, confidence=med, noop_headless=True
-
 ### 0x1d5 `cond-block` (u00415700, argc 0)
 - **summary:** zero-arg; ALWAYS follows jcc — marks conditional body entry
 - **grounding:** source=inference, confidence=high, noop_headless=True
@@ -552,13 +653,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural
 - **grounding:** source=harness, confidence=low, noop_headless=True
 - **evidence:** SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'script-entry 0x259'; VM treats it as no-op (default stub) across all 279 CLEAN A0 scenes
-
-## structural
-
-### 0x71 `label-def` (u0041A7B0, argc 1)
-- **summary:** (anchor_id) - define a T1 label/anchor, snapshot the current code position, and commit pending read-message records to the shared ReadTextDB.
-- **grounding:** source=investigation, confidence=high
-- **evidence:** Corpus: count exactly matches each script's T1 table and T1 entries target these records, preserving the structural label role. Ghidra /v2: op_0x71_handler@0x41e540 records (frame_pc-frame_codebase)/4 at the current frame's +0x20 field, snapshots text state, and calls read_text_db_commit_pending@0x46ae20. That drains queued {script_resource_id,message_index,message_count} records into ReadTextDB. script_frame_load_resource@0x40e980 stores the raw packed SYS4/AAI resource id at frame+0x04 (EngineCtx+0x53d64), establishing the persistence key. Therefore 0x71 is not a pure runtime no-op when persistent read history is modeled.
 
 ## unknown
 
@@ -674,10 +768,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x64 `copy-local-array` (copy-local-array, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0x6c `copy-to-global` (copy-to-global, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -690,26 +780,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x70 `u0041A750` (u0041A750, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x75 `u0041AC30` (u0041AC30, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x76 `u0041AC60` (u0041AC60, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x77 `u0041ACB0` (u0041ACB0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x78 `u0041AD00` (u0041AD00, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x79 `u0041AD30` (u0041AD30, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -719,10 +789,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x80 `u0041AF00` (u0041AF00, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x85 `u00414CF0` (u00414CF0, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -737,18 +803,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0xa0 `jcc` (jcc, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0xa1 `u00427C00` (u00427C00, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xa2 `u00427FD0` (u00427FD0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xa3 `u004244D0` (u004244D0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0xae `u00415130` (u00415130, argc 0)
 - **summary:** —
@@ -826,19 +880,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x12e `u0041E940` (u0041E940, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x12f `u0041ECB0` (u0041ECB0, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x130 `u00415F40` (u00415F40, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x131 `u00415F70` (u00415F70, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -910,14 +956,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x197 `u0041B510` (u0041B510, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x198 `u0041B540` (u0041B540, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x19b `u00414E80` (u00414E80, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -945,10 +983,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1a3 `string-lookup-set` (string-lookup-set, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x1a4 `u0041B580` (u0041B580, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1a5 `set-font` (set-font, argc 1)
 - **summary:** —
@@ -1018,10 +1052,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1bb `u0041B7B0` (u0041B7B0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1c1 `u0041B820` (u0041B820, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1058,10 +1088,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x20b `u00420D50` (u00420D50, argc 7)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x20d `u00420E10` (u00420E10, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1072,10 +1098,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x20f `u00420E40` (u00420E40, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x222 `u004216C0` (u004216C0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1132,10 +1154,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x24e `u00422EA0` (u00422EA0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x2bd `u00423100` (u00423100, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

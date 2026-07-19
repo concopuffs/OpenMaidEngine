@@ -1564,8 +1564,8 @@ x=728 pacing check before starting Read-message Skip.
 Native RE confirms that this service cannot be implemented as a second all-message toggle. AGE resolves the
 current script code offset through its per-frame message-offset table, then tests a dword flag in an
 engine-owned `ReadTextDB` keyed by the raw packed script resource id and per-script message index. Click,
-Auto, and active-Skip completion queue `{script_resource_id,index,count}`; opcode `0x71`, while still the
-structural T1 label/anchor,
+Auto, and active-Skip completion queue `{script_resource_id,index,count}`; opcode `0x71`, whose layout-reset
+sites are also the structural T1 targets,
 commits those pending records and therefore is not a pure runtime no-op.
 
 The database is profile-wide rather than slot-local. AGE loads and writes `RT.DAT` beside shared
@@ -1654,3 +1654,29 @@ architecture selects.
 
 With Auto, all-message Skip, and Hide Window implemented and Read-message Skip consciously deferred,
 History is the sole remaining unimplemented ADV control-strip action to investigate as a current slice.
+
+### ADV History retained-record investigation (2026-07-18)
+
+Native RE now bounds History as an in-memory engine service rather than an unknown menu subsystem. The text
+manager retains 0x48-byte text/metadata/voice records plus 8-byte `{layout_slot,first_record_index}` logical
+entries. Ops `0x70/0x71` establish group boundaries, `0x6e` writes styled text, `0xc4` writes voice pairs,
+and op `0x1d2` writes typed metadata. That last opcode was incorrectly classified as a safe marker despite
+17,323 corpus uses and is now corrected. Op `0x1bb` suppresses recursive recording while HISTORY runs; op
+`0x85` clears both vectors at ordinary ADV block boundaries.
+
+The other large-looking gaps are generic: `0x64` copies encoded inline literal arrays; `0xa1/0xa2/0xa3`
+implement switch/case dispatch; `0x12e` performs rectangle-array hover tests. The existing Hide Window input
+callbacks already supply HISTORY's actions. Font/color/layout/surface/presentation opcodes are individually
+bounded, while `0xd3/0xd4/0xd5` remains the smooth scrollbar callback/interpolation detail.
+
+Native context saves can serialize/deserialize the live backlog, but that path is distinct from `RT.DAT`.
+The first implementation should deliberately stay in memory: add an engine/session-owned history service,
+wire the native writers and `0x1d0..0x1d4` readers, then let the host render requested groups. Save/load
+restoration remains a named integration seam for the later unified storage architecture rather than a new
+backend decision in this slice. Full layout, lifecycle, and opcode evidence lives in
+[`engine-re.md`](engine-re.md#retained-history-record-model-and-lifetime-2026-07-18).
+
+**Recommended next implementation slice:** land the history record/index model and its ordinary ADV write
+path first, with focused synthetic tests for grouping, metadata, voice pairs, suppression, and clear. Then
+add generic literal-array/switch support and the HISTORY read/render path. This orders the work around the
+data that must exist before clicking History can display anything.

@@ -123,6 +123,11 @@ name = "auto_message_enabled"
 type = "int"
 note = "ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes"
 [[field]]
+offset = 0x55110
+name = "text_history_recording_suppressed"
+type = "uint"
+note = "high bit suppresses ADV retained-history index/text/metadata/voice recording; op 0x1bb writes 0x80000000 or zero, and HISTORY.BIN brackets itself with disable/enable"
+[[field]]
 offset = 0x55120
 name = "anti_tamper_a"
 type = "int"

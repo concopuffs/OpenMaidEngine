@@ -1220,7 +1220,7 @@ dword flag. `adv_refresh_read_skip_state@0x406cd0` and ops `0x6e/0x71/0x72` comb
 The write side records completion, rather than merely displaying text. Ordinary click/wheel advance and
 Auto expiry queue `{script_id, message_index, message_count}` through
 `read_text_db_queue_message@0x469340`; an op-`0x72` wait already being passed by Skip queues the same tuple
-directly. Opcode `0x71` remains the structural T1 label/anchor, but it is not a pure runtime no-op:
+directly. Opcode `0x71` resets a text layout at the structural sites targeted by T1; it is not a pure runtime no-op:
 `op_0x71_handler@0x41e540` snapshots the current code position and calls
 `read_text_db_commit_pending@0x46ae20`, which grows or creates the per-script flag array and sets the queued
 indices to one. This queued/commit seam lets the port reproduce native read eligibility without scene
@@ -1251,7 +1251,7 @@ History remains a distinct retained-text subsystem rather than another variation
 
 | Control | Native action | Current port boundary | Relative cost |
 |---|---|---|---|
-| History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Hotspot, nested `call-script`, and generic callback/input services work; retained text-history records, history query/render opcodes, and several UI/font operations do not | High |
+| History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Input/callback infrastructure works; a bounded retained-history model, its read/write opcodes, and supporting text/presentation ops remain | Medium-high, bounded |
 | Auto (`x=706`) | Toggle the Auto service | Implemented, including timed wait completion | Done |
 | Message Skip (`x=728`) | Enable persistent all-message fast-forward | Implemented; pacing discrepancies remain a later fidelity adjustment | Done |
 | Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Native persistence and queue/commit/query flow investigated; service not implemented | Medium-high, bounded |
@@ -1263,18 +1263,63 @@ cursor selection (`0x86/0x87`), mouse callback registration/dispatch (`0xcc/0xcd
 those services plus real op-`0x199` frame redirection; the existing retained renderer supplies the visual
 state while the script saves translations, hides the ADV chrome, permits view/pan input, and restores state.
 
-`HISTORY.BIN` is a substantially larger subsystem. Current static coverage is 47/78 distinct opcodes
-correctly handled (781/854 instructions), leaving 31 effectful opcode kinds across 73 instructions. The
-largest repeated gaps are local literal-array initialization (`0x64`, 15 sites) and the still-unreversed
-menu/action registration op `0xa2` (9 sites); the five core history navigation/render/metadata/voice opcodes
-are semantically reversed but still need a port-side retained-history service. AGE does not build the backlog
-from `RT.DAT`.
-It retains a session text-manager stream of 0x48-byte records plus an 8-byte logical-message index. Op
-`0x1d0` navigates message groups, `0x1d1` rerenders stored records with their font/color/layout metadata,
-`0x1d3/0x1d4` recover typed metadata and voice pairs, and `0x1bd` replays a selected stored voice. History
-also needs the generic callback/input layer used by Hide Window, local literal-array copies, and remaining
-menu/text-surface operations. ReadTextDB can share the point where a message completes, but it cannot serve
-as the backlog data model because it stores only read flags, not text, styling, names, or voice metadata.
+`HISTORY.BIN` remains a larger subsystem, but the formerly ambiguous gaps are now bounded. Static runtime
+coverage is still 47/78 distinct opcodes (781/854 instructions): this investigation refined semantics, not
+the C# handler count. The 15 op-`0x64` sites decode count-prefixed inline integer arrays used for row
+rectangles and coordinates. Ops `0xa1/0xa2/0xa3` are a generic value switch (`begin`, `add case`, `dispatch`),
+not a History-specific menu/input service; HISTORY maps already-produced action values to local branches.
+Op `0x12e` scans those rectangle/offset arrays for pointer hover. The Hide Window callback/input layer is
+therefore already sufficient.
+
+#### Retained History record model and lifetime (2026-07-18)
+
+The native text manager at `ctx+0x14940` owns two vectors:
+
+- manager `+0xd24/+0xd28`: 0x48-byte retained records;
+- manager `+0xd34/+0xd38`: 8-byte logical entries `{layout_slot, first_record_index}`.
+
+A normal record holds the layout slot at `+0x00`, geometry at `+0x04..+0x10`, value/metadata fields at
+`+0x14/+0x18`, font/color/baseline state at `+0x1c..+0x24`, flags at `+0x28`, and an inline-or-heap string
+object at `+0x2c` (length `+0x40`, capacity `+0x44`). Flag bit 0 begins a logical group; bit 1 is filtered by
+History's navigation mode; `0x20000000` denotes typed metadata and `0x40000000` denotes a voice pair.
+
+The write path is part of ordinary ADV execution:
+
+- op `0x70` defines a text layout and op `0x71` resets one. Unless recording is suppressed, each appends
+  `{layout_slot,current_record_count}` and arms the next record's group-start bit. The op-`0x71` operand is a
+  layout slot—not a T1 anchor id—although T1 entries structurally target these reset sites. Its ReadTextDB
+  snapshot/commit work remains a second responsibility.
+- op `0x6e`'s glyph builder appends normal text chunks with the active geometry/font/color state.
+- voice op `0xc4` appends a `0x40000000` record containing its stored pair.
+- op `0x1d2` appends a `0x20000000` record with operand 1 as the value and operand 2 as the metadata type.
+  It was previously misclassified as a safe statement marker; 17,323 corpus uses make this a foundational
+  correction.
+- op `0x1bb(0)` writes suppression bit `0x80000000` at `ctx+0x55110`; op `0x1bb(1)` clears it. HISTORY uses
+  that pair at entry/exit so its own UI text is not added to the backlog.
+- op `0x85` clears both vectors. Its 286 corpus uses are two sites in each of 143 ordinary ADV scripts,
+  generally bounding History to the current ADV block rather than an unbounded profile log.
+
+The read side is the previously identified op-`0x1d0..0x1d4` family. Op `0x1d0` returns a logical entry's
+layout slot and first record index; op `0x1d1` renders records until the next group boundary; op `0x1d3`
+finds typed metadata; op `0x1d4` finds the voice pair; op `0x1bd` replays its voice id.
+
+History is independent of `RT.DAT`, but native full save fidelity does serialize the live backlog.
+`text_history_serialize@0x451d00` writes the index and packed records/strings after context/numbered-save
+serialization, and `text_history_deserialize@0x456130` restores them on the matching load path. This is a
+future numbered-save integration seam, not a reason to choose a shared-profile backend now: an in-memory
+History button can be complete first, while save/load restoration stays deferred with the wider storage
+architecture decision.
+
+The remaining supporting gaps are ordinary presentation operations: primary/ruby font sizes (`0x75/0x197`),
+font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin (`0x198`), surface
+rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object presentation (`0x222`). The
+`0xd3/0xd4/0xd5` callback-sequence family drives the smooth scrollbar interpolation and is the main
+remaining scheduler detail; omitting it would affect motion fidelity, not the backlog data model.
+
+The port currently retains only the current `_advText` plus a diagnostic `(offset,text)` capture list.
+History should therefore begin with an engine/session-owned `AdvTextHistory` service—records, logical index,
+suppression, and clear lifetime—fed by the native write opcodes. The host should render a requested group;
+it should not own the canonical backlog. No persistence format is required for that first slice.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

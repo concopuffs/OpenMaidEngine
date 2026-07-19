@@ -847,28 +847,28 @@ observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0x64
-label = "copy-local-array"
+label = "copy-inline-int-array"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "copy-local-array"
-category = "unknown"
-summary = ""
+name = "copy-inline-int-array"
+category = "compute"
+summary = "(destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by encoded values from frame_codebase + operand2*4, reverses the engine rotate/XOR encoding with anti_tamper_a, and writes consecutive dwords. HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination first integer"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "inline blob dword offset"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -946,64 +946,64 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x70
-label = "u0041A750"
+label = "define-adv-text-layout"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041A750"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
-
-[[opcode.semantics.args]]
-i = 1
-role = ""
-observed_types = ["imm"]
-
-[[opcode.semantics.args]]
-i = 2
-role = ""
-observed_types = ["imm"]
-
-[[opcode.semantics.args]]
-i = 3
-role = ""
-observed_types = ["imm"]
-
-[[opcode.semantics.args]]
-i = 4
-role = ""
-observed_types = ["imm"]
-
-[[opcode.semantics.args]]
-i = 5
-role = ""
-observed_types = ["imm"]
-
-[[opcode]]
-op = 0x71
-label = "u0041A7B0"
-argc = 1
-abi_source = "kelebek+decode-validated"
-
-[opcode.semantics]
-name = "label-def"
-category = "structural"
-summary = "(anchor_id) - define a T1 label/anchor, snapshot the current code position, and commit pending read-message records to the shared ReadTextDB."
+name = "define-adv-text-layout"
+category = "adv"
+summary = "(layout_slot)(width)(height)(x)(y) - configure an ADV text layout/surface and, when history recording is enabled, append its logical history index and arm the next retained record as a group start."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Corpus: count exactly matches each script's T1 table and T1 entries target these records, preserving the structural label role. Ghidra /v2: op_0x71_handler@0x41e540 records (frame_pc-frame_codebase)/4 at the current frame's +0x20 field, snapshots text state, and calls read_text_db_commit_pending@0x46ae20. That drains queued {script_resource_id,message_index,message_count} records into ReadTextDB. script_frame_load_resource@0x40e980 stores the raw packed SYS4/AAI resource id at frame+0x04 (EngineCtx+0x53d64), establishing the persistence key. Therefore 0x71 is not a pure runtime no-op when persistent read history is modeled."
+evidence = "Ghidra /v2: op_0x70_handler@0x41e4e0 forwards the five operands and ctx+0x55110 to adv_text_layout_define@0x4550e0. The worker stores width/height/origin, creates or resizes surface slot layout+0x14, appends {layout_slot,current_record_count} to the 8-byte history index unless suppression bit31 is set, and arms manager+0xd40[slot] so the next 0x48-byte record receives group-start flag bit0."
 
 [[opcode.semantics.args]]
 i = 1
-role = "label/anchor id"
+role = "layout slot (0 = current)"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "width"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "height"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "origin x"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "origin y"
+observed_types = ["imm"]
+
+[[opcode]]
+op = 0x71
+label = "reset-adv-text-layout"
+argc = 1
+abi_source = "kelebek+decode-validated"
+
+[opcode.semantics]
+name = "reset-adv-text-layout"
+category = "adv"
+summary = "(layout_slot) - clear/reset an ADV text layout, append a retained-history boundary when recording is enabled, snapshot the current code/text position, and commit pending ReadTextDB records. T1 entries target these structural reset sites."
+noop_headless = false
+source = "investigation"
+confidence = "high"
+depends_on = []
+evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; the worker clears the selected layout and appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20."
+
+[[opcode.semantics.args]]
+i = 1
+role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -1095,19 +1095,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x75
-label = "u0041AC30"
+label = "set-font-size"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AC30"
-category = "unknown"
-summary = ""
+name = "set-font-size"
+category = "adv"
+summary = "(pixels) - set the primary text font height and rebuild its native rasterization state."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x75_handler@0x41ea10 calls text_set_primary_font_size@0x415bd0 on ctx+0x14940. The worker writes the negated pixel height to both primary LOGFONT states, derives width, and rebuilds font resources. HISTORY.BIN selects 22 pixels while active and restores 24 on exit."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1116,19 +1116,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x76
-label = "u0041AC60"
+label = "set-text-color"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AC60"
-category = "unknown"
-summary = ""
+name = "set-text-color"
+category = "adv"
+summary = "(rgb) - set the current primary text color."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x76_handler@0x41ea50 byte-swaps operand RGB into text-manager+0x54c and rebuilds text raster state. Retained 0x48-byte history records copy this field to record+0x24; HISTORY.BIN uses white."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1137,19 +1137,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x77
-label = "u0041ACB0"
+label = "set-text-effect-color"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041ACB0"
-category = "unknown"
-summary = ""
+name = "set-text-effect-color"
+category = "adv"
+summary = "(rgb) - set the secondary outline/shadow color used by the current text raster mode."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x77_handler@0x41eab0 byte-swaps operand RGB into text-manager+0x550 and rebuilds text raster state. The rasterizer consumes it beside the primary color and retained history copies it to record+0x1c; HISTORY.BIN uses dark 0x333e52 while active."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1158,19 +1158,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x78
-label = "u0041AD00"
+label = "set-text-render-mode"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AD00"
-category = "unknown"
-summary = ""
+name = "set-text-render-mode"
+category = "adv"
+summary = "(mode) - select the current text raster/effect mode."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x78_handler@0x41eb10 writes operand 1 to text-manager+0x558 and rebuilds font state. Direct draw and text_history_render_records branch on this field (including a distinct mode-3 offset path). HISTORY.BIN selects mode 3 and restores mode 3 with the normal ADV font preset."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1325,19 +1325,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x85
-label = "u00414CF0"
+label = "clear-text-history"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414CF0"
-category = "unknown"
-summary = ""
+name = "clear-text-history"
+category = "adv"
+summary = "Clear both the retained ADV text-record vector and its logical layout/message index."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x85_handler@0x4163d0 calls text_history_clear@0x455d70 on the text manager. The worker destroys the 0x48-byte record vector and clears the 8-byte logical index vector. Corpus: two sites in each of 143 normal ADV scripts bracket the retained backlog lifetime."
 
 [[opcode]]
 op = 0x86
@@ -1639,70 +1639,70 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0xa1
-label = "u00427C00"
+label = "begin-value-switch"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00427C00"
-category = "unknown"
-summary = ""
+name = "begin-value-switch"
+category = "control"
+summary = "Clear and initialize the current value-to-PC dispatch table used by the following case and switch-jump opcodes."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xa1_handler@0x42bd60 resets the engine's open-addressing value-dispatch table with capacity 0xfff. Corpus has 12 canonical sequences of 0xa1, one or more 0xa2 cases, then 0xa3 dispatch."
 
 [[opcode]]
 op = 0xa2
-label = "u00427FD0"
+label = "add-value-switch-case"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00427FD0"
-category = "unknown"
-summary = ""
+name = "add-value-switch-case"
+category = "control"
+summary = "(case_value)(target_pc) - format the VM value as a dispatch key and add its branch target to the current switch table."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xa2_handler@0x42d310 formats operand 1 through vm_value_format_string@0x418860 and inserts operand 2 into value_dispatch_insert_case@0x42cf70. HISTORY.BIN maps action values 0,3,4,5,6 to callback branches; it is generic switch/case dispatch, not menu registration."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "case value"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "target PC dword offset"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0xa3
-label = "u004244D0"
+label = "value-switch-jump"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004244D0"
-category = "unknown"
-summary = ""
+name = "value-switch-jump"
+category = "control"
+summary = "(selector)(default_target) - jump to the target registered for selector, or to the supplied default target when no case matches."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries value_dispatch_lookup@0x419290, writes the matched or operand-2 default PC into the current frame, and clears the command type. Corpus pairs it with 0xa1/0xa2 in 12 generic switch sequences."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "selector value"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "default target PC dword offset"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2519,58 +2519,58 @@ observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0x12e
-label = "u0041E940"
+label = "find-hit-rectangle"
 argc = 8
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041E940"
-category = "unknown"
-summary = ""
+name = "find-hit-rectangle"
+category = "input"
+summary = "(index_inout)(reference_rect)(pointer_x)(pointer_y)(rect_array)(x_offsets)(y_offsets)(count) - scan forward through encoded rectangles and return the next hit index, or -1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, scans candidates after the incoming index, applies per-entry x/y offsets to the pointer coordinates, performs rectangle overlap containment tests, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses it for mouse hover selection over its literal-initialized row rectangles."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "previous/matched index inout"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "reference rectangle pointer"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "pointer x"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "pointer y"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "candidate rectangle array"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "per-entry x offset array"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "per-entry y offset array"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "candidate count/end index"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
@@ -2632,23 +2632,23 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x131
-label = "u00415F70"
+label = "get-message-window-alpha"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415F70"
-category = "unknown"
-summary = ""
+name = "get-message-window-alpha"
+category = "draw"
+summary = "(out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "alpha setting out"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
@@ -3198,19 +3198,19 @@ observed_types = ["string"]
 
 [[opcode]]
 op = 0x197
-label = "u0041B510"
+label = "set-ruby-font-size"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B510"
-category = "unknown"
-summary = ""
+name = "set-ruby-font-size"
+category = "adv"
+summary = "(pixels) - set the secondary/ruby text font height and rebuild its native rasterization state."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x197_handler@0x41f3b0 calls the parallel secondary-font size worker at 0x415c40 on ctx+0x14940, which updates the second LOGFONT pair and rebuilds it. UI font preset sequences consistently set primary size through 0x75 and the smaller ruby size through 0x197; HISTORY.BIN uses 22/8."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3219,33 +3219,33 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x198
-label = "u0041B540"
+label = "set-adv-text-layout-origin"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B540"
-category = "unknown"
-summary = ""
+name = "set-adv-text-layout-origin"
+category = "adv"
+summary = "(layout_slot)(x)(y) - set the selected ADV text layout's presentation origin; slot 0 selects the current layout."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x198_handler@0x41f3f0 passes all three operands to adv_text_layout_set_origin@0x44ff30 on ctx+0x14940. The worker resolves slot 0 to current and writes x/y to layout+0x0c/+0x10. HISTORY.BIN positions its dynamically selected backlog layout with this opcode."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "origin x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "origin y"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -3500,19 +3500,19 @@ observed_types = ["g-int", "l-ptr"]
 
 [[opcode]]
 op = 0x1a4
-label = "u0041B580"
+label = "set-text-effect-offset"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B580"
-category = "unknown"
-summary = ""
+name = "set-text-effect-offset"
+category = "adv"
+summary = "(x)(y) - set the horizontal and vertical extent/offset used by the current text effect mode."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a4_handler@0x41f440 writes operands 1/2 to text-manager+0x564/+0x568. Native raster/bounds paths expand or shift text by these values when an effect mode is active; mode 3 subtracts both. HISTORY.BIN uses (1,1)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4012,23 +4012,23 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1bb
-label = "u0041B7B0"
+label = "set-text-history-recording"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B7B0"
-category = "unknown"
-summary = ""
+name = "set-text-history-recording"
+category = "adv"
+summary = "(enabled) - enable or suppress retained ADV text-history recording. Zero suppresses recording; one enables it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x55110 for operand 0 and zero for operand 1, rejecting other values. Text/layout/metadata/voice paths test or propagate that high bit before appending retained history. HISTORY.BIN disables recording at entry and reenables it at exit so the backlog UI does not record itself."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "enabled (0 or 1)"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -4269,28 +4269,28 @@ observed_types = ["imm", "g-int"]
 
 [[opcode]]
 op = 0x1d0
-label = "u0041BA80"
+label = "step-text-history"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "step-text-history"
 category = "adv"
-summary = "(out_group)(out_record)(delta) - move through retained ADV text-history groups and return the resolved group/record indices, or -1 at a boundary."
+summary = "(out_layout_slot)(out_record_index)(delta) - move through retained ADV text-history groups and return the resolved layout slot and first record index, or -1 outputs at a boundary."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes two outputs. The helper walks the text manager's 8-byte history index vector over its 0x48-byte retained text records, skipping masked records and returning -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count and page backward and positive deltas to page forward."
+evidence = "Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes the index entry's first field (layout slot) and second field (record index). The helper walks the 8-byte logical index over 0x48-byte retained records, skips record-flag bit1 for mode mask 2, and returns -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count/page backward and positive deltas to page forward."
 
 [[opcode.semantics.args]]
 i = 1
-role = "history group out"
+role = "layout slot out"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "history record out"
+role = "first history record index out"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
@@ -4341,28 +4341,28 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1d2
-label = "u0041BB40"
+label = "append-text-history-metadata"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "stmt-desc?"
-category = "marker"
-summary = "2 imm; immediately after stmt-begin 0x1f4 — statement descriptor?"
-noop_headless = true
-source = "harness"
-confidence = "med"
+name = "append-text-history-metadata"
+category = "adv"
+summary = "(value)(metadata_type) - append a typed metadata record to the current retained ADV message group when history recording is enabled."
+noop_headless = false
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1d2_handler@0x41f9c0 tests ctx+0x55110 and, when recording is enabled, calls text_history_append_typed_metadata@0x455f00. That appends a 0x48-byte record with flag 0x20000000, operand 1 at +0x14, and operand 2 at +0x18, consuming the pending group-start flag if set. The corpus has 17,323 uses; HISTORY.BIN later queries metadata types 1 and 2 through op 0x1d3. This opcode is effectful, not a statement marker."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "metadata value"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "metadata type"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -5058,19 +5058,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x20b
-label = "u00420D50"
+label = "fill-surface-rect"
 argc = 7
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420D50"
-category = "unknown"
-summary = ""
+name = "fill-surface-rect"
+category = "draw"
+summary = "(surface_slot)(x)(y)(width)(height)(alpha)(rgb) - fill a clipped rectangle on a graphics surface with the supplied color and alpha."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 400x30 name strip on temporary surface 0xc1 before draw-string."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5654,19 +5654,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x222
-label = "u004216C0"
+label = "present-gfx-object-range"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004216C0"
-category = "unknown"
-summary = ""
+name = "present-gfx-object-range"
+category = "draw"
+summary = "(first_handle)(count) - flush/present retained graphics objects in the selected handle range and clear their pending update flags."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch. HISTORY.BIN uses (0,60000) after rebuilding its retained presentation."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6666,19 +6666,19 @@ evidence = "SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'scr
 
 [[opcode]]
 op = 0x2bd
-label = "u00423100"
+label = "set-font-bold"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00423100"
-category = "unknown"
-summary = ""
+name = "set-font-bold"
+category = "adv"
+summary = "(enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x2bd_handler@0x4251c0 writes enabled?700:0 to LOGFONT weight at text-manager+0x4dc and calls the font rebuild worker. It immediately follows set-font throughout the UI corpus; HISTORY.BIN selects the Mincho face with bold enabled."
 
 [[opcode.semantics.args]]
 i = 1
