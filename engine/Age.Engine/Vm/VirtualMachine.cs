@@ -772,7 +772,12 @@ public sealed class VirtualMachine
             case "reset-message-voice-state": // 0x1bc resets native per-message voice/queued-voice state
                 _autoVoicePending = false; return pc + 1;
             case "set-text-history-recording": // 0x1bb: HISTORY.BIN suppresses recording its own UI
-                if (Read(a[0]) is 0 or 1) TextHistory.SetRecordingEnabled(Read(a[0]) == 1);
+                if (Read(a[0]) is 0 or 1)
+                {
+                    bool enabled = Read(a[0]) == 1;
+                    TextHistory.SetRecordingEnabled(enabled);
+                    if (enabled) _host.EndTextHistoryPresentation();
+                }
                 return pc + 1;
             case "append-text-history-metadata": // 0x1d2: typed value attached to the current group
                 TextHistory.AppendMetadata(Read(a[0]), Read(a[1]), _advTextStyle); return pc + 1;

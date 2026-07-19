@@ -1393,6 +1393,12 @@ Label and independently animated wait marker. Native rendering gets this layerin
 part of retained composition; the port must state it explicitly because those two elements are separate
 Godot overlays. They reappear with the same parked page after the modal frame returns.
 
+History's target-layout render batches are likewise presentation bindings, not part of the retained backlog.
+`HISTORY.BIN@0x1100` re-enables recording with op `0x1bb(1)` after erasing its object range and releasing
+surfaces `0xc0/0xc1`; that existing exit boundary now tells the host to discard all bound History batches.
+The semantic text/index records remain untouched, so reopening History rebuilds fresh rows while exiting
+cannot leave the old labels above the resumed ADV page.
+
 History's remaining work is stored voice replay through `0x1bd` and the `0xd3/0xd4/0xd5` smooth-scroll
 callback scheduler. None changes backlog ownership or requires choosing a save/profile backend.
 

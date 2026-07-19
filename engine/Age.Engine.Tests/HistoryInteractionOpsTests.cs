@@ -167,6 +167,8 @@ public class HistoryInteractionOpsTests
         Assert.True(host.SawRenderedText);
         Assert.True(host.HistoryReturned);
         Assert.Equal(1, host.Waits); // the enclosing ADV page was never released or re-entered
+        Assert.Equal(1, host.HistoryPresentationEnds);
+        Assert.Empty(host.ActiveHistoryRenders);
 
         var historyButtons = host.FirstHistoryFrame
             .Where(render => render.Handle >= 0xd2fa && render.Handle <= 0xd300)

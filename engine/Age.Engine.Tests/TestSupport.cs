@@ -18,6 +18,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Slot, int X, int Y)> TextCursors = new();
     public readonly List<(int Surface, int X, int Y, string Text)> SurfaceStrings = new();
     public readonly List<AdvTextHistoryRenderBatch> HistoryRenders = new();
+    public readonly Dictionary<int, AdvTextHistoryRenderBatch> ActiveHistoryRenders = new();
+    public int HistoryPresentationEnds;
     public readonly List<int> ClearedTextLayouts = new();
     public readonly List<SurfaceRectFill> SurfaceFills = new();
     public readonly List<(long First, long Count)> PresentedRanges = new();
@@ -38,8 +40,21 @@ internal class RecordingHost : IHost
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
-    public void ClearRenderedAdvTextLayout(int layoutSlot) => ClearedTextLayouts.Add(layoutSlot);
-    public void RenderTextHistory(AdvTextHistoryRenderBatch batch) => HistoryRenders.Add(batch);
+    public void ClearRenderedAdvTextLayout(int layoutSlot)
+    {
+        ClearedTextLayouts.Add(layoutSlot);
+        ActiveHistoryRenders.Remove(layoutSlot);
+    }
+    public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
+    {
+        HistoryRenders.Add(batch);
+        ActiveHistoryRenders[batch.LayoutSlot] = batch;
+    }
+    public void EndTextHistoryPresentation()
+    {
+        HistoryPresentationEnds++;
+        ActiveHistoryRenders.Clear();
+    }
     public int MessageWindowAlphaSetting { get; set; }
     public void FillSurfaceRect(SurfaceRectFill fill) => SurfaceFills.Add(fill);
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)

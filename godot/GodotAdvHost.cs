@@ -149,6 +149,12 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
+    public void EndTextHistoryPresentation()
+    {
+        lock (_textLock) _historyText.Clear();
+        _timeline?.Event("history-presentation-end");
+    }
+
     public IReadOnlyList<AdvTextHistoryRenderBatch> SnapshotRenderedTextHistory()
     {
         lock (_textLock) return _historyText.Values.OrderBy(batch => batch.LayoutSlot).ToArray();

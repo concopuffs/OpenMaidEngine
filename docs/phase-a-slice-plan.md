@@ -1801,6 +1801,12 @@ class of inherited-state bridges.
 Godot also suppresses the parked page's ordinary dialogue Label and wait indicator while any nested timed
 raw-input frame owns the modal screen, then restores them on return. Root Control anchor presets are now
 applied after parenting, removing the remaining occurrence of the associated runtime layout diagnostic.
+
+A follow-up exit check found that the host retained the last History render batches after the script had
+erased its objects and re-enabled recording. Op `0x1bb(1)` at `HISTORY.BIN@0x1100` is now the presentation
+end boundary: it clears only the host's transient layout bindings, leaving the engine-owned backlog intact
+for the next opening. The real interaction regression requires zero active History batches after return.
+
 Validation: engine 198/198, zero-warning Godot build, threaded `SELFTEST OK`, and vm0 RECOVER clean.
 
 **Next:** manually recheck the five History rows and overlay cleanup against the original. If they match, proceed

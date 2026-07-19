@@ -24,6 +24,9 @@ public interface IHost
         => DrawStringToSurface(surfaceSlot, x, y, text);
     void ClearRenderedAdvTextLayout(int layoutSlot) { }
     void RenderTextHistory(AdvTextHistoryRenderBatch batch) { }
+    // History render batches are transient bindings, unlike the retained backlog itself. HISTORY.BIN's
+    // recording re-enable at exit ends that presentation and drops every bound target layout.
+    void EndTextHistoryPresentation() { }
     int MessageWindowAlphaSetting => 0;
     void FillSurfaceRect(SurfaceRectFill fill) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
