@@ -34,6 +34,7 @@ public sealed class VirtualMachine
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
     private volatile bool _messageSkipEnabled;
+    private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
@@ -46,11 +47,13 @@ public sealed class VirtualMachine
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
+    public AdvTextHistory TextHistory { get; }
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
-                          IScriptProvider? provider = null, ITraceSink? sink = null)
+                          IScriptProvider? provider = null, ITraceSink? sink = null,
+                          AdvTextHistory? textHistory = null)
     { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
-      _sink = sink ?? NullTraceSink.Instance; }
+      _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory(); }
 
     /// <summary>Update the native 800x600 cursor coordinate without advancing the current ADV page.</summary>
     public void UpdatePointer(int x, int y)
@@ -436,10 +439,20 @@ public sealed class VirtualMachine
                     if (c > _o.EmitCap) { HaltReason = $"LOOP:line@0x{off:x}×{c}"; return HALT; }
                     string text = _cur.Script.GetString(off);
                     Emitted.Add((off, text, _cur.Script.Name));
+                    int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
+                    TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
                     _host.ShowText(off, text);
                 }
                 return pc + 1;
+            case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
+                TextHistory.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
+                                         (int)Read(a[3]), (int)Read(a[4]));
+                return pc + 1;
+            case "reset-adv-text-layout": // 0x71: reset layout and begin the next logical retained group
+                TextHistory.ResetLayout((int)Read(a[0]));
+                return pc + 1;
             case "set-adv-text-cursor": // 0x7a (layout slot, x, y); slot 0 means current natively
+                TextHistory.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
                 _host.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "configure-adv-wait-indicator": // 0x73: per-layout animated input-wait marker
                 _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
@@ -601,6 +614,32 @@ public sealed class VirtualMachine
             case "block-mark":
             case "reset-message-voice-state": // 0x1bc resets native per-message voice/queued-voice state
                 _autoVoicePending = false; return pc + 1;
+            case "set-text-history-recording": // 0x1bb: HISTORY.BIN suppresses recording its own UI
+                if (Read(a[0]) is 0 or 1) TextHistory.SetRecordingEnabled(Read(a[0]) == 1);
+                return pc + 1;
+            case "append-text-history-metadata": // 0x1d2: typed value attached to the current group
+                TextHistory.AppendMetadata(Read(a[0]), Read(a[1]), _advTextStyle); return pc + 1;
+            case "clear-text-history": // 0x85: bound the backlog to the current ordinary ADV block
+                TextHistory.Clear(); return pc + 1;
+            case "set-font-size":
+                _advTextStyle = _advTextStyle with { PrimaryFontSize = (int)Read(a[0]) }; return pc + 1;
+            case "set-ruby-font-size":
+                _advTextStyle = _advTextStyle with { RubyFontSize = (int)Read(a[0]) }; return pc + 1;
+            case "set-font-bold":
+                _advTextStyle = _advTextStyle with { Bold = Read(a[0]) != 0 }; return pc + 1;
+            case "set-text-color":
+                _advTextStyle = _advTextStyle with { TextColor = Read(a[0]) }; return pc + 1;
+            case "set-text-effect-color":
+                _advTextStyle = _advTextStyle with { EffectColor = Read(a[0]) }; return pc + 1;
+            case "set-text-render-mode":
+                _advTextStyle = _advTextStyle with { RenderMode = (int)Read(a[0]) }; return pc + 1;
+            case "set-text-effect-offset":
+                _advTextStyle = _advTextStyle with
+                {
+                    EffectOffsetX = (int)Read(a[0]),
+                    EffectOffsetY = (int)Read(a[1])
+                };
+                return pc + 1;
             case "u00415BF0":
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
                 return pc + 1;
@@ -632,6 +671,7 @@ public sealed class VirtualMachine
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice":
                 _autoVoicePending = true;
+                TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
                 _host.PlayVoice(Read(a[0])); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
                 _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;

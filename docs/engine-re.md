@@ -1316,10 +1316,17 @@ rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object pr
 `0xd3/0xd4/0xd5` callback-sequence family drives the smooth scrollbar interpolation and is the main
 remaining scheduler detail; omitting it would affect motion fidelity, not the backlog data model.
 
-The port currently retains only the current `_advText` plus a diagnostic `(offset,text)` capture list.
-History should therefore begin with an engine/session-owned `AdvTextHistory` service—records, logical index,
-suppression, and clear lifetime—fed by the native write opcodes. The host should render a requested group;
-it should not own the canonical backlog. No persistence format is required for that first slice.
+The first port slice now implements an engine/session-owned `AdvTextHistory` service. `GameSession` carries
+one instance across VM scene runs, while a standalone VM owns its instance for the full top-level and nested
+script lifetime. The model retains the logical index, typed text/metadata/voice records, group-start flags,
+layout/cursor snapshots, and font/color/effect state. Ops `0x70`, `0x71`, `0x6e`, `0xc4`, `0x1d2`, `0x1bb`,
+and `0x85` feed it directly; Godot remains only a presentation host and does not own the canonical backlog.
+
+The model intentionally has no JSON or disk serialization. `GameSession.ToJson()` continues to snapshot
+only the pre-existing global banks, so landing the live backlog does not silently choose a save/profile
+backend. Native numbered-save restoration remains the explicit future integration seam described above.
+The next History slice can now implement generic inline arrays/value dispatch and ops `0x1d0..0x1d4` over
+real retained data before adding host rendering.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

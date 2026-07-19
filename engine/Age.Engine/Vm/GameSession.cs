@@ -20,6 +20,8 @@ public sealed class GameSession
 {
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
+    /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
+    public AdvTextHistory TextHistory { get; } = new();
 
     public void Seed(int addr, long value) => Globals[addr] = value;
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
@@ -29,7 +31,7 @@ public sealed class GameSession
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null)
     {
-        var vm = new VirtualMachine(script, table, host, options, provider, sink);
+        var vm = new VirtualMachine(script, table, host, options, provider, sink, TextHistory);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
 
@@ -42,8 +44,9 @@ public sealed class GameSession
         return new SceneResult(vm.Emitted.ToList(), vm.HaltReason, vm.Steps);
     }
 
-    /// <summary>Serialize the persistent state to JSON (globals + string globals, keyed by decimal address).
-    /// Lets an expensive booted state be snapshotted and reused; foundation for save-file work.</summary>
+    /// <summary>Serialize the persistent global banks to JSON, keyed by decimal address.
+    /// Lets an expensive booted state be snapshotted and reused. Live <see cref="TextHistory"/> is
+    /// intentionally excluded until the unified save/profile architecture defines its lifecycle.</summary>
     public string ToJson()
     {
         var snap = new StateSnapshot(

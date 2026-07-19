@@ -1680,3 +1680,27 @@ backend decision in this slice. Full layout, lifecycle, and opcode evidence live
 path first, with focused synthetic tests for grouping, metadata, voice pairs, suppression, and clear. Then
 add generic literal-array/switch support and the HISTORY read/render path. This orders the work around the
 data that must exist before clicking History can display anything.
+
+### ADV History retained writer model implemented (2026-07-18)
+
+The recommended first slice is complete. `AdvTextHistory` is an engine model rather than a Godot widget:
+standalone VMs own it for their complete nested-script lifetime, and `GameSession` supplies one shared
+instance to successive scene VMs. It stores logical `{layout_slot,first_record_index}` entries and semantic
+text, typed-metadata, and voice-pair records with native flags, layout/cursor snapshots, and the active
+font/color/effect style.
+
+The ordinary native write path is live. Ops `0x70/0x71` configure/reset layouts and establish group
+boundaries; `0x6e`, `0xc4`, and `0x1d2` append text, voice, and metadata records; `0x1bb` suppresses all of
+those writers while HISTORY renders itself; and `0x85` clears the retained vectors at ordinary ADV block
+boundaries. The already-reversed font, color, mode, effect, bold, and cursor setters update the snapshots
+future history rendering will consume.
+
+Five focused regressions cover grouping and first-record flags, metadata and voice fields, style/layout
+snapshots, suppression/re-enable, clear lifetime, session sharing, and the real SC0000 first page reaching
+its wait with string `0x14963` retained. Validation: engine 182/182, zero-warning Godot build, threaded
+`SELFTEST OK`. Static HISTORY coverage is now 56/78 distinct opcodes and 798/854 instructions handled or
+safe-noop.
+
+**Next:** implement generic inline integer arrays (`0x64`) and value-switch dispatch (`0xa1/0xa2/0xa3`),
+then wire History navigation/query ops `0x1d0`, `0x1d3`, and `0x1d4` against this model. Rendering op `0x1d1`
+and its presentation operations can follow once those data-side script paths execute correctly.
