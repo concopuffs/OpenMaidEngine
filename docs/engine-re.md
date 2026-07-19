@@ -1203,6 +1203,82 @@ the missing native governor and remains fast without teleporting between blockin
 op `0x88` state reaches the host before the following cadence yields. Validation is engine 168/168,
 zero-warning Godot build, and threaded `SELFTEST OK`.
 
+### ADV read-message Skip and shared `RT.DAT` history (2026-07-18)
+
+Read-message Skip is backed by an engine-owned `ReadTextDB`, not a VM-global flag and not ordinary numbered
+slot data. Each script frame supplies its raw packed SYS4/AAI resource id, a table of message code offsets,
+and its count. `script_frame_load_resource@0x40e980` stores the same id used by
+`asset_open_indexed_entry` at frame field `+0x04` (`EngineCtx+0x53d64`); base Himegari scripts therefore use
+their SYS4INI file index, while append resources retain the high-byte pack selector.
+`read_text_db_find_message_index@0x468f50` maps the current code dword offset through that table to a
+per-script message index. `read_text_db_is_message_read@0x469930` formats the script id as an eight-digit
+lowercase hexadecimal key, looks up that script's record, bounds-checks the index, and returns the stored
+dword flag. `adv_refresh_read_skip_state@0x406cd0` and ops `0x6e/0x71/0x72` combine that result with
+`message:ReadTextSkip`; a read page sets `run_state_flags & 0x08000000` and
+`ctx->adv_read_skip_state`, which op `0x1cc` exposes to the scripts.
+
+The write side records completion, rather than merely displaying text. Ordinary click/wheel advance and
+Auto expiry queue `{script_id, message_index, message_count}` through
+`read_text_db_queue_message@0x469340`; an op-`0x72` wait already being passed by Skip queues the same tuple
+directly. Opcode `0x71` remains the structural T1 label/anchor, but it is not a pure runtime no-op:
+`op_0x71_handler@0x41e540` snapshots the current code position and calls
+`read_text_db_commit_pending@0x46ae20`, which grows or creates the per-script flag array and sets the queued
+indices to one. This queued/commit seam lets the port reproduce native read eligibility without scene
+offset lists or synthetic VM globals.
+
+Persistence is shared across numbered save slots. `shared_profile_save@0x40c950` atomically rewrites
+`SAVE.DAT`, then serializes `ReadTextDB` through `$$RT.DAT` to `RT.DAT`, with `RT.BAK` handling.
+`shared_profile_load@0x40ccd0` loads `SAVE.DAT` (falling back to `SAVE.BAK`) and then independently loads
+`RT.DAT` when present. Numbered saves use the separate `SAVE%2.2d.DAT` pattern. A successful context/slot
+save calls the shared-profile writer, and shutdown also calls it unless `set:NoSaveDat` suppresses shared
+data writes.
+
+The `RT.DAT` header is `0x114` bytes: magic `0x54523353` (bytes `S3RT`), a compatibility id, a 256-byte
+game id, version pair `1,0`, and script-record count. It is followed by 12-byte script records containing
+`{script_id, message_count, pointer_placeholder}` and the corresponding `message_count` dword flag arrays.
+The loader validates the header compatibility fields, allocates fresh arrays, and rebuilds the in-memory
+hashtable. The port should own an equivalent profile-level model; matching the original raw pointer-bearing
+file layout is optional compatibility work, not a prerequisite for native runtime semantics.
+
+The `/v2` Ghidra image now names/comments the lookup, queue, commit, mark, file read/write, and shared-profile
+save/load chain and corrects the relevant function prototypes; saved 2026-07-18.
+
+### Remaining ADV control-strip actions and implementation cost (2026-07-18)
+
+The five standard controls are now fully inventoried. Auto message and all-message Skip have working host
+services; Read-message Skip is the profile-wide `RT.DAT`/ReadTextDB slice above. The two other actions are
+History and Hide Window, and they exercise different engine subsystems rather than variations of Skip.
+
+| Control | Native action | Current port boundary | Relative cost |
+|---|---|---|---|
+| History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Hotspot and nested `call-script` work, but retained text-history records, history query/render opcodes, generic mouse/joy callback dispatch, and several UI/font operations do not | High |
+| Auto (`x=706`) | Toggle the Auto service | Implemented, including timed wait completion | Done |
+| Message Skip (`x=728`) | Enable persistent all-message fast-forward | Implemented; pacing discrepancies remain a later fidelity adjustment | Done |
+| Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Native persistence and queue/commit/query flow investigated; service not implemented | Medium-high, bounded |
+| Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, removes chrome, and runs `HIDEWIN.BIN` | Saved handler metadata and retained scene transforms exist, but op `0x199` and generic callback/input/cursor services do not | Medium |
+
+`HIDEWIN.BIN` is primarily an input/scheduler slice, not a new renderer. Static coverage is 29/37 distinct
+opcodes handled (251/286 instructions); its eight effectful gaps are cursor selection (`0x86/0x87`), mouse
+callback registration/dispatch (`0xcc/0xcd`), mouse-button state (`0x108`), and joy callback
+registration/poll/dispatch (`0xfb/0xff/0x100`). The script saves retained-object translations, hides the ADV
+chrome through the parent coroutine, allows the scene to be viewed/panned, then restores state. A clean port
+slice therefore needs real op-`0x199` frame redirection plus a per-frame callback table and host input
+snapshot; the existing retained renderer supplies the visual state.
+
+`HISTORY.BIN` is a substantially larger subsystem. Static coverage is 41/78 distinct opcodes handled
+(761/854 instructions), leaving 37 effectful opcode kinds. AGE does not build the backlog from `RT.DAT`.
+It retains a session text-manager stream of 0x48-byte records plus an 8-byte logical-message index. Op
+`0x1d0` navigates message groups, `0x1d1` rerenders stored records with their font/color/layout metadata,
+`0x1d3/0x1d4` recover typed metadata and voice pairs, and `0x1bd` replays a selected stored voice. History
+also needs the generic callback/input layer used by Hide Window, local literal-array copies, and remaining
+menu/text-surface operations. ReadTextDB can share the point where a message completes, but it cannot serve
+as the backlog data model because it stores only read flags, not text, styling, names, or voice metadata.
+
+Implementation order by dependency and risk is therefore: **Hide Window first**, because it establishes
+the reusable callback/coroutine input layer on an otherwise well-covered script; then Read-message Skip;
+then History after both the input layer and message-completion seam exist. The `/v2` image names/comments
+the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice opcode paths.
+
 ### ADV retained text — ops `0x7a` / `0x204` and show-text publication (2026-07-10)
 
 The SC0000 textbox uses two related native paths under the text manager at `ctx+0x14940`:

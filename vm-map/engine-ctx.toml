@@ -104,9 +104,9 @@ type = "void*"
 note = "0x78-byte context-record array base (coroutine/script contexts)"
 [[field]]
 offset = 0x53d64
-name = "gfx_obj_record_array"
-type = "void*"
-note = "gfx object-record array (field[0]=0xffffffff free; cmd-type at rec+0x24)"
+name = "frame_script_resource_id"
+type = "uint"
+note = "raw packed SYS4/AAI resource id for this 0x78-byte script frame; persisted ReadTextDB script key"
 [[field]]
 offset = 0x53d88
 name = "cmd_type_table"

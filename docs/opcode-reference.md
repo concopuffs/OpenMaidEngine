@@ -8,7 +8,7 @@
 ### 0x72 `wait-for-input` (wait-for-input, argc 1)
 - **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached. The handler also checks ctx+0x55104 (Auto enabled): when ctx+0x6dbe4 has no pending voice it arms the timer with message:AutoMessageTime1, substituting 100 ms for configuration value zero. adv_input_service_poll@0x411230 waits for an active voice to finish and then arms AutoMessageTime0, likewise with a 100-ms zero fallback.
+- **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached. The handler also checks ctx+0x55104 (Auto enabled): when ctx+0x6dbe4 has no pending voice it arms the timer with message:AutoMessageTime1, substituting 100 ms for configuration value zero. adv_input_service_poll@0x411230 waits for an active voice to finish and then arms AutoMessageTime0, likewise with a 100-ms zero fallback. The same click/Auto completion path calls read_text_db_queue_message@0x469340 with the current script id, resolved per-script message index, and message count; an already-skipped wait queues it directly in op 0x72. Op 0x71 later commits the pending records.
 
 ### 0x73 `configure-adv-wait-indicator` (configure-adv-wait-indicator, argc 10)
 - **summary:** (layout_slot)(dst_x)(dst_y)(surface_slot)(src_x)(src_y)(cell_w)(cell_h)(terminal_frame)(frame_period_ms) - configure the animated marker shown while the selected ADV layout waits for input.
@@ -19,6 +19,26 @@
 - **summary:** (layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and calls adv_text_set_cursor@0x4530f0 on text manager ctx+0x14940. Slot 0 resolves manager+0x4c8; manager+0x414[slot] selects the layout; text_layout_set_cursor@0x452530 writes x/y to +4/+8 of its last 0x14-byte record. SC0000 0x9d3 computes slot 1, x=75, y=47 before voiced show-text.
+
+### 0x1d0 `step-text-history` (u0041BA80, argc 3)
+- **summary:** (out_group)(out_record)(delta) - move through retained ADV text-history groups and return the resolved group/record indices, or -1 at a boundary.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_step_group@0x4537c0 with operand 3 and mode mask 2, then writes two outputs. The helper walks the text manager's 8-byte history index vector over its 0x48-byte retained text records, skipping masked records and returning -1 outputs at a boundary. HISTORY.BIN uses negative deltas to count and page backward and positive deltas to page forward.
+
+### 0x1d1 `render-text-history` (u0041BAE0, argc 5)
+- **summary:** (layout_slot)(record_index)(flags)(color_a)(color_b) - render retained ADV text records into a selected text layout/surface.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d1_render_text_history@0x41f950 forwards all five operands plus the text manager at ctx+0x14508 to text_history_render_records@0x4526c0. That helper walks 0x48-byte retained text records, applies record flags/colors/font state, measures strings, and rasterizes/binds them to the chosen layout. HISTORY.BIN uses it to draw each visible backlog line.
+
+### 0x1d3 `find-text-history-value` (u0041BB90, argc 5)
+- **summary:** (out_found)(out_value)(direction)(record_index)(value_type) - find typed metadata within one retained ADV message group.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_history_find_typed_value@0x450840 and writes its boolean result plus returned value. The helper scans the 0x48-byte text records within a logical group for flag 0x20000000 and matching type in record+0x18, returning record+0x14. HISTORY.BIN queries types 1 and 2 for line decoration/name metadata.
+
+### 0x1d4 `find-text-history-pair` (u0041BC00, argc 4)
+- **summary:** (out_a)(out_b)(direction)(record_index) - find paired metadata within one retained ADV message group.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_history_find_pair@0x4509f0 and writes two outputs. The helper scans the logical group for a record flagged 0x40000000 and returns its +0x14/+0x18 pair. HISTORY.BIN uses the pair to expose voice replay for a backlog entry.
 
 ### 0x204 `draw-string` (draw-string, argc 4)
 - **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
@@ -56,6 +76,11 @@
 - **summary:** Play a voice clip by id; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). While all-message Skip is active, retain/replace the queued voice id instead of starting it; playback resumes from the latest queued id after Skip clears. Same resolver rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d}).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it starts the voice immediately; while set it stores the latest id/zero arg at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active.
+
+### 0x1bd `play-history-voice` (u0041D910, argc 1)
+- **summary:** (voice_id) - replay a voice id selected from the retained ADV text history, preserving normal Skip and Auto-voice state behavior.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1bd_play_history_voice@0x420920 stops/replaces the active voice, starts operand 1 through the native voice service when Skip is inactive (or queues it while Skip is active), records the replay in the message voice state when enabled, and sets adv_auto_voice_pending when playback exists. HISTORY.BIN obtains the id from retained text-record metadata before invoking this opcode.
 
 ## control
 
@@ -123,7 +148,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x20c, 0x20d, 0x21c, 0x223
-- **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). Producer recovered 2026-07-10: adv_update_read_text_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message_ReadTextSkip plus current-PC read-history lookup; adv_interpreter_tick consumes it in click/read-skip control. It is not the 0x223 surface-transition progress flag.
+- **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). adv_refresh_read_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message:ReadTextSkip plus read_text_db_find_message_index@0x468f50 and read_text_db_is_message_read@0x469930. The database is engine-owned shared RT.DAT state keyed by raw packed script resource id and per-script message index, not VM globals or slot-local SAVE##.DAT data. adv_interpreter_tick consumes the result in click/read-skip control; it is not op 0x223 surface-transition progress.
 
 ### 0x21c `mark-frame-yield` (mark-frame-yield, argc 0)
 - **summary:** Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary.
@@ -333,6 +358,16 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 
 ## input
 
+### 0x86 `set-cursor-resource` (u0041B210, argc 1)
+- **summary:** (resource_id) - load an indexed cursor asset and install it as the active custom cursor.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x86_set_cursor_resource@0x41f0a0 opens operand 1 through asset_open_indexed_entry, extracts the asset payload, passes it to the cursor installer at 0x485ce0, releases the asset, and refreshes the OS cursor when the window is active. HIDEWIN.BIN selects resources 0x3318..0x331f according to the pointer's screen-edge region.
+
+### 0x87 `clear-cursor-resource` (u00414D10, argc 0)
+- **summary:** Clear the active custom cursor and refresh the OS cursor when the game window is active.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x87_clear_cursor_resource@0x416400 calls the cursor clear/release helper at 0x4856b0 and then the same active-window cursor refresh used by op 0x86. HIDEWIN.BIN calls it when leaving an edge region and on exit.
+
 ### 0x88 `set-message-skip` (u0041B290, argc 1)
 - **summary:** (enabled) - set persistent all-message Skip state. Nonzero makes the interpreter inject ADV fast-forward input every tick; zero stops injection and clears the transient skip run-state bit.
 - **grounding:** source=investigation, confidence=high
@@ -380,10 +415,40 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **depends on:** 0x90
 - **evidence:** Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's key-bit array. SC0000 binds bits 0, 8, and 7 to its three 1x1 keyed records.
 
+### 0xcc `register-mouse-callback` (mouse_callback, argc 2)
+- **summary:** (poll_interval_ms)(target_pc) - register a timed per-frame mouse callback in the current script.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xcc_register_mouse_callback@0x420f70 stores operand 2 as the callback PC and the current frame_script_resource_id as its owner, then arms operand 1 as the poll interval. HIDEWIN.BIN and HISTORY.BIN both register a 0x10-ms callback. Op 0xcd performs the timed dispatch.
+
+### 0xcd `dispatch-mouse-callback` (get-input-type, argc 0)
+- **summary:** Dispatch the registered mouse callback when its polling interval elapses.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xcd_dispatch_mouse_callback@0x417e10 compares timeGetTime against the registered interval, pushes the following PC, verifies the callback's saved script resource id matches the current frame, and jumps to the registered callback target. It writes no operand, so the upstream get-input-type label was incorrect.
+
+### 0xfb `register-joy-callback` (joy_callback, argc 2)
+- **summary:** (input_index)(target_pc) - register one of 32 per-frame joy/input callback targets.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xfb_register_joy_callback@0x421270 bounds-checks operand 1 to 0..31 and stores operand 2 in the current script frame's 33-entry callback table. Ops 0xff/0x100 poll and dispatch this table; HISTORY.BIN and HIDEWIN.BIN register indices 0..10.
+
+### 0xff `poll-joy-callback-input` (u00415A10, argc 0)
+- **summary:** Poll the current joy/input callback bitmask and initialize the per-dispatch scan state.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through the input poller at 0x4608b0, resets the scan index, and snapshots the current input selector. It pairs with op 0x100.
+
+### 0x100 `dispatch-joy-callbacks` (u00415A60, argc 0)
+- **summary:** Dispatch registered callbacks for the current or pending joy/input selection.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x100_dispatch_joy_callbacks@0x416f00 scans the bitmask captured by op 0xff (or uses the current selector when no mask is present), pushes a return PC, and jumps through the current frame's callback table populated by op 0xfb.
+
 ### 0x101 `reset-message-skip-input` (u00415BF0, argc 0)
 - **summary:** Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag.
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. It does not touch ctx+0x13dc or ctx+0x550fc, so adv_interpreter_tick re-injects Skip on the following tick while persistent state remains enabled. The Auto, Message-skip, Read-skip, and Hide-window callbacks invoke it after their 100 ms cursor re-arm sequence.
+
+### 0x108 `get-mouse-button-state` (u00415E70, argc 1)
+- **summary:** (out) - return the current mouse-button state bitmask.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through the mouse-state helper at 0x4602e0 and writes it to operand 1. HIDEWIN.BIN and HISTORY.BIN test individual bits to detect press/release transitions.
 
 ### 0x109 `get-cursor-virtual` (u00415EC0, argc 2)
 - **summary:** (out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates.
@@ -479,8 +544,9 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ## structural
 
 ### 0x71 `label-def` (u0041A7B0, argc 1)
-- **summary:** 1 imm; count == T1 table size -> the label/anchor T1 indexes. v1 no-op; revisit if menu/callback dispatch looks up by id
-- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **summary:** (anchor_id) - define a T1 label/anchor, snapshot the current code position, and commit pending read-message records to the shared ReadTextDB.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Corpus: count exactly matches each script's T1 table and T1 entries target these records, preserving the structural label role. Ghidra /v2: op_0x71_handler@0x41e540 records (frame_pc-frame_codebase)/4 at the current frame's +0x20 field, snapshots text state, and calls read_text_db_commit_pending@0x46ae20. That drains queued {script_resource_id,message_index,message_count} records into ReadTextDB. script_frame_load_resource@0x40e980 stores the raw packed SYS4/AAI resource id at frame+0x04 (EngineCtx+0x53d64), establishing the persistence key. Therefore 0x71 is not a pure runtime no-op when persistent read history is modeled.
 
 ## unknown
 
@@ -648,14 +714,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x86 `u0041B210` (u0041B210, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x87 `u00414D10` (u00414D10, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x8b `u0041B3D0` (u0041B3D0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -716,14 +774,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xcc `mouse_callback` (mouse_callback, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0xcd `get-input-type` (get-input-type, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0xd0 `u00415830` (u00415830, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -740,27 +790,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xfb `joy_callback` (joy_callback, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0xfe `u0041E360` (u0041E360, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xff `u00415A10` (u00415A10, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x100 `u00415A60` (u00415A60, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x107 `u0041E500` (u0041E500, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x108 `u00415E70` (u00415E70, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -984,10 +1018,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1bd `u0041D910` (u0041D910, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1c1 `u0041B820` (u0041B820, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1001,22 +1031,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1cf `u0041DA10` (u0041DA10, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1d0 `u0041BA80` (u0041BA80, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1d1 `u0041BAE0` (u0041BAE0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1d3 `u0041BB90` (u0041BB90, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1d4 `u0041BC00` (u0041BC00, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

@@ -1558,3 +1558,44 @@ again. Native still executes one opcode per interpreter tick during Skip. Godot 
 frame pulse at each `FrameYield` only while persistent message Skip is enabled, retaining normal free-running
 bursts outside Skip. Validation: engine 168/168, zero-warning Godot build, threaded `SELFTEST OK`; repeat the
 x=728 pacing check before starting Read-message Skip.
+
+### ADV Read-message Skip persistence investigation (2026-07-18)
+
+Native RE confirms that this service cannot be implemented as a second all-message toggle. AGE resolves the
+current script code offset through its per-frame message-offset table, then tests a dword flag in an
+engine-owned `ReadTextDB` keyed by the raw packed script resource id and per-script message index. Click,
+Auto, and active-Skip completion queue `{script_resource_id,index,count}`; opcode `0x71`, while still the
+structural T1 label/anchor,
+commits those pending records and therefore is not a pure runtime no-op.
+
+The database is profile-wide rather than slot-local. AGE loads and writes `RT.DAT` beside shared
+`SAVE.DAT`, using `$$RT.DAT` and `RT.BAK` for replacement/backup; numbered game slots remain
+`SAVE%2.2d.DAT`. Successful slot/context saves and normal shutdown persist the shared database. The full
+native chain and file layout are recorded in
+[`engine-re.md`](engine-re.md#adv-read-message-skip-and-shared-rtdat-history-2026-07-18), and `/v2` is
+renamed/commented/saved.
+
+**Next:** implement a profile-level read-history service behind the VM/host boundary, make click/Auto/Skip
+completion queue the native tuple, make op `0x71` commit it, and use the same resolver for op `0x1cc`.
+Persist it in a port-owned shared format first; raw `RT.DAT` import/export can remain a separate compatibility
+slice.
+
+### ADV remaining-button difficulty inventory (2026-07-18)
+
+The remaining action buttons beyond Read-message Skip are History (`x=684`) and Hide Window (`x=772`).
+They are not additional toggle services. `HIDEWIN.BIN` is 29/37 distinct opcodes covered (251/286
+instructions) and mainly needs the real op-`0x199` coroutine transition plus AGE's per-frame mouse/joy
+callback tables, button-state polling, and cursor-resource operations. Existing retained-object translation
+and presentation support covers its scene-view/pan behavior, making this a medium-sized infrastructure slice.
+
+`HISTORY.BIN` is 41/78 distinct opcodes covered (761/854 instructions) and needs a separate session-level
+retained text-record model, navigation/render/metadata ops `0x1d0/0x1d1/0x1d3/0x1d4`, stored-voice replay,
+the same generic input-callback layer, literal local-array initialization, and additional menu/text-surface
+operations. The shared ReadTextDB is not a backlog: it stores only per-message read flags. History is
+therefore the largest remaining control-strip action.
+
+**Recommended next slice:** implement Hide Window first as the smallest clean remaining action and use it to
+land the generic coroutine/input-callback service that History will later reuse. Read-message Skip remains
+the next bounded persistence slice; History should follow after both foundations exist. Full native evidence
+and the difficulty table live in
+[`engine-re.md`](engine-re.md#remaining-adv-control-strip-actions-and-implementation-cost-2026-07-18).
