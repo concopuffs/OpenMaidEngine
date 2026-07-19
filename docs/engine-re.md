@@ -1263,8 +1263,12 @@ cursor selection (`0x86/0x87`), mouse callback registration/dispatch (`0xcc/0xcd
 those services plus real op-`0x199` frame redirection; the existing retained renderer supplies the visual
 state while the script saves translations, hides the ADV chrome, permits view/pan input, and restores state.
 
-`HISTORY.BIN` is a substantially larger subsystem. Static coverage is 41/78 distinct opcodes handled
-(761/854 instructions), leaving 37 effectful opcode kinds. AGE does not build the backlog from `RT.DAT`.
+`HISTORY.BIN` is a substantially larger subsystem. Current static coverage is 47/78 distinct opcodes
+correctly handled (781/854 instructions), leaving 31 effectful opcode kinds across 73 instructions. The
+largest repeated gaps are local literal-array initialization (`0x64`, 15 sites) and the still-unreversed
+menu/action registration op `0xa2` (9 sites); the five core history navigation/render/metadata/voice opcodes
+are semantically reversed but still need a port-side retained-history service. AGE does not build the backlog
+from `RT.DAT`.
 It retains a session text-manager stream of 0x48-byte records plus an 8-byte logical-message index. Op
 `0x1d0` navigates message groups, `0x1d1` rerenders stored records with their font/color/layout metadata,
 `0x1d3/0x1d4` recover typed metadata and voice pairs, and `0x1bd` replays a selected stored voice. History
