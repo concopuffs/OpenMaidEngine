@@ -72,6 +72,9 @@ public interface IHost
     (int Width, int Height) GetTextureSize(int slot);
     void PlayBgm(long id);
     void PlayVoice(long id);
+    // Native voice playback retains a second start argument: ordinary dialogue passes 0,
+    // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.
+    void PlayVoice(long id, int playbackVariant) => PlayVoice(id);
     void LoadSoundEffect(long resourceId, int channel) { }
     void StartSoundEffect(int channel) { }
     void ReleaseSoundEffect(int channel) { }

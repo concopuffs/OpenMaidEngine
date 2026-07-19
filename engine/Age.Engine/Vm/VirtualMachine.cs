@@ -882,7 +882,12 @@ public sealed class VirtualMachine
             case "play-voice":
                 _autoVoicePending = true;
                 TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
-                _host.PlayVoice(Read(a[0])); return pc + 1;
+                _host.PlayVoice(Read(a[0]), 0); return pc + 1;
+            case "play-history-voice": // 0x1bd: native voice start/history argument is one
+            case "u0041D910":
+                _autoVoicePending = true;
+                TextHistory.AppendVoice(Read(a[0]), 1, _advTextStyle);
+                _host.PlayVoice(Read(a[0]), 1); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
                 _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "u0041D050":           // 0xb5 / semantics: sfx-start

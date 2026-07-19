@@ -1,3 +1,4 @@
+using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
@@ -9,6 +10,18 @@ public class HistoryDataOpsTests
     private static Operand I(long value) => new(T_IMM, value);
     private static Operand G(int address) => new(T_GINT, address);
     private static Operand L(int address) => new(T_LINT, address);
+
+    private sealed class HistoryVoiceHost : RecordingHost
+    {
+        public AdvAutoWaitState AutoState;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                                          Func<AdvAutoWaitState> autoWaitState)
+        {
+            AutoState = autoWaitState();
+            Waits++;
+        }
+    }
 
     [Fact]
     public void CopyInlineIntArrayWritesConsecutiveSignedDwords()
@@ -160,5 +173,50 @@ public class HistoryDataOpsTests
         Assert.Equal(0, metadata);
         Assert.False(history.TryFindVoicePair(0, out long voiceId, out long voiceArgument));
         Assert.Equal((-1L, -1L), (voiceId, voiceArgument));
+    }
+
+    [Fact]
+    public void PlayHistoryVoiceUsesNativeVariantAndAutoServices()
+    {
+        var history = new AdvTextHistory();
+        var script = ScriptAssembler.Assemble(Table, "HISTORY_VOICE_REPLAY",
+            new List<(int, Operand[])>
+            {
+                (0x1bd, new[] { I(77) }),
+                (0x72, new[] { I(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new HistoryVoiceHost();
+        var vm = new VirtualMachine(script, Table, host, textHistory: history);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(new long[] { 77 }, host.Voices);
+        Assert.Equal(new[] { (77L, 1) }, host.VoiceRequests);
+        Assert.True(host.AutoState.VoicePending);
+        var voice = Assert.Single(history.Records);
+        Assert.Equal(AdvTextHistoryRecordKind.Voice, voice.Kind);
+        Assert.Equal((77L, 1L), (voice.Value, voice.AuxValue));
+    }
+
+    [Fact]
+    public void SuppressedHistoryReplayDoesNotRecordItself()
+    {
+        var history = new AdvTextHistory();
+        history.SetRecordingEnabled(false);
+        var script = ScriptAssembler.Assemble(Table, "HISTORY_VOICE_REPLAY_SUPPRESSED",
+            new List<(int, Operand[])>
+            {
+                (0x1bd, new[] { I(88) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host, textHistory: history);
+
+        vm.Run();
+
+        Assert.Equal(new[] { (88L, 1) }, host.VoiceRequests);
+        Assert.Empty(history.Records);
     }
 }

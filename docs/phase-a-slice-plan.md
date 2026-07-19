@@ -1811,3 +1811,27 @@ Validation: engine 198/198, zero-warning Godot build, threaded `SELFTEST OK`, an
 
 **Next:** manually recheck the five History rows and overlay cleanup against the original. If they match, proceed
 with stored History voice replay (`0x1bd`), followed by `0xd3/0xd4/0xd5` smooth-scroll fidelity.
+
+### ADV History stored voice replay implemented (2026-07-19)
+
+The manual row/cleanup recheck passed, and stored History voice replay now uses the existing voice resolver,
+message-Skip replacement queue, and Auto voice-pending service. Native RE exposed a meaningful second value
+that the earlier one-id host API erased: ordinary `0xc4` calls the indexed voice service and records
+`{voice_id,0}`, while `0x1bd` uses and records `{voice_id,1}`. `IHost.PlayVoice` now carries this playback
+variant explicitly; Godot preserves it in queued requests and diagnostics while continuing to play the same
+resolved OGG until the native variant's audible interpretation is proven.
+
+The generic opcode still appends `{voice_id,1}` when history capture is enabled, matching the native handler.
+During the real History menu, the existing `0x1bb(0)` suppression boundary prevents that replay from becoming
+a new backlog record. Focused tests cover the variant, Auto state, normal recording, and suppressed replay.
+HISTORY is now 70/78 distinct opcodes and 842/854 instructions handled or safe-noop; its eight remaining
+effectful gaps total 12 instructions.
+
+Validation: 199 non-DirectShow engine cases pass, the isolated DirectShow movie case passes, opcode tests and
+lint are clean, vm0 RECOVER passes, the Godot build has zero warnings, and threaded `SELFTEST OK`. The full
+suite's DirectShow case still times out only when run among the complete suite; this pre-existing multimedia
+test interaction is unrelated to the History voice path. The `/v2` Ghidra image names/comments the shared
+indexed voice service and is saved.
+
+**Next:** investigate and implement the `0xd3/0xd4/0xd5` smooth-scroll callback/interpolation family as a
+separate fidelity slice, including the remaining scheduler support it depends upon.

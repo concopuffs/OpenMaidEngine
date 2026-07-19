@@ -40,7 +40,7 @@ public sealed class GodotAdvHost : IHost
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private volatile bool _messageSkipActive;
-    private AudioPayload? _queuedSkippedVoice;
+    private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
     private volatile bool _advPagePresentationSuspended;
@@ -312,7 +312,7 @@ public sealed class GodotAdvHost : IHost
 
         var queued = _queuedSkippedVoice;
         _queuedSkippedVoice = null;
-        if (queued != null) DispatchVoice(queued);
+        if (queued != null) DispatchVoice(queued.Value.Audio, queued.Value.PlaybackVariant);
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
@@ -601,24 +601,30 @@ public sealed class GodotAdvHost : IHost
         if (audio != null) _main.CallDeferred("PlayBgm", audio.Bytes, audio.Name);
     }
 
-    public void PlayVoice(long id)
+    public void PlayVoice(long id) => PlayVoice(id, 0);
+
+    public void PlayVoice(long id, int playbackVariant)
     {
         var asset = _res.Resolve(_scene, id);
         var audio = asset != null ? LoadAudio(asset) : null;
+        _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
+            ["playback_variant"] = playbackVariant });
         if (audio == null) return;
         if (_messageSkipActive)
         {
             bool firstQueued = _queuedSkippedVoice == null;
-            _queuedSkippedVoice = audio;
+            _queuedSkippedVoice = (audio, playbackVariant);
             if (firstQueued) _main.CallDeferred("StopVoiceForMessageSkip");
             return;
         }
-        DispatchVoice(audio);
+        DispatchVoice(audio, playbackVariant);
     }
 
-    private void DispatchVoice(AudioPayload audio)
+    private void DispatchVoice(AudioPayload audio, int playbackVariant)
     {
         int generation = _main.QueueVoicePlayback();
+        // Godot's stream player has no matching AGE start-mode control. Retain the native
+        // variant through dispatch/timeline so that distinction is not erased at the VM seam.
         _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation);
     }
 

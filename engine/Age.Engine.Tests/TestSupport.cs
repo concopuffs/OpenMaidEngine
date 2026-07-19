@@ -26,6 +26,8 @@ internal class RecordingHost : IHost
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
     public readonly List<long> SleptDurations = new();
     public readonly List<(long Resource, int Channel)> SfxLoads = new();
+    public readonly List<long> Voices = new();
+    public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
     public readonly List<int> SfxStarts = new();
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
@@ -101,7 +103,12 @@ internal class RecordingHost : IHost
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     public void PlayBgm(long id) { }
-    public void PlayVoice(long id) { }
+    public void PlayVoice(long id) => Voices.Add(id);
+    public void PlayVoice(long id, int playbackVariant)
+    {
+        Voices.Add(id);
+        VoiceRequests.Add((id, playbackVariant));
+    }
     public void LoadSoundEffect(long resourceId, int channel) => SfxLoads.Add((resourceId, channel));
     public void StartSoundEffect(int channel) => SfxStarts.Add(channel);
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);

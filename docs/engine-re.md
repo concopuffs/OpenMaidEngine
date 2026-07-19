@@ -1290,7 +1290,8 @@ The write path is part of ordinary ADV execution:
   layout slot—not a T1 anchor id—although T1 entries structurally target these reset sites. Its ReadTextDB
   snapshot/commit work remains a second responsibility.
 - op `0x6e`'s glyph builder appends normal text chunks with the active geometry/font/color state.
-- voice op `0xc4` appends a `0x40000000` record containing its stored pair.
+- voice op `0xc4` appends a `0x40000000` record containing `{voice_id,0}`; History replay op `0x1bd`
+  uses the same writer with `{voice_id,1}` when recording is enabled.
 - op `0x1d2` appends a `0x20000000` record with operand 1 as the value and operand 2 as the metadata type.
   It was previously misclassified as a safe statement marker; 17,323 corpus uses make this a foundational
   correction.
@@ -1301,7 +1302,8 @@ The write path is part of ordinary ADV execution:
 
 The read side is the previously identified op-`0x1d0..0x1d4` family. Op `0x1d0` returns a logical entry's
 layout slot and first record index; op `0x1d1` renders records until the next group boundary; op `0x1d3`
-finds typed metadata; op `0x1d4` finds the voice pair; op `0x1bd` replays its voice id.
+finds typed metadata; op `0x1d4` finds the voice pair. `HISTORY.BIN` dispatches pair variant 1 through op
+`0x1bd` and variant 0 through ordinary op `0xc4`.
 
 History is independent of `RT.DAT`, but native full save fidelity does serialize the live backlog.
 `text_history_serialize@0x451d00` writes the index and packed records/strings after context/numbered-save
@@ -1399,8 +1401,16 @@ surfaces `0xc0/0xc1`; that existing exit boundary now tells the host to discard 
 The semantic text/index records remain untouched, so reopening History rebuilds fresh rows while exiting
 cannot leave the old labels above the resumed ADV page.
 
-History's remaining work is stored voice replay through `0x1bd` and the `0xd3/0xd4/0xd5` smooth-scroll
-callback scheduler. None changes backlog ownership or requires choosing a save/profile backend.
+Stored voice replay now follows the native split. Ordinary op `0xc4` and History op `0x1bd` share the
+section-manifest resolver, Skip replacement queue, and Auto voice-pending state, but carry variants 0 and 1
+respectively through `IHost.PlayVoice`. Both append their pair to the backlog when recording is enabled;
+History's surrounding `0x1bb(0)` suppression prevents the replay from recording itself. Native
+`voice_play_indexed_asset@0x488330` stores that variant in the channel-12 sound-buffer state before starting
+playback. Its precise audible meaning remains unproven, so the Godot host retains it through its queue and
+timeline rather than inventing different playback behavior.
+
+History's remaining work is the `0xd3/0xd4/0xd5` smooth-scroll callback scheduler and its small supporting
+gaps. None changes backlog ownership or requires choosing a save/profile backend.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is
