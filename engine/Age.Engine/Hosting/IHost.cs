@@ -79,8 +79,14 @@ public interface IHost
     // Native voice playback retains a second start argument: ordinary dialogue passes 0,
     // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.
     void PlayVoice(long id, int playbackVariant) => PlayVoice(id);
+    // Native op 0x1cf stores a transient control mask. Bit 0 suppresses the automatic
+    // BGM attenuation normally applied when a voice starts.
+    void SetVoiceBgmDuckControl(long flags) { }
     void LoadSoundEffect(long resourceId, int channel) { }
     void StartSoundEffect(int channel) { }
+    // Native SetDelay (op 0x2bf) starts an already-loaded channel after delayMs.
+    // startMode is forwarded to the same worker used by immediate SFX starts.
+    void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }
     void ReleaseSoundEffect(int channel) { }
     void FadeBgm(int targetPercent, long durationMs) { }
     // Native op 0x236 binds a DirectShow movie decoder to an existing retained texture surface.

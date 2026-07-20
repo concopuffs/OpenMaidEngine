@@ -1952,3 +1952,28 @@ decision.
 
 Validation: all 206 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
 Godot build has zero warnings, and threaded `SELFTEST OK`.
+
+### SC0000 deferred SFX start and voice/BGM duck control implemented (2026-07-20)
+
+Native RE and the saved SFX trace resolve two high-frequency audio gaps. Opcode `0x2bf` is the sound
+facade's `SetDelay(channel,start_mode,delay_ms)`: SC0000's first `(4,0,100)` call starts the preloaded
+secondary E0808 channel about 109 ms later through the same worker used by `0xb5`. The port now schedules
+that start against the presentation clock and attaches it to a per-channel generation, so a later load or
+release cancels an obsolete callback instead of starting replacement audio.
+
+Opcode `0x1cf` replaces a transient voice/BGM-duck control mask; bit 0 suppresses automatic ducking.
+The native engine registers ducking enabled with a 50-percent target, and its voice-start helper saves the
+current BGM level before applying that target. Godot now follows that contract and restores the saved level
+when voice playback completes or message Skip stops it. This is runtime audio state only: no profile/save
+field, boot seed, or storage-backend decision was introduced.
+
+The canonical opcode and EngineCtx sources are regenerated, the expanded 65-field `EngineCtx` is applied,
+and the `/v2` handlers/workers are named, commented, and saved. SC0000 is now 119/129 distinct opcodes and
+16,238/16,257 instructions handled or safe-noop (92.2% distinct; 99.9% instruction-weighted); its ten
+remaining effectful gaps total 19 instructions.
+
+**Next:** investigate the six-call `0x1ad` cluster first. It is now the largest remaining SC0000 gap and
+should be classified before choosing between it and the smaller two-call support pairs.
+
+Validation: all 206 engine tests pass; opcode and EngineCtx lints, vm0 RECOVER, the zero-warning Godot
+build, and threaded `SELFTEST OK` are clean.

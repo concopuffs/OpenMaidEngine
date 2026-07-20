@@ -38,7 +38,11 @@ public partial class Main : Godot.Control
     private int _voiceQueuedGeneration;
     private int _voiceStartedGeneration;
     private int _voiceCompletedGeneration;
+    private bool _voiceBgmDuckActive;
+    private int _voiceBgmDuckGeneration;
+    private float _voiceBgmDuckRestoreDb;
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
+    private readonly int[] _sfxGenerations = new int[10];
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
@@ -850,7 +854,7 @@ public partial class Main : Godot.Control
         => System.Threading.Volatile.Read(ref _voiceCompletedGeneration)
            < System.Threading.Volatile.Read(ref _voiceQueuedGeneration);
 
-    public void PlayVoice(byte[] oggBytes, string assetName, int generation)
+    public void PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent)
     {
         var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
         if (stream == null)
@@ -859,6 +863,10 @@ public partial class Main : Godot.Control
             CompleteVoiceGeneration(generation);
             return;
         }
+        if (duckBgm)
+            BeginVoiceBgmDuck(generation, duckTargetPercent);
+        else
+            RestoreVoiceBgmDuck();
         stream.Loop = false;
         _voice.Stream = stream;
         System.Threading.Volatile.Write(ref _voiceStartedGeneration, generation);
@@ -888,15 +896,37 @@ public partial class Main : Godot.Control
         }
         while (System.Threading.Interlocked.CompareExchange(
                    ref _voiceCompletedGeneration, generation, current) != current);
+        if (_voiceBgmDuckActive && generation >= _voiceBgmDuckGeneration)
+            RestoreVoiceBgmDuck();
+    }
+
+    private void BeginVoiceBgmDuck(int generation, int targetPercent)
+    {
+        if (!_voiceBgmDuckActive)
+            _voiceBgmDuckRestoreDb = _bgm.VolumeDb;
+        _voiceBgmDuckActive = true;
+        _voiceBgmDuckGeneration = generation;
+        float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
+        _bgm.VolumeDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
+    }
+
+    private void RestoreVoiceBgmDuck()
+    {
+        if (!_voiceBgmDuckActive) return;
+        _bgm.VolumeDb = _voiceBgmDuckRestoreDb;
+        _voiceBgmDuckActive = false;
+        _voiceBgmDuckGeneration = 0;
     }
 
     public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel)
     {
         if ((uint)channel >= (uint)_sfx.Length) return;
+        _sfxGenerations[channel]++;
+        _sfx[channel].Stop();
+        _sfx[channel].Stream = null;
         var stream = AudioStreamWav.LoadFromBuffer(wavBytes);
         if (stream == null) { GD.Print($"WAV load failed {assetName}"); return; }
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
-        _sfx[channel].Stop();
         _sfx[channel].VolumeDb = 0;
         _sfx[channel].Stream = stream;
     }
@@ -907,9 +937,31 @@ public partial class Main : Godot.Control
             _sfx[channel].Play();
     }
 
+    public void ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)
+    {
+        if ((uint)channel >= (uint)_sfx.Length || _sfx[channel].Stream == null) return;
+        int generation = _sfxGenerations[channel];
+        void StartIfCurrent()
+        {
+            if (_sfxGenerations[channel] != generation || _sfx[channel].Stream == null) return;
+            if (_sfx[channel].Stream is AudioStreamWav wav)
+                wav.LoopMode = startMode == 0
+                    ? AudioStreamWav.LoopModeEnum.Disabled
+                    : AudioStreamWav.LoopModeEnum.Forward;
+            _sfx[channel].Play();
+        }
+        if (realDelaySeconds <= 0)
+        {
+            StartIfCurrent();
+            return;
+        }
+        GetTree().CreateTimer(realDelaySeconds).Timeout += StartIfCurrent;
+    }
+
     public void ReleaseSoundEffect(int channel)
     {
         if ((uint)channel >= (uint)_sfx.Length) return;
+        _sfxGenerations[channel]++;
         _sfx[channel].Stop();
         _sfx[channel].Stream = null;
     }

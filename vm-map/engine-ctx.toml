@@ -283,6 +283,16 @@ name = "adv_auto_voice_pending"
 type = "int"
 note = "set by play-voice ops when voice service exists; Auto waits for voice completion then arms AutoMessageTime0; op 0x1bc resets"
 [[field]]
+offset = 0x6dbe8
+name = "voice_bgm_duck_saved_volume"
+type = "int"
+note = "BGM volume saved by the voice-start duck helper before applying MusicFadeOnVoicePlayingVol"
+[[field]]
+offset = 0x6dbf0
+name = "voice_bgm_duck_control_flags"
+type = "uint"
+note = "transient mask replaced by op 0x1cf; bit 0 suppresses automatic voice-triggered BGM attenuation"
+[[field]]
 offset = 0x6dbf4
 name = "message_skip_queued_voice_id"
 type = "int"

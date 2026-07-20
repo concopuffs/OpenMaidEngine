@@ -972,12 +972,16 @@ public sealed class VirtualMachine
                 _autoVoicePending = true;
                 TextHistory.AppendVoice(Read(a[0]), 1, _advTextStyle);
                 _host.PlayVoice(Read(a[0]), 1); return pc + 1;
+            case "set-voice-bgm-duck-control": // 0x1cf: bit 0 suppresses automatic voice ducking
+                _host.SetVoiceBgmDuckControl(Read(a[0])); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
                 _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "u0041D050":           // 0xb5 / semantics: sfx-start
                 _host.StartSoundEffect((int)Read(a[0])); return pc + 1;
             case "u0041D080":           // 0xb6 / semantics: sfx-release
                 _host.ReleaseSoundEffect((int)Read(a[0])); return pc + 1;
+            case "schedule-sfx-start":  // 0x2bf / native SetDelay(channel, start mode, delay ms)
+                _host.ScheduleSoundEffectStart((int)Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
             case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
                 _host.FadeBgm((int)Read(a[0]), Read(a[1])); return pc + 1;
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000

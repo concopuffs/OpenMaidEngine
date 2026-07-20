@@ -1640,6 +1640,17 @@ resource `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in t
 scratch global `G[0x6242d]` is maintained outside script-visible writes; the SC0000 port profile exposes it
 as an external value of 4 rather than pretending the script assigned it.
 
+That later service start is opcode `0x2bf`, now identified as the facade's `SetDelay` operation.
+`op_0x2bf_schedule_sfx_start@0x425240` passes `(channel,start_mode,delay_ms)` to
+`sfx_set_delay@0x482720` on the inline sound facade at `ctx+0x14024`. The worker accepts channels `0..9`
+and stores five pieces of transient state: active at facade `+0x418`, elapsed/progress at `+0x440`, delay
+at `+0x468`, start mode at `+0x490`, and an aggregate-active marker at `+0x4b8`. Its native error text is
+literally `Function: SetDelay ... invalid Sound number`. The existing trace supplies the consumer proof:
+after SC0000 executes `(channel 4, mode 0, 100 ms)`, the ordinary `sfx_channel_start` worker enters for
+channel 4 about 109 ms later while the interpreter is parked at its `0x21c` presentation boundary. There
+is no intervening `0xb5`. The port schedules the same already-loaded channel and invalidates the pending
+callback if that channel is loaded again or released before its deadline.
+
 Normal-speed windowed validation reached `wait-for-input@0x1a58` after 45.6 seconds without an audio stall;
 the user confirmed the opening effects were audible and sounded good.
 
@@ -1648,6 +1659,19 @@ and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolate
 durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
 The VM is parked for the requested duration. `0xd9` is adjacent startup control, not audio data: it clears
 run/service bit `0x1000` in the primary and, when active, secondary context and has no VM-visible result.
+
+Opcode `0x1cf` belongs to the voice/BGM envelope rather than SFX. Handler
+`op_0x1cf_set_voice_bgm_duck_control@0x4209f0` replaces the transient mask at
+`EngineCtx.voice_bgm_duck_control_flags` (`ctx+0x6dbf0`). Before ordinary or History voice playback,
+`voice_bgm_duck_begin@0x406de0` checks that BGM is active, `MusicFadeOnVoicePlaying` is enabled, no explicit
+`0xc2` fade is active, and mask bit 0 is clear. It then saves the current BGM volume at
+`ctx+0x6dbe8` and applies `MusicFadeOnVoicePlayingVol`. The native settings registry supplies defaults of
+enabled=`1` and target=`50` percent; SC0000 writes only control masks `0` and `1`.
+
+The port therefore retains `0x1cf` as script-owned runtime state, applies the native registered default
+attenuation when an unsuppressed voice begins, and restores the saved BGM level when that voice completes
+or is stopped by message Skip. This introduces no profile record, boot seed, or persistence backend. A
+future unified settings backend can replace the registered defaults without changing the opcode/host seam.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 

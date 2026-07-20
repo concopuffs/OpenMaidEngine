@@ -30,7 +30,9 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Channel)> SfxLoads = new();
     public readonly List<long> Voices = new();
     public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
+    public readonly List<long> VoiceBgmDuckControls = new();
     public readonly List<int> SfxStarts = new();
+    public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
@@ -113,8 +115,11 @@ internal class RecordingHost : IHost
         Voices.Add(id);
         VoiceRequests.Add((id, playbackVariant));
     }
+    public void SetVoiceBgmDuckControl(long flags) => VoiceBgmDuckControls.Add(flags);
     public void LoadSoundEffect(long resourceId, int channel) => SfxLoads.Add((resourceId, channel));
     public void StartSoundEffect(int channel) => SfxStarts.Add(channel);
+    public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
+        => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
     public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)

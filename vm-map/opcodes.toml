@@ -4249,23 +4249,23 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1cf
-label = "u0041DA10"
+label = "set-voice-bgm-duck-control"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041DA10"
-category = "unknown"
-summary = ""
+name = "set-voice-bgm-duck-control"
+category = "audio"
+summary = "(flags) - replace the transient voice/BGM-duck control mask. Bit 0 suppresses automatic BGM attenuation when voice playback starts; zero permits the configured duck behavior."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1cf_set_voice_bgm_duck_control@0x4209f0 fetches operand 1 and writes it verbatim to ctx+0x6dbf0. The voice-start helper voice_bgm_duck_begin@0x406de0 tests bit 0 before arming BGM attenuation; native settings defaults register MusicFadeOnVoicePlaying=1 and MusicFadeOnVoicePlayingVol=50. SC0000 uses values 0 and 1."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "control flags (bit 0 = suppress voice-triggered BGM duck)"
 observed_types = ["imm", "g-int"]
 
 [[opcode]]
@@ -6688,33 +6688,33 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x2bf
-label = "u00423180"
+label = "schedule-sfx-start"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00423180"
-category = "unknown"
-summary = ""
+name = "schedule-sfx-start"
+category = "audio"
+summary = "(channel)(start_mode)(delay_ms) - schedule the already-loaded SFX channel to enter the ordinary start worker after the requested delay. Channels are limited to 0..9."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "frida"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x2bf_schedule_sfx_start@0x425240 calls sfx_set_delay@0x482720 on the ctx+0x14024 sound facade. The worker's native error text names Function:SetDelay, validates channel<=9, and stores active/progress/delay/start-mode state. Existing SC0000 trace: SetDelay(channel 4, mode 0, 100) is followed about 109 ms later by the ordinary sfx_channel_start worker on channel 4 with mode 0 and no intervening 0xb5."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "sound channel (0..9)"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "start mode forwarded to SFX start worker"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "delay in milliseconds"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

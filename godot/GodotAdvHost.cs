@@ -40,6 +40,7 @@ public sealed class GodotAdvHost : IHost
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private volatile bool _messageSkipActive;
+    private int _voiceBgmDuckControl;
     private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
@@ -663,9 +664,16 @@ public sealed class GodotAdvHost : IHost
     private void DispatchVoice(AudioPayload audio, int playbackVariant)
     {
         int generation = _main.QueueVoicePlayback();
+        bool duckBgm = (System.Threading.Volatile.Read(ref _voiceBgmDuckControl) & 1) == 0;
         // Godot's stream player has no matching AGE start-mode control. Retain the native
         // variant through dispatch/timeline so that distinction is not erased at the VM seam.
-        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation);
+        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, 50);
+    }
+
+    public void SetVoiceBgmDuckControl(long flags)
+    {
+        System.Threading.Volatile.Write(ref _voiceBgmDuckControl, unchecked((int)flags));
+        _timeline?.State("voice-bgm-duck-control", new() { ["flags"] = flags });
     }
 
     public void LoadSoundEffect(long resourceId, int channel)
@@ -685,6 +693,16 @@ public sealed class GodotAdvHost : IHost
         _timeline?.Event("sfx-start", new() { ["channel"] = channel,
             ["file"] = _sfxNames[channel] });
         _main.CallDeferred("StartSoundEffect", channel);
+    }
+
+    public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
+    {
+        if ((uint)channel >= (uint)_sfxNames.Length || _sfxNames[channel] == null) return;
+        long ms = System.Math.Clamp(delayMs, 0, 60_000);
+        double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
+        _timeline?.Event("sfx-start-scheduled", new() { ["channel"] = channel,
+            ["start_mode"] = startMode, ["delay_ms"] = ms, ["file"] = _sfxNames[channel] });
+        _main.CallDeferred("ScheduleSoundEffectStart", channel, startMode, realSeconds);
     }
 
     public void ReleaseSoundEffect(int channel)
