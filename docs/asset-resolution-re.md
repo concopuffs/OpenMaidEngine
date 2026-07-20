@@ -115,8 +115,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    The active manifest is frame-local, not fixed to the root scene: every VM call frame brackets host work
    with its script context. `set-texture` resolves the local id at load time and retains the normalized raw
    catalog id in the graphics surface, so that surface remains stable after a nested helper returns or a
-   sibling script becomes active. Voice, SFX, and movie calls likewise resolve against the executing frame.
-4. **Audio.** **✅ WIRED (2026-07-06), VFS bytes complete (2026-07-11).** `IHost.PlayBgm/PlayVoice` +
+   sibling script becomes active. Voice and movie calls likewise resolve against the executing frame;
+   SFX is the separate universal packed-id family documented below.
+4. **Audio.** **BGM/voice wired; VFS bytes complete (2026-07-11); packed-raw SFX correction pending.** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
    resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
    (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
@@ -132,8 +133,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
      to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `GodotAdvHost.PlayBgm` uses it.
      The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
 
-   Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). Scene-local SFX WAV entries use
-   the same byte path while retaining the existing channel lifecycle. See `docs/phase-a-slice-plan.md`.
+   Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). SFX WAV entries use universal
+   packed catalog ids through the same byte store while retaining the existing channel lifecycle. See
+   `docs/phase-a-slice-plan.md`.
    Diagnostic: `Age.Cli audio <SCENE>`.
 5. **Movies** (`OP`/`MVB`, MPEG) — SC0000 `0x236` now resolves its scene-local id through the same catalog
    and reads owned payload bytes through `IAssetStore`; see the movie section below.
@@ -150,19 +152,21 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 A2b-background: **steps 1–3 landed.** Step 1 = `build/asset-index.json`. Step 2 = **`resId →
 files[section_base(scene) + resId]`** via SYS4INI per-scene sections (`tools/resolve_asset.py` +
-`build/asset-sections.json`) — no runtime capture, all archives/types + audio. Step 3 = **first-pass
+`build/asset-sections.json`) — no runtime capture, all archives/types plus scene-local voice. Step 3 = **first-pass
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
 uses the manifest** (`files[base+id]`); **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
 
-## Native SFX resource proof (2026-07-11)
+## Native SFX resource proof (2026-07-11; addressing corrected 2026-07-20)
 
-SFX uses the same scene-local rule as graphics and voice: `files[section_base(scene)+resource_id]`.
-The matching native trace at SC0000 `0xc29` captures resource `0x28`, channel 0; static resolution yields
-`DATA1/E0808.WAV`, and the port trace resolves the same file. The following `0xc31` preload uses the same
-resource on native secondary channel 4. `play-bgm` remains the separate direct-name exception.
+SFX uses a universal packed catalog id, not the scene-local graphics/voice rule. A zero high byte directly
+indexes SYS4INI; a nonzero high byte selects the matching AAI mount and uses the low 24-bit index. The
+matching native trace at SC0000 `0xc29` captures raw id `0x28`, channel 0, which is
+`DATA1/E0808.WAV`; SC0000 being the first section previously hid the distinction. TITLE makes it decisive:
+`0x2aea` is raw `SE020.WAV` for hover, `0x3321` is raw `SE015.WAV` for activation, and neither fits TITLE's
+14-entry manifest. `play-bgm` remains the separate direct-name family.
 
 The Phase-A backend now resolves the OGG/WAV catalog entry and opens it through `IAssetStore`; Godot decodes
 the returned bytes into its existing BGM, voice, and fixed SC0000 SFX channel players. The earlier
@@ -215,12 +219,13 @@ store.
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
-4. **Runtime consumers (complete for scripts, textures, and audio).** `ResourceMap.ResolveTexture` preserves
+4. **Runtime consumers (scripts/textures complete; SFX resolver correction pending).** `ResourceMap.ResolveTexture` preserves
    scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
    decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
-   Godot no longer reads `build/textures/*.BMP`. BGM direct-name entries plus scene-local voice/SFX entries
-   are opened through the same `IAssetStore`; Godot decodes their OGG/WAV bytes in process. Extraction and
-   conversion tools remain diagnostics.
+   Godot no longer reads `build/textures/*.BMP`. BGM direct-name and scene-local voice entries are opened
+   through the same `IAssetStore`; the SFX WAV/player path is also present, but `GodotAdvHost` still applies
+   scene-local resolution where op `0xb4` requires `ResolvePacked`. SC0000 worked because its raw ids happen
+   to coincide with the first section. Extraction and conversion tools remain diagnostics.
 
 ### Acceptance gates
 

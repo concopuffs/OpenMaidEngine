@@ -128,9 +128,9 @@
 ## audio
 
 ### 0xb4 `sfx-load` (play-sound-effect, argc 2)
-- **summary:** (resource_id)(channel) — synchronously resolve/open the scene-manifest asset and replace the channel's decoded sound buffer without starting playback. Native manager supports channels 0..12; SC0000 uses 0..9.
+- **summary:** (packed_raw_resource_id)(channel) — synchronously open the universal SYS4INI/AAI catalog entry and replace the channel's decoded sound buffer without starting playback. A zero high byte is a raw SYS4INI index; a nonzero high byte selects an append catalog and uses the low 24-bit index. Native manager supports channels 0..12; SC0000 uses 0..9.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra op 0xb4 handler 0x4201d0 -> sfx_channel_load@0x482500 -> asset_open@0x44f390 + sound_decode_channel@0x483360. Native trace: SC0000 0xc29 loads resource 0x28 into channel 0; resource resolves by section_base+id to E0808.WAV; completion precedes 0xb5 in the same millisecond.
+- **evidence:** Ghidra /v2: op_0xb4_sfx_load@0x4201d0 -> sfx_channel_load@0x482500 -> asset_open_indexed_entry@0x44f390 + sound_decode_channel@0x483360. The opener indexes the base catalog directly for a zero high byte and selects mounted_aai[high_byte] otherwise. SC0000 0xc29 uses raw 0x28 = E0808.WAV. TITLE independently proves the addressing rule: raw 0x2aea = SE020.WAV is preloaded on channel 2 and started on every hover-selection change; raw 0x3321 = SE015.WAV is loaded/started on activation. A synchronized port trace executes those loads and starts but reports file=null because Godot incorrectly applies TITLE's 14-entry scene manifest.
 
 ### 0xb5 `sfx-start` (u0041D050, argc 1)
 - **summary:** (channel) — start the already-loaded channel once (logical loop=false). DirectSound publishes synchronously through Play(0,0,DSBPLAY_LOOPING); the low-level flag loops only the streaming ring, while decoder EOF stops logical playback.

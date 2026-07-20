@@ -99,6 +99,12 @@ SYSTEM4's computed resource id `G[0x699]=0x22`; `G[0]=1` and the script-produced
 single-scene diagnostic harness. This lands the boot/title/New Game entry half of B1–B3; proving a completed
 scene return plus boundary cleanup still belongs to B1 completion.
 
+**TITLE SFX investigation (2026-07-20).** Hover and activation callbacks are already executing their
+scripted `0xb5` starts. The load fails earlier because op `0xb4` uses universal packed SYS4INI/AAI ids,
+while Godot currently treats them as active-script manifest ids. TITLE's `0x2aea`/`SE020.WAV` hover and
+`0x3321`/`SE015.WAV` activation loads therefore resolve null; BGM is unaffected. The next bounded correction
+is a packed-raw SFX resolver plus TITLE/GAMESTART regression coverage, with no mixer redesign indicated.
+
 ## Stage B1 — Persistent session and scene coordinator
 
 Replace the single-SC0000-root assumption with an application-owned session that runs SYSTEM4 as its root.

@@ -1768,8 +1768,9 @@ the shortcut carries the same state in the meantime.
 The three SFX opcodes are a retained channel lifecycle, not immediate fire-and-forget calls. Handler
 resolution and the saved `/v2` names are:
 
-- `0xb4` `op_0xb4_sfx_load@0x4201d0` -> `sfx_channel_load@0x482500`: `(resource_id, channel)` opens the
-  scene-local SYS4 entry and replaces the channel decoder/buffer without starting it. The manager supports
+- `0xb4` `op_0xb4_sfx_load@0x4201d0` -> `sfx_channel_load@0x482500`: `(packed_raw_resource_id, channel)`
+  opens the universal SYS4INI entry directly when the high byte is zero, or the selected AAI append entry
+  when it is nonzero, then replaces the channel decoder/buffer without starting it. The manager supports
   13 slots (`0..12`); SC0000 deliberately resets and uses the `0..9` subset.
 - `0xb5` `op_0xb5_sfx_start_once@0x420210` -> `sfx_channel_start@0x4825d0`: starts the loaded channel with
   logical loop mode 0. Adjacent op `0xba`, not this slice, passes mode 1.
@@ -1789,10 +1790,19 @@ five handlers. The bounded port does not yet import native audio preferences, so
 uses unity gain and centered pan rather than hard-coding the captured user's setting.
 
 The native trace in `build/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
-resource `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
+raw catalog id `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
 `0xb4@0xc31` preloads the same WAV into engine-owned secondary channel 4 for a later service start. The
 scratch global `G[0x6242d]` is maintained outside script-visible writes; the SC0000 port profile exposes it
 as an external value of 4 rather than pretending the script assigned it.
+
+**TITLE SFX silence root cause (2026-07-20).** TITLE preloads raw id `0x2aea` (`SE020.WAV`) into channel 2
+and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
+(`SE015.WAV`) into channel 1 and immediately starts it; GAMESTART additionally uses raw `0x2aeb`
+(`SE013.WAV`). A synchronized Godot trace captured repeated hover starts and the Game Start activation, but
+each preceding load recorded `file:null`. `GodotAdvHost.LoadSoundEffect` currently applies the active
+script's scene-local manifest, and TITLE has only 14 local entries, so all three large raw ids fail before
+the existing WAV/player path. BGM remains audible because it uses its separate direct-name resolver. The
+bounded fix is a scene-independent packed-raw SFX resolver, not changes to callbacks, mixing, or channels.
 
 That later service start is opcode `0x2bf`, now identified as the facade's `SetDelay` operation.
 `op_0x2bf_schedule_sfx_start@0x425240` passes `(channel,start_mode,delay_ms)` to
