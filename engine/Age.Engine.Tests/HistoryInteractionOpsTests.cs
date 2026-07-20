@@ -13,6 +13,7 @@ public class HistoryInteractionOpsTests
     private static Operand P(int address) => new(T_LPTR, address);
 
     private sealed class StopAfterHistoryReturnsException : Exception { }
+    private sealed class StopAfterHistoryVoiceException : Exception { }
 
     private static void SeedSystem4AdvLayouts(Sys4ScriptProvider scripts, AdvTextHistory history)
         => Assert.Equal(9, AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
@@ -62,6 +63,55 @@ public class HistoryInteractionOpsTests
             HistoryReturned = !Vm.IsRawInputCallbackActive && !Vm.TextHistory.RecordingSuppressed;
             SawRenderedText = HistoryRenders.Any(render => render.Text.Length > 0);
             throw new StopAfterHistoryReturnsException();
+        }
+    }
+
+    private sealed class Sc0000HistoryVoiceHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private long _now;
+        private int _modalSleeps;
+        private bool _pressedVoiceRow;
+        public AdvTextHistoryRenderBatch? ClickedBatch;
+        public override long InputClockMilliseconds => _now;
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += System.Math.Max(16, duration);
+            if (!Vm.IsRawInputCallbackActive) return;
+            _modalSleeps++;
+            if (!_pressedVoiceRow)
+            {
+                ClickedBatch = HistoryRenders.LastOrDefault(batch => batch.Layout.OriginY < 600
+                    && Vm.TextHistory.TryFindVoicePair(batch.FirstRecordIndex, out _, out _));
+                if (ClickedBatch == null) return;
+                _pressedVoiceRow = true;
+                Vm.UpdatePointer(200, ClickedBatch.Layout.OriginY + 50);
+                Vm.UpdateMouseButtonState(0x1, true);
+                Vm.QueueInputCallback(4);
+                return;
+            }
+            if (_modalSleeps == 3)
+            {
+                Vm.UpdateMouseButtonState(0x1, false);
+                Vm.QueueInputCallback(10);
+            }
+            if (VoiceRequests.Count > 0) throw new StopAfterHistoryVoiceException();
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            bool hasRecentVoice = Vm.TextHistory.Entries.TakeLast(5)
+                .Any(entry => Vm.TextHistory.TryFindVoicePair(entry.FirstRecordIndex, out _, out _));
+            if (!hasRecentVoice) return;
+            Voices.Clear();
+            VoiceRequests.Clear();
+            Vm.UpdatePointer(684, 572);
+            while (serviceInputCallback()) { }
+            Assert.True(Vm.TryActivatePointer(684, 572));
+            while (serviceInputCallback()) { }
         }
     }
 
@@ -188,5 +238,30 @@ public class HistoryInteractionOpsTests
             .ToArray();
         Assert.NotEmpty(visibleRows);
         Assert.All(visibleRows, render => Assert.Equal(65, render.Layout.OriginX));
+    }
+
+    [Fact]
+    public void RealHistoryVoicedRowDispatchesItsRetainedVoicePair()
+    {
+        var scripts = Sys4ScriptProvider.Load(Table);
+        var host = new Sc0000HistoryVoiceHost();
+        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
+            new VmOptions(MaxSteps: 2_000_000), scripts);
+        host.Vm = vm;
+        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAfterHistoryVoiceException>(() => vm.Run());
+
+        var batch = Assert.IsType<AdvTextHistoryRenderBatch>(host.ClickedBatch);
+        Assert.True(vm.TextHistory.TryFindVoicePair(batch.FirstRecordIndex,
+            out long expectedVoice, out long expectedVariant));
+        Assert.Equal((0x24L, 0L), (expectedVoice, expectedVariant));
+        Assert.Equal(new[] { (expectedVoice, checked((int)expectedVariant)) }, host.VoiceRequests);
+
+        var resources = ResourceMap.Load();
+        var voice = Assert.IsType<AssetEntry>(resources.Resolve("SC0000", expectedVoice));
+        Assert.Equal("MAN999.OGG", voice.Name);
+        Assert.NotEmpty(resources.ReadAudio(voice).Bytes);
     }
 }

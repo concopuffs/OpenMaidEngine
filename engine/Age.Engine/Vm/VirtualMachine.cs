@@ -779,8 +779,8 @@ public sealed class VirtualMachine
                     if (enabled) _host.EndTextHistoryPresentation();
                 }
                 return pc + 1;
-            case "append-text-history-metadata": // 0x1d2: typed value attached to the current group
-                TextHistory.AppendMetadata(Read(a[0]), Read(a[1]), _advTextStyle); return pc + 1;
+            case "append-text-history-metadata": // 0x1d2: (metadata type, value)
+                TextHistory.AppendMetadata(Read(a[1]), Read(a[0]), _advTextStyle); return pc + 1;
             case "step-text-history": // 0x1d0: cumulative delta from the latest retained boundary
                 if (TextHistory.TryStepGroup((int)Read(a[2]), out var historyEntry))
                 {

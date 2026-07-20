@@ -1835,3 +1835,17 @@ indexed voice service and is saved.
 
 **Next:** investigate and implement the `0xd3/0xd4/0xd5` smooth-scroll callback/interpolation family as a
 separate fidelity slice, including the remaining scheduler support it depends upon.
+
+### ADV History live voice gate correction (2026-07-19)
+
+Manual replay remained silent, and the synchronized live trace localized the failure before the audio host:
+the clicked row reached `HISTORY.BIN@0x9c7`, found retained voice `{0x24,0}`, then failed its type-2 metadata
+query at `0x9e3/0x9ee` and returned without executing `0xc4` or `0x1bd`. The retained writer had reversed
+op `0x1d2`'s operands. Native handler/helper dataflow and SC0000's concrete `0x1d2(2,0x11)` site prove the
+ABI is `(metadata_type,value)`; the helper stores value at record `+0x14` and type at `+0x18`.
+
+The VM now records operand 2 as the value and operand 1 as the type. The real-script regression clears the
+voice request emitted by the original page, clicks the actual visible voiced History row, and requires a new
+request for SC0000 `0x24`/`MAN999.OGG`; this prevents a pre-History voice from producing a false positive.
+The `/v2` handler and helper comments are corrected and saved. Manual replay of that same retained row now
+plays audibly, confirming the full click-to-Godot path.

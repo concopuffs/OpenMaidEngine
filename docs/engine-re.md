@@ -1292,7 +1292,7 @@ The write path is part of ordinary ADV execution:
 - op `0x6e`'s glyph builder appends normal text chunks with the active geometry/font/color state.
 - voice op `0xc4` appends a `0x40000000` record containing `{voice_id,0}`; History replay op `0x1bd`
   uses the same writer with `{voice_id,1}` when recording is enabled.
-- op `0x1d2` appends a `0x20000000` record with operand 1 as the value and operand 2 as the metadata type.
+- op `0x1d2` appends a `0x20000000` record with operand 1 as the metadata type and operand 2 as its value.
   It was previously misclassified as a safe statement marker; 17,323 corpus uses make this a foundational
   correction.
 - op `0x1bb(0)` writes suppression bit `0x80000000` at `ctx+0x55110`; op `0x1bb(1)` clears it. HISTORY uses
@@ -1408,6 +1408,13 @@ History's surrounding `0x1bb(0)` suppression prevents the replay from recording 
 `voice_play_indexed_asset@0x488330` stores that variant in the channel-12 sound-buffer state before starting
 playback. Its precise audible meaning remains unproven, so the Godot host retains it through its queue and
 timeline rather than inventing different playback behavior.
+
+A live replay trace exposed a corrected prerequisite on that path. The clicked SC0000 row found voice pair
+`{0x24,0}` but returned at `HISTORY.BIN@0x9ee` because its required type-2 metadata lookup failed. Native
+`op_0x1d2_append_text_history_metadata@0x41f9c0` fetches operand 2 and then operand 1 before passing them as
+`(type,value)` to `text_history_append_typed_metadata@0x455f00`; the helper stores value at record `+0x14`
+and type at `+0x18`. Thus SC0000's `0x1d2(2,0x11)` means type 2, character/value `0x11`, not the reverse.
+The port now writes that pair in the native order, allowing HISTORY's type-2 gate to reach voice playback.
 
 History's remaining work is the `0xd3/0xd4/0xd5` smooth-scroll callback scheduler and its small supporting
 gaps. None changes backlog ownership or requires choosing a save/profile backend.

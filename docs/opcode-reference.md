@@ -86,9 +86,9 @@
 - **evidence:** Ghidra /v2: op_0x1d1_render_text_history@0x41f950 forwards all five operands plus the text manager at ctx+0x14508 to text_history_render_records@0x4526c0. That helper walks 0x48-byte retained text records, applies record flags/colors/font state, measures strings, and rasterizes/binds them to the chosen layout. HISTORY.BIN uses it to draw each visible backlog line.
 
 ### 0x1d2 `append-text-history-metadata` (append-text-history-metadata, argc 2)
-- **summary:** (value)(metadata_type) - append a typed metadata record to the current retained ADV message group when history recording is enabled.
+- **summary:** (metadata_type)(value) - append a typed metadata record to the current retained ADV message group when history recording is enabled.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1d2_handler@0x41f9c0 tests ctx+0x55110 and, when recording is enabled, calls text_history_append_typed_metadata@0x455f00. That appends a 0x48-byte record with flag 0x20000000, operand 1 at +0x14, and operand 2 at +0x18, consuming the pending group-start flag if set. The corpus has 17,323 uses; HISTORY.BIN later queries metadata types 1 and 2 through op 0x1d3. This opcode is effectful, not a statement marker.
+- **evidence:** Ghidra /v2: op_0x1d2_append_text_history_metadata@0x41f9c0 tests ctx+0x55110, fetches operand 2 followed by operand 1, and calls text_history_append_typed_metadata@0x455f00 as (layout=0, type=operand1, value=operand2). The helper appends a 0x48-byte record with flag 0x20000000, value at +0x14, and type at +0x18, consuming the pending group-start flag if set. SC0000's voiced page at 0x96d writes (type=2, value=0x11), and HISTORY.BIN later queries type 2 before replay. The corpus has 17,323 uses. This opcode is effectful, not a statement marker.
 
 ### 0x1d3 `find-text-history-value` (find-text-history-value, argc 5)
 - **summary:** (out_found)(out_value)(direction)(record_index)(value_type) - find typed metadata within one retained ADV message group.

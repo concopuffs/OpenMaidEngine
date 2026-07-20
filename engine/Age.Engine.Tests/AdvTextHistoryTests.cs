@@ -18,7 +18,7 @@ public class AdvTextHistoryTests
                 (0x75, new[] { I(24) }),
                 (0x76, new[] { I(0xf0e0d0) }),
                 (0x7a, new[] { I(0), I(12), I(34) }),
-                (0x1d2, new[] { I(123), I(1) }),
+                (0x1d2, new[] { I(1), I(123) }),
                 (0xc4, new[] { I(77) }),
                 (0x6e, new[] { I(0), S(0) }),
                 (0x71, new[] { I(1) }),
@@ -76,7 +76,7 @@ public class AdvTextHistoryTests
             {
                 (0x1bb, new[] { I(0) }),
                 (0x70, new[] { I(2), I(500), I(100), I(10), I(20) }),
-                (0x1d2, new[] { I(9), I(2) }),
+                (0x1d2, new[] { I(2), I(9) }),
                 (0xc4, new[] { I(88) }),
                 (0x6e, new[] { I(0), S(0) }),
                 (0x1bb, new[] { I(1) }),

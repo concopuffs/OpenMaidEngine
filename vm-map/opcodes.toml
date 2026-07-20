@@ -4349,21 +4349,21 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "append-text-history-metadata"
 category = "adv"
-summary = "(value)(metadata_type) - append a typed metadata record to the current retained ADV message group when history recording is enabled."
+summary = "(metadata_type)(value) - append a typed metadata record to the current retained ADV message group when history recording is enabled."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d2_handler@0x41f9c0 tests ctx+0x55110 and, when recording is enabled, calls text_history_append_typed_metadata@0x455f00. That appends a 0x48-byte record with flag 0x20000000, operand 1 at +0x14, and operand 2 at +0x18, consuming the pending group-start flag if set. The corpus has 17,323 uses; HISTORY.BIN later queries metadata types 1 and 2 through op 0x1d3. This opcode is effectful, not a statement marker."
+evidence = "Ghidra /v2: op_0x1d2_append_text_history_metadata@0x41f9c0 tests ctx+0x55110, fetches operand 2 followed by operand 1, and calls text_history_append_typed_metadata@0x455f00 as (layout=0, type=operand1, value=operand2). The helper appends a 0x48-byte record with flag 0x20000000, value at +0x14, and type at +0x18, consuming the pending group-start flag if set. SC0000's voiced page at 0x96d writes (type=2, value=0x11), and HISTORY.BIN later queries type 2 before replay. The corpus has 17,323 uses. This opcode is effectful, not a statement marker."
 
 [[opcode.semantics.args]]
 i = 1
-role = "metadata value"
+role = "metadata type"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "metadata type"
+role = "metadata value"
 observed_types = ["imm"]
 
 [[opcode]]
