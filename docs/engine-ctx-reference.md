@@ -39,6 +39,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x552e8` | `ret_stack_b` | `void*` | per-frame return stack (companion) |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |
+| `0x5f64c` | `adv_wait_indicator_timer` | `int` | elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame |
 | `0x5f690` | `timed_callback_abort_pc` | `int` | optional local fallback PC supplied to op 0xd5; -1 disables abort redirection |
 | `0x5f694` | `timed_callback_entries_vector` | `int` | MSVC vector object base for 16-byte schedule entries; begin/end/capacity pointers follow |
 | `0x5f698` | `timed_callback_entries_begin` | `void*` | begin pointer for 16-byte entries {deadline_ms, field_100, primary_pc, catchup_pc} |
@@ -48,8 +49,12 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x5f6a8` | `timed_callback_cursor` | `int` | next schedule entry consumed by timed_callback_sequence_tick; op 0xd3 resets to zero |
 | `0x5f6b4` | `timed_callback_script_resource_id` | `uint` | active frame script resource retained by op 0xd5 for local callback dispatch safety |
 | `0x5f6b8` | `timed_callback_script_resource_guard` | `uint` | companion current-script identity checked before redirecting to a scheduled callback |
+| `0x5f72c` | `adv_wait_indicator_frame` | `int` | current animated input-wait indicator frame, reset to zero when the service is armed |
+| `0x5f730` | `adv_wait_indicator_terminal_frame` | `int` | terminal frame returned by the indicator layout during ADV wait setup |
+| `0x5f734` | `adv_wait_indicator_enabled_value` | `int` | raw enable operand last written by op 0x1ce; nonzero arms the ADV wait-indicator service |
 | `0x6da78` | `message_skip_activation_guard` | `int` | set when op 0x88 enables Skip; suppresses the enabling click from immediately becoming a hotspot activation |
 | `0x6da80` | `message_skip_cancel_click_phase` | `int` | press/release phase used only when set:CancelMesSkipOnClick is nonzero |
+| `0x6da84` | `adv_wait_indicator_layout_slot` | `int` | ADV text layout whose wait indicator is armed or erased by input-wait setup and op 0x1ce |
 | `0x6da88` | `coroutine_yield_a` | `void*` | op 0x7b yield-state save (op1 -> +ctxidx*4) |
 | `0x6db28` | `coroutine_yield_b` | `void*` | op 0x7b yield-state save (op2 -> +ctxidx*4) |
 | `0x6dbc8` | `coroutine_runstate` | `int` | op 0x7c resume gate (run-state bit 0x2000000) |

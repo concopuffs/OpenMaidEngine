@@ -624,6 +624,14 @@ public sealed class VirtualMachine
                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
                     (int)Read(a[8]), Read(a[9])));
                 return pc + 1;
+            case "u0041B9F0":
+            case "set-adv-wait-indicator-enabled": // 0x1ce: explicit marker service start/stop
+                _host.SetAdvWaitIndicatorEnabled(Read(a[0]) != 0);
+                return pc + 1;
+            case "u00420CE0":
+            case "publish-adv-text-layout": // 0x20a: publish layout and current marker frame if active
+                _host.PublishAdvTextLayout((int)Read(a[0]));
+                return pc + 1;
             case "draw-string": // 0x204 (surface slot, x, y, string)
                 _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]),
                                           _advTextStyle);

@@ -173,6 +173,11 @@ name = "timed_callback_timer"
 type = "int"
 note = "elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler"
 [[field]]
+offset = 0x5f64c
+name = "adv_wait_indicator_timer"
+type = "int"
+note = "elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame"
+[[field]]
 offset = 0x5f690
 name = "timed_callback_abort_pc"
 type = "int"
@@ -218,6 +223,21 @@ name = "timed_callback_script_resource_guard"
 type = "uint"
 note = "companion current-script identity checked before redirecting to a scheduled callback"
 [[field]]
+offset = 0x5f72c
+name = "adv_wait_indicator_frame"
+type = "int"
+note = "current animated input-wait indicator frame, reset to zero when the service is armed"
+[[field]]
+offset = 0x5f730
+name = "adv_wait_indicator_terminal_frame"
+type = "int"
+note = "terminal frame returned by the indicator layout during ADV wait setup"
+[[field]]
+offset = 0x5f734
+name = "adv_wait_indicator_enabled_value"
+type = "int"
+note = "raw enable operand last written by op 0x1ce; nonzero arms the ADV wait-indicator service"
+[[field]]
 offset = 0x6da78
 name = "message_skip_activation_guard"
 type = "int"
@@ -227,6 +247,11 @@ offset = 0x6da80
 name = "message_skip_cancel_click_phase"
 type = "int"
 note = "press/release phase used only when set:CancelMesSkipOnClick is nonzero"
+[[field]]
+offset = 0x6da84
+name = "adv_wait_indicator_layout_slot"
+type = "int"
+note = "ADV text layout whose wait indicator is armed or erased by input-wait setup and op 0x1ce"
 [[field]]
 offset = 0x6da88
 name = "coroutine_yield_a"

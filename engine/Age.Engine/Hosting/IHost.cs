@@ -31,6 +31,10 @@ public interface IHost
     void FillSurfaceRect(SurfaceRectFill fill) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
+    // Op 0x1ce explicitly starts/stops the same animated marker that op 0x72 starts for an ADV wait.
+    void SetAdvWaitIndicatorEnabled(bool enabled) { }
+    // Op 0x20a republishes one retained ADV text layout and includes the current marker frame when active.
+    void PublishAdvTextLayout(int layoutSlot) { }
     // Op 0x199 temporarily yields the active ADV page into its registered hide-window coroutine.
     // The retained scene continues to render, but the text layout and its wait marker are suspended
     // until op 0x7c restores the saved page PC.

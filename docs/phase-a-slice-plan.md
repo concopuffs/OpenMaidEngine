@@ -1926,3 +1926,29 @@ slice. Keep `0x1cb` deferred until the global save/profile storage boundary is c
 Validation: all 205 engine tests pass, including four focused History presentation cases; opcode and
 EngineCtx tests/lints are clean, vm0 RECOVER passes, the Godot build has zero warnings, and threaded
 `SELFTEST OK`.
+
+### ADV History text publication / wait-indicator service implemented (2026-07-20)
+
+Native RE corrects the provisional "sprite-animation service" description: `0x1ce` and `0x20a` are the
+explicit control points for ADV text publication and its animated input-wait indicator. `0x1ce(enabled)`
+starts or stops the indicator's run-state/timer/frame service; Himegari only calls it with zero when entering
+modal scripts, including HISTORY. `0x20a(layout_slot)` republishes the selected retained text layout and,
+when the service is active, binds its current indicator frame; HISTORY's shared redraw callback uses slot 1.
+Normal ADV wait opcode `0x72` implicitly arms the same service.
+
+The VM now forwards both operations through generic host methods. Godot gates its existing animated marker
+on the explicit enabled state and requests recomposition for layout publication. Because the port keeps the
+parent wait blocked while a nested raw-input callback executes, it restores a previously enabled parent
+marker when that callback returns, matching the native path that re-enters the shared redraw/wait routine.
+No script offsets, boot seeds, or persistence assumptions were introduced.
+
+A focused synthetic regression verifies the two service calls, and the real SC0000-to-HISTORY regression
+requires marker disable plus layout-slot-1 publication while preserving the same enclosing ADV wait and
+cleaning the modal rows. The canonical opcode and EngineCtx sources are regenerated; the `/v2` handlers and
+workers are named/commented, the expanded 63-field `EngineCtx` is applied, and the image is saved. HISTORY
+is now 77/78 distinct opcodes and 853/854 instructions handled or safe-noop. The only remaining instruction
+is the deliberately deferred `0x1cb` Read-message Skip setting getter, pending a global profile/save backend
+decision.
+
+Validation: all 206 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
+Godot build has zero warnings, and threaded `SELFTEST OK`.

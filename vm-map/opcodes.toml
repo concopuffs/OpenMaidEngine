@@ -4233,18 +4233,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B9F0"
-category = "unknown"
-summary = ""
+name = "set-adv-wait-indicator-enabled"
+category = "adv"
+summary = "(enabled) - explicitly start or stop the animated ADV input-wait indicator service."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op_0x1ce_set_adv_wait_indicator_enabled@0x41f8c0 writes enabled to ctx+0x5f734. A nonzero value sets run bit 0x40000000, resets ctx+0x5f72c to frame zero, and starts the ctx+0x5f64c elapsed timer. Zero erases the indicator through adv_text_publish_wait_indicator_frame@0x453120 using ctx+0x6da84 and frame -2 when necessary, then clears the run bit. The corpus uses 0x1ce(0) on modal/menu entry, including HISTORY.BIN@0x3."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "enabled"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -5043,18 +5043,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420CE0"
-category = "unknown"
-summary = ""
+name = "publish-adv-text-layout"
+category = "adv"
+summary = "(layout_slot) - republish one ADV text layout and, while active, its current wait-indicator frame."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requested slot to adv_text_publish_layout@0x450c80, which rebinds the layout's retained text records. If ADV run-state bit 0x40000000 is active, it also calls adv_text_publish_wait_indicator_frame@0x453120 with ctx+0x5f72c. Slot zero resolves the text manager's current layout; the corpus always uses slot one, including HISTORY.BIN@0x13ab in its shared ADV redraw callback."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout_slot (0 = current)"
 observed_types = ["imm"]
 
 [[opcode]]

@@ -80,6 +80,11 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x55110 for operand 0 and zero for operand 1, rejecting other values. Text/layout/metadata/voice paths test or propagate that high bit before appending retained history. HISTORY.BIN disables recording at entry and reenables it at exit so the backlog UI does not record itself.
 
+### 0x1ce `set-adv-wait-indicator-enabled` (u0041B9F0, argc 1)
+- **summary:** (enabled) - explicitly start or stop the animated ADV input-wait indicator service.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op_0x1ce_set_adv_wait_indicator_enabled@0x41f8c0 writes enabled to ctx+0x5f734. A nonzero value sets run bit 0x40000000, resets ctx+0x5f72c to frame zero, and starts the ctx+0x5f64c elapsed timer. Zero erases the indicator through adv_text_publish_wait_indicator_frame@0x453120 using ctx+0x6da84 and frame -2 when necessary, then clears the run bit. The corpus uses 0x1ce(0) on modal/menu entry, including HISTORY.BIN@0x3.
+
 ### 0x1d0 `step-text-history` (step-text-history, argc 3)
 - **summary:** (out_layout_slot)(out_record_index)(delta) - resolve a cumulative delta from the latest retained ADV boundary and return its layout slot and first record index, or -1 outputs at a boundary.
 - **grounding:** source=investigation, confidence=high
@@ -109,6 +114,11 @@
 - **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string, fetches surface/x/y, then calls draw_string_to_surface@0x450150 on text manager ctx+0x14940. The worker validates and locks gfx-manager surface table +0xa590[slot], chooses text_raster_string_uncached@0x459d90 or cached/effect path @0x45b600, rasterizes GDI GetGlyphOutlineA bitmaps through text_blit_glyph_bitmap@0x458c80 using font/color state +0x4d0/+0x458, then unlocks. SC0000 0x9b2 draws the speaker name into 400x30 surface 0xd at (1,1); following 0x1fb binds it to retained object 0xe678 at (74,444).
+
+### 0x20a `publish-adv-text-layout` (u00420CE0, argc 1)
+- **summary:** (layout_slot) - republish one ADV text layout and, while active, its current wait-indicator frame.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requested slot to adv_text_publish_layout@0x450c80, which rebinds the layout's retained text records. If ADV run-state bit 0x40000000 is active, it also calls adv_text_publish_wait_indicator_frame@0x453120 with ctx+0x5f72c. Slot zero resolves the text manager's current layout; the corpus always uses slot one, including HISTORY.BIN@0x13ab in its shared ADV redraw callback.
 
 ### 0x2bd `set-font-bold` (set-font-bold, argc 1)
 - **summary:** (enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state.
@@ -1068,10 +1078,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x1ce `u0041B9F0` (u0041B9F0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1cf `u0041DA10` (u0041DA10, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1089,10 +1095,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x207 `u00420B00` (u00420B00, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x20a `u00420CE0` (u00420CE0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

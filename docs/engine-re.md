@@ -1725,6 +1725,46 @@ saved.
 
 ---
 
+### ADV text publication and wait-indicator service -- opcodes `0x1ce` / `0x20a` (2026-07-20)
+
+The earlier working label "sprite-animation service" was too broad. These operations belong specifically
+to ADV text publication and the animated input-wait indicator (the bouncing marker shown after a page
+finishes typing). They do not expose a generic retained-object animation channel.
+
+`op_0x1ce_set_adv_wait_indicator_enabled@0x41f8c0` stores its operand at
+`EngineCtx.adv_wait_indicator_enabled_value` (`ctx+0x5f734`). A nonzero value sets run-state bit
+`0x40000000`, resets `adv_wait_indicator_frame` (`ctx+0x5f72c`) to zero, and starts
+`adv_wait_indicator_timer` (`ctx+0x5f64c`). Zero erases the indicator belonging to
+`adv_wait_indicator_layout_slot` (`ctx+0x6da84`) with the worker's frame `-2` mode and clears the run bit.
+Every Himegari corpus use is `0x1ce(0)`, normally at entry to a modal script; `HISTORY.BIN@0x3` is the
+concrete route relevant here.
+
+`op_0x20a_publish_adv_text_layout@0x422ce0` first calls
+`adv_text_publish_layout@0x450c80`. Slot zero selects the text manager's current layout; a nonzero operand
+selects that indexed layout. The worker erases the layout's old retained-object range, walks its 20-byte
+text records, and rebinds their draw objects. When run-state bit `0x40000000` is active, the opcode also
+calls `adv_text_publish_wait_indicator_frame@0x453120` with the current indicator frame. The latter worker
+uses frame `-1` to return/capture the terminal frame, `-2` to erase the indicator object, and a
+nonnegative frame to choose and bind the corresponding atlas cell. All corpus uses are `0x20a(1)`;
+`HISTORY.BIN@0x13ab` reaches it through the shared ADV redraw callback.
+
+Opcode `0x72` owns the normal implicit start of the same service: it records the waiting layout, captures
+the indicator's terminal frame, resets the active frame to zero, starts the timer, and raises run-state bit
+`0x40000000`. Completing the input wait erases the object and clears the bit. In the original interpreter,
+return from a nested modal script flows through that shared redraw/wait path and re-arms the parent marker.
+The port's host blocks inside the enclosing wait while servicing the nested HISTORY callback, so it restores
+the previously enabled parent marker at the callback-return boundary. This is lifecycle equivalence, not a
+script-specific seed or global-state workaround.
+
+The port exposes the two explicit operations as host services: `0x1ce` controls marker eligibility and
+`0x20a` requests retained ADV publication. Godot's existing indicator clock/configuration remains the
+animation implementation. The real SC0000-to-HISTORY regression proves HISTORY disables the marker on
+entry, executes layout-slot-1 publication on return, clears transient History rows, and leaves the enclosing
+ADV page wait in place. The expanded 63-field `EngineCtx` and semantic function annotations are applied to
+the saved `/v2` image.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.

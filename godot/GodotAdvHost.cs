@@ -43,6 +43,7 @@ public sealed class GodotAdvHost : IHost
     private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
+    private bool _waitIndicatorEnabled;
     private volatile bool _advPagePresentationSuspended;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
@@ -196,6 +197,22 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
+    public void SetAdvWaitIndicatorEnabled(bool enabled)
+    {
+        lock (_textLock)
+        {
+            if (enabled && !_waitIndicatorEnabled) _waitIndicatorStartedMs = _clock.NowMs;
+            _waitIndicatorEnabled = enabled;
+        }
+        _timeline?.Event("wait-indicator-enabled", new() { ["enabled"] = enabled });
+    }
+
+    public void PublishAdvTextLayout(int layoutSlot)
+    {
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("adv-text-layout-publish", new() { ["layout"] = layoutSlot });
+    }
+
     public AdvWaitIndicatorSnapshot? SnapshotAdvWaitIndicator()
     {
         if (!IsWaiting || _advPagePresentationSuspended) return null;
@@ -203,6 +220,7 @@ public sealed class GodotAdvHost : IHost
         long resourceId;
         lock (_textLock)
         {
+            if (!_waitIndicatorEnabled) return null;
             if (!_waitIndicators.TryGetValue(_activeWaitLayout, out config)) return null;
             if (!_surfaceResources.TryGetValue(config.SurfaceSlot, out resourceId)) return null;
         }
@@ -234,8 +252,12 @@ public sealed class GodotAdvHost : IHost
         // Publish retained mutations accumulated before the wait once. A static input wait is not itself a
         // reason to rebuild the 800x600 background every frame; ambient channels are queried separately.
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-        lock (_textLock) _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-        _waitIndicatorStartedMs = _clock.NowMs;
+        lock (_textLock)
+        {
+            _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+            _waitIndicatorStartedMs = _clock.NowMs;
+            _waitIndicatorEnabled = true;
+        }
         IsWaiting = true;
         _timeline?.State("input-wait", new() { ["page"] = Pages });
         var autoTimer = new AdvAutoAdvanceTimer();
@@ -243,7 +265,24 @@ public sealed class GodotAdvHost : IHost
         bool messageSkipped = false;
         while (!_stopping)
         {
-            while (serviceInputCallback()) { }
+            while (true)
+            {
+                bool markerWasEnabled;
+                lock (_textLock) markerWasEnabled = _waitIndicatorEnabled;
+                bool keepServicing = serviceInputCallback();
+                // The native callback returns through the shared ADV redraw/wait path, whose op 0x72
+                // re-arms a marker stopped by nested HISTORY. Our blocking host keeps the parent wait
+                // parked, so restore that parent-owned state at the equivalent callback boundary.
+                lock (_textLock)
+                {
+                    if (markerWasEnabled && !_waitIndicatorEnabled)
+                    {
+                        _waitIndicatorEnabled = true;
+                        _waitIndicatorStartedMs = _clock.NowMs;
+                    }
+                }
+                if (!keepServicing) break;
+            }
             if (_messageSkipActive)
             {
                 messageSkipped = true;
@@ -259,6 +298,7 @@ public sealed class GodotAdvHost : IHost
             if (_gate.Wait(0)) break;
         }
         IsWaiting = false;
+        lock (_textLock) _waitIndicatorEnabled = false;
         _timeline?.State("running", new()
         {
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",

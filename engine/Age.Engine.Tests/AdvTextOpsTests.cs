@@ -53,4 +53,24 @@ public class AdvTextOpsTests
         Assert.Equal(new Age.Engine.Hosting.AdvWaitIndicatorConfig(1, 385, 140, 12, 0, 0, 30, 27, 12, 48),
                      Assert.Single(host.WaitIndicators));
     }
+
+    [Fact]
+    public void WaitIndicatorToggleAndTextLayoutPublicationReachHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "WAITMARK_SERVICE",
+            new List<(int, Operand[])>
+            {
+                (0x1ce, new[] { new Operand(0, 1) }),
+                (0x20a, new[] { new Operand(0, 4) }),
+                (0x1ce, new[] { new Operand(0, 0) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new[] { true, false }, host.WaitIndicatorEnabledChanges);
+        Assert.Equal(4, Assert.Single(host.PublishedAdvTextLayouts));
+    }
 }

@@ -102,5 +102,6 @@ public class HistoryPresentationOpsTests
         Assert.All(host.HistoryRenders.Where(render => render.Text.Length > 0),
             render => Assert.Equal(8, render.Style.LineSpacing));
         Assert.Contains(host.PresentedRanges, range => range == (0L, 60000L));
+        Assert.Contains(false, host.WaitIndicatorEnabledChanges);
     }
 }

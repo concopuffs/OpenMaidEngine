@@ -24,6 +24,8 @@ internal class RecordingHost : IHost
     public readonly List<SurfaceRectFill> SurfaceFills = new();
     public readonly List<(long First, long Count)> PresentedRanges = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
+    public readonly List<bool> WaitIndicatorEnabledChanges = new();
+    public readonly List<int> PublishedAdvTextLayouts = new();
     public readonly List<long> SleptDurations = new();
     public readonly List<(long Resource, int Channel)> SfxLoads = new();
     public readonly List<long> Voices = new();
@@ -62,6 +64,8 @@ internal class RecordingHost : IHost
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
+    public void SetAdvWaitIndicatorEnabled(bool enabled) => WaitIndicatorEnabledChanges.Add(enabled);
+    public void PublishAdvTextLayout(int layoutSlot) => PublishedAdvTextLayouts.Add(layoutSlot);
     public void SetAdvPagePresentationSuspended(bool suspended)
         => AdvPagePresentationSuspended.Add(suspended);
     public void WaitForInput() => Waits++;
