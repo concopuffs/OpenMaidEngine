@@ -4495,19 +4495,20 @@ evidence = ""
 
 [[opcode]]
 op = 0x1f6
-label = "u00416170"
+label = "clear-retained-gfx-objects"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00416170"
-category = "unknown"
-summary = ""
+name = "clear-retained-gfx-objects"
+category = "draw"
+summary = "Clear the complete retained gfx-object registry while preserving allocated surface resources. Subsequent object queries return absent until draw/geometry operations recreate records."
+details = "The handler clears the map embedded at retained-gfx owner+0x408, resets its count and transient dirty/force flags, but does not release the 1000 surface slots or clear the separate queued-surface-command list. Corpus call sites pair it either with 0x23d for a full transient-resource reset or with 0x20e for a backbuffer clear."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1f6_clear_retained_gfx_objects@0x417430 passes ctx+0x46614 to retained_gfx_objects_clear@0x47cab0. The worker destroys every node in owner+0x408, resets its sentinel/count, and clears owner+0xb558/+0xb55c/+0xb564/+0xb568 plus bit 0x10000 state. DATA1: 293 calls in 146 scripts; 146 continue to 0x23d and 143 to 0x20e."
 
 [[opcode]]
 op = 0x1f7
@@ -4801,12 +4802,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-blit-color"
 category = "draw"
-summary = "0x202 (handle)(delay_ms)(duration_ms)(alpha)(color) — arm the one-shot packed-ARGB channel. Worker gfx_op_0x202_worker_set_color_anim @0x47ea00 resets shared start obj+0x34, writes delay +0x38, duration +0x4c, and target +0x64. gfx_object_apply_transform_channels @0x472f00 linearly interpolates each byte from current +0x60 on frame clock ctx+0xb550, commits the target, clears timing, writes target -1, and clears the one-shot active bit when all sibling channels finish. Negative alpha/RGB independently preserve current bytes. Implemented in GfxState with synchronized current/target timeline evidence; draw-string 0x204/0x7a remains separate."
+summary = "0x202 (handle)(delay_ms)(duration_ms)(alpha)(color) — arm the one-shot packed-ARGB channel. Worker gfx_op_0x202_worker_set_color_anim @0x47ea00 resets shared start obj+0x34, writes delay +0x38, duration +0x4c, and target +0x64. gfx_object_apply_transform_channels @0x472f00 linearly interpolates each byte from current +0x60 on retained-gfx owner+0xb550 (EngineCtx+0x51b64), commits the target, clears timing, writes target -1, and clears the one-shot active bit when all sibling channels finish. Negative alpha/RGB independently preserve current bytes. Implemented in GfxState with synchronized current/target timeline evidence; draw-string 0x204/0x7a remains separate."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock ctx+0xb550; bytewise integer LERP; natural or ctx+0xb55c forced completion. /v2 annotated and saved 2026-07-10."
+evidence = "Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock retained-gfx owner+0xb550 (EngineCtx+0x51b64); bytewise integer LERP; natural or owner+0xb55c (EngineCtx+0x51b70) forced completion. /v2 annotated and saved 2026-07-10."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5129,40 +5130,42 @@ evidence = "Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_pr
 
 [[opcode]]
 op = 0x20d
-label = "u00420E10"
+label = "select-render-target"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420E10"
-category = "unknown"
-summary = ""
+name = "select-render-target"
+category = "draw"
+summary = "Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000."
+details = "For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = [0x20c, 0x1c7, 0x1cc]
-evidence = ""
+evidence = "Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 and retained-gfx owner ctx+0x46614 to retained_gfx_select_render_target@0x479660. Its D3D calls resolve texture level 0 or backbuffer 0, then invoke device vtable +0x94 SetRenderTarget and store selected slot at owner+0xb530. DATA1: 113 calls in 24 scripts."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "surface slot; >=1000 selects the backbuffer"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x20e
-label = "u00416250"
+label = "clear-render-target"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00416250"
-category = "unknown"
-summary = ""
+name = "clear-render-target"
+category = "draw"
+summary = "Clear the currently selected render target to black and reset its depth buffer to 1.0."
+details = "This is a target-pixel operation, not retained-object teardown. It invokes IDirect3DDevice9::Clear with zero rectangles, flags D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER (3), color 0, depth 1.0, and stencil 0. The port tracks 0x20d target ownership and forwards the clear to the host; its retained compositor already rebuilds the backbuffer from black."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x20e_clear_render_target@0x4174f0 passes renderer ctx+0x46188 to d3d_clear_render_target_black@0x471460. The worker calls device pointer +0x410, vtable +0xac with (0,NULL,3,0,1.0f,0). DATA1: 345 calls in 167 scripts; 57 directly follow 0x20d and 143 directly follow 0x1f6."
 
 [[opcode]]
 op = 0x20f
@@ -5500,7 +5503,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x223]
-evidence = "Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in ctx+0x408 map, creates destination, copies exactly 0xb5 dwords from source object record, then marks ctx+0xb558 dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7."
+evidence = "Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in retained-gfx owner+0x408 (EngineCtx+0x46a1c), creates destination, copies exactly 0xb5 dwords from source object record, then marks owner+0xb558 (EngineCtx+0x51b6c) dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5521,12 +5524,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-transform-norm"
 category = "draw"
-summary = "(handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity."
+summary = "(handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64), after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and frame-time ctx+0xb550."
+evidence = "Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5618,12 +5621,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-transform-abs"
 category = "draw"
-summary = "(handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity."
+summary = "(handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64), after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550."
+evidence = "Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5695,7 +5698,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x20c, 0x21c, 0x1c7, 0x1cc]
-evidence = "Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7."
+evidence = "Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from retained-gfx owner+0xb550 (EngineCtx+0x51b64) and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6127,7 +6130,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on ctx+0xb550 and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second."
+evidence = "Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on retained-gfx owner+0xb550 (EngineCtx+0x51b64) and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6353,19 +6356,20 @@ evidence = ""
 
 [[opcode]]
 op = 0x23d
-label = "u004162F0"
+label = "release-transient-surfaces"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004162F0"
-category = "unknown"
-summary = ""
+name = "release-transient-surfaces"
+category = "draw"
+summary = "Stop movie bindings and release transient gfx surface slots 42 through 999 inclusive, preserving system-owned slots 0 through 41."
+details = "For each fixed slot in [42,1000), the handler stops/releases the movie-to-texture object at ctx+0x52bd4[slot], then invokes the ordinary retained-gfx surface-release worker. Protected/externally owned slots may be retained by the worker's per-slot guard. This is the resource half of the common 0x1f6/0x23d full-reset sequence."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x23d_release_transient_surfaces@0x4175c0 loops EDI=42 while EDI<1000, stops/releases ctx+0x52bd4[EDI] movie objects, and calls retained_gfx_release_surface@0x474e40 on owner ctx+0x46614. DATA1: 149 calls in 146 scripts; 146 directly follow 0x1f6."
 
 [[opcode]]
 op = 0x23f

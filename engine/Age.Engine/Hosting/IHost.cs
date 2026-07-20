@@ -72,6 +72,12 @@ public interface IHost
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
     void ReleaseSurface(int slot) { }
+    /// <summary>Clear the selected target's pixels; -1 denotes the main backbuffer.</summary>
+    void ClearRenderTarget(int surfaceSlot) { }
+    void ReleaseSurfaceRange(int firstSlot, int count)
+    {
+        for (int slot = firstSlot; slot < firstSlot + count; slot++) ReleaseSurface(slot);
+    }
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
     (int Width, int Height) GetTextureSize(int slot);
     void PlayBgm(long id);

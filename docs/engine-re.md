@@ -498,7 +498,8 @@ independent matrix channels, not two encodings of one vec3 property.
   at `obj+0x208`, and the target axis-angle matrix at `obj+0x12c`. Current axis/angle are
   `obj+0x1ec..0x1f4/+0x204`, with current matrix `obj+0xec`.
 - `gfx_object_apply_transform_channels` (`0x472f00`) supplies the timing contract. All three channels use
-  shared start timestamp `obj+0x34` and global frame-time `ctx+0xb550`, but have independent delay/duration:
+  shared start timestamp `obj+0x34` and retained-gfx frame-time `owner+0xb550`
+  (`EngineCtx+0x51b64`), but have independent delay/duration:
   scale `obj+0x3c/+0x50`, rotation `obj+0x40/+0x54`, translation `obj+0x44/+0x58`. Each holds current through the
   delay, linearly interpolates current→target for its duration, then commits the target and clears its own timing.
   Neither third component is opacity.
@@ -556,7 +557,8 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
   real and verifiable on screen.
 
 **Corrected host model:** `0x21e` scale and `0x220` translation run directly from frame-time
-`ctx+0xb550` using their own delay/duration; they do not use op `0x238` as their duration.
+`retained-gfx owner+0xb550` (`EngineCtx+0x51b64`) using their own delay/duration; they do not use op
+`0x238` as their duration.
 Op `0x234` is the independent rotation cycle above. Op `0x238` still configures the separate
 `ctx+0x51b78/+0x51b7c` animation service used by its own family.
 
@@ -742,7 +744,8 @@ per-frame bytecode. Reversed + annotated in Ghidra:
 - **Retained objects carry cyclic rotation state:** flag value `4` at `obj+0`, start timestamp
   `obj+0x214`, period `obj+0x228`, and axis `obj+0x244/248/24c`.
 - **`gfx_object_set_rotation_cycle`** (`0x47f060`, worker for legacy op **`0x234`**)
-  configures that channel. `gfx_object_anim_interpolate` consumes it from frame-time `ctx+0xb550`
+  configures that channel. `gfx_object_anim_interpolate` consumes it from retained-gfx frame-time
+  `owner+0xb550` (`EngineCtx+0x51b64`)
   as a repeating 0..360-degree axis rotation. Op **`0x1fd`**
   (`gfx_op_0x1fd_set_vec_scaled@0x422650` → `gfx_object_set_scale_current@0x47e6b0`) is an immediate
   current-scale setter: it divides integer X/Y/Z percentages by 100, marks scale state at `obj+0x68`, and
@@ -772,7 +775,8 @@ and snapshotted textures at draw time; symptoms: alternating grey, glow over bac
   set-texture) resolves `resId` via the SYS4INI resolver (`FUN_0044f390`) and loads the file into the slot's
   surface **with a colorkey/chromakey** (op arg 3 — never modelled before), also releasing the old surface.
   A surface persists at its slot until the next set-texture overwrites it.
-- **Objects** — the `ctx+0x408` registry, keyed by handle (a `std::map`). `gfx_op_0x1fb_draw_bind` (`0x422510`,
+- **Objects** — the retained-gfx `owner+0x408` registry (`EngineCtx+0x46a1c`), keyed by handle (a
+  `std::map`). `gfx_op_0x1fb_draw_bind` (`0x422510`,
   op `0x1fb` draw-texture) → `gfx_object_bind_draw` (`0x47e870`): sets the object's **source slot** (`obj+4`),
   **source rect** (`obj+8..0x14` = left,top,right,bottom), **position** (`obj+0x24/28/2c` = V24), and the
   **visible** flag (bit 0). The object references its surface **by slot index, live** (re-resolved each frame),
@@ -807,7 +811,8 @@ Ghidra functions renamed + plate-commented, saved).
   is loaded/cached.
 - **`0x202` (`gfx_op_0x202_worker_set_color_anim` `0x47ea00`)**: sets an **animated** color/alpha target
   `obj+0x64 = packedARGB`, the color-anim active bit, and resets shared start `obj+0x34=0`. Operands 2/3
-  are delay/duration at `obj+0x38/+0x4c`; sampling uses frame clock `ctx+0xb550`, not op `0x238`.
+  are delay/duration at `obj+0x38/+0x4c`; sampling uses retained-gfx frame clock `owner+0xb550`
+  (`EngineCtx+0x51b64`), not op `0x238`.
 - **`0x203` (`gfx_op_0x203_worker_set_color` `0x47e9b0`)**: sets a **static** color/alpha `obj+0x60`, no anim
   bit. Immediate per-object modulation.
 - **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** (`local_2c`: 0 opaque, 1 alpha
@@ -841,10 +846,12 @@ visible glow on the ordinary interactive path. This glow is a retained scaled/ro
 fade animates so smooth ramping could join slice A. Findings (Ghidra `gfx_object_anim_interpolate`
 `0x473ed0`, annotated+saved): the bit-2 anim family (op `0x234`) interpolates **5 independent sub-channels**
 (color `obj+0x240`/period `obj+0x220`, two matrices, rotation `0x168`=360°, src-rect scroll), each on the
-**global frame clock `ctx+0xb550`** (advanced per present, NOT the op-`0x238` clock `ctx+0x51b7c`), and each
+**global frame clock `retained-gfx owner+0xb550` (`EngineCtx+0x51b64`)** (advanced per present, NOT the
+op-`0x238` clock `ctx+0x51b7c`), and each
 **ping-pongs** (triangle wave, folded at period/2) — i.e. these are *oscillating/pulsing* effects, not
 one-shot fades. The `0x202`/`0x203` color (`obj+0x60` static / `obj+0x64` animated, sets
-`ctx+0xb558`/`0xb560`) is a **separate channel whose blit consumer was not located** in this pass. So a
+`owner+0xb558`/`0xb560` = `EngineCtx+0x51b6c`/`0x51b74`) is a **separate channel whose blit consumer was
+not located** in this pass. So a
 one-shot fade's exact source→target→easing is still unresolved and would take a dedicated dig (find the
 `obj+0x64` consumer + the color→`obj+0x240` path + the clock advance). ⇒ **smooth color-anim interpolation
 stays deferred**; slice A ships the static end-state (which reaches the correct final alpha/tint and fixes
@@ -852,9 +859,11 @@ the stuck-opaque bug), with interpolation as a scoped follow-up.
 
 **Resolution (2026-07-10 — supersedes the deferral above).** The missing consumer was the bit-1 branch in
 `gfx_object_apply_transform_channels` (`0x472f00`), before its matrix channels. It seeds shared start
-`obj+0x34` from `ctx+0xb550`; holds current packed ARGB `obj+0x60` through delay `+0x38`; then performs an
+`obj+0x34` from retained-gfx `owner+0xb550` (`EngineCtx+0x51b64`); holds current packed ARGB `obj+0x60`
+through delay `+0x38`; then performs an
 integer, bytewise linear interpolation to target `+0x64` for duration `+0x4c`. At natural completion—or
-when `ctx+0xb55c == 1` requests forced completion—the target commits to current, delay/duration clear,
+when retained-gfx `owner+0xb55c == 1` (`EngineCtx+0x51b70`) requests forced completion—the target commits
+to current, delay/duration clear,
 target becomes `0xffffffff`, and the one-shot active bit clears when no color/matrix/src-rect sibling remains.
 The object-local override bit at `+0x2d0` suppresses the global force. Negative alpha/RGB target operands
 independently preserve their bytes from current `+0x60`.
@@ -1842,6 +1851,51 @@ animation implementation. The real SC0000-to-HISTORY regression proves HISTORY d
 entry, executes layout-slot-1 publication on return, clears transient History rows, and leaves the enclosing
 ADV page wait in place. The expanded 63-field `EngineCtx` and semantic function annotations are applied to
 the saved `/v2` image.
+
+---
+
+### Retained graphics lifecycle and render targets -- opcodes `0x1f6` / `0x23d` / `0x20d` / `0x20e` (2026-07-20)
+
+The initially suspected `0x1f6` / `0x20e` pair is actually two independent lifecycle pairs. Opcode
+`0x1f6` clears retained object records, while `0x23d` releases transient surface resources. Separately,
+`0x20d` selects a Direct3D render target and `0x20e` clears the selected target to black. Their frequent
+adjacency comes from scene setup and teardown, not from one shared service.
+
+`op_0x1f6_clear_retained_gfx_objects@0x417430` passes the embedded retained-gfx manager at
+`EngineCtx+0x46614` to `retained_gfx_objects_clear@0x47cab0`. The worker destroys the complete
+handle-to-object map at manager `+0x408` (`EngineCtx+0x46a1c`), resets its sentinel/count and transient
+dirty/force-completion/animation-clock state, but leaves the surface table and queued surface commands
+intact. The port consequently clears `GfxState` objects without releasing their source slots, allowing a
+later bind to recreate an object from an existing surface.
+
+`op_0x23d_release_transient_surfaces@0x4175c0` loops over slots 42 through 999. For each slot it stops and
+releases any movie-to-texture object at `EngineCtx+0x52bd4[slot]`, then calls
+`retained_gfx_release_surface@0x474e40`. Slots 0 through 41 are deliberately preserved. The native release
+worker can also retain a slot protected by its per-slot ownership guard; the port has no corresponding
+external owner and releases the complete transient range. In the corpus, 146 of 149 `0x23d` calls directly
+follow `0x1f6`, forming the full object-plus-resource reset.
+
+`op_0x20d_select_render_target@0x422e10` forwards its operand to
+`retained_gfx_select_render_target@0x479660`. Values below 1000 resolve a retained texture wrapper, acquire
+texture level zero, and call `IDirect3DDevice9::SetRenderTarget(0, surface)`. Values at or above 1000 acquire
+backbuffer zero instead and record current target `-1` at manager `+0xb530` (`EngineCtx+0x51b44`). Opcode
+`0x20e` then calls `d3d_clear_render_target_black@0x471460`, which invokes `IDirect3DDevice9::Clear` with no
+rectangles, `D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER`, color zero, depth 1.0, and stencil zero. The port tracks
+the selected target and forwards the clear to the host; the retained compositor reconstructs its main
+backbuffer from black at publication boundaries, while offscreen clears also discard modeled text pixels.
+
+This trace also corrects an important base-pointer assumption in earlier graphics notes. Offsets `+0x408`
+and `+0xb550` are relative to the retained-gfx manager at `EngineCtx+0x46614`, not to `EngineCtx` itself.
+Their absolute locations are therefore `EngineCtx+0x46a1c` (object registry) and `EngineCtx+0x51b64`
+(frame timer). The same correction moves the dirty/force-completion fields to `EngineCtx+0x51b6c` through
+`+0x51b74`. This changes native field provenance and the Ghidra structure, but not the already implemented
+host-side object/animation behavior, which was based on worker semantics and runtime traces rather than
+directly reading those native addresses.
+
+Corpus totals are 293 `0x1f6` calls in 146 scripts, 149 `0x23d` calls in 146 scripts, 113 `0x20d` calls in
+24 scripts, and 345 `0x20e` calls in 167 scripts. In SC0000, the full reset appears as `0x1f6` then `0x23d`
+at `0x4ed`; other paths use `0x1f6` then `0x20e` to discard retained objects and clear the already selected
+backbuffer. Fresh offscreen surfaces commonly use `0x20d` then `0x20e` before drawing.
 
 ---
 

@@ -954,10 +954,12 @@ The plain check reports only the generated reference's CRLF on its newly added r
 **Native contract.** `gfx_op_0x202_worker_set_color_anim@0x47ea00` writes target packed ARGB at
 `obj+0x64`, delay/duration at `+0x38/+0x4c`, and resets the one-shot family's shared start `+0x34`.
 The missing consumer is the bit-1 path in `gfx_object_apply_transform_channels@0x472f00`: it seeds start
-from frame time `ctx+0xb550`, performs an integer bytewise current-`+0x60` to target-`+0x64` LERP, then
+from frame time `retained-gfx owner+0xb550` (`EngineCtx+0x51b64`), performs an integer bytewise
+current-`+0x60` to target-`+0x64` LERP, then
 commits target, clears timing, writes target `-1`, and clears the active bit once all sibling one-shot
 channels finish. This is ordinary presentation-clock coupling, not op `0x238`'s separate service clock.
-`ctx+0xb55c == 1` forces completion unless the object-local `+0x2d0` override bit is set. `/v2` comments
+`retained-gfx owner+0xb55c == 1` (`EngineCtx+0x51b70`) forces completion unless the object-local
+`+0x2d0` override bit is set. `/v2` comments
 were corrected and saved.
 
 **Port and endpoint diagnosis.** `GfxState` now retains current/target/delay/duration separately, shares
@@ -2041,3 +2043,36 @@ largest repeated non-persistence SC0000 cluster.
 
 Validation: all 206 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, and `git diff --check`
 are clean.
+
+### Slice A2b retained-graphics lifecycle implemented (2026-07-20)
+
+Native RE split the apparent `0x1f6` / `0x20e` pair into two separate services. `0x1f6` clears the retained
+handle-to-object registry without releasing surface resources, and the commonly adjacent `0x23d` stops
+movie bindings and releases transient surface slots 42 through 999. Independently, `0x20d(slot)` selects
+an offscreen Direct3D render target (or the backbuffer for values at least 1000), and `0x20e` clears the
+selected color target to black plus its depth buffer to 1.0.
+
+The VM now models all four operations generically. `GfxState` owns the selected target and distinct
+object/surface lifecycle; the host receives target clears and fixed-range surface release. Godot removes
+modeled offscreen text pixels on clear, stops movies and clears slot-owned resources on the bulk release,
+and continues to rebuild the main retained frame from black. Focused regressions prove object clear
+preserves surfaces for rebinding, target selection reaches both an offscreen slot and the backbuffer, and
+the bulk release preserves system-owned low slots while dropping slot 42.
+
+The trace corrected an older EngineCtx-base assumption: object registry `+0x408`, frame timer `+0xb550`,
+and nearby animation flags are relative to the embedded retained-gfx manager at `EngineCtx+0x46614`.
+Their actual absolute addresses are `EngineCtx+0x46a1c` and `EngineCtx+0x51b64` onward. Existing visible
+graphics and animation implementations remain valid because they model the recovered worker behavior and
+observed timing rather than reading native process addresses.
+
+The canonical opcode and EngineCtx sources are regenerated. `/v2` names/comments the four handlers and
+five supporting workers, and the corrected structure is reapplied before saving. SC0000 is now **121/129
+distinct opcodes handled (93.8%)** and **16,037/16,257 instructions handled or safe-noop (98.6%)**; 206 of
+the 220 remaining effectful-gap instructions are the deliberately deferred `0x1a2` shared-profile writes.
+
+**Next:** investigate/implement the two-call `0x242` retained-object field setter. It is already classified
+as an object `+0x2d0` write and is the smallest coherent non-persistence gap; keep `0x1a2`/`0x1a3`, `0x1ad`,
+and `0x1cb` behind the future profile/save ownership decision.
+
+Validation: all 209 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, the Godot build,
+threaded self-test, and `git diff --check` are clean.

@@ -36,6 +36,8 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public readonly List<int> ClearedRenderTargets = new();
+    public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
@@ -106,6 +108,8 @@ internal class RecordingHost : IHost
     }
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) { }
+    public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);
+    public void ReleaseSurfaceRange(int firstSlot, int count) => ReleasedSurfaceRanges.Add((firstSlot, count));
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     public void PlayBgm(long id) { }

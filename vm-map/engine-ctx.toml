@@ -8,11 +8,6 @@ struct_name = "EngineCtx"
 size = 0xa1000
 
 [[field]]
-offset = 0x408
-name = "gfx_obj_registry"
-type = "int"
-note = "retained gfx-object map (std::map handle->object); geometry/draw get-or-create, 0x215 returns obj+4 source slot, 0x1f7 erases"
-[[field]]
 offset = 0x40c
 name = "sys4ini_count"
 type = "int"
@@ -43,16 +38,6 @@ name = "alt_pack_table"
 type = "int"
 note = "call-script high-byte alternate pack table (unused by corpus)"
 [[field]]
-offset = 0xb558
-name = "gfx_dirty_a"
-type = "int"
-note = "gfx dirty flag (anim set raises)"
-[[field]]
-offset = 0xb560
-name = "gfx_dirty_b"
-type = "int"
-note = "gfx dirty flag"
-[[field]]
 offset = 0x14d54
 name = "gfx_obj_ptr_table"
 type = "void*"
@@ -67,6 +52,26 @@ offset = 0x14f45
 name = "script_frame_index"
 type = "int"
 note = "call-script frame index (0x1e-dword frames)"
+[[field]]
+offset = 0x46188
+name = "renderer_device_state"
+type = "int"
+note = "embedded D3D9 device/render state; op 0x20e passes this base to the target/depth clear worker"
+[[field]]
+offset = 0x46598
+name = "d3d9_device"
+type = "void*"
+note = "IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac"
+[[field]]
+offset = 0x46614
+name = "retained_gfx_manager"
+type = "int"
+note = "embedded retained graphics manager passed by gfx opcode handlers; worker offsets are relative to this base"
+[[field]]
+offset = 0x46a1c
+name = "gfx_obj_registry"
+type = "int"
+note = "retained_gfx_manager+0x408 std::map handle->object; 0x1f6 clears, geometry/draw get-or-create, 0x215 queries, 0x1f7 erases"
 [[field]]
 offset = 0x46d14
 name = "query_table_46d14"
@@ -83,20 +88,45 @@ name = "shared_profile_int_table"
 type = "int"
 note = "open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it"
 [[field]]
+offset = 0x50ba4
+name = "gfx_render_target_table"
+type = "void*"
+note = "retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d"
+[[field]]
 offset = 0x51b64
 name = "frame_timer"
 type = "int"
-note = "frame timer (present updates 0x51b64/0x51b68)"
+note = "frame timer at retained_gfx_manager+0xb550; present updates 0x51b64/0x51b68 and object animation samples it"
 [[field]]
 offset = 0x51b78
 name = "anim_clock_elapsed"
 type = "int"
-note = "global anim clock elapsed (op 0x238 zeroes)"
+note = "global anim clock elapsed at retained_gfx_manager+0xb564; op 0x238 and object reset 0x1f6 zero it"
 [[field]]
 offset = 0x51b7c
 name = "anim_clock_duration"
 type = "int"
-note = "global anim clock total duration (op 0x238 sets)"
+note = "global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it"
+[[field]]
+offset = 0x51b44
+name = "gfx_current_render_target"
+type = "int"
+note = "retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer"
+[[field]]
+offset = 0x51b6c
+name = "gfx_dirty_a"
+type = "int"
+note = "retained_gfx_manager+0xb558 dirty flag; op 0x1f6 clears it"
+[[field]]
+offset = 0x51b70
+name = "gfx_force_complete"
+type = "int"
+note = "retained_gfx_manager+0xb55c requests forced completion of one-shot channels; op 0x1f6 clears it"
+[[field]]
+offset = 0x51b74
+name = "gfx_dirty_b"
+type = "int"
+note = "retained_gfx_manager+0xb560 dirty flag"
 [[field]]
 offset = 0x52bd4
 name = "surfaces"

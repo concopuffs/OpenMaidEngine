@@ -329,6 +329,13 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
 
+### 0x1f6 `clear-retained-gfx-objects` (clear-retained-gfx-objects, argc 0)
+- **summary:** Clear the complete retained gfx-object registry while preserving allocated surface resources. Subsequent object queries return absent until draw/geometry operations recreate records.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1f6_clear_retained_gfx_objects@0x417430 passes ctx+0x46614 to retained_gfx_objects_clear@0x47cab0. The worker destroys every node in owner+0x408, resets its sentinel/count, and clears owner+0xb558/+0xb55c/+0xb564/+0xb568 plus bit 0x10000 state. DATA1: 293 calls in 146 scripts; 146 continue to 0x23d and 143 to 0x20e.
+
+The handler clears the map embedded at retained-gfx owner+0x408, resets its count and transient dirty/force flags, but does not release the 1000 surface slots or clear the separate queued-surface-command list. Corpus call sites pair it either with 0x23d for a full transient-resource reset or with 0x20e for a backbuffer clear.
+
 ### 0x1f7 `gfx-elem-erase` (gfx-elem-erase, argc 2)
 - **summary:** 0x1f7 (handle)(count) — erase retained gfx objects. Handler 0x422270 calls gfx_object_erase_range@0x47d8b0 for [handle,handle+count) when count>1, else gfx_object_erase@0x47d850. This removes entries from the same object map queried by op 0x215, so erased objects stop compositing. SC0000 uses it before op 0x1fa releases the returned surface slot.
 - **grounding:** source=investigation, confidence=high
@@ -365,9 +372,9 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **evidence:** Ghidra /v2: handler gfx_op_0x1ff_set_geom3@0x4227b0 converts operands 2..4 to float and calls gfx_object_set_translation_current@0x47e800. The worker gets/creates the object, marks obj+0x168, and calls matrix4_make_translation on obj+0x16c. SC0000 uses (0,0,0) before animating BG001A. Annotated and saved 2026-07-11.
 
 ### 0x202 `gfx-blit-color` (gfx-blit-color, argc 5)
-- **summary:** 0x202 (handle)(delay_ms)(duration_ms)(alpha)(color) — arm the one-shot packed-ARGB channel. Worker gfx_op_0x202_worker_set_color_anim @0x47ea00 resets shared start obj+0x34, writes delay +0x38, duration +0x4c, and target +0x64. gfx_object_apply_transform_channels @0x472f00 linearly interpolates each byte from current +0x60 on frame clock ctx+0xb550, commits the target, clears timing, writes target -1, and clears the one-shot active bit when all sibling channels finish. Negative alpha/RGB independently preserve current bytes. Implemented in GfxState with synchronized current/target timeline evidence; draw-string 0x204/0x7a remains separate.
+- **summary:** 0x202 (handle)(delay_ms)(duration_ms)(alpha)(color) — arm the one-shot packed-ARGB channel. Worker gfx_op_0x202_worker_set_color_anim @0x47ea00 resets shared start obj+0x34, writes delay +0x38, duration +0x4c, and target +0x64. gfx_object_apply_transform_channels @0x472f00 linearly interpolates each byte from current +0x60 on retained-gfx owner+0xb550 (EngineCtx+0x51b64), commits the target, clears timing, writes target -1, and clears the one-shot active bit when all sibling channels finish. Negative alpha/RGB independently preserve current bytes. Implemented in GfxState with synchronized current/target timeline evidence; draw-string 0x204/0x7a remains separate.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock ctx+0xb550; bytewise integer LERP; natural or ctx+0xb55c forced completion. /v2 annotated and saved 2026-07-10.
+- **evidence:** Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock retained-gfx owner+0xb550 (EngineCtx+0x51b64); bytewise integer LERP; natural or owner+0xb55c (EngineCtx+0x51b70) forced completion. /v2 annotated and saved 2026-07-10.
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
 - **summary:** 0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case.
@@ -392,6 +399,21 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
 
 Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
+
+### 0x20d `select-render-target` (select-render-target, argc 1)
+- **summary:** Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x1c7, 0x1cc
+- **evidence:** Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 and retained-gfx owner ctx+0x46614 to retained_gfx_select_render_target@0x479660. Its D3D calls resolve texture level 0 or backbuffer 0, then invoke device vtable +0x94 SetRenderTarget and store selected slot at owner+0xb530. DATA1: 113 calls in 24 scripts.
+
+For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it.
+
+### 0x20e `clear-render-target` (clear-render-target, argc 0)
+- **summary:** Clear the currently selected render target to black and reset its depth buffer to 1.0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x20e_clear_render_target@0x4174f0 passes renderer ctx+0x46188 to d3d_clear_render_target_black@0x471460. The worker calls device pointer +0x410, vtable +0xac with (0,NULL,3,0,1.0f,0). DATA1: 345 calls in 167 scripts; 57 directly follow 0x20d and 143 directly follow 0x1f6.
+
+This is a target-pixel operation, not retained-object teardown. It invokes IDirect3DDevice9::Clear with zero rectangles, flags D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER (3), color 0, depth 1.0, and stencil 0. The port tracks 0x20d target ownership and forwards the clear to the host; its retained compositor already rebuilds the backbuffer from black.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
 - **summary:** 0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table.
@@ -437,12 +459,12 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **summary:** (source_handle)(destination_handle) - clone the complete retained gfx object record (0xb5 dwords / 0x2d4 bytes). SC0000 uses destination=source+1 as range A's old-frame snapshot immediately before 0x223 crossfades range B's updated source into target handle source+2.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223
-- **evidence:** Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in ctx+0x408 map, creates destination, copies exactly 0xb5 dwords from source object record, then marks ctx+0xb558 dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7.
+- **evidence:** Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker requires source in retained-gfx owner+0x408 (EngineCtx+0x46a1c), creates destination, copies exactly 0xb5 dwords from source object record, then marks owner+0xb558 (EngineCtx+0x51b6c) dirty. SC0000 site 0x128fc passes current handle and handle+1 before queueing 0x223 at 0x129e7.
 
 ### 0x21e `set-anim-transform-norm` (set-anim-transform-norm, argc 6)
-- **summary:** (handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity.
+- **summary:** (handle)(delay_ms)(duration_ms)(sx)(sy)(sz) — set the normalized SCALE-matrix channel (100=identity). Target obj+0xac is linearly sampled from current obj+0x6c by gfx_object_apply_transform_channels@0x472f00 on retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64), after delay and for duration, then committed. Shares only start timestamp obj+0x34 with op 0x220; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and frame-time ctx+0xb550.
+- **evidence:** Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. Consumer 0x472f00 uses delay obj+0x3c, duration obj+0x50, current obj+0x6c, target obj+0xac, shared start obj+0x34, and retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64).
 
 ### 0x21f `set-anim-rotation-axis-angle` (set-anim-rotation-axis-angle, argc 7)
 - **summary:** (handle)(delay_ms)(duration_ms)(axis_x)(axis_y)(axis_z)(angle_deg) — set the delayed one-shot axis-angle rotation channel. Handler converts axis/angle integers to floats; worker stores target axis obj+0x1f8 and angle obj+0x208 and builds target matrix obj+0x12c. gfx_object_apply_transform_channels samples current axis/angle linearly on shared start obj+0x34 and composes T(-anchor)*scale*rotation*translation*T(anchor).
@@ -450,9 +472,9 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **evidence:** Ghidra handler 0x423410 -> gfx_object_set_rotation_channel@0x47eb70; consumer gfx_object_apply_transform_channels@0x472f00 uses delay +0x40, duration +0x54, current axis +0x1ec/angle +0x204, target axis +0x1f8/angle +0x208, current matrix +0xec and target +0x12c. Native SC0000 handle 0xcb8e sample at 11/390 of axis (0,0,1), 30deg matches matrix [0.9055,0.0134;-0.0134,0.9055] and translation (74.1449,47.3127).
 
 ### 0x220 `set-anim-transform-abs` (set-anim-transform-abs, argc 6)
-- **summary:** (handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on frame-time ctx+0xb550, after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity.
+- **summary:** (handle)(delay_ms)(duration_ms)(tx)(ty)(tz) — set the absolute TRANSLATION-matrix channel. Target obj+0x1ac is linearly sampled from current obj+0x16c by gfx_object_apply_transform_channels@0x472f00 on retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64), after delay and for duration, then committed. Independent of op 0x21e scale; neither Z is opacity.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and frame-time ctx+0xb550.
+- **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64).
 
 ### 0x222 `present-gfx-object-range` (present-gfx-object-range, argc 2)
 - **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range and clear their pending update flags.
@@ -464,7 +486,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x21c, 0x1c7, 0x1cc
 - **depended on by:** 0x20c, 0x21c, 0x21d
-- **evidence:** Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from ctx+0xb550 and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7.
+- **evidence:** Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from retained-gfx owner+0xb550 (EngineCtx+0x51b64) and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7.
 
 ### 0x224 `clear-gfx-command-queue` (clear-gfx-command-queue, argc 0)
 - **summary:** Clear the native gfx command queue rooted at ctx+0x418. Host-implicit because the port composites retained state directly.
@@ -497,7 +519,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 ### 0x234 `anim-start` (anim-start, argc 5)
 - **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure cyclic rotation. Worker stores period obj+0x228, start obj+0x214=0, and float axis obj+0x244; each frame uses integer degrees floor(((now-start)%period)*360/period). gfx_object_composite right-multiplies this separately anchored transform after the one-shot scale/rotation/translation product, so cyclic rotation also rotates the translation vector.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on ctx+0xb550 and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second.
+- **evidence:** Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on retained-gfx owner+0xb550 (EngineCtx+0x51b64) and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second.
 
 ### 0x236 `play-movie-to-surface` (play-movie-to-surface, argc 4)
 - **summary:** (resource_id)(surface_slot)(movie_flags)(sync_mask) - synchronously resolve/open an archive movie and construct its DirectShow graph, then start asynchronous frame delivery into the retained destination surface. The opcode itself is non-blocking: the VM advances to the next instruction. SC0000's native site evaluates (0x33, 0, 2, 0) at 0x13c8 and resumes at bytecode 0x13d1; its later 0x21c service boundary yields until movie EOF before cleanup.
@@ -514,6 +536,13 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **summary:** (handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint.
+
+### 0x23d `release-transient-surfaces` (release-transient-surfaces, argc 0)
+- **summary:** Stop movie bindings and release transient gfx surface slots 42 through 999 inclusive, preserving system-owned slots 0 through 41.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x23d_release_transient_surfaces@0x4175c0 loops EDI=42 while EDI<1000, stops/releases ctx+0x52bd4[EDI] movie objects, and calls retained_gfx_release_surface@0x474e40 on owner ctx+0x46614. DATA1: 149 calls in 146 scripts; 146 directly follow 0x1f6.
+
+For each fixed slot in [42,1000), the handler stops/releases the movie-to-texture object at ctx+0x52bd4[slot], then invokes the ordinary retained-gfx surface-release worker. Protected/externally owned slots may be retained by the worker's per-slot guard. This is the resource half of the common 0x1f6/0x23d full-reset sequence.
 
 ### 0x23f `u00422930` (u00422930, argc 2)
 - **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
@@ -1094,10 +1123,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x1f6 `u00416170` (u00416170, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1fe `u004206C0` (u004206C0, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1107,15 +1132,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x207 `u00420B00` (u00420B00, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x20d `u00420E10` (u00420E10, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-- **depends on:** 0x20c, 0x1c7, 0x1cc
-
-### 0x20e `u00416250` (u00416250, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1152,10 +1168,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x23c `u004162B0` (u004162B0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23d `u004162F0` (u004162F0, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

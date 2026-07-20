@@ -962,6 +962,15 @@ public sealed class VirtualMachine
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                     (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
                 return pc + 1;
+            case "clear-retained-gfx-objects": // 0x1f6: erase object records, but preserve surfaces
+                Gfx.ClearRetainedObjects(); return pc + 1;
+            case "select-render-target": // 0x20d: slot <1000 selects a surface; >=1000 restores backbuffer
+                Gfx.SelectRenderTarget(Read(a[0])); return pc + 1;
+            case "clear-render-target": // 0x20e: clear color to black and depth to one
+                _host.ClearRenderTarget(Gfx.CurrentRenderTargetSlot); return pc + 1;
+            case "release-transient-surfaces": // 0x23d: native fixed range [42,1000)
+                Gfx.ReleaseSurfaceRange(42, 1000 - 42);
+                _host.ReleaseSurfaceRange(42, 1000 - 42); return pc + 1;
             case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
             case "play-voice":
                 _autoVoicePending = true;

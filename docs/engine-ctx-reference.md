@@ -6,7 +6,6 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 
 | offset | name | type | note |
 |---|---|---|---|
-| `0x408` | `gfx_obj_registry` | `int` | retained gfx-object map (std::map handle->object); geometry/draw get-or-create, 0x215 returns obj+4 source slot, 0x1f7 erases |
 | `0x40c` | `sys4ini_count` | `int` | SYS4INI record count |
 | `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
 | `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
@@ -15,15 +14,22 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x3028` | `alt_pack_table` | `int` | call-script high-byte alternate pack table (unused by corpus) |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
-| `0xb558` | `gfx_dirty_a` | `int` | gfx dirty flag (anim set raises) |
-| `0xb560` | `gfx_dirty_b` | `int` | gfx dirty flag |
 | `0x14d54` | `gfx_obj_ptr_table` | `void*` | per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c) |
 | `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
 | `0x14f45` | `script_frame_index` | `int` | call-script frame index (0x1e-dword frames) |
+| `0x46188` | `renderer_device_state` | `int` | embedded D3D9 device/render state; op 0x20e passes this base to the target/depth clear worker |
+| `0x46598` | `d3d9_device` | `void*` | IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac |
+| `0x46614` | `retained_gfx_manager` | `int` | embedded retained graphics manager passed by gfx opcode handlers; worker offsets are relative to this base |
+| `0x46a1c` | `gfx_obj_registry` | `int` | retained_gfx_manager+0x408 std::map handle->object; 0x1f6 clears, geometry/draw get-or-create, 0x215 queries, 0x1f7 erases |
 | `0x46d14` | `query_table_46d14` | `void*` | stride-0x14 table read by op 0x216 |
-| `0x51b64` | `frame_timer` | `int` | frame timer (present updates 0x51b64/0x51b68) |
-| `0x51b78` | `anim_clock_elapsed` | `int` | global anim clock elapsed (op 0x238 zeroes) |
-| `0x51b7c` | `anim_clock_duration` | `int` | global anim clock total duration (op 0x238 sets) |
+| `0x50ba4` | `gfx_render_target_table` | `void*` | retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d |
+| `0x51b44` | `gfx_current_render_target` | `int` | retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer |
+| `0x51b64` | `frame_timer` | `int` | frame timer at retained_gfx_manager+0xb550; present updates 0x51b64/0x51b68 and object animation samples it |
+| `0x51b6c` | `gfx_dirty_a` | `int` | retained_gfx_manager+0xb558 dirty flag; op 0x1f6 clears it |
+| `0x51b70` | `gfx_force_complete` | `int` | retained_gfx_manager+0xb55c requests forced completion of one-shot channels; op 0x1f6 clears it |
+| `0x51b74` | `gfx_dirty_b` | `int` | retained_gfx_manager+0xb560 dirty flag |
+| `0x51b78` | `anim_clock_elapsed` | `int` | global anim clock elapsed at retained_gfx_manager+0xb564; op 0x238 and object reset 0x1f6 zero it |
+| `0x51b7c` | `anim_clock_duration` | `int` | global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it |
 | `0x52bd4` | `surfaces` | `void*` | surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate |
 | `0x53d14` | `cur_ctx_index` | `uint` | current script-context index (curCtx); indexes 0x78-byte coroutine/frame records |
 | `0x53d28` | `frame_codebase` | `void*` | current frame codebase (PC = codebase + off*4) |

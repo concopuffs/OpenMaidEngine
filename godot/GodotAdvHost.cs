@@ -593,6 +593,49 @@ public sealed class GodotAdvHost : IHost
         _main.CallDeferred("StopMovie", resourceId);
     }
 
+    public void ClearRenderTarget(int surfaceSlot)
+    {
+        // The retained compositor rebuilds the backbuffer from black at the next publication boundary.
+        // For an offscreen target, discard separately retained text draws so its modeled pixel contents
+        // observe the native D3D clear as well.
+        if (surfaceSlot >= 0)
+            lock (_textLock) _surfaceText.Remove(surfaceSlot);
+        _timeline?.Event("render-target-clear", new() { ["surface"] = surfaceSlot });
+    }
+
+    public void ReleaseSurfaceRange(int firstSlot, int count)
+    {
+        var stoppedMovies = new System.Collections.Generic.HashSet<long>();
+        int end = checked(firstSlot + count);
+        lock (_imageLock)
+        {
+            for (int slot = firstSlot; slot < end; slot++)
+            {
+                if (_movieBySurface.Remove(slot, out long resourceId))
+                {
+                    stoppedMovies.Add(resourceId);
+                    _movieFrames.Remove(resourceId);
+                    _completedMovies.Remove(resourceId);
+                }
+                _slotDims.Remove(slot);
+            }
+        }
+        lock (_textLock)
+        {
+            for (int slot = firstSlot; slot < end; slot++)
+            {
+                _surfaceText.Remove(slot);
+                _surfaceResources.Remove(slot);
+            }
+        }
+        foreach (long resourceId in stoppedMovies)
+        {
+            _timeline?.Event("movie-stop", new() { ["resource"] = resourceId, ["range_release"] = true });
+            _main.CallDeferred("StopMovie", resourceId);
+        }
+        _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
+    }
+
     // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's
     // sample callback: the retained object keeps its surface binding while only the surface pixels change.
     public void PublishMovieFrame(long resourceId, string name, int rawIndex, RgbaImage frame)

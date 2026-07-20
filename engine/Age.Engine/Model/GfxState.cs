@@ -42,7 +42,7 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
-/// native ctx+0x408 map that op 0x215 queries and the geometry get/set ops share. Each object carries a
+/// native retained-gfx owner+0x408 map (EngineCtx+0x46a1c) that op 0x215 queries and the geometry get/set ops share. Each object carries a
 /// slot (returned by 0x215) and three 3-vectors: V18 (set 0x217 / get 0x218, anchor), V24 (set 0x219 /
 /// get 0x21a, position), V16c (set 0x1ff). The native DirectDraw workers are NOT modelled — only the data
 /// the query ops read back, which is all the bytecode geometry math needs.</summary>
@@ -100,7 +100,8 @@ public sealed class GfxState
         public (double X, double Y, double Z, double Angle) RotationTarget;
         public long RotationDelayMs, RotationDurationMs;
         public bool RotationChannelEnabled;
-        // Shared matrix-channel start timestamp obj+0x34, seeded from frame-time ctx+0xb550.
+        // Shared matrix-channel start timestamp obj+0x34, seeded from retained-gfx owner+0xb550
+        // (EngineCtx+0x51b64).
         public long OneShotStartMs = -1;
 
         // Op 0x234 is a separate cyclic rotation channel (period obj+0x228, axis obj+0x244..0x24c).
@@ -117,6 +118,8 @@ public sealed class GfxState
 
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
+    /// <summary>The D3D render target selected by op 0x20d. -1 denotes the main backbuffer.</summary>
+    public int CurrentRenderTargetSlot { get; private set; } = -1;
 
     // ---- Separate global animation service clock (op 0x238; ctx+0x51b7c total / +0x51b78 elapsed).
     // Retained for its opcode family; 0x21e scale and 0x220 translation use frame-time directly instead. ----
@@ -219,12 +222,45 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x1f6: clear every retained gfx-object record without releasing surface resources.</summary>
+    public void ClearRetainedObjects()
+    {
+        lock (_lock)
+        {
+            _objects.Clear();
+            CurrentObject = 0;
+        }
+    }
+
     private readonly object _lock = new();
 
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----
     private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
     private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
     public void SetSurface(int slot, long resId, long colorKey) { lock (_lock) { _surfaces[slot] = (resId, colorKey); } }
+
+    /// <summary>Op 0x20d: select a surface as the D3D render target; values at or above 1000 restore the
+    /// device backbuffer in the native engine.</summary>
+    public void SelectRenderTarget(long slot)
+    {
+        lock (_lock) CurrentRenderTargetSlot = slot is >= 0 and < 1000 ? (int)slot : -1;
+    }
+
+    /// <summary>Op 0x23d: release the transient surface range while retaining system-owned low slots.</summary>
+    public void ReleaseSurfaceRange(int firstSlot, int count)
+    {
+        lock (_lock)
+        {
+            int end = checked(firstSlot + count);
+            for (int slot = firstSlot; slot < end; slot++)
+            {
+                _surfaces.Remove(slot);
+                _surfaceTransitions.Remove(slot);
+            }
+            if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
+                CurrentRenderTargetSlot = -1;
+        }
+    }
 
     /// <summary>Ops 0x202/0x203: record a packed 0xAARRGGBB color/alpha modulation on the object and mark it
     /// HasColor so the compositor applies alpha+tint (vs the opaque default).</summary>
@@ -502,7 +538,7 @@ public sealed class GfxState
     }
 
     /// <summary>Op 0x234: retain the cyclic rotation period and axis separately. Native interpolation uses
-    /// frame-time ctx+0xb550 and rotates through 360 degrees per period; affine rendering is deferred.</summary>
+    /// frame-time retained-gfx owner+0xb550 (EngineCtx+0x51b64) and rotates through 360 degrees per period.</summary>
     public void SetRotationCycle(long handle, long periodMs, (long X, long Y, long Z) axis)
     {
         lock (_lock)
