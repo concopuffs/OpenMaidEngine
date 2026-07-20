@@ -493,6 +493,14 @@ independent matrix channels, not two encodings of one vec3 property.
 - `0x220` passes raw operands 4–6 to `gfx_object_set_translation_channel` (`0x47ecc0`), stores timing at
   `obj+0x44/+0x58`, and calls `0x48afb1`, which writes them into matrix entries 12–14 at
   `obj+0x1ac`: a **translation matrix**.
+- `0x1fe(handle, axis_x, axis_y, axis_z, angle_degrees)` is the immediate-current rotation setter.
+  `op_0x1fe_set_rotation_current` (`0x422700`) converts operands 2–5 to floats and calls
+  `gfx_object_set_rotation_current` (`0x47e720`). The worker stores current axis at
+  `obj+0x1ec..0x1f4`, current angle in degrees at `obj+0x204`, converts the angle to radians, writes the
+  current axis-angle matrix at `obj+0xec`, marks transform state at `obj+0x68`, and raises retained-gfx
+  redraw dirty at manager `+0xb558` (`EngineCtx+0x51b6c`). It is the direct-current companion to
+  `0x21f`, not another timed channel. Of 187 corpus calls, 186 use Z axis `(0,0,1)`; the lone DEBUG call
+  uses Y axis `(0,1,0)`. SC0010 uses immediate `5`, `-5`, and `0` degree Z rotations in a wobble setup.
 - `0x21f` converts operands 4–7 to floats and calls `gfx_object_set_rotation_channel` (`0x47eb70`). It
   stores delay/duration at `obj+0x40/+0x54`, target axis at `obj+0x1f8..0x200`, target angle (degrees)
   at `obj+0x208`, and the target axis-angle matrix at `obj+0x12c`. Current axis/angle are

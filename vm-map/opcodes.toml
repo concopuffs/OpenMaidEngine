@@ -4723,38 +4723,38 @@ argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004206C0"
-category = "unknown"
-summary = ""
+name = "set-current-rotation-axis-angle"
+category = "draw"
+summary = "(handle)(axis_x)(axis_y)(axis_z)(angle_degrees) — immediately replace the retained object's current axis-angle rotation matrix. This is the direct-current companion to op 0x21f's delayed one-shot rotation target."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1fe_set_rotation_current@0x422700 converts operands 2..5 to float and calls gfx_object_set_rotation_current@0x47e720. The worker gets/creates the handle, marks transform state at obj+0x68, stores current axis obj+0x1ec..0x1f4 and angle degrees obj+0x204, converts degrees to radians with pi/180, builds the current matrix at obj+0xec through matrix4_make_axis_angle, and sets retained-gfx redraw dirty owner+0xb558 (EngineCtx+0x51b6c). The finite-channel consumer composes this current matrix between scale and translation. Corpus: 186/187 calls use Z axis (0,0,1); the lone DEBUG call uses Y axis (0,1,0)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "object handle"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "rotation axis X"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "rotation axis Y"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "rotation axis Z"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "angle degrees"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

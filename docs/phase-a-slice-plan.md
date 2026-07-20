@@ -2132,3 +2132,23 @@ normal-path no-ops for `0xae` or a transient-only `ReadTextSkip` setting.
 
 Validation: 213 engine tests pass; opcode and EngineCtx generators/tests/lints, SC0000 coverage, vm0
 RECOVER, the zero-warning Godot build, threaded self-test, and `git diff --check` are clean.
+
+### Slice A2b opcode `0x1fe` immediate rotation classified (2026-07-20)
+
+Native RE resolves `0x1fe(handle, axis_x, axis_y, axis_z, angle_degrees)` as the retained-object
+immediate-current axis-angle rotation setter. The handler converts its four numeric operands to floats;
+the worker stores the current axis and degree angle, rebuilds the current rotation matrix, and raises the
+ordinary retained-gfx redraw flag. It neither creates a timed transition nor writes `0x21f`'s target
+fields: it is rotation's direct-current companion to the implemented `0x1fd` current-scale setter.
+
+Corpus use reinforces the decode: 186 of 187 calls use Z axis `(0,0,1)`, with only a DEBUG call using Y
+axis `(0,1,0)`. SC0010's five sites include immediate `5`, `-5`, and `0` degree Z rotations in a wobble
+sequence; SC0020 and SC0030 add six and three sites respectively. The port already retains
+`RotationCurrent` and composes it in native matrix order, so implementation should be a narrow generic
+`GfxState` current-rotation setter plus VM dispatch and focused tests. No runtime implementation is claimed
+by this investigation.
+
+**Next:** implement `0x1fe` through the existing retained-transform model. It requires no new host API,
+storage backend, seed, or script-specific behavior.
+
+Validation: opcode source regenerated; opcode tests/lint and `git diff --check` are clean.

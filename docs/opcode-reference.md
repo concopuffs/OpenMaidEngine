@@ -371,6 +371,11 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches operands 2..4, divides each by the 100.0 constant, and calls gfx_object_set_scale_current@0x47e6b0. The worker gets/creates the object, marks obj+0x68, and calls matrix4_make_scale on obj+0x6c. SC0000 sets AE001D handles to 210/210/100 and 240/240/100; without this setter their 800x800 alpha circles remain below the viewport. Both functions annotated and /v2 saved 2026-07-11.
 
+### 0x1fe `set-current-rotation-axis-angle` (u004206C0, argc 5)
+- **summary:** (handle)(axis_x)(axis_y)(axis_z)(angle_degrees) — immediately replace the retained object's current axis-angle rotation matrix. This is the direct-current companion to op 0x21f's delayed one-shot rotation target.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1fe_set_rotation_current@0x422700 converts operands 2..5 to float and calls gfx_object_set_rotation_current@0x47e720. The worker gets/creates the handle, marks transform state at obj+0x68, stores current axis obj+0x1ec..0x1f4 and angle degrees obj+0x204, converts degrees to radians with pi/180, builds the current matrix at obj+0xec through matrix4_make_axis_angle, and sets retained-gfx redraw dirty owner+0xb558 (EngineCtx+0x51b6c). The finite-channel consumer composes this current matrix between scale and translation. Corpus: 186/187 calls use Z axis (0,0,1); the lone DEBUG call uses Y axis (0,1,0).
+
 ### 0x1ff `set-current-translation` (set-gfx-geom3-c, argc 4)
 - **summary:** 0x1ff (handle)(x)(y)(z) — immediately replace the retained object's current translation matrix at obj+0x16c. This is the direct-current companion to 0x220's delayed target at obj+0x1ac.
 - **grounding:** source=investigation, confidence=high
@@ -1129,10 +1134,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1c8 `toString` (toString, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x1fe `u004206C0` (u004206C0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x205 `u00420A60` (u00420A60, argc 6)
 - **summary:** —
