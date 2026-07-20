@@ -868,7 +868,11 @@ public sealed class VirtualMachine
                 int flags = (int)Read(a[2]);
                 if ((flags & 4) == 0 && TextHistory.TryBuildRenderBatch(
                         (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), out var batch))
-                    _host.RenderTextHistory(batch);
+                    _host.RenderTextHistory(batch with
+                    {
+                        // Native History uses the text manager's current leading, not a retained-record field.
+                        Style = batch.Style with { LineSpacing = _advTextStyle.LineSpacing }
+                    });
                 return pc + 1;
             }
             case "u0041BB90":
@@ -891,6 +895,9 @@ public sealed class VirtualMachine
                 _advTextStyle = _advTextStyle with { PrimaryFontSize = (int)Read(a[0]) }; return pc + 1;
             case "set-ruby-font-size":
                 _advTextStyle = _advTextStyle with { RubyFontSize = (int)Read(a[0]) }; return pc + 1;
+            case "u0041B3D0":
+            case "set-text-line-spacing":
+                _advTextStyle = _advTextStyle with { LineSpacing = (int)Read(a[0]) }; return pc + 1;
             case "set-font-bold":
                 _advTextStyle = _advTextStyle with { Bold = Read(a[0]) != 0 }; return pc + 1;
             case "set-text-color":

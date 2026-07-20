@@ -630,6 +630,7 @@ public partial class Main : Godot.Control
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
         label.AddThemeColorOverride("font_outline_color", RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f)));
+        label.AddThemeConstantOverride("line_spacing", style.LineSpacing);
         int outline = style.RenderMode == 0 ? 0 : System.Math.Max(1,
             System.Math.Max(System.Math.Abs(style.EffectOffsetX), System.Math.Abs(style.EffectOffsetY)));
         label.AddThemeConstantOverride("outline_size", outline);

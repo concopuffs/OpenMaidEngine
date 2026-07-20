@@ -55,6 +55,11 @@
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x85_handler@0x4163d0 calls text_history_clear@0x455d70 on the text manager. The worker destroys the 0x48-byte record vector and clears the 8-byte logical index vector. Corpus: two sites in each of 143 normal ADV scripts bracket the retained backlog lifetime.
 
+### 0x8b `set-text-line-spacing` (u0041B3D0, argc 1)
+- **summary:** (pixels) - set the extra pixel spacing added between text lines.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x8b_set_text_line_spacing@0x41f270 stores operand 1 at text manager +0x560 (ctx+0x14ea0). adv_text_manager_initialize@0x456800 defaults it to 6. Horizontal newline/history paths at 0x456fd0/0x452970 advance y by (+0x560 - primary LOGFONT.lfHeight); lfHeight is negative, so this is font pixel height plus configured leading. Corpus arguments are 8 for 22/24px Mincho blocks and 9 for 16px Gothic blocks.
+
 ### 0x197 `set-ruby-font-size` (set-ruby-font-size, argc 1)
 - **summary:** (pixels) - set the secondary/ruby text font height and rebuild its native rasterization state.
 - **grounding:** source=investigation, confidence=high
@@ -812,10 +817,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x80 `u0041AF00` (u0041AF00, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x8b `u0041B3D0` (u0041B3D0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

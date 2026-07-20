@@ -1899,3 +1899,30 @@ gap. Keep `0x1cb` deferred, and treat `0x1ce`/`0x20a` together as their own spri
 
 Validation: all 205 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
 Godot build has zero warnings, and threaded `SELFTEST OK`.
+
+### ADV History text line spacing implemented (2026-07-19)
+
+Native RE resolves the two remaining `0x8b` calls as text-manager line leading. The handler writes its
+single pixel count to manager offset `+0x560` (`EngineCtx+0x14ea0`), whose initializer default is 6.
+Horizontal newline and History rendering add that value to the primary font's positive pixel height; the
+script's concrete style blocks use 8 pixels with their 22/24-pixel Mincho fonts and 9 with a 16-pixel
+Gothic font.
+
+The VM now retains that current style property, Godot applies it as the Label `line_spacing` theme
+constant, and History rendering matches native ownership: line spacing comes from the text manager's
+current state rather than from the retained record. A focused regression distinguishes a record retained
+with spacing 9 from the current History spacing 8, and the real HISTORY route requires all non-empty rows
+to render with its setup value of 8.
+
+The canonical opcode and EngineCtx sources are regenerated. The `/v2` handler and all supporting
+initializer/line-advance functions are named and commented, the expanded 58-field `EngineCtx` is reapplied,
+and the program is saved. HISTORY is now 75/78 distinct opcodes and 851/854 instructions handled or
+safe-noop. The remaining instructions are paired sprite-animation service ops `0x1ce`/`0x20a` and the
+deferred Read-message Skip setting getter `0x1cb`.
+
+**Next:** investigate and implement `0x1ce`/`0x20a` together as the final non-persistence History support
+slice. Keep `0x1cb` deferred until the global save/profile storage boundary is chosen.
+
+Validation: all 205 engine tests pass, including four focused History presentation cases; opcode and
+EngineCtx tests/lints are clean, vm0 RECOVER passes, the Godot build has zero warnings, and threaded
+`SELFTEST OK`.

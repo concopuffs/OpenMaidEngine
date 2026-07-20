@@ -16,6 +16,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0xb558` | `gfx_dirty_a` | `int` | gfx dirty flag (anim set raises) |
 | `0xb560` | `gfx_dirty_b` | `int` | gfx dirty flag |
 | `0x14d54` | `gfx_obj_ptr_table` | `void*` | per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c) |
+| `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
 | `0x14f45` | `script_frame_index` | `int` | call-script frame index (0x1e-dword frames) |
 | `0x46d14` | `query_table_46d14` | `void*` | stride-0x14 table read by op 0x216 |
 | `0x51b64` | `frame_timer` | `int` | frame timer (present updates 0x51b64/0x51b68) |

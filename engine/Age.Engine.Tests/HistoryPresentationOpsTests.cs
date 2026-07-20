@@ -17,7 +17,7 @@ public class HistoryPresentationOpsTests
         history.DefineLayout(1, 640, 160, 80, 430);
         history.AppendMetadata(9, 2, AdvTextStyle.Default);
         history.AppendText(0, 10, "retained dialogue", new AdvTextStyle(24, 8, false,
-            0xffffff, 0x606060, 3, 1, 1));
+            0xffffff, 0x606060, 3, 1, 1, 9));
         history.ResetLayout(1);
         history.AppendText(0, 11, "next group", AdvTextStyle.Default);
         history.SetRecordingEnabled(false);
@@ -29,6 +29,7 @@ public class HistoryPresentationOpsTests
             {
                 (0x198, new[] { I(4), I(65), I(150) }),
                 (0x7a, new[] { I(4), I(45), I(42) }),
+                (0x8b, new[] { I(8) }),
                 (0x1d1, new[] { I(4), I(0), I(0), I(0), I(0) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
@@ -41,8 +42,9 @@ public class HistoryPresentationOpsTests
         Assert.Equal((4, 0, "retained dialogue"),
             (render.LayoutSlot, render.FirstRecordIndex, render.Text));
         Assert.Equal(new AdvTextLayoutSnapshot(4, 600, 150, 65, 150, 45, 42), render.Layout);
-        Assert.Equal((24, 0xffffffL, 0x606060L),
-            (render.Style.PrimaryFontSize, render.Style.TextColor, render.Style.EffectColor));
+        Assert.Equal((24, 0xffffffL, 0x606060L, 8),
+            (render.Style.PrimaryFontSize, render.Style.TextColor, render.Style.EffectColor,
+             render.Style.LineSpacing));
     }
 
     [Fact]
@@ -97,6 +99,8 @@ public class HistoryPresentationOpsTests
 
         Assert.NotEqual("step-cap", result.Halt);
         Assert.Contains(host.HistoryRenders, render => render.Text.Length > 0);
+        Assert.All(host.HistoryRenders.Where(render => render.Text.Length > 0),
+            render => Assert.Equal(8, render.Style.LineSpacing));
         Assert.Contains(host.PresentedRanges, range => range == (0L, 60000L));
     }
 }

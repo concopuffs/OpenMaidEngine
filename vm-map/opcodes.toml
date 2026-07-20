@@ -1405,18 +1405,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B3D0"
-category = "unknown"
-summary = ""
+name = "set-text-line-spacing"
+category = "adv"
+summary = "(pixels) - set the extra pixel spacing added between text lines."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x8b_set_text_line_spacing@0x41f270 stores operand 1 at text manager +0x560 (ctx+0x14ea0). adv_text_manager_initialize@0x456800 defaults it to 6. Horizontal newline/history paths at 0x456fd0/0x452970 advance y by (+0x560 - primary LOGFONT.lfHeight); lfHeight is negative, so this is font pixel height plus configured leading. Corpus arguments are 8 for 22/24px Mincho blocks and 9 for 16px Gothic blocks."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "extra line spacing in pixels"
 observed_types = ["imm"]
 
 [[opcode]]

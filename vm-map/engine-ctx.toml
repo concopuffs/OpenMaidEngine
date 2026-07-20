@@ -58,6 +58,11 @@ name = "gfx_obj_ptr_table"
 type = "void*"
 note = "per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c)"
 [[field]]
+offset = 0x14ea0
+name = "text_line_spacing"
+type = "int"
+note = "extra pixel leading between text lines; defaults to 6, op 0x8b writes it"
+[[field]]
 offset = 0x14f45
 name = "script_frame_index"
 type = "int"

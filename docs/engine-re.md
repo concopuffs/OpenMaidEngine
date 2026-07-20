@@ -1700,6 +1700,31 @@ inventing unsigned behavior. `/v2` names/comments this mount/load/open chain and
 
 ---
 
+### ADV text line spacing -- opcode `0x8b` (2026-07-19)
+
+`op_0x8b_set_text_line_spacing@0x41f270` stores its single operand at ADV text-manager offset
+`+0x560`, or `EngineCtx.text_line_spacing` (`ctx+0x14ea0`). This is pixel leading, not a font face,
+weight, or effect selector. `adv_text_manager_initialize@0x456800` gives it a native default of 6.
+
+The horizontal line-break path (`adv_text_append_line_break_horizontal@0x456fd0`) and retained History
+renderer (`text_history_render_records@0x452970`) pass `manager+0x560 - manager+0x4cc` as the line
+advance. Offset `+0x4cc` is the primary `LOGFONT.lfHeight`, which AGE stores as a negative pixel height,
+so the effective pitch is `font pixel height + text_line_spacing`. The corresponding vertical-writing
+path uses the same pitch to move to the next column. Corpus values support that interpretation: scripts
+pair 8 pixels with 22/24-pixel Mincho text and 9 pixels with 16-pixel Gothic text.
+
+History records do not snapshot the `+0x560` field. `text_history_append_text_record@0x456000` retains
+font, color, effect, geometry, flags, and string state, while `text_history_render_records` reads the
+manager's current line spacing when it encounters a retained line-break marker. The port therefore keeps
+line spacing in the current ADV style manager and overrides a History render batch with that current value;
+the individual record continues to supply its retained font/color/effect fields.
+
+The `/v2` image names/comments the handler, manager initializer, horizontal/vertical line-break paths, and
+their low-level cursor-advance helpers. The regenerated 58-field `EngineCtx` is applied and the program is
+saved.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.
