@@ -36,19 +36,16 @@ public class GfxCommandBufferTests
         Assert.Equal(30, vm.Globals[7]);
     }
 
-    private static (int, Operand[]) Register(int handle) => (0x1a2, new[] { G(handle) });
-
     [Fact]
     public void QueryReturnsZeroForCreatedUnboundObject_ThenBoundSourceSlot()
     {
         // Op 0x215 returns obj+4 from the retained gfx object. Native initialization leaves an unbound object's
-        // field at zero; op 0x1a2 is unrelated. Draw-texture replaces it with the bound source slot.
+        // field at zero. Draw-texture replaces it with the bound source slot.
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
             MovGI(1, 0xcb2a), MovGI(2, 6), MovGI(3, 0), MovGI(4, 200),
             SetGeom3(1, 3, 3, 3),
-            Register(1),
             Query(10, 1),
             (0x1fb, new[] { G(1), G(2), I(0), I(0), G(4), G(4), G(3), G(3) }),
             Query(11, 1), Exit(),

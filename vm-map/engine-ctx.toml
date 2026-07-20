@@ -73,6 +73,16 @@ name = "query_table_46d14"
 type = "void*"
 note = "stride-0x14 table read by op 0x216"
 [[field]]
+offset = 0x4d7c
+name = "shared_profile_state"
+type = "void*"
+note = "embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata"
+[[field]]
+offset = 0x5190
+name = "shared_profile_int_table"
+type = "int"
+note = "open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it"
+[[field]]
 offset = 0x51b64
 name = "frame_timer"
 type = "int"
@@ -222,6 +232,11 @@ offset = 0x5f6b8
 name = "timed_callback_script_resource_guard"
 type = "uint"
 note = "companion current-script identity checked before redirecting to a scheduled callback"
+[[field]]
+offset = 0x5f6c0
+name = "value_switch_table"
+type = "int"
+note = "temporary formatted-value branch table reset by 0xa1, populated by 0xa2, queried by 0xa3; distinct from shared_profile_int_table"
 [[field]]
 offset = 0x5f72c
 name = "adv_wait_indicator_frame"

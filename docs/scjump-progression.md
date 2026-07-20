@@ -41,14 +41,12 @@ Run: `py -3.11 -X utf8 tools/scjump_decode.py --verify`.
 
 ## The native decision→scene boundary (deferred)
 A FIELD snippet does `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`, which the spec
-guessed was the scene resolver. **Correction (refined 2026-07-20, via Ghidra):** `u00428010` (op `0x1a2`)
-registers an operand's current value under a `"%c%8.8x"` key derived from its lvalue descriptor in a
-separate open-addressing table. Its write of 3 at `ctx+0x53d88` is the instruction length, not a gfx
-command type. So that snippet is a **value-registration operation, not the
-decision→scene dispatch**. The real decision→scene mechanism is **still unidentified** and belongs with
-the call-script / script-load dispatch (`name-resolution.md §1`). See `docs/engine-re.md` for the
-verified handler analysis, including the explicit note that the port's legacy inert `GfxState` approximation
-is not a faithful implementation, and the opcode-dispatch table that will crack call-script next.
+guessed was the scene resolver. **Correction (resolved 2026-07-20, via Ghidra):** `u00428010` (op `0x1a2`)
+snapshots that selected global integer array cell into the shared `SAVE.DAT` profile table, keyed by its
+resolved global-bank index. Paired op `0x1a3` restores a selected cell or zero. Its write of 3 at
+`ctx+0x53d88` is only the instruction length. So this is **profile persistence, not decision→scene
+dispatch**; scene loading remains the separate call-script/progression mechanism. See `docs/engine-re.md`
+for the verified pair, shared-save serialization path, and explicit port deferral boundary.
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).

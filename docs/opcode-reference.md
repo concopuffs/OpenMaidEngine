@@ -288,12 +288,19 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
 
-### 0x1a2 `register-lvalue-value` (gfx-cmd-register, argc 1)
-- **summary:** 0x1a2 (value) — register operand 1's current value under a key derived from its lvalue descriptor in the open-addressing table at ctx+0x5190. The write of 3 at ctx+0x53d88 is only this instruction's encoded dword length, not a graphics command type. This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query it. NOT save/scene.
+### 0x1a2 `store-shared-profile-int` (store-shared-profile-int, argc 1)
+- **summary:** 0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. The key is `3%08x`, where the address is resolved through global/local pointer operands; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra: handler 0x42d360 fetches operand 1's value and lvalue descriptor separately, formats the descriptor key, then calls FUN_0042cf70. By contrast op 0x215 passes ctx+0x46614 to gfx_object_query_source_slot@0x47f280, which searches the retained object map and returns obj+4.
+- **evidence:** Ghidra /v2: op_0x1a2_store_shared_profile_int@0x42d360 reads operand 1 with vm_operand_fetch, resolves its cell index with vm_operand_lvalue (accepted types 3/6/0xc), formats `3%08x`, and calls hash_table_insert_or_assign with ECX=ctx+0x5190. shared_profile_payload_write@0x430a20 serializes each 12-byte key plus 32-bit value to SAVE.DAT. Corpus: 17,585 calls in 315 scripts; 17,539 use local-ptr after lookup-array and 46 use global-int.
 
-Port status (2026-07-20): not faithfully implemented. The legacy gfx-cmd-register dispatch currently adds only the operand's numeric value to an otherwise runtime-unread HashSet in GfxState; it neither preserves the native descriptor key nor models a known consumer. Do not treat its presence in the VM switch or coverage's impl bucket as semantic completion. The native table's consumer must be identified before choosing the correct host subsystem.
+Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-20): deliberately unimplemented pending the unified shared-profile storage boundary; the former inert GfxState HashSet approximation was removed so coverage reports the gap.
+
+### 0x1a3 `load-shared-profile-int` (load-shared-profile-int, argc 1)
+- **summary:** 0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same `3%08x` cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. DATA1 corpus: 73 calls in 12 scripts, 42 local-ptr and 31 global-int.
+
+This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-20): deliberately unimplemented with 0x1a2 pending the unified shared-profile storage boundary.
 
 ### 0x1ad `mark-save-resume-frame` (mark-save-resume-frame, argc 0)
 - **summary:** Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself.
@@ -1014,10 +1021,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1a1 `u0041CB40` (u0041CB40, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x1a3 `string-lookup-set` (string-lookup-set, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x1a5 `set-font` (set-font, argc 1)
 - **summary:** —

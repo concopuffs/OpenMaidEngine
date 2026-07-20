@@ -115,11 +115,6 @@ public sealed class GfxState
     // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
     private readonly Dictionary<long, GfxObject> _objects = new();
 
-    // ---- opcode 0x1a2's operand-descriptor registry. Native op 0x1a2 hashes the lvalue descriptor string;
-    // it is separate from the retained-object map queried by op 0x215. We retain membership for diagnostics
-    // and teardown parity, but it does not make an undrawn gfx object queryable as a surface slot. ----
-    private readonly HashSet<long> _operandRegistry = new();
-
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
 
@@ -181,10 +176,6 @@ public sealed class GfxState
         }
     }
 
-    /// <summary>Op 0x1a2: retain the operand's current value in the separate descriptor registry. This does
-    /// not populate the retained-object map used by op 0x215.</summary>
-    public void Register(long handle) { lock (_lock) { _operandRegistry.Add(handle); } }
-
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
 
     /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
@@ -204,7 +195,6 @@ public sealed class GfxState
             if (_objects.TryGetValue(handle, out var obj) && obj.SourceSlot == fromSlot)
                 obj.SourceSlot = toSlot;
     }
-    public bool IsRegistered(long handle) { lock (_lock) { return _operandRegistry.Contains(handle); } }
     public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
 
     public void Release(long handle)
@@ -212,7 +202,6 @@ public sealed class GfxState
         lock (_lock)   // re-entrant: EraseRange already holds _lock
         {
             _objects.Remove(handle);
-            _operandRegistry.Remove(handle);
         }
     }
 

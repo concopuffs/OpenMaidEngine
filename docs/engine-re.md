@@ -146,39 +146,52 @@ decompile `ctx->cur_ctx_index` / `ctx->frame_instruction_word_count` / `ctx->run
 
 ## Findings
 
-### op `0x1a2` (`u00428010`) is a value/descriptor registration op — NOT save, NOT decision→scene (corrected 2026-07-20)
+### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
 
 The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong**,
-and pinning the *real* handler via the dispatch table above corrects two layers of confusion:
+and pinning the real handler plus its paired reader resolves the service:
 
 - **VA-drift trap:** Kelebek's `u00428010` = op `0x1a2`. But Kelebek's raw VA `0x428010`, in *our*
   build, sits inside a *different* handler `0x427fb0`, which is **op `0x1ac`** (per the table:
   `ctx[0x26e3f]=0x427fb0`). Op `0x1ac` is a **save-path** op — its handler formats
   `%s\SAVE%2.2d.DAT` (format string `0x571e70`) and is multi-operand. Reading the raw VA gave the
   wrong opcode.
-- **Op `0x1a2`'s real handler = `FUN_0042d360`** (`= ctx[0x26c93+0x1a2] = ctx[0x26e35]`), argc 1. It
-  records the generic **3-dword instruction length** at `ctx+0x53d88 + curCtx*0x78`, fetches operand 1,
-  formats a key with `"%c%8.8x"` (format string `0x5714e0`) from `(type 3, operand lvalue descriptor)`,
-  and inserts the operand's current value into the separate open-addressing table at `ctx+0x5190`.
-  The old graphics classification came entirely from misreading the instruction-length field as a
-  command type. The handler is still definitively not save or scene-load.
-- **Consequence — the decision→scene premise is discredited.** The FIELD snippet
-  `lookup(0x5f0ed, 0x62ccf); mov(ptr,1); lookup(0x5f0ed, 0x62ccf); u00428010(ptr)` (next op `0x21b`,
-  also outside the scene loader) is a **value-registration operation**, not scene sequencing. So `u00428010` does **not**
-  resolve decision→scene. **The real decision→scene mechanism is unidentified** — it belongs with the
-  call-script / script-load dispatch (`name-resolution.md §1`), the next target for this loop (now
-  armed with the dispatch table to resolve the call-script handler directly).
+- **`0x1a2` = store.** `op_0x1a2_store_shared_profile_int@0x42d360` records the generic three-dword
+  instruction length, reads operand 1's current raw 32-bit value, and resolves its actual cell index with
+  `vm_operand_lvalue`. That accessor accepts a direct global integer (type 3), global pointer (type 6), or
+  local pointer (type `0xc`); pointer forms resolve to an index relative to the global integer bank. The
+  handler formats the key `3%08x` and insert-or-assigns the value in the table at `ctx+0x5190`.
+- **`0x1a3` = load.** `op_0x1a3_load_shared_profile_int@0x427e90` resolves the identical cell index,
+  calls `shared_profile_int_lookup@0x4199d0`, and writes the result back through `vm_operand_write`.
+  A missing key returns **zero**. The old `string-lookup-set` label described neither its type nor effect.
+- **The consumer is shared `SAVE.DAT`.** `shared_profile_payload_write@0x430a20` enumerates this table
+  and writes its entry count followed by one 12-byte key and one 32-bit value per entry. It is invoked by
+  `shared_profile_save@0x40c950`. `shared_profile_payload_read@0x431070`, called by
+  `shared_profile_load@0x40ccd0`, reconstructs the same table with insert-or-assign. Numbered
+  `SAVE##.DAT` paths use the surrounding state object only for container metadata/timing; they do not
+  enumerate this table. `RT.DAT` independently stores `ReadTextDB`.
+- **The generic hash helper caused the earlier conflation.** `hash_table_insert_or_assign@0x42cf70` and
+  `hash_table_find_value_ptr@0x419290` operate on whichever table ECX selects. `0x1a2` selects
+  `ctx+0x5190`; value-switch ops `0xa2`/`0xa3` select the distinct temporary table at `ctx+0x5f6c0`;
+  engine settings and text caches use still other instances.
+- **Corpus shape matches profile persistence.** The corpus has 17,585 `0x1a2` calls in 315 scripts:
+  17,539 operate on a local pointer immediately resolved by `lookup-array`, while 46 name a global cell
+  directly. The paired `0x1a3` appears 73 times in 12 scripts. `LOADCONFIG.BIN` restores configuration
+  globals with consecutive loads; `SYSTEM4.BIN` stores its initialized-config flag; gameplay and ADV
+  scripts store selected array cells rather than the whole VM global bank.
 
-**Port audit consequence (2026-07-20): `0x1a2` is not faithfully implemented.** The VM still dispatches
-the opcode through its legacy `gfx-cmd-register` label to `GfxState.Register(Read(a[0]))`. That method adds
-only the operand's current numeric value to `_operandRegistry`, a `HashSet<long>`; it does not retain the
-lvalue descriptor key used by AGE. `IsRegistered` has no runtime callers, so the set currently has no
-gameplay or rendering effect (and its removal during gfx-object erase is likewise inert). Therefore this
-mistake does **not** invalidate the completed retained-object, animation, History, or ADV work, whose
-semantics came from independent workers/fields/traces. It does mean the opcode table's syntactic `impl`
-classification overstates compatibility for `0x1a2`: keep it as explicit follow-up debt until the native
-descriptor table's consumer is identified, then move the model out of `GfxState` and preserve descriptor→value
-semantics in the appropriate VM/service subsystem.
+**Port verdict: semantics solved, persistence implementation deferred.** The old unread `GfxState`
+`HashSet` and legacy VM handler have been removed, so both opcodes now appear as effectful gaps rather than
+false implementations. A faithful service needs a profile-owned `global-cell-index → raw-int32` map shared
+across VM/script lifetimes, with `0x1a2` upsert and `0x1a3` load-or-zero, then a deliberate persistence
+boundary. The current `GameSession` JSON serializes the entire global bank, which can accidentally preserve
+some values but cannot reproduce AGE's selected-cell restore/reset lifecycle. Do not add another ad-hoc JSON
+field until the unified shared `SAVE.DAT`/`RT.DAT`/numbered-save architecture chooses ownership and migration.
+This deferral is now explicit in opcode coverage; it is not a safe-noop claim.
+
+The FIELD snippet `lookup(0x5f0ed, 0x62ccf); mov(ptr,1); lookup(...); 0x1a2(ptr)` therefore persists that
+selected global array cell to the shared profile. It does not resolve decision→scene; scene dispatch remains
+the separate call-script/progression path documented in `name-resolution.md` and `scjump-progression.md`.
 
 **Lesson:** never analyze a native op by its Kelebek `u00XXXXXX` VA directly — always resolve the real
 handler through the dispatch table (`ctx[0x26c93 + op]`). The raw VA is off by whole functions.
@@ -244,7 +257,7 @@ VA-drift — it lands inside the unrelated `FUN_00421090`. Same lesson as `0x1a2
 2. **`out = FUN_0047f280(FUN_0041b940(2))`** — `FUN_0041b940(2)` fetches operand 2 (the bytecode handle
    key); `FUN_0047f280` is a **`std::map::find`** over an engine-internal associative registry, returning
    the mapped value or **`0xffffffff` (not-found)**; `FUN_00425fb0(1, out)` writes it to operand 1. That
-   registry is populated by the retained-object draw/geometry workers. Op `0x1a2`'s descriptor-value
+   registry is populated by the retained-object draw/geometry workers. Op `0x1a2`'s shared-profile integer
    table is separate and does not populate this map.
 
 **(a) vs (b) — the verdict is (b).** The value `0x215` returns is **native retained-object state**: "has a
@@ -263,7 +276,7 @@ probe never observed. Absence in that capture therefore says nothing about the n
 **The fix is tractable and Frida-free.** (b) does *not* mean an opaque native state machine. The subsystem
 is a **modelable data structure**: retained object records (slot / geometry / draw state) behind a
 handle→object registry (a `std::map`). Geometry and draw workers lazily populate that retained-object map;
-query and erase workers read/remove the same entries. Op `0x1a2` also maintains a descriptor-value hash,
+query and erase workers read/remove the same entries. Op `0x1a2` also maintains a shared-profile integer table,
 but that is a separate structure and is not what op `0x215` queries. The opcode-level source of truth is
 `vm-map/opcodes.toml`.
 
@@ -280,7 +293,7 @@ The decisive caller/callee detail is the owner pointer. Op `0x215`'s handler pas
 - draw-bound object → `0x215` returns the live source slot from `obj+4`.
 
 The earlier “op `0x215` reads a registry populated only by `0x1a2`” conclusion was wrong: it conflated
-the retained-object `std::map` with `0x1a2`'s open-addressing operand-descriptor hash. The useful part of
+the retained-object `std::map` with `0x1a2`'s open-addressing shared-profile integer table. The useful part of
 the earlier fix remains: `GetOrCreate` must not fabricate a slot. A fresh object stays unbound (-1) until
 `draw-texture` supplies its real source slot.
 
@@ -1271,6 +1284,10 @@ Persistence is shared across numbered save slots. `shared_profile_save@0x40c950`
 `RT.DAT` when present. Numbered saves use the separate `SAVE%2.2d.DAT` pattern. A successful context/slot
 save calls the shared-profile writer, and shutdown also calls it unless `set:NoSaveDat` suppresses shared
 data writes.
+
+The selected integer-cell portion of shared `SAVE.DAT` is the `0x1a2` store / `0x1a3` restore service
+documented above. It is independent of the `RT.DAT` read-message database even though the shared-profile
+writer updates both files in one lifecycle.
 
 The `RT.DAT` header is `0x114` bytes: magic `0x54523353` (bytes `S3RT`), a compatibility id, a 256-byte
 game id, version pair `1,0`, and script-record count. It is followed by 12-byte script records containing

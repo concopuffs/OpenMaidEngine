@@ -296,8 +296,8 @@ SECOND half"; don't duplicate here):
 1. **Native gfx ops (b):** the retained-object command-buffer ops (`0x1f7`,`0x1fa`,`0x1ff`,`0x202`,`0x203`,
    `0x212`,`0x213`,`0x215`–`0x21a`) were reversed + implemented against a host-side `GfxState` (VM execution
    state; `engine/Age.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots. **Correction
-   (2026-07-20):** `0x1a2` never belonged to this family; its current inert `GfxState` approximation is not a
-   faithful implementation. See `docs/engine-re.md` § op `0x1a2` for the compatibility-debt audit.
+   (2026-07-20):** `0x1a2` never belonged to this family; it is the shared `SAVE.DAT` integer-store half
+   paired with `0x1a3`, and its inert `GfxState` approximation has been removed. See `docs/engine-re.md`.
 2. **Missing system-boot state (a):** the CG handle array `G[0x62455..]` is set by boot script **INIT2**
    (via entrypoint `SYSTEM4.BIN`), which a cold single-scene run skips → all CGs collapsed onto object 0.
    Supplied via **`Age.Cli gfx --boot`** and **Godot `--boot`** (run `INITCONFIG/INIT2/INIT` through
@@ -694,7 +694,7 @@ SC0000 coverage is now **77/129 handled (59.7%)**, with 52 GAP ops / 613 GAP ins
 
 **Follow-up — magic-circle teardown fixed (2026-07-09).** Ghidra caller analysis corrected op `0x215`:
 it queries the retained gfx-object map and returns `obj+4`, the source surface slot written by
-`draw-texture`; it does not query op `0x1a2`'s descriptor hash. The old host model returned -1 for CG
+`draw-texture`; it does not query op `0x1a2`'s shared-profile integer table. The old host model returned -1 for CG
 handles, so SC0000 skipped its explicit `0x1f7(handle,10)` + `0x1fa(slot)` cleanup and left
 `AE001H.AGF` (resource `0x37`) visible. `GfxState.QuerySlot` now returns the bound source slot,
 `0x1f7` erases retained objects, and `0x1fa` clears the surface. A booted SC0000 integration regression
@@ -2007,12 +2007,37 @@ Validation: all 206 engine tests pass; opcode and EngineCtx tests/lints, vm0 REC
 are clean. SC0000 coverage deliberately remains 119/129 distinct opcodes handled (92.2%), with `0x1ad`'s
 six calls retained as a gap until numbered saves serialize active execution frames.
 
-**Follow-up audit — `0x1a2` compatibility status (2026-07-20).** Correcting the shared instruction-length
-field does not invalidate any completed visible graphics/animation/UI behavior: every affected native opcode
-has independent worker/field/trace evidence, and the port does not emulate `ctx+0x53d88`. The exception is
-`0x1a2`, whose legacy VM case stores only a numeric value in an unread `GfxState` set instead of AGE's
-lvalue-descriptor→value entry. It has no present runtime consumer, so this is latent compatibility debt rather
-than a current visual regression. Coverage currently counts the case as `impl`; do not interpret that bucket
-as proof of semantic completion for this opcode. Canonical details and the eventual investigation target live
-in `docs/engine-re.md` and `vm-map/opcodes.toml`. Documentation validation: regenerated opcode references,
-opcode build/lint and tests, and `git diff --check` are clean.
+### Slice A2b-0x1a2/0x1a3 investigation — shared SAVE.DAT integer cells (2026-07-20)
+
+The foundational field correction does not invalidate completed visible graphics/animation/UI behavior, but
+the flagged `0x1a2` debt is now fully classified. `0x1a2` snapshots the selected global integer cell into a
+shared-profile hash keyed by its resolved global-bank index; `0x1a3` restores the paired value or zero. Native
+`shared_profile_save` serializes the table to shared `SAVE.DAT`, and `shared_profile_load` reconstructs it.
+It is neither retained graphics state, numbered-slot state, nor `RT.DAT` ReadTextDB state. The full native
+contract and provenance live in `docs/engine-re.md` and `vm-map/opcodes.toml`.
+
+The inert `GfxState` approximation and its VM handler were removed. This intentionally changes coverage from
+a false `impl` classification to an explicit effectful gap; it does not change visible runtime behavior because
+the old set had no readers. `0x1a3` was already a default-stub gap. The port's whole-global-bank `GameSession`
+snapshot can mask some persistence effects, but it is broader than AGE's selected-cell service and cannot
+faithfully reproduce load-or-zero or lifecycle boundaries.
+
+**Deferred implementation boundary:** add the pair only with a profile-owned cell-index→raw-int32 service
+shared across VM runs and an explicit decision for how port profiles persist/migrate shared `SAVE.DAT` state.
+Do not seed values, special-case script offsets, or silently fold this table into retained graphics or numbered
+saves. This can be implemented independently of raw native file import/export once the port-owned profile
+schema is chosen; `RT.DAT` and numbered-save frame state may share the owning profile service without sharing
+their native on-disk formats.
+
+The canonical opcode and EngineCtx sources are regenerated. The `/v2` handlers, shared-profile payload
+reader/writer, and generic table helpers are named and commented; the expanded 69-field `EngineCtx` is
+reapplied and the image is saved. Correcting the false implementation moves SC0000 from 119/129 to **118/129
+distinct opcodes handled (91.5%)**: its 206 `0x1a2` instructions now appear honestly among 225 effectful-gap
+instructions. This is a tracker correction, not a new runtime failure.
+
+**Next:** keep `0x1a2`/`0x1a3`, `0x1ad`, and `0x1cb` grouped behind the future unified profile/save ownership
+decision. Continue with the paired zero-operand `0x1f6`/`0x20e` scene setup/teardown investigation as the
+largest repeated non-persistence SC0000 cluster.
+
+Validation: all 206 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, and `git diff --check`
+are clean.

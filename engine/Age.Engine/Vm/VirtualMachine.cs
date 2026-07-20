@@ -1068,9 +1068,6 @@ public sealed class VirtualMachine
             {
                 var o = Gfx.GetOrCreate(Read(a[0])); o.Field68 = Read(a[1]); o.Field6c = Read(a[2]); return pc + 1;
             }
-            case "gfx-cmd-register":    // 0x1a2 (handle) — operand-descriptor hash insert; separate from
-                                        // op 0x215's retained gfx-object/source-slot lookup
-                Gfx.Register(Read(a[0])); return pc + 1;
             case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
             case "gfx-elem-release":    // 0x1fa (surface slot)

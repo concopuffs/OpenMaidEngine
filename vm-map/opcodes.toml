@@ -3459,45 +3459,46 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1a2
-label = "gfx-cmd-register"
+label = "store-shared-profile-int"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "register-lvalue-value"
+name = "store-shared-profile-int"
 category = "control"
-summary = "0x1a2 (value) — register operand 1's current value under a key derived from its lvalue descriptor in the open-addressing table at ctx+0x5190. The write of 3 at ctx+0x53d88 is only this instruction's encoded dword length, not a graphics command type. This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query it. NOT save/scene."
-details = "Port status (2026-07-20): not faithfully implemented. The legacy gfx-cmd-register dispatch currently adds only the operand's numeric value to an otherwise runtime-unread HashSet in GfxState; it neither preserves the native descriptor key nor models a known consumer. Do not treat its presence in the VM switch or coverage's impl bucket as semantic completion. The native table's consumer must be identified before choosing the correct host subsystem."
+summary = "0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. The key is `3%08x`, where the address is resolved through global/local pointer operands; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry."
+details = "Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-20): deliberately unimplemented pending the unified shared-profile storage boundary; the former inert GfxState HashSet approximation was removed so coverage reports the gap."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra: handler 0x42d360 fetches operand 1's value and lvalue descriptor separately, formats the descriptor key, then calls FUN_0042cf70. By contrast op 0x215 passes ctx+0x46614 to gfx_object_query_source_slot@0x47f280, which searches the retained object map and returns obj+4."
+evidence = "Ghidra /v2: op_0x1a2_store_shared_profile_int@0x42d360 reads operand 1 with vm_operand_fetch, resolves its cell index with vm_operand_lvalue (accepted types 3/6/0xc), formats `3%08x`, and calls hash_table_insert_or_assign with ECX=ctx+0x5190. shared_profile_payload_write@0x430a20 serializes each 12-byte key plus 32-bit value to SAVE.DAT. Corpus: 17,585 calls in 315 scripts; 17,539 use local-ptr after lookup-array and 46 use global-int."
 
 [[opcode.semantics.args]]
 i = 1
-role = "value"
+role = "global integer cell to snapshot"
 observed_types = ["g-int", "l-ptr"]
 
 [[opcode]]
 op = 0x1a3
-label = "string-lookup-set"
+label = "load-shared-profile-int"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "string-lookup-set"
-category = "unknown"
-summary = ""
+name = "load-shared-profile-int"
+category = "control"
+summary = "0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same `3%08x` cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent."
+details = "This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-20): deliberately unimplemented with 0x1a2 pending the unified shared-profile storage boundary."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. DATA1 corpus: 73 calls in 12 scripts, 42 local-ptr and 31 global-int."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "global integer cell to restore"
 observed_types = ["g-int", "l-ptr"]
 
 [[opcode]]

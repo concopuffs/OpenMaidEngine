@@ -4,15 +4,12 @@ using Xunit;
 public class GfxStateTests
 {
     [Fact]
-    public void QueryReturnsBoundSourceSlot_NotOperandRegistryValue()
+    public void QueryReturnsBoundSourceSlot()
     {
         // Native op 0x215 queries the retained-object map and returns obj+4. The default initializer zeroes
-        // that field, while draw-texture replaces it with the bound slot. Op 0x1a2 is a separate registry.
+        // that field, while draw-texture replaces it with the bound slot.
         var g = new GfxState();
         g.GetOrCreate(0xcb2a).V18 = (400, 600, 0);
-        Assert.Equal(0, g.QuerySlot(0xcb2a));
-
-        g.Register(0xcb2a);
         Assert.Equal(0, g.QuerySlot(0xcb2a));
 
         g.BindDraw(0xcb2a, 6, 0, 0, 200, 200, 10, 20);
