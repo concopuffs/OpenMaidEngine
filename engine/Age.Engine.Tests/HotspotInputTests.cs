@@ -303,6 +303,53 @@ public class HotspotInputTests
     }
 
     [Fact]
+    public void AdvSkipService_SuspendsAndRestoresPersistentMessageSkip()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_LIFECYCLE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19b, Array.Empty<Operand>()),
+            (0x19a, new[] { G(0x144) }),
+            (0x1c7, new[] { G(0x145) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x146) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x144));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x145));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x146));
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false, true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void AdvSkipService_RestoreIncludesLiveReadSkipChannel()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "READ_SKIP_LIFECYCLE", new List<(int, Operand[])>
+        {
+            (0x19b, Array.Empty<Operand>()),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x147) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost { AdvReadSkip = true };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x147));
+        Assert.False(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { false, true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
     public void Sc0000MessageSkipButton_EnablesPersistentServiceState()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

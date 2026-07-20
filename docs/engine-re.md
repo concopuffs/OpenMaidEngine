@@ -1240,6 +1240,23 @@ the missing native governor and remains fast without teleporting between blockin
 op `0x88` state reaches the host before the following cadence yields. Validation is engine 168/168,
 zero-warning Godot build, and threaded `SELFTEST OK`.
 
+**ADV entry/exit lifecycle.** The script comments `savemesskip` and `loadmesskip` describe a temporary
+suspension boundary, not a second saved preference. `op_0x19b_suspend_adv_skip_service@0x416560` clears
+active `ctx+0x13dc`, run-state bit `0x08000000`, and `ctx+0x55100` (`adv_skip_service_enabled`) while
+deliberately preserving `ctx+0x550fc`, the all-message Skip toggle returned by op `0x19a`.
+`op_0x19c_resume_adv_skip_service@0x4165a0` sets the lifecycle gate again and reconstructs active
+fast-forward from persistent all-message Skip or `adv_read_skip_state`; the separate startup guard at
+`ctx+0x6f86c` can suppress that reactivation. SC0000 brackets ADV teardown/setup with this pair, as do
+branch transitions and `CALLBACK_LOAD.BIN`.
+
+The port therefore keeps persistent Skip separate from currently active fast-forward. Opcode `0x19b`
+deactivates the host service without changing the control-strip toggle, and `0x19c` recomputes the host
+service from the persistent toggle plus the host's live read-skip channel. This also makes op `0x1c7`
+correctly report inactive during the suspended interval. Focused regressions cover preservation across the
+pair and read-skip-only reactivation. Implementing the `message:ReadTextSkip` preference itself remains
+deferred with ops `0x1ca`/`0x1cb` and the profile-owned `ReadTextDB`; the lifecycle implementation does not
+invent a storage backend.
+
 ### Opcode `0x1ad` marks the numbered-save resume-frame boundary (2026-07-20)
 
 Opcode `0x1ad` is a zero-operand persistence marker, not an input reset or modal-UI synchronization call.
@@ -1265,6 +1282,26 @@ neutral only under that present limitation; counting it as faithfully implemente
 real implementation belongs in the future unified save architecture, where the VM must serialize the active
 `ExecFrame` chain and remember which frame is the resume boundary. This is the same architectural deferral as
 the already-deferred profile/read-state work, not a reason to invent a seed or offset-specific shortcut.
+
+### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
+
+Opcode `0xae` is the load-side rendezvous paired with serialized script-frame state. Its handler,
+`op_0xae_continue_save_load_stack_restore@0x416790`, normally returns after recording its one-dword length.
+It only becomes effectful while `ctx+0x53d24` (`save_load_stack_restore_active`) is set by
+`save_data_deserialize_and_begin_restore@0x40fd10`. That deserializer restores the selected save layout,
+loads `CALLBACK_LOAD.BIN` or the saved entry script, and resets the current context so ordinary opcode
+`0xae` sites can rebuild the saved stack.
+
+On an active restore, the handler reads `set:SaveVersion1`/`set:SaveVersion2`, selects the matching saved
+frame layout, replaces the current frame PC with its saved resume or call target, and advances through the
+serialized contexts. At the saved terminal context it clears the restore flag and reinstates the saved
+context/return state. The corpus placement supports that control-flow role: 305 calls overwhelmingly follow
+coroutine-resume or call boundaries, including SC0000's main-loop resume sequence.
+
+The opcode remains an effectful port gap. It is a no-op during every currently reachable port execution,
+but its actual branch cannot be implemented until numbered saves serialize and restore the active
+`ExecFrame` chain. Counting an unconditional no-op as coverage would conceal that dependency, so it stays
+grouped with `0x1ad` rather than receiving a placeholder VM case.
 
 ### ADV read-message Skip and shared `RT.DAT` history (2026-07-18)
 

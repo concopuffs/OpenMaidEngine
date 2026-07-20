@@ -36,6 +36,7 @@ public sealed class VirtualMachine
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
     private volatile bool _messageSkipEnabled;
+    private volatile bool _messageSkipServiceActive;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     public long CallScriptDispatches { get; private set; }
@@ -819,14 +820,25 @@ public sealed class VirtualMachine
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
                 _messageSkipEnabled = Read(a[0]) != 0;
-                _host.SetMessageSkipActive(_messageSkipEnabled);
+                _messageSkipServiceActive = _messageSkipEnabled;
+                _host.SetMessageSkipActive(_messageSkipServiceActive);
                 return pc + 1;
             case "u00414E50": // 0x19a: persistent state used by the SO001 active overlay
                 Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
+            case "u00414E80":
+            case "suspend-adv-skip-service": // 0x19b: preserve the toggle while leaving ADV presentation
+                _messageSkipServiceActive = false;
+                _host.SetMessageSkipActive(false);
+                return pc + 1;
+            case "u00414EC0":
+            case "resume-adv-skip-service": // 0x19c: recompute active fast-forward on ADV entry
+                _messageSkipServiceActive = _messageSkipEnabled || _host.IsAdvReadSkipActive;
+                _host.SetMessageSkipActive(_messageSkipServiceActive);
+                return pc + 1;
             case "get-message-skip": // 0x1c7: persistent Skip or host-supplied Ctrl fast-forward
-                // The native per-op tick continually re-arms the transient run-state bit while op 0x88's
-                // persistent flag is set. The host channel carries the physically held Ctrl/input source.
-                Write(a[0], _messageSkipEnabled || _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
+                // The native per-op tick continually re-arms the transient run-state bit while the
+                // ADV service is enabled. The host channel also carries physical fast-forward input.
+                Write(a[0], _messageSkipServiceActive || _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
             case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
             case "get-adv-service-state":   // compatibility with pre-recovery generated tables
                 Write(a[0], _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;

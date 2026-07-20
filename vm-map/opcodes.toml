@@ -1713,14 +1713,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415130"
-category = "unknown"
-summary = ""
+name = "continue-save-load-stack-restore"
+category = "control"
+summary = "() - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with FUN_0040f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack."
 
 [[opcode]]
 op = 0xb4
@@ -3293,14 +3293,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414E80"
-category = "unknown"
-summary = ""
+name = "suspend-adv-skip-service"
+category = "input"
+summary = "() - suspend active ADV fast-forward while preserving the user's persistent all-message Skip toggle."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. Corpus comments call it `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation."
 
 [[opcode]]
 op = 0x19c
@@ -3309,14 +3309,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414EC0"
-category = "unknown"
-summary = ""
+name = "resume-adv-skip-service"
+category = "input"
+summary = "() - enable the ADV skip service and recompute active fast-forward from persistent all-message Skip or the live read-skip channel."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x19c_resume_adv_skip_service@0x4165a0 sets ctx+0x55100, clears the click-cancel phase, and normally activates run-state bit 0x08000000 when ctx+0x550fc persistent all-message Skip or ctx+0x6dbd4 adv_read_skip_state is nonzero. Otherwise it clears ctx+0x13dc and the run-state bit. A separate startup fast-forward guard at ctx+0x6f86c suppresses reactivation while active. Corpus comments call it `loadmesskip`; ADV setup, branch, and CALLBACK_LOAD paths pair it with op 0x19b."
 
 [[opcode]]
 op = 0x19d

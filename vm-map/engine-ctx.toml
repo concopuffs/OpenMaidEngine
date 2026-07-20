@@ -143,6 +143,11 @@ name = "cur_ctx_index"
 type = "uint"
 note = "current script-context index (curCtx); indexes 0x78-byte coroutine/frame records"
 [[field]]
+offset = 0x53d24
+name = "save_load_stack_restore_active"
+type = "int"
+note = "set while a deserialized numbered-save script stack is being reconstructed; op 0xae restores saved frame PCs/contexts and clears it at the terminal saved context"
+[[field]]
 offset = 0x53d28
 name = "frame_codebase"
 type = "void*"
@@ -172,6 +177,11 @@ offset = 0x550fc
 name = "message_skip_display_enabled"
 type = "int"
 note = "persistent all-message Skip state returned by op 0x19a for the ADV control-strip active overlay"
+[[field]]
+offset = 0x55100
+name = "adv_skip_service_enabled"
+type = "int"
+note = "ADV presentation lifecycle gate: op 0x19b clears it while preserving the persistent Skip toggle; op 0x19c sets it before recomputing active message/read skip"
 [[field]]
 offset = 0x55104
 name = "auto_message_enabled"

@@ -251,6 +251,11 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries value_dispatch_lookup@0x419290, writes the matched or operand-2 default PC into the current frame, and clears the command type. Corpus pairs it with 0xa1/0xa2 in 12 generic switch sequences.
 
+### 0xae `continue-save-load-stack-restore` (u00415130, argc 0)
+- **summary:** () - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with FUN_0040f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack.
+
 ### 0xc8 `sleep` (sleep, argc 1)
 - **summary:** Pause the current script for <duration> milliseconds while retained presentation continues.
 - **grounding:** source=investigation, confidence=high
@@ -681,6 +686,16 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x19a_get_message_skip@0x4271b0 writes ctx+0x550fc to operand 1. The shared ADV redraw routine uses it to select SO001's active Message-skip icon at x=728.
 
+### 0x19b `suspend-adv-skip-service` (u00414E80, argc 0)
+- **summary:** () - suspend active ADV fast-forward while preserving the user's persistent all-message Skip toggle.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. Corpus comments call it `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation.
+
+### 0x19c `resume-adv-skip-service` (u00414EC0, argc 0)
+- **summary:** () - enable the ADV skip service and recompute active fast-forward from persistent all-message Skip or the live read-skip channel.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19c_resume_adv_skip_service@0x4165a0 sets ctx+0x55100, clears the click-cancel phase, and normally activates run-state bit 0x08000000 when ctx+0x550fc persistent all-message Skip or ctx+0x6dbd4 adv_read_skip_state is nonzero. Otherwise it clears ctx+0x13dc and the run-state bit. A separate startup fast-forward guard at ctx+0x6f86c suppresses reactivation while active. Corpus comments call it `loadmesskip`; ADV setup, branch, and CALLBACK_LOAD paths pair it with op 0x19b.
+
 ### 0x1b6 `get-auto-message` (u00414F60, argc 1)
 - **summary:** (out) - return whether automatic message advance is enabled.
 - **grounding:** source=investigation, confidence=high
@@ -895,10 +910,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0xae `u00415130` (u00415130, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0xb7 `u0041D0E0` (u0041D0E0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1030,14 +1041,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x196 `display-furigana` (display-furigana, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x19b `u00414E80` (u00414E80, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x19c `u00414EC0` (u00414EC0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x19d `u0041C680` (u0041C680, argc 2)
 - **summary:** —

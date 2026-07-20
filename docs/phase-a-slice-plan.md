@@ -2104,3 +2104,31 @@ important than any one opcode's count; persistence-bound `0x1a2`, `0x1ad`, and `
 
 Validation: all 211 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, the zero-warning
 Godot build, threaded self-test, and `git diff --check` are clean.
+
+### Slice A2b ADV skip lifecycle implemented; adjacent persistence gaps classified (2026-07-20)
+
+Native RE resolves script `savemesskip`/`loadmesskip` opcodes `0x19b`/`0x19c` as an ADV presentation
+lifecycle pair. Suspend clears active fast-forward and the service gate while preserving the persistent
+all-message Skip toggle. Resume re-enables the gate and recomputes active fast-forward from that toggle or
+the live read-skip channel. The VM now models persistent and active skip state separately, and focused tests
+prove both persistent-toggle preservation and read-skip-only reactivation.
+
+The same investigation classified the two adjacent one-call gaps without papering them over. Opcode `0x1ca`
+is the already-known `message:ReadTextSkip` settings write and remains deferred with `0x1cb`, `RT.DAT`, and
+the profile-owned read-state decision. Opcode `0xae` is normally inert but becomes the serialized save-stack
+restoration rendezvous: it restores frame PCs and walks saved contexts while a flag set by the save-data
+deserializer is active. Because the port has no numbered-save `ExecFrame` backend, an unconditional no-op
+would be a false implementation; it remains grouped with `0x1ad`.
+
+The canonical opcode source and expanded 78-field EngineCtx source are regenerated. `/v2` names/comments
+the three handlers and save deserializer, applies `adv_skip_service_enabled` and
+`save_load_stack_restore_active`, and is saved. SC0000 is now **124/129 distinct opcodes handled (96.1%)**
+and **16,041/16,257 instructions handled or safe-noop (98.7%)**. Its five remaining gaps total 216
+instructions: `0x1a2`×206, `0x1ad`×6, `0x1cb`×2, `0x1ca`×1, and `0xae`×1.
+
+**Next:** keep all five remaining gaps behind the unified profile/read-state/numbered-save ownership work.
+Choose the next implementation slice from a different scene or runtime subsystem rather than claiming
+normal-path no-ops for `0xae` or a transient-only `ReadTextSkip` setting.
+
+Validation: 213 engine tests pass; opcode and EngineCtx generators/tests/lints, SC0000 coverage, vm0
+RECOVER, the zero-warning Godot build, threaded self-test, and `git diff --check` are clean.
