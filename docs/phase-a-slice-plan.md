@@ -1874,3 +1874,28 @@ implementation slice from their actual responsibilities rather than treating the
 
 Validation: all 203 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
 Godot build has zero warnings, and threaded `SELFTEST OK`.
+
+### ADV History mouse-wheel navigation implemented (2026-07-19)
+
+The five-gap investigation separated independent responsibilities instead of grouping them by proximity.
+Native `age_main_window_proc@0x486320` handles `WM_MOUSEWHEEL` by sign-extending its high-word delta and
+accumulating it at `EngineCtx+0x1c34`; op `0x10d` returns that signed total and clears it. HISTORY first
+uses the opcode to discard stale motion, then polls it from its timed mouse callback and feeds the sign into
+the already implemented smooth-scroll route.
+
+Godot now translates wheel-up/down into signed 120-unit deltas, and the VM atomically accumulates and
+consumes them. This extends the existing generic raw-input callback seam and introduces no script-specific
+offsets, seeded state, or persistence choice. A focused regression proves accumulation/read-clear behavior;
+a real SC0000-to-HISTORY regression opens after eight messages and proves wheel-up changes the retained row
+selection without releasing the enclosing ADV wait.
+
+The canonical opcode and EngineCtx sources are regenerated, and `/v2` now names/comments the recovered main
+window procedure and the specific `0x10d` handler. HISTORY is 74/78 distinct opcodes and 849/854 instructions
+handled or safe-noop. Remaining: `0x8b` twice, paired sprite-animation service ops `0x1ce`/`0x20a`, and the
+deferred Read-message Skip setting getter `0x1cb`.
+
+**Next:** reverse the common text-style block around `0x8b`; it is the smallest remaining non-persistence
+gap. Keep `0x1cb` deferred, and treat `0x1ce`/`0x20a` together as their own sprite-animation slice.
+
+Validation: all 205 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
+Godot build has zero warnings, and threaded `SELFTEST OK`.

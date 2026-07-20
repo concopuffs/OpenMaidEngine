@@ -359,6 +359,18 @@ public partial class Main : Godot.Control
             _vm.UpdatePointer(p.X, p.Y);
             return;
         }
+        if (e is InputEventMouseButton wheel
+            && wheel.Pressed
+            && (wheel.ButtonIndex == MouseButton.WheelUp || wheel.ButtonIndex == MouseButton.WheelDown))
+        {
+            // WM_MOUSEWHEEL supplies signed multiples of WHEEL_DELTA (120). AGE accumulates that
+            // value until op 0x10d reads and clears it; HISTORY currently uses only its sign.
+            int direction = wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1;
+            int steps = System.Math.Max(1, (int)System.Math.Round(wheel.Factor));
+            _vm.QueueMouseWheelDelta(direction * 120 * steps);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventMouseButton mb
             && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {

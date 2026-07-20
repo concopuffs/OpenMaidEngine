@@ -33,6 +33,11 @@ name = "message_skip_enabled"
 type = "int"
 note = "persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero"
 [[field]]
+offset = 0x1c34
+name = "mouse_wheel_delta"
+type = "int"
+note = "signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it"
+[[field]]
 offset = 0x3028
 name = "alt_pack_table"
 type = "int"

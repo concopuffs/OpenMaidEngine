@@ -1445,7 +1445,31 @@ script frame, blocks only at these scheduler service boundaries using the host c
 after each local callback returns. Focused tests cover exact relative deadlines and the late catch-up choice.
 
 Smooth-scroll scheduling is now implemented without changing History backlog ownership or choosing a
-save/profile backend. HISTORY's remaining static gaps are five supporting opcodes across seven instructions.
+save/profile backend.
+
+#### Mouse-wheel accumulation and History navigation (2026-07-19)
+
+Opcode `0x10d` is the read half of AGE's generic Win32 mouse-wheel service. The newly recovered
+`age_main_window_proc@0x486320` handles `WM_MOUSEWHEEL` (`0x20a`), sign-extends the high word of `wParam`,
+and normally adds that value to `ctx+0x1c34`. In special run modes it instead maps the sign through the
+configurable `set:WheelKeyUp`/`set:WheelKeyDown` actions, so the accumulator is specifically the ordinary
+raw-wheel channel used by scripts such as HISTORY.
+
+`op_0x10d_consume_mouse_wheel_delta@0x428cf0` writes the accumulated signed value to operand 1 and clears
+the field immediately. HISTORY polls it twice: once while establishing the callback loop to discard stale
+input, then once per timed mouse callback. The script only tests zero and sign, converting a positive or
+negative native delta into one call of its existing smooth-scroll path.
+
+The port follows that ownership directly: Godot converts wheel-up/down events to signed 120-unit native
+deltas, the VM atomically accumulates them, and `0x10d` atomically reads and clears the total. This state is
+runtime input only; it is neither a script seed nor profile/save data. A real SC0000-to-HISTORY regression
+opens after eight retained messages and proves wheel-up selects older retained rows without releasing or
+re-entering the enclosing ADV wait.
+
+HISTORY is now 74/78 distinct opcodes and 849/854 instructions handled or safe-noop. Its remaining static
+gaps are four supporting opcodes across five instructions: text-style setter `0x8b` occurs twice,
+`0x1ce`/`0x20a` form a sprite-animation service pair, and `0x1cb` reads the deliberately deferred
+Read-message Skip profile setting.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

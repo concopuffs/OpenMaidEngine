@@ -11,6 +11,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
 | `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
 | `0x13dc` | `message_skip_enabled` | `int` | persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero |
+| `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
 | `0x3028` | `alt_pack_table` | `int` | call-script high-byte alternate pack table (unused by corpus) |
 | `0xb558` | `gfx_dirty_a` | `int` | gfx dirty flag (anim set raises) |
 | `0xb560` | `gfx_dirty_b` | `int` | gfx dirty flag |

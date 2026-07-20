@@ -28,6 +28,7 @@ public sealed class VirtualMachine
     private ExecFrame? _rawInputFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
     private int _mouseButtonState;
+    private int _mouseWheelDelta;
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
     private bool _autoMessageEnabled;
@@ -94,6 +95,14 @@ public sealed class VirtualMachine
 
     /// <summary>Update one native mouse-button bit (left=0x1, right=0x2 in Himegari).</summary>
     public void UpdateMouseButtonState(int bit, bool pressed) => UpdateMaskBit(ref _mouseButtonState, bit, pressed);
+
+    /// <summary>Accumulate a signed native mouse-wheel delta until op 0x10d consumes it.</summary>
+    public void QueueMouseWheelDelta(int delta)
+    {
+        if (delta == 0) return;
+        Interlocked.Add(ref _mouseWheelDelta, delta);
+        _host.WakeInputCallbackService();
+    }
 
     /// <summary>Update one held AGE input-callback index used by ops 0xfb/0xff/0x100.</summary>
     public void UpdateInputCallbackState(int index, bool pressed)
@@ -725,6 +734,9 @@ public sealed class VirtualMachine
             case "u00415E70":
             case "get-mouse-button-state": // 0x108
                 Write(a[0], Volatile.Read(ref _mouseButtonState)); return pc + 1;
+            case "u00415F10":
+            case "consume-mouse-wheel-delta": // 0x10d
+                Write(a[0], Interlocked.Exchange(ref _mouseWheelDelta, 0)); return pc + 1;
             case "u00415EC0":
             case "get-cursor-virtual": // 0x109
             {

@@ -2463,18 +2463,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415F10"
-category = "unknown"
-summary = ""
+name = "consume-mouse-wheel-delta"
+category = "input"
+summary = "(out) - return the accumulated signed mouse-wheel delta and clear it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x10d_consume_mouse_wheel_delta@0x428cf0 copies ctx+0x1c34 to operand 1 and immediately clears the field. AGE's window procedure at 0x486925 handles WM_MOUSEWHEEL by sign-extending the high word of wParam and accumulating it at ctx+0x1c34; HISTORY.BIN polls this value and branches on its sign to select one scroll direction."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "accumulated signed delta out"
 observed_types = ["l-int"]
 
 [[opcode]]

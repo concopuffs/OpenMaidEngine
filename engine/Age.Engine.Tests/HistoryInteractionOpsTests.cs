@@ -14,6 +14,7 @@ public class HistoryInteractionOpsTests
 
     private sealed class StopAfterHistoryReturnsException : Exception { }
     private sealed class StopAfterHistoryVoiceException : Exception { }
+    private sealed class StopAfterHistoryWheelException : Exception { }
 
     private static void SeedSystem4AdvLayouts(Sys4ScriptProvider scripts, AdvTextHistory history)
         => Assert.Equal(9, AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
@@ -113,6 +114,81 @@ public class HistoryInteractionOpsTests
             Assert.True(Vm.TryActivatePointer(684, 572));
             while (serviceInputCallback()) { }
         }
+    }
+
+    private sealed class Sc0000HistoryWheelHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private readonly Dictionary<int, int> _before = new();
+        private long _now;
+        private bool _wheelQueued;
+        public bool HistoryRowsChanged;
+        public override long InputClockMilliseconds => _now;
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += System.Math.Max(16, duration);
+            if (!Vm.IsRawInputCallbackActive || ActiveHistoryRenders.Count == 0) return;
+            if (!_wheelQueued)
+            {
+                foreach (var (slot, batch) in ActiveHistoryRenders)
+                    _before[slot] = batch.FirstRecordIndex;
+                _wheelQueued = true;
+                Vm.QueueMouseWheelDelta(120); // native wheel-up sign: move toward older retained rows
+                return;
+            }
+            HistoryRowsChanged = ActiveHistoryRenders.Any(pair =>
+                !_before.TryGetValue(pair.Key, out int first) || first != pair.Value.FirstRecordIndex);
+            if (HistoryRowsChanged) throw new StopAfterHistoryWheelException();
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            if (Waits < 8) return;
+            Vm.UpdatePointer(684, 572);
+            while (serviceInputCallback()) { }
+            Assert.True(Vm.TryActivatePointer(684, 572));
+            while (serviceInputCallback()) { }
+        }
+    }
+
+    [Fact]
+    public void MouseWheelDeltaAccumulatesAndIsClearedByOpcode10d()
+    {
+        var script = ScriptAssembler.Assemble(Table, "WHEEL_DELTA",
+            new List<(int, Operand[])>
+            {
+                (0x10d, new[] { G(0x100) }),
+                (0x10d, new[] { G(0x101) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        vm.QueueMouseWheelDelta(120);
+        vm.QueueMouseWheelDelta(-360);
+
+        vm.Run();
+
+        Assert.Equal(-240, vm.Globals[0x100]);
+        Assert.Equal(0, vm.Globals[0x101]);
+    }
+
+    [Fact]
+    public void RealHistoryWheelUpNavigatesToOlderRetainedRows()
+    {
+        var scripts = Sys4ScriptProvider.Load(Table);
+        var host = new Sc0000HistoryWheelHost();
+        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
+            new VmOptions(MaxSteps: 2_000_000), scripts);
+        host.Vm = vm;
+        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAfterHistoryWheelException>(() => vm.Run());
+
+        Assert.True(host.HistoryRowsChanged);
+        Assert.Equal(8, host.Waits); // the eighth enclosing ADV wait was not released or re-entered
     }
 
     [Fact]
