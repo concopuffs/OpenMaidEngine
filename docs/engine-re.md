@@ -233,10 +233,39 @@ the per-frame return stack (`[ctx+0x552e8]`/`[ctx+0x55248]`). The operand is a *
 the current script** (matches header table **T3, tag 0x8F** = local call targets). So `0x8f` is a
 local JSR; only `0x03` loads another script.
 
-**Follow-up (functional):** the C# VM still *stubs* `call-script`. With the id→resource mapping now
-known, it can be implemented for real (load the target `.BIN` from the archive via the SYS4INI record,
-push a frame, run, return) — the unlock for subroutine-using scripts and, via the same path,
-decision→scene (scenes are just `SCxxxx.BIN` records loaded by their SYS4INI index).
+**Port status:** the C# VM resolves both immediate and computed resource ids through `IScriptProvider`,
+pushes an `ExecFrame`, runs the child, and resumes its caller. This is the same mechanism needed for the
+natural root described below; an out-of-band scene-name registry is not required.
+
+#### Natural boot and New Game control spine (B0, 2026-07-20)
+
+SYSTEM4 is the long-lived script root and the game's actual scene coordinator. Its initial path establishes
+the nine ADV layouts and system surfaces, chooses `LOADCONFIG.BIN` or `INITCONFIG.BIN`, calls `INIT2.BIN`,
+optionally calls `LOGO.BIN` and `OP.BIN`, calls the one-op `INIT.BIN`, and enters `TITLE.BIN`. `INIT2` is
+not a thin handle seed: it calls 23 data initializers in order (`EBINIT`, `CNINIT`, `ITINIT`, `SKINIT`,
+`ILINIT`, `AFINIT`, `TRINIT`, `MAINIT`, `ALINIT`, `CDINIT2`, `MPINIT`, `LAINIT`, `OBINIT`, `STINIT2`,
+`RTINIT`, `CGINIT`, `SPINIT`, `CTINIT`, `CVINIT`, `CIINIT`, `VIINIT`, `SCINIT`, `BTANINIT2`) and then
+`TUNE.BIN`. The CLI `play --boot` nine-script list is therefore only a partial diagnostic approximation;
+the Godot `--boot` path reaches the complete list indirectly because it executes `INIT2` with call-script
+resolution enabled.
+
+An existing native operand trace identifies every observed heap codebase by a 100% match against its static
+instruction-offset set. The captured New Game route is:
+
+`TITLE → GAMESTART → UNITECH → CALCARR → GAMESTART → TUNE → GAMESTART → TITLE → SYSTEM4 → SC0000`.
+
+The transition sites make the ownership explicit. `TITLE@0x31c` calls `GAMESTART`. The selected New Game
+path calls `UNITECH@0xd47` (which calls `CALCARR@0x4ca`), later calls `TUNE@0x1338`, writes flow result
+`G[0]=1` and SCJUMP decision `G[0x62ccf]=0`, and returns. SYSTEM4 resumes at `0x2b0`, prepares the ADV
+scene boundary, resolves `G[0x87a57][G[0x62ccf]]` into next-script resource `G[0x699]`, falls back to raw
+SYS4INI id `0x22` (`SC0000.BIN`) when the mapping is zero, and executes computed `call-script@0x477`.
+Thus normal scenes remain nested script frames under SYSTEM4 and return to it; the port should keep one
+VM/host session rooted at SYSTEM4 rather than replace top-level VMs based on a host-invented scene result.
+
+`tools/frida/capture_script_loads.py` hooks `script_frame_load_resource@0x40e980` and reads its third stack
+argument (the raw packed resource id) for direct name resolution. It is attach-only: attempting to gate the
+installed executable at process start with this loader hook produced Protection Error 45 and no records.
+No protection bypass or executable patch is part of the investigation.
 
 ---
 

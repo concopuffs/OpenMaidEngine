@@ -67,22 +67,48 @@ Capture:
 Detailed progression semantics remain canonical in `docs/scjump-progression.md`; native loader findings
 belong in `docs/engine-re.md` and `docs/name-resolution.md`.
 
+### Initial B0 result (2026-07-20)
+
+Static SYSTEM4/INIT2 control flow plus an existing native opcode trace establishes the first natural spine:
+
+`SYSTEM4 → config load/init → INIT2 (+23 nested data initializers, then TUNE) → optional LOGO/OP
+→ INIT → TITLE → GAMESTART → UNITECH/CALCARR → TUNE → TITLE return → SYSTEM4 → SC0000`.
+
+SYSTEM4, not an opaque native dispatcher, is the long-lived scene coordinator. It maps the SCJUMP decision
+through a global resource-id table, places the result in `G[0x699]`, and uses computed `call-script`; the
+initial zero decision falls back to raw SYS4INI id `0x22`, `SC0000.BIN`. The current VM already supports
+computed nested call-script frames. Consequently B1 should preserve one VM and host rooted at SYSTEM4,
+letting script-owned setup/cleanup surround child scenes, rather than invent an out-of-band replacement
+protocol. Full process-start observation remains useful for profile/default and retained host-state evidence,
+but is no longer needed to guess the script coordinator architecture.
+
+The current headless C# runner already follows this root naturally: one SYSTEM4 run entered INITCONFIG,
+INIT2 and all 23 of its data-initializer children, TUNE, INIT, and TITLE (28 nested script calls total), then
+remained in TITLE's input-poll loop because the diagnostic host supplies no user input. Direct opcode
+coverage is 100% for all 23 data initializers, CALCARR, and TUNE; the remaining direct coverage is SYSTEM4
+64/82, INIT2 9/12, TITLE 61/65, GAMESTART 43/47, and UNITECH 29/31. B0/B1 should therefore make the
+SYSTEM4-rooted path visible and interactive in Godot, then investigate only the gaps actually reached on
+that route instead of treating every static gap as a prerequisite.
+
 ## Stage B1 — Persistent session and scene coordinator
 
-Replace the single-root-scene assumption with an application-owned session that can run one script scene,
-observe its terminal request, and start the next without discarding persistent state.
+Replace the single-SC0000-root assumption with an application-owned session that runs SYSTEM4 as its root.
+SYSTEM4's computed `call-script` is the authoritative scene coordinator: child scenes return to that frame,
+while globals, the host, and intentional retained state remain owned by the same live VM session.
 
 Required responsibilities:
 
 - Own global integer/string banks and any proven external/profile state across scenes.
-- Distinguish nested `call-script` frames from top-level scene replacement.
+- Preserve the SYSTEM4 root while distinguishing ordinary child frames from scene-boundary children for
+  diagnostics and lifecycle assertions; do not perform host-driven top-level replacement.
 - Define scene-owned versus session-owned host state and tear each down at the correct boundary.
 - Preserve intentional system-owned surfaces, configuration, and audio while releasing scene-local state.
 - Expose deterministic transition evidence: outgoing scene, reason/decision, incoming scene, and state
   summary suitable for tests.
 
-Completion evidence: a synthetic or small real sequence transitions between two top-level scripts while
-preserving selected globals and correctly releasing scene-local presentation state.
+Completion evidence: SYSTEM4 reaches a computed child script in one VM, the child returns to SYSTEM4,
+selected globals and system-owned state survive, and script-owned boundary cleanup releases scene-local
+presentation state.
 
 ## Stage B2 — Faithful full boot
 

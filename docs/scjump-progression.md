@@ -39,14 +39,20 @@ choices are not pure story flags.
    failures). This is the oracle that covers native-gated paths.
 Run: `py -3.11 -X utf8 tools/scjump_decode.py --verify`.
 
-## The native decision→scene boundary (deferred)
+## The decision→scene boundary (resolved 2026-07-20)
 A FIELD snippet does `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`, which the spec
 guessed was the scene resolver. **Correction (resolved 2026-07-20, via Ghidra):** `u00428010` (op `0x1a2`)
 snapshots that selected global integer array cell into the shared `SAVE.DAT` profile table, keyed by its
 resolved global-bank index. Paired op `0x1a3` restores a selected cell or zero. Its write of 3 at
 `ctx+0x53d88` is only the instruction length. So this is **profile persistence, not decision→scene
-dispatch**; scene loading remains the separate call-script/progression mechanism. See `docs/engine-re.md`
-for the verified pair, shared-save serialization path, and explicit port deferral boundary.
+dispatch**. The separate boundary is now located in `SYSTEM4.BIN`: on the normal path it indexes the global
+resource-id table rooted at `G[0x87a57]` by `scjump_decision_out` (`G[0x62ccf]`), copies the selected raw
+SYS4INI id into `G[0x699]`, substitutes `0x22` (`SC0000.BIN`) when the result is zero, and executes
+`call-script G[0x699]` at SYSTEM4 offset `0x477`. The called scene returns to the still-live SYSTEM4 frame.
+
+The captured initial New Game path sets decision zero in `GAMESTART.BIN`; SYSTEM4 consequently takes the
+`0x22` fallback and enters SC0000. Later decisions use the same mapping/call boundary. See
+`docs/engine-re.md` §Natural boot and New Game control spine for the native trace and complete boot chain.
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).

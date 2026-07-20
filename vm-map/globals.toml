@@ -7,6 +7,28 @@
 note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
 
 [[global]]
+address = "0x0"
+name = "system_flow_request"
+category = "choice-output"
+type = "int"
+value_domain = "0..5"
+usage = "Return-mode request shared by TITLE/GAMESTART and SYSTEM4. The natural New Game path writes 1 immediately after GAMESTART's TUNE call; TITLE returns and SYSTEM4 routes value 1 into its ADV scene loop. Values 2/3/5 route to FORT/FIELD/CAMP; other writers use the same system-level request channel."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x699", "0x62ccf"]
+
+[[global]]
+address = "0x699"
+name = "next_script_resource_id"
+category = "choice-output"
+type = "int"
+value_domain = "raw SYS4INI id or 0"
+usage = "SYSTEM4's computed child-script resource id. On the normal ADV path SYSTEM4 copies G[0x87a57][scjump_decision_out] here, substitutes raw id 0x22 (SC0000.BIN) when zero, executes call-script through this cell at offset 0x477, then clears it after the child returns."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62ccf"]
+
+[[global]]
 address = "0x3234"
 name = "chapter_mode"
 category = "story-flag"
@@ -157,28 +179,6 @@ type = "int"
 value_domain = "row index"
 usage = "Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses)."
 source = "investigation"
-confidence = "med"
-depends_on = []
-
-[[global]]
-address = "0x0"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "one of {0, 1, 2, 3, 4, 5}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 21 scripts; compared against [0, 1, 2, 3, 4, 5]; writers=['BTL.BIN', 'CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
-
-[[global]]
-address = "0x699"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CAMP.BIN', 'EVOLVE.BIN', 'SALLY.BIN', 'SYSTEM4.BIN']."
-source = "auto-shape"
 confidence = "med"
 depends_on = []
 

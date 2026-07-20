@@ -7,6 +7,8 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x0` | system_flow_request | high | investigation | Return-mode request shared by TITLE/GAMESTART and SYSTEM4. The natural New Game path writes 1 immediately after GAMESTART's TUNE call; TITLE returns and SYSTEM4 routes value 1 into its ADV scene loop. Values 2/3/5 route to FORT/FIELD/CAMP; other writers use the same system-level request channel. |
+| `0x699` | next_script_resource_id | high | investigation | SYSTEM4's computed child-script resource id. On the normal ADV path SYSTEM4 copies G[0x87a57][scjump_decision_out] here, substitutes raw id 0x22 (SC0000.BIN) when zero, executes call-script through this cell at offset 0x477, then clears it after the child returns. |
 | `0xa68` | — | med | auto-shape | TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']. |
 | `0x62ccc` | scjump_decision_out2 | low | inference | Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it. |
 | `0x62ccf` | scjump_decision_out | low | inference | One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode. |
@@ -342,8 +344,6 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
-| `0x0` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 21 scripts; compared against [0, 1, 2, 3, 4, 5]; writers=['BTL.BIN', 'CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']. |
-| `0x699` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CAMP.BIN', 'EVOLVE.BIN', 'SALLY.BIN', 'SYSTEM4.BIN']. |
 | `0xa57` | lily_form_a | high | investigation | Lily current-form flag A. Exactly one of form A/B/C is 1; gates form-specific voiced dialogue (seeding 0xa57=1 -> SC0000 186->229 lines). Set externally (menu/save), no static writer. |
 | `0xa58` | lily_form_b | high | investigation | Lily current-form flag B. See lily_form_a. |
 | `0xa59` | lily_form_c | high | investigation | Lily current-form flag C. See lily_form_a. |

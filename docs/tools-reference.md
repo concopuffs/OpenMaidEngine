@@ -201,6 +201,16 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 
 *(Static disassembly of `build/engine-dump/range_00400000.bin` uses **capstone** — `py -3.11 -m pip install capstone`; VA `X` → file offset `X−0x400000`.)*
 
+### B0 script-load capture
+
+`tools/frida/capture_script_loads.py` attaches at TITLE, hooks
+`script_frame_load_resource@0x40e980`, and resolves each raw SYS4 resource id to a `.BIN` name and parent
+frame in `build/script-loads.jsonl`. Launch the game normally, then run
+`py -3.11 -u -X utf8 tools/frida/capture_script_loads.py [secs]` before selecting New Game. Use
+`--analyze` to print an existing log and `--selftest` for its pure resolver checks. It is deliberately
+attach-only: a process-start loader-hook trial triggered Protection Error 45, so the tool does not spawn
+or bypass protection.
+
 ## Native engine RE (Ghidra)
 
 | Tool | Purpose | Run | Reads → Writes |
