@@ -1795,14 +1795,16 @@ raw catalog id `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts i
 scratch global `G[0x6242d]` is maintained outside script-visible writes; the SC0000 port profile exposes it
 as an external value of 4 rather than pretending the script assigned it.
 
-**TITLE SFX silence root cause (2026-07-20).** TITLE preloads raw id `0x2aea` (`SE020.WAV`) into channel 2
+**TITLE SFX packed-raw correction (2026-07-20).** TITLE preloads raw id `0x2aea` (`SE020.WAV`) into channel 2
 and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
 (`SE015.WAV`) into channel 1 and immediately starts it; GAMESTART additionally uses raw `0x2aeb`
 (`SE013.WAV`). A synchronized Godot trace captured repeated hover starts and the Game Start activation, but
-each preceding load recorded `file:null`. `GodotAdvHost.LoadSoundEffect` currently applies the active
-script's scene-local manifest, and TITLE has only 14 local entries, so all three large raw ids fail before
-the existing WAV/player path. BGM remains audible because it uses its separate direct-name resolver. The
-bounded fix is a scene-independent packed-raw SFX resolver, not changes to callbacks, mixing, or channels.
+each preceding load recorded `file:null`: `GodotAdvHost.LoadSoundEffect` applied the active script's
+scene-local manifest, and TITLE has only 14 local entries. `ResourceMap.ResolveSoundEffect` now uses the
+native packed lookup and filters the selected record to OGG/WAV before the existing byte/player path.
+The corrected synchronized trace resolves and starts `SE020`, `SE015`, and `SE013` through
+TITLE→GAMESTART→TITLE, and the user confirmed hover, activation, and cancel sounds are audible. BGM remains
+independent through its direct-name resolver; no callback, mixer, or channel workaround was needed.
 
 That later service start is opcode `0x2bf`, now identified as the facade's `SetDelay` operation.
 `op_0x2bf_schedule_sfx_start@0x425240` passes `(channel,start_mode,delay_ms)` to

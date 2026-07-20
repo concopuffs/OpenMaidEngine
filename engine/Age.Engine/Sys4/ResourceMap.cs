@@ -1,9 +1,8 @@
 namespace Age.Engine.Sys4;
 
 /// <summary>
-/// Compatibility facade over the runtime SYS4 catalog. SYS4INI's file list is sectioned (one per scene: SCxxxx.BIN + its
-/// cross-archive asset manifest); file_number is the index within a section. So a bytecode
-/// resId resolves as files[section_base(scene) + resId] -- unified for graphics and audio.
+/// Compatibility facade over the runtime SYS4 catalog. Scene-local graphics/voice/movie ids resolve
+/// through the executing script's manifest; BGM uses direct names; SFX/cursors use universal packed ids.
 /// See docs/asset-resolution-re.md.
 /// </summary>
 public sealed class ResourceMap
@@ -72,6 +71,13 @@ public sealed class ResourceMap
     {
         var name = $"BGM{id:D3}.OGG";
         var entry = _catalog.ResolveName(name);
+        return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
+    }
+
+    /// <summary>Resolve opcode 0xb4's universal packed SYS4INI/AAI id to an audio entry.</summary>
+    public AssetEntry? ResolveSoundEffect(long packedRawId)
+    {
+        var entry = _catalog.ResolvePacked(packedRawId);
         return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
     }
 

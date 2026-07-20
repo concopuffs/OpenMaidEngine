@@ -1736,7 +1736,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0xb4_sfx_load@0x4201d0 -> sfx_channel_load@0x482500 -> asset_open_indexed_entry@0x44f390 + sound_decode_channel@0x483360. The opener indexes the base catalog directly for a zero high byte and selects mounted_aai[high_byte] otherwise. SC0000 0xc29 uses raw 0x28 = E0808.WAV. TITLE independently proves the addressing rule: raw 0x2aea = SE020.WAV is preloaded on channel 2 and started on every hover-selection change; raw 0x3321 = SE015.WAV is loaded/started on activation. A synchronized port trace executes those loads and starts but reports file=null because Godot incorrectly applies TITLE's 14-entry scene manifest."
+evidence = "Ghidra /v2: op_0xb4_sfx_load@0x4201d0 -> sfx_channel_load@0x482500 -> asset_open_indexed_entry@0x44f390 + sound_decode_channel@0x483360. The opener indexes the base catalog directly for a zero high byte and selects mounted_aai[high_byte] otherwise. SC0000 0xc29 uses raw 0x28 = E0808.WAV. TITLE independently proves the addressing rule: raw 0x2aea = SE020.WAV is preloaded on channel 2 and started on every hover-selection change; raw 0x3321 = SE015.WAV is loaded/started on activation. The pre-fix port trace reported file=null under scene-manifest resolution; after switching Godot to ResolveSoundEffect/ResolvePacked, a synchronized TITLE->GAMESTART->TITLE trace resolves and starts SE020/SE015/SE013, confirmed audible by the user."
 
 [[opcode.semantics.args]]
 i = 1

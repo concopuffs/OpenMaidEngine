@@ -117,7 +117,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    catalog id in the graphics surface, so that surface remains stable after a nested helper returns or a
    sibling script becomes active. Voice and movie calls likewise resolve against the executing frame;
    SFX is the separate universal packed-id family documented below.
-4. **Audio.** **BGM/voice wired; VFS bytes complete (2026-07-11); packed-raw SFX correction pending.** `IHost.PlayBgm/PlayVoice` +
+4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
    resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
    (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
@@ -219,13 +219,13 @@ store.
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
-4. **Runtime consumers (scripts/textures complete; SFX resolver correction pending).** `ResourceMap.ResolveTexture` preserves
+4. **Runtime consumers (complete for scripts, textures, and current audio families).** `ResourceMap.ResolveTexture` preserves
    scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
    decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
-   Godot no longer reads `build/textures/*.BMP`. BGM direct-name and scene-local voice entries are opened
-   through the same `IAssetStore`; the SFX WAV/player path is also present, but `GodotAdvHost` still applies
-   scene-local resolution where op `0xb4` requires `ResolvePacked`. SC0000 worked because its raw ids happen
-   to coincide with the first section. Extraction and conversion tools remain diagnostics.
+   Godot no longer reads `build/textures/*.BMP`. BGM direct-name, scene-local voice, and packed-raw SFX
+   entries are opened through the same `IAssetStore`. `ResourceMap.ResolveSoundEffect` owns op `0xb4`'s
+   `ResolvePacked` lookup and audio filtering; the existing Godot WAV/channel path consumes its result.
+   Extraction and conversion tools remain diagnostics.
 
 ### Acceptance gates
 

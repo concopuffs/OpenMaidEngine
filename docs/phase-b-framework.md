@@ -99,11 +99,12 @@ SYSTEM4's computed resource id `G[0x699]=0x22`; `G[0]=1` and the script-produced
 single-scene diagnostic harness. This lands the boot/title/New Game entry half of B1–B3; proving a completed
 scene return plus boundary cleanup still belongs to B1 completion.
 
-**TITLE SFX investigation (2026-07-20).** Hover and activation callbacks are already executing their
-scripted `0xb5` starts. The load fails earlier because op `0xb4` uses universal packed SYS4INI/AAI ids,
-while Godot currently treats them as active-script manifest ids. TITLE's `0x2aea`/`SE020.WAV` hover and
-`0x3321`/`SE015.WAV` activation loads therefore resolve null; BGM is unaffected. The next bounded correction
-is a packed-raw SFX resolver plus TITLE/GAMESTART regression coverage, with no mixer redesign indicated.
+**TITLE SFX packed-raw correction (2026-07-20).** Hover and activation callbacks were already executing their
+scripted `0xb5` starts. The load failed earlier because op `0xb4` uses universal packed SYS4INI/AAI ids,
+while Godot treated them as active-script manifest ids. The new packed-raw resolver maps TITLE's
+`0x2aea`/`SE020.WAV` hover, `0x3321`/`SE015.WAV` activation, and GAMESTART's `0x2aeb`/`SE013.WAV` cancel
+through the existing channel players. A synchronized TITLE→GAMESTART→TITLE trace records every load/start
+with its filename, and manual validation confirms they are audible; BGM remains unaffected.
 
 ## Stage B1 — Persistent session and scene coordinator
 

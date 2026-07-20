@@ -168,7 +168,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
-    public void Sc0000BgmVoiceAndSfxPayloadsReadDirectlyFromArchives()
+    public void Sc0000AndTitleAudioPayloadsReadDirectlyFromTheirNativeAddressSpaces()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var archiveOnly = new Sys4AssetStore(catalog, Paths.GameDir);
@@ -182,12 +182,19 @@ public class Sys4AssetStoreTests
         Assert.Equal("MAN999.OGG", voice?.Name);
         AssertOgg(resources.ReadAudio(voice!));
 
-        var sfx = resources.Resolve("SC0000", 0x28);
+        var sfx = resources.ResolveSoundEffect(0x28);
         Assert.Equal("E0808.WAV", sfx?.Name);
         var wav = resources.ReadAudio(sfx!);
         Assert.Equal("E0808.WAV", wav.Name);
         Assert.Equal("RIFF", Encoding.ASCII.GetString(wav.Bytes, 0, 4));
         Assert.Equal("WAVE", Encoding.ASCII.GetString(wav.Bytes, 8, 4));
+
+        Assert.Null(resources.Resolve("TITLE", 0x2aea));
+        Assert.Equal("SE020.WAV", resources.ResolveSoundEffect(0x2aea)?.Name);
+        Assert.Equal("SE013.WAV", resources.ResolveSoundEffect(0x2aeb)?.Name);
+        Assert.Equal("SE015.WAV", resources.ResolveSoundEffect(0x3321)?.Name);
+        Assert.Null(resources.ResolveSoundEffect(0x337e)); // SO001.AGF is not audio.
+        Assert.Null(resources.ResolveSoundEffect(0x02000000)); // unmounted append selector.
 
         Assert.Throws<InvalidDataException>(() => resources.ReadAudio(catalog.ResolveName("SO001.AGF")!));
     }

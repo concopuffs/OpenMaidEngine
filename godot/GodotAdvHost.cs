@@ -748,7 +748,7 @@ public sealed class GodotAdvHost : IHost
     public void LoadSoundEffect(long resourceId, int channel)
     {
         if ((uint)channel >= (uint)_sfxNames.Length) return;
-        var asset = _res.Resolve(CurrentScene, resourceId);
+        var asset = _res.ResolveSoundEffect(resourceId);
         var audio = asset != null ? LoadAudio(asset) : null;
         _sfxNames[channel] = audio?.Name;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel,
