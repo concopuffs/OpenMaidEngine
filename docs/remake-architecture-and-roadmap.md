@@ -549,8 +549,10 @@ VM and dead weight on an incorrect one.
 ## 6. Extending to other AGE games and versions
 
 ### Other AGE games, same version (e.g. Kamidori, also SYS4)
-**Reused for free:** container parser, VM core, backend adapters, the opcode table (the engine ABI
-is shared across the family), disassembler/assembler, the whole extraction methodology.
+**Reused for free:** container parser, VM core, backend adapters, the engine-version opcode ABI,
+disassembler/assembler, and the whole extraction methodology. The ABI is shared across the family,
+but semantic and implementation coverage still grows as another game's corpus exercises services that
+the first game did not use.
 **Per-game (inherent content work):** the **global-var map** (globals are game-specific), the
 **data-table layouts** (each game's `*INIT` differs), assets, and any game-specific effectful behavior.
 The **call-script registry is no longer a per-game long pole** — it's a raw index into that game's
@@ -559,6 +561,38 @@ SYS4INI file table, parsed directly by the runtime catalog (and exported by `par
 the toolchain at the new game's archives, re-run extraction, rebuild its global map, author a profile.
 **This is the core payoff of the VM approach:** the *engine* cost amortizes across all AGE games; only
 content-mapping recurs — far less than re-coding each game's logic bespoke.
+
+#### Opcode ABI registry must be independent of per-game coverage
+
+A cursory Kamidori boot probe on 2026-07-20 validated much of this boundary: its own `SYS4INI.BIN` and
+archives loaded, `SYSTEM4.BIN` completed the initializer chain, call-script resolution entered
+`TITLE.BIN`, and title graphics/resource commands resolved. The first hard stop was not a different
+container or catalog. Kamidori's title loop reached opcode `0x1be` (`u0041D9D0`, argc 2) at bytecode
+offset `0xd7`. That opcode exists in Kelebek's full AGE/SYS4 table, but it is absent from the generated
+`build/opcodes.json` because that runtime artifact currently contains only opcodes observed in Himegari.
+`Sys4Loader` therefore stopped decoding at the unknown opcode; `TITLE.BIN` returned as if it had ended,
+and Godot displayed its ordinary `— end —` marker instead of reporting an incompatibility.
+
+The future multi-game design must keep three separate concepts:
+
+1. A **version ABI registry** containing every known opcode number, operand count/shape, and version gate
+   needed to decode that SYS generation, regardless of whether the active game uses it.
+2. **Per-game observed coverage**, used for prioritization, provenance, and regression reporting but never
+   to decide which otherwise-known instructions the runtime parser is allowed to decode.
+3. **Semantic/runtime implementation coverage**, which may remain incomplete and should report a precise
+   unsupported-service error containing game/profile, script, opcode, and bytecode offset.
+
+An opcode that is absent even from the selected version ABI should likewise be a structured decode error,
+not a synthetic final instruction or natural script return. Supporting a new same-version game then means
+selecting the complete shared ABI, measuring its corpus against existing semantics, and implementing only
+the newly exercised services. It should not require cloning the VM or manufacturing a new parser table
+from that game's corpus.
+
+The probe also exposed a separate profile/presentation concern: Kamidori creates a `1024x576` render
+target while the current Himegari frontend assumes an `800x600` presentation. Logical canvas geometry,
+scaling, and any game-specific defaults therefore belong in the selected game profile or script-driven
+surface state rather than in a forked frontend. This experiment was diagnostic only; no Kamidori support
+or `0x1be` semantics were implemented.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
