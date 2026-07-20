@@ -169,6 +169,17 @@ and pinning the *real* handler via the dispatch table above corrects two layers 
   call-script / script-load dispatch (`name-resolution.md §1`), the next target for this loop (now
   armed with the dispatch table to resolve the call-script handler directly).
 
+**Port audit consequence (2026-07-20): `0x1a2` is not faithfully implemented.** The VM still dispatches
+the opcode through its legacy `gfx-cmd-register` label to `GfxState.Register(Read(a[0]))`. That method adds
+only the operand's current numeric value to `_operandRegistry`, a `HashSet<long>`; it does not retain the
+lvalue descriptor key used by AGE. `IsRegistered` has no runtime callers, so the set currently has no
+gameplay or rendering effect (and its removal during gfx-object erase is likewise inert). Therefore this
+mistake does **not** invalidate the completed retained-object, animation, History, or ADV work, whose
+semantics came from independent workers/fields/traces. It does mean the opcode table's syntactic `impl`
+classification overstates compatibility for `0x1a2`: keep it as explicit follow-up debt until the native
+descriptor table's consumer is identified, then move the model out of `GfxState` and preserve descriptor→value
+semantics in the appropriate VM/service subsystem.
+
 **Lesson:** never analyze a native op by its Kelebek `u00XXXXXX` VA directly — always resolve the real
 handler through the dispatch table (`ctx[0x26c93 + op]`). The raw VA is off by whole functions.
 

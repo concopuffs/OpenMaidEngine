@@ -293,6 +293,8 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra: handler 0x42d360 fetches operand 1's value and lvalue descriptor separately, formats the descriptor key, then calls FUN_0042cf70. By contrast op 0x215 passes ctx+0x46614 to gfx_object_query_source_slot@0x47f280, which searches the retained object map and returns obj+4.
 
+Port status (2026-07-20): not faithfully implemented. The legacy gfx-cmd-register dispatch currently adds only the operand's numeric value to an otherwise runtime-unread HashSet in GfxState; it neither preserves the native descriptor key nor models a known consumer. Do not treat its presence in the VM switch or coverage's impl bucket as semantic completion. The native table's consumer must be identified before choosing the correct host subsystem.
+
 ### 0x1ad `mark-save-resume-frame` (mark-save-resume-frame, argc 0)
 - **summary:** Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself.
 - **grounding:** source=investigation, confidence=high

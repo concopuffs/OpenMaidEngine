@@ -293,9 +293,11 @@ script-context records for gfx objects — was wrong: it observed the wrong stru
 
 **Resolution had TWO halves** (canonical decode in `docs/engine-re.md`, op `0x215` + "The render drift's
 SECOND half"; don't duplicate here):
-1. **Native gfx ops (b):** all 14 command-buffer ops (`0x1a2`,`0x1f7`,`0x1fa`,`0x1ff`,`0x202`,`0x203`,
-   `0x212`,`0x213`,`0x215`–`0x21a`) reversed + implemented against a host-side `GfxState` (VM execution
-   state; `engine/Age.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots.
+1. **Native gfx ops (b):** the retained-object command-buffer ops (`0x1f7`,`0x1fa`,`0x1ff`,`0x202`,`0x203`,
+   `0x212`,`0x213`,`0x215`–`0x21a`) were reversed + implemented against a host-side `GfxState` (VM execution
+   state; `engine/Age.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots. **Correction
+   (2026-07-20):** `0x1a2` never belonged to this family; its current inert `GfxState` approximation is not a
+   faithful implementation. See `docs/engine-re.md` § op `0x1a2` for the compatibility-debt audit.
 2. **Missing system-boot state (a):** the CG handle array `G[0x62455..]` is set by boot script **INIT2**
    (via entrypoint `SYSTEM4.BIN`), which a cold single-scene run skips → all CGs collapsed onto object 0.
    Supplied via **`Age.Cli gfx --boot`** and **Godot `--boot`** (run `INITCONFIG/INIT2/INIT` through
@@ -2004,3 +2006,13 @@ largest repeated non-persistence cluster still unclassified.
 Validation: all 206 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, and `git diff --check`
 are clean. SC0000 coverage deliberately remains 119/129 distinct opcodes handled (92.2%), with `0x1ad`'s
 six calls retained as a gap until numbered saves serialize active execution frames.
+
+**Follow-up audit — `0x1a2` compatibility status (2026-07-20).** Correcting the shared instruction-length
+field does not invalidate any completed visible graphics/animation/UI behavior: every affected native opcode
+has independent worker/field/trace evidence, and the port does not emulate `ctx+0x53d88`. The exception is
+`0x1a2`, whose legacy VM case stores only a numeric value in an unread `GfxState` set instead of AGE's
+lvalue-descriptor→value entry. It has no present runtime consumer, so this is latent compatibility debt rather
+than a current visual regression. Coverage currently counts the case as `impl`; do not interpret that bucket
+as proof of semantic completion for this opcode. Canonical details and the eventual investigation target live
+in `docs/engine-re.md` and `vm-map/opcodes.toml`. Documentation validation: regenerated opcode references,
+opcode build/lint and tests, and `git diff --check` are clean.

@@ -3467,6 +3467,7 @@ abi_source = "kelebek+decode-validated"
 name = "register-lvalue-value"
 category = "control"
 summary = "0x1a2 (value) — register operand 1's current value under a key derived from its lvalue descriptor in the open-addressing table at ctx+0x5190. The write of 3 at ctx+0x53d88 is only this instruction's encoded dword length, not a graphics command type. This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query it. NOT save/scene."
+details = "Port status (2026-07-20): not faithfully implemented. The legacy gfx-cmd-register dispatch currently adds only the operand's numeric value to an otherwise runtime-unread HashSet in GfxState; it neither preserves the native descriptor key nor models a known consumer. Do not treat its presence in the VM switch or coverage's impl bucket as semantic completion. The native table's consumer must be identified before choosing the correct host subsystem."
 noop_headless = false
 source = "investigation"
 confidence = "high"

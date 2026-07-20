@@ -47,7 +47,8 @@ separate open-addressing table. Its write of 3 at `ctx+0x53d88` is the instructi
 command type. So that snippet is a **value-registration operation, not the
 decision→scene dispatch**. The real decision→scene mechanism is **still unidentified** and belongs with
 the call-script / script-load dispatch (`name-resolution.md §1`). See `docs/engine-re.md` for the
-verified handler analysis and the opcode-dispatch table that will crack call-script next.
+verified handler analysis, including the explicit note that the port's legacy inert `GfxState` approximation
+is not a faithful implementation, and the opcode-dispatch table that will crack call-script next.
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).
