@@ -99,6 +99,22 @@ public class SoftwareAffineRasterizerTests
         Assert.Equal(new byte[4], hidden);
     }
 
+    [Fact]
+    public void BlitRgba_AdditiveMakesBlackTransparentAndAddsScaledColor()
+    {
+        var identity = new Affine2D(1, 0, 0, 1, 0, 0);
+        byte[] background = { 40, 50, 60, 255 };
+        byte[] black = { 0, 0, 0, 255 };
+        SoftwareAffineRasterizer.BlitRgba(background, 1, 1, black, 1, 1, 0, 0, 1, 1,
+            identity, 0xffffff, 0, 1, multiplyTint: true, blend: BlendKind.Additive);
+        Assert.Equal(new byte[] { 40, 50, 60, 255 }, background);
+
+        byte[] blueGlow = { 16, 32, 200, 128 };
+        SoftwareAffineRasterizer.BlitRgba(background, 1, 1, blueGlow, 1, 1, 0, 0, 1, 1,
+            identity, 0xffffff, 0, 0.5f, multiplyTint: true, blend: BlendKind.Additive);
+        Assert.Equal(new byte[] { 43, 57, 109, 255 }, background);
+    }
+
     // Pre-fast-path affine algorithm retained here as an independent differential oracle.
     private static void ReferenceBlit(byte[] dst, int dstW, int dstH, byte[] src, int srcW,
                                       int srcX, int srcY, int width, int height, Affine2D transform,

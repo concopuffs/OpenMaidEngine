@@ -90,6 +90,15 @@ coverage is 100% for all 23 data initializers, CALCARR, and TUNE; the remaining 
 SYSTEM4-rooted path visible and interactive in Godot, then investigate only the gaps actually reached on
 that route instead of treating every static gap as a prerequisite.
 
+**Godot root landing (2026-07-20).** The no-argument Godot/run-godot path now starts SYSTEM4 directly and
+does not apply the direct-SC0000 layout/surface bootstrap or the diagnostic `--boot` prefix. A windowed run
+reaches and renders TITLE using SYSTEM4-owned retained state. A real-script integration test drives TITLE's
+Game Start input, GAMESTART's release-gated default selection, and proves the same VM enters SC0000 through
+SYSTEM4's computed resource id `G[0x699]=0x22`; `G[0]=1` and the script-produced ADV-chrome flag
+`G[0x6c1]=1` are present at that boundary. `--scene SC0000 --boot` remains available only as the explicit
+single-scene diagnostic harness. This lands the boot/title/New Game entry half of B1–B3; proving a completed
+scene return plus boundary cleanup still belongs to B1 completion.
+
 ## Stage B1 — Persistent session and scene coordinator
 
 Replace the single-SC0000-root assumption with an application-owned session that runs SYSTEM4 as its root.

@@ -665,10 +665,15 @@ public sealed class GfxState
                 {
                     var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
                     tint = ((long)r << 16) | ((long)g << 8) | (long)b;
-                    if (o.StaticColorMode == 1 || (o.StaticColorMode == 0 && o.OneShotColorBlend))
+                    if (o.StaticColorMode == 1)
                     {
-                        // Native mode 1 enables SRCALPHA/INVSRCALPHA and passes packed ARGB as D3D
-                        // modulation. Its high byte is opacity, not mode-0 tint/fill strength.
+                        // Native mode 1 enables SRCALPHA/ONE additive blending and passes packed ARGB as
+                        // D3D modulation. Black therefore contributes nothing (TITLE's SO022 flames),
+                        // while the high byte scales the additive source contribution.
+                        alpha = a; strength = 0; blend = BlendKind.Additive; multiplyTint = true;
+                    }
+                    else if (o.StaticColorMode == 0 && o.OneShotColorBlend)
+                    {
                         alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
                     }
                     else if (o.StaticColorMode == 2)

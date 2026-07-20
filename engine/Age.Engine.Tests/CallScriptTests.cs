@@ -9,16 +9,19 @@ public class CallScriptTests
 {
     // Opcodes (from build/opcodes.json): exit=0x2, call-script=0x3(argc1), mov=0x55(argc2).
     // Operand types: imm=0, global-int=3, local-int=9.
-    private const uint OP_EXIT = 0x2, OP_CALLSCRIPT = 0x3, OP_MOV = 0x55;
+    private const uint OP_EXIT = 0x2, OP_CALLSCRIPT = 0x3, OP_MOV = 0x55, OP_SETTEXTURE = 0x1f9;
 
-    private sealed class NullHost : IHost
+    private class NullHost : IHost
     {
+        public virtual void EnterScriptContext(string scriptName) { }
+        public virtual void ExitScriptContext() { }
+        public virtual long ResolveTextureResourceId(long resourceId) => resourceId;
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
         public void FrameYield() { }
         public void CreateTexture(int s, int w, int h) { }
-        public void SetTexture(long r, int s) { }
+        public virtual void SetTexture(long r, int s) { }
         public void DrawTexture(int s, int sx, int sy, int w, int h, int dx, int dy) { }
         public (int Width, int Height) GetTextureSize(int s) => (0, 0);
         public void PlayBgm(long id) { }
@@ -30,6 +33,29 @@ public class CallScriptTests
         private readonly Dictionary<long, Script> _m;
         public MapProvider(Dictionary<long, Script> m) => _m = m;
         public Script? GetById(long id) => _m.TryGetValue(id, out var s) ? s : null;
+    }
+
+    private sealed class ContextHost : NullHost
+    {
+        private readonly Stack<string> _contexts = new();
+        public List<string> Events { get; } = new();
+        public List<(long ResourceId, int Slot)> Textures { get; } = new();
+
+        public override void EnterScriptContext(string scriptName)
+        {
+            _contexts.Push(scriptName);
+            Events.Add($"enter:{scriptName}");
+        }
+
+        public override void ExitScriptContext()
+        {
+            Events.Add($"exit:{_contexts.Pop()}");
+        }
+
+        public override long ResolveTextureResourceId(long resourceId)
+            => resourceId + (_contexts.Peek() == "CALLEE" ? 700 : 70);
+
+        public override void SetTexture(long resourceId, int slot) => Textures.Add((resourceId, slot));
     }
 
     // Build a Script from raw dwords via the real loader (guarantees identical decode).
@@ -104,5 +130,26 @@ public class CallScriptTests
         var vm = new VirtualMachine(caller, t, new NullHost(), null, new MapProvider(new() { [5] = callee }));
         vm.Run();
         Assert.Equal(1, vm.Globals[0x20]);   // caller's local 0 unchanged by callee's local 0
+    }
+
+    [Fact]
+    public void ScriptLocalTextureIdsFollowTheActiveNestedFrame()
+    {
+        var t = Table();
+        var callee = Asm(t, "CALLEE",
+            OP_SETTEXTURE, 0, 7, 0, 2, 0, uint.MaxValue,
+            OP_EXIT);
+        var caller = Asm(t, "CALLER",
+            OP_SETTEXTURE, 0, 7, 0, 1, 0, uint.MaxValue,
+            OP_CALLSCRIPT, 0, 5,
+            OP_SETTEXTURE, 0, 7, 0, 3, 0, uint.MaxValue,
+            OP_EXIT);
+        var host = new ContextHost();
+        var vm = new VirtualMachine(caller, t, host, null, new MapProvider(new() { [5] = callee }));
+
+        vm.Run();
+
+        Assert.Equal(new[] { (77L, 1), (707L, 2), (77L, 3) }, host.Textures);
+        Assert.Equal(new[] { "enter:CALLER", "enter:CALLEE", "exit:CALLEE", "exit:CALLER" }, host.Events);
     }
 }

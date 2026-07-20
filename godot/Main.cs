@@ -153,8 +153,8 @@ public partial class Main : Godot.Control
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
-        bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0;   // run SYSTEM4's state prefix first
-        string scene = "SC0000";                        // --scene <NAME>: which scene to play (default SC0000)
+        bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0; // diagnostic prefix for direct-scene runs
+        string scene = "SYSTEM4";                       // natural persistent root; --scene keeps direct diagnostics
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
@@ -200,6 +200,8 @@ public partial class Main : Godot.Control
         Sys4ScriptProvider? scripts = null;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
+        bool directSceneHarness = !_selftest
+            && !scene.Equals("SYSTEM4", System.StringComparison.OrdinalIgnoreCase);
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
             pageMapPath = System.IO.Path.Combine(Paths.Build, $"page-map-{scene.ToUpperInvariant()}.jsonl");
@@ -220,12 +222,12 @@ public partial class Main : Godot.Control
         // single-scene harness starts after that prefix, so carry forward its exact script-owned state
         // alongside the inherited SO000/SO001 state below. Full Phase-B SYSTEM4 replay will replace this
         // bootstrap as one unit; HISTORY depends on the 650x150 dimensions of layouts 2..6 for clipping.
-        if (!_selftest)
+        if (directSceneHarness)
             AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
                 scripts!.RequireByName("SYSTEM4.BIN"), table, _vm.TextHistory);
         // SYSTEM4 loads the shared SO001 chrome sheet into surface slot 17 before any scene runs.
         // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
-        if (!_selftest && resources.ResolveName("SO001.AGF") is { } systemChrome)
+        if (directSceneHarness && resources.ResolveName("SO001.AGF") is { } systemChrome)
         {
             _host.SetTexture(systemChrome.RawIndex, 0x11);
             _vm.Gfx.SetSurface(0x11, systemChrome.RawIndex, 0);
@@ -233,7 +235,7 @@ public partial class Main : Godot.Control
         // SYSTEM4 also loads SO000 and configures op 0x73 before entering scene code. The Phase-A
         // single-scene harness does not replay those graphics side effects, so inject their exact state
         // alongside the existing SO001 bootstrap until Phase B runs the complete SYSTEM4 entrypoint.
-        if (!_selftest && resources.ResolveName("SO000.AGF") is { } waitIndicator)
+        if (directSceneHarness && resources.ResolveName("SO000.AGF") is { } waitIndicator)
         {
             _host.SetTexture(waitIndicator.RawIndex, 0x0c);
             _vm.Gfx.SetSurface(0x0c, waitIndicator.RawIndex, 0xff00);
@@ -242,7 +244,7 @@ public partial class Main : Godot.Control
         }
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
-        if (boot && !_selftest)
+        if (boot && directSceneHarness)
         {
             var session = new GameSession();
             foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
@@ -254,13 +256,13 @@ public partial class Main : Godot.Control
         // The native SYSTEM4 UI boot enables standard ADV chrome after the data-only *INIT prefix above.
         // Without this inherited value the visible SO001 strip is still drawn, but every ADV script skips
         // its five pointer rectangles and registers only the off-screen keyboard/pad records.
-        if (!_selftest)
+        if (directSceneHarness)
         {
             _vm.Globals[0x6c1] = 1;
-            // The native ADV scheduler supplies this Hide Window permission outside script-visible
-            // writes. Every ADV scene gates its HIDEWIN call on it after opcode 0x199 re-entry.
-            _vm.Globals[0x62425] = 1;
         }
+        // The native ADV scheduler supplies this Hide Window permission outside script-visible writes.
+        // It is an engine service default, not a scene bootstrap, and remains present for either entry path.
+        if (!_selftest) _vm.Globals[0x62425] = 1;
         // Native AGE owns this transient secondary-SFX channel outside script-visible writes.
         // The matching SC0000 trace has value 4 at 0xc31; seed only this proven profile/slice.
         if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
@@ -526,7 +528,7 @@ public partial class Main : Godot.Control
                 else
                 {
                     BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
-                              localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic);
+                              localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic, v.Blend);
                     var raw = _vm.Gfx.TryGet(v.Handle);
                     outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
@@ -710,7 +712,7 @@ public partial class Main : Godot.Control
                 if (texture == null) continue;
                 BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
                           source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,
-                          texture.Value.IsDynamic);
+                          texture.Value.IsDynamic, source.Blend);
             }
             drawn++;
         }
@@ -749,11 +751,11 @@ public partial class Main : Godot.Control
 
     // Blit one object's surface rect. Static source pixels are cached per (assetId, colorKey): on first use, texels
     // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
-    // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 sets multiplyTint and uses packed RGB as
-    // multiplicative modulation while alpha is object opacity.
+    // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 uses packed RGB modulation and
+    // SRCALPHA/ONE additive composition; black source pixels therefore contribute nothing.
     private void BlitLayer(RgbaImage decoded, int assetId, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
                            Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
-                           bool dynamic = false)
+                           bool dynamic = false, BlendKind blend = BlendKind.Alpha)
     {
         var cacheKey = (assetId, colorKey);
         int sourceWidth, sourceHeight;
@@ -796,7 +798,7 @@ public partial class Main : Godot.Control
         if (sw <= 0 || sh <= 0) return;
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
             _screenPixels, ScreenWidth, ScreenHeight, sourcePixels, sourceWidth, sourceHeight,
-            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint);
+            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint, blend);
     }
 
     private void FillAffineQuad(int w, int h, Age.Engine.Model.Affine2D localToDest, long tint, float alpha)

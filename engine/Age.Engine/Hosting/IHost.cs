@@ -15,6 +15,11 @@ public readonly record struct SurfaceRectFill(
 
 public interface IHost
 {
+    // Script-local resource ids resolve against the currently executing frame's SYS4INI section.
+    // Interactive hosts track this stack; headless hosts may keep the no-op/default identity behavior.
+    void EnterScriptContext(string scriptName) { }
+    void ExitScriptContext() { }
+    long ResolveTextureResourceId(long resourceId) => resourceId;
     void ShowText(int offset, string text);
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.

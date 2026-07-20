@@ -34,6 +34,14 @@ public sealed class ResourceMap
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
 
+    /// <summary>Resolve an already-normalized raw catalog id without applying a scene section base.</summary>
+    public AssetEntry? ResolveRawTexture(long rawId)
+    {
+        var entry = _catalog.ResolveRaw(rawId);
+        return entry is { IsPlaceholder: false } &&
+               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
+    }
+
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
     public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
 

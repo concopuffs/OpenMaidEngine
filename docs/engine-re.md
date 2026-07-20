@@ -245,9 +245,9 @@ optionally calls `LOGO.BIN` and `OP.BIN`, calls the one-op `INIT.BIN`, and enter
 not a thin handle seed: it calls 23 data initializers in order (`EBINIT`, `CNINIT`, `ITINIT`, `SKINIT`,
 `ILINIT`, `AFINIT`, `TRINIT`, `MAINIT`, `ALINIT`, `CDINIT2`, `MPINIT`, `LAINIT`, `OBINIT`, `STINIT2`,
 `RTINIT`, `CGINIT`, `SPINIT`, `CTINIT`, `CVINIT`, `CIINIT`, `VIINIT`, `SCINIT`, `BTANINIT2`) and then
-`TUNE.BIN`. The CLI `play --boot` nine-script list is therefore only a partial diagnostic approximation;
-the Godot `--boot` path reaches the complete list indirectly because it executes `INIT2` with call-script
-resolution enabled.
+`TUNE.BIN`. The CLI `play --boot` nine-script list is therefore only a partial diagnostic approximation.
+Godot now runs SYSTEM4 itself by default, so this complete sequence and its host-visible side effects execute
+in one VM; Godot `--boot` remains only for an explicit direct-scene diagnostic such as `--scene SC0000`.
 
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
 instruction-offset set. The captured New Game route is:
@@ -261,6 +261,11 @@ scene boundary, resolves `G[0x87a57][G[0x62ccf]]` into next-script resource `G[0
 SYS4INI id `0x22` (`SC0000.BIN`) when the mapping is zero, and executes computed `call-script@0x477`.
 Thus normal scenes remain nested script frames under SYSTEM4 and return to it; the port should keep one
 VM/host session rooted at SYSTEM4 rather than replace top-level VMs based on a host-invented scene result.
+
+**Port landing (2026-07-20).** The no-argument Godot path is rooted at SYSTEM4 and renders TITLE without
+manual inherited-layout or surface injection. A real-script integration test drives the same input callback
+lifecycle through TITLE and GAMESTART and observes SYSTEM4 enter SC0000 with `G[0]=1`, `G[0x699]=0x22`,
+and script-produced `G[0x6c1]=1`. Direct `--scene` launches retain the old bootstrap strictly as a diagnostic.
 
 `tools/frida/capture_script_loads.py` hooks `script_frame_load_resource@0x40e980` and reads its third stack
 argument (the raw packed resource id) for direct name resolution. It is attach-only: attempting to gate the
@@ -852,18 +857,26 @@ Ghidra functions renamed + plate-commented, saved).
   (`EngineCtx+0x51b64`), not op `0x238`.
 - **`0x203` (`gfx_op_0x203_worker_set_color` `0x47e9b0`)**: sets a **static** color/alpha `obj+0x60`, no anim
   bit. Immediate per-object modulation.
-- **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** (`local_2c`: 0 opaque, 1 alpha
-  `SRCALPHA/INVSRCALPHA`, 2/3 additive/special for glow/flash) and passes a modulation color/alpha to the
-  device draw. Slice A ports the **alpha** path (fades); additive (glow) is deferred (its `local_2c` source
-  field is `obj+0x30`, the value written by op `0x203`. Mode 1 uses packed ARGB alpha as opacity and RGB
-  as multiplicative D3D modulation. For a **textured mode-0** object, preserved `0xffffffff` is opaque
+- **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** from `obj+0x30`, the value written
+  by op `0x203`, and passes a modulation color/alpha to the device draw. Correcting the D3D9 constants:
+  mode 1 writes `SRCBLEND=SRCALPHA` (5) and `DESTBLEND=ONE` (2), so it is additive glow—not ordinary
+  `SRCALPHA/INVSRCALPHA`. Mode 2 conditionally writes `ONE/ZERO` for a selected render target; mode 3 adds
+  the subtract blend operation to the mode-1 factors. The port implements mode-1 additive composition,
+  where packed alpha scales source contribution and packed RGB multiplicatively modulates it. For a
+  **textured mode-0** object, preserved `0xffffffff` is opaque
   identity, not a request to replace the texture with white; the packed alpha byte is therefore not a
-  generic tint-strength control. Modes 2/3 remain separately scoped beyond the completed mode-1 path, and
+  generic tint-strength control. Mode 3 remains separately scoped beyond the completed mode-1 path, and
   surfaceless mode-0 fills remain a distinct consumer case.
+
+**TITLE SO022 additive proof (2026-07-20).** TITLE loads type-1 8-bpp `SO022.AGF` with no alpha plane and
+no color key, binds two 140×140 spritesheet objects, and calls `0x203(handle,1,255,0xffffff)` for both.
+Ordinary alpha composition therefore produces opaque black squares around the blue flames. Native mode-1
+`SRCALPHA/ONE` makes black contribute zero; the implemented additive raster path removes the rectangles
+while preserving the animated glow, verified across a windowed SYSTEM4/TITLE capture.
 
 **SC0000 third-CG white-screen and missing-glow fix (2026-07-11).** The page containing
 `大役を担ったのは…` reaches the intended EV052DA image and both animated AE001D layers. A synchronized
-Godot capture proved AE001D is correctly alpha-bearing and drawn in mode 1 at only 6-8% object opacity;
+Godot capture proved AE001D is correctly alpha-bearing and drawn in mode 1 at only a 6-8% additive source scale;
 it was not the white wall. During the preceding `0x223` EV052CA→EV052DA crossfade, base handle `0xcb2a`
 renders EV052DA in mode 2 with identity modulation. When the transition ends, `0x203@0x12478` restores that
 same textured object to mode 0 with negative color operands, preserving `0xffffffff`. Native keeps EV052DA
@@ -908,8 +921,8 @@ alpha/RGB target operands independently preserve their bytes from current `+0x60
 
 The port now carries current and target separately and samples them from the unified `FrameClock`; an op
 `0x203` static write after `0x202` therefore becomes the ramp's current value rather than overwriting its
-target. Mode 0 retains the established CG/tint/fill behavior; mode 1 now uses native alpha opacity plus RGB
-modulation. `draw-string 0x204`/`0x7a` remains a separate dependency.
+target. Mode 0 retains the established CG/tint/fill behavior; mode 1 uses native additive composition with
+ARGB alpha as the source scale plus RGB modulation. `draw-string 0x204`/`0x7a` remains a separate dependency.
 
 **ADV chrome correction (2026-07-11).** Mode 0 cannot be classified from the final packed color alone.
 Static `0x203(mode=0, alpha=0, rgb=white)` remains the established opaque/no-tint CG initializer, but a
@@ -1004,13 +1017,13 @@ AE001H, exactly matching the reported white pulse. Follow-up native dataflow clo
 fresh objects initialize static color `obj+0x60` to `0xffffffff`; the interpolator samples that temporary
 color toward target `obj+0x240`, then `gfx_object_composite` passes the sample and the unchanged blend
 selector `obj+0x30` to `gfx_object_blit_d3d9`. Mode 0 enables no alpha blending and uses RGB only as vertex
-modulation, while mode 1 enables SRCALPHA/INVSRCALPHA. AE001H therefore cycles
+modulation, while mode 1 enables SRCALPHA/ONE additive composition. AE001H therefore cycles
 `0xffffffff ↔ 0xe0ffffff`: identity RGB throughout, with alpha intentionally inert in mode 0, so native has
 no visible pulse. The faithful fix is now fully bounded: initialize/resolve static color correctly, sample
 packed ARGB, and consume it through the existing mode-specific blend path instead of converting animated
 alpha into tint strength. The port now initializes static color to native identity `0xffffffff`, resolves
 negative operands in `SetColorAnimResolved`, samples packed ARGB before blend selection, and feeds it through
-the existing mode-specific path. Exact AE001H, mode-0 RGB-modulation, and mode-1 alpha regressions cover the
+the existing mode-specific path. Exact AE001H, mode-0 RGB-modulation, and mode-1 additive regressions cover the
 contract; the white pulse is removed without suppressing the scripted channel.
 
 **Resolved 2026-07-20:** `0x236` is the movie-to-retained-surface path described below. `0x242` is the

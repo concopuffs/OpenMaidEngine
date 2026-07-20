@@ -341,32 +341,48 @@ public sealed class VirtualMachine
             previousRawInputFrame = _rawInputFrame;
         }
         var prev = _cur; _cur = frame; _depth++;
-        _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
-        var outcome = FrameOutcome.RanOff;
-        int pc = frame.Pc;
-        while (pc >= 0 && pc < frame.Script.Instructions.Count)
+        bool hostContextEntered = false;
+        try
         {
-            if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
-            Steps++;
-            if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
-            int next = Step(frame.Script.Instructions[pc], pc);
-            _host.FrameYield();
-            if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
-            if (next == HALT) { outcome = FrameOutcome.Halted; break; }
-            pc = next;
+            _host.EnterScriptContext(frame.Script.Name);
+            hostContextEntered = true;
+            _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
+            var outcome = FrameOutcome.RanOff;
+            int pc = frame.Pc;
+            while (pc >= 0 && pc < frame.Script.Instructions.Count)
+            {
+                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
+                Steps++;
+                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
+                int next = Step(frame.Script.Instructions[pc], pc);
+                _host.FrameYield();
+                if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
+                if (next == HALT) { outcome = FrameOutcome.Halted; break; }
+                pc = next;
+            }
+            _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
+            return outcome;
         }
-        _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
-        lock (_interactiveLock)
+        finally
         {
-            if (cause == FrameCause.CallScript)
-                _interactiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
-                    ? previousInteractiveFrame : null;
-            else if (ReferenceEquals(_interactiveFrame, frame))
-                _interactiveFrame = null;
-            if (ReferenceEquals(_rawInputFrame, frame)) _rawInputFrame = previousRawInputFrame;
+            lock (_interactiveLock)
+            {
+                if (cause == FrameCause.CallScript)
+                    _interactiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
+                        ? previousInteractiveFrame : null;
+                else if (ReferenceEquals(_interactiveFrame, frame))
+                    _interactiveFrame = null;
+                if (ReferenceEquals(_rawInputFrame, frame)) _rawInputFrame = previousRawInputFrame;
+            }
+            try
+            {
+                if (hostContextEntered) _host.ExitScriptContext();
+            }
+            finally
+            {
+                _cur = prev; _depth--;
+            }
         }
-        _cur = prev; _depth--;
-        return outcome;
     }
 
     private bool ServiceHotspotCallback()
@@ -951,12 +967,17 @@ public sealed class VirtualMachine
                 Gfx.ClearSurface((int)Read(a[0]));
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
+            {
+                long requestedResourceId = Read(a[0]);
+                long resolvedResourceId = _host.ResolveTextureResourceId(requestedResourceId);
                 if (_diagSetTexture)   // AGE_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
-                    System.Console.Error.WriteLine($"[settex] resId=0x{Read(a[0]):x} slot={(int)Read(a[1])} " +
+                    System.Console.Error.WriteLine($"[settex] resId=0x{requestedResourceId:x}->0x{resolvedResourceId:x} slot={(int)Read(a[1])} " +
                         $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
                 _host.ReleaseSurface((int)Read(a[1]));
-                Gfx.SetSurface((int)Read(a[1]), Read(a[0]), a.Count > 2 ? Read(a[2]) : 0);
-                _host.SetTexture(Read(a[0]), (int)Read(a[1])); return pc + 1;   // host still tracks dims for get-texture-size
+                Gfx.SetSurface((int)Read(a[1]), resolvedResourceId, a.Count > 2 ? Read(a[2]) : 0);
+                _host.SetTexture(resolvedResourceId, (int)Read(a[1]));
+                return pc + 1;   // host still tracks dims for get-texture-size
+            }
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
                 Gfx.BindDraw(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                              (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));

@@ -5,7 +5,8 @@ public static class SoftwareAffineRasterizer
 {
     public static void BlitRgba(byte[] dst, int dstW, int dstH, byte[] src, int srcW, int srcH,
                                 int srcX, int srcY, int width, int height, Affine2D localToDest,
-                                long tint, float tintStrength, float opacity, bool multiplyTint = false)
+                                long tint, float tintStrength, float opacity, bool multiplyTint = false,
+                                BlendKind blend = BlendKind.Alpha)
     {
         if (width <= 0 || height <= 0) return;
         int istr = (int)(System.Math.Clamp(tintStrength, 0f, 1f) * 255);
@@ -15,7 +16,7 @@ public static class SoftwareAffineRasterizer
         if (TryIntegerTranslation(localToDest, out int tx, out int ty))
         {
             BlitTranslated(dst, dstW, dstH, src, srcW, srcX, srcY, width, height,
-                           tx, ty, tr, tg, tb, istr, ia, multiplyTint);
+                           tx, ty, tr, tg, tb, istr, ia, multiplyTint, blend);
             return;
         }
         if (!localToDest.TryInverse(out var inv)) return;
@@ -30,7 +31,7 @@ public static class SoftwareAffineRasterizer
             int sr=multiplyTint ? src[si]*tr/255 : (src[si]*(255-istr)+tr*istr)/255;
             int sg=multiplyTint ? src[si+1]*tg/255 : (src[si+1]*(255-istr)+tg*istr)/255;
             int sb=multiplyTint ? src[si+2]*tb/255 : (src[si+2]*(255-istr)+tb*istr)/255;
-            Blend(dst,di,sr,sg,sb,sa);
+            Blend(dst,di,sr,sg,sb,sa,blend);
         }
     }
 
@@ -67,7 +68,8 @@ public static class SoftwareAffineRasterizer
 
     private static void BlitTranslated(byte[] dst, int dstW, int dstH, byte[] src, int srcW,
                                        int srcX, int srcY, int width, int height, int tx, int ty,
-                                       int tr, int tg, int tb, int istr, int ia, bool multiplyTint)
+                                       int tr, int tg, int tb, int istr, int ia, bool multiplyTint,
+                                       BlendKind blend)
     {
         int x0 = System.Math.Max(0, tx), y0 = System.Math.Max(0, ty);
         int x1 = (int)System.Math.Min(dstW, (long)tx + width);
@@ -84,7 +86,7 @@ public static class SoftwareAffineRasterizer
                 int sr = multiplyTint ? src[si] * tr / 255 : (src[si] * (255 - istr) + tr * istr) / 255;
                 int sg = multiplyTint ? src[si + 1] * tg / 255 : (src[si + 1] * (255 - istr) + tg * istr) / 255;
                 int sb = multiplyTint ? src[si + 2] * tb / 255 : (src[si + 2] * (255 - istr) + tb * istr) / 255;
-                Blend(dst, di, sr, sg, sb, sa);
+                Blend(dst, di, sr, sg, sb, sa, blend);
             }
         }
     }
@@ -108,7 +110,12 @@ public static class SoftwareAffineRasterizer
         x1=System.Math.Min(dw,(int)System.Math.Ceiling(System.Math.Max(System.Math.Max(a.X,b.X),System.Math.Max(c.X,d.X))));
         y1=System.Math.Min(dh,(int)System.Math.Ceiling(System.Math.Max(System.Math.Max(a.Y,b.Y),System.Math.Max(c.Y,d.Y))));
     }
-    private static void Blend(byte[] d,int i,int r,int g,int b,int a){
+    private static void Blend(byte[] d,int i,int r,int g,int b,int a,BlendKind blend=BlendKind.Alpha){
+        if(blend==BlendKind.Additive){
+            d[i]=(byte)System.Math.Min(255,d[i]+r*a/255);d[i+1]=(byte)System.Math.Min(255,d[i+1]+g*a/255);
+            d[i+2]=(byte)System.Math.Min(255,d[i+2]+b*a/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a);
+            return;
+        }
         d[i]=(byte)((r*a+d[i]*(255-a))/255);d[i+1]=(byte)((g*a+d[i+1]*(255-a))/255);
         d[i+2]=(byte)((b*a+d[i+2]*(255-a))/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a);
     }

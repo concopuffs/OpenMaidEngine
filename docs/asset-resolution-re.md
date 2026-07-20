@@ -75,13 +75,13 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    AGE game with the same container — **the "scope" was just which SYS4INI section the scene lives in.**
    (The old `play-bgm 5→BGM006` validation point was a mis-attribution — the real game plays BGM005.)
 
-   **System/global-id exception (identified 2026-07-10; not yet implemented).** Some SYSTEM4 loads use
+   **System/global-id exception (identified 2026-07-10; implemented).** Some SYSTEM4 loads use
    the SYS4INI record's universal `raw_index` directly, including the two `@` placeholder records, rather
    than a scene-local manifest index. `SYSTEM4.BIN` writes `G[0x69b]=0x337e`, then
    `set-texture(G[0x69b], slot=0x11)`. SYS4INI `raw_index 0x337e` is `DATA1/SO001.AGF`, the shared
-   800×300 RGBA system-chrome sheet. The filtered `files[]` list omits placeholders, so treating `0x337e`
-   as a `files[]` position currently mis-resolves it to `SETROUTE.BIN`. This path needs a distinct
-   `raw_index → entry` lookup; the scene-manifest rule above remains correct for SC texture/voice ids.
+   800×300 RGBA system-chrome sheet. `ResourceMap.ResolveTexture` therefore tries the active script's
+   scene manifest first and then the distinct universal raw-id lookup; the scene-manifest rule above
+   remains correct for ordinary SC texture/voice ids.
 
    *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
    for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
@@ -104,16 +104,18 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    model approximated the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
    (A2b section) for the implementation history and current retained-object model.
 
-   **Current system-chrome shortcut/gap (confirmed 2026-07-10).** `Main --boot` executes only
-   `INITCONFIG/INIT2/INIT` through `CaptureHost` and copies their globals into the scene VM; it does not
-   replay SYSTEM4's graphics side effects through `GodotAdvHost`. `convert_agf.py --scene SC0000` also
-   converts only SC0000's manifest, so `build/textures/SO001.BMP` is absent. `CALLBACK_WINDOW.BIN` expects
-   slot `0x11` to already contain SO001, draws the 800×227 textbox from `(0,0)`, and crops the lower-right
-   buttons from the same sheet. In the port slot 17 is unpopulated, so retained handle `0xd2f0` resolves as
-   a colored surfaceless object and the compositor draws the observed opaque black fill. A temporary decode
-   verified SO001 is 800×300, 32-bpp, with substantial per-pixel alpha; the current rasterizer already
-   consumes source alpha. The missing prerequisites are system-asset resolution/conversion and retained
-   slot initialization, not new textbox drawing or button interaction.
+   **System chrome ownership (resolved 2026-07-20).** The normal Godot entry now runs SYSTEM4 as the live
+   root, so its SO000/SO001 loads, ADV-layout definitions, and retained slot initialization execute through
+   `GodotAdvHost` before TITLE and child scenes. Asset lookup decodes VFS-owned AGF bytes directly and does
+   not depend on a scene-limited converted BMP. `CALLBACK_WINDOW.BIN` consequently inherits slot `0x11`
+   with SO001 and can crop its textbox/buttons normally. The explicit `--scene SC0000 --boot` diagnostic
+   still injects the same known inherited layout and surface state because it intentionally bypasses
+   SYSTEM4; that shortcut is no longer the shipped/default route.
+
+   The active manifest is frame-local, not fixed to the root scene: every VM call frame brackets host work
+   with its script context. `set-texture` resolves the local id at load time and retains the normalized raw
+   catalog id in the graphics surface, so that surface remains stable after a nested helper returns or a
+   sibling script becomes active. Voice, SFX, and movie calls likewise resolve against the executing frame.
 4. **Audio.** **✅ WIRED (2026-07-06), VFS bytes complete (2026-07-11).** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
    resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players

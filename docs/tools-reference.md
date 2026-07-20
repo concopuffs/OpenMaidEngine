@@ -132,21 +132,24 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 - **Godot** accepts **`--trace-histogram <file>`** — profile the **real** run (headless flow diverges because
   `wait-for-input` is a no-op there; the real run to page 1 is ~562 steps with **0** sleeps vs headless's 2M
   steps / 493k sleeps). Dumped when the scene ends or the window closes. e.g.
-  `godot --path godot -- --boot --shot out/p1.png --trace-histogram out/hist.txt`.
+  `godot --path godot -- --scene SC0000 --boot --shot out/p1.png --trace-histogram out/hist.txt`.
 
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
-Plays the real bytecode with call-script execution on (subroutines run live). `--headless` can't render
-texture ops (no GPU context) — run windowed for real scenes. User args (after `--`):
-- `--scene <NAME>` — which scene to play (default `SC0000`), e.g. `--scene SC0240` (executes 29 nested subroutines).
+Plays the real bytecode with call-script execution on (subroutines run live). A no-argument launch, including
+`run-godot.ps1`, starts the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. `--headless` can't
+render texture ops (no GPU context) — run windowed for real scenes. User args (after `--`):
+- `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
-- `--boot` — run SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` before the scene, so scene-assumed boot state (chiefly INIT2's gfx handle array) is present. **Needed for the gfx CGs to render** (without it the opening event CGs collapse/drift). e.g. `godot --path godot -- --boot`.
+- `--boot` — direct-scene diagnostic only: with `--scene <non-SYSTEM4>`, run the old
+  `INITCONFIG/INIT2/INIT` state prefix before that isolated scene. The normal SYSTEM4-rooted launch neither
+  needs nor applies it. e.g. `godot --path godot -- --scene SC0000 --boot`.
 - `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
-- `--shot-sequence <dir> [--frames N]` — dump one PNG per rendered frame (`frame_0000.png…`, default N=180 ≈ 3s @60fps) then quit, auto-advancing past input waits. Verifies time-based retained effects and publication boundaries as distinct frames, which a single `--shot` cannot. CPU/IO-heavy by design (a PNG every frame); a dev diagnostic, not a normal run. e.g. `godot --path godot -- --boot --shot-sequence out/seq --frames 300`.
+- `--shot-sequence <dir> [--frames N]` — dump one PNG per rendered frame (`frame_0000.png…`, default N=180 ≈ 3s @60fps) then quit, auto-advancing past input waits. Verifies time-based retained effects and publication boundaries as distinct frames, which a single `--shot` cannot. CPU/IO-heavy by design (a PNG every frame); a dev diagnostic, not a normal run. e.g. `godot --path godot -- --scene SC0000 --boot --shot-sequence out/seq --frames 300`.
 - `--sleep-scale <f>` — multiply every explicit `sleep` (op 0xc8) duration by `f` (default 1.0). This stretches only script-authored sleep holds; it does not slow ordinary opcode bursts or replace `0x20c`/`0x21c` presentation pacing. Debug-only; leave at 1.0 for real playback.
 - `--speed <f>` — scale sleeps and retained presentation clocks without throttling ordinary opcode bursts or auto-advancing input waits. Values 0.05–8 are accepted; `--speed 0.25` is useful for transform inspection, while 1.0 is normal playback.
-- `--gfx-log <file>` — **compositor + op diagnostic** (the tool that root-caused the grey background). Logs, per rendered frame, only the objects whose draw outcome **CHANGED** (drawn↔skip↔gone, resId, resolved file, `slot`, `src`/`dst`, `op`acity, `tintStr`ength) — quiet until something actually changes, so the exact frame a layer drops out (and why) stands out. Also traces every `set-texture`/`create-texture` **slot assignment** (via `GodotAdvHost.TraceOps`). Works live or with `--shot-sequence`. Use it before theorising about layering/blend/geometry: it showed the grey BG = the slot-selecting globals resolving to 0 → every texture collapsing into slot 0 (see engine-re.md §"Grey-background root cause"). e.g. `godot --path godot -- --boot --gfx-log out/gfx.log` then click to the bad page.
+- `--gfx-log <file>` — **compositor + op diagnostic** (the tool that root-caused the grey background). Logs, per rendered frame, only the objects whose draw outcome **CHANGED** (drawn↔skip↔gone, resId, resolved file, `slot`, `src`/`dst`, `op`acity, `tintStr`ength) — quiet until something actually changes, so the exact frame a layer drops out (and why) stands out. Also traces every `set-texture`/`create-texture` **slot assignment** (via `GodotAdvHost.TraceOps`). Works live or with `--shot-sequence`. Use it before theorising about layering/blend/geometry: it showed the grey BG = the slot-selecting globals resolving to 0 → every texture collapsing into slot 0 (see engine-re.md §"Grey-background root cause"). e.g. `godot --path godot -- --scene SC0000 --boot --gfx-log out/gfx.log` then click to the bad page.
   Matrix-channel outcomes also include `base`, `anchor`, projected `dst`, sampled `scale`/`trans`, and
   one-shot-plus-cyclic `rot`ation angles. Active op-`0x202` outcomes include packed `color=current->target`
   and `colorProgress`, synchronized with the same frame/clock in `--timeline-log`. Parent directories are
@@ -155,7 +158,7 @@ texture ops (no GPU context) — run windowed for real scenes. User args (after 
 - `--timeline-log <jsonl>` — diagnostic-only synchronized event stream for a real Godot run. Records every
   executed script byte offset/opcode, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,
   `halted`), BGM events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
-  `--boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
+  `--scene SC0000 --boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 
 **Godot page locator:** every normal run recreates `build/page-map-<SCENE>.jsonl`, adding one record per

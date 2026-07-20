@@ -12,10 +12,12 @@ public sealed class GodotAdvHost : IHost
 {
     private readonly Main _main;
     private readonly ResourceMap _res;
-    private readonly string _scene;                       // e.g. "SC0000" — for section_base
+    private readonly string _rootScene;
+    private readonly object _scriptContextLock = new();
+    private readonly Stack<string> _scriptContexts = new();
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
-    private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> scene/raw resource id
+    private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> normalized raw catalog id
     private readonly Dictionary<long, (RgbaImage Image, string Name, int RawIndex)> _movieFrames = new();
     private readonly Dictionary<int, long> _movieBySurface = new();
     private readonly HashSet<long> _completedMovies = new();
@@ -59,9 +61,32 @@ public sealed class GodotAdvHost : IHost
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, GodotTimelineLog? timeline = null)
     {
-        _main = main; _res = res; _scene = scene; _clock = clock;
+        _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
     }
+
+    private string CurrentScene
+    {
+        get { lock (_scriptContextLock) return _scriptContexts.TryPeek(out var scene) ? scene : _rootScene; }
+    }
+
+    public void EnterScriptContext(string scriptName)
+    {
+        string scene = System.IO.Path.GetFileNameWithoutExtension(scriptName).ToUpperInvariant();
+        lock (_scriptContextLock) _scriptContexts.Push(scene);
+        _timeline?.Event("script-context-enter", new() { ["scene"] = scene });
+    }
+
+    public void ExitScriptContext()
+    {
+        string? scene = null;
+        lock (_scriptContextLock)
+            if (_scriptContexts.TryPop(out var popped)) scene = popped;
+        if (scene != null) _timeline?.Event("script-context-exit", new() { ["scene"] = scene });
+    }
+
+    public long ResolveTextureResourceId(long resourceId)
+        => _res.ResolveTexture(CurrentScene, resourceId)?.RawIndex ?? resourceId;
 
     public void ShowText(int offset, string text)
     {
@@ -225,7 +250,7 @@ public sealed class GodotAdvHost : IHost
             if (!_waitIndicators.TryGetValue(_activeWaitLayout, out config)) return null;
             if (!_surfaceResources.TryGetValue(config.SurfaceSlot, out resourceId)) return null;
         }
-        var asset = _res.ResolveTexture(_scene, resourceId);
+        var asset = _res.ResolveRawTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         if (asset == null || image == null || config.CellWidth <= 0 || config.CellHeight <= 0) return null;
         int frames = System.Math.Max(1, config.TerminalFrame + 1);
@@ -510,7 +535,7 @@ public sealed class GodotAdvHost : IHost
             _surfaceText.Remove(slot);
             _surfaceResources[slot] = resourceId;
         }
-        var asset = _res.ResolveTexture(_scene, resourceId);
+        var asset = _res.ResolveRawTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
         if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(asset?.Name ?? "<none>")}");
@@ -531,15 +556,16 @@ public sealed class GodotAdvHost : IHost
         lock (_imageLock)
             if (_movieFrames.TryGetValue(resId, out var movie))
                 return (movie.Image, movie.Name, movie.RawIndex, true);
-        var asset = _res.ResolveTexture(_scene, resId);
+        var asset = _res.ResolveRawTexture(resId);
         var image = asset != null ? Decode(asset) : null;
         return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
     }
 
     public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
-        var asset = _res.Resolve(_scene, resourceId);
-        if (asset == null) { Godot.GD.Print($"movie unresolved {_scene}:0x{resourceId:x}"); return; }
+        string scene = CurrentScene;
+        var asset = _res.Resolve(scene, resourceId);
+        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return; }
         try
         {
             var movie = _res.ReadMovie(asset);
@@ -689,7 +715,7 @@ public sealed class GodotAdvHost : IHost
 
     public void PlayVoice(long id, int playbackVariant)
     {
-        var asset = _res.Resolve(_scene, id);
+        var asset = _res.Resolve(CurrentScene, id);
         var audio = asset != null ? LoadAudio(asset) : null;
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
             ["playback_variant"] = playbackVariant });
@@ -722,7 +748,7 @@ public sealed class GodotAdvHost : IHost
     public void LoadSoundEffect(long resourceId, int channel)
     {
         if ((uint)channel >= (uint)_sfxNames.Length) return;
-        var asset = _res.Resolve(_scene, resourceId);
+        var asset = _res.Resolve(CurrentScene, resourceId);
         var audio = asset != null ? LoadAudio(asset) : null;
         _sfxNames[channel] = audio?.Name;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel,
