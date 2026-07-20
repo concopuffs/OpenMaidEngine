@@ -136,8 +136,9 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
-Plays the real bytecode with call-script execution on (subroutines run live). A no-argument launch, including
-`run-godot.ps1`, starts the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. `--headless` can't
+Plays the real bytecode with call-script execution on (subroutines run live). A no-argument launch starts
+the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. The local `run-godot.ps1`/`.cmd` launchers
+make that route explicit with `--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes. User args (after `--`):
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
