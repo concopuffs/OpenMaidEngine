@@ -158,6 +158,56 @@ name = "sleep_timer"
 type = "int"
 note = "sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration)"
 [[field]]
+offset = 0x5f3ac
+name = "timed_callback_timer"
+type = "int"
+note = "elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler"
+[[field]]
+offset = 0x5f690
+name = "timed_callback_abort_pc"
+type = "int"
+note = "optional local fallback PC supplied to op 0xd5; -1 disables abort redirection"
+[[field]]
+offset = 0x5f694
+name = "timed_callback_entries_vector"
+type = "int"
+note = "MSVC vector object base for 16-byte schedule entries; begin/end/capacity pointers follow"
+[[field]]
+offset = 0x5f698
+name = "timed_callback_entries_begin"
+type = "void*"
+note = "begin pointer for 16-byte entries {deadline_ms, field_100, primary_pc, catchup_pc}"
+[[field]]
+offset = 0x5f69c
+name = "timed_callback_entries_end"
+type = "void*"
+note = "end pointer for the timed callback entry vector"
+[[field]]
+offset = 0x5f6a0
+name = "timed_callback_entries_capacity"
+type = "void*"
+note = "capacity-end pointer for the timed callback entry vector"
+[[field]]
+offset = 0x5f6a4
+name = "timed_callback_last_index"
+type = "int"
+note = "last appended schedule index; op 0xd3 resets to -1 and op 0xd4 increments per entry"
+[[field]]
+offset = 0x5f6a8
+name = "timed_callback_cursor"
+type = "int"
+note = "next schedule entry consumed by timed_callback_sequence_tick; op 0xd3 resets to zero"
+[[field]]
+offset = 0x5f6b4
+name = "timed_callback_script_resource_id"
+type = "uint"
+note = "active frame script resource retained by op 0xd5 for local callback dispatch safety"
+[[field]]
+offset = 0x5f6b8
+name = "timed_callback_script_resource_guard"
+type = "uint"
+note = "companion current-script identity checked before redirecting to a scheduled callback"
+[[field]]
 offset = 0x6da78
 name = "message_skip_activation_guard"
 type = "int"
@@ -232,3 +282,8 @@ offset = 0xa0ce4
 name = "run_state_flags"
 type = "uint"
 note = "interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward)"
+[[field]]
+offset = 0xa0ce8
+name = "timed_callback_abort_signal"
+type = "int"
+note = "scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured"

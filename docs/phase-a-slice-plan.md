@@ -1849,3 +1849,28 @@ voice request emitted by the original page, clicks the actual visible voiced His
 request for SC0000 `0x24`/`MAN999.OGG`; this prevents a pre-History voice from producing a false positive.
 The `/v2` handler and helper comments are corrected and saved. Manual replay of that same retained row now
 plays audibly, confirming the full click-to-Godot path.
+
+### ADV History smooth-scroll scheduler implemented (2026-07-19)
+
+Native RE resolves `0xd3/0xd4/0xd5` as a generic frame-local timed local-callback sequence. Op `0xd3`
+initializes it, op `0xd4` appends repeated relative deadlines with separate primary and catch-up targets,
+and op `0xd5` starts the elapsed timer and services callbacks through the penultimate entry. The final entry
+is a look-ahead sentinel. The scheduler chooses the catch-up target when the next deadline is already late,
+which lets HISTORY advance interpolation state without performing every intermediate redraw.
+
+HISTORY's concrete schedule is 10/20/30/40/50/51/52 ms: five scrollbar interpolation steps, a no-op
+terminal callback, and the look-ahead sentinel. The VM now stores this state on the active script frame,
+uses the host's existing clock/sleep boundary, redirects into the shipped local callbacks, and resumes the
+same `0xd5` after `ret`. Focused regressions cover on-time execution and forced catch-up behavior.
+
+The canonical opcode and `EngineCtx` sources are updated and regenerated; the `/v2` handlers, vector append
+helper, timer helper, and main-loop scheduler are named/commented, the expanded 56-field `EngineCtx` is
+reapplied, and the program is saved. HISTORY is now 73/78 distinct opcodes and 847/854 instructions handled
+or safe-noop. Its five remaining effectful gaps total seven instructions: `0x10d` and `0x8b` twice each,
+plus one each of `0x1ce`, `0x1cb`, and `0x20a`.
+
+**Next:** investigate the five remaining HISTORY support opcodes together, then select the smallest coherent
+implementation slice from their actual responsibilities rather than treating them as one feature by count.
+
+Validation: all 203 engine tests pass, opcode and EngineCtx tests/lints are clean, vm0 RECOVER passes, the
+Godot build has zero warnings, and threaded `SELFTEST OK`.

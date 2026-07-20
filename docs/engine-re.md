@@ -1416,8 +1416,36 @@ A live replay trace exposed a corrected prerequisite on that path. The clicked S
 and type at `+0x18`. Thus SC0000's `0x1d2(2,0x11)` means type 2, character/value `0x11`, not the reverse.
 The port now writes that pair in the native order, allowing HISTORY's type-2 gate to reach voice playback.
 
-History's remaining work is the `0xd3/0xd4/0xd5` smooth-scroll callback scheduler and its small supporting
-gaps. None changes backlog ownership or requires choosing a save/profile backend.
+#### Timed local-callback scheduler and History smooth scrolling (2026-07-19)
+
+Ops `0xd3/0xd4/0xd5` are a generic frame-local timed callback sequence, not a History-specific animation
+primitive. The native state is a vector of 16-byte entries at `ctx+0x5f694`, with begin/end/capacity at
+`+0x5f698/+0x5f69c/+0x5f6a0`; each entry is `{deadline_ms,aux,primary_pc,catchup_pc}`. The playback cursor is
+`ctx+0x5f6a8`, the last appended index is `ctx+0x5f6a4`, and op `0xd5` uses the elapsed timer rooted at
+`ctx+0x5f3ac`. These names are canonical in `vm-map/engine-ctx.toml` and applied to the `/v2` `EngineCtx`.
+
+- op `0xd3` clears the vector, resets the cursor to zero, and initializes the last index and optional abort
+  PC to `-1`;
+- op `0xd4(interval,count,primary,catchup)` appends `count` entries, accumulating each deadline relative to
+  the preceding one and storing the two local callback PCs;
+- op `0xd5(abort_pc)` retains the active script identity, starts the timer, sorts the entries, and enables
+  scheduler run-state bit `0x40` while `cursor < last_index`. The final entry is therefore a non-dispatched
+  look-ahead sentinel, not another callback.
+
+`timed_callback_sequence_tick@0x408170` sleeps until an entry is due. If the following entry's deadline is
+already behind elapsed time, it dispatches the current entry's catch-up PC; otherwise it dispatches the
+primary PC. It validates that the active frame still owns the recorded script, redirects that frame's PC,
+and advances the cursor. The optional abort signal at `ctx+0xa0ce8` redirects to the op-`0xd5` fallback PC;
+HISTORY passes `0xffffffff`, so that branch is outside its live route.
+
+HISTORY builds deadlines 10, 20, 30, 40, 50, 51, and 52 ms. The first five advance a five-step scrollbar
+interpolation; the catch-up form omits the expensive redraw/present call when the engine is late. The 51 ms
+entry is a no-op callback and the 52 ms entry is its look-ahead sentinel. The port keeps the sequence on the
+script frame, blocks only at these scheduler service boundaries using the host clock, and resumes op `0xd5`
+after each local callback returns. Focused tests cover exact relative deadlines and the late catch-up choice.
+
+Smooth-scroll scheduling is now implemented without changing History backlog ownership or choosing a
+save/profile backend. HISTORY's remaining static gaps are five supporting opcodes across seven instructions.
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is

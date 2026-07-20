@@ -233,6 +233,21 @@ This also names the whole call graph statically (build/callscript-names.json).
 
 Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity).
 
+### 0xd3 `begin-timed-callback-sequence` (u00425960, argc 0)
+- **summary:** Clear and initialize the current script frame's timed local-callback sequence.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xd3_handler@0x41a430 clears the 16-byte-entry vector at ctx+0x5f694, sets last index ctx+0x5f6a4 and abort target ctx+0x5f690 to -1, and resets playback cursor ctx+0x5f6a8 to zero. HISTORY.BIN@0xbf9 begins its seven-event scrollbar interpolation schedule.
+
+### 0xd4 `append-relative-timed-callbacks` (u004266F0, argc 4)
+- **summary:** Append repeated relative deadlines and their on-time/catch-up local callback targets to the current frame's timed sequence.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xd4_handler@0x428890 loops operand 2 times, accumulates operand 1 onto the preceding deadline, stores operand 3 at entry+8 and operand 4 at entry+0xc, and appends each 16-byte entry. HISTORY.BIN@0xbfa/0xc03/0xc0c produces deadlines 10,20,30,40,50,51,52 ms.
+
+### 0xd5 `run-timed-callback-sequence` (u004262C0, argc 1)
+- **summary:** Start or service the frame-local timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. Operand 1 is an optional abort/fallback PC; HISTORY passes 0xffffffff.
+
 ### 0xd9 `clear-run-state-0x1000` (u00415880, argc 0)
 - **summary:** Clear native run/service bit 0x1000; if the secondary context is active, clear the same bit there. SC0000 executes it once after the initial SFX-channel reset, with no VM-visible result.
 - **grounding:** source=investigation, confidence=high, noop_headless=True
@@ -844,18 +859,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xd0 `u00415830` (u00415830, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xd3 `u00425960` (u00425960, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xd4 `u004266F0` (u004266F0, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xd5 `u004262C0` (u004262C0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

@@ -2128,14 +2128,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00425960"
-category = "unknown"
-summary = ""
+name = "begin-timed-callback-sequence"
+category = "control"
+summary = "Clear and initialize the current script frame's timed local-callback sequence."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xd3_handler@0x41a430 clears the 16-byte-entry vector at ctx+0x5f694, sets last index ctx+0x5f6a4 and abort target ctx+0x5f690 to -1, and resets playback cursor ctx+0x5f6a8 to zero. HISTORY.BIN@0xbf9 begins its seven-event scrollbar interpolation schedule."
 
 [[opcode]]
 op = 0xd4
@@ -2144,33 +2144,33 @@ argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004266F0"
-category = "unknown"
-summary = ""
+name = "append-relative-timed-callbacks"
+category = "control"
+summary = "Append repeated relative deadlines and their on-time/catch-up local callback targets to the current frame's timed sequence."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xd4_handler@0x428890 loops operand 2 times, accumulates operand 1 onto the preceding deadline, stores operand 3 at entry+8 and operand 4 at entry+0xc, and appends each 16-byte entry. HISTORY.BIN@0xbfa/0xc03/0xc0c produces deadlines 10,20,30,40,50,51,52 ms."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "relative interval (ms)"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "repeat count"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "on-time local callback code target"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "catch-up local callback code target"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2180,18 +2180,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004262C0"
-category = "unknown"
-summary = ""
+name = "run-timed-callback-sequence"
+category = "control"
+summary = "Start or service the frame-local timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. Operand 1 is an optional abort/fallback PC; HISTORY passes 0xffffffff."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "abort/fallback local code target (-1 disables)"
 observed_types = ["imm"]
 
 [[opcode]]

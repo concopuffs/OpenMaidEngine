@@ -6,6 +6,8 @@ namespace Age.Engine.Vm;
 /// are shared across frames; everything here is per-call and discarded on return.</summary>
 internal sealed class ExecFrame
 {
+    internal readonly record struct TimedCallback(long DeadlineMs, int PrimaryOffset, int CatchUpOffset);
+
     public readonly Script Script;
     public int Pc;                                       // entry instruction index
     public readonly Frame Locals = new();
@@ -22,6 +24,10 @@ internal sealed class ExecFrame
     public int MouseCallbackTarget = -1;                 // op 0xcc target dword offset
     public long MouseCallbackIntervalMs;
     public long MouseCallbackNextAtMs;
+    public readonly List<TimedCallback> TimedCallbacks = new(); // ops 0xd3/0xd4/0xd5
+    public int TimedCallbackCursor;
+    public long? TimedCallbackStartedAtMs;
+    public int TimedCallbackAbortOffset = -1;
     public readonly HotspotRegistry Hotspots = new();
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }
