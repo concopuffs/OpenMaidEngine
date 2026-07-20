@@ -1249,12 +1249,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "coroutine-save-yield-handlers"
 category = "control"
-summary = "(handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index) + gfx cmd-type 5. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator)."
+summary = "(handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index); its generic handler prologue records the 5-dword instruction length. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator)."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {*(ctx+0x53d88+ctx[0x53d14]*0x78)=5; ctx[0x6da88+idx*4]=op1; ctx[0x6db28+idx*4]=op2}. Both operands are code PCs (handler labels)."
+evidence = "Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {frame_instruction_word_count[idx]=5; ctx[0x6da88+idx*4]=op1; ctx[0x6db28+idx*4]=op2}. Both operands are code PCs (handler labels)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -2046,7 +2046,7 @@ abi_source = "kelebek+decode-validated"
 name = "sleep"
 category = "control"
 summary = "Pause the current script for <duration> milliseconds while retained presentation continues."
-details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity)."
+details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also records its generic 3-dword instruction length and runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity)."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -2894,7 +2894,7 @@ noop_headless = false
 source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = "Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Writes gfx cmd-type 9; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service."
+evidence = "Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Records the generic 9-dword instruction length; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3464,9 +3464,9 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "gfx-cmd-register"
-category = "draw"
-summary = "0x1a2 (value) — gfx cmd-type 3. Handler gfx_op_0x1a2_descriptor_register@0x42d360 builds a key from operand 1's lvalue descriptor and inserts its value into an open-addressing descriptor hash (vm_lvalue_descriptor_hash_insert@0x42cf70). This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query this hash. NOT save/scene."
+name = "register-lvalue-value"
+category = "control"
+summary = "0x1a2 (value) — register operand 1's current value under a key derived from its lvalue descriptor in the open-addressing table at ctx+0x5190. The write of 3 at ctx+0x53d88 is only this instruction's encoded dword length, not a graphics command type. This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query it. NOT save/scene."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -3710,19 +3710,19 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1ad
-label = "u004154F0"
+label = "mark-save-resume-frame"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004154F0"
-category = "unknown"
-summary = ""
+name = "mark-save-resume-frame"
+category = "control"
+summary = "Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ad_mark_save_resume_frame@0x416b70 writes decoded instruction size 1 and ctx+0x9928c=cur_ctx_index. context_state_serialize@0x40d320 uses that field (or cur_ctx_index when -1) as the inclusive frame cutoff for save layouts 2/3, serializes frames 0..cutoff, and forces the cutoff frame's saved return entry to -1. op_0x2_exit_or_return_frame@0x417940 clears the mark when unwinding below it. Corpus: 1,928 calls in 304 scripts; SC0000's six calls are at startup and immediately after HISTORY/MENU/HIDEWIN/INPUTNAME returns."
 
 [[opcode]]
 op = 0x1ae
@@ -4840,7 +4840,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-draw-color"
 category = "draw"
-summary = "0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case."
+summary = "0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5202,7 +5202,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-gfx-field64"
 category = "draw"
-summary = "0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table."
+summary = "0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5228,7 +5228,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-gfx-xy"
 category = "draw"
-summary = "0x213 (obj_idx)(x)(y) — gfx cmd-type 7. Handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). See docs/engine-re.md gfx op-contract table."
+summary = "0x213 (obj_idx)(x)(y) — handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). The generic instruction length is 7 dwords. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5285,7 +5285,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "query-gfx-field?"
 category = "draw"
-summary = "0x216 (out)(idx) — gfx cmd-type 5. Handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table."
+summary = "0x216 (out)(idx) — handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). The generic instruction length is 5 dwords. A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5311,7 +5311,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-gfx-geom3"
 category = "draw"
-summary = "0x217 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x217_set_geom3 @0x4231b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e960. In SC0000 label_12649 it writes the anchor vector G[0x6249b/c/d] INTO the object; op 0x218 reads it back. See docs/engine-re.md gfx op-contract table."
+summary = "0x217 (handle)(a)(b)(c) — handler gfx_op_0x217_set_geom3 @0x4231b0 SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e960; its generic instruction length is 9 dwords. In SC0000 label_12649 it writes the anchor vector G[0x6249b/c/d] INTO the object; op 0x218 reads it back. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5347,7 +5347,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "get-gfx-geom3?"
 category = "draw"
-summary = "0x218 (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x218_query_geom3 @0x42a130: GETS a stored 3-vector from object `handle` (FUN_0047f360) into out_a/b/c. In label_12649 it reads the object's anchor vector back into G[0x6249b/c/d] — a stubbed DRIVER of the render drift (stale anchor → bad centering). See docs/engine-re.md gfx op-contract table."
+summary = "0x218 (handle)(out_a)(out_b)(out_c) — handler gfx_op_0x218_query_geom3 @0x42a130 GETS a stored 3-vector from object `handle` (FUN_0047f360) into out_a/b/c; its generic instruction length is 9 dwords. In label_12649 it reads the object's anchor vector back into G[0x6249b/c/d] — a stubbed DRIVER of the render drift (stale anchor → bad centering). See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5383,7 +5383,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-gfx-geom3-b"
 category = "draw"
-summary = "0x219 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x219_set_geom3 @0x423240: SETS a 3-vector (int→float) on object `handle` via native worker FUN_0047e910 (sibling of 0x217, a different per-object vector). See docs/engine-re.md gfx op-contract table."
+summary = "0x219 (handle)(a)(b)(c) — handler gfx_op_0x219_set_geom3 @0x423240 SETS a 3-vector (int→float) on object `handle` via native worker FUN_0047e910 (sibling of 0x217, a different per-object vector); its generic instruction length is 9 dwords. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5419,7 +5419,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "get-gfx-geom3-b?"
 category = "draw"
-summary = "0x21a (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x21a_query_geom3 @0x42a1b0: GETS a stored 3-vector from object `handle` (FUN_0047f2e0) into out_a/b/c. In label_12649 it reads the object's position vector into G[0x62498/9/a] — a stubbed DRIVER of the render drift. See docs/engine-re.md gfx op-contract table."
+summary = "0x21a (handle)(out_a)(out_b)(out_c) — handler gfx_op_0x21a_query_geom3 @0x42a1b0 GETS a stored 3-vector from object `handle` (FUN_0047f2e0) into out_a/b/c; its generic instruction length is 9 dwords. In label_12649 it reads the object's position vector into G[0x62498/9/a] — a stubbed DRIVER of the render drift. See docs/engine-re.md gfx op-contract table."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5482,7 +5482,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x223, 0x1c7, 0x1cc]
-evidence = "Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10."
+evidence = "Ghidra handler 0x417520 records the 1-dword instruction length and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10."
 
 [[opcode]]
 op = 0x21d
@@ -6198,7 +6198,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-clock"
 category = "draw"
-summary = "(duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift."
+summary = "(duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. The generic instruction length is 3 dwords. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -6441,7 +6441,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-gfx-field2d0"
 category = "draw"
-summary = "0x242 (handle)(value) — command type 5. Get-or-create the retained gfx object and write value to obj+0x2d0. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown."
+summary = "0x242 (handle)(value) — get-or-create the retained gfx object and write value to obj+0x2d0; the generic instruction length is 5 dwords. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown."
 noop_headless = false
 source = "investigation"
 confidence = "high"

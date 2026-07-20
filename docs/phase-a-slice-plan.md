@@ -284,12 +284,12 @@ with the rest of the screen grey). Root cause = the stubbed native op **`0x215`*
 slot 0 (its return drives `label_12649`'s slot-select).
 
 **The canonical decode + verdict now lives in `docs/engine-re.md` (op `0x215` section)** — don't duplicate it
-here. In brief: `0x215`'s real handler `FUN_0042a0b0` (Ghidra) writes cmd-type 5 into the current gfx-object
-record and returns a **`std::map::find`** over an engine-internal command-buffer registry (populated by sibling
-gfx ops like `0x1a2`). That return is **native command-buffer state, not the VM global bank** → seeding
+here. In brief: `0x215`'s real handler `FUN_0042a0b0` (Ghidra) records its generic 5-dword instruction length
+and returns a **`std::map::find`** over the retained gfx-object registry populated by draw/geometry workers.
+That return is **native retained-object state, not the VM global bank** → seeding
 story-state **cannot** fix it. So this is **(b) a genuine native op**, *not* (a) the Phase-B state-divergence
-problem. The prior conclusion in this doc — grounded in a 2/s `capture_gfx_objects.py` poll of the object-*record*
-array — was wrong: it observed the wrong structure (not the lookup map) and can't rule out transient records.
+problem. The prior conclusion in this doc — grounded in a 2/s `capture_gfx_objects.py` poll that mistook
+script-context records for gfx objects — was wrong: it observed the wrong structure, not the lookup map.
 
 **Resolution had TWO halves** (canonical decode in `docs/engine-re.md`, op `0x215` + "The render drift's
 SECOND half"; don't duplicate here):
@@ -401,7 +401,7 @@ dramatic holds, not the rapid burst's pacer.
 
 **RE (Ghidra):** `sleep_op_0xc8`@`0x420ec0` is **non-blocking** — it arms a main-loop-polled timer
 (`sleep_timer_arm`@`0x44cff0`; start = ms tick, duration = operand). **Operand unit = milliseconds.** (Also
-carries anti-tamper + a gfx cmd-type-3 write, neither needed host-side.) `0x20c` = `gfx_op_0x20c_present_frame`
+carries anti-tamper + a generic 3-dword instruction-length write, neither needed host-side.) `0x20c` = `gfx_op_0x20c_present_frame`
 → host-implicit (our compositor presents continuously) → `noop_headless`.
 
 **Implemented:** `IHost.Sleep(long)` + VM `case "sleep"` forwarding the raw operand; the 9 non-Godot hosts no-op
@@ -1977,3 +1977,30 @@ should be classified before choosing between it and the smaller two-call support
 
 Validation: all 206 engine tests pass; opcode and EngineCtx lints, vm0 RECOVER, the zero-warning Godot
 build, and threaded `SELFTEST OK` are clean.
+
+### Slice A2b-0x1ad investigation — numbered-save resume-frame marker (2026-07-20)
+
+The six-call SC0000 `0x1ad` cluster is now classified at high confidence. The zero-operand handler
+`0x416b70` stores the current script-context index in `ctx+0x9928c`. Numbered-save serializer layouts 2/3
+use that index as the inclusive high frame, copy activations `0..mark`, and clear the marked activation's
+saved return target so it becomes the top frame after load. Opcode `0x2` clears the mark when unwinding below
+it. Across the corpus, 1,928 calls in 304 scripts place the marker at main-script entries and after modal
+script returns; SC0000's sites are startup plus `HISTORY`/`MENU`/`HIDEWIN`/`INPUTNAME` return paths.
+
+No runtime implementation landed. The current `GameSession` JSON format persists global banks only and has
+no active `ExecFrame` chain or numbered-save lifecycle, so `0x1ad` cannot have its native observable effect
+without choosing the unified save backend already being deliberately deferred. It remains an effectful gap,
+now explicitly grouped with persistence work rather than UI support.
+
+The investigation also corrected a foundational native-field label: `ctx+0x53d88 + curCtx*0x78` is the
+decoded instruction length in dwords (`1 + 2*argc`) used by `adv_interpreter_tick` to advance the PC, not a
+gfx command type. The canonical EngineCtx field, affected opcode prose, native RE, SCJUMP note, and legacy
+Frida-tool description now reflect that distinction; no completed host gfx behavior changes as a result.
+
+**Next:** leave `0x1ad` and `0x1cb` together behind the future save/profile boundary. Investigate the paired
+zero-operand `0x1f6`/`0x20e` calls next: both bracket SC0000's ADV scene setup/teardown paths and are the
+largest repeated non-persistence cluster still unclassified.
+
+Validation: all 206 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, and `git diff --check`
+are clean. SC0000 coverage deliberately remains 119/129 distinct opcodes handled (92.2%), with `0x1ad`'s
+six calls retained as a gap until numbered saves serialize active execution frames.

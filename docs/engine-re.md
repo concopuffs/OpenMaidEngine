@@ -115,8 +115,9 @@ decode when you reverse one (the generic name is a floor, not a final).
 > `switch_program /v2/range_00400000.bin`) before doing anything** — `run_script_inline` runs against the
 > GUI's active program, so a wrong-program script would mutate/measure garbage.
 
-**Other confirmed engine-context offsets** (`ctx`/`esi`): `+0x53d14` = current gfx-object index;
-`+0x53d88` = per-object cmd-type table (stride `0x78` = 120 bytes); operand-fetch helper =
+**Other confirmed engine-context offsets** (`ctx`/`esi`): `+0x53d14` = current script-context index;
+`+0x53d88 + index*0x78` = current decoded instruction length in dwords (the interpreter advances PC by
+that value times four); operand-fetch helper =
 **`vm_operand_fetch`@`0x41b940`** (thiscall, `ecx=ctx`, arg = operand index → returns the operand value);
 **`vm_operand_write`@`0x425fb0`** = the counterpart store; **`vm_operand_lvalue`@`0x415f30`** = the
 companion index/pointer accessor.
@@ -137,7 +138,7 @@ Ghidra name is the record.
 **These `ctx` offsets are now a typed struct (2026-07-09).** The canonical field map is
 `vm-map/engine-ctx.toml` → generated `docs/engine-ctx-reference.md`; a `run_script_inline` pass created
 an `EngineCtx` Ghidra struct and retyped **all 419 dispatch handlers' `this` to `EngineCtx *`**, so they
-decompile `ctx->cur_ctx_index` / `ctx->cmd_type_table` / `ctx->run_state_flags` instead of `param_1 + 0x…`
+decompile `ctx->cur_ctx_index` / `ctx->frame_instruction_word_count` / `ctx->run_state_flags` instead of `param_1 + 0x…`
 (verified: `sleep_op_0xc8`, `gfx_op_0x215_query_source_slot`). Add a field: edit `engine-ctx.toml`, run
 `engine_ctx_build.py --build`, re-apply the struct. (The VM global bank `G[…]` is separate — `globals.toml`.)
 
@@ -145,7 +146,7 @@ decompile `ctx->cur_ctx_index` / `ctx->cmd_type_table` / `ctx->run_state_flags` 
 
 ## Findings
 
-### op `0x1a2` (`u00428010`) is a GRAPHICS command-buffer op — NOT save, NOT decision→scene (2026-07-07)
+### op `0x1a2` (`u00428010`) is a value/descriptor registration op — NOT save, NOT decision→scene (corrected 2026-07-20)
 
 The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong**,
 and pinning the *real* handler via the dispatch table above corrects two layers of confusion:
@@ -155,14 +156,15 @@ and pinning the *real* handler via the dispatch table above corrects two layers 
   `ctx[0x26e3f]=0x427fb0`). Op `0x1ac` is a **save-path** op — its handler formats
   `%s\SAVE%2.2d.DAT` (format string `0x571e70`) and is multi-operand. Reading the raw VA gave the
   wrong opcode.
-- **Op `0x1a2`'s real handler = `FUN_0042d360`** (`= ctx[0x26c93+0x1a2] = ctx[0x26e35]`), argc 1. It:
-  sets the **current gfx-object cmd-type to 3** (`*(ctx+0x53d88 + ctx[0x53d14]*0x78) = 3`), fetches
-  operand 1, formats a key with `"%c%8.8x"` (format string `0x5714e0`) of `(3, operand)`, and calls
-  `FUN_0042cf70(key, &operand)`. This is a **graphics command-buffer registration op**, not save and
-  not scene-load.
+- **Op `0x1a2`'s real handler = `FUN_0042d360`** (`= ctx[0x26c93+0x1a2] = ctx[0x26e35]`), argc 1. It
+  records the generic **3-dword instruction length** at `ctx+0x53d88 + curCtx*0x78`, fetches operand 1,
+  formats a key with `"%c%8.8x"` (format string `0x5714e0`) from `(type 3, operand lvalue descriptor)`,
+  and inserts the operand's current value into the separate open-addressing table at `ctx+0x5190`.
+  The old graphics classification came entirely from misreading the instruction-length field as a
+  command type. The handler is still definitively not save or scene-load.
 - **Consequence — the decision→scene premise is discredited.** The FIELD snippet
   `lookup(0x5f0ed, 0x62ccf); mov(ptr,1); lookup(0x5f0ed, 0x62ccf); u00428010(ptr)` (next op `0x21b`,
-  also gfx-family) is a **graphics/UI operation**, not scene sequencing. So `u00428010` does **not**
+  also outside the scene loader) is a **value-registration operation**, not scene sequencing. So `u00428010` does **not**
   resolve decision→scene. **The real decision→scene mechanism is unidentified** — it belongs with the
   call-script / script-load dispatch (`name-resolution.md §1`), the next target for this loop (now
   armed with the dispatch table to resolve the call-script handler directly).
@@ -214,7 +216,7 @@ decision→scene (scenes are just `SCxxxx.BIN` records loaded by their SYS4INI i
 
 ---
 
-### op `0x215` (`query-gfx-object?`) is a native command-buffer op — settles the render drift as (b) (2026-07-07)
+### op `0x215` (`query-gfx-object?`) is a retained gfx-object query — settles the render drift as (b) (corrected 2026-07-20)
 
 **This is the canonical account of the background/sprite "drift" bug** (background pinned off-centre /
 bottom-right, rest grey — `Screenshot 2026-07-06 211353.png`). It supersedes the earlier "drift =
@@ -226,32 +228,31 @@ Resolved via the dispatch table (`ctx[0x26c93 + 0x215]`): the registration routi
 VA-drift — it lands inside the unrelated `FUN_00421090`. Same lesson as `0x1a2`: never trust a Kelebek raw VA.)
 
 `FUN_0042a0b0(ctx)` does exactly two things:
-1. **`*(ctx + 0x53d88 + ctx[0x53d14]*0x78) = 5`** — writes **cmd-type 5** into the *current* gfx-object
-   record. A **command-buffer registration** side-effect, directly parallel to op `0x1a2` (`FUN_0042d360`)
-   writing cmd-type 3. So `0x215` is part of the gfx command-buffer subsystem, not a pure query.
+1. **`*(ctx + 0x53d88 + ctx[0x53d14]*0x78) = 5`** — records this opcode's generic encoded length
+   (one opcode dword plus two dwords per operand). This is interpreter bookkeeping, not a gfx side effect.
 2. **`out = FUN_0047f280(FUN_0041b940(2))`** — `FUN_0041b940(2)` fetches operand 2 (the bytecode handle
    key); `FUN_0047f280` is a **`std::map::find`** over an engine-internal associative registry, returning
    the mapped value or **`0xffffffff` (not-found)**; `FUN_00425fb0(1, out)` writes it to operand 1. That
-   registry is **populated by sibling gfx ops** — op `0x1a2`'s handler builds a `"%c%8.8x"` key and calls
-   `FUN_0042cf70`, an open-addressing hash **insert** into the same kind of store.
+   registry is populated by the retained-object draw/geometry workers. Op `0x1a2`'s descriptor-value
+   table is separate and does not populate this map.
 
-**(a) vs (b) — the verdict is (b).** The value `0x215` returns is **native command-buffer state**: "has a
-gfx object already been registered under this handle?" (`≥0` = existing → use its slot; `-1` = new). That
+**(a) vs (b) — the verdict is (b).** The value `0x215` returns is **native retained-object state**: "has a
+gfx object already been created under this handle, and what is its source slot?" (`≥0` = existing → use its slot;
+`-1` = absent). That
 state lives in the engine's own registry, maintained by the gfx ops, **not in the VM global bank**. So
 **seeding story-state globals cannot reproduce it** — the drift is *not* the Phase-B state-divergence
 problem. Stubbing `0x215` returns a constant → `label_12649`'s slot-select always takes one branch → every
 draw collapses onto slot 0 → the anchor-preserve math measures foreign-sized textures → cumulative drift.
 
 **Why the prior "state-divergence" conclusion was wrong.** It was grounded in `capture_gfx_objects.py`,
-which polled the object-*record* array (`[esi+0x53d64]`) at ~2/s and saw only 3 persistent UI objects, "0
-CG objects." But (i) the branch is driven by the **map lookup** (a different structure the poll never
-observed), and (ii) command-buffer records are **transient** — a 2/s poll can't prove CG records weren't
-used. Absence in that capture ≠ absence of the native path.
+which polled `[esi+0x53d64]` at ~2/s and mistook the engine's `0x78`-byte **script-context records** for gfx
+objects. The branch is driven by the retained-object map at `ctx+0x46614+0x408`, a different structure the
+probe never observed. Absence in that capture therefore says nothing about the native gfx-object path.
 
 **The fix is tractable and Frida-free.** (b) does *not* mean an opaque native state machine. The subsystem
-is a **modelable data structure**: an object-record array (slot / geometry / cmd-type per object) plus a
+is a **modelable data structure**: retained object records (slot / geometry / draw state) behind a
 handle→object registry (a `std::map`). Geometry and draw workers lazily populate that retained-object map;
-query and erase workers read/remove the same entries. Op `0x1a2` also maintains an operand-descriptor hash,
+query and erase workers read/remove the same entries. Op `0x1a2` also maintains a descriptor-value hash,
 but that is a separate structure and is not what op `0x215` queries. The opcode-level source of truth is
 `vm-map/opcodes.toml`.
 
@@ -310,7 +311,7 @@ handle array** (native entry-state a cold single-scene harness skips), NOT a sto
 
 **The loop iterator `op 0x140` is a native video-service call — not statically reproducible.** Handler =
 **`0x4299c0`** (dispatch `ctx[0x9b74c]=0x4299c0`; created+typed `EngineCtx*`+annotated; Kelebek `u0041F9C0` is
-VA-drift). It writes gfx cmd-type 9, copies operand-2/3 strings (`"LABEL"`, `"J"`) + operand-4 int, calls
+VA-drift). It records the generic 9-dword instruction length, copies operand-2/3 strings (`"LABEL"`, `"J"`) + operand-4 int, calls
 **`(*DAT_005c6018)(8, ctx[0x54fe8], &{str,str,int})`**, and writes the returned PC-like value back to operand 1
 (SC0000: `G[0x6be]`). `DAT_005c6018` is a **runtime-resolved function pointer** (all 6 xrefs are READs, no
 static writer) — the engine's **native video / transition / timing service**: `FUN_00405740` (a screen-
@@ -350,17 +351,17 @@ stubbed. The real video-service timing remains intentionally unmodeled.
 returned -1 and skipped it. The corrected source-slot query now reaches `0x1f7(handle,10)` object erasure
 and `0x1fa(slot)` surface release; the booted regression ends with no visible `0x37` object.
 
-#### gfx command-buffer — op contract table (2026-07-07, full family reversed)
+#### gfx opcode contract table (corrected 2026-07-20; full family reversed)
 
-Every gfx op shares one shape: **write a `cmd-type` into the current object record** (`*(ctx + 0x53d88 +
-ctx[0x53d14]*0x78) = <cmd>`), fetch operands via `FUN_0041b940(i)` (1-based; `docs` = the `0x1a2` variant
-uses `FUN_00415f30`), then either **SET** object fields (call a native worker `FUN_0047xxxx`) or **QUERY**
-object fields (write results back to output operands via `FUN_00425fb0(i, val)`). Handlers resolved through
+Every handler first writes its encoded instruction length in dwords to the current **script-frame** record
+(`*(ctx + 0x53d88 + ctx[0x53d14]*0x78) = 1 + 2*argc`), then fetches operands via
+`FUN_0041b940(i)` (1-based). Gfx handlers then either **SET** retained-object fields (call a native worker
+`FUN_0047xxxx`) or **QUERY** them (write results back via `FUN_00425fb0(i, val)`). The length write is generic
+interpreter bookkeeping and is not part of the gfx contract. Handlers resolved through
 the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_op_0x<op>_<role>`.
 
-| op | handler | cmd | dir | argc | contract |
+| op | handler | words | dir | argc | contract |
 |---|---|---|---|---|---|
-| `0x1a2` | `0x42d360` | 3 | set | 1 | operand-descriptor hash insert: key `"%c%8.8x"(3, operand-desc)` → `FUN_0042cf70`; separate from the retained object map |
 | `0x1f7` | `0x422270` | 5 | erase | 2 | retained-object erase: `op2>1` → `gfx_object_erase_range(op1,op2)` erases `[op1,op1+op2)`, else `gfx_object_erase(op1)` |
 | `0x1fa` | `0x4224a0` | 3 | set | 1 | release **surface slot** `ctx+0x52bd4[op1]` (vtbl free) + `FUN_00474e40(op1)` |
 | `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
@@ -513,13 +514,13 @@ preserving colorkey/tint/opacity behavior and never deriving opacity from transf
 Decoding the two already-named clock/start ops (dispatch table → `0x234`@`0x00423da0`, `0x238`@`0x004240e0`;
 both annotated) and grepping the SC0000 opening settles the animation model and confirms the opening exercises it:
 
-- **`0x238 set_anim_clock` (argc 1, cmd-type 3):** `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = operand1`
+- **`0x238 set_anim_clock` (argc 1, 3-dword instruction):** `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = operand1`
   (total duration). **A GLOBAL, NON-BLOCKING clock** — not per-object. The op only *configures* the clock; it
   does **not** loop/wait. The native render loop advances this clock each frame and interpolates *all* animating
   objects. Its own plate comment states the payoff: "our port can drive animation in the host's per-frame loop
   while the VM is parked at wait-for-input; no VM/host frame-lockstep." → **validates the wall-clock-tween
   architecture directly.** SC0000: `set-anim-clock(G[0x624bb])` @`0x123bd`, `set-anim-clock(0x190=400)` @`0x13858`.
-- **`0x234 anim_start` (legacy mnemonic; argc 5, cmd-type 0xb):** following worker
+- **`0x234 anim_start` (legacy mnemonic; argc 5, 11-dword instruction):** following worker
   `gfx_object_set_rotation_cycle` (`0x47f060`) into `gfx_object_anim_interpolate` (`0x473ed0`)
   corrects its ABI to `(handle)(period_ms)(axis_x)(axis_y)(axis_z)`. Period is `obj+0x228`, axis is
   `obj+0x244..0x24c`, and the frame-clock consumer applies
@@ -570,7 +571,7 @@ was **wrong**, and it came from trusting our own `Age.Cli gfx` oracle (which exe
 CG draws as "slot 0"). Verified against native code + the raw bytecode:
 
 - **`draw-texture` (op `0x1fb`, handler `gfx_op_0x1fb_draw_bind`@`0x422510`) is a RETAINED bind, not a blit.** It
-  writes cmd-type `0x11` and calls **`gfx_object_bind_draw`@`0x47e870`**, which on the object keyed by `handle`
+  records its 17-dword instruction length and calls **`gfx_object_bind_draw`@`0x47e870`**, which on the object keyed by `handle`
   (operand 1) sets: `flag|=1` (visible), `obj+4 = source SLOT index`, `obj+8..0x14 = source rect`,
   `obj+0x24/28/2c = position`. Its plate comment (prior RE) already states the key fact: the object stores the
   **slot INDEX — a live ref to `surface[slot]`, resolved each frame at render — NOT a texture snapshot.** Objects
@@ -602,7 +603,8 @@ Handler resolved via the dispatch table (`ctx[0x26c93+0xc8]` = `param_1[0x26d5b]
   native confirmation that the engine paces animation in its per-frame loop, not by blocking.
 - **Operand unit = MILLISECONDS.** `duration < 10` fast-paths through import `[0x56f0b8]`; every real scene sleep
   (`100`/`750`/`1000` in SC0000) is `≥ 10` → the timer-arm path.
-- The handler also writes gfx **cmd-type 3** into the current object record (`ctx+0x53d88+curidx*0x78`) and runs
+- The handler also records its generic **3-dword instruction length** in the current script-frame record
+  (`ctx+0x53d88+curidx*0x78`) and runs
   two **anti-tamper** checks (call `[ctx+0x5512c]`; a rotate-checksum compare of `ctx+0x55120/0x55124`;
   `__CxxThrowException` on mismatch — integrity work piggybacked on a hot op). Neither is needed by our model.
 
@@ -946,7 +948,7 @@ classified as the retained-object `+0x2d0` field setter described above; `0x23d/
 ### Movie-to-surface opcode `0x236` (2026-07-11)
 
 The exact ABI is `play-movie-to-surface(resource_id, surface_slot, movie_flags, sync_mask)`. Handler
-`op_0x236_play_movie_to_surface@0x423ee0` is command type 9 and requires the destination texture to exist.
+`op_0x236_play_movie_to_surface@0x423ee0` records a 9-dword instruction length and requires the destination texture to exist.
 It allocates/reuses a 0x478-byte `CMovieToTexture` object, binds the D3D device/backing texture, opens
 operand 1 through `asset_open_indexed_entry`, constructs a DirectShow FilterGraph, and starts it. The graph
 queries `IGraphBuilder`, `IMediaControl`, `IMediaPosition`, `IMediaEvent`, and `IBasicAudio`; its custom
@@ -1202,6 +1204,32 @@ message Skip is active. Normal opcode bursts retain the existing run-to-service-
 the missing native governor and remains fast without teleporting between blocking points. A regression proves
 op `0x88` state reaches the host before the following cadence yields. Validation is engine 168/168,
 zero-warning Godot build, and threaded `SELFTEST OK`.
+
+### Opcode `0x1ad` marks the numbered-save resume-frame boundary (2026-07-20)
+
+Opcode `0x1ad` is a zero-operand persistence marker, not an input reset or modal-UI synchronization call.
+Its real dispatch handler is `op_0x1ad_mark_save_resume_frame@0x416b70`. Aside from recording the generic
+one-dword instruction length at `ctx+0x53d88 + curCtx*0x78`, it performs one semantic write:
+`ctx->save_frame_boundary_index = ctx->cur_ctx_index` (`ctx+0x9928c = ctx+0x53d14`).
+
+`context_state_serialize@0x40d320` consumes the mark for numbered-save layouts 2 and 3. A negative mark
+falls back to the current frame; otherwise the serializer copies script frames `0..mark` inclusive and
+forces the marked frame's saved return entry to `-1`, making that frame the top/terminal activation after
+load. `op_0x2_exit_or_return_frame@0x417940` clears the mark when normal return unwinds below it. Scene/context reset also
+initializes it to `-1`. Thus the mark selects both the highest saved activation and the frame at which a
+loaded game resumes; the opcode itself neither reads nor writes a file.
+
+Corpus placement agrees with the native dataflow: 1,928 executions appear across 304 scripts. Roots such as
+`CAMP`, `FIELD`, and `FORT` mark their main frame near entry; SC0000's six sites are its startup path and the
+return paths from `HISTORY`, `MENU`, `HIDEWIN`, and `INPUTNAME`. Those calls re-establish the enclosing ADV
+frame as the safe numbered-save resume point after modal/nested scripts finish.
+
+**Port implication:** the current port-owned JSON session snapshot persists only global integer/string banks
+and deliberately has no active-frame or numbered-save backend. Treating `0x1ad` as a no-op is behaviorally
+neutral only under that present limitation; counting it as faithfully implemented would be misleading. Its
+real implementation belongs in the future unified save architecture, where the VM must serialize the active
+`ExecFrame` chain and remember which frame is the resume boundary. This is the same architectural deferral as
+the already-deferred profile/read-state work, not a reason to invent a seed or offset-specific shortcut.
 
 ### ADV read-message Skip and shared `RT.DAT` history (2026-07-18)
 

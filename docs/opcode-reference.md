@@ -222,9 +222,9 @@ This also names the whole call graph statically (build/callscript-names.json).
 
 
 ### 0x7b `coroutine-save-yield-handlers` (u0041ADB0, argc 2)
-- **summary:** (handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index) + gfx cmd-type 5. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator).
+- **summary:** (handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index); its generic handler prologue records the 5-dword instruction length. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator).
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {*(ctx+0x53d88+ctx[0x53d14]*0x78)=5; ctx[0x6da88+idx*4]=op1; ctx[0x6db28+idx*4]=op2}. Both operands are code PCs (handler labels).
+- **evidence:** Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {frame_instruction_word_count[idx]=5; ctx[0x6da88+idx*4]=op1; ctx[0x6db28+idx*4]=op2}. Both operands are code PCs (handler labels).
 
 ### 0x7c `coroutine-resume` (u00416A90, argc 0)
 - **summary:** () — scene-coroutine RESUME point. Native requires run-state bit 0x2000000 (ctx[0x6dbc8]) set — THROWS (__CxxThrowException) if unset, so it is only ever reached on a scheduler-driven re-entry, NEVER on a cold first pass (cold flow jmps over it). Restores PC=ctx[0x53d28]+ctx[0x6dbcc]*4, clears the run-bit (ctx+0xa0ce4 &= ~0x2000000), resets input/line state. SC0000 0x443 (falls into the main loop label_444). See engine-re.md §Scene-coroutine framework.
@@ -256,7 +256,7 @@ This also names the whole call graph statically (build/callscript-names.json).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section.
 
-Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also writes gfx cmd-type 3 + runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity).
+Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class). duration<10 fast-paths via [0x56f0b8]; all real scene sleeps (100/750/1000) are >=10. The handler also records its generic 3-dword instruction length and runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for duration ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity).
 
 ### 0xd3 `begin-timed-callback-sequence` (u00425960, argc 0)
 - **summary:** Clear and initialize the current script frame's timed local-callback sequence.
@@ -281,12 +281,22 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 ### 0x140 `coroutine-label-yield` (u0041F9C0, argc 4)
 - **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
 - **grounding:** source=investigation, confidence=med
-- **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Writes gfx cmd-type 9; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
+- **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Records the generic 9-dword instruction length; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
 
 ### 0x199 `yield-adv-coroutine` (u00414D50, argc 0)
 - **summary:** Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
+
+### 0x1a2 `register-lvalue-value` (gfx-cmd-register, argc 1)
+- **summary:** 0x1a2 (value) — register operand 1's current value under a key derived from its lvalue descriptor in the open-addressing table at ctx+0x5190. The write of 3 at ctx+0x53d88 is only this instruction's encoded dword length, not a graphics command type. This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query it. NOT save/scene.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra: handler 0x42d360 fetches operand 1's value and lvalue descriptor separately, formats the descriptor key, then calls FUN_0042cf70. By contrast op 0x215 passes ctx+0x46614 to gfx_object_query_source_slot@0x47f280, which searches the retained object map and returns obj+4.
+
+### 0x1ad `mark-save-resume-frame` (mark-save-resume-frame, argc 0)
+- **summary:** Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ad_mark_save_resume_frame@0x416b70 writes decoded instruction size 1 and ctx+0x9928c=cur_ctx_index. context_state_serialize@0x40d320 uses that field (or cur_ctx_index when -1) as the inclusive frame cutoff for save layouts 2/3, serializes frames 0..cutoff, and forces the cutoff frame's saved return entry to -1. op_0x2_exit_or_return_frame@0x417940 clears the mark when unwinding below it. Corpus: 1,928 calls in 304 scripts; SC0000's six calls are at startup and immediately after HISTORY/MENU/HIDEWIN/INPUTNAME returns.
 
 ### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
 - **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
@@ -299,7 +309,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
 - **depended on by:** 0x223
-- **evidence:** Ghidra handler 0x417520 sets cmd-type 1 and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10.
+- **evidence:** Ghidra handler 0x417520 records the 1-dword instruction length and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10.
 
 SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here. The port publishes and waits for visible finite one-shot channels or 0x223 commands; click forcing remains limited to the latter.
 
@@ -309,11 +319,6 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **summary:** (out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
-
-### 0x1a2 `gfx-cmd-register` (gfx-cmd-register, argc 1)
-- **summary:** 0x1a2 (value) — gfx cmd-type 3. Handler gfx_op_0x1a2_descriptor_register@0x42d360 builds a key from operand 1's lvalue descriptor and inserts its value into an open-addressing descriptor hash (vm_lvalue_descriptor_hash_insert@0x42cf70). This structure is separate from op 0x215's retained gfx-object map; op 0x215 does not query this hash. NOT save/scene.
-- **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra: handler 0x42d360 fetches operand 1's value and lvalue descriptor separately, formats the descriptor key, then calls FUN_0042cf70. By contrast op 0x215 passes ctx+0x46614 to gfx_object_query_source_slot@0x47f280, which searches the retained object map and returns obj+4.
 
 ### 0x1f7 `gfx-elem-erase` (gfx-elem-erase, argc 2)
 - **summary:** 0x1f7 (handle)(count) — erase retained gfx objects. Handler 0x422270 calls gfx_object_erase_range@0x47d8b0 for [handle,handle+count) when count>1, else gfx_object_erase@0x47d850. This removes entries from the same object map queried by op 0x215, so erased objects stop compositing. SC0000 uses it before op 0x1fa releases the returned surface slot.
@@ -356,7 +361,7 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **evidence:** Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock ctx+0xb550; bytewise integer LERP; natural or ctx+0xb55c forced completion. /v2 annotated and saved 2026-07-10.
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
-- **summary:** 0x203 (handle)(mode)(alpha)(color) — gfx cmd-type 9. Worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case.
+- **summary:** 0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the opaque textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength); mode 1 is SRCALPHA/INVSRCALPHA with ARGB alpha opacity and multiplicative RGB modulation; mode 2 is the 0x223 transition-source identity path. Surfaceless mode-0 fill consumption remains a distinct case.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9; mode 1 sets D3DRS SRCALPHA/INVSRCALPHA and the packed color is the device draw modulation. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white.
 
@@ -380,12 +385,12 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
-- **summary:** 0x212 (obj_idx)(val) — gfx cmd-type 5. Handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. Sets one per-object field. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4230c0 (dispatch ctx[0x26c93+0x212]); writes [obj+0x64]=operand2, obj from ctx+0x14d54[operand1*4].
 
 ### 0x213 `set-gfx-xy` (set-gfx-xy, argc 3)
-- **summary:** 0x213 (obj_idx)(x)(y) — gfx cmd-type 7. Handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x213 (obj_idx)(x)(y) — handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). The generic instruction length is 7 dwords. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x423110; writes obj+0x68/+0x6c from operands 2/3, obj from ctx+0x14d54[operand1*4].
 
@@ -395,27 +400,27 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **evidence:** Ghidra: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280, which searches ECX+0x408 and returns object+4. gfx_object_bind_draw@0x47e870 writes the bound slot there; gfx_object_init_default@0x472810 explicitly writes zero to dword index 1. SC0000 page-58 trace: the old -1 default skipped cleanup of transform-created handle 0xcb2a, then EV050EA inherited translation (-100,0), rotation -90, and alpha 0; the native zero default makes the guard succeed and the reused object is identity/opaque.
 
 ### 0x216 `query-gfx-field?` (query-gfx-field?, argc 2)
-- **summary:** 0x216 (out)(idx) — gfx cmd-type 5. Handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x216 (out)(idx) — handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). The generic instruction length is 5 dwords. A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x42a0f0; reads ctx+0x46d14[operand2 * 0x14], writes operand1 via FUN_00425fb0(1,·).
 
 ### 0x217 `set-gfx-geom3` (set-gfx-geom3, argc 4)
-- **summary:** 0x217 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x217_set_geom3 @0x4231b0: SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e960. In SC0000 label_12649 it writes the anchor vector G[0x6249b/c/d] INTO the object; op 0x218 reads it back. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x217 (handle)(a)(b)(c) — handler gfx_op_0x217_set_geom3 @0x4231b0 SETS a 3-vector (int→float a,b,c) on object `handle` via native worker FUN_0047e960; its generic instruction length is 9 dwords. In SC0000 label_12649 it writes the anchor vector G[0x6249b/c/d] INTO the object; op 0x218 reads it back. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4231b0 (dispatch ctx[0x26c93+0x217]); FUN_0047e960(op1,(float)op2,(float)op3,(float)op4). label_12649 sites e.g. 0x00c67 handle=G[0x62457], vec=G[0x6249b/c/d].
 
 ### 0x218 `get-gfx-geom3?` (get-gfx-geom3?, argc 4)
-- **summary:** 0x218 (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x218_query_geom3 @0x42a130: GETS a stored 3-vector from object `handle` (FUN_0047f360) into out_a/b/c. In label_12649 it reads the object's anchor vector back into G[0x6249b/c/d] — a stubbed DRIVER of the render drift (stale anchor → bad centering). See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x218 (handle)(out_a)(out_b)(out_c) — handler gfx_op_0x218_query_geom3 @0x42a130 GETS a stored 3-vector from object `handle` (FUN_0047f360) into out_a/b/c; its generic instruction length is 9 dwords. In label_12649 it reads the object's anchor vector back into G[0x6249b/c/d] — a stubbed DRIVER of the render drift (stale anchor → bad centering). See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x42a130; FUN_0047f360(obj op1) + 3x FUN_00550850→FUN_00425fb0(2/3/4). label_12649 site 0x00c8f handle=G[0x62457] → G[0x6249b/c/d].
 
 ### 0x219 `set-gfx-geom3-b` (set-gfx-geom3-b, argc 4)
-- **summary:** 0x219 (handle)(a)(b)(c) — gfx cmd-type 9. Handler gfx_op_0x219_set_geom3 @0x423240: SETS a 3-vector (int→float) on object `handle` via native worker FUN_0047e910 (sibling of 0x217, a different per-object vector). See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x219 (handle)(a)(b)(c) — handler gfx_op_0x219_set_geom3 @0x423240 SETS a 3-vector (int→float) on object `handle` via native worker FUN_0047e910 (sibling of 0x217, a different per-object vector); its generic instruction length is 9 dwords. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x423240 (was unanalyzed; function created this session; dispatch ctx[0x26c93+0x219]); FUN_0047e910(op1,(float)op2,(float)op3,(float)op4).
 
 ### 0x21a `get-gfx-geom3-b?` (get-gfx-geom3-b?, argc 4)
-- **summary:** 0x21a (handle)(out_a)(out_b)(out_c) — gfx cmd-type 9. Handler gfx_op_0x21a_query_geom3 @0x42a1b0: GETS a stored 3-vector from object `handle` (FUN_0047f2e0) into out_a/b/c. In label_12649 it reads the object's position vector into G[0x62498/9/a] — a stubbed DRIVER of the render drift. See docs/engine-re.md gfx op-contract table.
+- **summary:** 0x21a (handle)(out_a)(out_b)(out_c) — handler gfx_op_0x21a_query_geom3 @0x42a1b0 GETS a stored 3-vector from object `handle` (FUN_0047f2e0) into out_a/b/c; its generic instruction length is 9 dwords. In label_12649 it reads the object's position vector into G[0x62498/9/a] — a stubbed DRIVER of the render drift. See docs/engine-re.md gfx op-contract table.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2/3/4). label_12649 site 0x00c86 handle=G[0x62457] → G[0x62498/9/a].
 
@@ -493,7 +498,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 The handler requires an existing destination texture, allocates/reuses a 0x478-byte movie-to-texture object for the surface, opens operand 1 through the native indexed-asset reader, builds FilterGraph/IGraphBuilder/IMediaControl/IMediaPosition/IMediaEvent/IBasicAudio, and presents bottom-up RGB samples through the movie texture renderer. Operand 3 selects movie/sound routing policy: bits 0x10000/0x20000/0x40000/0x80000 force sound route 0/1/2/3, otherwise set:DependMovieSound is used; SC0000's low value 2 is retained as native movie mode state. Operand 4 is stored as the movie sync/device mask at object+0x42c; SC0000 passes 0. Static layer preparation after 0x236 does not terminate the retained movie; 0x21c services it through EOF and subsequent surface cleanup stops/detaches it.
 
 ### 0x238 `set-anim-clock` (set-anim-clock, argc 1)
-- **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. cmd-type 3. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
+- **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. The generic instruction length is 3 dwords. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
 - **grounding:** source=investigation, confidence=high
 
 ### 0x239 `u004223C0` (u004223C0, argc 6)
@@ -506,7 +511,7 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x242 `set-gfx-field2d0` (set-gfx-field2d0, argc 2)
-- **summary:** 0x242 (handle)(value) — command type 5. Get-or-create the retained gfx object and write value to obj+0x2d0. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown.
+- **summary:** 0x242 (handle)(value) — get-or-create the retained gfx object and write value to obj+0x2d0; the generic instruction length is 5 dwords. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x242_set_object_field2d0@0x4249d0 fetches operands 2 and 1 and calls gfx_object_set_field2d0@0x47f1a0; the worker calls gfx_object_get_or_create then stores operand 2 at returned object+0x2d0.
 
@@ -1041,10 +1046,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1ac `u0041CD80` (u0041CD80, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1ad `u004154F0` (u004154F0, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

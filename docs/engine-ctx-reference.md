@@ -23,12 +23,12 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x51b78` | `anim_clock_elapsed` | `int` | global anim clock elapsed (op 0x238 zeroes) |
 | `0x51b7c` | `anim_clock_duration` | `int` | global anim clock total duration (op 0x238 sets) |
 | `0x52bd4` | `surfaces` | `void*` | surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate |
-| `0x53d14` | `cur_ctx_index` | `uint` | current gfx-object / script-context index (curCtx); indexes 0x78-byte records |
+| `0x53d14` | `cur_ctx_index` | `uint` | current script-context index (curCtx); indexes 0x78-byte coroutine/frame records |
 | `0x53d28` | `frame_codebase` | `void*` | current frame codebase (PC = codebase + off*4) |
 | `0x53d2c` | `frame_pc` | `int` | current frame PC column (op = *(0x53d2c + curCtx*0x78)) |
 | `0x53d60` | `ctx_record_base` | `void*` | 0x78-byte context-record array base (coroutine/script contexts) |
 | `0x53d64` | `frame_script_resource_id` | `uint` | raw packed SYS4/AAI resource id for this 0x78-byte script frame; persisted ReadTextDB script key |
-| `0x53d88` | `cmd_type_table` | `int` | per-object cmd-type column base (write *(0x53d88 + curCtx*0x78)) |
+| `0x53d88` | `frame_instruction_word_count` | `int` | current decoded instruction length in dwords for each 0x78-byte script frame; interpreter advances PC by this value * 4 |
 | `0x550fc` | `message_skip_display_enabled` | `int` | persistent all-message Skip state returned by op 0x19a for the ADV control-strip active overlay |
 | `0x55104` | `auto_message_enabled` | `int` | ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes |
 | `0x55110` | `text_history_recording_suppressed` | `uint` | high bit suppresses ADV retained-history index/text/metadata/voice recording; op 0x1bb writes 0x80000000 or zero, and HISTORY.BIN brackets itself with disable/enable |
@@ -65,6 +65,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x6dbf0` | `voice_bgm_duck_control_flags` | `uint` | transient mask replaced by op 0x1cf; bit 0 suppresses automatic voice-triggered BGM attenuation |
 | `0x6dbf4` | `message_skip_queued_voice_id` | `int` | latest voice resource deferred by op 0xc4 while run_state_flags message-skip bit is active |
 | `0x6dbf8` | `message_skip_queued_voice_arg` | `int` | second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero |
+| `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
 | `0xa0cc0` | `screen_w` | `int` | screen width (640) |
 | `0xa0cc4` | `screen_h` | `int` | screen height (480) |

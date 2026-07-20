@@ -96,7 +96,7 @@ note = "surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) alloc
 offset = 0x53d14
 name = "cur_ctx_index"
 type = "uint"
-note = "current gfx-object / script-context index (curCtx); indexes 0x78-byte records"
+note = "current script-context index (curCtx); indexes 0x78-byte coroutine/frame records"
 [[field]]
 offset = 0x53d28
 name = "frame_codebase"
@@ -119,9 +119,9 @@ type = "uint"
 note = "raw packed SYS4/AAI resource id for this 0x78-byte script frame; persisted ReadTextDB script key"
 [[field]]
 offset = 0x53d88
-name = "cmd_type_table"
+name = "frame_instruction_word_count"
 type = "int"
-note = "per-object cmd-type column base (write *(0x53d88 + curCtx*0x78))"
+note = "current decoded instruction length in dwords for each 0x78-byte script frame; interpreter advances PC by this value * 4"
 [[field]]
 offset = 0x550fc
 name = "message_skip_display_enabled"
@@ -302,6 +302,11 @@ offset = 0x6dbf8
 name = "message_skip_queued_voice_arg"
 type = "int"
 note = "second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero"
+[[field]]
+offset = 0x9928c
+name = "save_frame_boundary_index"
+type = "int"
+note = "highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"
