@@ -1102,7 +1102,9 @@ public sealed class VirtualMachine
                 Gfx.SetRotationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "set-anim-clock":   // 0x238 (duration) — global, non-blocking (host advances it per-frame)
                 Gfx.SetAnimClock(Read(a[0])); return pc + 1;
-            case "reset-anim-clock": // 0x243: reset the separate global animation-service clock
+            case "set-object-animation-detached": // 0x242 (handle)(flags): bit 0 is nonblocking/force-proof
+                Gfx.SetOneShotAnimationControl(Read(a[0]), Read(a[1])); return pc + 1;
+            case "reset-anim-clock": // 0x243: force unprotected one-shots and reset the global service clock
                 Gfx.ResetAnimClock(); return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
                 Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),

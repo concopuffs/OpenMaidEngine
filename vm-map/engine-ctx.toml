@@ -116,7 +116,7 @@ note = "retained_gfx_manager+0xb530 selected surface slot; -1 denotes device bac
 offset = 0x51b6c
 name = "gfx_dirty_a"
 type = "int"
-note = "retained_gfx_manager+0xb558 dirty flag; op 0x1f6 clears it"
+note = "retained_gfx_manager+0xb558 redraw-dirty flag; active finite object channels set it even when detached by 0x242; op 0x1f6 clears it"
 [[field]]
 offset = 0x51b70
 name = "gfx_force_complete"
@@ -126,7 +126,12 @@ note = "retained_gfx_manager+0xb55c requests forced completion of one-shot chann
 offset = 0x51b74
 name = "gfx_dirty_b"
 type = "int"
-note = "retained_gfx_manager+0xb560 dirty flag"
+note = "retained_gfx_manager+0xb560 blocking-presentation dirty flag; active finite object channels set it unless obj+0x2d0 bit 0 detaches them"
+[[field]]
+offset = 0x51b80
+name = "gfx_animation_service_flags"
+type = "uint"
+note = "retained_gfx_manager+0xb56c service flags; bit 1 suppresses op 0x243 force-complete/clock-reset request"
 [[field]]
 offset = 0x52bd4
 name = "surfaces"

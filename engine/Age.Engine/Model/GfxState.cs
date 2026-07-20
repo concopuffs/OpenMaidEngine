@@ -100,6 +100,9 @@ public sealed class GfxState
         public (double X, double Y, double Z, double Angle) RotationTarget;
         public long RotationDelayMs, RotationDurationMs;
         public bool RotationChannelEnabled;
+        // Op 0x242 writes obj+0x2d0. Bit 0 detaches the finite one-shot group from the blocking-dirty
+        // service and protects it from op 0x243's global force-completion request until natural completion.
+        public long OneShotAnimationControlFlags;
         // Shared matrix-channel start timestamp obj+0x34, seeded from retained-gfx owner+0xb550
         // (EngineCtx+0x51b64).
         public long OneShotStartMs = -1;
@@ -170,7 +173,9 @@ public sealed class GfxState
                 TranslationEnabled = s.TranslationEnabled,
                 RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
                 RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
-                RotationChannelEnabled = s.RotationChannelEnabled, OneShotStartMs = s.OneShotStartMs,
+                RotationChannelEnabled = s.RotationChannelEnabled,
+                OneShotAnimationControlFlags = s.OneShotAnimationControlFlags,
+                OneShotStartMs = s.OneShotStartMs,
                 RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
                 RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
             };
@@ -395,8 +400,56 @@ public sealed class GfxState
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _objects.Values.Any(o => o.Visible &&
+                                            (o.OneShotAnimationControlFlags & 1) == 0 &&
                                             (o.OneShotColorEnabled || o.ScaleEnabled ||
                                              o.RotationChannelEnabled || o.TranslationEnabled));
+    }
+
+    /// <summary>Op 0x242: replace the retained object's animation-control word. Native bit 0 makes its
+    /// finite one-shot channels nonblocking and immune to op 0x243 forced completion.</summary>
+    public void SetOneShotAnimationControl(long handle, long flags)
+    {
+        lock (_lock) GetOrCreate(handle).OneShotAnimationControlFlags = flags;
+    }
+
+    /// <summary>Part of op 0x243: immediately commit every unprotected finite one-shot channel. Objects
+    /// marked by op 0x242 bit 0 keep sampling asynchronously.</summary>
+    private void ForceCompleteOneShotChannels()
+    {
+        foreach (var o in _objects.Values)
+        {
+            if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
+            if (o.OneShotColorEnabled)
+            {
+                o.Color = o.OneShotColorTarget & 0xffffffff;
+                o.OneShotColorTarget = -1;
+                o.ColorDelayMs = 0;
+                o.ColorDurationMs = 0;
+                o.OneShotColorEnabled = false;
+            }
+            if (o.ScaleEnabled)
+            {
+                o.ScaleCurrent = o.ScaleTarget;
+                o.ScaleDelayMs = 0;
+                o.ScaleDurationMs = 0;
+                o.ScaleEnabled = false;
+            }
+            if (o.RotationChannelEnabled)
+            {
+                o.RotationCurrent = o.RotationTarget;
+                o.RotationDelayMs = 0;
+                o.RotationDurationMs = 0;
+                o.RotationChannelEnabled = false;
+            }
+            if (o.TranslationEnabled)
+            {
+                o.TranslationCurrent = o.TranslationTarget;
+                o.TranslationDelayMs = 0;
+                o.TranslationDurationMs = 0;
+                o.TranslationEnabled = false;
+            }
+            o.OneShotStartMs = -1;
+        }
     }
 
     /// <summary>Whether sampling the retained scene at a later frame can change its pixels without another
@@ -555,10 +608,16 @@ public sealed class GfxState
         lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
     }
 
-    /// <summary>Op 0x243: reset the separate global animation-service clock.</summary>
+    /// <summary>Op 0x243: force ordinary finite channels to their endpoints and reset the separate
+    /// global animation-service clock. Op-0x242-detached objects ignore the completion request.</summary>
     public void ResetAnimClock()
     {
-        lock (_lock) { AnimClockDurationTicks = 0; AnimClockGeneration++; }
+        lock (_lock)
+        {
+            ForceCompleteOneShotChannels();
+            AnimClockDurationTicks = 0;
+            AnimClockGeneration++;
+        }
     }
 
     /// <summary>Back-compat: snapshot with no animation clock (nowMs = 0) — deterministic, for headless
@@ -579,6 +638,8 @@ public sealed class GfxState
             {
                 var o = kv.Value;
                 if (!o.Visible) continue;
+                bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
+                                  o.RotationChannelEnabled || o.TranslationEnabled;
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
 
                 // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
@@ -644,7 +705,7 @@ public sealed class GfxState
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                if ((o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled)
+                if (hadOneShot
                     && o.OneShotStartMs < 0)
                     o.OneShotStartMs = nowMs;
                 var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
@@ -656,7 +717,10 @@ public sealed class GfxState
                                                       o.TranslationDelayMs, o.TranslationDurationMs,
                                                       o.OneShotStartMs, ref o.TranslationEnabled, nowMs);
                 if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled)
+                {
+                    if (hadOneShot) o.OneShotAnimationControlFlags &= ~1L;
                     o.OneShotStartMs = -1;
+                }
 
                 double cycleAngle = 0;
                 if (o.RotationEnabled && o.RotationPeriodMs > 0)

@@ -2076,3 +2076,31 @@ and `0x1cb` behind the future profile/save ownership decision.
 
 Validation: all 209 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, the Godot build,
 threaded self-test, and `git diff --check` are clean.
+
+### Slice A2b detached finite object animation implemented (2026-07-20)
+
+The `obj+0x2d0` consumer resolves `0x242(handle,flags)` as a finite-animation detachment control. Bit 0
+makes that object's one-shot color/scale/rotation/translation/source-rectangle group ignore `0x243`'s
+global force-complete request and prevents it from holding native blocking-presentation dirty state, while
+leaving redraw dirty so it continues animating asynchronously. Native clears bit 0 after the finite group
+finishes. SC0000's two CG loaders pass zero; 302 of 303 corpus calls do the same. The only value-one use is
+an animated battle object in `BTL.BIN`.
+
+`GfxState` now retains and clones the control word, excludes detached channels from blocking waits without
+excluding them from visual recomposition, protects them from `0x243`, and clears bit 0 on natural completion.
+The `0x243` model is correspondingly completed: it commits every unprotected finite channel as well as
+resetting the separate global animation clock. Focused regressions cover get-or-create/clone behavior and
+the protected-versus-ordinary completion split.
+
+The canonical opcode source is refined and regenerated. EngineCtx adds the animation-service flags at
+`0x51b80` and refines the two dirty-field roles; the expanded 76-field structure is reapplied to `/v2`.
+The `0x242` handler/worker, `0x243`, and the shared channel consumer are named/commented and saved. SC0000
+is now **122/129 distinct opcodes handled (94.6%)** and **16,039/16,257 instructions handled or safe-noop
+(98.7%)**. Its remaining seven gaps total 218 instructions, 206 of them the deferred shared-profile write.
+
+**Next:** investigate the four adjacent one-call unknowns `0x19b`, `0x19c`, `0x1ca`, and `0xae` together
+before choosing an implementation. Their low frequency makes a shared native-service relationship more
+important than any one opcode's count; persistence-bound `0x1a2`, `0x1ad`, and `0x1cb` remain deferred.
+
+Validation: all 211 engine tests pass; opcode and EngineCtx tests/lints, vm0 RECOVER, the zero-warning
+Godot build, threaded self-test, and `git diff --check` are clean.

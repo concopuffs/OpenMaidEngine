@@ -260,7 +260,7 @@ public class GfxAnimationTests
     }
 
     [Fact]
-    public void ResetAnimClock_DispatchClearsOnlyGlobalServiceClock()
+    public void ResetAnimClock_DispatchClearsGlobalServiceClock()
     {
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "CLOCKRESET", new List<(int, Operand[])>

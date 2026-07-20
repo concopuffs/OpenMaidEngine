@@ -548,15 +548,19 @@ For each fixed slot in [42,1000), the handler stops/releases the movie-to-textur
 - **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=kelebek, confidence=low
 
-### 0x242 `set-gfx-field2d0` (set-gfx-field2d0, argc 2)
-- **summary:** 0x242 (handle)(value) — get-or-create the retained gfx object and write value to obj+0x2d0; the generic instruction length is 5 dwords. SC0000's common CG loader passes zero after draw binding. This field does not reset transform or color channels; its downstream purpose remains unknown.
+### 0x242 `set-object-animation-detached` (set-object-animation-detached, argc 2)
+- **summary:** Replace the retained object's animation-control word at obj+0x2d0. Bit 0 detaches finite one-shot channels from blocking presentation and protects them from 0x243 forced completion until they finish naturally.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x242_set_object_field2d0@0x4249d0 fetches operands 2 and 1 and calls gfx_object_set_field2d0@0x47f1a0; the worker calls gfx_object_get_or_create then stores operand 2 at returned object+0x2d0.
+- **depended on by:** 0x243
+- **evidence:** Ghidra /v2: op_0x242_set_object_animation_detached@0x4249d0 calls gfx_object_set_animation_control@0x47f1a0. Consumer gfx_object_apply_transform_channels@0x472f00 tests obj+0x2d0 bit 0 to suppress manager+0xb55c forced completion and manager+0xb560 blocking-dirty publication, while still setting manager+0xb558 redraw dirty; it clears bit 0 when the finite group completes. DATA1: 303 calls; values zero x302, one x1.
+
+The setter get-or-creates the object and writes the complete operand. During retained composition, bit 0 makes the one-shot color/scale/rotation/translation/source-rectangle group ignore the manager's force-complete request and suppresses the blocking-dirty flag while leaving the redraw-dirty flag active. When no finite channel remains, native clears bit 0 and the shared start time. SC0000's two common CG loaders explicitly write zero. Across DATA1, 302 calls write zero and the sole nonzero call is BTL.BIN's animated battle-object setup, which writes one.
 
 ### 0x243 `reset-anim-clock` (reset-anim-clock, argc 0)
-- **summary:** Reset the native global animation-service elapsed and duration fields to zero when service flag bit 1 is clear.
+- **summary:** When animation-service flag bit 1 is clear, request forced completion of ordinary finite one-shot object channels and reset the global animation-service elapsed/duration fields. Objects detached by 0x242 bit 0 ignore the force request.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set ctx+0x51b70=1 and zero ctx+0x51b78/+0x51b7c. Normal SC0000 label_1235a calls it before present-frame.
+- **depends on:** 0x242
+- **evidence:** Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set retained-gfx owner+0xb55c (EngineCtx+0x51b70)=1 and zero owner+0xb564/+0xb568. gfx_object_apply_transform_channels treats force value 1 as immediate completion unless obj+0x2d0 bit 0 is set. SC0000 label_1235a calls it before present-frame.
 
 ## input
 

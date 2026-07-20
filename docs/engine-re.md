@@ -439,8 +439,8 @@ The preceding query-gated cleanup had skipped this created-but-unbound object be
 `SourceSlot=-1`. Native `gfx_object_init_default` zeroes `obj+4`, so op `0x215` returns slot 0, the cleanup
 erases the object, and the later bind recreates identity state. Matching that default leaves EV050EA centered,
 unrotated, and opaque in the synchronized page-58 compositor trace. The adjacent op `0x242(handle,0)` is not
-a reset: `op_0x242_set_object_field2d0@0x4249d0` calls `gfx_object_set_field2d0@0x47f1a0`, which only writes
-the supplied value at `obj+0x2d0`.
+a reset: it clears the object's detached-animation control word after binding. Its consumer and complete
+lifecycle are documented under “Detached finite object animation” below.
 
 **Page-89 surface-lifetime correction (2026-07-11).** Locator `SC0000 P089` resolves to
 `wait@0x89e9`; the loader at `0x8976..0x898a` resolves resource `0x6a` to `BG004D.AGF`. The background
@@ -865,8 +865,9 @@ integer, bytewise linear interpolation to target `+0x64` for duration `+0x4c`. A
 when retained-gfx `owner+0xb55c == 1` (`EngineCtx+0x51b70`) requests forced completion—the target commits
 to current, delay/duration clear,
 target becomes `0xffffffff`, and the one-shot active bit clears when no color/matrix/src-rect sibling remains.
-The object-local override bit at `+0x2d0` suppresses the global force. Negative alpha/RGB target operands
-independently preserve their bytes from current `+0x60`.
+The object-local bit at `+0x2d0` suppresses the global force and keeps that finite group from raising the
+blocking-presentation dirty flag; it remains redraw-active and therefore animates asynchronously. Negative
+alpha/RGB target operands independently preserve their bytes from current `+0x60`.
 
 The port now carries current and target separately and samples them from the unified `FrameClock`; an op
 `0x203` static write after `0x202` therefore becomes the ramp's current value rather than overwriting its
@@ -975,8 +976,9 @@ negative operands in `SetColorAnimResolved`, samples packed ARGB before blend se
 the existing mode-specific path. Exact AE001H, mode-0 RGB-modulation, and mode-1 alpha regressions cover the
 contract; the white pulse is removed without suppressing the scripted channel.
 
-**Resolved 2026-07-11:** `0x236` is the movie-to-retained-surface path described below. `0x242` is now
-classified as the retained-object `+0x2d0` field setter described above; `0x23d/0x20a/0x20e` remain GAP.
+**Resolved 2026-07-20:** `0x236` is the movie-to-retained-surface path described below. `0x242` is the
+detached finite-animation control described below; `0x23d`, `0x20a`, and `0x20e` are also implemented in
+their later lifecycle/presentation slices.
 
 ### Movie-to-surface opcode `0x236` (2026-07-11)
 
@@ -1896,6 +1898,40 @@ Corpus totals are 293 `0x1f6` calls in 146 scripts, 149 `0x23d` calls in 146 scr
 24 scripts, and 345 `0x20e` calls in 167 scripts. In SC0000, the full reset appears as `0x1f6` then `0x23d`
 at `0x4ed`; other paths use `0x1f6` then `0x20e` to discard retained objects and clear the already selected
 backbuffer. Fresh offscreen surfaces commonly use `0x20d` then `0x20e` before drawing.
+
+---
+
+### Detached finite object animation -- opcodes `0x242` / `0x243` (2026-07-20)
+
+`op_0x242_set_object_animation_detached@0x4249d0` fetches `(handle, flags)` and calls
+`gfx_object_set_animation_control@0x47f1a0`, which get-or-creates the retained object and replaces its
+32-bit control word at `obj+0x2d0`. Only bit 0 has a located consumer. It does not reset geometry, color,
+or matrix state.
+
+`gfx_object_apply_transform_channels@0x472f00` gives bit 0 two connected effects on the finite one-shot
+group (packed color, scale, rotation, translation, and timed source rectangle):
+
+- Manager `+0xb55c` value 1 normally forces every finite channel to its endpoint. Bit 0 masks that request
+  for this object.
+- An unfinished ordinary object raises manager `+0xb560`, keeping blocking presentation active. A bit-0
+  object does not raise that flag, but still raises redraw-dirty `+0xb558`, so it continues animating while
+  script execution proceeds.
+
+When no finite channel remains, the consumer clears bit 0 and the shared start timestamp. The control is
+therefore a per-animation detachment flag, not a persistent object mode. Object initialization sets the
+word to zero, and native clone copies it with the rest of the complete object record.
+
+`op_0x243_force_complete_and_reset_anim_clock@0x4182d0` supplies the paired global operation. When service
+flags manager `+0xb56c` bit 1 is clear, it sets force-complete `+0xb55c` (`EngineCtx+0x51b70`) to 1 and
+zeros the separate animation-service elapsed/duration fields at `+0xb564/+0xb568`. The next composition
+commits every ordinary finite group; detached objects ignore the request. The port performs that observable
+commit directly when executing `0x243`, excludes detached groups from its blocking wait predicate, and
+continues including them in its visual recomposition predicate until natural completion.
+
+Corpus evidence is unusually sharp: all 303 calls pass an immediate flag, with zero used 302 times and one
+used once. SC0000's two CG-loader sites (`0x12723`, `0x13310`) write zero. `BTL.BIN@0x2b4d` writes one on an
+animated battle object after its texture/movie or sprite-cell setup, matching the nonblocking background
+animation contract. No boot seed, script-offset branch, or persistence state is involved.
 
 ---
 
