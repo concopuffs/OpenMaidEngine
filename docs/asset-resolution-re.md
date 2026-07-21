@@ -282,6 +282,20 @@ A windowed SC0000 run with `extracted/` moved aside crossed both voice sites and
 recording BGM005 plus `E0808.WAV` load/start/preload on channels 0/0/4 with no Godot OGG/WAV decode errors.
 Channel, loop, interruption, timing, fade, load/start, and release behavior is unchanged.
 
+### Windows cursor payloads (implemented 2026-07-21)
+
+Cursor artwork is catalog-backed, not embedded in AGE.EXE. The eight ADV edge cursors at raw ids
+`0x3318..0x331f` are 326-byte, uncompressed 1-bpp 32x32 Windows CUR payloads. FIELD's drag-pan callback
+instead loads raw id `0x32ce`, catalog entry `CURSOR09.CUR` at `DATA1.ALF:611394962+766`. Its CUR directory
+and DIB header specify one 32x32 image, hotspot `(16,14)`, 4 bits per pixel, no compression, and a default
+16-entry BGRA palette. The 744-byte image consists of the 40-byte BITMAPINFOHEADER, 64-byte palette,
+512-byte color/XOR bitmap, and 128-byte 1-bpp AND mask. The original runtime decoder accepted only 1-bpp
+XOR data and therefore rejected this valid color cursor. `CurDecoder` now accepts the installed
+uncompressed 1-bpp and 4-bpp variants, derives each palette size from the DIB metadata, calculates separate
+DWORD-aligned XOR and AND strides, expands packed high-nibble-first 4-bpp indices through the BGRA palette,
+and retains the separate 1-bpp AND transparency mask. The installed-asset regression checks CURSOR09's
+dimensions, hotspot, transparent background, grayscale, and a non-gray palette pixel.
+
 ### SC0000 movie payload and presentation (2026-07-11)
 
 The scene-local implementation was first validated at SC0000 `0x236@0x13c8`. Resource `0x33` resolves through the

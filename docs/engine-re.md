@@ -1807,9 +1807,12 @@ Godot supplies virtual-screen pointer coordinates, left/right mouse bits (`0x1`/
 directional input indices (down/left/up/right = 0/1/2/3; accept/cancel = 4/5). The common index-10 release
 callback is queued on action release.
 
-Raw ids `0x3318..0x331f` resolve through SYS4INI to the game's 32x32 monochrome Windows `.CUR` assets. The
+Raw ids `0x3318..0x331f` resolve through SYS4INI to eight 32x32 monochrome Windows `.CUR` assets. The
 runtime decodes their DIB XOR/AND masks and hotspots to RGBA textures and installs them through Godot's
-custom-cursor API. This is asset-backed behavior; no replacement cursor art is authored by the port.
+custom-cursor API. FIELD separately selects raw id `0x32ce` (`CURSOR09.CUR`) while drag-panning; that asset
+is an uncompressed 4-bpp, 16-color 32x32 cursor with hotspot `(16,14)`, not an EXE-embedded cursor. The
+port decoder accepts both installed paletted formats, using their independent DWORD-aligned XOR/color and
+1-bpp AND-mask strides. No replacement cursor art is authored by the port.
 
 Every ordinary ADV script gates the handler-A call to HIDEWIN on `G[0x62425]`. No script writes that global,
 and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native scheduler-owned

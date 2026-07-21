@@ -5,7 +5,7 @@ namespace Age.Engine.Sys4;
 /// <summary>A decoded Windows cursor image and its native hotspot.</summary>
 public sealed record CursorImage(RgbaImage Image, int HotspotX, int HotspotY);
 
-/// <summary>Decoder for Himegari's monochrome Windows .CUR resources.</summary>
+/// <summary>Decoder for Himegari's paletted Windows .CUR resources.</summary>
 public static class CurDecoder
 {
     public static CursorImage Decode(ReadOnlySpan<byte> file, string name = "CUR")
@@ -31,16 +31,28 @@ public static class CurDecoder
         int bitsPerPixel = U16(file, imageOffset + 14);
         int compression = I32(file, imageOffset + 16);
         if (dibWidth != width || System.Math.Abs(dibHeight) != height * 2 || planes != 1
-            || bitsPerPixel != 1 || compression != 0)
-            throw new InvalidDataException($"{name}: expected an uncompressed 1-bit {width}x{height} cursor");
+            || bitsPerPixel is not (1 or 4) || compression != 0)
+            throw new InvalidDataException(
+                $"{name}: expected an uncompressed 1-bit or 4-bit {width}x{height} cursor");
 
         int paletteOffset = checked(imageOffset + headerSize);
-        if (paletteOffset > file.Length - 8) throw new InvalidDataException($"{name}: palette is truncated");
-        int xorStride = checked(((width + 31) / 32) * 4);
-        int maskBytes = checked(xorStride * height);
-        int xorOffset = checked(paletteOffset + 8);
-        int andOffset = checked(xorOffset + maskBytes);
-        if (andOffset > file.Length - maskBytes) throw new InvalidDataException($"{name}: cursor masks are truncated");
+        int colorsUsed = I32(file, imageOffset + 32);
+        int maximumPaletteEntries = 1 << bitsPerPixel;
+        int paletteEntries = colorsUsed == 0 ? maximumPaletteEntries : colorsUsed;
+        if (paletteEntries <= 0 || paletteEntries > maximumPaletteEntries)
+            throw new InvalidDataException($"{name}: cursor palette size is invalid");
+        int paletteBytes = checked(paletteEntries * 4);
+        if (paletteOffset > file.Length - paletteBytes)
+            throw new InvalidDataException($"{name}: palette is truncated");
+
+        int xorStride = checked(((width * bitsPerPixel + 31) / 32) * 4);
+        int andStride = checked(((width + 31) / 32) * 4);
+        int xorBytes = checked(xorStride * height);
+        int andBytes = checked(andStride * height);
+        int xorOffset = checked(paletteOffset + paletteBytes);
+        int andOffset = checked(xorOffset + xorBytes);
+        if (andOffset > file.Length - andBytes)
+            throw new InvalidDataException($"{name}: cursor masks are truncated");
 
         var rgba = new byte[checked(width * height * 4)];
         bool bottomUp = dibHeight > 0;
@@ -48,12 +60,15 @@ public static class CurDecoder
         {
             int sourceY = bottomUp ? height - 1 - y : y;
             int xorRow = xorOffset + sourceY * xorStride;
-            int andRow = andOffset + sourceY * xorStride;
+            int andRow = andOffset + sourceY * andStride;
             for (int x = 0; x < width; x++)
             {
-                int shift = 7 - (x & 7);
-                int paletteIndex = (file[xorRow + (x >> 3)] >> shift) & 1;
-                bool transparent = ((file[andRow + (x >> 3)] >> shift) & 1) != 0 && paletteIndex == 0;
+                int paletteIndex = bitsPerPixel == 1
+                    ? (file[xorRow + (x >> 3)] >> (7 - (x & 7))) & 1
+                    : (file[xorRow + (x >> 1)] >> ((1 - (x & 1)) * 4)) & 0xf;
+                int maskShift = 7 - (x & 7);
+                bool transparent = ((file[andRow + (x >> 3)] >> maskShift) & 1) != 0
+                                   && paletteIndex == 0;
                 int palette = paletteOffset + paletteIndex * 4;
                 int dst = (y * width + x) * 4;
                 rgba[dst] = file[palette + 2];

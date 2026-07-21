@@ -416,6 +416,13 @@ range-isolation/animation, VM dispatch, full engine tests, and the threaded Godo
 acceptance confirms that DEBUGMAP now displays the dungeon map correctly; the earlier full-sheet overlay is
 gone and the field presentation remains operational after the camera-transform correction.
 
+Drag-panning exposes one bounded presentation follow-up. FIELD op `0x86` at `0x2e4d` selects raw cursor
+`0x32ce` on pan entry and op `0x87` clears it on exit. That catalog entry is the installed 4-bpp color
+`CURSOR09.CUR`, whereas the port originally decoded only the eight 1-bpp ADV cursors. This was a
+decoder-format gap, not missing or EXE-embedded artwork. The CUR decoder now handles both installed 1-bpp
+and 4-bpp formats with independent XOR/AND strides; archive-backed pixel/hotspot tests pass. Manual
+acceptance confirms the gripped cursor now displays correctly during drag-panning.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
