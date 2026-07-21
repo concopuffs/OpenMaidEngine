@@ -2266,6 +2266,41 @@ is script-owned state, with no boot seed or game-specific coordinates in the run
 
 ---
 
+### Logical input-action configuration — `0xfe` / `0x107` / `0x10b` / `0x10c` (2026-07-21)
+
+SYSTEM4's adjacent input setup block defines the logical action namespace later consumed by callback
+poll/dispatch ops `0xff` and `0x100`. These calls are effectful engine configuration, not declarations:
+
+- `op_0xfe_set_input_action_count@0x421390` stores an unsigned count below 32 at EngineCtx `+0x814` and
+  throws script error `0x10005` for an invalid count. SYSTEM4 sets 10, so callback dispatch scans actions
+  0 through 9.
+- `op_0x107_map_joystick_button@0x421550` writes physical joystick button numbers into the 32-entry
+  EngineCtx `+0x89c` table. Joystick axes directly emit actions 0=up, 1=right, 2=down, 3=left; table slot
+  N emits action N+4. SYSTEM4 maps physical buttons 0,3,2,1,6,7 to actions 4 through 9.
+- `op_0x10b_map_mouse_button@0x4216f0` writes a logical button slot into the table at EngineCtx `+0x135c`,
+  indexed by physical mouse button. Polling adds four to the stored slot. Initialization zeroes this map,
+  making left mouse action 4 by default; SYSTEM4 `(3,1)` maps right mouse to action 7.
+- `op_0x10c_map_keyboard_scancode@0x421730` translates a DirectInput DIK scan code through EngineCtx
+  `+0x1828` to a Win32 virtual key, then writes the action into the 256-entry table at `+0x1428`.
+  Initialization prebinds the arrow keys to actions 0=up, 1=right, 2=down, 3=left. SYSTEM4 adds action 4
+  = Z/Enter, 5 = Space, 6 = C/LeftCtrl, 7 = X, 8 = PageUp, and 9 = PageDown.
+
+`input_poll_action_mask@0x4608b0` combines
+`input_poll_keyboard_action_bits@0x4601a0`, `input_poll_mouse_action_bits@0x460240`, and
+`input_poll_joystick_action_bits@0x460380`. The first three logical actions are therefore not a generic
+Godot UI ordering; they are the native engine ABI established by the input manager and refined by scripts.
+
+The current port bypasses this configuration. `godot/Main.cs` feeds `ui_down`, `ui_left`, `ui_up`, and
+`ui_right` directly into indices 0,1,2,3, then maps `ui_accept`/`ui_cancel` to 4/5. The VM also scans all
+32 callback indices instead of the configured count. As a result the directional ordering differs from
+native, auxiliary actions 6 through 9 and native right-mouse action 7 are not physically reachable through
+the SYSTEM4 bindings, and the four configuration opcodes still fall back. A faithful implementation should
+add one engine-owned input-binding model shared by these four handlers and `0xff`/`0x100`, then translate
+Godot key, mouse, and joy events through it. This is frontend input configuration only: it needs no profile
+storage, boot seed, or game-specific conditional.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.

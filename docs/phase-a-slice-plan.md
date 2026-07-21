@@ -2152,3 +2152,21 @@ by this investigation.
 storage backend, seed, or script-specific behavior.
 
 Validation: opcode source regenerated; opcode tests/lint and `git diff --check` are clean.
+
+### Slice B1 SYSTEM4 logical input bindings investigated (2026-07-21)
+
+Native RE resolves SYSTEM4's adjacent `0xfe`/`0x107`/`0x10b`/`0x10c` block as the configuration layer for
+the logical action mask consumed by `0xff`/`0x100`. `0xfe` sets a ten-action dispatch bound. Native default
+arrows use 0=up, 1=right, 2=down, 3=left; keyboard mappings then assign Z/Enter, Space, C/LeftCtrl, X,
+PageUp, and PageDown to actions 4 through 9. Joystick axes use the same directional actions, six physical
+buttons map to actions 4 through 9, left mouse defaults to action 4, and SYSTEM4 remaps right mouse to 7.
+
+The port presently sends six Godot UI actions directly to logical indices in a different directional
+order and lets `0x100` scan all 32 slots. The next implementation should therefore be one generic,
+engine-owned physical-to-logical binding service: model native defaults, implement all four setters, bound
+callback polling/dispatch by the configured count, and route Godot key/mouse/joy events through the model.
+It requires no save/profile decision, seed, or Himegari-specific branch. No runtime implementation is
+claimed by this investigation.
+
+**Next:** implement that input-binding service as one coherent slice with focused mapping, bounds, and
+simultaneous-input regressions, then manually exercise TITLE/ROOM/ADV keyboard and mouse paths.

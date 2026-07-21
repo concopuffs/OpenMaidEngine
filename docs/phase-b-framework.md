@@ -284,8 +284,12 @@ SYSTEM4's paired `0x79`/`0x1c1` setup is now natively resolved and implemented: 
 cursor restored by later layout resets, while `0x1c1` configures layout-local right/bottom overflow
 boundaries. `AdvTextHistory`, VM dispatch, the direct-scene SYSTEM4 bootstrap, and ordinary/history Godot
 label geometry now share that script-owned state; the former slot-1 hardcoding is removed. The next
-natural Game Start diagnostic should identify the next reached effectful fallback. Closing Godot currently
-releases a parked ADV wait before process teardown, so the page map may contain one trailing
+reached SYSTEM4 cluster is also resolved: `0xfe` establishes ten logical input actions, while `0x107`,
+`0x10b`, and `0x10c` configure joystick-button, mouse-button, and DIK keyboard mappings consumed by
+`0xff`/`0x100`. The port currently bypasses that script-owned map with six hardcoded Godot action indices
+and scans 32 callbacks, so the next coherent slice is an engine-owned input-binding model plus these four
+handlers and physical Godot event translation. This is independent of profile/save ownership. Closing
+Godot currently releases a parked ADV wait before process teardown, so the page map may contain one trailing
 shutdown-only page; the final timeline `input-wait` is the authoritative stop.
 
 ## Stage B2 — Faithful full boot

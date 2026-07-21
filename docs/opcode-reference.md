@@ -720,25 +720,35 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xfb_register_joy_callback@0x421270 bounds-checks operand 1 to 0..31 and stores operand 2 in the current script frame's 33-entry callback table. Ops 0xff/0x100 poll and dispatch this table; HISTORY.BIN and HIDEWIN.BIN register indices 0..10.
 
+### 0xfe `set-input-action-count` (u0041E360, argc 1)
+- **summary:** (count) - set the number of logical input actions scanned and dispatched by ops 0xff/0x100.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xfe_set_input_action_count@0x421390 accepts unsigned values below 32, stores the count at EngineCtx+0x814, and throws script error 0x10005 otherwise. op_0xff_poll_joy_callback_input passes the input-manager subobject to input_poll_action_mask@0x4608b0 with this count as its scan bound; op_0x100_dispatch_joy_callbacks rejects selected action indices at or above the same count. SYSTEM4@0x1cf sets 10, enabling logical actions 0..9 before configuring joystick, mouse, and keyboard mappings.
+
 ### 0xff `poll-joy-callback-input` (u00415A10, argc 0)
 - **summary:** Poll the current joy/input callback bitmask and initialize the per-dispatch scan state.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through input_poll_action_mask@0x4608b0, resets the scan index, and snapshots the current input selector. That poller combines configured keyboard, mouse-action, and joystick bits. input_poll_mouse_action_bits@0x460240 maps VK_LBUTTON to logical bit mouse_map[0]+4 (default index 4) and VK_RBUTTON to mouse_map[1]+4 (default index 5). It pairs with op 0x100.
+- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through input_poll_action_mask@0x4608b0, resets the scan index, and snapshots the current input selector. That poller combines configured keyboard, mouse-action, and joystick bits, bounded by EngineCtx+0x814 input_action_count. input_poll_mouse_action_bits@0x460240 maps VK_LBUTTON/VK_RBUTTON through mouse_button_action_map and adds 4; initialization leaves both slots zero, so left defaults to action 4, while SYSTEM4 op 0x10b remaps right to action 7. It pairs with op 0x100.
 
 ### 0x100 `dispatch-joy-callbacks` (u00415A60, argc 0)
 - **summary:** Dispatch registered callbacks for the current or pending joy/input selection.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x100_dispatch_joy_callbacks@0x416f00 scans the bitmask captured by op 0xff (or uses the current selector when no mask is present), pushes a return PC, and jumps through the current frame's callback table populated by op 0xfb.
+- **evidence:** Ghidra /v2: op_0x100_dispatch_joy_callbacks@0x416f00 scans the bitmask captured by op 0xff (or uses the current selector when no mask is present), bounded by EngineCtx+0x814 input_action_count; it pushes a return PC and jumps through the current frame's callback table populated by op 0xfb.
 
 ### 0x101 `reset-message-skip-input` (u00415BF0, argc 0)
 - **summary:** Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag.
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. It does not touch ctx+0x13dc or ctx+0x550fc, so adv_interpreter_tick re-injects Skip on the following tick while persistent state remains enabled. The Auto, Message-skip, Read-skip, and Hide-window callbacks invoke it after their 100 ms cursor re-arm sequence.
 
+### 0x107 `map-joystick-button` (u0041E500, argc 2)
+- **summary:** (button_slot)(physical_button) - map a logical button slot to a physical joystick button; slot N emits logical action N+4.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x107_map_joystick_button@0x421550 writes operand 2 to EngineCtx+0x89c+operand1*4 when unsigned operand1<32, otherwise it is a no-op. input_poll_joystick_action_bits@0x460380 emits axes as actions 0=up, 1=right, 2=down, 3=left and mapped button slot N as action N+4. SYSTEM4 maps slots 0..5 to physical buttons 0,3,2,1,6,7, producing actions 4..9.
+
 ### 0x108 `get-mouse-button-state` (u00415E70, argc 1)
 - **summary:** (out) - return the current mouse-button state bitmask.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through input_poll_raw_mouse_buttons@0x4602e0 and writes it to operand 1. The raw mapping is VK_LBUTTON -> 0x1 and VK_RBUTTON -> 0x2. This is distinct from op 0xff's logical action mask: the default mouse mapping also exposes left/right as callback indices 4/5, both registered by HIDEWIN to its close/restore callback.
+- **evidence:** Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local through input_poll_raw_mouse_buttons@0x4602e0 and writes it to operand 1. The raw mapping is VK_LBUTTON -> 0x1 and VK_RBUTTON -> 0x2. This is distinct from op 0xff's configured logical action mask: left defaults to action 4, while SYSTEM4 maps right to action 7 with op 0x10b. HIDEWIN registers both logical actions to its close/restore callback.
 
 ### 0x109 `get-cursor-virtual` (u00415EC0, argc 2)
 - **summary:** (out_x)(out_y) - read the OS cursor and convert it into AGE's virtual-screen coordinates.
@@ -749,6 +759,16 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** (x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly.
+
+### 0x10b `map-mouse-button` (u0041E5A0, argc 2)
+- **summary:** (button_slot)(physical_button) - map a physical mouse button to a logical button slot; polling emits the slot as logical action slot+4.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x10b_map_mouse_button@0x4216f0 writes operand 1 to EngineCtx+0x135c+operand2*4 when unsigned operand1<32; it does not validate the physical-button operand. input_poll_mouse_action_bits@0x460240 checks left/right physical indices 0/1, reads this map, adds 4, and sets that logical action bit. Initialization zeroes the map, so left defaults to action 4. SYSTEM4@0x218 uses (3,1), mapping right mouse to action 7.
+
+### 0x10c `map-keyboard-scancode` (u0041E5E0, argc 2)
+- **summary:** (action)(dik_scan_code) - map a DirectInput keyboard scan code to a logical input action.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x10c_map_keyboard_scancode@0x421730 requires unsigned operand1<32 or throws script error 0x10005. It translates operand 2 through EngineCtx+0x1828, the DIK-to-Win32-VK table built by input_initialize_dik_to_vk_table@0x45fc60, then writes the action to EngineCtx+0x1428[VK]. input_poll_keyboard_action_bits@0x4601a0 polls 256 virtual keys and emits the configured action bits. input_manager_initialize_defaults@0x460630 prebinds arrow keys as 0=up, 1=right, 2=down, 3=left. SYSTEM4 additionally maps action 4 to Z/Enter, 5 to Space, 6 to C/LeftCtrl, 7 to X, 8 to PageUp, and 9 to PageDown.
 
 ### 0x10d `consume-mouse-wheel-delta` (u00415F10, argc 1)
 - **summary:** (out) - return the accumulated signed mouse-wheel delta and clear it.
@@ -994,22 +1014,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xd0 `u00415830` (u00415830, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xfe `u0041E360` (u0041E360, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x107 `u0041E500` (u0041E500, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x10b `u0041E5A0` (u0041E5A0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x10c `u0041E5E0` (u0041E5E0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

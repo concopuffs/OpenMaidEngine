@@ -9,7 +9,13 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x40c` | `sys4ini_count` | `int` | SYS4INI record count |
 | `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
 | `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
+| `0x814` | `input_action_count` | `int` | logical input callback count (0..31); op 0xfe sets it and ops 0xff/0x100 bound their action-mask scan by it |
+| `0x898` | `joystick_physical_button_count` | `int` | WinMM JOYCAPS physical button count returned by op 0x106 |
+| `0x89c` | `joystick_button_map` | `int` | base of 32-entry logical button-slot to physical joystick-button table; op 0x107 writes it, slot N emits action N+4 |
+| `0x135c` | `mouse_button_action_map` | `int` | base of physical mouse-button to logical button-slot table; op 0x10b writes it and polling adds 4 to obtain the action index |
 | `0x13dc` | `message_skip_enabled` | `int` | persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero |
+| `0x1428` | `keyboard_vk_action_map` | `int` | base of 256-entry Win32 virtual-key to logical action table consumed by keyboard polling |
+| `0x1828` | `dik_to_vk_table` | `int` | base of 256-entry DirectInput DIK scan-code to Win32 virtual-key translation used by op 0x10c |
 | `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
 | `0x3028` | `alt_pack_table` | `int` | call-script high-byte alternate pack table (unused by corpus) |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |

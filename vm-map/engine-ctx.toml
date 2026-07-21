@@ -23,10 +23,40 @@ name = "sys4ini_records"
 type = "void*"
 note = "SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50"
 [[field]]
+offset = 0x814
+name = "input_action_count"
+type = "int"
+note = "logical input callback count (0..31); op 0xfe sets it and ops 0xff/0x100 bound their action-mask scan by it"
+[[field]]
+offset = 0x898
+name = "joystick_physical_button_count"
+type = "int"
+note = "WinMM JOYCAPS physical button count returned by op 0x106"
+[[field]]
+offset = 0x89c
+name = "joystick_button_map"
+type = "int"
+note = "base of 32-entry logical button-slot to physical joystick-button table; op 0x107 writes it, slot N emits action N+4"
+[[field]]
+offset = 0x135c
+name = "mouse_button_action_map"
+type = "int"
+note = "base of physical mouse-button to logical button-slot table; op 0x10b writes it and polling adds 4 to obtain the action index"
+[[field]]
 offset = 0x13dc
 name = "message_skip_enabled"
 type = "int"
 note = "persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero"
+[[field]]
+offset = 0x1428
+name = "keyboard_vk_action_map"
+type = "int"
+note = "base of 256-entry Win32 virtual-key to logical action table consumed by keyboard polling"
+[[field]]
+offset = 0x1828
+name = "dik_to_vk_table"
+type = "int"
+note = "base of 256-entry DirectInput DIK scan-code to Win32 virtual-key translation used by op 0x10c"
 [[field]]
 offset = 0x1c34
 name = "mouse_wheel_delta"
