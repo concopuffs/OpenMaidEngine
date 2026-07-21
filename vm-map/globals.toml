@@ -316,14 +316,36 @@ depends_on = []
 
 [[global]]
 address = "0x6718"
-name = ""
-category = "story-flag"
+name = "selected_party_slot"
+category = "index-pointer"
 type = "int"
-value_domain = "one of {0, 2}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 2]; writers=['ADDSKILL.BIN', 'CHMENU.BIN', 'DELCH.BIN', 'DRAWCHP.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..99"
+usage = "Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x673c", "0x67a0"]
+
+[[global]]
+address = "0x673c"
+name = "party_slot_flags"
+category = "data-table"
+type = "int[100]"
+value_domain = "bitfield"
+usage = "Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6718", "0x67a0"]
+
+[[global]]
+address = "0x67a0"
+name = "party_slot_character_id"
+category = "data-table"
+type = "int[100]"
+value_domain = "character/unit definition id or 0"
+usage = "Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6718", "0x673c"]
 
 [[global]]
 address = "0x671b"

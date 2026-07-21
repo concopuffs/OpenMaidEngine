@@ -2578,38 +2578,39 @@ observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
 op = 0x12f
-label = "u0041ECB0"
+label = "sort-indices-by-key-sum"
 argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041ECB0"
-category = "unknown"
-summary = ""
+name = "sort-indices-by-key-sum"
+category = "compute"
+summary = "(out_indices, key_a, key_b, count) - write a stable ascending permutation of indices 0..count-1, ordered by the signed 32-bit sum key_a[index] + key_b[index]."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x12f_sort_indices_by_key_sum@0x429360 resolves operands 1-3 as integer-array bases, seeds out_indices[0]=0, then performs insertion sort. It shifts a prior index only when signed unchecked(key_a[new]+key_b[new]) is strictly less than the prior sum, so equal keys retain source order. Operand 4 is fetched as the exclusive count. The final native loop merely re-encodes direct writes into AGE's protected integer representation. Release corpus: 40 sites. CHMENU@0x1c9b sorts 100 party-slot keys and reads the populated tail; a no-op leaves the initial party slot undiscoverable even though UNITECH created it."
+details = "Implemented with domain-preserving addressed-array access, native signed 32-bit key addition/overflow, stable insertion ordering, repeated count reads, and the native unconditional out_indices[0]=0 write. Focused tests lock stability/overflow/zero-count behavior; a natural SYSTEM4-to-SC0000 state carried into release CHMENU proves the initial slot remains selected after the real roster sort."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_index_permutation"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "primary_key_array"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "secondary_key_array"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "count"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

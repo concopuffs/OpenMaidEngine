@@ -215,6 +215,13 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x6c_handler@0x426d90 resolves operand 1 as a writable VM pointer and fills operand-2 consecutive dwords with ctx->anti_tamper_b, the native encoded representation of logical integer zero. INITCONFIG@0x30 clears G[0x2e49..0x2e55] before registering those 13 profile cells; treating operand 2 as a scalar source incorrectly wrote 13 to G[0x2e49] and disabled ROOM's character greeting/farewell voices. /v2 annotated and saved 2026-07-21.
 
+### 0x12f `sort-indices-by-key-sum` (sort-indices-by-key-sum, argc 4)
+- **summary:** (out_indices, key_a, key_b, count) - write a stable ascending permutation of indices 0..count-1, ordered by the signed 32-bit sum key_a[index] + key_b[index].
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x12f_sort_indices_by_key_sum@0x429360 resolves operands 1-3 as integer-array bases, seeds out_indices[0]=0, then performs insertion sort. It shifts a prior index only when signed unchecked(key_a[new]+key_b[new]) is strictly less than the prior sum, so equal keys retain source order. Operand 4 is fetched as the exclusive count. The final native loop merely re-encodes direct writes into AGE's protected integer representation. Release corpus: 40 sites. CHMENU@0x1c9b sorts 100 party-slot keys and reads the populated tail; a no-op leaves the initial party slot undiscoverable even though UNITECH created it.
+
+Implemented with domain-preserving addressed-array access, native signed 32-bit key addition/overflow, stable insertion ordering, repeated count reads, and the native unconditional out_indices[0]=0 write. Focused tests lock stability/overflow/zero-count behavior; a natural SYSTEM4-to-SC0000 state carried into release CHMENU proves the initial slot remains selected after the real roster sort.
+
 ### 0x135 `bit-set` (bit-set, argc 2)
 - **summary:** (value)(bit_index) - set the indexed bit in the destination integer.
 - **grounding:** source=investigation, confidence=high
@@ -1021,10 +1028,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x12c `lookup-array-2d` (lookup-array-2d, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x12f `u0041ECB0` (u0041ECB0, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x132 `u0041EF00` (u0041EF00, argc 1)
 - **summary:** —

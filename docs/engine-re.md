@@ -2347,6 +2347,26 @@ teardown. The port now retains this engine-owned selector in `GfxState.DefaultOb
 selects slot 8 in the regression. The surveyed MENU/INFO scripts do not themselves call op `0x1d9`, so this
 state was not the cause of the former missing launch.
 
+### Indexed two-key sort — `0x12f` (2026-07-21)
+
+`op_0x12f_sort_indices_by_key_sum@0x429360` takes `(out_indices, key_a, key_b, count)`. It resolves the
+first three operands as integer-array bases, seeds output index zero, and performs a stable insertion sort
+over source indices `0..count-1`. The comparison is signed
+`unchecked(key_a[index] + key_b[index])`; a new index moves left only when its sum is strictly smaller, so
+equal sums preserve source order. The native handler's final loop does not change that result: it encodes
+the directly written output cells back into AGE's protected integer-bank representation.
+
+This is the cause of the first observed character-menu discrepancy. Natural New Game correctly runs
+UNITECH and enters SC0000 with party slot 2 carrying flags `0x13` and character id 2. CHMENU constructs
+100 party-slot sort keys, calls `0x12f` at `0x1c9b`, and reads the populated tail of the resulting index
+permutation. The port's fallback no-op left that permutation zero-filled, so CHMENU selected slot zero and
+rendered an apparently empty party even though the authoritative unit state already existed. The port now
+implements the generic sort with addressed local/global arrays, native signed 32-bit addition and overflow,
+stable equal-key ordering, repeated count reads, and the native unconditional output-index-zero write.
+Focused tests cover stability, overflow, and zero count. A real-script regression carries natural
+SYSTEM4-to-SC0000 state into CHMENU and stops after `0x1db8`, proving selected slot 2 survives the first
+release roster sort without a fallback. No startup seed or menu-specific roster injection is involved.
+
 ---
 
 ## Native walls backlog (targets for this loop)

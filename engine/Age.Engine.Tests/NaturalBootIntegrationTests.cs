@@ -1,4 +1,5 @@
 using Age.Engine.Diagnostics;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
@@ -6,6 +7,11 @@ using Xunit;
 public class NaturalBootIntegrationTests
 {
     private sealed class ReachedSc0000Exception : Exception { }
+    private sealed class ReachedChmenuRosterException : Exception { }
+
+    private sealed record NaturalBootResult(
+        OpcodeTable Table, Sys4ScriptProvider Scripts, VirtualMachine Vm,
+        NewGameInputHost Host, StopAtSc0000Sink Sink);
 
     private sealed class StopAtSc0000Sink : ITraceSink
     {
@@ -28,6 +34,29 @@ public class NaturalBootIntegrationTests
                 if (e.Name.Equals("SC0000.BIN", StringComparison.OrdinalIgnoreCase))
                     throw new ReachedSc0000Exception();
             }
+        }
+    }
+
+    private sealed class StopAfterChmenuRosterSink : ITraceSink
+    {
+        public VirtualMachine Vm = null!;
+        public bool SawIndexSort;
+        public bool SawIndexSortFallback;
+        public bool TracingSteps => true;
+
+        public void Emit(in TraceEvent e)
+        {
+            if (e.Kind == TraceEventKind.Stub && e.Opcode == 0x12f)
+                SawIndexSortFallback = true;
+            if (e.Kind != TraceEventKind.Step || e.Ins == null) return;
+            if (e.Opcode == 0x12f) SawIndexSort = true;
+
+            // The step event is emitted before execution. At CHMENU@0x1dbd, the first sort has
+            // completed and 0x1db8 has copied the chosen roster slot back to G[0x6718].
+            if (e.Ins.Offset == 0x1dbd
+                && string.Equals(Vm.DebugFrame?.CurrentScript, "CHMENU.BIN",
+                                 StringComparison.OrdinalIgnoreCase))
+                throw new ReachedChmenuRosterException();
         }
     }
 
@@ -82,8 +111,7 @@ public class NaturalBootIntegrationTests
         }
     }
 
-    [Fact]
-    public void System4Root_NewGameSelectionNaturallyCallsSc0000()
+    private static NaturalBootResult RunNaturalNewGameToSc0000()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var scripts = Sys4ScriptProvider.Load(table);
@@ -100,6 +128,16 @@ public class NaturalBootIntegrationTests
         var exception = Record.Exception(() => vm.Run());
         Assert.True(exception is ReachedSc0000Exception,
             $"halt={vm.HaltReason}; title_sleeps={host.TitlePollSleeps}; entered={string.Join(",", sink.Entered)}");
+        return new NaturalBootResult(table, scripts, vm, host, sink);
+    }
+
+    [Fact]
+    public void System4Root_NewGameSelectionNaturallyCallsSc0000()
+    {
+        var boot = RunNaturalNewGameToSc0000();
+        var vm = boot.Vm;
+        var host = boot.Host;
+        var sink = boot.Sink;
 
         Assert.Equal(new[]
         {
@@ -122,5 +160,29 @@ public class NaturalBootIntegrationTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x6c1));
         Assert.False(sink.SawStringEqualsStub);
         Assert.False(sink.SawUnitDataCopyStub);
+    }
+
+    [Fact]
+    public void NaturalNewGamePartyStateSurvivesRealChmenuRosterSort()
+    {
+        var boot = RunNaturalNewGameToSc0000();
+        Assert.Equal(2, boot.Vm.Globals.GetValueOrDefault(0x6718));
+        Assert.Equal(0x13, boot.Vm.Globals.GetValueOrDefault(0x673c + 2));
+        Assert.Equal(2, boot.Vm.Globals.GetValueOrDefault(0x67a0 + 2));
+
+        var sink = new StopAfterChmenuRosterSink();
+        var menuVm = new VirtualMachine(boot.Scripts.RequireByName("CHMENU.BIN"), boot.Table,
+            new RecordingHost(), new VmOptions(MaxSteps: 5_000_000), boot.Scripts, sink);
+        sink.Vm = menuVm;
+        foreach (var (address, value) in boot.Vm.Globals) menuVm.Globals[address] = value;
+        foreach (var (address, value) in boot.Vm.ExternalGlobals) menuVm.ExternalGlobals[address] = value;
+        foreach (var (address, value) in boot.Vm.GlobalStrings) menuVm.GlobalStrings[address] = value;
+
+        var exception = Record.Exception(() => menuVm.Run());
+
+        Assert.IsType<ReachedChmenuRosterException>(exception);
+        Assert.True(sink.SawIndexSort);
+        Assert.False(sink.SawIndexSortFallback);
+        Assert.Equal(2, menuVm.Globals.GetValueOrDefault(0x6718));
     }
 }

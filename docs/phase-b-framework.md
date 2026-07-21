@@ -293,6 +293,18 @@ SYSTEM4's same 16 immediate configuration calls. This is independent of profile/
 Godot currently releases a parked ADV wait before process teardown, so the page map may contain one trailing
 shutdown-only page; the final timeline `input-wait` is the authoritative stop.
 
+**SC0000 character-menu roster discrepancy (2026-07-21; investigated).** A natural-boot state probe at
+SC0000 entry shows that GAMESTART/UNITECH already created party slot 2 with flags `0x13`, character id 2,
+and selected slot 2. The empty Character Info page is therefore not missing boot data. CHMENU gathers that
+active slot, constructs two 100-cell sort-key arrays, calls opcode `0x12f` at `0x1c9b`, and reads the
+populated tail of the resulting index permutation. The port had been falling through `0x12f`, leaving the
+output zero-filled and making CHMENU select empty slot zero. Native RE fully identifies `0x12f` as a stable
+ascending index sort by the signed sum of two key arrays. The generic opcode is now implemented with native
+32-bit overflow and stable ordering. Focused regressions cover equal keys, overflow, and zero count; a
+real-script regression carries the naturally booted state into CHMENU and proves the first roster sort keeps
+slot 2 selected with no `0x12f` fallback. This uses no seed or menu-specific injection. Remaining acceptance
+is manual: open Character Info at the first stable SC0000 page and confirm the initial character is visible.
+
 ## Stage B2 — Faithful full boot
 
 Replace `--boot`'s diagnostic seeding and separately injected inherited surfaces with normal boot execution.

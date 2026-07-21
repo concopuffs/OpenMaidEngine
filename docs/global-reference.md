@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16417 globals (73 curated, 16344 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16417 globals (75 curated, 16342 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -27,6 +27,8 @@
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
+| `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
+| `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -75,8 +77,6 @@
 | `0x671c` | — | low | auto-shape | array |
 | `0x671f` | — | low | auto-shape | array |
 | `0x6727` | — | low | auto-shape | array |
-| `0x673c` | — | low | auto-shape | array |
-| `0x67a0` | — | low | auto-shape | array |
 | `0x6804` | — | low | auto-shape | array |
 | `0x6868` | — | low | auto-shape | array |
 | `0x6930` | — | low | auto-shape | array |
@@ -337,6 +337,7 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
 | `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
 
@@ -352,7 +353,6 @@
 | `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
 | `0x3275` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']. |
-| `0x6718` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0, 2]; writers=['ADDSKILL.BIN', 'CHMENU.BIN', 'DELCH.BIN', 'DRAWCHP.BIN']. |
 | `0x671b` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [999]; writers=['ALCHEMY.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x671e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']. |
 | `0x6722` | — | med | auto-shape | TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']. |

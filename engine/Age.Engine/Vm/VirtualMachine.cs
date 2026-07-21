@@ -735,6 +735,36 @@ public sealed class VirtualMachine
                 Write(a[0], match);
                 return pc + 1;
             }
+            case "sort-indices-by-key-sum": // 0x12f: stable ascending permutation by signed key sum
+            case "u0041ECB0":
+            {
+                VmAddress output = BaseAddr(a[0]);
+
+                // Native writes element zero even when count is zero or negative, then builds the
+                // permutation in place with insertion sort. Read the count for each outer iteration:
+                // the handler fetches operand 4 repeatedly rather than caching it.
+                WriteIntCell(output, 0);
+                for (int sourceIndex = 1; sourceIndex < unchecked((int)Read(a[3])); sourceIndex++)
+                {
+                    int position = sourceIndex;
+                    while (position > 0)
+                    {
+                        int previousIndex = unchecked((int)ReadIntCell(output.Offset(position - 1)));
+                        int previousKey = unchecked(
+                            unchecked((int)ReadAddressedCell(a[1], previousIndex))
+                            + unchecked((int)ReadAddressedCell(a[2], previousIndex)));
+                        int sourceKey = unchecked(
+                            unchecked((int)ReadAddressedCell(a[1], sourceIndex))
+                            + unchecked((int)ReadAddressedCell(a[2], sourceIndex)));
+                        if (sourceKey >= previousKey) break;
+
+                        WriteIntCell(output.Offset(position), previousIndex);
+                        position--;
+                    }
+                    WriteIntCell(output.Offset(position), sourceIndex);
+                }
+                return pc + 1;
+            }
             case "bit-set":
             {
                 long bit = Read(a[1]);
