@@ -23,7 +23,7 @@ also softer Windows assumptions that should be tested or replaced before claimin
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `godot/DirectShowMovieDecoder.cs`: DirectShow COM objects plus `ole32.dll` `CoInitializeEx` / `CoUninitialize` | Movie playback cannot run outside Windows | Introduce a decoder interface and backend factory; retain DirectShow on Windows while adding a portable MPEG backend |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `godot/DirectShowMovieDecoder.cs`: DirectShow COM objects plus `ole32.dll` `CoInitializeEx` / `CoUninitialize` | Movie playback cannot run outside Windows; the current Windows filter stack also rejects the installed MPEG effects whose display width is 8 mod 16 | Introduce a decoder interface and backend factory; use a software MPEG backend for portable coverage and as the Windows fallback for unsupported effect dimensions |
 | Movie integration | `godot/Main.cs` directly constructs and stores `DirectShowMovieDecoder`; `Main` is marked `SupportedOSPlatform("windows")` | The frontend has no runtime fallback or OS-specific source selection | Type `MovieRuntime` against the decoder interface, select by platform/build, and move the Windows annotation to the DirectShow backend |
 | Movie audio | DirectShow connects only the video pin to the sample grabber/null renderer | The MPEG audio stream is intentionally silent on every platform | Design a PCM/audio-clock contract or let a future backend own synchronized A/V; separate feature slice |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
@@ -66,6 +66,12 @@ interface. A future cleanup should:
    separately for `0x20f` rather than blocking inside the decoder backend.
 6. Treat synchronized movie audio as a separate extension of the contract rather than coupling it to the
    compositor.
+
+This replacement is now also required for Windows gameplay parity. Archive-backed probes on 2026-07-21
+show that the current DirectShow graph accepts tested MPEG widths divisible by 16 (208, 288, 304, 400, and
+800) but fails `Connect` with `0x80040217` for tested widths that are 8 mod 16 (280, 360, 520, and 600).
+The dominant combat-effect family is 280x352 (125 installed `MVB` assets), so retaining DirectShow as the
+only Windows decoder is insufficient even though SC0000's 800x600 `CHAPTER.AGF` works.
 
 An OS-specific build is also viable: include DirectShow only in Windows exports and a different decoder in
 other exports. The current plain `net8.0` project has no conditional backend selection. COM declarations may

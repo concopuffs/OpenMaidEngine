@@ -535,7 +535,7 @@ build, and threaded selftest pass. Manual DEBUGMAP acceptance now confirms that 
 reachable-tile overlays, accepts movement, and reaches working player combat. The next bounded work is to
 investigate the concrete combat discrepancies found during that acceptance run.
 
-### Player-attack runtime frontier implemented (2026-07-21; manual attack pending)
+### Player-attack runtime frontier implemented; combat reached (2026-07-21)
 
 The selected attack-path opcode cluster is now implemented. `0x191` preserves native signed-32-bit absolute
 value behavior (including `INT_MIN`); `0xd0` and `0x23c` sample the shared monotonic/frame clock; `0x23a`
@@ -558,10 +558,19 @@ the current exchange.
 
 Focused regressions cover exact dispatch, signed edge cases, string aliasing, clock rollover truncation,
 movie polling, animation reset suppression, delayed voice operands, paired clipping, overlap, and colorkey
-transparency. The next gate is manual: execute one player attack from DEBUGMAP, confirm HP/damage and combat
-voice presentation settle, and verify control returns to interactive FIELD. If that passes, proceed to an
-enemy-turn/end-turn slice; if it fails, use the first concrete visual/control discrepancy rather than the
-deferred profile write as the investigation entry point.
+transparency. Manual DEBUGMAP acceptance reached player combat and exposed the next concrete frontier:
+combat-effect movies do not play. The resolver/decoder diagnosis is canonical in
+`docs/asset-resolution-re.md`; fix that bounded movie path before proceeding to enemy-turn/end-turn breadth.
+
+**Combat-effect movie gap diagnosed; implementation pending.** BTL's `0x236@0x2b21` consumes universal
+raw MVB ids because BTL has no SC manifest, while the host currently permits only scene-local resolution.
+That explains each `movie unresolved BTL:...` warning and the secondary attempt to decode MPEG-backed
+`MVB914.AGF` as a still image. A raw-catalog decoder probe also found a separate backend wall: the current
+DirectShow graph handles `MVB914` (400x400) but rejects the reached 280x352 MVB001/MVB004/MVB955/MVB958
+assets with `0x80040217`. Broader samples tie current compatibility to 16-aligned display widths, while 125
+installed MVB assets use 280x352. The next slice is therefore typed scene-first/raw movie resolution plus
+the existing portable-decoder seam and a software fallback for these effects, with destination dimensions
+and failed-movie identity preserved correctly.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

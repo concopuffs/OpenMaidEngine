@@ -326,6 +326,45 @@ unrendered. The real-scene trace remains a separate extracted-present test
 because the current `Paths.Scripts()` test bootstrap still locates its root `*.BIN` fixtures there; migrating
 that test/bootstrap path is unrelated to movie asset loading and was not folded into this slice.
 
+### BTL combat-effect movie resolution and decoder boundary (diagnosed 2026-07-21)
+
+BTL's movie call at `BTL.BIN@0x2b21` is the same non-modal opcode `0x236`, but its table supplies universal
+raw SYS4INI ids because `BTL.BIN` has no `SC####` manifest section. The first accepted combat run reached
+five such ids:
+
+| Raw id | Catalog asset | MPEG size | Sequence size |
+|---:|---|---:|---:|
+| `0x2bd8` | `MVB958.AGF` | 40,964 bytes | 280x352 |
+| `0x2af1` | `MVB001.AGF` | 90,116 bytes | 280x352 |
+| `0x2bde` | `MVB955.AGF` | 22,532 bytes | 280x352 |
+| `0x2af5` | `MVB004.AGF` | 69,636 bytes | 280x352 |
+| `0x2bca` | `MVB914.AGF` | 133,124 bytes | 400x400 |
+
+All five archive payloads begin with MPEG program-stream pack code `00 00 01 BA`; none is a corrupt still
+AGF. `GodotAdvHost.PlayMovieToSurface` currently calls only `ResourceMap.Resolve(BTL,id)`, which must return
+null because the catalog builds local ranges only for `SC####.BIN`. Texture and voice resolution already
+use the required ordering: active SC manifest first, then a type-checked universal raw fallback. Non-modal
+movie resolution needs the same typed ordering. The logged `AGF decode failed MVB914.AGF` is downstream:
+after movie lookup fails, no movie identity is registered, the VM still binds the raw id to the surface,
+and the compositor falls through to the still-image decoder because MPEG movies also use `.AGF` names.
+
+Resolution is not the only blocker. An archive-backed probe of the actual Windows backend found that the
+current DirectShow graph decodes `MVB914` and exposes a positive stop time, but rejects all four 280x352
+assets while connecting the MPEG video decoder with HRESULT `0x80040217`. Wider probes establish the
+boundary in the current filter stack: 208/288/304/400/800-pixel widths decode, while 280/360/520/600-pixel
+widths fail; the latter are all 8 mod 16. This is not a rare content edge: 125 installed `MVB*.AGF` files
+are 280x352. Requesting RGB24 instead of RGB32 does not change negotiation. The evidence localizes the
+failure to DirectShow/filter compatibility with these non-16-aligned MPEG display widths; it does not prove
+which internal stock filter imposes the restriction.
+
+The correct implementation boundary therefore has three parts: add a typed scene-first/raw-fallback
+resolver for non-modal movies; introduce the already-planned decoder interface/factory and a software MPEG
+fallback that handles the installed non-16-aligned effects; and preserve the destination surface's created
+dimensions instead of replacing every movie surface with the SC0000-specific 800x600 value. Decoder failure
+should also leave a completed movie identity long enough to suppress bogus still-AGF fallback. Regressions
+must cover at least raw BTL resolution, a 280x352 effect (`MVB001`), a 400x400 effect (`MVB914`), immediate
+`0x23f` stop time, RGBA frame publication, completion, and release.
+
 ### Modal startup/ending movie resources (implemented 2026-07-20)
 
 Opcode `0x20f` uses universal raw SYS4INI indexes rather than the executing script's manifest. Its complete
