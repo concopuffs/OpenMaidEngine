@@ -39,6 +39,7 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
+    public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
@@ -109,6 +110,8 @@ internal class RecordingHost : IHost
         gfx.StartForegroundTransitions(100);
         gfx.CompleteForegroundTransitions(100);
     }
+    public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
+        => SurfaceCrossfades.Add((sourceSurface, targetSurface, intervalArgument));
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) { }
     public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);

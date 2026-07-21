@@ -95,6 +95,17 @@ confidence = "high"
 depends_on = ["0x6c1"]
 
 [[global]]
+address = "0x2e49"
+name = "character_voice_suppressed"
+category = "data-table"
+type = "int[13]"
+value_domain = "13 cells of {0,1}; 0 enables that character's voice, 1 suppresses it"
+usage = "Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3."
+source = "investigation"
+confidence = "high"
+depends_on = []
+
+[[global]]
 address = "0x6c9"
 name = "adv_hover_history"
 category = "ui-toggle"

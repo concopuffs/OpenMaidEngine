@@ -649,7 +649,26 @@ public sealed class VirtualMachine
                 Write(a[0], Read(a[0]) & ~(1L << (int)bit)); return pc + 1;
             }
             case "check-bit": Write(a[0], (Read(a[1]) >> (int)(Read(a[2]) & 31)) & 1); return pc + 1;
-            case "copy-to-global": Write(a[0], Read(a[1])); return pc + 1;
+            case "zero-int-range":
+            case "copy-to-global": // pre-reference compatibility for opcode 0x6c
+            {
+                int count = System.Math.Max(0, checked((int)Read(a[1])));
+                for (int i = 0; i < count; i++) WriteConsecutive(a[0], i, 0);
+                return pc + 1;
+            }
+            case "random-modulo": // 0x60: native CRT rand() % bound
+            case "u0041A270":
+            {
+                long bound = Read(a[1]);
+                if (bound == 0)
+                {
+                    Write(a[0], 0);
+                    HaltReason ??= "random-modulo-zero";
+                    return HALT;
+                }
+                Write(a[0], System.Random.Shared.Next(0x8000) % bound);
+                return pc + 1;
+            }
             case "jmp": return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
             case "call": _cur.CallStack.Add(pc + 1); return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
             case "ret":
@@ -1301,6 +1320,10 @@ public sealed class VirtualMachine
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;
             case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint
                 _host.PresentFrame(Gfx); return pc + 1;
+            case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
+            case "u00418B40":
+                _host.CrossfadeSurfaces(Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]));
+                return pc + 1;
             case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary
                 _host.WaitForForegroundTransition(Gfx); return pc + 1;
             case "clear-gfx-command-queue": // 0x224: retained compositor does not use this native queue

@@ -604,8 +604,31 @@ public partial class Main : Godot.Control
         foreach (var label in _surfaceTextLabels) label.Visible = false;
         int surfaceTextLabelIndex = 0;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
+        if (_host.TrySnapshotScreenTransition(out var transition))
+        {
+            // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
+            // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
+            CompositeVisibleObjects(transition.Source, 1f, ref surfaceTextLabelIndex, decisions, false);
+            FillQuad(0, 0, ScreenWidth, ScreenHeight, 0, (float)transition.Progress);
+            CompositeVisibleObjects(transition.Target, (float)transition.Progress,
+                                    ref surfaceTextLabelIndex, decisions, false);
+        }
+        else
+        {
+            var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // synchronized objects + ranges
+            CompositeVisibleObjects(visible, 1f, ref surfaceTextLabelIndex, decisions, true);
+        }
+        _screen.SetData(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8, _screenPixels);
+        _screenTex.Update(_screen);
+        if (decisions != null) LogGfxDecisionChanges(decisions);
+    }
+
+    private void CompositeVisibleObjects(IReadOnlyList<RenderObject> visible, float globalOpacity,
+                                         ref int surfaceTextLabelIndex,
+                                         System.Collections.Generic.Dictionary<long, string>? decisions,
+                                         bool includeSurfaceText)
+    {
         int z = 0;
-        var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // one synchronized sample for objects + ranges
         foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
             var t = v.Transform;
@@ -614,7 +637,7 @@ public partial class Main : Godot.Control
             var projected = localToDest.Apply(0, 0);
             int dstX = (int)System.Math.Round(projected.X);
             int dstY = (int)System.Math.Round(projected.Y);
-            float opacity = v.Alpha / 255f;                  // transform Z is never opacity
+            float opacity = v.Alpha / 255f * globalOpacity;  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
             string outcome;
             if (v.SurfaceTransition is { } transition)
@@ -661,9 +684,9 @@ public partial class Main : Godot.Control
                               ColorTimeline(v.ColorTransition);
                 }
             }
-            decisions?.Add(v.Handle, $"z{z} {outcome}");
+            if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
             var rawObject = _vm.Gfx.TryGet(v.Handle);
-            if (rawObject != null)
+            if (includeSurfaceText && rawObject != null)
             {
                 foreach (var surfaceText in _host.SnapshotSurfaceText(rawObject.SourceSlot))
                 {
@@ -681,9 +704,6 @@ public partial class Main : Godot.Control
             }
             z++;
         }
-        _screen.SetData(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8, _screenPixels);
-        _screenTex.Update(_screen);
-        if (decisions != null) LogGfxDecisionChanges(decisions);
     }
 
     private void UpdateAdvTextPresentation()

@@ -168,7 +168,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
-    public void Sc0000AndTitleAudioPayloadsReadDirectlyFromTheirNativeAddressSpaces()
+    public void Sc0000RoomAndTitleAudioPayloadsReadDirectlyFromTheirNativeAddressSpaces()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var archiveOnly = new Sys4AssetStore(catalog, Paths.GameDir);
@@ -178,9 +178,14 @@ public class Sys4AssetStoreTests
         Assert.Equal("BGM005.OGG", bgm?.Name);
         AssertOgg(resources.ReadAudio(bgm!));
 
-        var voice = resources.Resolve("SC0000", 0x24);
+        var voice = resources.ResolveVoice("SC0000", 0x24);
         Assert.Equal("MAN999.OGG", voice?.Name);
         AssertOgg(resources.ReadAudio(voice!));
+
+        var roomVoice = resources.ResolveVoice("ROOM", 0x3365);
+        Assert.Equal("EUA0016.OGG", roomVoice?.Name);
+        AssertOgg(resources.ReadAudio(roomVoice!));
+        Assert.Null(resources.ResolveVoice("ROOM", 0x337e)); // SO001.AGF is not voice audio.
 
         var sfx = resources.ResolveSoundEffect(0x28);
         Assert.Equal("E0808.WAV", sfx?.Name);

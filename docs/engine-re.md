@@ -2135,13 +2135,64 @@ animation contract. No boot seed, script-offset branch, or persistence state is 
 
 ---
 
+### ROOM character selection, profile voice defaults, and legacy screen crossfade — `0x60` / `0x6c` / `0x25` (2026-07-21)
+
+ROOM's apparently connected missing greeting and instant menu presentation were three separate native
+contracts. Opcode `0x60` is the random selector, `0x6c` establishes the default voice-setting array, and
+`0x25` owns the blocking transition between two complete offscreen frames.
+
+`op_0x60_handler@0x426970` calls the imported CRT `rand`, fetches operand 2, and writes
+`rand() % bound` to operand 1. Bound zero first writes zero and then raises script error `0x10005`.
+`ROOM.BIN@0x5` passes bound 4; the result selects four character resource sets. Results 0, 1, and 2 also
+select six voice ids each (`0x3365..0x3376`), including their greeting/farewell pair. Result 3 deliberately
+leaves those locals zero in the release script, so that presentation variant is silent by script design.
+
+The voice-enabled default was being defeated earlier in boot. `op_0x6c_handler@0x426d90` resolves operand
+1 as a writable integer address and fills operand-2 consecutive dwords with `EngineCtx::anti_tamper_b`, the
+native encoded representation of logical zero. It is a zero-range operation, not the scalar
+`copy-to-global` suggested by Kelebek's label. `INITCONFIG@0x30` therefore clears the 13-cell character
+voice-setting table `G[0x2e49..0x2e55]`, after which `0x1a2` registers each cell with the shared profile
+service. CONFIG indexes the same table for voice preview and its 0/1 enable/suppress choices. The old port
+instead wrote the scalar count 13 into `G[0x2e49]`; ROOM treats a nonzero value in cell 0 as voice suppression and
+skipped all greeting/farewell ids. Correct zero-range execution fixes the boot default without implementing
+or choosing a persistence backend for `0x1a2`/`0x1a3`.
+
+`op_0x25_handler@0x41ce00` starts the legacy transition manager at `EngineCtx+0x1c38`, sets run-state bit
+8, and keeps the script parked until the transition completes. Its three operands are source surface,
+target surface, and a timing argument. For arguments up to 64, the handler arms that many milliseconds per
+tick and advances the 8-bit alpha by 16. Larger arguments use `argument/16` milliseconds and alpha step
+1. The branch is expressed in decompilation as `((arg < 65) - 1 & 0xfffffff1) + 0x10`; evaluating both
+outcomes is significant (`true -> 16`, `false -> 1`). `interval_timer_poll_elapsed_steps@0x44d080` returns any missed timer intervals, and
+`screen_transition_tick@0x43a7a0` mode 4 composites source first and target over it at the accumulated alpha;
+at `0x100` it commits the target. `screen_transition_begin@0x439da0` and
+`screen_transition_finalize@0x4399c0` own the endpoints. Thus an argument 10 lasts about 160 ms, while 30
+lasts about 480 ms; input can force the endpoint through the same transition-abort service. Manual ROOM
+validation caught the initially inverted alpha-step branch.
+
+ROOM explicitly constructs those full frames. It selects/clears surface 1 and calls `0x20c`, mutates the
+retained room presentation, captures surface 2 through another `0x20c`, restores the backbuffer, and calls
+`0x25(1,2,10)`. The same form fades its menu away at `0x856`; after the farewell and one-second hold,
+`0x25(1,2,30)@0x8dc` fades to the frame prepared for TITLE return. The interactive port now snapshots
+retained objects when `0x20c` targets an offscreen surface, composites the captured target over the captured
+source on the shared frame clock, blocks the VM through the endpoint, and only then permits the following
+surface release/root reload. Headless hosts retain their non-rendering no-op policy.
+
+The same manual pass exposed a separate resource-addressing issue after `0x6c` was fixed: ROOM did execute
+`play-voice`, but `GodotAdvHost` attempted only SC-section resolution. ROOM is a frontend script without an
+SC section, and its voice operands `0x3365..0x3376` are universal raw SYS4INI indices (for example raw
+`0x3365` is `EUA0016.OGG`). Voice resolution now matches the already-required texture rule: try the active
+SC section first, then a type-checked raw-catalog fallback. SC0000's local `0x24 -> MAN999.OGG` mapping is
+unchanged.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.
 - **decision→scene** — how `0x62ccf`/the decision selects the next `SCxxxx`. Now narrower: scenes load
   via `call-script`/the same SYS4INI-index loader, so the open question is only where the decision
   value is turned into a scene *id* (a caller of SCJUMP; re-aimed away from `u00428010`).
-- **op `0x60`** (`u0041A270`) — the rand-like value gating 1732/1755 SCJUMP decisions.
+- ~~**op `0x60`**~~ — **SOLVED**: CRT `rand() % bound`, including the zero-bound script-error path.
 - ~~**gfx command-buffer**~~ — **DONE** (the `0x212–0x21a` positioned-object subsystem = the rendering
   drift): all 14 ops reversed + implemented against a host-side `GfxState`, and the missing INIT2 boot
   state supplied via `--boot`. CGs render (screenshot-confirmed). See the op `0x215` finding + "The render

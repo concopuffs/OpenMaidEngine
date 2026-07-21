@@ -353,9 +353,9 @@ sealed class AudioTraceHost : IHost
         var entry = _res.ResolveBgm(id);
         Events.Add(("play-bgm", id, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>"));
     }
-    public void PlayVoice(long id)                      // voice: per-scene manifest
+    public void PlayVoice(long id)                      // voice: SC section, then frontend raw id
     {
-        var e = _res.Resolve(_scene, id);
+        var e = _res.ResolveVoice(_scene, id);
         Events.Add(("play-voice", id, e == null ? "<unresolved>" : $"{e.Archive} {e.Name}"));
     }
     public void ShowText(int offset, string text) { }

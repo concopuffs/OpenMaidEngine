@@ -65,7 +65,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    > **`resId → files[ section_base(scene) + resId ]`**, where `section_base` = the start of the SYS4INI
    > section containing the scene's `SCxxxx.BIN`.
 
-   Manifest rule holds for `set-texture(resId)` and `play-voice(id)`. **⚠ `play-bgm` is the EXCEPTION —
+   The manifest rule holds first for `set-texture(resId)` and `play-voice(id)`. Non-SC frontend scripts
+   such as ROOM instead carry universal raw catalog ids, so both typed resolvers fall back to raw lookup
+   when the executing script has no SC section. **⚠ `play-bgm` is the EXCEPTION —
    it does NOT use the manifest; it uses direct literal names `BGM{id:03d}.OGG` (see step 4, by-ear
    corrected 2026-07-06).** **Tool:** `tools/resolve_asset.py --build` → `build/asset-sections.json`
    (359 sections, 136 scenes); `resolve_asset.py <SCENE> [resId]` resolves. **Validated:** `file_number ==
@@ -81,7 +83,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    `set-texture(G[0x69b], slot=0x11)`. SYS4INI `raw_index 0x337e` is `DATA1/SO001.AGF`, the shared
    800×300 RGBA system-chrome sheet. `ResourceMap.ResolveTexture` therefore tries the active script's
    scene manifest first and then the distinct universal raw-id lookup; the scene-manifest rule above
-   remains correct for ordinary SC texture/voice ids.
+   remains correct for ordinary SC texture/voice ids. ROOM voice `0x3365`, for example, resolves as raw
+   `EUA0016.OGG`; treating it only as a ROOM-local id produces no asset because ROOM owns no SC range.
 
    *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
    for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
@@ -124,7 +127,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
    (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
    addressing — the earlier "unified graphics+audio manifest" claim was WRONG for BGM:**
-   - **Voice** (`play-voice`) → per-scene manifest, `files[base+id]`, **offset 0** (same as textures). Proven:
+   - **Voice** (`play-voice`) → SC-section manifest `files[base+id]` at **offset 0**, with a type-checked
+     universal-raw fallback for frontend scripts without an SC section (same as textures). Proven:
      the manifest interleaves graphics/voice (`files[35]=EV049AA`, `[36]=MAN999`, `[37]=EV052CA`, `[38]=SYL0001`),
      so `id-1` would land voices on `.AGF` (silent) — they play, so offset is exactly 0.
    - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), NOT the manifest.
@@ -152,12 +156,14 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 A2b-background: **steps 1–3 landed.** Step 1 = `build/asset-index.json`. Step 2 = **`resId →
 files[section_base(scene) + resId]`** via SYS4INI per-scene sections (`tools/resolve_asset.py` +
-`build/asset-sections.json`) — no runtime capture, all archives/types plus scene-local voice. Step 3 = **first-pass
+`build/asset-sections.json`) — no runtime capture, all archives/types plus SC-section voice and typed raw
+fallback for non-SC frontend scripts. Step 3 = **first-pass
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
-uses the manifest** (`files[base+id]`); **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
+uses the SC manifest first** (`files[base+id]`) and universal raw lookup for non-SC frontend scripts;
+**`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
 
 ## Native SFX resource proof (2026-07-11; addressing corrected 2026-07-20)
 
@@ -222,7 +228,7 @@ store.
 4. **Runtime consumers (complete for scripts, textures, and current audio families).** `ResourceMap.ResolveTexture` preserves
    scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
    decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
-   Godot no longer reads `build/textures/*.BMP`. BGM direct-name, scene-local voice, and packed-raw SFX
+   Godot no longer reads `build/textures/*.BMP`. BGM direct-name, scene-first/raw-fallback voice, and packed-raw SFX
    entries are opened through the same `IAssetStore`. `ResourceMap.ResolveSoundEffect` owns op `0xb4`'s
    `ResolvePacked` lookup and audio filtering; the existing Godot WAV/channel path consumes its result.
    Extraction and conversion tools remain diagnostics.

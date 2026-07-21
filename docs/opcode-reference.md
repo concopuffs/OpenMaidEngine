@@ -153,9 +153,9 @@
 - **evidence:** Ghidra op 0xc2 handler 0x4204c0 sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830; bgm_fade_tick@0x464960 interpolates current/target percent and applies volume, releasing at target 0. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms.
 
 ### 0xc4 `play-voice` (play-voice, argc 1)
-- **summary:** Play a voice clip by id with native playback/history variant 0; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). While all-message Skip is active, retain/replace the queued voice request instead of starting it; playback resumes from the latest queued request after Skip clears. Same resolver rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d}).
+- **summary:** Play a voice clip by id with native playback/history variant 0. SC scripts resolve through their SYS4INI section manifest; frontend scripts without an SC section use the id as a universal raw-catalog index. While all-message Skip is active, retain/replace the queued voice request instead of starting it; playback resumes from the latest queued request after Skip clears. Same scene-first/raw-fallback resolver family as set-texture (NOT play-bgm, which is direct-name BGM{id:03d}).
 - **grounding:** source=investigation, confidence=high
-- **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it calls voice_play_indexed_asset@0x488330 with variant 0 and records pair {id,0}; while Skip is active it stores the latest id/zero variant at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active.
+- **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the SC-section offset is exactly 0. ROOM supplies raw ids 0x3365..0x3376 from a non-SC frontend script; raw 0x3365 is EUA0016.OGG. A scene-only resolver returned null there despite the opcode executing, while the established texture path already required the same raw fallback for frontend resources. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it calls voice_play_indexed_asset@0x488330 with variant 0 and records pair {id,0}; while Skip is active it stores the latest id/zero variant at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active.
 
 ### 0x1bd `play-history-voice` (u0041D910, argc 1)
 - **summary:** Replay a voice id selected from retained ADV text history using native playback/history variant 1, preserving normal Skip and Auto-voice state behavior.
@@ -174,6 +174,11 @@
 
 ## compute
 
+### 0x60 `random-modulo` (u0041A270, argc 2)
+- **summary:** (destination)(bound) — write CRT rand() % bound. A bound of zero first writes zero and then raises the engine's script error.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x60_handler@0x426970 calls imported CRT rand(), fetches operand 2, takes signed remainder, and writes operand 1. The zero-bound branch writes zero then throws error 0x10005. ROOM@0x5 calls (local 0x110,4), and its following branches select one of four character surface sets; variants 0..2 also select voice-id sextets. /v2 annotated and saved 2026-07-21.
+
 ### 0x61 `lookup-array` (lookup-array, argc 3)
 - **summary:** Take a typed reference to base[index], preserving whether the base belongs to local or global storage.
 - **grounding:** source=investigation, confidence=high
@@ -185,6 +190,11 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 - **summary:** (destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writable VM address, reads a count dword followed by values from frame_codebase + operand2*4, reverses the native loader's rotate/XOR in-memory representation with anti_tamper_a, and writes consecutive dwords. The original SYS4 file footer stores the count and values plainly; HISTORY.BIN uses 15 blobs to initialize its rectangle, coordinate, and lookup arrays.
+
+### 0x6c `zero-int-range` (copy-to-global, argc 2)
+- **summary:** (destination)(count) — write logical integer zero to count consecutive VM cells beginning at the resolved destination.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x6c_handler@0x426d90 resolves operand 1 as a writable VM pointer and fills operand-2 consecutive dwords with ctx->anti_tamper_b, the native encoded representation of logical integer zero. INITCONFIG@0x30 clears G[0x2e49..0x2e55] before registering those 13 profile cells; treating operand 2 as a scalar source incorrectly wrote 13 to G[0x2e49] and disabled ROOM's character greeting/farewell voices. /v2 annotated and saved 2026-07-21.
 
 ### 0x135 `bit-set` (bit-set, argc 2)
 - **summary:** (value)(bit_index) - set the indexed bit in the destination integer.
@@ -348,6 +358,14 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 
 ## draw
 
+### 0x25 `crossfade-surfaces` (u00418B40, argc 3)
+- **summary:** (source_surface)(target_surface)(interval_argument) — blocking legacy full-frame mode-4 alpha transition. The native engine composites the captured target surface over the captured source while an 8-bit alpha accumulator advances from 0 to 256.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x20d
+- **evidence:** Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 sets run-state bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), calls screen_transition_begin@0x439da0 with mode 4, and later screen_transition_finalize@0x4399c0. engine_main_tick_with_exception_policy polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). The step branch was corrected after manual timing validation; /v2 annotated and saved 2026-07-21.
+
+The handler uses an alpha step of 1 and timer interval=argument when argument <=64. Above 64 it uses step=16 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host.
+
 ### 0x131 `get-message-window-alpha` (get-message-window-alpha, argc 1)
 - **summary:** (out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome.
 - **grounding:** source=investigation, confidence=high
@@ -424,7 +442,7 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
-- **depended on by:** 0x20d, 0x223
+- **depended on by:** 0x25, 0x20d, 0x223
 - **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
 
 Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
@@ -433,6 +451,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **summary:** Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x1c7, 0x1cc
+- **depended on by:** 0x25
 - **evidence:** Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 and retained-gfx owner ctx+0x46614 to retained_gfx_select_render_target@0x479660. Its D3D calls resolve texture level 0 or backbuffer 0, then invoke device vtable +0x94 SetRenderTarget and store selected slot at owner+0xb530. DATA1: 113 calls in 24 scripts.
 
 For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it.
@@ -825,10 +844,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x25 `u00418B40` (u00418B40, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x50 `add` (add, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -893,17 +908,9 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x60 `u0041A270` (u0041A270, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x63 `u00414A60` (u00414A60, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x6c `copy-to-global` (copy-to-global, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x6e `show-text` (show-text, argc 2)
 - **summary:** —

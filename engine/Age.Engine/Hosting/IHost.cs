@@ -77,6 +77,9 @@ public interface IHost
     // read/message-skip branch reaches op 0x20c and presents the completed endpoint immediately.
     void WaitForForegroundTransition(GfxState gfx) { }
     void PresentFrame(GfxState gfx) { }
+    // Legacy SYS4 screen-transition family (op 0x25): scripts render two complete frames into
+    // numbered surfaces, then block while the engine alpha-composites target over source.
+    void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument) { }
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
     void ReleaseSurface(int slot) { }

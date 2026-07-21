@@ -248,28 +248,29 @@ argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00418B40"
-category = "unknown"
-summary = ""
+name = "crossfade-surfaces"
+category = "draw"
+summary = "(source_surface)(target_surface)(interval_argument) — blocking legacy full-frame mode-4 alpha transition. The native engine composites the captured target surface over the captured source while an 8-bit alpha accumulator advances from 0 to 256."
+details = "The handler uses an alpha step of 1 and timer interval=argument when argument <=64. Above 64 it uses step=16 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x20c, 0x20d]
+evidence = "Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 sets run-state bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), calls screen_transition_begin@0x439da0 with mode 4, and later screen_transition_finalize@0x4399c0. engine_main_tick_with_exception_policy polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). The step branch was corrected after manual timing validation; /v2 annotated and saved 2026-07-21."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "captured source surface"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "captured target surface"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -770,23 +771,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041A270"
-category = "unknown"
-summary = ""
+name = "random-modulo"
+category = "compute"
+summary = "(destination)(bound) — write CRT rand() % bound. A bound of zero first writes zero and then raises the engine's script error."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x60_handler@0x426970 calls imported CRT rand(), fetches operand 2, takes signed remainder, and writes operand 1. The zero-bound branch writes zero then throws error 0x10005. ROOM@0x5 calls (local 0x110,4), and its following branches select one of four character surface sets; variants 0..2 also select voice-id sextets. /v2 annotated and saved 2026-07-21."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "random remainder destination"
 observed_types = ["l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "exclusive modulus bound"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode]]
@@ -880,23 +881,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "copy-to-global"
-category = "unknown"
-summary = ""
+name = "zero-int-range"
+category = "compute"
+summary = "(destination)(count) — write logical integer zero to count consecutive VM cells beginning at the resolved destination."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x6c_handler@0x426d90 resolves operand 1 as a writable VM pointer and fills operand-2 consecutive dwords with ctx->anti_tamper_b, the native encoded representation of logical integer zero. INITCONFIG@0x30 clears G[0x2e49..0x2e55] before registering those 13 profile cells; treating operand 2 as a scalar source incorrectly wrote 13 to G[0x2e49] and disabled ROOM's character greeting/farewell voices. /v2 annotated and saved 2026-07-21."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "first integer destination"
 observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "consecutive cell count"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -1947,16 +1948,16 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "play-voice"
 category = "audio"
-summary = "Play a voice clip by id with native playback/history variant 0; id resolves via the SYS4INI section manifest -> files[section_base(scene)+id] (voice OGG in DATA1/DATA4). While all-message Skip is active, retain/replace the queued voice request instead of starting it; playback resumes from the latest queued request after Skip clears. Same resolver rule as set-texture (NOT play-bgm, which is direct-name BGM{id:03d})."
+summary = "Play a voice clip by id with native playback/history variant 0. SC scripts resolve through their SYS4INI section manifest; frontend scripts without an SC section use the id as a universal raw-catalog index. While all-message Skip is active, retain/replace the queued voice request instead of starting it; playback resumes from the latest queued request after Skip clears. Same scene-first/raw-fallback resolver family as set-texture (NOT play-bgm, which is direct-name BGM{id:03d})."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the offset is exactly 0. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it calls voice_play_indexed_asset@0x488330 with variant 0 and records pair {id,0}; while Skip is active it stores the latest id/zero variant at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active."
+evidence = "By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Off-by-one disproven structurally: manifest interleaves graphics/voice (files[35]=EV049AA, [36]=MAN999, [37]=EV052CA, [38]=SYL0001), so files[base+id] lands voices on OGGs while files[base+id-1] would land them on .AGF graphics (silent) -- and they play, so the SC-section offset is exactly 0. ROOM supplies raw ids 0x3365..0x3376 from a non-SC frontend script; raw 0x3365 is EUA0016.OGG. A scene-only resolver returned null there despite the opcode executing, while the established texture path already required the same raw fallback for frontend resources. Lily's lines are correctly form-gated (G[0xa57/0xa58/0xa59]) and stay silent when no form flag is seeded -- not a bug. Ghidra /v2 op_0xc4_handler@0x420610: when run_state_flags bit 0x08000000 is clear it calls voice_play_indexed_asset@0x488330 with variant 0 and records pair {id,0}; while Skip is active it stores the latest id/zero variant at ctx+0x6dbf4/+0x6dbf8. adv_interpreter_tick starts and clears that deferred voice when Skip/read-skip input is no longer active."
 
 [[opcode.semantics.args]]
 i = 1
-role = "voice id (section-manifest index)"
+role = "voice id (SC-section index or frontend raw-catalog index)"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode]]

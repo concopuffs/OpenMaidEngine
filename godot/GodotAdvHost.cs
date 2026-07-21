@@ -51,6 +51,9 @@ public sealed class GodotAdvHost : IHost
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
     private GfxState? _foregroundGfx;
+    private readonly object _screenTransitionLock = new();
+    private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
+    private LegacyScreenTransition? _screenTransition;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
     public volatile bool IsSleeping;
@@ -369,6 +372,19 @@ public sealed class GodotAdvHost : IHost
                 return;
             }
         }
+        if (IsTransitionWaiting)
+        {
+            lock (_screenTransitionLock)
+            {
+                if (_screenTransition != null)
+                {
+                    _screenTransition.Forced = true;
+                    _timeline?.State("screen-transition-forced-complete", new());
+                    _frameSignal.Set();
+                    return;
+                }
+            }
+        }
         if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
     }
 
@@ -464,6 +480,17 @@ public sealed class GodotAdvHost : IHost
 
     public void PresentFrame(GfxState gfx)
     {
+        if (gfx.CurrentRenderTargetSlot >= 0)
+        {
+            int slot = gfx.CurrentRenderTargetSlot;
+            var snapshot = gfx.SnapshotVisibleObjects(_clock.NowMs);
+            lock (_screenTransitionLock) _renderTargetSnapshots[slot] = snapshot;
+            _timeline?.Event("render-target-snapshot", new()
+            {
+                ["surface"] = slot, ["objects"] = snapshot.Count,
+            });
+            return;
+        }
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
         int completed = gfx.CompleteForegroundTransitions(_clock.NowMs);
         if (started > 0 || completed > 0)
@@ -474,12 +501,88 @@ public sealed class GodotAdvHost : IHost
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
 
+    // Op 0x25's native mode-4 path advances an 8-bit alpha accumulator. Values <=64 use the
+    // operand as the timer interval and step alpha by sixteen; larger values divide the interval
+    // by sixteen and step alpha by one. This reproduces the resulting wall-clock duration.
+    public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
+    {
+        IReadOnlyList<RenderObject> source;
+        IReadOnlyList<RenderObject> target;
+        long start = _clock.NowMs;
+        long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
+        lock (_screenTransitionLock)
+        {
+            source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
+                ? capturedSource : System.Array.Empty<RenderObject>();
+            target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
+                ? capturedTarget : gfx.SnapshotVisibleObjects(start);
+            _screenTransition = new LegacyScreenTransition(source, target, start, duration);
+        }
+        _foregroundGfx = null;
+        System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, start);
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        IsTransitionWaiting = true;
+        _timeline?.State("screen-transition-start", new()
+        {
+            ["source"] = sourceSurface, ["target"] = targetSurface,
+            ["interval_argument"] = intervalArgument, ["duration_ms"] = duration,
+            ["source_objects"] = source.Count, ["target_objects"] = target.Count,
+        });
+        while (!_stopping)
+        {
+            bool complete;
+            lock (_screenTransitionLock)
+                complete = _screenTransition == null || _screenTransition.Forced
+                    || _clock.NowMs - start >= duration;
+            if (complete) break;
+            _frameSignal.WaitOne(50);
+        }
+        // Publish the exact target endpoint before the following surface releases/root reload.
+        lock (_screenTransitionLock)
+            if (_screenTransition != null) _screenTransition.Forced = true;
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        // Do not let the VM release both source surfaces (or immediately reload SYSTEM4) until the
+        // main thread has actually published the terminal target frame.
+        while (!_stopping)
+        {
+            lock (_screenTransitionLock)
+                if (_screenTransition == null) break;
+            _frameSignal.WaitOne(50);
+        }
+        IsTransitionWaiting = false;
+        System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
+        _timeline?.State("running", new() { ["screen_transition_complete"] = true });
+    }
+
+    public bool TrySnapshotScreenTransition(out LegacyScreenTransitionSnapshot snapshot)
+    {
+        lock (_screenTransitionLock)
+        {
+            if (_screenTransition == null)
+            {
+                snapshot = default;
+                return false;
+            }
+            double progress = _screenTransition.Forced ? 1.0
+                : System.Math.Clamp((_clock.NowMs - _screenTransition.StartMs)
+                    / (double)_screenTransition.DurationMs, 0.0, 1.0);
+            snapshot = new LegacyScreenTransitionSnapshot(
+                _screenTransition.Source, _screenTransition.Target, progress);
+            if (_screenTransition.Forced) _screenTransition = null;
+            return true;
+        }
+    }
+
     // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
     // once, then continue only while the sampled retained scene can actually change. Text reveal is a separate
     // Godot Label; waiting/sleeping alone do not alter background pixels.
     public bool ShouldRecomposite(GfxState gfx)
-        => System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0 ||
-           gfx.HasActiveVisualPresentation(_clock.NowMs);
+    {
+        bool screenTransitionActive;
+        lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
+        return System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0 ||
+               screenTransitionActive || gfx.HasActiveVisualPresentation(_clock.NowMs);
+    }
 
     public void Stop()
     {
@@ -518,6 +621,11 @@ public sealed class GodotAdvHost : IHost
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;
         _foregroundGfx = null;
+        lock (_screenTransitionLock)
+        {
+            _renderTargetSnapshots.Clear();
+            _screenTransition = null;
+        }
         IsWaiting = false;
         IsTransitionWaiting = false;
         IsSleeping = false;
@@ -694,6 +802,7 @@ public sealed class GodotAdvHost : IHost
 
     public void ReleaseSurface(int slot)
     {
+        lock (_screenTransitionLock) _renderTargetSnapshots.Remove(slot);
         long resourceId;
         lock (_imageLock)
         {
@@ -739,6 +848,8 @@ public sealed class GodotAdvHost : IHost
     {
         var stoppedMovies = new System.Collections.Generic.HashSet<long>();
         int end = checked(firstSlot + count);
+        lock (_screenTransitionLock)
+            for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
         lock (_imageLock)
         {
             for (int slot = firstSlot; slot < end; slot++)
@@ -808,7 +919,8 @@ public sealed class GodotAdvHost : IHost
     }
 
     // ---- audio ops (OGG plays natively in Godot) ----
-    // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: via the per-scene manifest.
+    // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: SC-section first,
+    // then universal raw id for frontend scripts such as ROOM that do not own an SC section.
     public void PlayBgm(long id)
     {
         var asset = _res.ResolveBgm(id);
@@ -821,7 +933,7 @@ public sealed class GodotAdvHost : IHost
 
     public void PlayVoice(long id, int playbackVariant)
     {
-        var asset = _res.Resolve(CurrentScene, id);
+        var asset = _res.ResolveVoice(CurrentScene, id);
         var audio = asset != null ? LoadAudio(asset) : null;
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
             ["playback_variant"] = playbackVariant });
@@ -914,5 +1026,26 @@ public sealed class GodotAdvHost : IHost
 }
 
 public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);
+public readonly record struct LegacyScreenTransitionSnapshot(
+    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress);
+
+internal sealed class LegacyScreenTransition
+{
+    public IReadOnlyList<RenderObject> Source { get; }
+    public IReadOnlyList<RenderObject> Target { get; }
+    public long StartMs { get; }
+    public long DurationMs { get; }
+    public bool Forced { get; set; }
+
+    public LegacyScreenTransition(IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
+                                  long startMs, long durationMs)
+    {
+        Source = source;
+        Target = target;
+        StartMs = startMs;
+        DurationMs = durationMs;
+    }
+}
+
 public readonly record struct AdvWaitIndicatorSnapshot(
     RgbaImage Image, string Name, int AssetId, AdvWaitIndicatorConfig Config, int Frame);

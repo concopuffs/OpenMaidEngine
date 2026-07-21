@@ -33,6 +33,14 @@ public sealed class ResourceMap
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
 
+    /// <summary>Resolve voice audio through the active SC section when one exists, then through the
+    /// universal raw catalog used by non-SC frontend scripts such as ROOM.</summary>
+    public AssetEntry? ResolveVoice(string scene, long resId)
+    {
+        var entry = _catalog.ResolveScene(scene, resId) ?? _catalog.ResolveRaw(resId);
+        return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
+    }
+
     /// <summary>Resolve an already-normalized raw catalog id without applying a scene section base.</summary>
     public AssetEntry? ResolveRawTexture(long rawId)
     {

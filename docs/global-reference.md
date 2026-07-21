@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-16417 globals (72 curated, 16345 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+16417 globals (73 curated, 16344 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -26,6 +26,7 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -57,7 +58,6 @@
 | `0x26f1` | — | low | auto-shape | array |
 | `0x2755` | — | low | auto-shape | array |
 | `0x27bd` | — | low | auto-shape | array |
-| `0x2e49` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
 | `0x329e` | — | low | auto-shape | array |

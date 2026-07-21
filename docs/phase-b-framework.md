@@ -237,12 +237,27 @@ were presented, its terminal op `0x9` at `0x1fb` ran, and SYSTEM4 reconstructed 
 launcher/session-lifecycle discrepancy was observed. DEBUG-specific content oddities are not acceptance
 failures for this developer route and remain out of scope unless they reproduce in a normal game script.
 
-**TITLE Extra Room entry (`ROOM.BIN`, 2026-07-20).** The title dispatch itself is correct. The first manual
+**TITLE Extra Room entry (`ROOM.BIN`, 2026-07-20 through 2026-07-21).** The title dispatch itself is correct. The first manual
 entry exposed a scheduler discrepancy: ROOM's stable input poll uses `sleep 0`, which native `0xc8` clamps
 to a one-millisecond timer. Godot previously treated it as a zero-duration no-op, letting the script consume
 the 20-million-step guard and display `-end-`. The interactive host now preserves the native one-tick yield;
 Godot also prints the VM halt reason and step count before its generic end marker so future terminations are
-distinguishable. Manual ROOM presentation and its genuine op-`0x9` return to TITLE remain to be rechecked.
+distinguishable. Manual follow-up confirmed the room remains interactive and its genuine op-`0x9` returns to
+TITLE, then exposed three presentation gaps. Native RE resolved and implemented all three underlying
+contracts: `0x60` selects the four room variants through CRT `rand()%4`; corrected `0x6c` zero-fills the
+13-cell character-voice profile table instead of writing scalar 13 into its first cell; and `0x25` performs
+a blocking target-over-source crossfade between the two frames ROOM captures through offscreen `0x20c`
+presents. Entry/menu transitions use timing argument 10, the final black transition uses 30, and the port
+now waits for the terminal captured frame before surface release or SYSTEM4 reload. The release script's
+fourth random presentation variant intentionally has no voice ids; the first three have distinct
+greeting/farewell pairs. ROOM now has 55/56 distinct opcodes and 420/421 instructions handled or proven
+safe; its sole remaining gap is the already classified one-shot `0x1fe` current-rotation setter on a
+decorative object, unrelated to these transition/audio paths. Manual visual/audio parity remains to be
+rechecked on the updated build. The first recheck confirmed the transition was visible but exposed two
+follow-up corrections: the decompiled alpha-step branch had initially been read backwards (`arg<=64`
+means step 16, not step 1), making argument 10 about 160 ms and argument 30 about 480 ms; and ROOM's raw
+voice ids were reaching `play-voice` but failing the port's SC-section-only lookup because ROOM owns no SC
+section. Voice resolution now uses the same scene-first, type-checked raw fallback as frontend textures.
 
 ## Stage B2 — Faithful full boot
 
