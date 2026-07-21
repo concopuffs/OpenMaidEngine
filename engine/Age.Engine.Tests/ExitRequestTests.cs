@@ -50,4 +50,23 @@ public class ExitRequestTests
         Assert.False(vm.Globals.ContainsKey(0x7001));
         Assert.False(vm.Globals.ContainsKey(0x7002));
     }
+
+    [Fact]
+    public void DebugIgnoreExitRequestFallsThroughToFollowingBytecode()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "TITLE.BIN", new List<(int, Operand[])>
+        {
+            (0x1, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x7000), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost(),
+            new VmOptions(IgnoreExitRequests: true));
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.Globals[0x7000]);
+    }
 }

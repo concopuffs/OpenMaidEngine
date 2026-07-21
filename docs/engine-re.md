@@ -302,7 +302,10 @@ TITLE happens to contain a developer menu immediately after its `0x1`, including
 former unknown-op fallback did expose that menu when selecting TITLE's fifth action, providing a useful
 visual confirmation of the static mapping but not a legitimate retail route. Opcode `0x1` now propagates a
 process-exit request through hotspot callbacks and nested script frames and ends the VM session without
-executing the following bytecode. End-to-end visual validation of the native
+executing the following bytecode. An explicit Godot `--native-debug-menu` diagnostic can deliberately
+restore the old fall-through for developer archaeology; it maps to `VmOptions.IgnoreExitRequests`, defaults
+off, and is not part of the native compatibility path. Because it changes the opcode globally, it also
+suppresses SYSTEM4's invalid-execution-mode exit site during that run. End-to-end visual validation of the native
 `SYSTEM4 -> TITLE -> child -> 0x9 -> SYSTEM4 -> TITLE` history remains deferred until the frontend
 exit/return-to-title boundary or a natural game-over/completion route exists.
 
@@ -777,6 +780,11 @@ VM `case "sleep"`; see `vm-map/opcodes.toml` 0xc8. **It does not pace ordinary o
 native presentation trace proved that back-to-back retained mutations execute within milliseconds and are
 first published at the following `0x20c`/`0x21c`, sleep, or stable input boundary. An earlier claim that the
 opening was generally sleep-paced was inherited without execution evidence and is superseded.
+
+The native timer arm clamps every duration to at least one millisecond. This is semantically important for
+menu scripts: ROOM's steady input loop uses `sleep 0` as a one-engine-tick yield. The Godot host formerly
+allowed a zero deadline, turning that loop into a free-running burst that exhausted the VM step guard and
+showed `-end-`; it now applies the native minimum after the debug speed multiplier.
 
 **Related — `present-frame` (op `0x20c`):** dispatch `param_1[0x26e9f] = gfx_op_0x20c_present_frame` →
 `gfx_render_frame`@`0x4820b0` (buffer flip). The port treats `0x20c` as an explicit retained-state publication

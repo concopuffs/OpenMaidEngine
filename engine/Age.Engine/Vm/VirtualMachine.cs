@@ -724,6 +724,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "throw-exit-request":
+                if (_o.IgnoreExitRequests) return pc + 1;
                 // Native op 0x1 throws Command_Exit_Exception through callbacks and nested script
                 // frames. The outer engine loop catches it and exits without advancing frame_pc.
                 throw new ProcessExitRequestedException();

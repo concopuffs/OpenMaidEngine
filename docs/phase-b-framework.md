@@ -150,7 +150,8 @@ route through the first `0x9` remains deferred: Himegari's readily accessible re
 to the still-unimplemented frontend exit-request policy, while the other known natural paths require later
 gameplay, game over, or completion. Do not use TITLE's post-`0x1` developer menu as evidence; native `0x1`
 is non-returning, and the port now propagates that exit request instead of falling through into the hidden
-bytecode. See `docs/engine-re.md`.
+bytecode. The opt-in `--native-debug-menu` diagnostic deliberately restores fall-through for exploring that
+retained developer UI, but does not qualify as native lifecycle validation. See `docs/engine-re.md`.
 
 **Godot debug scene launcher (2026-07-20; implemented and manually validated).** The first version
 is deliberately narrower than arbitrary hot swapping:
@@ -235,6 +236,13 @@ confirmed `TITLE -> F4 -> DEBUG.BIN`: its four scripted ADV pages at `0xc7`, `0x
 were presented, its terminal op `0x9` at `0x1fb` ran, and SYSTEM4 reconstructed the visible TITLE menu. No
 launcher/session-lifecycle discrepancy was observed. DEBUG-specific content oddities are not acceptance
 failures for this developer route and remain out of scope unless they reproduce in a normal game script.
+
+**TITLE Extra Room entry (`ROOM.BIN`, 2026-07-20).** The title dispatch itself is correct. The first manual
+entry exposed a scheduler discrepancy: ROOM's stable input poll uses `sleep 0`, which native `0xc8` clamps
+to a one-millisecond timer. Godot previously treated it as a zero-duration no-op, letting the script consume
+the 20-million-step guard and display `-end-`. The interactive host now preserves the native one-tick yield;
+Godot also prints the VM halt reason and step count before its generic end marker so future terminations are
+distinguishable. Manual ROOM presentation and its genuine op-`0x9` return to TITLE remain to be rechecked.
 
 ## Stage B2 — Faithful full boot
 

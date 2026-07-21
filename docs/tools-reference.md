@@ -139,13 +139,19 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 Plays the real bytecode with call-script execution on (subroutines run live). A no-argument launch starts
 the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. The local `run-godot.ps1`/`.cmd` launchers
 make that route explicit with `--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. `--headless` can't
-render texture ops (no GPU context) — run windowed for real scenes. User args (after `--`):
+render texture ops (no GPU context) — run windowed for real scenes. On VM termination the console prints
+the exact halt reason and step count before the generic on-screen `-end-` marker. User args (after `--`):
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
 - `--boot` — direct-scene diagnostic only: with `--scene <non-SYSTEM4>`, run the old
   `INITCONFIG/INIT2/INIT` state prefix before that isolated scene. The normal SYSTEM4-rooted launch neither
   needs nor applies it. e.g. `godot --path godot -- --scene SC0000 --boot`.
+- `--native-debug-menu` — intentionally treat exit-request opcode `0x1` as a no-op, exposing TITLE's
+  otherwise unreachable shipped developer menu. This is a non-native debug divergence and also suppresses
+  SYSTEM4's invalid-execution-mode exit request for that run. Direct Godot and PowerShell launches leave it
+  disabled unless explicitly requested. The local `run-godot.cmd` convenience launcher enables it by
+  default; use `run-godot.ps1` without `-NativeDebugMenu` for a native-faithful launch.
 - `--shot <png> [--shot-page N]` — capture page N to a PNG then quit (dev screenshot). At scene end it also prints the call-scripts executed as nested frames.
 - `--shot-sequence <dir> [--frames N]` — dump one PNG per rendered frame (`frame_0000.png…`, default N=180 ≈ 3s @60fps) then quit, auto-advancing past input waits. Verifies time-based retained effects and publication boundaries as distinct frames, which a single `--shot` cannot. CPU/IO-heavy by design (a PNG every frame); a dev diagnostic, not a normal run. e.g. `godot --path godot -- --scene SC0000 --boot --shot-sequence out/seq --frames 300`.
 - `--sleep-scale <f>` — multiply every explicit `sleep` (op 0xc8) duration by `f` (default 1.0). This stretches only script-authored sleep holds; it does not slow ordinary opcode bursts or replace `0x20c`/`0x21c` presentation pacing. Debug-only; leave at 1.0 for real playback.

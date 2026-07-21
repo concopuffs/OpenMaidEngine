@@ -6,5 +6,7 @@ namespace Age.Engine.Vm;
 /// through every prompt into code no real playthrough reaches (which is what made a headless SC0000 spin
 /// 493k× in the name-entry poll loop). Leave false for interactive frontends that really block on input
 /// (Godot) and for the dialogue-coverage sweep that deliberately walks every page.</param>
+/// <param name="IgnoreExitRequests">Debug-only divergence: treat op 0x1 as a no-op so unreachable
+/// post-exit bytecode can be explored. Leave false for native-faithful execution.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
-                               bool HaltAtWaitForInput = false);
+                               bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false);

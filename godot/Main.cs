@@ -159,6 +159,9 @@ public partial class Main : Godot.Control
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
         bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0; // diagnostic prefix for direct-scene runs
+        bool nativeDebugMenu = System.Array.IndexOf(userArgs, "--native-debug-menu") >= 0;
+        if (nativeDebugMenu)
+            GD.Print("[debug] native exit requests disabled; post-0x1 bytecode may execute");
         string scene = "SYSTEM4";                       // natural persistent root; --scene keeps direct diagnostics
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
@@ -223,7 +226,8 @@ public partial class Main : Godot.Control
         Age.Engine.Diagnostics.ITraceSink sink = _trace;
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
-        _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, sink);
+        _vm = new VirtualMachine(script, table, _host,
+            new VmOptions(MaxSteps: 20_000_000, IgnoreExitRequests: nativeDebugMenu), provider, sink);
         if (scripts != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -348,6 +352,7 @@ public partial class Main : Godot.Control
         {
             _ended = true;
             DumpHistogram();
+            GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
             ReportSubroutines();
             ShowEnd();
             if (_selftest) RunSelfTest();
@@ -1188,11 +1193,13 @@ public partial class Main : Godot.Control
         launcherSmoke.Open(debugEntries, "SYSTEM4.BIN > TITLE.BIN");
         launcherSmoke.Hide();
         launcherSmoke.QueueFree();
-        ok &= launcherOk;
+        bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
+                              && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
+        ok &= launcherOk && sleepMinimumOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
-                         $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts)");
+                         $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); sleep-min=1ms");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
-                      $"debug-launcher={launcherOk}");
+                      $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

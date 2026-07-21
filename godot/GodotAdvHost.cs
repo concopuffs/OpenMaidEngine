@@ -547,9 +547,14 @@ public sealed class GodotAdvHost : IHost
     public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier for explicit op-0xc8 holds only
     // Wait on the unified FrameClock timebase (not Thread.Sleep) so the Speed multiplier scales
     // sleeps together with retained presentation clocks. Main._Process advances the clock + pulses each frame.
+    internal static long NormalizeSleepMilliseconds(long duration, double scale)
+        => (long)System.Math.Clamp(duration * scale, 1, 60_000);
+
     public void Sleep(long duration)
     {
-        long ms = (long)System.Math.Clamp(duration * SleepScale, 0, 60_000);   // cap so a pathological script can't hang the window
+        // Native sleep_timer_arm clamps the duration to at least 1 ms. In menu poll loops, sleep(0)
+        // therefore yields to the next engine tick instead of becoming a free-running no-op.
+        long ms = NormalizeSleepMilliseconds(duration, SleepScale);
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
         // A sleep is a service boundary: make preceding retained writes visible once even when no animation
