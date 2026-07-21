@@ -41,10 +41,10 @@ public sealed class ResourceMap
         return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
     }
 
-    /// <summary>Resolve an already-normalized raw catalog id without applying a scene section base.</summary>
+    /// <summary>Resolve an already-normalized packed catalog id without applying a scene section base.</summary>
     public AssetEntry? ResolveRawTexture(long rawId)
     {
-        var entry = _catalog.ResolveRaw(rawId);
+        var entry = _catalog.ResolvePacked(rawId);
         return entry is { IsPlaceholder: false } &&
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }

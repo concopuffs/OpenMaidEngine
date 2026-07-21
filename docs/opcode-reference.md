@@ -594,9 +594,25 @@ Implemented through IHost.PlayModalMovieToSurface. ResourceMap.ResolveRawMovie d
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 handler gfx_op_0x228_query_position@0x42a3a0 calls gfx_object_query_translation_target@0x47cdd0. The worker copies the complete 0xb5-dword object record, passes copied obj+0x17c to matrix4_decompose_affine@0x48d7c8, and returns its translation outputs; the decomposition reads matrix elements +0x30/+0x34/+0x38, corresponding to obj+0x1ac/+0x1b0/+0x1b4. SC0000 AE001H queries this before each 0x220 leg. C# regression covers targets (40,-20), (50,-80), (130,-100), plus the missing-object output-preservation path.
 
-### 0x229 `u004219E0` (u004219E0, argc 5)
-- **summary:** 0x229 set-position2 (handle)(op2)(x)(y)(z): set object position/geometry directly (FUN_00472bb0/be0). C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster.
-- **grounding:** source=kelebek, confidence=low
+### 0x229 `set-gfx-range-transform` (set-gfx-range-transform, argc 5)
+- **summary:** (first_handle)(count)(anchor_x)(anchor_y)(anchor_z) — reset and select the retained-gfx range transform applied after each ordinary object matrix for handles in [first, first+count), then set its anchor/pivot. A zero count disables it.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x229_set_gfx_range_transform@0x423700 first calls gfx_range_transform_reset@0x472b80, then writes operands 1/2 to retained-gfx owner+0x420/+0x424 and operands 3..5 to the embedded transform object's anchor at owner+0x440..+0x448. gfx_object_composite@0x47f650 post-multiplies the sampled owner+0xb5b4 matrix only for handles in that selected range. Corpus: 693 calls/309 scripts; 590 disable with all zeroes, 101 select from handle 1 with a script-computed count, and FIELD/LOOK supply camera anchors. This supersedes the former incorrect per-object-position interpretation; per-object direct position is 0x22f.
+
+### 0x22a `set-gfx-range-scale-current` (set-gfx-range-scale-current, argc 3)
+- **summary:** (scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the selected retained-gfx range transform's current scale matrix.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x22a_set_gfx_range_scale_current@0x4237b0 divides all three operands by 100 and calls gfx_range_transform_set_scale_current@0x472c10, which builds owner+0x494. FIELD and LOOK each call it once after 0x229/0x22c; FIELD's zoom percent is G[0xccc09].
+
+### 0x22c `set-gfx-range-translation-current` (set-gfx-range-translation-current, argc 3)
+- **summary:** (translate_x)(translate_y)(translate_z) — immediately replace the selected retained-gfx range transform's current translation matrix.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x22c_set_gfx_range_translation_current@0x423900 passes the three integer operands as floats to gfx_range_transform_set_translation_current@0x472d00, which builds owner+0x594. FIELD computes (400-camera_x, 300-camera_y, 0), making the selected map anchor land at screen center; LOOK uses the same camera helper.
+
+### 0x22d `set-gfx-range-scale-target` (set-gfx-range-scale-target, argc 5)
+- **summary:** (delay_ms)(duration_ms)(scale_x_percent)(scale_y_percent)(scale_z_percent) — animate the selected retained-gfx range transform's scale from its current matrix to the target.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides operands 3..5 by 100 and calls gfx_range_transform_set_scale_target@0x472d50. The worker arms the embedded transform object's ordinary scale channel (delay obj+0x3c, duration +0x50, target matrix +0xac), which gfx_range_transform_sample_frame@0x476df0 samples before range composition. FIELD has the sole corpus call, a 300 ms camera zoom.
 
 ### 0x22f `u00421DD0` (u00421DD0, argc 5)
 - **summary:** 0x22f set-position (handle)(op2)(x)(y)(z): set the object base position (direct transform, not ping-pong). Worker gfx_worker_set_translation @0x472e90. C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster.
@@ -657,6 +673,11 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x242
 - **evidence:** Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set retained-gfx owner+0xb55c (EngineCtx+0x51b70)=1 and zero owner+0xb564/+0xb568. gfx_object_apply_transform_channels treats force value 1 as immediate completion unless obj+0x2d0 bit 0 is set. SC0000 label_1235a calls it before present-frame.
+
+### 0x249 `load-raw-texture-surface` (load-raw-texture-surface, argc 3)
+- **summary:** Load an AGF by universal packed SYS4INI/AAI catalog id into a retained surface slot using native surface mode 1 and the same RGB colorkey contract as set-texture (0x1f9).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instruction-length 7 and is contract-identical to gfx_op_0x1f9_load_surface through release, asset_open_indexed_entry, RGB colorkey conversion, load failure, and cleanup. Its mode-1 gfx_surface_mode1_ctor selects a tiled large-image wrapper: gfx_tiled_surface_create@0x432ff0 splits the logical dimensions into DAT_005b15b0-sized ordinary mode-0 child textures; gfx_tiled_surface_upload_agf@0x431a10 decodes and uploads each region; gfx_tiled_surface_blit@0x4316b0 subdivides a requested logical source rectangle across those tiles. It is not a spritesheet interpretation or alternate blend mode, so the port's contiguous CPU image is behaviorally equivalent. Corpus literals are universal raw indexes, including FIELD 0x32da..0x32dd -> SO005/SO007/SO008A/SO007A, and therefore bypass scene-section normalization.
 
 ## input
 
@@ -1181,18 +1202,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x22a `u00421A90` (u00421A90, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x22c `u00421BD0` (u00421BD0, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x22d `u00421C60` (u00421C60, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x230 `u00421E70` (u00421E70, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1218,10 +1227,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x248 `u00422E80` (u00422E80, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x249 `u00422EB0` (u00422EB0, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

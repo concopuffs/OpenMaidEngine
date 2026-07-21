@@ -5804,146 +5804,146 @@ observed_types = ["g-int", "l-int"]
 
 [[opcode]]
 op = 0x229
-label = "u004219E0"
+label = "set-gfx-range-transform"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004219E0"
+name = "set-gfx-range-transform"
 category = "draw"
-summary = "0x229 set-position2 (handle)(op2)(x)(y)(z): set object position/geometry directly (FUN_00472bb0/be0). C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster."
+summary = "(first_handle)(count)(anchor_x)(anchor_y)(anchor_z) — reset and select the retained-gfx range transform applied after each ordinary object matrix for handles in [first, first+count), then set its anchor/pivot. A zero count disables it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x229_set_gfx_range_transform@0x423700 first calls gfx_range_transform_reset@0x472b80, then writes operands 1/2 to retained-gfx owner+0x420/+0x424 and operands 3..5 to the embedded transform object's anchor at owner+0x440..+0x448. gfx_object_composite@0x47f650 post-multiplies the sampled owner+0xb5b4 matrix only for handles in that selected range. Corpus: 693 calls/309 scripts; 590 disable with all zeroes, 101 select from handle 1 with a script-computed count, and FIELD/LOOK supply camera anchors. This supersedes the former incorrect per-object-position interpretation; per-object direct position is 0x22f."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "first affected object handle"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "affected handle count; zero disables"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "range-transform anchor X"
 observed_types = ["imm", "g-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "range-transform anchor Y"
 observed_types = ["imm", "g-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "range-transform anchor Z"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x22a
-label = "u00421A90"
+label = "set-gfx-range-scale-current"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421A90"
-category = "unknown"
-summary = ""
+name = "set-gfx-range-scale-current"
+category = "draw"
+summary = "(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the selected retained-gfx range transform's current scale matrix."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x22a_set_gfx_range_scale_current@0x4237b0 divides all three operands by 100 and calls gfx_range_transform_set_scale_current@0x472c10, which builds owner+0x494. FIELD and LOOK each call it once after 0x229/0x22c; FIELD's zoom percent is G[0xccc09]."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "X scale percent"
 observed_types = ["g-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "Y scale percent"
 observed_types = ["g-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "Z scale percent"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x22c
-label = "u00421BD0"
+label = "set-gfx-range-translation-current"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421BD0"
-category = "unknown"
-summary = ""
+name = "set-gfx-range-translation-current"
+category = "draw"
+summary = "(translate_x)(translate_y)(translate_z) — immediately replace the selected retained-gfx range transform's current translation matrix."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x22c_set_gfx_range_translation_current@0x423900 passes the three integer operands as floats to gfx_range_transform_set_translation_current@0x472d00, which builds owner+0x594. FIELD computes (400-camera_x, 300-camera_y, 0), making the selected map anchor land at screen center; LOOK uses the same camera helper."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "translation X"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "translation Y"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "translation Z"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x22d
-label = "u00421C60"
+label = "set-gfx-range-scale-target"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421C60"
-category = "unknown"
-summary = ""
+name = "set-gfx-range-scale-target"
+category = "draw"
+summary = "(delay_ms)(duration_ms)(scale_x_percent)(scale_y_percent)(scale_z_percent) — animate the selected retained-gfx range transform's scale from its current matrix to the target."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides operands 3..5 by 100 and calls gfx_range_transform_set_scale_target@0x472d50. The worker arms the embedded transform object's ordinary scale channel (delay obj+0x3c, duration +0x50, target matrix +0xac), which gfx_range_transform_sample_frame@0x476df0 samples before range composition. FIELD has the sole corpus call, a 300 ms camera zoom."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "delay milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "duration milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "target X scale percent"
 observed_types = ["g-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "target Y scale percent"
 observed_types = ["g-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "target Z scale percent"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -6509,33 +6509,33 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x249
-label = "u00422EB0"
+label = "load-raw-texture-surface"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422EB0"
-category = "unknown"
-summary = ""
+name = "load-raw-texture-surface"
+category = "draw"
+summary = "Load an AGF by universal packed SYS4INI/AAI catalog id into a retained surface slot using native surface mode 1 and the same RGB colorkey contract as set-texture (0x1f9)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instruction-length 7 and is contract-identical to gfx_op_0x1f9_load_surface through release, asset_open_indexed_entry, RGB colorkey conversion, load failure, and cleanup. Its mode-1 gfx_surface_mode1_ctor selects a tiled large-image wrapper: gfx_tiled_surface_create@0x432ff0 splits the logical dimensions into DAT_005b15b0-sized ordinary mode-0 child textures; gfx_tiled_surface_upload_agf@0x431a10 decodes and uploads each region; gfx_tiled_surface_blit@0x4316b0 subdivides a requested logical source rectangle across those tiles. It is not a spritesheet interpretation or alternate blend mode, so the port's contiguous CPU image is behaviorally equivalent. Corpus literals are universal raw indexes, including FIELD 0x32da..0x32dd -> SO005/SO007/SO008A/SO007A, and therefore bypass scene-section normalization."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "universal packed SYS4INI/AAI catalog id"
 observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface slot"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "RGB888 colorkey; negative disables colorkey"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

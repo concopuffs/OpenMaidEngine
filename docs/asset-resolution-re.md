@@ -86,6 +86,16 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    remains correct for ordinary SC texture/voice ids. ROOM voice `0x3365`, for example, resolves as raw
    `EUA0016.OGG`; treating it only as a ROOM-local id produces no asset because ROOM owns no SC range.
 
+   **Explicit raw texture loader (identified and implemented 2026-07-21).** Opcode `0x249` is the
+   unambiguous packed raw-id texture path even while a scene section is active. It shares `0x1f9`'s surface
+   replacement, AGF decode, and RGB colorkey contract, but passes native surface mode 1 and does not apply
+   the executing frame's section base. FIELD uses `0x32da..0x32dd`, the universal SYS4INI indexes for
+   `SO005.AGF`, `SO007.AGF`, `SO008A.AGF`, and `SO007A.AGF`, to populate map-sheet surfaces `0x3e..0x41`.
+   The port therefore forwards those ids directly to `ResolveRawTexture`; it must not run them through
+   `ResolveTextureResourceId` first. Native mode 1 is a large-image wrapper which tiles the same decoded
+   logical pixels over ordinary child textures; it is not a different AGF/spritesheet interpretation or
+   blend rule. The port's contiguous CPU image is therefore equivalent for rendering purposes.
+
    *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
    for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
    hunt for the selector (thought it was native scene state; even tried reading `G[0x62424]` live — the

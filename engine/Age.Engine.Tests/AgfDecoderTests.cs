@@ -81,6 +81,22 @@ public class AgfDecoderTests
         Assert.Contains(image.Pixels.Where((_, i) => (i & 3) == 3), a => a is > 0 and < 255);
     }
 
+    [Theory]
+    [InlineData(0x32da, "SO005.AGF")]
+    [InlineData(0x32db, "SO007.AGF")]
+    [InlineData(0x32dc, "SO008A.AGF")]
+    [InlineData(0x32dd, "SO007A.AGF")]
+    public void InstalledFieldMapSheetsResolveAndDecodeByRawCatalogIndex(int rawId, string name)
+    {
+        var resources = ResourceMap.Load();
+        var asset = resources.ResolveRawTexture(rawId);
+        Assert.NotNull(asset);
+        Assert.Equal(name, asset.Name);
+        var image = resources.DecodeTexture(asset);
+        Assert.True(image.Width > 0);
+        Assert.True(image.Height > 0);
+    }
+
     private sealed class MemoryStore(byte[] bytes) : IAssetStore
     {
         public Stream Open(AssetEntry entry) => new MemoryStream(bytes, writable: false);

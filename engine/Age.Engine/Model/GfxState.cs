@@ -38,7 +38,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            int Alpha, long Tint, int TintStrength, BlendKind Blend,
                                            bool MultiplyTint,
                                            SurfaceTransitionState? SurfaceTransition = null,
-                                           ColorTransitionState? ColorTransition = null);
+                                           ColorTransitionState? ColorTransition = null,
+                                           Affine2D? RangeTransform = null);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -119,6 +120,12 @@ public sealed class GfxState
     // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
     private readonly Dictionary<long, GfxObject> _objects = new();
 
+    // Ops 0x229-0x22e address one embedded gfx-object record outside the ordinary object map. Its sampled
+    // matrix is post-multiplied onto only the selected handle range during native composition. FIELD uses
+    // this as its map camera while the surrounding dungeon UI remains screen-fixed.
+    private long _rangeTransformFirst, _rangeTransformCount;
+    private GfxObject _rangeTransform = new();
+
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
     /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero.</summary>
@@ -153,6 +160,44 @@ public sealed class GfxState
     public void SetDefaultObjectSlot(int slot)
     {
         lock (_lock) DefaultObjectSlot = slot;
+    }
+
+    /// <summary>Op 0x229: reset the embedded range transform, select [first, first+count), and set its
+    /// anchor/pivot. This does not create or mutate an ordinary retained object.</summary>
+    public void SetRangeTransform(long first, long count, (long X, long Y, long Z) anchor)
+    {
+        lock (_lock)
+        {
+            _rangeTransformFirst = first;
+            _rangeTransformCount = System.Math.Max(0, count);
+            _rangeTransform = new GfxObject { V18 = anchor };
+        }
+    }
+
+    /// <summary>Op 0x22a: immediately replace the embedded range transform's current scale.</summary>
+    public void SetRangeScaleCurrent((long X, long Y, long Z) percent)
+    {
+        lock (_lock)
+            _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+    }
+
+    /// <summary>Op 0x22c: immediately replace the embedded range transform's current translation.</summary>
+    public void SetRangeTranslationCurrent((long X, long Y, long Z) translation)
+    {
+        lock (_lock) _rangeTransform.TranslationCurrent = translation;
+    }
+
+    /// <summary>Op 0x22d: arm the range transform's delayed one-shot scale target.</summary>
+    public void SetRangeScaleChannel(long delayMs, long durationMs, (long X, long Y, long Z) percent)
+    {
+        lock (_lock)
+        {
+            _rangeTransform.ScaleDelayMs = delayMs;
+            _rangeTransform.ScaleDurationMs = durationMs;
+            _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+            _rangeTransform.ScaleEnabled = durationMs > 0;
+            _rangeTransform.OneShotStartMs = -1;
+        }
     }
 
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
@@ -257,6 +302,9 @@ public sealed class GfxState
             _surfaceTransitions.Clear();
             CurrentObject = 0;
             CurrentRenderTargetSlot = -1;
+            _rangeTransformFirst = 0;
+            _rangeTransformCount = 0;
+            _rangeTransform = new GfxObject();
             AnimClockDurationTicks = 0;
             AnimClockGeneration++;
         }
@@ -424,6 +472,8 @@ public sealed class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
+                   _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&
                                             (o.OneShotAnimationControlFlags & 1) == 0 &&
                                             (o.OneShotColorEnabled || o.ScaleEnabled ||
@@ -441,40 +491,46 @@ public sealed class GfxState
     /// marked by op 0x242 bit 0 keep sampling asynchronously.</summary>
     private void ForceCompleteOneShotChannels()
     {
+        CommitOneShotChannels(_rangeTransform);
         foreach (var o in _objects.Values)
         {
             if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
-            if (o.OneShotColorEnabled)
-            {
-                o.Color = o.OneShotColorTarget & 0xffffffff;
-                o.OneShotColorTarget = -1;
-                o.ColorDelayMs = 0;
-                o.ColorDurationMs = 0;
-                o.OneShotColorEnabled = false;
-            }
-            if (o.ScaleEnabled)
-            {
-                o.ScaleCurrent = o.ScaleTarget;
-                o.ScaleDelayMs = 0;
-                o.ScaleDurationMs = 0;
-                o.ScaleEnabled = false;
-            }
-            if (o.RotationChannelEnabled)
-            {
-                o.RotationCurrent = o.RotationTarget;
-                o.RotationDelayMs = 0;
-                o.RotationDurationMs = 0;
-                o.RotationChannelEnabled = false;
-            }
-            if (o.TranslationEnabled)
-            {
-                o.TranslationCurrent = o.TranslationTarget;
-                o.TranslationDelayMs = 0;
-                o.TranslationDurationMs = 0;
-                o.TranslationEnabled = false;
-            }
-            o.OneShotStartMs = -1;
+            CommitOneShotChannels(o);
         }
+    }
+
+    private static void CommitOneShotChannels(GfxObject o)
+    {
+        if (o.OneShotColorEnabled)
+        {
+            o.Color = o.OneShotColorTarget & 0xffffffff;
+            o.OneShotColorTarget = -1;
+            o.ColorDelayMs = 0;
+            o.ColorDurationMs = 0;
+            o.OneShotColorEnabled = false;
+        }
+        if (o.ScaleEnabled)
+        {
+            o.ScaleCurrent = o.ScaleTarget;
+            o.ScaleDelayMs = 0;
+            o.ScaleDurationMs = 0;
+            o.ScaleEnabled = false;
+        }
+        if (o.RotationChannelEnabled)
+        {
+            o.RotationCurrent = o.RotationTarget;
+            o.RotationDelayMs = 0;
+            o.RotationDurationMs = 0;
+            o.RotationChannelEnabled = false;
+        }
+        if (o.TranslationEnabled)
+        {
+            o.TranslationCurrent = o.TranslationTarget;
+            o.TranslationDelayMs = 0;
+            o.TranslationDurationMs = 0;
+            o.TranslationEnabled = false;
+        }
+        o.OneShotStartMs = -1;
     }
 
     /// <summary>Whether sampling the retained scene at a later frame can change its pixels without another
@@ -484,6 +540,8 @@ public sealed class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
+                   _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&
                        (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
                         o.TranslationEnabled ||
@@ -651,7 +709,8 @@ public sealed class GfxState
 
     /// <summary>Visible objects in ascending-handle order (= z-order), each with its source surface resolved
     /// and its active channels interpolated at <paramref name="nowMs"/>. Position is the base V24 (a direct
-    /// transform, ops 0x22f/0x229); scale and translation are independent one-shot matrix channels. The
+    /// transform (op 0x22f); scale and translation are independent one-shot matrix channels. Ops
+    /// 0x229-0x22e contribute a second sampled matrix only to their selected handle range. The
     /// src-rect channel (0x239/0x231) selects the spritesheet cell; the color channel (0x232) ping-pongs the
     /// alpha/tint. Channel Start fields seed to nowMs on first sight.</summary>
     public IReadOnlyList<RenderObject> SnapshotVisibleObjects(long nowMs)
@@ -659,6 +718,28 @@ public sealed class GfxState
         lock (_lock)
         {
             var list = new List<RenderObject>();
+            Affine2D? rangeAffine = null;
+            if (_rangeTransformCount > 0)
+            {
+                var r = _rangeTransform;
+                bool hadRangeOneShot = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
+                if (hadRangeOneShot && r.OneShotStartMs < 0) r.OneShotStartMs = nowMs;
+                var rangeScale = SampleMatrixChannel(ref r.ScaleCurrent, r.ScaleTarget, r.ScaleDelayMs,
+                    r.ScaleDurationMs, r.OneShotStartMs, ref r.ScaleEnabled, nowMs);
+                var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, r.RotationTarget,
+                    r.RotationDelayMs, r.RotationDurationMs, r.OneShotStartMs,
+                    ref r.RotationChannelEnabled, nowMs);
+                var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, r.TranslationTarget,
+                    r.TranslationDelayMs, r.TranslationDurationMs, r.OneShotStartMs,
+                    ref r.TranslationEnabled, nowMs);
+                if (!r.ScaleEnabled && !r.RotationChannelEnabled && !r.TranslationEnabled)
+                    r.OneShotStartMs = -1;
+                rangeAffine = Transform2DMath.Build(new TransformState(
+                    rangeScale.X, rangeScale.Y, rangeScale.Z,
+                    rangeTranslation.X, rangeTranslation.Y, rangeTranslation.Z,
+                    r.V18.X, r.V18.Y, r.V18.Z,
+                    rangeRotation.X, rangeRotation.Y, rangeRotation.Z, rangeRotation.Angle));
+            }
             foreach (var kv in _objects.OrderBy(k => k.Key))
             {
                 var o = kv.Value;
@@ -762,6 +843,9 @@ public sealed class GfxState
 
                 SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
                     ? SampleTransition(st, nowMs) : null;
+                Affine2D? objectRangeTransform = rangeAffine is { } ra &&
+                    kv.Key >= _rangeTransformFirst && kv.Key - _rangeTransformFirst < _rangeTransformCount
+                    ? ra : null;
                 list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new TransformState(scale.X, scale.Y, scale.Z,
@@ -771,7 +855,8 @@ public sealed class GfxState
                                           new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
                                                                  o.RotationAxis.Z, cycleAngle),
-                                          alpha, tint, strength, blend, multiplyTint, transition, colorTransition));
+                                          alpha, tint, strength, blend, multiplyTint, transition,
+                                          colorTransition, objectRangeTransform));
             }
             return list;
         }

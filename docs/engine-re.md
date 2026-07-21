@@ -941,6 +941,61 @@ Separate scale/rotation/translation state and timing are implemented. Anchor sem
 cyclic wrapping, 2D projection, and affine raster coverage have focused native-oracle tests. Native D3D9 filtering
 and render-target command execution remain separate fidelity work.
 
+#### Raw mode-1 surface load — opcode `0x249` (2026-07-21)
+
+`op_0x249_load_raw_texture_surface@0x424b20` has ABI
+`(universal_packed_catalog_id, surface_slot, RGB_colorkey)`. Its release, movie detach, indexed-asset open,
+colorkey conversion, failure exception, and stream cleanup are the same as `0x1f9`. The only native loader
+difference is the last argument to `gfx_surface_load_asset@0x477c40`: `0x1f9` passes mode 0, while `0x249`
+passes mode 1. `gfx_surface_decode_and_create@0x474e90` selects a base 0x450-byte texture object for mode 0
+and a derived 0x460-byte texture object for mode 1. A successful mode-0 load records the resource id in its
+device-reload record; mode 1 records `-1`.
+
+The derived class is specifically a **tiled large-image surface**, not an alternate pixel format,
+spritesheet interpretation, or blend mode. `gfx_tiled_surface_create@0x432ff0` divides the logical image into
+`ceil(width / DAT_005b15b0) × ceil(height / DAT_005b15b0)` ordinary mode-0 child surfaces.
+`gfx_tiled_surface_upload_agf@0x431a10` decodes indexed 1/4/8-bpp and 24/32-bpp input and uploads each tile;
+`gfx_tiled_surface_blit@0x4316b0` divides any requested logical source rectangle across the intersecting
+children and adjusts their destinations. A CPU compositor can therefore keep one contiguous decoded RGBA
+image without losing the mode-1 behavior relevant to Himegari.
+
+The corpus makes the addressing and first gameplay consequence concrete. FIELD calls `0x249` with raw ids
+`0x32da..0x32dd`, which are SYS4INI entries `SO005`, `SO007`, `SO008A`, and `SO007A`, into slots
+`0x3e..0x41`. `DRAWMAP.BIN` then creates the dungeon tile objects almost entirely from slots `0x3e` and
+`0x3f`. A skipped `0x249` therefore leaves the surrounding UI operational but the central map black. After
+implementing it, the first DEBUGMAP retest exposed a separate host blit error: FIELD intentionally binds a
+zero-width/zero-height SO005 prototype object, while the port expanded zero dimensions to the full texture.
+Native `gfx_object_blit_d3d9@0x4774c0` clips the explicit source rectangle and returns when
+`right<=left || bottom<=top`; mode-1's tiled blit likewise visits no children for an empty rectangle. The
+port now preserves that empty draw rather than leaking the complete SO005 sheet.
+
+#### Selected retained-object range transform — opcodes `0x229`/`0x22a`/`0x22c`/`0x22d` (2026-07-21)
+
+`0x229` was formerly misclassified as a second per-object position setter. Native
+`op_0x229_set_gfx_range_transform@0x423700` instead resets an embedded gfx-object record at retained-gfx
+owner `+0x428`, writes `(first_handle,count)` to owner `+0x420/+0x424`, and writes operands 3..5 as that
+embedded object's anchor at owner `+0x440..+0x448`. The actual per-object direct-position opcode remains
+`0x22f`.
+
+On every render frame, `gfx_range_transform_sample_frame@0x476df0` samples the embedded object's ordinary
+scale/rotation/translation channels into owner matrix `+0xb5b4`. `gfx_object_composite@0x47f650`
+post-multiplies an object's normal matrix by this shared matrix only when its handle is in
+`[first_handle, first_handle+count)`. The sibling setters are:
+
+- `0x22a`: current scale, three integer percentages divided by 100;
+- `0x22b`: current axis-angle rotation (present in the native dispatch table, zero Himegari corpus calls);
+- `0x22c`: current translation in pixels;
+- `0x22d`: delayed/duration scale target, using the embedded object's ordinary one-shot scale channel;
+- `0x22e`: delayed/duration axis-angle target (native-dispatch-only, zero Himegari corpus calls).
+
+FIELD's camera helper selects handles `[1,50000)`, anchors the transform at the current camera world
+coordinate `(G[0x767e],G[0x767f])`, sets translation to `(400-camera_x,300-camera_y,0)`, and applies the
+zoom percentage from `G[0xccc09]`. Thus the map layer is centered/scaled while handles `>=50000`—the dungeon
+UI—remain screen-fixed. FIELD's sole `0x22d` call animates a zoom over 300 ms. LOOK reuses the immediate
+camera helper. Across the corpus, `0x229` occurs 693 times in 309 scripts: 590 all-zero disables, 101
+identity-range selections, and the two FIELD/LOOK camera selections. Correcting the contract therefore
+removes spurious object-zero mutations without changing established ADV output.
+
 ### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
 
 Reversed for graphics slice A (spec `docs/superpowers/specs/2026-07-08-blend-transparency-design.md`;
@@ -1048,7 +1103,7 @@ annotated in Ghidra, saved.
 | op | handler / worker | semantics |
 |---|---|---|
 | `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel |
-| `0x229` | `gfx_op_0x229_set_position` (`FUN_00472bb0`+`FUN_00472be0`) | set object **position/geometry** immediately (`obj+0x420/0x424` + vec `obj+0x440..0x448`) |
+| `0x229` | `op_0x229_set_gfx_range_transform` → `gfx_range_transform_reset` / `select_handles` / `set_anchor` | reset/select the shared **retained-object range transform**; not a per-object position setter (superseded finding above) |
 | `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
 | `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color**: bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Negative alpha/RGB preserve corresponding bytes from static color `obj+0x60`; alpha >255 clamps. Distinct from one-shot `0x202`/static `0x203` |

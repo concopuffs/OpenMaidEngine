@@ -12,6 +12,17 @@ public readonly record struct Affine2D(double XX, double XY, double YX, double Y
         return new(XX, XY, YX, YY, p.X, p.Y);
     }
 
+    /// <summary>Compose this row-vector transform followed by <paramref name="next"/>. Native uses this
+    /// order when it post-multiplies an object's matrix by the selected retained-gfx range transform.</summary>
+    public Affine2D Then(Affine2D next)
+        => new(
+            XX * next.XX + XY * next.YX,
+            XX * next.XY + XY * next.YY,
+            YX * next.XX + YY * next.YX,
+            YX * next.XY + YY * next.YY,
+            TX * next.XX + TY * next.YX + next.TX,
+            TX * next.XY + TY * next.YY + next.TY);
+
     public bool TryInverse(out Affine2D inverse)
     {
         double det = XX * YY - XY * YX;

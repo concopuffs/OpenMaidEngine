@@ -383,6 +383,39 @@ requires them.
 Completion evidence combines original-game observation, executed-opcode/call traces, visible map/UI output,
 and before/after global-state comparisons for the action.
 
+### DEBUGMAP field-entry result (2026-07-21; manually validated)
+
+The shipped `DEBUGMAP.BIN` path is useful for the first bounded field slice, but it is not treated as a
+replacement for the natural campaign path. It performs substantial script-authored setup itself: it creates
+the test units, writes stage id `0xa5` to `G[0x4dfbc]`, fills the field-mode globals, writes system-flow
+request `G[0]=3`, and returns so SYSTEM4 enters `FIELD.BIN`. Runs launched from TITLE also retain the real
+SYSTEM4/INIT tables. A future discrepancy in party, inventory, stage, or progression state may still be an
+unpublished debug-level prerequisite; do not invent a seed unless its missing producer is proven.
+
+The first observed field discrepancy was a black central map while the surrounding field UI and minimap
+input remained alive. `DRAWMAP.BIN` is 23/23 opcodes handled and `RENDERMAP.BIN` is 31/31. FIELD's missing
+opcode `0x249` loads universal raw map sheets `0x32da..0x32dd`
+(`SO005`/`SO007`/`SO008A`/`SO007A`) into surfaces `0x3e..0x41`, after which DRAWMAP binds its generated tile
+objects to those surfaces. Skipping the loader left valid retained objects pointing at empty surfaces.
+
+The first retest after adding `0x249` showed the complete SO005 sheet enlarged over a grey field. The native
+mode-1 class is now fully identified as a large-image tiled wrapper over the same decoded pixels, ruling out
+a special spritesheet or blend interpretation. Two independent presentation gaps caused the retest:
+
+- native treats a zero-area draw-texture source rectangle as an empty draw; the port incorrectly expanded
+  it to the entire source image, exposing FIELD's intentionally invisible SO005 prototype object;
+- FIELD's camera depends on the shared retained-object range transform. Corrected `0x229` selects the map
+  handle range and anchor (it is not a per-object position opcode), while newly implemented `0x22a`,
+  `0x22c`, and `0x22d` apply immediate zoom, immediate translation, and animated zoom to that range without
+  moving the surrounding UI.
+
+The related native `0x22b`/`0x22e` range-rotation setters have zero Himegari corpus calls and need no runtime
+implementation yet. The remaining `DRAWMINIMAP` gap is `0x207` (eight calls) and is confined to minimap
+work; FIELD's other 14 static gaps do not produce the main terrain layer. Installed-asset decode,
+range-isolation/animation, VM dispatch, full engine tests, and the threaded Godot selftest pass. Manual
+acceptance confirms that DEBUGMAP now displays the dungeon map correctly; the earlier full-sheet overlay is
+gone and the field presentation remains operational after the camera-transform correction.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:

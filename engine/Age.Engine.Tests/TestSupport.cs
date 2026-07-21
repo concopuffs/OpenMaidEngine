@@ -42,12 +42,15 @@ internal class RecordingHost : IHost
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
+    public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
     public int SceneContextResets;
+    public long TextureResourceIdOffset;
+    public long ResolveTextureResourceId(long resourceId) => resourceId + TextureResourceIdOffset;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -123,7 +126,7 @@ internal class RecordingHost : IHost
     public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
         => SurfaceCrossfades.Add((sourceSurface, targetSurface, intervalArgument));
     public void CreateTexture(int slot, int w, int h) { }
-    public void SetTexture(long resId, int slot) { }
+    public void SetTexture(long resId, int slot) => Textures.Add((resId, slot));
     public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);
     public void ReleaseSurfaceRange(int firstSlot, int count) => ReleasedSurfaceRanges.Add((firstSlot, count));
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }

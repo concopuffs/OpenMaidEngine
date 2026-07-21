@@ -660,6 +660,8 @@ public partial class Main : Godot.Control
             var t = v.Transform;
             var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
+            if (v.RangeTransform is { } rangeTransform)
+                localToDest = localToDest.Then(rangeTransform);
             var projected = localToDest.Apply(0, 0);
             int dstX = (int)System.Math.Round(projected.X);
             int dstY = (int)System.Math.Round(projected.Y);
@@ -869,6 +871,8 @@ public partial class Main : Godot.Control
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
             var affine = Transform2DMath.Build(source.Transform, source.Rotation).FromLocalOrigin(source.DstX, source.DstY);
+            if (source.RangeTransform is { } rangeTransform)
+                affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
             if (source.SurfaceResId == 0)
             {
@@ -927,6 +931,10 @@ public partial class Main : Godot.Control
                            Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
                            bool dynamic = false, BlendKind blend = BlendKind.Alpha)
     {
+        // Native gfx_object_blit_d3d9 clips the explicit source rectangle and returns without drawing when
+        // right<=left or bottom<=top. FIELD deliberately creates zero-area prototype objects from SO005;
+        // expanding those dimensions to the full texture leaks the entire spritesheet onto the map.
+        if (w <= 0 || h <= 0) return;
         var cacheKey = (assetId, colorKey);
         int sourceWidth, sourceHeight;
         byte[] sourcePixels;
@@ -961,8 +969,8 @@ public partial class Main : Godot.Control
             sourcePixels = cached.Rgba;
         }
 
-        int sw = w > 0 ? w : sourceWidth;
-        int sh = h > 0 ? h : sourceHeight;
+        int sw = w;
+        int sh = h;
         sw = System.Math.Min(sw, sourceWidth - srcX);
         sh = System.Math.Min(sh, sourceHeight - srcY);
         if (sw <= 0 || sh <= 0) return;

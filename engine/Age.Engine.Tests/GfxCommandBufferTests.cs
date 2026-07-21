@@ -102,6 +102,8 @@ public class GfxCommandBufferTests
         => (0x1fb, new[] { G(handle), G(slot), I(0), I(0), G(w), G(h), G(dx), G(dy) });
 
     private static (int, Operand[]) SetTex(int resId, int slot) => (0x1f9, new[] { G(resId), G(slot), I(0) });
+    private static (int, Operand[]) SetRawTex(long resId, long slot, long colorKey)
+        => (0x249, new[] { I(resId), I(slot), I(colorKey) });
 
     [Fact]
     public void SetThenDrawTextureMakesAVisibleObjectFromTheSurface()
@@ -121,5 +123,27 @@ public class GfxCommandBufferTests
         Assert.Equal(0xA, vis[0].Handle);
         Assert.Equal(0x25, vis[0].SurfaceResId);          // resolved from the object's live source slot
         Assert.Equal((800, 600, 0, 0), (vis[0].W, vis[0].H, vis[0].DstX, vis[0].DstY));
+    }
+
+    [Fact]
+    public void RawTextureLoadBypassesSceneResourceNormalizationAndFeedsRetainedDraws()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "RAW-GFX", new List<(int, Operand[])>
+        {
+            SetRawTex(0x32da, 0x3e, 0),
+            (0x1fb, new[] { I(0x100), I(0x3e), I(0), I(0), I(100), I(100), I(20), I(30) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost { TextureResourceIdOffset = 0x1000 };
+        var vm = new VirtualMachine(scene, t, host);
+
+        vm.Run();
+
+        Assert.Equal((0x32daL, 0x3e), Assert.Single(host.Textures));
+        var visible = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
+        Assert.Equal(0x32da, visible.SurfaceResId);
+        Assert.Equal(0, visible.ColorKey);
+        Assert.Equal((100, 100, 20, 30), (visible.W, visible.H, visible.DstX, visible.DstY));
     }
 }

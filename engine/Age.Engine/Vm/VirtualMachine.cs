@@ -1328,6 +1328,20 @@ public sealed class VirtualMachine
                 _host.SetTexture(resolvedResourceId, (int)Read(a[1]));
                 return pc + 1;   // host still tracks dims for get-texture-size
             }
+            case "u00422EB0":                 // pre-reference compatibility
+            case "load-raw-texture-surface":  // 0x249 (raw catalog id)(slot)(colorkey)
+            {
+                // Native shares 0x1f9's release/load/colorkey path, but constructs its mode-1
+                // surface subclass and receives an already-global SYS4INI catalog index. The
+                // CPU compositor does not need the D3D subclass distinction; it does need the
+                // resource id to bypass the executing script's scene-section normalization.
+                long rawResourceId = Read(a[0]);
+                int surfaceSlot = (int)Read(a[1]);
+                _host.ReleaseSurface(surfaceSlot);
+                Gfx.SetSurface(surfaceSlot, rawResourceId, Read(a[2]));
+                _host.SetTexture(rawResourceId, surfaceSlot);
+                return pc + 1;
+            }
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
                 Gfx.BindDraw(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                              (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
@@ -1445,8 +1459,21 @@ public sealed class VirtualMachine
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
             case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
-            case "u004219E0":   // 0x229 set-position2: same shape, direct position
                 Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[2]), Read(a[3]), Read(a[4])); return pc + 1;
+            case "u004219E0":                  // pre-reference compatibility
+            case "set-gfx-range-transform":   // 0x229 (first)(count)(anchor x/y/z)
+                Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+                return pc + 1;
+            case "u00421A90":                  // pre-reference compatibility
+            case "set-gfx-range-scale-current": // 0x22a (sx%)(sy%)(sz%)
+                Gfx.SetRangeScaleCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return pc + 1;
+            case "u00421BD0":                  // pre-reference compatibility
+            case "set-gfx-range-translation-current": // 0x22c (tx)(ty)(tz)
+                Gfx.SetRangeTranslationCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return pc + 1;
+            case "u00421C60":                  // pre-reference compatibility
+            case "set-gfx-range-scale-target": // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
+                Gfx.SetRangeScaleChannel(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+                return pc + 1;
             case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
             case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)
