@@ -2224,3 +2224,17 @@ follow-up discrepancies reached through manual use. SAVE/CONFIG remain separate,
 action masks through it before page advance, and implement op `0x80`'s engine-owned selector. Add a focused
 synthetic bound-action test plus an SC0000 action-7 regression that proves the real `MENU.BIN` frame is
 entered and the parent ADV wait is restored after return.
+
+**Implemented:** the armed hotspot registry now scans op-`0x97` bindings in native registration order and
+feeds matches through the existing activation callback lifecycle. Godot sends pressed keyboard, mouse, and
+joystick action masks through that bridge before ADV page advance, so right mouse and X both reach the
+script-owned MENU callback without a game-specific shortcut. Op `0x80` retains the selected default graphics
+object slot. Focused coverage proves single-consumption/rearm behavior, the selector contract, and actual
+SC0000 action-7 entry into release `MENU.BIN` followed by restoration of the parent ADV hotspots. Validation:
+255 engine tests, zero-warning Godot build, and threaded selftest.
+
+**Next:** manually exercise right-click and X from an SC0000 ADV wait, verify the MENU shell can be navigated
+and closed without losing the underlying page, then classify only the secondary submenu gaps actually reached.
+
+**Manual validation:** passed on 2026-07-21. The system menu opens from ADV and returns successfully through
+the implemented script-owned action path; no underlying-page restoration discrepancy was reported.

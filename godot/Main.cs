@@ -423,7 +423,7 @@ public partial class Main : Godot.Control
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
             int physicalButton = mb.ButtonIndex == MouseButton.Left ? 0 : 1;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
-            _vm.UpdatePhysicalMouseButtonState(physicalButton, mb.Pressed);
+            int action = _vm.UpdatePhysicalMouseButtonState(physicalButton, mb.Pressed);
             if (mb.Pressed && _host.IsModalMovieWaiting)
             {
                 _host.SignalInput();
@@ -432,6 +432,11 @@ public partial class Main : Godot.Control
             }
             // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
             // the held physical button through the script-configured logical action map.
+            if (mb.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
+            {
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
@@ -447,7 +452,11 @@ public partial class Main : Godot.Control
             && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {
             int action = _vm.UpdateKeyboardVirtualKeyState(virtualKey, gameplayKey.Pressed);
-            if (gameplayKey.Pressed && IsAdvanceAction(action))
+            if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
+            {
+                GetViewport().SetInputAsHandled();
+            }
+            else if (gameplayKey.Pressed && IsAdvanceAction(action))
             {
                 if (_host.IsModalMovieWaiting)
                 {
@@ -462,7 +471,11 @@ public partial class Main : Godot.Control
         if (e is InputEventJoypadButton joyButton)
         {
             int actionMask = _vm.UpdateJoystickButtonState((int)joyButton.ButtonIndex, joyButton.Pressed);
-            if (joyButton.Pressed && HasAdvanceAction(actionMask))
+            if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
+            {
+                GetViewport().SetInputAsHandled();
+            }
+            else if (joyButton.Pressed && HasAdvanceAction(actionMask))
             {
                 if (_host.IsModalMovieWaiting)
                 {

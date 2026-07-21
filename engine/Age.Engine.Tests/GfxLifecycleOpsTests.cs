@@ -56,6 +56,24 @@ public class GfxLifecycleOpsTests
     }
 
     [Fact]
+    public void DefaultGraphicsObjectSlotOpcodeRetainsLatestSelection()
+    {
+        var table = T();
+        var scene = ScriptAssembler.Assemble(table, "GFX-DEFAULT-SLOT", new List<(int, Operand[])>
+        {
+            (0x80, new[] { I(7) }),
+            (0x80, new[] { I(1) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Gfx.DefaultObjectSlot);
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
     public void BulkReleaseDropsOnlyTransientSurfaceRange()
     {
         var table = T();

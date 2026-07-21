@@ -2322,15 +2322,16 @@ the parent ADV controls and redraws the retained page. Opcode `0x97` binds actio
 Native `adv_input_service_poll@0x411230` polls the configured logical-action mask first, then calls
 `input_hotspot_poll_bound_action_callback@0x403fb0`. The helper scans armed records in registration order;
 for each nonnegative op-`0x97` action index it tests `mask & (1 << action)` and returns the record's ordinary
-activation callback PC. This is the missing port seam. `HotspotRegistry.BindKey` already retains the action
-on the matching record, but no code consumes `Entry.InputBit`; Godot currently routes only pointer-left
-activation and action-4/5 page advance. Right mouse therefore reaches `InputBindings` as action 7 but never
-queues the MENU callback.
+activation callback PC. This identified the former port seam: `HotspotRegistry.BindKey` retained the action
+on the matching record, but no code consumed `Entry.InputBit`; Godot routed only pointer-left activation and
+action-4/5 page advance. Right mouse therefore reached `InputBindings` as action 7 without queuing MENU.
 
-The first implementation slice is narrow and engine-generic: expose bound-action activation on the armed
-hotspot registry, route pressed keyboard/mouse/joystick logical-action masks through it before ordinary page
-advance, wake the existing callback service, and reuse the same consume/rearm behavior as pointer activation.
-No MENU-specific branch belongs in Godot or the VM.
+The implemented bridge is engine-generic. `HotspotRegistry.ActivateBoundActions` scans armed records in
+registration order, consumes the first matching logical-action binding through the ordinary activation
+target, and shares pointer activation's disarm/rearm lifecycle. Godot routes pressed keyboard, mouse, and
+joystick logical-action masks through the VM before ordinary page advance and wakes the existing callback
+service. There is no MENU-specific branch in Godot or the VM. A real SC0000 regression proves action 7
+enters the release `MENU.BIN` and restores the parent ADV hotspot registry after controlled return.
 
 The reached script path is promising but should be validated incrementally. `MENU.BIN` is 48/49 opcodes
 handled and its only static gap is op `0x80`; `INFO.BIN`, which selects character/enemy/voice/affinity/item
@@ -2342,8 +2343,9 @@ the system menu.
 The sole `MENU.BIN` gap is now decoded: `op_0x80_set_default_gfx_object_slot@0x41ed40` stores operand 1 at
 EngineCtx `+0x14e08`; `op_0x1d9_handler@0x420a30` substitutes that selected slot only when its explicit
 object-slot operand is zero. MENU-family scripts select slots 7/8/9 on entry and restore slot 1 during
-teardown. This selector should join the input bridge implementation for state correctness, though the
-surveyed MENU/INFO scripts do not themselves call op `0x1d9`, so it is not the cause of the missing launch.
+teardown. The port now retains this engine-owned selector in `GfxState.DefaultObjectSlot`; MENU's entry path
+selects slot 8 in the regression. The surveyed MENU/INFO scripts do not themselves call op `0x1d9`, so this
+state was not the cause of the former missing launch.
 
 ---
 

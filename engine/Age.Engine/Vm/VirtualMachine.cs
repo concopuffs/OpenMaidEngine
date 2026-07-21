@@ -135,6 +135,17 @@ public sealed class VirtualMachine
         return consumed;
     }
 
+    /// <summary>Queue the first armed hotspot callback bound by op 0x97 to any action in
+    /// <paramref name="actionMask"/>. True means the logical input was consumed.</summary>
+    public bool TryActivateInputActions(int actionMask)
+    {
+        bool consumed;
+        lock (_interactiveLock)
+            consumed = _interactiveFrame?.Hotspots.ActivateBoundActions(actionMask) == true;
+        if (consumed) _host.WakeInputCallbackService();
+        return consumed;
+    }
+
     /// <summary>Update one native mouse-button bit (left=0x1, right=0x2 in Himegari).</summary>
     public void UpdateMouseButtonState(int bit, bool pressed) => UpdateMaskBit(ref _mouseButtonState, bit, pressed);
 
@@ -962,7 +973,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "u0041C150":
-            case "bind-hotspot-key": // 0x97: keyboard/pad routing is a later host-input slice
+            case "bind-hotspot-key": // 0x97: bind a configured logical action to this record
                 lock (_interactiveLock)
                     _cur.Hotspots.BindKey((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
                                           (int)Read(a[3]), (int)Read(a[4]));
@@ -1398,6 +1409,9 @@ public sealed class VirtualMachine
                 Gfx.GetOrCreate(Read(a[0])).V18 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
             case "set-gfx-geom3-b":     // 0x219 (handle)(a)(b)(c) -> V24
                 Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "u0041AF00":           // 0x80: default object slot substituted by native op 0x1d9
+            case "set-default-gfx-object-slot":
+                Gfx.SetDefaultObjectSlot((int)Read(a[0])); return pc + 1;
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
             case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)

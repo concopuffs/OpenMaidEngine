@@ -39,6 +39,64 @@ public class HotspotInputTests
         }
     }
 
+    private sealed class BoundActionHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool Consumed;
+        public bool DuplicateConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            Assert.False(Vm.TryActivateInputActions(1 << 6));
+            Consumed = Vm.TryActivateInputActions(1 << 7);
+            DuplicateConsumed = Vm.TryActivateInputActions(1 << 7);
+            while (serviceInputCallback()) { }
+        }
+    }
+
+    private sealed class Sc0000MenuHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool MenuActionConsumed;
+        public bool ParentHotspotsRearmed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            MenuActionConsumed = Vm.TryActivateInputActions(1 << 7);
+            while (serviceInputCallback()) { }
+            // Consuming the same binding again without advancing the page proves the parent registry
+            // was restored after MENU returned. Do not service it: this test ends at that boundary.
+            ParentHotspotsRearmed = Vm.TryActivateInputActions(1 << 7);
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    private sealed class ReturnMenuOnEntrySink : Age.Engine.Diagnostics.ITraceSink
+    {
+        public VirtualMachine Vm = null!;
+        public bool MenuEntered;
+        private bool _returnRequested;
+        public bool TracingSteps => true;
+
+        public void Emit(in Age.Engine.Diagnostics.TraceEvent e)
+        {
+            if (e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                && string.Equals(e.Name, "MENU.BIN", StringComparison.OrdinalIgnoreCase))
+            {
+                MenuEntered = true;
+                return;
+            }
+            // Request the controlled return when MENU reaches its slot selector. Step events are emitted
+            // before execution, so op 0x80 still runs and the request is consumed at its next boundary.
+            if (!MenuEntered || _returnRequested
+                || e.Kind != Age.Engine.Diagnostics.TraceEventKind.Step || e.Opcode != 0x80) return;
+            var frame = Assert.IsType<DebugFrameSnapshot>(Vm.DebugFrame);
+            Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
+            _returnRequested = true;
+        }
+    }
+
     private sealed class Sc0000HoverHost : RecordingHost
     {
         public VirtualMachine Vm = null!;
@@ -166,6 +224,34 @@ public class HotspotInputTests
         Assert.Equal(7, host.InputCallbackFrames);
         Assert.Equal("exit", vm.HaltReason);
         Assert.False(vm.TryActivatePointer(30, 40)); // the script frame has exited, so no hotspot remains active
+    }
+
+    [Fact]
+    public void ArmedHotspot_DispatchesBoundLogicalActionThroughOrdinaryActivationCallback()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int activateTarget = 31;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT_ACTION", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(activateTarget) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x110), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.False(host.DuplicateConsumed);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x110));
+        Assert.Equal(1, host.Waits);
+        Assert.Equal("exit", vm.HaltReason);
     }
 
     [Fact]
@@ -408,6 +494,29 @@ public class HotspotInputTests
                                         && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
         Assert.True(host.HideReturned);
         Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+    }
+
+    [Fact]
+    public void Sc0000ActionSeven_EntersRealMenuAndRestoresParentAdvHotspots()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var scene = scripts.RequireByName("SC0000.BIN");
+        var host = new Sc0000MenuHost();
+        var sink = new ReturnMenuOnEntrySink();
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), scripts, sink);
+        host.Vm = vm;
+        sink.Vm = vm;
+        InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.MenuActionConsumed);
+        Assert.True(sink.MenuEntered);
+        Assert.Equal(8, vm.Gfx.DefaultObjectSlot); // MENU's entry selector ran before the controlled return.
+        Assert.True(host.ParentHotspotsRearmed);
     }
 
     [Fact]

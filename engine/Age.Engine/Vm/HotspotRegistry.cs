@@ -7,7 +7,7 @@ internal sealed class HotspotRegistry
     {
         public int Left, Top, Right, Bottom;
         public int EnterTarget, LeaveTarget, ActivateTarget;
-        public int? InputBit;
+        public int? LogicalAction;
 
         public bool Contains(int x, int y)
             => x >= Left && x <= Right && y >= Top && y <= Bottom;
@@ -36,12 +36,12 @@ internal sealed class HotspotRegistry
         });
     }
 
-    public void BindKey(int x, int y, int width, int height, int inputBit)
+    public void BindKey(int x, int y, int width, int height, int logicalAction)
     {
         int right = x + width, bottom = y + height;
         var entry = _entries.FirstOrDefault(e => e.Left == x && e.Top == y
                                               && e.Right == right && e.Bottom == bottom);
-        if (entry != null) entry.InputBit = inputBit;
+        if (entry != null) entry.LogicalAction = logicalAction;
     }
 
     public bool Arm(int pointerX, int pointerY)
@@ -69,7 +69,25 @@ internal sealed class HotspotRegistry
         int hit = FindHit(x, y);
         if (hit < 0) return false;
 
-        int target = _entries[hit].ActivateTarget;
+        return ConsumeActivation(_entries[hit].ActivateTarget);
+    }
+
+    /// <summary>Activate the first armed record whose op-0x97 logical action is present in the
+    /// current input mask. Native scans records in registration order before pointer activation.</summary>
+    public bool ActivateBoundActions(int actionMask)
+    {
+        if (!Armed || actionMask == 0) return false;
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            int? action = _entries[i].LogicalAction;
+            if (action is >= 0 and < 32 && (actionMask & (1 << action.Value)) != 0)
+                return ConsumeActivation(_entries[i].ActivateTarget);
+        }
+        return false;
+    }
+
+    private bool ConsumeActivation(int target)
+    {
         // Native consumes the active input registration before dispatch. Its ADV scheduler revisits the
         // shared registration routine afterward; retain the definitions so the blocking host can model
         // that revisit without advancing the enclosing dialogue page.

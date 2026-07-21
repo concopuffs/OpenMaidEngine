@@ -121,6 +121,8 @@ public sealed class GfxState
 
     private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
+    /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero.</summary>
+    public int DefaultObjectSlot { get; private set; }
     /// <summary>The D3D render target selected by op 0x20d. -1 denotes the main backbuffer.</summary>
     public int CurrentRenderTargetSlot { get; private set; } = -1;
 
@@ -146,6 +148,11 @@ public sealed class GfxState
             CurrentObject = handle;
             return o;
         }
+    }
+
+    public void SetDefaultObjectSlot(int slot)
+    {
+        lock (_lock) DefaultObjectSlot = slot;
     }
 
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
