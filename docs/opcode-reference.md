@@ -721,19 +721,19 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **evidence:** Ghidra /v2: op_0xfb_register_joy_callback@0x421270 bounds-checks operand 1 to 0..31 and stores operand 2 in the current script frame's 33-entry callback table. Ops 0xff/0x100 poll and dispatch this table; HISTORY.BIN and HIDEWIN.BIN register indices 0..10.
 
 ### 0xfe `set-input-action-count` (u0041E360, argc 1)
-- **summary:** (count) - set the number of logical input actions scanned and dispatched by ops 0xff/0x100.
+- **summary:** (count) - set the logical action scan bound; op 0x100 uses callback slot count itself when the polled mask is empty.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xfe_set_input_action_count@0x421390 accepts unsigned values below 32, stores the count at EngineCtx+0x814, and throws script error 0x10005 otherwise. op_0xff_poll_joy_callback_input passes the input-manager subobject to input_poll_action_mask@0x4608b0 with this count as its scan bound; op_0x100_dispatch_joy_callbacks rejects selected action indices at or above the same count. SYSTEM4@0x1cf sets 10, enabling logical actions 0..9 before configuring joystick, mouse, and keyboard mappings.
+- **evidence:** Ghidra /v2: op_0xfe_set_input_action_count@0x421390 accepts unsigned values below 32, stores the count at EngineCtx+0x814, and throws script error 0x10005 otherwise. op_0x100_dispatch_joy_callbacks scans set mask bits only below this count; when op 0xff produces an empty mask, it instead dispatches the callback table entry at index count and resumes after op 0x100. SYSTEM4@0x1cf sets 10, enabling held logical actions 0..9 and reserving callback slot 10 for the no-input/release path before configuring joystick, mouse, and keyboard mappings.
 
 ### 0xff `poll-joy-callback-input` (u00415A10, argc 0)
-- **summary:** Poll the current joy/input callback bitmask and initialize the per-dispatch scan state.
+- **summary:** Poll the configured keyboard/mouse/joystick action mask and initialize the op 0x100 dispatch scan.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through input_poll_action_mask@0x4608b0, resets the scan index, and snapshots the current input selector. That poller combines configured keyboard, mouse-action, and joystick bits, bounded by EngineCtx+0x814 input_action_count. input_poll_mouse_action_bits@0x460240 maps VK_LBUTTON/VK_RBUTTON through mouse_button_action_map and adds 4; initialization leaves both slots zero, so left defaults to action 4, while SYSTEM4 op 0x10b remaps right to action 7. It pairs with op 0x100.
+- **evidence:** Ghidra /v2: op_0xff_poll_joy_callback_input@0x416eb0 clears the pending input mask, fills it through input_poll_action_mask@0x4608b0, resets EngineCtx+0x6da6c input_callback_scan_index, and copies input_action_count to +0x6da70. The poller combines configured keyboard, mouse-action, and joystick bits; the joystick button-slot loop uses input_action_count, while op 0x100 applies the final action scan bound. input_poll_mouse_action_bits@0x460240 maps VK_LBUTTON/VK_RBUTTON through mouse_button_action_map and adds 4; initialization leaves both slots zero, so left defaults to action 4, while SYSTEM4 op 0x10b remaps right to action 7.
 
 ### 0x100 `dispatch-joy-callbacks` (u00415A60, argc 0)
-- **summary:** Dispatch registered callbacks for the current or pending joy/input selection.
+- **summary:** Dispatch each set logical action below the configured count, or callback slot count when no action is held.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x100_dispatch_joy_callbacks@0x416f00 scans the bitmask captured by op 0xff (or uses the current selector when no mask is present), bounded by EngineCtx+0x814 input_action_count; it pushes a return PC and jumps through the current frame's callback table populated by op 0xfb.
+- **evidence:** Ghidra /v2: op_0x100_dispatch_joy_callbacks@0x416f00 scans the bitmask captured by op 0xff from EngineCtx+0x6da6c up to but excluding EngineCtx+0x814 input_action_count. Each set action resumes at op 0x100 so simultaneous bits continue dispatching. If the mask is empty, it dispatches callback table slot input_action_count and resumes after op 0x100. Callback targets come from the current frame's table populated by op 0xfb; SYSTEM4's count 10 therefore makes slot 10 the native no-input/release callback rather than an eleventh action bit.
 
 ### 0x101 `reset-message-skip-input` (u00415BF0, argc 0)
 - **summary:** Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag.
@@ -768,7 +768,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x10c `map-keyboard-scancode` (u0041E5E0, argc 2)
 - **summary:** (action)(dik_scan_code) - map a DirectInput keyboard scan code to a logical input action.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x10c_map_keyboard_scancode@0x421730 requires unsigned operand1<32 or throws script error 0x10005. It translates operand 2 through EngineCtx+0x1828, the DIK-to-Win32-VK table built by input_initialize_dik_to_vk_table@0x45fc60, then writes the action to EngineCtx+0x1428[VK]. input_poll_keyboard_action_bits@0x4601a0 polls 256 virtual keys and emits the configured action bits. input_manager_initialize_defaults@0x460630 prebinds arrow keys as 0=up, 1=right, 2=down, 3=left. SYSTEM4 additionally maps action 4 to Z/Enter, 5 to Space, 6 to C/LeftCtrl, 7 to X, 8 to PageUp, and 9 to PageDown.
+- **evidence:** Ghidra /v2: op_0x10c_map_keyboard_scancode@0x421730 requires unsigned operand1<32 or throws script error 0x10005. It translates operand 2 through EngineCtx+0x1828, the DIK-to-Win32-VK table built by input_initialize_dik_to_vk_table@0x45fc60, then writes the action to EngineCtx+0x1428[VK]. input_poll_keyboard_action_bits@0x4601a0 polls 256 virtual keys and emits the configured action bits. input_manager_initialize_defaults@0x460630 starts with count 7 and maps 0=Up, 1=Right, 2=Down, 3=Left, 4=Enter, 5=Space, and 6=Backspace. SYSTEM4 raises the count to 10 and adds Z to action 4, C/LeftCtrl to 6, X to 7, PageUp to 8, and PageDown to 9 without erasing the earlier mappings.
 
 ### 0x10d `consume-mouse-wheel-delta` (u00415F10, argc 1)
 - **summary:** (out) - return the accumulated signed mouse-wheel delta and clear it.

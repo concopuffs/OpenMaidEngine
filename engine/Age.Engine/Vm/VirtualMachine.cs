@@ -57,6 +57,7 @@ public sealed class VirtualMachine
     public Dictionary<int, long> ExternalGlobals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
     public GfxState Gfx { get; } = new();
+    public InputBindings InputBindings { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
     public long Steps { get; private set; }
@@ -144,17 +145,52 @@ public sealed class VirtualMachine
         _host.WakeInputCallbackService();
     }
 
-    /// <summary>Update one held AGE input-callback index used by ops 0xfb/0xff/0x100.</summary>
+    /// <summary>Update one held logical AGE action directly. Physical frontends should use the
+    /// keyboard/mouse/joystick methods below so script-configured bindings remain authoritative.</summary>
     public void UpdateInputCallbackState(int index, bool pressed)
     {
         if ((uint)index >= 32) return;
         UpdateMaskBit(ref _heldInputCallbackMask, 1 << index, pressed);
+        _host.WakeInputCallbackService();
     }
 
-    /// <summary>Queue a one-shot AGE input callback, such as the shared release callback at index 10.</summary>
+    public int UpdateKeyboardVirtualKeyState(int virtualKey, bool pressed)
+    {
+        InputBindings.UpdateKeyboardVirtualKey(virtualKey, pressed);
+        _host.WakeInputCallbackService();
+        return InputBindings.KeyboardAction(virtualKey);
+    }
+
+    public int UpdatePhysicalMouseButtonState(int physicalButton, bool pressed)
+    {
+        InputBindings.UpdateMouseButton(physicalButton, pressed);
+        _host.WakeInputCallbackService();
+        return InputBindings.MouseAction(physicalButton);
+    }
+
+    public int UpdateJoystickButtonState(int physicalButton, bool pressed)
+    {
+        InputBindings.UpdateJoystickButton(physicalButton, pressed);
+        _host.WakeInputCallbackService();
+        return InputBindings.JoystickButtonActionMask(physicalButton);
+    }
+
+    public void UpdateJoystickAxisState(int axis, double value)
+    {
+        InputBindings.UpdateJoystickAxis(axis, value);
+        _host.WakeInputCallbackService();
+    }
+
+    /// <summary>Queue a one-shot logical action for diagnostics/tests. The native no-input callback is
+    /// table index ActionCount and is selected automatically when polling returns an empty mask.</summary>
     public void QueueInputCallback(int index)
     {
         if ((uint)index >= 32) return;
+        if (index == InputBindings.ActionCount)
+        {
+            _host.WakeInputCallbackService();
+            return;
+        }
         int bit = 1 << index;
         int before, after;
         do
@@ -162,6 +198,7 @@ public sealed class VirtualMachine
             before = Volatile.Read(ref _queuedInputCallbackMask);
             after = before | bit;
         } while (Interlocked.CompareExchange(ref _queuedInputCallbackMask, after, before) != before);
+        _host.WakeInputCallbackService();
     }
 
     private static void UpdateMaskBit(ref int field, int bit, bool set)
@@ -945,15 +982,37 @@ public sealed class VirtualMachine
                 if ((uint)index < 32) _cur.InputCallbackTargets[index] = (int)Read(a[1]);
                 return pc + 1;
             }
+            case "u0041E360":
+            case "set-input-action-count": // 0xfe: actions [0,count), no-input callback at count
+            {
+                int count = unchecked((int)Read(a[0]));
+                if (!InputBindings.SetActionCount(count))
+                {
+                    HaltReason ??= $"input-action-count-out-of-range:{count}";
+                    return HALT;
+                }
+                return pc + 1;
+            }
             case "u00415A10":
             case "poll-joy-callback-input": // 0xff
-                _cur.PendingInputCallbackMask = Volatile.Read(ref _heldInputCallbackMask)
+                _cur.PendingInputCallbackMask = InputBindings.PollActionMask()
+                    | Volatile.Read(ref _heldInputCallbackMask)
                     | Interlocked.Exchange(ref _queuedInputCallbackMask, 0);
                 _cur.InputCallbackScanIndex = 0;
                 return pc + 1;
             case "u00415A60":
             case "dispatch-joy-callbacks": // 0x100
-                while (_cur.InputCallbackScanIndex < 32)
+            {
+                int actionCount = InputBindings.ActionCount;
+                if (_cur.PendingInputCallbackMask == 0)
+                {
+                    int idleTarget = _cur.InputCallbackTargets[actionCount];
+                    if (idleTarget < 0 || !_cur.Script.IndexByOffset.TryGetValue(idleTarget, out int target))
+                        return pc + 1;
+                    _cur.CallStack.Add(pc + 1);
+                    return target;
+                }
+                while (_cur.InputCallbackScanIndex < actionCount)
                 {
                     int index = _cur.InputCallbackScanIndex++;
                     if ((_cur.PendingInputCallbackMask & (1 << index)) == 0) continue;
@@ -964,6 +1023,11 @@ public sealed class VirtualMachine
                     _cur.CallStack.Add(pc);
                     return target;
                 }
+                return pc + 1;
+            }
+            case "u0041E500":
+            case "map-joystick-button": // 0x107: button slot N emits action N+4
+                InputBindings.MapJoystickButton(unchecked((int)Read(a[0])), unchecked((int)Read(a[1])));
                 return pc + 1;
             case "u00415E70":
             case "get-mouse-button-state": // 0x108
@@ -983,6 +1047,22 @@ public sealed class VirtualMachine
             case "u0041E540":
             case "set-cursor-virtual": // 0x10a; retain the virtual position even without OS warping
                 UpdatePointer((int)Read(a[0]), (int)Read(a[1])); return pc + 1;
+            case "u0041E5A0":
+            case "map-mouse-button": // 0x10b: physical button -> slot, polled action is slot+4
+                InputBindings.MapMouseButton(unchecked((int)Read(a[0])), unchecked((int)Read(a[1])));
+                return pc + 1;
+            case "u0041E5E0":
+            case "map-keyboard-scancode": // 0x10c: logical action <- DIK translated through native VK table
+            {
+                int action = unchecked((int)Read(a[0]));
+                int dik = unchecked((int)Read(a[1]));
+                if (!InputBindings.MapKeyboardScanCode(action, dik))
+                {
+                    HaltReason ??= $"keyboard-action-out-of-range:{action}";
+                    return HALT;
+                }
+                return pc + 1;
+            }
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "u00425960":

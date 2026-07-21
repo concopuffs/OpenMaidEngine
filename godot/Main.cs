@@ -240,8 +240,11 @@ public partial class Main : Godot.Control
         // alongside the inherited SO000/SO001 state below. Full Phase-B SYSTEM4 replay will replace this
         // bootstrap as one unit; HISTORY depends on the 650x150 dimensions of layouts 2..6 for clipping.
         if (directSceneHarness)
-            AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
-                scripts!.RequireByName("SYSTEM4.BIN"), table, _vm.TextHistory);
+        {
+            var systemScript = scripts!.RequireByName("SYSTEM4.BIN");
+            AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(systemScript, table, _vm.TextHistory);
+            InputBindingBootstrap.Apply(systemScript, _vm.InputBindings);
+        }
         // SYSTEM4 loads the shared SO001 chrome sheet into surface slot 17 before any scene runs.
         // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
         if (directSceneHarness && resources.ResolveName("SO001.AGF") is { } systemChrome)
@@ -418,18 +421,17 @@ public partial class Main : Godot.Control
             bool rawInputCallbackActive = _vm.IsRawInputCallbackActive;
             _vm.UpdatePointer(p.X, p.Y);
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
+            int physicalButton = mb.ButtonIndex == MouseButton.Left ? 0 : 1;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
+            _vm.UpdatePhysicalMouseButtonState(physicalButton, mb.Pressed);
             if (mb.Pressed && _host.IsModalMovieWaiting)
             {
                 _host.SignalInput();
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            // AGE exposes the physical left button twice: raw mask 0x1 for the timed mouse callback,
-            // and the configured primary action (default input callback index 4). Script-owned callback
-            // loops consume both channels without releasing the enclosing ADV page wait.
-            if (mb.ButtonIndex == MouseButton.Left && (advPageSuspended || rawInputCallbackActive))
-                _vm.QueueInputCallback(mb.Pressed ? 4 : 10);
+            // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
+            // the held physical button through the script-configured logical action map.
             if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
@@ -441,32 +443,43 @@ public partial class Main : Godot.Control
                 && !advPageSuspended && !rawInputCallbackActive) _host.SignalInput();
             return;
         }
-        UpdateAgeInputCallback(e, "ui_down", 0);
-        UpdateAgeInputCallback(e, "ui_left", 1);
-        UpdateAgeInputCallback(e, "ui_up", 2);
-        UpdateAgeInputCallback(e, "ui_right", 3);
-        UpdateAgeInputCallback(e, "ui_accept", 4);
-        UpdateAgeInputCallback(e, "ui_cancel", 5);
-        if (_host.IsModalMovieWaiting
-            && (e.IsActionPressed("ui_accept") || e.IsActionPressed("ui_cancel")))
+        if (e is InputEventKey gameplayKey && !gameplayKey.Echo
+            && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {
-            _host.SignalInput();
-            GetViewport().SetInputAsHandled();
+            int action = _vm.UpdateKeyboardVirtualKeyState(virtualKey, gameplayKey.Pressed);
+            if (gameplayKey.Pressed && IsAdvanceAction(action))
+            {
+                if (_host.IsModalMovieWaiting)
+                {
+                    _host.SignalInput();
+                    GetViewport().SetInputAsHandled();
+                }
+                else if (!_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                    _host.SignalInput();
+            }
             return;
         }
-        if (e.IsActionPressed("ui_accept")
-            && !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive) _host.SignalInput();
+        if (e is InputEventJoypadButton joyButton)
+        {
+            int actionMask = _vm.UpdateJoystickButtonState((int)joyButton.ButtonIndex, joyButton.Pressed);
+            if (joyButton.Pressed && HasAdvanceAction(actionMask))
+            {
+                if (_host.IsModalMovieWaiting)
+                {
+                    _host.SignalInput();
+                    GetViewport().SetInputAsHandled();
+                }
+                else if (!_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                    _host.SignalInput();
+            }
+            return;
+        }
+        if (e is InputEventJoypadMotion joyMotion && (int)joyMotion.Axis is 0 or 1)
+            _vm.UpdateJoystickAxisState((int)joyMotion.Axis, joyMotion.AxisValue);
     }
 
-    private void UpdateAgeInputCallback(InputEvent e, StringName action, int index)
-    {
-        if (e.IsActionPressed(action)) _vm.UpdateInputCallbackState(index, true);
-        if (e.IsActionReleased(action))
-        {
-            _vm.UpdateInputCallbackState(index, false);
-            _vm.QueueInputCallback(10); // common release callback registered by HISTORY/HIDEWIN
-        }
-    }
+    private static bool IsAdvanceAction(int action) => action is 4 or 5;
+    private static bool HasAdvanceAction(int mask) => (mask & ((1 << 4) | (1 << 5))) != 0;
 
     private void ToggleDebugSceneLauncher()
     {
@@ -1217,11 +1230,19 @@ public partial class Main : Godot.Control
         launcherSmoke.QueueFree();
         bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
                               && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
-        ok &= launcherOk && sleepMinimumOk;
+        bool inputTranslationOk = Win32VirtualKeyTranslator.TryTranslate(
+                                      new InputEventKey { PhysicalKeycode = Key.Z }, out int zVk) && zVk == 0x5a
+                                  && Win32VirtualKeyTranslator.TryTranslate(
+                                      new InputEventKey { PhysicalKeycode = Key.Up }, out int upVk) && upVk == 0x26
+                                  && Win32VirtualKeyTranslator.TryTranslate(
+                                      new InputEventKey { PhysicalKeycode = Key.Ctrl }, out int ctrlVk) && ctrlVk == 0x11;
+        ok &= launcherOk && sleepMinimumOk && inputTranslationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
-                         $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); sleep-min=1ms");
+                         $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
+                         $"sleep-min=1ms; native-key-translation=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
-                      $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}");
+                      $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
+                      $"native-key-translation={inputTranslationOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

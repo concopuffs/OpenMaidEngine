@@ -16,9 +16,13 @@ public class HistoryInteractionOpsTests
     private sealed class StopAfterHistoryVoiceException : Exception { }
     private sealed class StopAfterHistoryWheelException : Exception { }
 
-    private static void SeedSystem4AdvLayouts(Sys4ScriptProvider scripts, AdvTextHistory history)
-        => Assert.Equal(9, AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
-            scripts.RequireByName("SYSTEM4.BIN"), Table, history));
+    private static void SeedSystem4Services(Sys4ScriptProvider scripts, VirtualMachine vm)
+    {
+        var systemScript = scripts.RequireByName("SYSTEM4.BIN");
+        Assert.Equal(9, AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(
+            systemScript, Table, vm.TextHistory));
+        Assert.Equal(16, InputBindingBootstrap.Apply(systemScript, vm.InputBindings));
+    }
 
     private sealed class Sc0000HistoryCloseHost : RecordingHost
     {
@@ -182,7 +186,7 @@ public class HistoryInteractionOpsTests
         var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
-        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        SeedSystem4Services(scripts, vm);
         vm.Globals[0x6c1] = 1;
 
         Assert.Throws<StopAfterHistoryWheelException>(() => vm.Run());
@@ -199,7 +203,7 @@ public class HistoryInteractionOpsTests
         var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
-        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        SeedSystem4Services(scripts, vm);
         vm.Globals[0x6c1] = 1;
 
         Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
@@ -285,7 +289,7 @@ public class HistoryInteractionOpsTests
         var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
-        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        SeedSystem4Services(scripts, vm);
         vm.Globals[0x6c1] = 1;
 
         Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
@@ -326,7 +330,7 @@ public class HistoryInteractionOpsTests
         var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
-        SeedSystem4AdvLayouts(scripts, vm.TextHistory);
+        SeedSystem4Services(scripts, vm);
         vm.Globals[0x6c1] = 1;
 
         Assert.Throws<StopAfterHistoryVoiceException>(() => vm.Run());

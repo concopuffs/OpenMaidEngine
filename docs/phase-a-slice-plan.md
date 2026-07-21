@@ -2170,3 +2170,23 @@ claimed by this investigation.
 
 **Next:** implement that input-binding service as one coherent slice with focused mapping, bounds, and
 simultaneous-input regressions, then manually exercise TITLE/ROOM/ADV keyboard and mouse paths.
+
+### Slice B1 SYSTEM4 logical input bindings implemented (2026-07-21)
+
+`InputBindings` now owns AGE's process-wide physical-to-logical map. Its constructor reproduces native
+count 7 and the retained defaults Up/Right/Down/Left, Enter, Space, and Backspace. Opcodes
+`0xfe`/`0x107`/`0x10b`/`0x10c` mutate the action bound, joystick slots, mouse slots, and DIK-translated
+Win32-VK map. Godot supplies physical key, left/right mouse, standardized joy-button, and primary-axis
+state instead of hardcoded `ui_*` indices; direct-scene diagnostics replay SYSTEM4's 16 immediate mapping
+calls through a bounded bootstrap while natural boot executes them normally.
+
+The implementation also corrects `0x100`'s release boundary after a final native trace: set bits dispatch
+only below `input_action_count` and resume at `0x100` for simultaneous inputs, while an empty mask dispatches
+callback slot `input_action_count` and resumes after the opcode. SYSTEM4's value 10 therefore reserves slot
+10 as the no-input/release callback rather than exposing action bit 10. The old synthetic release-bit queue
+is no longer used by Godot. Focused tests cover native defaults, all four setters, the real SYSTEM4 block,
+empty-mask dispatch, simultaneous/bounded actions, and native range failures.
+
+**Next:** manually exercise TITLE, ROOM, and ADV with keyboard, left/right mouse, and—if available—a
+controller. A clean check should confirm native direction order, Z/Enter/Space behavior, right-click action
+7, and release re-arming before selecting another reached Phase-B cluster.

@@ -395,6 +395,8 @@ public class HotspotInputTests
         var host = new Sc0000HideWindowHost();
         var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), provider, trace);
         host.Vm = vm;
+        InputBindingBootstrap.Apply(
+            Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
         vm.Globals[0x6c1] = 1;
         vm.Globals[0x62425] = 1; // inherited native ADV scheduler state, mirrored by Godot Main
 

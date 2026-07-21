@@ -9,7 +9,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x40c` | `sys4ini_count` | `int` | SYS4INI record count |
 | `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
 | `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
-| `0x814` | `input_action_count` | `int` | logical input callback count (0..31); op 0xfe sets it and ops 0xff/0x100 bound their action-mask scan by it |
+| `0x814` | `input_action_count` | `int` | logical action count (0..31); op 0xfe sets it, op 0x100 scans actions below it and uses callback slot count itself when the polled mask is empty |
 | `0x898` | `joystick_physical_button_count` | `int` | WinMM JOYCAPS physical button count returned by op 0x106 |
 | `0x89c` | `joystick_button_map` | `int` | base of 32-entry logical button-slot to physical joystick-button table; op 0x107 writes it, slot N emits action N+4 |
 | `0x135c` | `mouse_button_action_map` | `int` | base of physical mouse-button to logical button-slot table; op 0x10b writes it and polling adds 4 to obtain the action index |
@@ -71,6 +71,8 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x5f72c` | `adv_wait_indicator_frame` | `int` | current animated input-wait indicator frame, reset to zero when the service is armed |
 | `0x5f730` | `adv_wait_indicator_terminal_frame` | `int` | terminal frame returned by the indicator layout during ADV wait setup |
 | `0x5f734` | `adv_wait_indicator_enabled_value` | `int` | raw enable operand last written by op 0x1ce; nonzero arms the ADV wait-indicator service |
+| `0x6da6c` | `input_callback_scan_index` | `int` | op 0xff resets this to zero; op 0x100 advances it while scanning set action bits below input_action_count |
+| `0x6da70` | `input_action_count_snapshot` | `int` | op 0xff copies input_action_count here when beginning a callback poll/dispatch pass |
 | `0x6da78` | `message_skip_activation_guard` | `int` | set when op 0x88 enables Skip; suppresses the enabling click from immediately becoming a hotspot activation |
 | `0x6da80` | `message_skip_cancel_click_phase` | `int` | press/release phase used only when set:CancelMesSkipOnClick is nonzero |
 | `0x6da84` | `adv_wait_indicator_layout_slot` | `int` | ADV text layout whose wait indicator is armed or erased by input-wait setup and op 0x1ce |

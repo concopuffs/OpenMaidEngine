@@ -26,7 +26,7 @@ note = "SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; r
 offset = 0x814
 name = "input_action_count"
 type = "int"
-note = "logical input callback count (0..31); op 0xfe sets it and ops 0xff/0x100 bound their action-mask scan by it"
+note = "logical action count (0..31); op 0xfe sets it, op 0x100 scans actions below it and uses callback slot count itself when the polled mask is empty"
 [[field]]
 offset = 0x898
 name = "joystick_physical_button_count"
@@ -332,6 +332,16 @@ offset = 0x5f734
 name = "adv_wait_indicator_enabled_value"
 type = "int"
 note = "raw enable operand last written by op 0x1ce; nonzero arms the ADV wait-indicator service"
+[[field]]
+offset = 0x6da6c
+name = "input_callback_scan_index"
+type = "int"
+note = "op 0xff resets this to zero; op 0x100 advances it while scanning set action bits below input_action_count"
+[[field]]
+offset = 0x6da70
+name = "input_action_count_snapshot"
+type = "int"
+note = "op 0xff copies input_action_count here when beginning a callback poll/dispatch pass"
 [[field]]
 offset = 0x6da78
 name = "message_skip_activation_guard"

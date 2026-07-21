@@ -286,9 +286,10 @@ boundaries. `AdvTextHistory`, VM dispatch, the direct-scene SYSTEM4 bootstrap, a
 label geometry now share that script-owned state; the former slot-1 hardcoding is removed. The next
 reached SYSTEM4 cluster is also resolved: `0xfe` establishes ten logical input actions, while `0x107`,
 `0x10b`, and `0x10c` configure joystick-button, mouse-button, and DIK keyboard mappings consumed by
-`0xff`/`0x100`. The port currently bypasses that script-owned map with six hardcoded Godot action indices
-and scans 32 callbacks, so the next coherent slice is an engine-owned input-binding model plus these four
-handlers and physical Godot event translation. This is independent of profile/save ownership. Closing
+`0xff`/`0x100`. The port now owns the native seven-action defaults, executes all four setters, translates
+Godot physical key/mouse/joy events through the resulting map, scans only actions below the configured
+count, and invokes callback slot `count` for the empty-mask release path. Direct-scene diagnostics replay
+SYSTEM4's same 16 immediate configuration calls. This is independent of profile/save ownership. Closing
 Godot currently releases a parked ADV wait before process teardown, so the page map may contain one trailing
 shutdown-only page; the final timeline `input-wait` is the authoritative stop.
 
