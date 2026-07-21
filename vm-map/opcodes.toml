@@ -4135,7 +4135,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). SC0000 label_1235a ORs it with op 0x1cc."
+evidence = "Ghidra /v2: handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm_operand_write(1, 1|0). adv_interpreter_tick@0x410fb0 first polls the configured logical-action mask; action 6 is bit 0x40 and therefore drives this transient run state from SYSTEM4's C/LeftCtrl bindings or the retained native Backspace default. Persistent op-0x88 state injects the same bit. SC0000 label_1235a ORs the result with op 0x1cc."
 
 [[opcode.semantics.args]]
 i = 1

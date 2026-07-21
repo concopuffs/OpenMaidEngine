@@ -13,6 +13,8 @@ internal class RecordingHost : IHost
     public int TransitionWaits;
     public int InputCallbackFrames;
     public bool MessageSkip;
+    public bool ScriptMessageSkip;
+    public bool PhysicalMessageSkip;
     public bool AdvReadSkip;
     public readonly List<(int Offset, string Text)> Lines = new();
     public readonly List<(int Slot, int X, int Y)> TextCursors = new();
@@ -41,6 +43,7 @@ internal class RecordingHost : IHost
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
     public readonly List<bool> MessageSkipChanges = new();
+    public readonly List<bool> PhysicalMessageSkipChanges = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
@@ -94,8 +97,15 @@ internal class RecordingHost : IHost
     public bool IsMessageSkipActive => MessageSkip;
     public void SetMessageSkipActive(bool active)
     {
-        MessageSkip = active;
-        MessageSkipChanges.Add(active);
+        ScriptMessageSkip = active;
+        MessageSkip = ScriptMessageSkip || PhysicalMessageSkip;
+        MessageSkipChanges.Add(MessageSkip);
+    }
+    public void SetPhysicalMessageSkipActive(bool active)
+    {
+        PhysicalMessageSkip = active;
+        MessageSkip = ScriptMessageSkip || PhysicalMessageSkip;
+        PhysicalMessageSkipChanges.Add(active);
     }
     public bool IsAdvReadSkipActive => AdvReadSkip;
     public void PresentFrame(GfxState gfx)

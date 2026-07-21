@@ -41,6 +41,9 @@ public sealed class GodotAdvHost : IHost
     private long _advTextStartedMs;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
+    private readonly object _messageSkipLock = new();
+    private bool _scriptMessageSkipActive;
+    private bool _physicalMessageSkipActive;
     private volatile bool _messageSkipActive;
     private int _voiceBgmDuckControl;
     private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
@@ -405,19 +408,42 @@ public sealed class GodotAdvHost : IHost
     public bool IsMessageSkipActive => _messageSkipActive;
 
     public void SetMessageSkipActive(bool active)
+        => SetMessageSkipChannel(active, physical: false);
+
+    public void SetPhysicalMessageSkipActive(bool active)
+        => SetMessageSkipChannel(active, physical: true);
+
+    private void SetMessageSkipChannel(bool active, bool physical)
     {
-        _messageSkipActive = active;
-        _timeline?.State("message-skip", new() { ["enabled"] = active });
-        if (active)
+        bool effective;
+        bool changed;
+        (AudioPayload Audio, int PlaybackVariant)? queued = null;
+        lock (_messageSkipLock)
+        {
+            if (physical) _physicalMessageSkipActive = active;
+            else _scriptMessageSkipActive = active;
+            effective = _scriptMessageSkipActive || _physicalMessageSkipActive;
+            changed = effective != _messageSkipActive;
+            _messageSkipActive = effective;
+            if (changed && !effective)
+            {
+                queued = _queuedSkippedVoice;
+                _queuedSkippedVoice = null;
+            }
+        }
+        if (!changed) return;
+        _timeline?.State("message-skip", new()
+        {
+            ["enabled"] = effective,
+            ["source"] = physical ? "logical-action-6" : "script",
+        });
+        if (effective)
         {
             lock (_textLock) _advTextForceComplete = true;
             _frameSignal.Set();
             _inputCallbackSignal.Set();
             return;
         }
-
-        var queued = _queuedSkippedVoice;
-        _queuedSkippedVoice = null;
         if (queued != null) DispatchVoice(queued.Value.Audio, queued.Value.PlaybackVariant);
     }
 
@@ -628,8 +654,13 @@ public sealed class GodotAdvHost : IHost
         }
         while (_gate.Wait(0)) { }
         _inputCallbackSignal.WaitOne(0);
-        _messageSkipActive = false;
-        _queuedSkippedVoice = null;
+        lock (_messageSkipLock)
+        {
+            _scriptMessageSkipActive = false;
+            _physicalMessageSkipActive = false;
+            _messageSkipActive = false;
+            _queuedSkippedVoice = null;
+        }
         System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
@@ -952,10 +983,19 @@ public sealed class GodotAdvHost : IHost
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
             ["playback_variant"] = playbackVariant });
         if (audio == null) return;
-        if (_messageSkipActive)
+        bool queuedForSkip;
+        bool firstQueued = false;
+        lock (_messageSkipLock)
         {
-            bool firstQueued = _queuedSkippedVoice == null;
-            _queuedSkippedVoice = (audio, playbackVariant);
+            queuedForSkip = _messageSkipActive;
+            if (queuedForSkip)
+            {
+                firstQueued = _queuedSkippedVoice == null;
+                _queuedSkippedVoice = (audio, playbackVariant);
+            }
+        }
+        if (queuedForSkip)
+        {
             if (firstQueued) _main.CallDeferred("StopVoiceForMessageSkip");
             return;
         }

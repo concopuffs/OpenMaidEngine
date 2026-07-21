@@ -48,6 +48,7 @@ public sealed class VirtualMachine
     private bool _initialRootRun = true;
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
+    private volatile bool _advSkipServiceEnabled;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     public long CallScriptDispatches { get; private set; }
@@ -157,6 +158,7 @@ public sealed class VirtualMachine
     public int UpdateKeyboardVirtualKeyState(int virtualKey, bool pressed)
     {
         InputBindings.UpdateKeyboardVirtualKey(virtualKey, pressed);
+        RefreshPhysicalMessageSkipState();
         _host.WakeInputCallbackService();
         return InputBindings.KeyboardAction(virtualKey);
     }
@@ -164,6 +166,7 @@ public sealed class VirtualMachine
     public int UpdatePhysicalMouseButtonState(int physicalButton, bool pressed)
     {
         InputBindings.UpdateMouseButton(physicalButton, pressed);
+        RefreshPhysicalMessageSkipState();
         _host.WakeInputCallbackService();
         return InputBindings.MouseAction(physicalButton);
     }
@@ -171,6 +174,7 @@ public sealed class VirtualMachine
     public int UpdateJoystickButtonState(int physicalButton, bool pressed)
     {
         InputBindings.UpdateJoystickButton(physicalButton, pressed);
+        RefreshPhysicalMessageSkipState();
         _host.WakeInputCallbackService();
         return InputBindings.JoystickButtonActionMask(physicalButton);
     }
@@ -209,6 +213,16 @@ public sealed class VirtualMachine
             before = Volatile.Read(ref field);
             after = set ? before | bit : before & ~bit;
         } while (Interlocked.CompareExchange(ref field, after, before) != before);
+    }
+
+    /// <summary>Mirror adv_interpreter_tick's bit-0x40 path. The bit is logical action 6 from the
+    /// process-owned binding map, not a hardcoded Ctrl test; Himegari also binds C and retains the
+    /// engine's default Backspace binding. The presentation lifecycle gate prevents a held action
+    /// from leaking into non-ADV script execution.</summary>
+    private void RefreshPhysicalMessageSkipState()
+    {
+        bool active = _advSkipServiceEnabled && (InputBindings.PollActionMask() & 0x40) != 0;
+        _host.SetPhysicalMessageSkipActive(active);
     }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
@@ -465,9 +479,11 @@ public sealed class VirtualMachine
         _autoVoicePending = false;
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
+        _advSkipServiceEnabled = false;
         _advTextStyle = AdvTextStyle.Default;
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
+        _host.SetPhysicalMessageSkipActive(false);
         _host.ResetSceneContext();
     }
 
@@ -1132,13 +1148,17 @@ public sealed class VirtualMachine
                 Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
             case "u00414E80":
             case "suspend-adv-skip-service": // 0x19b: preserve the toggle while leaving ADV presentation
+                _advSkipServiceEnabled = false;
                 _messageSkipServiceActive = false;
                 _host.SetMessageSkipActive(false);
+                _host.SetPhysicalMessageSkipActive(false);
                 return pc + 1;
             case "u00414EC0":
             case "resume-adv-skip-service": // 0x19c: recompute active fast-forward on ADV entry
+                _advSkipServiceEnabled = true;
                 _messageSkipServiceActive = _messageSkipEnabled || _host.IsAdvReadSkipActive;
                 _host.SetMessageSkipActive(_messageSkipServiceActive);
+                RefreshPhysicalMessageSkipState();
                 return pc + 1;
             case "get-message-skip": // 0x1c7: persistent Skip or host-supplied Ctrl fast-forward
                 // The native per-op tick continually re-arms the transient run-state bit while the

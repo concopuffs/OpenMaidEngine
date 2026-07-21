@@ -68,6 +68,59 @@ public class InputBindingTests
         Assert.Equal(7, bindings.MouseAction(1));
     }
 
+    [Theory]
+    [InlineData(0x08)] // retained native Backspace default
+    [InlineData(0x11)] // SYSTEM4 LeftCtrl binding
+    [InlineData(0x43)] // SYSTEM4 C binding
+    public void LogicalActionSixDrivesHeldAdvFastForward(int virtualKey)
+    {
+        var script = ScriptAssembler.Assemble(Table, "ADV_FAST_FORWARD", new List<(int, Operand[])>
+        {
+            (0x19c, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host);
+        InputBindingBootstrap.Apply(
+            Sys4ScriptProvider.Load(Table).RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+
+        vm.UpdateKeyboardVirtualKeyState(virtualKey, true);
+        Assert.False(host.PhysicalMessageSkip); // ADV lifecycle is not active yet.
+
+        vm.Run();
+
+        Assert.True(host.PhysicalMessageSkip);
+        Assert.True(host.MessageSkip);
+
+        vm.UpdateKeyboardVirtualKeyState(virtualKey, false);
+
+        Assert.False(host.PhysicalMessageSkip);
+        Assert.False(host.MessageSkip);
+    }
+
+    [Fact]
+    public void ReleasingPhysicalFastForwardDoesNotClearPersistentSkip()
+    {
+        var script = ScriptAssembler.Assemble(Table, "ADV_PERSISTENT_AND_HELD_SKIP", new List<(int, Operand[])>
+        {
+            (0x19c, Array.Empty<Operand>()),
+            (0x88, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host);
+        InputBindingBootstrap.Apply(
+            Sys4ScriptProvider.Load(Table).RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+        vm.Run();
+
+        vm.UpdateKeyboardVirtualKeyState(0x11, true);
+        vm.UpdateKeyboardVirtualKeyState(0x11, false);
+
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.False(host.PhysicalMessageSkip);
+        Assert.True(host.MessageSkip);
+    }
+
     [Fact]
     public void EmptyPollDispatchesTheCallbackAtActionCount()
     {

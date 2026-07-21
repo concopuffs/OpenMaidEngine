@@ -2292,6 +2292,12 @@ poll/dispatch ops `0xff` and `0x100`. These calls are effectful engine configura
 `input_poll_joystick_action_bits@0x460380`. The first three logical actions are therefore not a generic
 Godot UI ordering; they are the native engine ABI established by the input manager and refined by scripts.
 
+The same mask is also consumed directly by `adv_interpreter_tick@0x410fb0`. Logical action 6 is bit
+`0x40`, the exact bit used by the transient ADV fast-forward/run-state path. There is no Ctrl-specific
+branch: SYSTEM4's C and LeftCtrl mappings, the retained native Backspace default, and any joystick mapping
+that emits action 6 all reach the same hold-to-fast-forward mechanism. Persistent op-`0x88` Skip injects
+that same bit independently each tick.
+
 The port now models this as one process-owned `InputBindings` service. It starts with the native seven
 keyboard defaults, the four configuration handlers mutate it, and `0xff` combines live keyboard-VK,
 left/right mouse, joystick-axis, and joystick-button state with the narrow logical injection used by tests.
@@ -2300,8 +2306,10 @@ uses callback slot `count` only for an empty mask. Godot translates layout-indep
 native Win32 VK namespace and sends physical mouse/standard joy events through the service; it no longer
 assigns Godot's `ui_*` actions directly to AGE indices. Direct-scene diagnostics replay the same 16 immediate
 SYSTEM4 configuration calls through `InputBindingBootstrap`, while natural boot executes the real opcodes.
-This remains frontend input configuration only: it needs no profile storage, boot seed, or game-specific
-conditional.
+The live action-6 state now also feeds the ADV fast-forward host channel while the ADV lifecycle service is
+enabled. That transient channel is kept separate from persistent op-`0x88` Skip, so releasing the held key
+cannot clear the user's toggle; both channels share the existing text completion, wait advance, voice
+deferral, and skip cadence. This needs no profile storage, boot seed, or game-specific conditional.
 
 ---
 

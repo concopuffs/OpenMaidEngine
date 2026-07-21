@@ -2190,3 +2190,19 @@ empty-mask dispatch, simultaneous/bounded actions, and native range failures.
 **Next:** manually exercise TITLE, ROOM, and ADV with keyboard, left/right mouse, and—if available—a
 controller. A clean check should confirm native direction order, Z/Enter/Space behavior, right-click action
 7, and release re-arming before selecting another reached Phase-B cluster.
+
+### Slice B1 ADV held fast-forward implemented (2026-07-21)
+
+Manual validation found the general input bindings sound but LeftCtrl did not accelerate ADV. Native tracing
+resolves the missing consumer: `adv_interpreter_tick@0x410fb0` polls the configured logical mask and uses
+action 6's bit `0x40` for transient fast-forward. It does not test Ctrl directly, so SYSTEM4's C/LeftCtrl
+bindings and the engine's retained Backspace default intentionally share the behavior.
+
+The VM now forwards held action 6 through an ADV-lifecycle-gated physical skip channel. Godot combines it
+with, but stores it separately from, persistent op-`0x88` Skip; release therefore restores normal playback
+only when the persistent channel is also off. The combined state reuses text completion, wait advance,
+voice deferral/release, and skip pacing. Focused tests cover Backspace/C/Ctrl, activation on ADV resume, and
+persistent-toggle survival across a physical press/release.
+
+**Next:** manually hold LeftCtrl through text reveal and multiple waits in SC0000, then confirm release
+returns to normal cadence and that the on-screen Skip toggle remains active if enabled during the test.
