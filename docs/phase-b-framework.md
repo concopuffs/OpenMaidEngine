@@ -423,6 +423,17 @@ decoder-format gap, not missing or EXE-embedded artwork. The CUR decoder now han
 and 4-bpp formats with independent XOR/AND strides; archive-backed pixel/hotspot tests pass. Manual
 acceptance confirms the gripped cursor now displays correctly during drag-panning.
 
+A follow-up full-corpus analytics audit corrected a metadata artifact: ops `0x228`, `0x22f`, `0x231`,
+`0x232`, `0x239`, and `0x23f` had detailed native RE but still retained opaque semantic names, while
+`0x1a8` was an unnamed explicit no-op. Their semantic names are now current, and native proves `0x1a8`
+is a structural marker whose handler only records instruction length. The same audit exposed a real runtime
+gap, now closed: `0x23f` queries a loaded surface's DirectShow stop position in truncated integer
+milliseconds (all 23 sites are associated with a preceding `0x236`). On a freshly opened graph the stop
+position normally equals its duration; FIELD uses it for 16 ms animation scheduling. The port now queries
+that value during synchronous movie-graph initialization and retains it per movie surface. Empty movie
+slots return -1; unavailable timing metadata warns and returns -1 rather than exposing native's undefined
+failure output.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:

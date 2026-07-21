@@ -52,6 +52,9 @@ public partial class Main : Godot.Control
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
+    // 0x236 creates its graph synchronously on the VM thread so 0x23f can query timing immediately.
+    // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private GodotTraceSink _trace = null!;
     private PageLocatorState _locator = null!;
@@ -318,6 +321,7 @@ public partial class Main : Godot.Control
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
         _host?.PulseFrame();
         UpdateVoicePlaybackState();
+        AdoptPendingMovies();
         UpdateMovieFrames();
         if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite(_vm.Gfx))
             Recomposite();   // native publishes retained mutations only at present/service boundaries
@@ -595,6 +599,8 @@ public partial class Main : Godot.Control
     public override void _ExitTree()
     {
         DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); _locator?.Dispose();
+        foreach (var movie in _pendingMovies.Values) movie.Decoder.Dispose();
+        _pendingMovies.Clear();
         foreach (var movie in _movies.Values) movie.Decoder.Dispose();
         _movies.Clear();
     }
@@ -1162,19 +1168,35 @@ public partial class Main : Godot.Control
         CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
     }
 
-    public void PlayMovie(byte[] mpegBytes, string assetName, long resourceId, int rawIndex)
+    public bool TryPlayMovie(byte[] mpegBytes, string assetName, long resourceId, int rawIndex,
+                             out long? stopTimeMs)
     {
-        if (_movies.Remove(resourceId, out var prior)) prior.Decoder.Dispose();
+        stopTimeMs = null;
         try
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
-            _movies[resourceId] = new MovieRuntime(assetName, rawIndex, new DirectShowMovieDecoder(payload));
-            GD.Print($"movie started {assetName} ({mpegBytes.Length} bytes from VFS)");
+            var runtime = new MovieRuntime(assetName, rawIndex, new DirectShowMovieDecoder(payload));
+            stopTimeMs = runtime.Decoder.StopTimeMs;
+            while (!_pendingMovies.TryAdd(resourceId, runtime))
+                if (_pendingMovies.TryRemove(resourceId, out var prior)) prior.Decoder.Dispose();
+            return true;
         }
         catch (System.Exception e)
         {
             GD.Print($"movie decode failed {assetName}: {e.Message}");
             _host.NotifyMovieCompleted(resourceId); // release a pending 0x21c boundary on deterministic load failure
+            return false;
+        }
+    }
+
+    private void AdoptPendingMovies()
+    {
+        foreach (var (resourceId, _) in _pendingMovies)
+        {
+            if (!_pendingMovies.TryRemove(resourceId, out var movie)) continue;
+            if (_movies.Remove(resourceId, out var prior)) prior.Decoder.Dispose();
+            _movies[resourceId] = movie;
+            GD.Print($"movie started {movie.Name} ({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS)");
         }
     }
 
@@ -1195,6 +1217,7 @@ public partial class Main : Godot.Control
 
     public void StopMovie(long resourceId)
     {
+        if (_pendingMovies.TryRemove(resourceId, out var pending)) pending.Decoder.Dispose();
         if (_movies.Remove(resourceId, out var movie))
         {
             movie.Decoder.Dispose();

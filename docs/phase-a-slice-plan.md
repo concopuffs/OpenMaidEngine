@@ -2238,3 +2238,24 @@ and closed without losing the underlying page, then classify only the secondary 
 
 **Manual validation:** passed on 2026-07-21. The system menu opens from ADV and returns successfully through
 the implemented script-owned action path; no underlying-page restoration discrepancy was reported.
+
+### Slice B1 movie-surface stop-time query implemented (2026-07-21)
+
+Native RE corrected op `0x23f` from the port's former retained-object existence test to
+`query-surface-stop-time-ms(out, surface_slot)`. It calls `IMediaPosition::get_StopTime`, multiplies seconds
+by 1000, truncates toward zero, and returns -1 only for an empty movie slot. All 23 Himegari sites are
+associated with a preceding non-modal `0x236`; FIELD consumes the result as an effect lifetime.
+
+The Windows decoder now obtains the stop time inside `0x236`'s synchronous graph-construction boundary and
+hands it into engine-owned per-surface movie state before the VM advances. The already initialized decoder
+is staged for main-thread adoption, so frame delivery remains asynchronous without reopening the graph.
+`0x23f` returns the retained value. If a movie exists but its decoder supplies no finite signed-32-bit
+timing value, the host reports a warning containing script/offset/surface context and returns -1; a genuinely
+empty movie slot returns -1 silently. Focused tests cover all three outcomes and the real SC0000 DirectShow
+payload exposes a positive stop time. Validation: 270 engine tests, zero-warning Godot build, and threaded
+Godot selftest.
+
+**Manual validation:** passed on 2026-07-21. A normal Game Start through SC0000's movie-backed opening
+produced no `movie stop-time unavailable` warning, confirming the ordinary DirectShow timing handoff.
+
+**Next:** continue with the next concrete discrepancy reached by manual testing.

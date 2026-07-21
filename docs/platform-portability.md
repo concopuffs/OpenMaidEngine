@@ -52,10 +52,12 @@ VM op 0x236 (non-modal) / op 0x20f (modal)
 ```
 
 Everything before and after `DirectShowMovieDecoder` is portable. The backend currently exposes the right
-conceptual operations (`TryTakeFrame`, `IsCompleted`, and `Dispose`) but they are not formalized as an
+conceptual operations (`StopTimeMs`, `TryTakeFrame`, `IsCompleted`, and `Dispose`) but they are not formalized as an
 interface. A future cleanup should:
 
-1. Add an `IMovieDecoder` contract for frame delivery, completion, failure, and disposal.
+1. Add an `IMovieDecoder` contract for synchronous stop-time metadata, frame delivery, completion, failure,
+   and disposal. Stop time must be available before `0x236` returns so an immediately following `0x23f`
+   remains deterministic.
 2. Add an injected factory that accepts `MoviePayload` and selects an available backend.
 3. Keep DirectShow in a Windows-specific source set or assembly, with its platform annotation local to it.
 4. Implement a portable MPEG program-stream backend that produces the same top-down RGBA8 frames.

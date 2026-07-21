@@ -1102,13 +1102,13 @@ annotated in Ghidra, saved.
 **In scope (built this slice):**
 | op | handler / worker | semantics |
 |---|---|---|
-| `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel |
+| `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel. Operand 2 is also retained as channel control state; the port currently ignores that field. |
 | `0x229` | `op_0x229_set_gfx_range_transform` → `gfx_range_transform_reset` / `select_handles` / `set_anchor` | reset/select the shared **retained-object range transform**; not a per-object position setter (superseded finding above) |
 | `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
 | `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color**: bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Negative alpha/RGB preserve corresponding bytes from static color `obj+0x60`; alpha >255 clamps. Distinct from one-shot `0x202`/static `0x203` |
 | `0x228` | `gfx_op_0x228_query_position` → `gfx_object_query_translation_target` (`0x47cdd0`) | **query** the decomposed target-translation matrix (x,y,z), `obj+0x1ac/+0x1b0/+0x1b4`, → operand slots 3/4/5; success is 0 and missing is 1 |
-| `0x23f` | `gfx_op_0x23f_query_object` (`FUN_0042a520`) | **query** an object status/value → operand slot 1 |
+| `0x23f` | `op_0x23f_query_surface_stop_time_ms` (`0x42a520`) | **query loaded-surface DirectShow stop position in integer milliseconds** → operand slot 1, or -1 for an empty movie surface. Implemented with an explicit warning/-1 safety path when host timing metadata is unavailable. |
 
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
@@ -1222,6 +1222,48 @@ textbox-area object remains outside this finding, as does the deliberately unren
 The `/v2` image names/comments the handler; movie ctor/interface/open/play/volume/release workers; sound
 route helpers; renderer media-type/sample workers; and stop/detach/destructor lifecycle. The image was
 saved after annotation.
+
+### Movie-surface stop-time query `0x23f` (2026-07-21)
+
+The exact ABI is `query-surface-stop-time-ms(out_stop_time_ms, surface_slot)`. Handler
+`op_0x23f_query_surface_stop_time_ms@0x42a520` records a 5-dword instruction length, fetches operand 2,
+and directly indexes `EngineCtx+0x52bd4[surface_slot]`. A null surface writes `-1` to operand 1. A non-null
+surface dereferences the `CMovieToTexture+0x414` interface pointer and calls vtable slot `+0x28` with a
+stack `double` output parameter.
+
+That interface is conclusively `IMediaPosition`: graph initialization queries IID
+`{56A868B2-0AD4-11CE-B03A-0020AF0BA770}`, and the inherited `IUnknown` + `IDispatch` layout places
+`get_Duration` at `+0x1c`, `put_CurrentPosition` at `+0x20`, `get_CurrentPosition` at `+0x24`, and
+`get_StopTime` at `+0x28`. Neighboring op `0x23e` calls `+0x24`, while movie op `0x245` calls `+0x20`,
+which independently confirms the slot mapping. Thus `0x23f` does **not** call `get_Duration`; it asks for
+the configured playback stop position. With an ordinary freshly opened graph that position normally
+equals the media duration, explaining why every observed consumer uses it as a lifetime.
+
+Native multiplies the returned `REFTIME` seconds by the double `1000.0` at `0x5713e8`, passes the x87
+value to the compiler helper at `0x550850`, and writes the low 32-bit integer to operand 1. The helper's
+SSE2 branch uses `CVTTSD2SI`; its x87 fallback corrects the current rounding result to the same behavior,
+so conversion is truncation toward zero. The COM `HRESULT` is ignored and the local output is not
+preinitialized: the handler assumes any non-null movie surface has a usable `IMediaPosition`. It is a
+pure query—no run-state bit, service boundary, seek, or playback mutation occurs.
+
+Himegari has 23 calls in 17 scripts: BTL, DEBUGADV2, FIELD (2), SC0000/10/20/40/50/60/70/80/90,
+SC0100 (2), SC0110 (2), SC0120 (2), SC0130 (3), and USEMAGIC. Every site is associated with a preceding
+`0x236` load of the queried surface; the repeated ADV form has five table writes between load and query.
+FIELD supplies the strongest unit evidence: one path computes `stop_time_ms / 16 + 1` for a 16 ms callback
+schedule, and another clamps it to 600 ms before calling DRAWVOL. This corroborates the native decode and
+rules out the former port behavior, `retained gfx object exists ? 0 : -1`.
+
+**Port implementation (2026-07-21):** `DirectShowMovieDecoder` now queries
+`IMediaPosition::get_StopTime` after the graph reaches its running state and before synchronous `0x236`
+initialization returns. It applies native seconds-to-milliseconds truncation and hands the value through
+`IHost.PlayMovieToSurface` into a movie-surface record owned by `GfxState`. Decoder construction moved from
+the deferred Godot callback to the VM-side synchronous open boundary; the ready decoder is staged in a
+thread-safe pending registry and adopted by the main thread before frame sampling, preserving asynchronous
+presentation. `0x23f` silently returns -1 for an empty movie slot. If the movie record exists but DirectShow
+returned an error, non-finite value, or value outside native signed-32-bit range, the port emits
+`movie stop-time unavailable ...; returning -1` and returns -1. This is the chosen safe substitute for
+native's ignored-HRESULT/uninitialized-output edge case. A normal Game Start through SC0000 was manually
+validated without the warning, confirming that the installed movie's ordinary metadata path succeeds.
 
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
 

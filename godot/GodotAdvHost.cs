@@ -74,6 +74,8 @@ public sealed class GodotAdvHost : IHost
         _locator = locator; _timeline = timeline;
     }
 
+    public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
+
     private string CurrentScene
     {
         get { lock (_scriptContextLock) return _scriptContexts.TryPeek(out var scene) ? scene : _rootScene; }
@@ -767,12 +769,13 @@ public sealed class GodotAdvHost : IHost
         return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
     }
 
-    public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         string scene = CurrentScene;
         var asset = _res.Resolve(scene, resourceId);
-        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return; }
-        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false);
+        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
+        return StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
+                          out long? stopTimeMs) ? stopTimeMs : null;
     }
 
     public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
@@ -788,7 +791,8 @@ public sealed class GodotAdvHost : IHost
         _modalMovieWaiting = true;
         try
         {
-            if (!StartMovie(asset, rawResourceId, surfaceSlot, movieFlags, 0, modal: true)) return;
+            if (!StartMovie(asset, rawResourceId, surfaceSlot, movieFlags, 0, modal: true,
+                            out _)) return;
             _timeline?.State("modal-movie-wait", new()
             {
                 ["resource"] = rawResourceId, ["surface"] = surfaceSlot, ["file"] = asset.Name,
@@ -818,8 +822,9 @@ public sealed class GodotAdvHost : IHost
     }
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            long syncMask, bool modal)
+                            long syncMask, bool modal, out long? stopTimeMs)
     {
+        stopTimeMs = null;
         try
         {
             var movie = _res.ReadMovie(asset);
@@ -835,8 +840,7 @@ public sealed class GodotAdvHost : IHost
                 ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
-            _main.CallDeferred("PlayMovie", movie.Bytes, movie.Name, resourceId, asset.RawIndex);
-            return true;
+            return _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.RawIndex, out stopTimeMs);
         }
         catch (System.Exception e)
         {

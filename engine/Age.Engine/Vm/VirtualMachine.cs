@@ -1425,7 +1425,8 @@ public sealed class VirtualMachine
                 // The native CMovieToTexture renderer replaces the pixels of the already-created surface.
                 // Retain the same resource binding so the compositor resolves live movie frames for its objects.
                 Gfx.SetSurface(surfaceSlot, resourceId, 0);
-                _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
+                long? stopTimeMs = _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
+                Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs);
                 return pc + 1; // native cmd size 9 resumes at the next instruction; playback is asynchronous
             }
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
@@ -1490,8 +1491,26 @@ public sealed class VirtualMachine
                 else Write(a[0], 1);   // native missing-object path leaves output operands untouched
                 return pc + 1;
             }
-            case "u00422930":   // 0x23f query-object: (out)(handle) <- 0 if the object exists, else -1
-                Write(a[0], Gfx.TryGet(Read(a[1])) != null ? 0 : -1); return pc + 1;
+            case "u00422930":                    // pre-reference compatibility
+            case "query-surface-stop-time-ms":   // 0x23f (out_stop_time_ms)(surface_slot)
+            {
+                int surfaceSlot = (int)Read(a[1]);
+                if (!Gfx.TryGetMovieStopTime(surfaceSlot, out long? stopTimeMs))
+                {
+                    Write(a[0], -1); // native null CMovieToTexture slot
+                    return pc + 1;
+                }
+                if (!stopTimeMs.HasValue)
+                {
+                    _host.ReportWarning(
+                        $"movie stop-time unavailable {_cur.Script.Name}@0x{ins.Offset:x} " +
+                        $"surface={surfaceSlot}; returning -1");
+                    Write(a[0], -1);
+                    return pc + 1;
+                }
+                Write(a[0], stopTimeMs.Value);
+                return pc + 1;
+            }
             case "set-gfx-geom3-c":     // 0x1ff: set current translation matrix
                 Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "u00420620":             // upstream ABI label

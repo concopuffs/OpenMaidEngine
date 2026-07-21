@@ -589,7 +589,7 @@ Implemented through IHost.PlayModalMovieToSurface. ResourceMap.ResolveRawMovie d
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **evidence:** Ghidra handler 0x417550 -> gfx_command_queue_clear 0x47cb10, which destroys queued nodes and restores the sentinel links/count.
 
-### 0x228 `u00421940` (u00421940, argc 5)
+### 0x228 `query-gfx-translation-target` (u00421940, argc 5)
 - **summary:** 0x228 query translation target (succ)(handle)(outX)(outY)(outZ): clone the retained object, decompose its target translation matrix at obj+0x17c, and return matrix translation obj+0x1ac/+0x1b0/+0x1b4. Returns succ=0 when found; when absent, writes succ=1 and leaves outputs untouched. The C# VM queries TranslationTarget independently of V24. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 handler gfx_op_0x228_query_position@0x42a3a0 calls gfx_object_query_translation_target@0x47cdd0. The worker copies the complete 0xb5-dword object record, passes copied obj+0x17c to matrix4_decompose_affine@0x48d7c8, and returns its translation outputs; the decomposition reads matrix elements +0x30/+0x34/+0x38, corresponding to obj+0x1ac/+0x1b0/+0x1b4. SC0000 AE001H queries this before each 0x220 leg. C# regression covers targets (40,-20), (50,-80), (130,-100), plus the missing-object output-preservation path.
@@ -614,16 +614,17 @@ Implemented through IHost.PlayModalMovieToSurface. ResourceMap.ResolveRawMovie d
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides operands 3..5 by 100 and calls gfx_range_transform_set_scale_target@0x472d50. The worker arms the embedded transform object's ordinary scale channel (delay obj+0x3c, duration +0x50, target matrix +0xac), which gfx_range_transform_sample_frame@0x476df0 samples before range composition. FIELD has the sole corpus call, a 300 ms camera zoom.
 
-### 0x22f `u00421DD0` (u00421DD0, argc 5)
-- **summary:** 0x22f set-position (handle)(op2)(x)(y)(z): set the object base position (direct transform, not ping-pong). Worker gfx_worker_set_translation @0x472e90. C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster.
-- **grounding:** source=kelebek, confidence=low
+### 0x22f `set-gfx-position-current` (u00421DD0, argc 5)
+- **summary:** (handle)(control)(x)(y)(z) — set the object's current/base translation matrix. The native worker also retains operand 2 as channel control state; the port currently applies x/y/z but ignores that control operand.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: gfx_op_0x22f_set_position_anim@0x423b00 fetches x/y/z as floats and passes all five operands to gfx_worker_set_translation@0x472e90. The worker builds the current translation matrix with x/y/z and stores operand 2 in the channel record. This is distinct from the shared range transform at 0x229. The C# handler sets V24 directly and is therefore position-correct but does not yet model operand 2.
 
-### 0x231 `u00421EA0` (u00421EA0, argc 4)
+### 0x231 `animate-gfx-srcrect-loop` (u00421EA0, argc 4)
 - **summary:** (handle)(frame_period_ms)(frame_count)(column_count) — loop row-major through the spritesheet. Every frame preserves draw-texture's source-rectangle width/height; frame=floor(elapsed/frame_period)%frame_count, src offset=(frame%columns*width, frame/columns*height). Worker gfx_worker_anim_srcrect @0x47eec0; consumer gfx_object_anim_interpolate @0x473ed0.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Native /v2 decompile: worker stores period at obj+0x230, frame_count at +0x238, columns at +0x23c. Interpolator computes ((now-start)/period)%frame_count, then offsets both source-rect X bounds by rect_width*(frame%columns) and Y bounds by rect_height*(frame/columns). SC0000 uses (100,8,4) with AE001H's eight 200x200 cells in a 4x2 800x400 sheet.
 
-### 0x232 `u00421EF0` (u00421EF0, argc 4)
+### 0x232 `animate-gfx-color-loop` (u00421EF0, argc 4)
 - **summary:** 0x232 anim-color (handle)(period)(alpha)(color): ping-pong the temporary packed ARGB passed to the normal object blit. Handler resolves negative alpha/RGB from static color obj+0x60 and clamps alpha above 255. Blend selector obj+0x30 is unchanged: mode 0 keeps default blending (animated alpha is inert; RGB is vertex modulation), while mode 1 uses sampled ARGB alpha as the SRCALPHA scale for additive composition. Fresh static color is 0xffffffff. The C# VM resolves sentinels and consumes sampled ARGB through the unchanged mode-specific path. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: gfx_op_0x232_anim_color@0x423c30 resolves sentinels then calls gfx_worker_anim_color@0x47ef50; gfx_object_anim_interpolate@0x473ed0 samples static obj+0x60 toward target obj+0x240 into a temporary packed color; gfx_object_composite@0x47f650 passes that color plus unchanged selector obj+0x30 to gfx_object_blit_d3d9@0x4774c0. Blit mode 0 leaves the default path and passes RGB as modulation; mode 1 sets SRCALPHA/ONE additive composition. gfx_object_init_default@0x472810 initializes obj+0x60=0xffffffff. SC0000 0x1a0e (handle,1200,224,-1) is therefore 0xffffffff<->0xe0ffffff with inert alpha and identity RGB in mode 0: no visible pulse. C# regressions cover exact AE001H visual invariance, negative-RGB preservation, mode-0 RGB modulation, and mode-1 additive scaling.
@@ -644,7 +645,7 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **summary:** (duration) — set the GLOBAL animation clock: native ctx+0x51b78=0 (elapsed), +0x51b7c=duration. The generic instruction length is 3 dwords. NON-BLOCKING: only configures; the render loop advances it and interpolates all animating objects. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift.
 - **grounding:** source=investigation, confidence=high
 
-### 0x239 `u004223C0` (u004223C0, argc 6)
+### 0x239 `animate-gfx-srcrect-target` (u004223C0, argc 6)
 - **summary:** (handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint.
@@ -656,9 +657,12 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 
 For each fixed slot in [42,1000), the handler stops/releases the movie-to-texture object at ctx+0x52bd4[slot], then invokes the ordinary retained-gfx surface-release worker. Protected/externally owned slots may be retained by the worker's per-slot guard. This is the resource half of the common 0x1f6/0x23d full-reset sequence.
 
-### 0x23f `u00422930` (u00422930, argc 2)
-- **summary:** 0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster.
-- **grounding:** source=kelebek, confidence=low
+### 0x23f `query-surface-stop-time-ms` (u00422930, argc 2)
+- **summary:** (out_stop_time_ms)(surface_slot) — query the DirectShow stop position retained by a loaded movie surface, convert seconds to integer milliseconds by truncating toward zero, and write -1 when the movie slot is empty. The port retains this metadata during 0x236 graph initialization; unavailable metadata emits a warning and also returns -1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x23f_query_surface_stop_time_ms@0x42a520 indexes EngineCtx surface array operand 2, returns -1 for a null slot, otherwise dereferences movie+0x414 IMediaPosition and calls vtable+0x28 get_StopTime. The adjacent op 0x23e uses the same interface at vtable+0x24 get_CurrentPosition; movie op 0x245 uses +0x20 put_CurrentPosition, independently confirming the documented vtable layout. The returned seconds are multiplied by g_dMillisecondsPerSecond@0x5713e8 (double 1000.0) and truncated by crt_ftol2_sse_truncate@0x550850 before vm_operand_write(1). All 23 Himegari sites in 17 scripts are associated with a preceding op 0x236 movie load to the queried surface. FIELD divides one result by 16 and adds 1 to build a 16 ms callback schedule; another path clamps the result to 600 ms before DRAWVOL.
+
+The surface object's +0x414 member is IMediaPosition. Its vtable +0x28 entry is get_StopTime (after IUnknown, IDispatch, get_Duration, put_CurrentPosition, and get_CurrentPosition), returning a REFTIME double in seconds. Native multiplies by the double constant 1000.0 and calls the compiler float-to-integer helper, whose SSE2 and x87 paths both truncate toward zero. It does not inspect the getter HRESULT. For a valid graph the default stop time normally equals media duration, which explains duration-style consumers, but the exact ABI is stop position rather than get_Duration. The handler only queries state; it does not yield or alter playback. Port safety extension: a modeled movie surface whose decoder cannot supply a finite signed-32-bit stop time reports a warning and returns -1 instead of reproducing native's uninitialized-output failure path.
 
 ### 0x242 `set-object-animation-detached` (set-object-animation-detached, argc 2)
 - **summary:** Replace the retained object's animation-control word at obj+0x2d0. Bit 0 detaches finite one-shot channels from blocking presentation and protects them from 0x243 forced completion until they finish naturally.
@@ -870,6 +874,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **evidence:** Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine setting interface's getter for `message:ReadTextSkip` and writes the result to operand 1. The shared ADV redraw routine uses it for the active Read-message-skip icon.
 
 ## marker
+
+### 0x1a8 `instruction-marker-noop` (dev_ukn, argc 0)
+- **summary:** Zero-operand structural marker. The native shared 0xaf/0x1a8 handler only records this instruction's one-dword length and returns.
+- **grounding:** source=investigation, confidence=high, noop_headless=True
+- **evidence:** Ghidra /v2: op_0xaf_0x1a8_handler@0x416650 writes frame_instruction_word_count=1 for the current script context and immediately returns. Himegari has 1,989 op-0x1a8 sites. The port's explicit no-op matches native behavior.
 
 ### 0x1bf `call-end` (u004156C0, argc 0)
 - **summary:** zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker
@@ -1141,10 +1150,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1a7 `comment` (comment, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x1a8 `dev_ukn` (dev_ukn, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1a9 `u00428090` (u00428090, argc 1)
 - **summary:** —

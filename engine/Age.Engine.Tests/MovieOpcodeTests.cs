@@ -101,6 +101,70 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void QueryMovieStopTimeReturnsTheValueRetainedByPlayMovie()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MOVIE-TIME", new List<(int, Operand[])>
+        {
+            (0x236, new[] { new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2), new Operand(0, 0) }),
+            (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost { MovieStopTimeMs = 1876 };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1876, vm.Globals[0x1234]);
+        Assert.True(vm.Gfx.TryGetMovieStopTime(5, out long? retained));
+        Assert.Equal(1876, retained);
+        Assert.Empty(host.Warnings);
+
+        vm.Gfx.SetSurface(5, 0x34, 0); // replacing the native surface tears down its movie metadata
+        Assert.False(vm.Gfx.TryGetMovieStopTime(5, out _));
+    }
+
+    [Fact]
+    public void QueryMovieStopTimeReturnsMinusOneWithoutWarningForAnEmptyMovieSlot()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "EMPTY-MOVIE-TIME", new List<(int, Operand[])>
+        {
+            (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+        vm.Gfx.GetOrCreate(5); // retained-object existence is unrelated to the native movie-object slot
+
+        vm.Run();
+
+        Assert.Equal(-1, vm.Globals[0x1234]);
+        Assert.Empty(host.Warnings);
+    }
+
+    [Fact]
+    public void QueryMovieStopTimeWarnsAndReturnsMinusOneWhenMetadataIsUnavailable()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MISSING-MOVIE-TIME", new List<(int, Operand[])>
+        {
+            (0x236, new[] { new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2), new Operand(0, 0) }),
+            (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(-1, vm.Globals[0x1234]);
+        string warning = Assert.Single(host.Warnings);
+        Assert.Contains("movie stop-time unavailable MISSING-MOVIE-TIME@", warning);
+        Assert.Contains("surface=5; returning -1", warning);
+    }
+
+    [Fact]
     public void Sc0000MoviePayloadReadsFromArchiveVfsAndIsMpegProgramStream()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -135,6 +199,8 @@ public class MovieOpcodeTests
         var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
         var entry = resources.Resolve("SC0000", 0x33)!;
         using var decoder = new DirectShowMovieDecoder(resources.ReadMovie(entry));
+
+        Assert.True(decoder.StopTimeMs > 0, "DirectShow should expose a positive IMediaPosition stop time");
 
         var deadline = DateTime.UtcNow.AddSeconds(10);
         RgbaImage? frame = null;

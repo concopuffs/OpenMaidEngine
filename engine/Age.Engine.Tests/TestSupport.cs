@@ -38,6 +38,7 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public long? MovieStopTimeMs;
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
@@ -45,11 +46,13 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
+    public readonly List<string> Warnings = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
     public int SceneContextResets;
     public long TextureResourceIdOffset;
+    public void ReportWarning(string message) => Warnings.Add(message);
     public long ResolveTextureResourceId(long resourceId) => resourceId + TextureResourceIdOffset;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
@@ -145,8 +148,11 @@ internal class RecordingHost : IHost
         => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
-    public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
-        => Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+    {
+        Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+        return MovieStopTimeMs;
+    }
     public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((rawResourceId, surfaceSlot, movieFlags));
 }

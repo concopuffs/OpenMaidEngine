@@ -3606,14 +3606,14 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "dev_ukn"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "low"
+name = "instruction-marker-noop"
+category = "marker"
+summary = "Zero-operand structural marker. The native shared 0xaf/0x1a8 handler only records this instruction's one-dword length and returns."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xaf_0x1a8_handler@0x416650 writes frame_instruction_word_count=1 for the current script context and immediately returns. Himegari has 1,989 op-0x1a8 sites. The port's explicit no-op matches native behavior."
 
 [[opcode]]
 op = 0x1a9
@@ -5768,7 +5768,7 @@ argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421940"
+name = "query-gfx-translation-target"
 category = "draw"
 summary = "0x228 query translation target (succ)(handle)(outX)(outY)(outZ): clone the retained object, decompose its target translation matrix at obj+0x17c, and return matrix translation obj+0x1ac/+0x1b0/+0x1b4. Returns succ=0 when found; when absent, writes succ=1 and leaves outputs untouched. The C# VM queries TranslationTarget independently of V24. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
@@ -5953,14 +5953,14 @@ argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421DD0"
+name = "set-gfx-position-current"
 category = "draw"
-summary = "0x22f set-position (handle)(op2)(x)(y)(z): set the object base position (direct transform, not ping-pong). Worker gfx_worker_set_translation @0x472e90. C# VM: sets V24. See docs/engine-re.md §SC0000 anim cluster."
+summary = "(handle)(control)(x)(y)(z) — set the object's current/base translation matrix. The native worker also retains operand 2 as channel control state; the port currently applies x/y/z but ignores that control operand."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: gfx_op_0x22f_set_position_anim@0x423b00 fetches x/y/z as floats and passes all five operands to gfx_worker_set_translation@0x472e90. The worker builds the current translation matrix with x/y/z and stores operand 2 in the channel record. This is distinct from the shared range transform at 0x229. The C# handler sets V24 directly and is therefore position-correct but does not yet model operand 2."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6015,7 +6015,7 @@ argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421EA0"
+name = "animate-gfx-srcrect-loop"
 category = "draw"
 summary = "(handle)(frame_period_ms)(frame_count)(column_count) — loop row-major through the spritesheet. Every frame preserves draw-texture's source-rectangle width/height; frame=floor(elapsed/frame_period)%frame_count, src offset=(frame%columns*width, frame/columns*height). Worker gfx_worker_anim_srcrect @0x47eec0; consumer gfx_object_anim_interpolate @0x473ed0."
 noop_headless = false
@@ -6051,7 +6051,7 @@ argc = 4
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421EF0"
+name = "animate-gfx-color-loop"
 category = "draw"
 summary = "0x232 anim-color (handle)(period)(alpha)(color): ping-pong the temporary packed ARGB passed to the normal object blit. Handler resolves negative alpha/RGB from static color obj+0x60 and clamps alpha above 255. Blend selector obj+0x30 is unchanged: mode 0 keeps default blending (animated alpha is inert; RGB is vertex modulation), while mode 1 uses sampled ARGB alpha as the SRCALPHA scale for additive composition. Fresh static color is 0xffffffff. The C# VM resolves sentinels and consumes sampled ARGB through the unchanged mode-specific path. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
@@ -6227,7 +6227,7 @@ argc = 6
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004223C0"
+name = "animate-gfx-srcrect-target"
 category = "draw"
 summary = "(handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately."
 noop_headless = false
@@ -6383,23 +6383,24 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422930"
+name = "query-surface-stop-time-ms"
 category = "draw"
-summary = "0x23f query-object (out)(handle): return object status (FUN_0042a520; -1 if none). C# VM: 0 if the object exists else -1. See docs/engine-re.md §SC0000 anim cluster."
+summary = "(out_stop_time_ms)(surface_slot) — query the DirectShow stop position retained by a loaded movie surface, convert seconds to integer milliseconds by truncating toward zero, and write -1 when the movie slot is empty. The port retains this metadata during 0x236 graph initialization; unavailable metadata emits a warning and also returns -1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+details = "The surface object's +0x414 member is IMediaPosition. Its vtable +0x28 entry is get_StopTime (after IUnknown, IDispatch, get_Duration, put_CurrentPosition, and get_CurrentPosition), returning a REFTIME double in seconds. Native multiplies by the double constant 1000.0 and calls the compiler float-to-integer helper, whose SSE2 and x87 paths both truncate toward zero. It does not inspect the getter HRESULT. For a valid graph the default stop time normally equals media duration, which explains duration-style consumers, but the exact ABI is stop position rather than get_Duration. The handler only queries state; it does not yield or alter playback. Port safety extension: a modeled movie surface whose decoder cannot supply a finite signed-32-bit stop time reports a warning and returns -1 instead of reproducing native's uninitialized-output failure path."
+evidence = "Ghidra /v2: op_0x23f_query_surface_stop_time_ms@0x42a520 indexes EngineCtx surface array operand 2, returns -1 for a null slot, otherwise dereferences movie+0x414 IMediaPosition and calls vtable+0x28 get_StopTime. The adjacent op 0x23e uses the same interface at vtable+0x24 get_CurrentPosition; movie op 0x245 uses +0x20 put_CurrentPosition, independently confirming the documented vtable layout. The returned seconds are multiplied by g_dMillisecondsPerSecond@0x5713e8 (double 1000.0) and truncated by crt_ftol2_sse_truncate@0x550850 before vm_operand_write(1). All 23 Himegari sites in 17 scripts are associated with a preceding op 0x236 movie load to the queried surface. FIELD divides one result by 16 and adds 1 to build a 16 ms callback schedule; another path clamps the result to 600 ms before DRAWVOL."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_stop_time_ms"
 observed_types = ["l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]

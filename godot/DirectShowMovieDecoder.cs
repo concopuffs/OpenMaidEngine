@@ -35,6 +35,9 @@ internal sealed class DirectShowMovieDecoder : IDisposable, ISampleGrabberCB
     private IMediaControl? _control;
 
     public bool IsCompleted => _completed;
+    /// <summary>The graph's IMediaPosition stop time converted exactly as native op 0x23f does:
+    /// seconds * 1000, truncated toward zero. Null means DirectShow supplied no usable value.</summary>
+    public long? StopTimeMs { get; private set; }
 
     public DirectShowMovieDecoder(MoviePayload movie)
     {
@@ -112,6 +115,13 @@ internal sealed class DirectShowMovieDecoder : IDisposable, ISampleGrabberCB
             int stateHr = _control.GetState(5000, out int graphState);
             if (stateHr < 0) Check(stateHr, "wait for running movie graph");
             if (graphState != 2) throw new InvalidOperationException($"movie graph entered unexpected state {graphState}");
+            var mediaPosition = (IMediaPosition)_graphObject;
+            int stopHr = mediaPosition.get_StopTime(out double stopTimeSeconds);
+            double stopTimeMilliseconds = stopTimeSeconds * 1000.0;
+            if (stopHr >= 0 && double.IsFinite(stopTimeMilliseconds)
+                            && stopTimeMilliseconds >= int.MinValue
+                            && stopTimeMilliseconds <= int.MaxValue)
+                StopTimeMs = (long)System.Math.Truncate(stopTimeMilliseconds);
             _ready.Set();
             var mediaEvent = (IMediaEvent)_graphObject;
             while (!_stopping)
@@ -265,6 +275,21 @@ internal sealed class DirectShowMovieDecoder : IDisposable, ISampleGrabberCB
     [ComImport, Guid("56A868B1-0AD4-11CE-B03A-0020AF0BA770"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
     private interface IMediaControl
     { [PreserveSig] int Run(); [PreserveSig] int Pause(); [PreserveSig] int Stop(); [PreserveSig] int GetState(int timeout, out int state); }
+    [ComImport, Guid("56A868B2-0AD4-11CE-B03A-0020AF0BA770"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
+    private interface IMediaPosition
+    {
+        [PreserveSig] int get_Duration(out double seconds);
+        [PreserveSig] int put_CurrentPosition(double seconds);
+        [PreserveSig] int get_CurrentPosition(out double seconds);
+        [PreserveSig] int get_StopTime(out double seconds);
+        [PreserveSig] int put_StopTime(double seconds);
+        [PreserveSig] int get_PrerollTime(out double seconds);
+        [PreserveSig] int put_PrerollTime(double seconds);
+        [PreserveSig] int put_Rate(double rate);
+        [PreserveSig] int get_Rate(out double rate);
+        [PreserveSig] int CanSeekForward(out int canSeekForward);
+        [PreserveSig] int CanSeekBackward(out int canSeekBackward);
+    }
     [ComImport, Guid("56A868B6-0AD4-11CE-B03A-0020AF0BA770"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
     private interface IMediaEvent
     {

@@ -299,6 +299,7 @@ public sealed class GfxState
             _objects.Clear();
             _fieldTable.Clear();
             _surfaces.Clear();
+            _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
             CurrentObject = 0;
             CurrentRenderTargetSlot = -1;
@@ -314,8 +315,32 @@ public sealed class GfxState
 
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----
     private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
+    // A separate entry models the native CMovieToTexture object attached to a surface. A null value means
+    // the movie object exists but its host decoder supplied no usable IMediaPosition stop time.
+    private readonly Dictionary<int, long?> _movieStopTimesMs = new();
     private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
-    public void SetSurface(int slot, long resId, long colorKey) { lock (_lock) { _surfaces[slot] = (resId, colorKey); } }
+    public void SetSurface(int slot, long resId, long colorKey)
+    {
+        lock (_lock)
+        {
+            _surfaces[slot] = (resId, colorKey);
+            _movieStopTimesMs.Remove(slot);
+        }
+    }
+
+    /// <summary>Op 0x236 handoff: retain the initialized movie graph's IMediaPosition stop time. Null
+    /// deliberately distinguishes a movie surface with unavailable metadata from an empty movie slot.</summary>
+    public void SetMovieStopTime(int slot, long? stopTimeMs)
+    {
+        lock (_lock) _movieStopTimesMs[slot] = stopTimeMs;
+    }
+
+    /// <summary>Op 0x23f query. False means no movie object occupies the slot; true with a null value
+    /// means the movie exists but its stop-time query failed or returned unusable metadata.</summary>
+    public bool TryGetMovieStopTime(int slot, out long? stopTimeMs)
+    {
+        lock (_lock) return _movieStopTimesMs.TryGetValue(slot, out stopTimeMs);
+    }
 
     /// <summary>Op 0x20d: select a surface as the D3D render target; values at or above 1000 restore the
     /// device backbuffer in the native engine.</summary>
@@ -333,6 +358,7 @@ public sealed class GfxState
             for (int slot = firstSlot; slot < end; slot++)
             {
                 _surfaces.Remove(slot);
+                _movieStopTimesMs.Remove(slot);
                 _surfaceTransitions.Remove(slot);
             }
             if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
@@ -429,7 +455,14 @@ public sealed class GfxState
             o.ColorAnim = true;
         }
     }
-    public void ClearSurface(int slot) { lock (_lock) { _surfaces[slot] = (0, 0); } }   // create-texture (blank)
+    public void ClearSurface(int slot)
+    {
+        lock (_lock)
+        {
+            _surfaces[slot] = (0, 0); // create-texture (blank)
+            _movieStopTimesMs.Remove(slot);
+        }
+    }
 
     /// <summary>Op 0x223: queue a type-0 timed alpha transition into a target surface slot.</summary>
     public void QueueSurfaceAlphaTransition(long commandKey, int targetSlot,
