@@ -441,15 +441,17 @@ bounded opcode gaps rather than missing game state:
 - `0x13a` registers one of 11 `(surface, atlas x/y, digit width/height)` styles, and `0x23b` expands a
   decimal value into retained per-digit objects with zero-pad/center/left/right layout flags. `DRAWCHP.BIN`
   contains eight style registrations and 22 numeric draws covering the visible turn/control/mana/level and
-  HP/SP/FS fields. Both opcodes are currently unimplemented, which precisely explains the blank values.
+  HP/SP/FS fields. Skipping both opcodes precisely explained the blank values.
 - `DRAWCHP.BIN` already reads and submits the unit and weapon strings to `0x204`, but its two preceding
-  `0x1a6` centering calls are unimplemented. Native `0x1a6` returns `strlen(CP932_bytes) >> 1`; skipping it
+  `0x1a6` centering calls were unimplemented. Native `0x1a6` returns `strlen(CP932_bytes) >> 1`; skipping it
   places the strings at x=257 on a 263-pixel scratch surface, so the existing compositor clips them.
 
 The exact native contracts and addresses live in `docs/engine-re.md`; opcode-source metadata is in
-`vm-map/opcodes.toml`. No runtime implementation was made in this investigation. The next field slice is
-therefore to implement the shared 11-style numeric renderer and the encoded-byte-length calculation, then
-recheck the same `DEBUGMAP` HUD before pursuing any state seeding.
+`vm-map/opcodes.toml`. The shared implementation is now landed in the VM/retained-graphics model: the style
+registry holds the 11 EngineCtx records, decimal glyphs become ordinary retained objects, and `0x1a6`
+measures the configured native encoding (CP932 for SYS4). Focused coverage plus the full 278-test engine
+suite, zero-warning Godot build, and threaded frontend selftest pass. The next field action is the manual
+visual recheck of the same `DEBUGMAP` HUD before pursuing any state seeding.
 
 ## Later Phase B breadth
 

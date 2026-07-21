@@ -24,6 +24,13 @@ public readonly record struct SurfaceTransitionState(long CommandKey, int Target
 public readonly record struct ColorTransitionState(long Current, long Target,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Active);
 
+/// <summary>One EngineCtx numeric-glyph style registered by opcode 0x13a.</summary>
+public readonly record struct NumericGlyphStyle(int SurfaceSlot, int AtlasX, int AtlasY,
+                                                int DigitWidth, int DigitHeight)
+{
+    public bool Registered => SurfaceSlot != 0;
+}
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
@@ -119,6 +126,7 @@ public sealed class GfxState
     // Populated lazily by the geometry SET ops and draw-texture. Op 0x215 queries this same native map and
     // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
     private readonly Dictionary<long, GfxObject> _objects = new();
+    private readonly NumericGlyphStyle[] _numericGlyphStyles = new NumericGlyphStyle[11];
 
     // Ops 0x229-0x22e address one embedded gfx-object record outside the ordinary object map. Its sampled
     // matrix is post-multiplied onto only the selected handle range during native composition. FIELD uses
@@ -623,6 +631,75 @@ public sealed class GfxState
         {
             var o = GetOrCreate(handle);
             o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
+        }
+    }
+
+    /// <summary>Op 0x13a: replace one of the native engine's eleven decimal-glyph atlas styles.</summary>
+    public bool RegisterNumericGlyphStyle(int styleIndex, int surfaceSlot, int atlasX, int atlasY,
+                                          int digitWidth, int digitHeight)
+    {
+        lock (_lock)
+        {
+            if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length) return false;
+            _numericGlyphStyles[styleIndex] =
+                new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight);
+            return true;
+        }
+    }
+
+    /// <summary>Op 0x23b: erase a destination handle range, split a signed 32-bit value into decimal
+    /// digits, and bind one retained object per displayed atlas cell. Returns false for an invalid or
+    /// unregistered style, matching the native handler's script-error path.</summary>
+    public bool DrawDecimalGlyphs(long baseHandle, int styleIndex, int value, int x, int y,
+                                  int digitCapacity, int flags)
+    {
+        lock (_lock)
+        {
+            if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length
+                || !_numericGlyphStyles[styleIndex].Registered) return false;
+
+            NumericGlyphStyle style = _numericGlyphStyles[styleIndex];
+            EraseRange(baseHandle, digitCapacity);
+
+            int remaining = value;
+            int handleOffset = 0;
+            int digitCount = 1;
+            for (int n = remaining / 10; n != 0; n /= 10) digitCount++;
+
+            for (int slot = digitCapacity - 1; slot >= 0; slot--)
+            {
+                int digit = remaining % 10;
+                int drawX;
+                bool draw;
+
+                if ((flags & 0x2) != 0)
+                {
+                    draw = slot == digitCapacity - 1 || remaining != 0;
+                    drawX = unchecked(x + style.DigitWidth * slot
+                        - (digitCapacity - digitCount) * style.DigitWidth / 2);
+                }
+                else if ((flags & 0x4) != 0)
+                {
+                    digitCount--;
+                    draw = slot == digitCapacity - 1 || remaining != 0;
+                    drawX = unchecked(x + style.DigitWidth * digitCount);
+                }
+                else
+                {
+                    draw = (flags & 0x1) != 0 || slot == digitCapacity - 1 || remaining != 0;
+                    drawX = unchecked(x + style.DigitWidth * slot);
+                }
+
+                if (draw)
+                {
+                    int srcX = unchecked(style.AtlasX + digit * style.DigitWidth);
+                    BindDraw(baseHandle + handleOffset, style.SurfaceSlot,
+                             srcX, style.AtlasY, style.DigitWidth, style.DigitHeight, drawX, y);
+                    handleOffset++;
+                }
+                remaining /= 10;
+            }
+            return true;
         }
     }
 

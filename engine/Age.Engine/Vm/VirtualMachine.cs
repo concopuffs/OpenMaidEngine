@@ -1,6 +1,7 @@
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using System.Text;
 namespace Age.Engine.Vm;
 
 /// <summary>A stable identity/snapshot of the exact script frame currently executing.</summary>
@@ -22,6 +23,7 @@ public sealed class VirtualMachine
     private readonly OpcodeTable _t;
     private readonly IHost _host;
     private readonly VmOptions _o;
+    private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
@@ -87,8 +89,12 @@ public sealed class VirtualMachine
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null)
-    { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
-      _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory(); }
+    {
+        _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
+        _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
+    }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
     /// Writes are copied here and applied by the VM thread before another opcode executes.</summary>
@@ -313,6 +319,12 @@ public sealed class VirtualMachine
             case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
             case T_LSTRPTR: WriteStringCell(Ga(_cur.Locals.SP, (int)op.Value), val); break;
         }
+    }
+
+    private int NativeStringByteLength(string value)
+    {
+        int nul = value.IndexOf('\0');
+        return _nativeStringEncoding.GetByteCount(nul < 0 ? value : value[..nul]);
     }
 
     private static VmAddress Ga(Dictionary<int, VmAddress> d, int k)
@@ -656,6 +668,9 @@ public sealed class VirtualMachine
             case "set-string":
                 if (IsStr(a[0]) || IsStr(a[1])) WriteStr(a[0], ReadStr(a[1]));
                 else Write(a[0], Read(a[1]));
+                return pc + 1;
+            case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
+                Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
                 return pc + 1;
             case "lookup-array":
                 LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]))); return pc + 1;
@@ -1347,6 +1362,34 @@ public sealed class VirtualMachine
                              (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
                 _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                                   (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return pc + 1;   // IHost seam (oracle log; Godot no-ops)
+            case "u0041F3A0":
+            case "register-numeric-glyph-style": // 0x13a: (style)(surface)(atlas x/y)(digit w/h)
+            {
+                int styleIndex = unchecked((int)Read(a[0]));
+                if (!Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
+                        unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
+                        unchecked((int)Read(a[4])), unchecked((int)Read(a[5]))))
+                {
+                    HaltReason ??= $"numeric-glyph-style-index-out-of-range:{styleIndex}";
+                    return HALT;
+                }
+                return pc + 1;
+            }
+            case "u00422460":
+            case "draw-decimal-glyphs": // 0x23b: retained decimal glyph draw
+            {
+                int styleIndex = unchecked((int)Read(a[1]));
+                if (!Gfx.DrawDecimalGlyphs(Read(a[0]), styleIndex, unchecked((int)Read(a[2])),
+                        unchecked((int)Read(a[3])), unchecked((int)Read(a[4])),
+                        unchecked((int)Read(a[5])), unchecked((int)Read(a[6]))))
+                {
+                    HaltReason ??= (uint)styleIndex >= 11
+                        ? $"numeric-glyph-style-index-out-of-range:{styleIndex}"
+                        : $"numeric-glyph-style-unregistered:{styleIndex}";
+                    return HALT;
+                }
+                return pc + 1;
+            }
             case "get-texture-size":   // 0x208 (slot) (out_w) (out_h)
             {
                 var (gw, gh) = _host.GetTextureSize((int)Read(a[0]));

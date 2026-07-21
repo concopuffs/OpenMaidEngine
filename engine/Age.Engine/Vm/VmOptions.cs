@@ -8,5 +8,8 @@ namespace Age.Engine.Vm;
 /// (Godot) and for the dialogue-coverage sweep that deliberately walks every page.</param>
 /// <param name="IgnoreExitRequests">Debug-only divergence: treat op 0x1 as a no-op so unreachable
 /// post-exit bytecode can be explored. Leave false for native-faithful execution.</param>
+/// <param name="NativeStringCodePage">Encoding used when an opcode measures the engine's byte-string
+/// representation. SYS4 defaults to CP932; another container frontend can select its own code page.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
-                               bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false);
+                               bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
+                               int NativeStringCodePage = 932);

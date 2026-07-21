@@ -2488,16 +2488,20 @@ the port:
   them for the field HUD's turn/control/mana/level/HP/SP/FS values.
 
 This path creates ordinary retained graphics objects, so the existing atlas decode and compositor are
-already the correct backend. The missing engine model is the 11 style records plus the two VM dispatches;
-it is not an immediate `GodotAdvHost.DrawTexture` raster operation.
+the correct backend; it is not an immediate `GodotAdvHost.DrawTexture` raster operation. The port now
+models all 11 EngineCtx style records in `GfxState` and implements both dispatches. Each `0x23b` call erases
+its full destination-handle capacity and then uses the ordinary
+`BindDraw` path for every displayed digit, preserving surface replacement, z-order, and compositor effects.
 
 The absent unit and weapon names are a separate layout-compute gap. `DRAWCHP.BIN` does populate both
 strings and calls `draw-string` at `0x9c6`/`0x9f5`, but first centers each one with opcode `0x1a6`.
 `op_0x1a6_half_byte_strlen@0x427020` resolves the NUL-terminated engine byte string and writes
 `strlen(bytes) >> 1`. The script multiplies that result by 21 and subtracts it from x=257 on a 263-pixel
 scratch surface. With the opcode skipped, x remains 257 and Godot correctly clips nearly all of the text.
-An implementation must preserve the original encoded byte count (or reproduce it with CP932 encoding),
-not use the .NET UTF-16 character count.
+The port reproduces the encoded byte count rather than using the .NET UTF-16 character count. The VM's
+native-string code page is configurable for other container frontends and defaults to SYS4's CP932; the
+calculation also stops at an embedded NUL before shifting. Focused tests cover CP932 mixed-width strings,
+all three numeric layout flags, zero padding, retained-object replacement, and invalid/unregistered styles.
 
 ---
 
