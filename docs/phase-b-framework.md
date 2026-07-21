@@ -112,8 +112,8 @@ that is one at context construction and cleared only when op `0x9` resets/reload
 SYSTEM4 calls `LOGO.BIN` and `OP.BIN` only while that flag is nonzero. The former stubbed-zero output
 explained the direct jump to TITLE. LOGO and OP then use the modal movie op
 `0x20f` with raw catalog movies `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`; existing `0x236` is the distinct
-non-modal, scene-local movie-to-surface path. The VM now models the initial-root flag and clears it at its
-existing op-`0x9` lifecycle boundary. Godot resolves a typed raw MPEG asset, reuses the asynchronous decoder
+non-modal, scene-local movie-to-surface path. The VM now models the initial-root flag and clears it at the
+op-`0x9` whole-stack root-reload boundary. Godot resolves a typed raw MPEG asset, reuses the asynchronous decoder
 and retained compositor, and parks the VM until EOF or mouse/Accept/Cancel input. Focused natural-boot tests
 prove `LOGO -> OP -> INIT -> TITLE` ordering and exact movie operands. MPEG audio remains explicitly deferred
 until the decoder abstraction has an engine-owned synchronized audio/volume contract.
@@ -123,6 +123,15 @@ until the decoder abstraction has an engine-owned synchronized audio/volume cont
 Replace the single-SC0000-root assumption with an application-owned session that runs SYSTEM4 as its root.
 SYSTEM4's computed `call-script` is the authoritative scene coordinator: child scenes return to that frame,
 while globals, the host, and intentional retained state remain owned by the same live VM session.
+
+**Root-reload boundary implemented (2026-07-20).** Ordinary op `0x2` child exits still return to their
+calling SYSTEM4 frame. Op `0x9` is the distinct native reset path: it discards the complete active script
+stack, clears scene-owned graphics/input/ADV state, cancels deferred SFX starts while preserving active
+audio, preserves global banks and process-owned host state, and starts raw script resource zero
+(`SYSTEM4.BIN`) at offset zero. The implementation propagates the boundary
+through nested calls without running any caller continuation and records the new root frame with
+`FrameCause.RootReload`. Native RE and the one intentional history-lifetime exception are documented in
+`docs/engine-re.md`; the history backlog remains preserved until its ownership is proven rather than guessed.
 
 Required responsibilities:
 
@@ -134,9 +143,97 @@ Required responsibilities:
 - Expose deterministic transition evidence: outgoing scene, reason/decision, incoming scene, and state
   summary suitable for tests.
 
-Completion evidence: SYSTEM4 reaches a computed child script in one VM, the child returns to SYSTEM4,
-selected globals and system-owned state survive, and script-owned boundary cleanup releases scene-local
-presentation state.
+Completion evidence now present: SYSTEM4 reaches computed child scripts in one VM; ordinary children return
+to SYSTEM4; op `0x9` performs a tested whole-stack reload of SYSTEM4; selected globals and process-owned state
+survive; and scene-owned presentation/input state is released. Manual validation of a natural gameplay
+route through the first `0x9` remains deferred: Himegari's readily accessible return-to-title choice belongs
+to the still-unimplemented frontend exit-request policy, while the other known natural paths require later
+gameplay, game over, or completion. Do not use TITLE's currently exposed post-`0x1` developer-menu
+fallthrough as evidence; native `0x1` is non-returning. See `docs/engine-re.md`.
+
+**Godot debug scene launcher (2026-07-20; implemented and manually validated).** The first version
+is deliberately narrower than arbitrary hot swapping:
+
+- Expose an F4-style Godot overlay only while `TITLE.BIN` is the persistent VM's active SYSTEM4 child.
+- Resolve the chosen `.BIN` through the existing SYS4 catalog, then ask the VM to return the current TITLE
+  child frame with the game-authored coordinator writes (`G[0]=1`, `G[0xaba5c]=-1`, `G[0x62ccf]=0`, and
+  selected packed id in `G[0x699]`) applied on the VM thread.
+- Let SYSTEM4 resume at `0x2b0` and execute its real entry wrapper and computed `call-script`; do not replace
+  the VM root or call the selected scene directly from Godot.
+- Disable switching while another scene is active. That scene must reach its own terminal cleanup and then
+  either return through SYSTEM4's post-child cleanup or execute its genuine op `0x9`. A separate clean
+  relaunch remains the escape hatch for a stuck/incomplete scene.
+
+The runtime now has a generic debug-only "return this exact active child frame with queued global writes"
+request, thread-safe frame-generation/stack reporting, and the distinct `DebugReturned` trace outcome. TITLE
+does not park in ADV op `0x72`: its visible menu continuously polls input and executes a 1 ms op-`0xc8` sleep
+at `TITLE@0xe5`. The request therefore targets the observed active frame generation and is consumed by the
+VM thread at its next completed opcode boundary, before another TITLE opcode can execute. `SignalInput` is
+used only if the target happens to be in a real ADV wait, avoiding a stale signal that could advance the
+selected child. Synthetic coordinator tests cover both an ADV wait and TITLE's sleep/poll shape, selected-
+child dispatch, ordinary SYSTEM4 continuation, stale/ineligible request rejection, and selected-child
+op-`0x9` whole-stack propagation.
+
+This launcher would provide the real visible TITLE→selected scene sequence and preserve the coordinator
+boundary, but it cannot manufacture valid late-game state. The current direct harness and opcode coverage
+suggest early ADV scenes and `DEBUG.BIN` are plausible targets; later scenarios, GAMECLEAR, battle/map, and
+profile-dependent scripts may still require progression data or missing opcodes. A startup-only/direct-scene
+selector is cheaper, but it is merely a UI for `--scene ... --boot` and provides no transition-lifecycle
+evidence. An unrestricted in-process switch would additionally require VM cancellation, task joining,
+movie/audio disposal, locator/trace regeneration, and an explicit global-state policy, so it is not a quick
+or trustworthy first version.
+
+**Menu population and selection contract.** The runtime SYS4 catalog—not `build/` inventory—is the
+source of truth. Himegari currently has 481 unique base-catalog `.BIN` records: 136 `SC####`, 164 `SP*`, 8
+`DEBUG*`, 29 initializer-named scripts, and 144 other named scripts. Each menu row keeps the packed resource
+id as its identity and carries display name, pack selector, raw index, archive, size, and category; names are
+labels rather than keys so future append-pack collisions remain representable. Population should enumerate
+base `Catalog.Files` plus every mounted append catalog, exclude placeholders/non-BIN records, and compute
+`packed_id = (pack_id << 24) | raw_index` without parsing all scripts up front. The selected script is decoded
+and validated only when Launch is pressed; an unsupported decode reports an error and leaves TITLE running.
+The currently mounted append pack contributes 39 additional `.BIN` records, so the shipped launcher smoke
+test sees 520 distinct packed script ids.
+
+The initial UI groups entries rather than implying every BIN is a standalone scene:
+
+- **Scenario:** `SC####.BIN`, naturally sorted by number.
+- **Secondary/event:** `SP*.BIN`, naturally sorted by name and suffix.
+- **Debug:** `DEBUG*.BIN`.
+- **Other/expert:** every remaining script; the separate **All** filter includes every category. Initializers,
+  callbacks, data routines, and modal UI scripts may require caller-owned state and may immediately return
+  or corrupt the live session.
+
+`SYSTEM4.BIN` and `TITLE.BIN` are not launchable in the first version; recursively dispatching either through
+SYSTEM4's child slot is not a scene test. Search is case-insensitive over name and hexadecimal/decimal packed
+id. The detail pane shows name, category, packed/raw id, archive, size, and the fixed warning that launch uses
+the current live global/profile state. Compatibility or opcode-gap badges are deferred until coverage logic
+has an engine-owned runtime API; the menu must not parse generated Markdown or call Python tooling.
+
+The implementation should leave one explicit extension point for future test sequences:
+`DebugLaunchPreset(label, packed_script_id, extra_global_writes, note)`. Catalog rows use only the four
+coordinator writes above; profile-authored presets may later add proven story/progression globals without
+turning the menu into a free-form state editor or save backend. Arbitrary PC/offset jumps are out of scope.
+
+**Implementation order.** (1) Add catalog script-entry enumeration with packed ids and unit coverage for
+base/append mounts, placeholders, duplicate names across packs, and category/sort/filter behavior. (2) Add a
+generic VM debug request targeted at an exact active frame generation; it applies an immutable set of global
+writes on the VM thread and returns that child at the next opcode boundary. Test SYSTEM4→TITLE→selected child,
+ordinary child return/cleanup continuation, op-`0x9` propagation, TITLE's sleep/poll loop, and stale/ineligible
+request rejection. (3) Add the Godot F4 overlay (`PopupPanel`, search/category controls, `ItemList`, detail
+pane, Launch/Cancel), consume all overlay input, and enable Launch only for the active `SYSTEM4 > TITLE`
+stack. (4) Add a Godot smoke test for catalog population and request wiring, then
+manually validate `TITLE -> DEBUG -> 0x9 -> SYSTEM4 -> TITLE` before expanding the selectable categories or
+adding presets.
+
+Steps 1–4 are complete. F4 opens the Godot `PopupPanel` only for the exact active
+`SYSTEM4.BIN > TITLE.BIN` stack; search, category filters, packed-id metadata, guarded Launch, and Cancel are
+live. `SYSTEM4.BIN` and `TITLE.BIN` remain visible but unlaunchable. While the panel is open, AGE gameplay
+input is not forwarded. Launch reparses the selected packed id before queuing any writes. The threaded Godot
+selftest constructs the catalog and panel and currently reports 520 unique packed scripts. Manual validation
+confirmed `TITLE -> F4 -> DEBUG.BIN`: its four scripted ADV pages at `0xc7`, `0x110`, `0x17b`, and `0x1ed`
+were presented, its terminal op `0x9` at `0x1fb` ran, and SYSTEM4 reconstructed the visible TITLE menu. No
+launcher/session-lifecycle discrepancy was observed. DEBUG-specific content oddities are not acceptance
+failures for this developer route and remain out of scope unless they reproduce in a normal game script.
 
 ## Stage B2 — Faithful full boot
 

@@ -17,14 +17,19 @@ public class MovieOpcodeTests
             (0x130, new[] { new Operand(3, 0x100) }),
             (0x9, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(root, table, new RecordingHost());
+        var reloadedRoot = ScriptAssembler.Assemble(table, "SYSTEM4", new List<(int, Operand[])>
+        {
+            (0x130, new[] { new Operand(3, 0x101) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(root, table, host,
+            provider: new MapProvider(new Dictionary<long, Script> { [0] = reloadedRoot }));
 
         vm.Run();
         Assert.Equal(1, vm.Globals[0x100]);
-
-        vm.Globals[0x100] = -1;
-        vm.Run();
-        Assert.Equal(0, vm.Globals[0x100]);
+        Assert.Equal(0, vm.Globals[0x101]);
+        Assert.Equal(1, host.SceneContextResets);
     }
 
     [Fact]

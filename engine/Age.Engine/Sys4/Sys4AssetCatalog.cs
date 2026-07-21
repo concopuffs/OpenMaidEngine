@@ -16,6 +16,9 @@ public sealed record AssetEntry(
     bool IsPlaceholder = false,
     int PackId = 0);
 
+/// <summary>A real catalog entry paired with the packed resource id AGE uses at runtime.</summary>
+public sealed record PackedAssetEntry(long PackedId, AssetEntry Asset);
+
 /// <summary>Runtime parser and lookup views for a base S4IC SYS4INI catalog and its S4AC append mounts.</summary>
 public sealed class Sys4AssetCatalog
 {
@@ -171,6 +174,25 @@ public sealed class Sys4AssetCatalog
     public IReadOnlyList<string> ScriptNames => Files
         .Where(f => f.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
         .Select(f => f.Name.ToUpperInvariant()).ToArray();
+
+    /// <summary>Enumerate every script in native packed-id order, including mounted append packs.
+    /// Placeholder slots and non-script assets are excluded without collapsing raw indices.</summary>
+    public IReadOnlyList<PackedAssetEntry> EnumerateScripts()
+    {
+        var scripts = new List<PackedAssetEntry>();
+        AddScripts(this, scripts);
+        foreach (var append in _appendPacks.OrderBy(pair => pair.Key).Select(pair => pair.Value))
+            AddScripts(append, scripts);
+        return scripts;
+    }
+
+    private static void AddScripts(Sys4AssetCatalog catalog, List<PackedAssetEntry> scripts)
+    {
+        long selector = (long)catalog.PackId << 24;
+        foreach (var entry in catalog.Files)
+            if (entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
+                scripts.Add(new PackedAssetEntry(selector | (uint)entry.RawIndex, entry));
+    }
 
     private static Dictionary<string, (int Start, int End)> BuildSceneRanges(IReadOnlyList<AssetEntry> files)
     {

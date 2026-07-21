@@ -253,10 +253,55 @@ in one VM; Godot `--boot` remains only for an explicit direct-scene diagnostic s
 deterministic first-process-run behavior, not a profile/save decision. `SYSTEM4@0x29a` calls op `0x130` and
 executes `LOGO.BIN@0x2a4` then `OP.BIN@0x2a7` when its result is nonzero. Native
 `op_0x130_get_initial_root_run@0x4295b0` returns `EngineCtx+0x54ff0`; context construction initializes that
-field to one, while `op_0x9_handler` is its only later writer and clears it before resetting engine state and
-reloading root script id zero. The port now owns the same flag in the persistent VM: it begins at one,
-`0x130` writes it, and the existing op-`0x9` lifecycle boundary clears it. It is not a boot seed or profile
-value. Full native whole-stack root reload remains part of the broader scene-coordinator work.
+field to one, while `op_0x9_reset_scene_and_reload_root` is its only later writer and clears it before
+resetting engine state and reloading root script id zero. The port now owns the same flag in the persistent
+VM: it begins at one,
+`0x130` writes it, and op `0x9` clears it as part of the whole-stack root reload described below. It is not
+a boot seed or profile value.
+
+**Whole-stack root reload (`0x9`, 2026-07-20).** Native
+`op_0x9_reset_scene_and_reload_root@0x418f50` is not an ordinary child-script return. It clears the
+initial-root flag, calls `script_frame_dispose@0x40e610` across all 40 interpreter slots, cancels timed and
+input-callback state, invokes `scene_context_init_reset@0x40b3b0`, resets hotspot/input services, and finally
+loads raw script resource zero with `script_frame_load_resource(..., 0)`. Raw SYS4INI index zero is
+`SYSTEM4.BIN` in Himegari.
+
+The scene reset owns interpreter run state, ADV input/skip/auto state, retained gfx objects and command
+queues, text/render buffers, and—on the normal fresh-session path—the 1000 ordinary surface/movie slots.
+It does not clear the global VM bank or engine configuration. The port now mirrors that boundary: an `0x9`
+request propagates through every nested `call-script` frame without executing any caller continuation,
+clears scene-owned VM/Godot presentation and input state, cancels deferred SFX starts without unloading or
+stopping active channels/BGM, preserves global/external-global banks and process-owned configuration/caches,
+then begins raw script zero at offset zero in the same VM session.
+The retained ADV history backlog remains intact for now because its lifetime across this reset has not yet
+been proven; only recording suppression is reset. Focused tests cover a three-frame unwind and raw-zero
+resolution to `SYSTEM4.BIN`.
+
+**Frontend exit request is not a root reload (`0x1`, 2026-07-20).** Native
+`op_0x1_throw_exit_request@0x4162e0` constructs reason value one and raises the engine's non-returning C++
+control exception (`DAT_005a9710`). Its only two corpus sites establish the intent: TITLE executes it after
+the fifth main-menu action's sound and delay, while SYSTEM4 executes it after reporting an invalid execution
+mode. The Windows/frontend catch policy—full exit versus returning to title—is outside this opcode handler
+and is not implemented in the Godot frontend yet.
+
+TITLE happens to contain a developer menu immediately after its `0x1`, including a `call-script` to
+`DEBUG.BIN`; that code is unreachable in the native flow because the handler never returns. The port still
+treats unknown `0x1` as a fall-through stub, so selecting the fifth TITLE action would expose that menu by
+accident. This is a known discrepancy, not a legitimate route for validating `0x9`. End-to-end visual
+validation of the native `SYSTEM4 -> TITLE -> child -> 0x9 -> SYSTEM4 -> TITLE` history therefore remains
+deferred until the frontend exit/return-to-title boundary or a natural game-over/completion route exists.
+
+The unreachable developer menu nevertheless records the game's intended debug-scene handoff. Its two ADV
+viewer choices write `G[0]=1`, `G[0xaba5c]=-1`, `G[0x62ccf]=0`, and a raw script id into `G[0x699]`, then
+return TITLE with local result one. TITLE's outer loop performs its normal ADV input/skip exit pair and
+returns to SYSTEM4. SYSTEM4 resumes at `0x2b0`; the nonzero `G[0xaba5c]` suppresses SCJUMP remapping, so the
+coordinator keeps the requested `G[0x699]`, performs its normal scene-entry setup, and calls that script at
+`0x477`. Other developer choices directly call utility scripts such as `DEBUG.BIN` from TITLE instead.
+
+This also confirms three distinct cleanup owners around a debug launch: the selected script's own terminal
+subroutines, SYSTEM4's ordinary post-child cleanup (including all ten SFX channels and retained scene
+objects), and op `0x9`'s whole-stack scene reset when that opcode is actually executed. An arbitrary VM
+script replacement would bypass the first two and is not equivalent to native scene dispatch.
 
 Both child scripts create/draw 800x600 surface 42 and call op `0x20f`; their resource ids are universal raw
 SYS4INI indexes `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`. `ED.BIN` is the only other corpus user, with

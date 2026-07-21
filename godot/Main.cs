@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
+using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
@@ -45,6 +47,9 @@ public partial class Main : Godot.Control
     private readonly int[] _sfxGenerations = new int[10];
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
+    private Sys4ScriptProvider? _scripts;
+    private DebugSceneLauncher? _debugSceneLauncher;
+    private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
@@ -200,6 +205,7 @@ public partial class Main : Godot.Control
         Sys4ScriptProvider? scripts = null;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
+        _scripts = scripts;
         bool directSceneHarness = !_selftest
             && !scene.Equals("SYSTEM4", System.StringComparison.OrdinalIgnoreCase);
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
@@ -218,6 +224,13 @@ public partial class Main : Godot.Control
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host, new VmOptions(MaxSteps: 20_000_000), provider, sink);
+        if (scripts != null)
+        {
+            _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
+            _debugSceneLauncher = new DebugSceneLauncher();
+            _debugSceneLauncher.LaunchRequested += LaunchDebugScene;
+            AddChild(_debugSceneLauncher);
+        }
         // SYSTEM4.BIN defines these nine shared ADV text layouts before dispatching any scene. The
         // single-scene harness starts after that prefix, so carry forward its exact script-owned state
         // alongside the inherited SO000/SO001 state below. Full Phase-B SYSTEM4 replay will replace this
@@ -359,6 +372,21 @@ public partial class Main : Godot.Control
             _locatorHud.Text = _locator.CurrentDisplay + " · copied";
             return;
         }
+        if (e is InputEventKey debugKey && debugKey.Pressed && !debugKey.Echo && debugKey.Keycode == Key.F4)
+        {
+            ToggleDebugSceneLauncher();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (_debugSceneLauncher?.Visible == true)
+        {
+            if (e is InputEventKey escape && escape.Pressed && !escape.Echo && escape.Keycode == Key.Escape)
+            {
+                _debugSceneLauncher.Hide();
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
         if (e is InputEventMouseMotion motion)
         {
             var p = ToNativeScreen(motion.Position);
@@ -433,6 +461,82 @@ public partial class Main : Godot.Control
             _vm.UpdateInputCallbackState(index, false);
             _vm.QueueInputCallback(10); // common release callback registered by HISTORY/HIDEWIN
         }
+    }
+
+    private void ToggleDebugSceneLauncher()
+    {
+        if (_debugSceneLauncher == null) return;
+        if (_debugSceneLauncher.Visible)
+        {
+            _debugSceneLauncher.Hide();
+            return;
+        }
+        if (!TryGetTitleDebugFrame(out var frame, out string reason))
+        {
+            _status.Text = reason;
+            GD.Print($"[debug-launcher] unavailable: {reason}");
+            return;
+        }
+        _debugSceneLauncher.Open(_debugSceneEntries, string.Join(" > ", frame.CallStack));
+    }
+
+    private void LaunchDebugScene(DebugSceneEntry entry)
+    {
+        if (_debugSceneLauncher == null || _scripts == null) return;
+        if (!TryGetTitleDebugFrame(out var frame, out string reason))
+        {
+            _debugSceneLauncher.SetStatus(reason);
+            return;
+        }
+        if (!entry.Launchable || _scripts.GetById(entry.PackedId) == null)
+        {
+            _debugSceneLauncher.SetStatus("The selected packed script could not be parsed; no state was changed.");
+            return;
+        }
+
+        var coordinatorWrites = new Dictionary<int, long>
+        {
+            [0] = 1,
+            [0xaba5c] = -1,
+            [0x62ccf] = 0,
+            [0x699] = entry.PackedId,
+        };
+        if (!_vm.TryRequestDebugFrameReturn(frame.FrameId, coordinatorWrites))
+        {
+            _debugSceneLauncher.SetStatus("TITLE changed frames before launch; reopen the launcher and try again.");
+            return;
+        }
+
+        _timeline?.Event("debug-scene-launch-request", new()
+        {
+            ["script"] = entry.Name,
+            ["packed_id"] = entry.PackedId,
+        });
+        GD.Print($"[debug-launcher] SYSTEM4 dispatch requested: {entry.Name} (0x{entry.PackedId:x8})");
+        _debugSceneLauncher.Hide();
+        // ADV waits need an explicit wake; TITLE's actual menu is a 1 ms sleep/poll loop and will consume
+        // the request at its next opcode boundary without leaving a stale input signal for the child scene.
+        if (_host.IsWaiting) _host.SignalInput();
+    }
+
+    private bool TryGetTitleDebugFrame(out DebugFrameSnapshot frame, out string reason)
+    {
+        frame = _vm.DebugFrame!;
+        if (_done || frame == null)
+        {
+            reason = "Available only while TITLE is the active SYSTEM4 child.";
+            return false;
+        }
+        if (frame.CallStack.Count != 2
+            || !frame.CallStack[0].Equals("SYSTEM4.BIN", System.StringComparison.OrdinalIgnoreCase)
+            || !frame.CallStack[1].Equals("TITLE.BIN", System.StringComparison.OrdinalIgnoreCase)
+            || !frame.CurrentScript.Equals("TITLE.BIN", System.StringComparison.OrdinalIgnoreCase))
+        {
+            reason = "Refused: the active stack is not SYSTEM4 > TITLE.";
+            return false;
+        }
+        reason = "";
+        return true;
     }
 
     private (int X, int Y) ToNativeScreen(Vector2 position)
@@ -973,6 +1077,14 @@ public partial class Main : Godot.Control
         GetTree().CreateTimer(realDelaySeconds).Timeout += StartIfCurrent;
     }
 
+    public void CancelScheduledSoundEffectStarts()
+    {
+        // Native scene_context_init_reset calls sfx_clear_scheduled_starts. Generation invalidation
+        // cancels the timer callbacks without stopping active sounds or unloading their channel streams.
+        for (int channel = 0; channel < _sfxGenerations.Length; channel++)
+            _sfxGenerations[channel]++;
+    }
+
     public void ReleaseSoundEffect(int channel)
     {
         if ((uint)channel >= (uint)_sfx.Length) return;
@@ -1068,8 +1180,19 @@ public partial class Main : Godot.Control
         var actual = _host.Captured.ConvertAll(c => c.Offset);
         bool ok = actual.Count == expected.Count;
         for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected[i];
-        if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling)");
-        else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}");
+        var debugEntries = DebugSceneCatalog.Build(Sys4AssetCatalog.Load(Paths.Sys4Ini));
+        bool launcherOk = debugEntries.Any(entry => entry.Name == "DEBUG.BIN" && entry.Launchable)
+                          && debugEntries.Select(entry => entry.PackedId).Distinct().Count() == debugEntries.Count;
+        var launcherSmoke = new DebugSceneLauncher();
+        AddChild(launcherSmoke);
+        launcherSmoke.Open(debugEntries, "SYSTEM4.BIN > TITLE.BIN");
+        launcherSmoke.Hide();
+        launcherSmoke.QueueFree();
+        ok &= launcherOk;
+        if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
+                         $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts)");
+        else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
+                      $"debug-launcher={launcherOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

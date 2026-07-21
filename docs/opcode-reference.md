@@ -198,6 +198,11 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 
 ## control
 
+### 0x1 `throw-exit-request` (throw-exit-request, argc 0)
+- **summary:** () - raise the engine's non-returning exit/fatal-abort control exception with reason value 1. TITLE uses it for the fifth main-menu action; SYSTEM4 uses it after reporting an invalid execution mode.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1_throw_exit_request@0x4162e0 constructs local value 1 and calls __CxxThrowException_8 with type descriptor DAT_005a9710; the handler is non-returning. Corpus has exactly two sites: TITLE@0x393 after the fifth menu action's sound/sleep, and SYSTEM4@0x5b9 after printing 'invalid execution mode'. TITLE bytecode following 0x1 builds a developer debug menu and can only be reached when a port incorrectly treats 0x1 as a fall-through stub. The frontend catch/prompt policy remains a separate unimplemented boundary.
+
 ### 0x3 `call-script` (call-script, argc 1)
 - **summary:** load & call another SYS4 script by id; id = RAW index into the SYS4INI file table (asset-index). Pushes a script frame; returns to caller when the callee ends.
 - **grounding:** source=investigation, confidence=high
@@ -222,11 +227,11 @@ This also names the whole call graph statically (build/callscript-names.json).
 
 
 ### 0x9 `exit-script` (exit-script, argc 0)
-- **summary:** () - terminate the active script lifecycle and return to root script id 0. Before the native engine resets/reloads the root, it clears the initial-root-run flag queried by op 0x130 so LOGO/OP are not replayed.
+- **summary:** () - discard the complete active script stack, reset scene-owned engine services, and load raw script resource 0 as the new root. The global VM banks and process-owned configuration survive; the initial-root-run flag queried by op 0x130 is cleared so LOGO/OP are not replayed.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x9_handler@0x418f50 stores zero to EngineCtx+0x54ff0, calls scene_context_init_reset, and loads root script resource id 0. Corpus sites are terminal scene/control exits rather than ordinary local returns.
+- **evidence:** Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, optionally releases AutoFreeTex surfaces, then calls script_frame_load_resource(...,0). The scene reset clears interpreter/ADV/input/retained-gfx state and normally releases the 1000 surface/movie slots; it does not clear the VM global bank or engine configuration. Corpus sites are terminal scene/control exits rather than ordinary local returns.
 
-The port retains its earlier frame/session-boundary representation of root return, but now performs the proven process-lifecycle side effect by clearing its VM-owned initial-root-run flag. A faithful whole-stack root reload remains part of the broader persistent scene-coordinator work, not the startup-movie slice.
+Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, cancels deferred SFX starts while preserving active/process-owned audio, preserves globals/external globals and process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset.
 
 ### 0x7b `coroutine-save-yield-handlers` (u0041ADB0, argc 2)
 - **summary:** (handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index); its generic handler prologue records the 5-dword instruction length. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator).
@@ -293,7 +298,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 ### 0x130 `get-initial-root-run` (get-initial-root-run, argc 1)
 - **summary:** (out) - write the engine's initial-root-run flag. It is initialized to 1 when the AGE context is constructed and cleared by op 0x9 before that opcode resets state and reloads root script id 0. SYSTEM4 uses the value to call LOGO.BIN and OP.BIN only on the process's initial root run.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x130_get_initial_root_run@0x4295b0 copies EngineCtx+0x54ff0 to operand 1. FUN_00413860 initializes +0x54ff0 to 1 at 0x413cc7/0x413d15; op_0x9_handler@0x418f50 is its only later writer and clears it before scene_context_init_reset plus script_frame_load_resource(...,0). Corpus: sole site SYSTEM4@0x29a branches to LOGO.BIN then OP.BIN only when the returned value is nonzero.
+- **evidence:** Ghidra /v2: op_0x130_get_initial_root_run@0x4295b0 copies EngineCtx+0x54ff0 to operand 1. FUN_00413860 initializes +0x54ff0 to 1 at 0x413cc7/0x413d15; op_0x9_reset_scene_and_reload_root@0x418f50 is its only later writer and clears it before scene_context_init_reset plus script_frame_load_resource(...,0). Corpus: sole site SYSTEM4@0x29a branches to LOGO.BIN then OP.BIN only when the returned value is nonzero.
 
 Implemented as process-lifecycle state owned by the persistent VM: it begins at one and op 0x9 clears it. It is not a script global, save/profile value, command-line seed, or script-name special case.
 
@@ -795,10 +800,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **evidence:** SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'script-entry 0x259'; VM treats it as no-op (default stub) across all 279 CLEAN A0 scenes
 
 ## unknown
-
-### 0x1 `u004149C0` (u004149C0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x2 `exit` (exit, argc 0)
 - **summary:** —

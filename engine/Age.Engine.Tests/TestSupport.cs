@@ -43,6 +43,7 @@ internal class RecordingHost : IHost
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
+    public int SceneContextResets;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -88,6 +89,7 @@ internal class RecordingHost : IHost
     public void ClearCursorResource() => CursorClearCount++;
     public virtual void Sleep(long duration) => SleptDurations.Add(duration);
     public virtual void FrameYield() { }
+    public void ResetSceneContext() => SceneContextResets++;
     public bool IsMessageSkipActive => MessageSkip;
     public void SetMessageSkipActive(bool active)
     {

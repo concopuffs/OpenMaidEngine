@@ -162,6 +162,16 @@ render texture ops (no GPU context) — run windowed for real scenes. User args 
   `--scene SC0000 --boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 
+**Godot debug scene launcher:** press **F4** while the natural boot is showing TITLE. TITLE's visible menu is
+a live 1 ms sleep/input-poll loop rather than an ADV `wait-for-input`; the launcher identifies that exact
+active child frame and returns it cooperatively at the next completed opcode boundary. The overlay enumerates
+all base and mounted-append `.BIN` records by packed id, with All/SC/SP/Debug/Other filters, name or exact
+hexadecimal/decimal id search, and archive/raw-id details. `SYSTEM4.BIN` and `TITLE.BIN` are intentionally
+unlaunchable. Launch is accepted only for the exact `SYSTEM4.BIN > TITLE.BIN` wait stack; it returns TITLE
+with the coordinator globals queued on the VM thread, then lets SYSTEM4 perform its normal computed child
+call. F4 outside TITLE prints an unavailable reason and changes no state. Cancel or Escape closes the panel.
+The launcher does not seed story/profile state, jump to byte offsets, or force-switch an active child scene.
+
 **Godot page locator:** every normal run recreates `build/page-map-<SCENE>.jsonl`, adding one record per
 `wait-for-input` with the run-relative page, page-start location, canonical wait script/offset, last
 show-text instruction and string offsets, text, and nested call stack. Use `--page-map <jsonl>` to override

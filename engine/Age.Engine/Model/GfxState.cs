@@ -237,6 +237,24 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Native scene_context_init_reset ownership boundary used by opcode 0x9: discard
+    /// retained objects, command/query state, surfaces, transitions, render-target selection, and the
+    /// scene animation clock while leaving VM globals and decoded host assets outside this model.</summary>
+    public void ResetSceneContext()
+    {
+        lock (_lock)
+        {
+            _objects.Clear();
+            _fieldTable.Clear();
+            _surfaces.Clear();
+            _surfaceTransitions.Clear();
+            CurrentObject = 0;
+            CurrentRenderTargetSlot = -1;
+            AnimClockDurationTicks = 0;
+            AnimClockGeneration++;
+        }
+    }
+
     private readonly object _lock = new();
 
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----

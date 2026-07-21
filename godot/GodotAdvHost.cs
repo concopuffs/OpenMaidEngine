@@ -491,6 +491,44 @@ public sealed class GodotAdvHost : IHost
         _frameSignal.Set();
     }
 
+    public void ResetSceneContext()
+    {
+        // scene_context_init_reset releases ordinary surface/movie bindings but keeps decoded asset
+        // caches and process-owned audio/configuration available to the reloaded SYSTEM4 root.
+        ReleaseSurfaceRange(0, 1000);
+        lock (_textLock)
+        {
+            _surfaceText.Clear();
+            _surfaceResources.Clear();
+            _historyText.Clear();
+            _advText = "";
+            _advTextX = 100;
+            _advTextY = 47;
+            _advTextForceComplete = false;
+            _waitIndicators.Clear();
+            _activeWaitLayout = 0;
+            _waitIndicatorEnabled = false;
+        }
+        while (_gate.Wait(0)) { }
+        _inputCallbackSignal.WaitOne(0);
+        _messageSkipActive = false;
+        _queuedSkippedVoice = null;
+        System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
+        _advPagePresentationSuspended = false;
+        _modalMovieCancelled = false;
+        _modalMovieWaiting = false;
+        _foregroundGfx = null;
+        IsWaiting = false;
+        IsTransitionWaiting = false;
+        IsSleeping = false;
+        IsTextRevealing = false;
+        System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _main.CallDeferred("CancelScheduledSoundEffectStarts");
+        _main.CallDeferred("ClearPage");
+        _timeline?.State("scene-context-reset", new());
+    }
+
     // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
     public void PulseFrame() => _frameSignal.Set();
 

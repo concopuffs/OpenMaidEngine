@@ -101,7 +101,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
     │                                       script provider, AGF/LZSS and Windows CUR decoders, and resource facade
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
-    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine)
+    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine),
+                                            including the TITLE-only F4 debug scene launcher
 ```
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by normal Godot runs and map runtime ADV

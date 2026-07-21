@@ -2,7 +2,7 @@ using Age.Engine.Model;
 namespace Age.Engine.Diagnostics;
 
 public enum TraceEventKind { Step, FrameEnter, FrameExit, CallScript, Stub, Halt }
-public enum FrameCause { TopScene, CallScript }
+public enum FrameCause { TopScene, CallScript, RootReload }
 
 /// <summary>An engine diagnostic fact. A <c>readonly struct</c> with a Kind discriminator and a shared
 /// field set — no per-event heap allocation. Only the fields relevant to a Kind are populated; the

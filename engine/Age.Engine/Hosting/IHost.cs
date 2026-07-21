@@ -65,6 +65,9 @@ public interface IHost
     void ClearCursorResource() { }
     void Sleep(long duration);
     void FrameYield();
+    // Native op 0x9 resets scene-owned host services before reloading root script resource 0.
+    // Global banks, engine configuration, decoded-asset caches, and persistent profile state survive.
+    void ResetSceneContext() { }
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
     // hosts default to normal playback; the Godot host supplies the live interactive values.
     void SetMessageSkipActive(bool active) { }

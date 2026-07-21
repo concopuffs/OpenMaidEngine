@@ -1,4 +1,5 @@
 using Age.Engine.Sys4;
+using Age.Engine.Diagnostics;
 using Xunit;
 
 public class Sys4ScriptProviderTests
@@ -45,5 +46,45 @@ public class Sys4ScriptProviderTests
         Assert.Same(patched, provider.RequireByName("field.bin"));
         Assert.Null(provider.GetByName("../FIELD.BIN"));
         Assert.Equal(481, provider.ScriptNames.Count);
+    }
+
+    [Fact]
+    public void DebugCatalogPreservesPackedIdentityAcrossBaseAndAppendPacks()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var entries = DebugSceneCatalog.Build(catalog);
+
+        Assert.Equal(catalog.EnumerateScripts().Count, entries.Count);
+        Assert.Equal(481, entries.Count(entry => entry.PackId == 0));
+        Assert.Contains(entries, entry => entry.Name == "$1$SC1260.BIN"
+                                          && entry.PackedId == (0x01000000L | (uint)entry.RawIndex)
+                                          && entry.Kind == DebugScriptKind.Scenario);
+        Assert.All(entries, entry => Assert.Same(
+            catalog.ResolvePacked(entry.PackedId),
+            catalog.AppendPacks.GetValueOrDefault(entry.PackId, catalog).ResolveRaw(entry.RawIndex)));
+        Assert.Equal(entries.Count, entries.Select(entry => entry.PackedId).Distinct().Count());
+    }
+
+    [Fact]
+    public void DebugCatalogFiltersByProfileCategoryNameAndPackedId()
+    {
+        var entries = DebugSceneCatalog.Build(Sys4AssetCatalog.Load(Paths.Sys4Ini));
+
+        var scenarios = DebugSceneCatalog.Filter(entries, DebugScriptFilter.Scenario, "");
+        Assert.NotEmpty(scenarios);
+        Assert.All(scenarios, entry => Assert.Equal(DebugScriptKind.Scenario, entry.Kind));
+        Assert.Contains(scenarios, entry => entry.Name.Equals("SC0000.BIN", StringComparison.OrdinalIgnoreCase));
+
+        var debug = DebugSceneCatalog.Filter(entries, DebugScriptFilter.Debug, "DEBUG.BIN");
+        var exact = Assert.Single(debug);
+        Assert.Equal("DEBUG.BIN", exact.Name);
+        Assert.True(exact.Launchable);
+        Assert.Equal(exact, Assert.Single(DebugSceneCatalog.Filter(entries, DebugScriptFilter.All,
+            $"0x{exact.PackedId:x}")));
+        Assert.Equal(exact, Assert.Single(DebugSceneCatalog.Filter(entries, DebugScriptFilter.All,
+            exact.PackedId.ToString())));
+
+        Assert.False(entries.Single(entry => entry.Name == "SYSTEM4.BIN").Launchable);
+        Assert.False(entries.Single(entry => entry.Name == "TITLE.BIN").Launchable);
     }
 }

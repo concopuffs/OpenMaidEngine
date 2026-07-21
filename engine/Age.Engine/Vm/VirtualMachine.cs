@@ -3,12 +3,16 @@ using Age.Engine.Hosting;
 using Age.Engine.Model;
 namespace Age.Engine.Vm;
 
+/// <summary>A stable identity/snapshot of the exact script frame currently executing.</summary>
+public sealed record DebugFrameSnapshot(long FrameId, string CurrentScript, IReadOnlyList<string> CallStack);
+
 public sealed class VirtualMachine
 {
     private const long NoJump = 0xFFFFFFFF;
     private const int HALT = int.MinValue;
     private const int FRAME_RETURN = int.MinValue + 1;
     private const int HOTSPOT_RETURN = int.MinValue + 2;
+    private const int ROOT_RELOAD = int.MinValue + 3;
     private const int SceneEntryCoroutineGate = 0xaba5c;
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
@@ -24,6 +28,12 @@ public sealed class VirtualMachine
     private int _depth;
     private readonly ITraceSink _sink;
     private readonly object _interactiveLock = new();
+    private readonly object _debugControlLock = new();
+    private readonly List<string> _activeFrameNames = new();
+    private ExecFrame? _debugActiveFrame;
+    private long _debugActiveFrameId;
+    private long _debugNextFrameId;
+    private DebugFrameReturnRequest? _debugFrameReturnRequest;
     private ExecFrame? _interactiveFrame;
     private ExecFrame? _rawInputFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
@@ -59,11 +69,39 @@ public sealed class VirtualMachine
     }
     public AdvTextHistory TextHistory { get; }
 
+    /// <summary>The currently executing recursive script frame and stack, or null outside VM execution.</summary>
+    public DebugFrameSnapshot? DebugFrame
+    {
+        get
+        {
+            lock (_debugControlLock)
+                return _debugActiveFrame == null
+                    ? null
+                    : new DebugFrameSnapshot(_debugActiveFrameId, _debugActiveFrame.Script.Name,
+                                             _activeFrameNames.ToArray());
+        }
+    }
+
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null)
     { _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
       _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory(); }
+
+    /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
+    /// Writes are copied here and applied by the VM thread before another opcode executes.</summary>
+    public bool TryRequestDebugFrameReturn(long frameId, IReadOnlyDictionary<int, long> globalWrites)
+    {
+        ArgumentNullException.ThrowIfNull(globalWrites);
+        lock (_debugControlLock)
+        {
+            if (_debugActiveFrame == null || _debugActiveFrameId != frameId
+                || _debugFrameReturnRequest != null) return false;
+            _debugFrameReturnRequest = new DebugFrameReturnRequest(
+                _debugActiveFrame, new Dictionary<int, long>(globalWrites));
+            return true;
+        }
+    }
 
     /// <summary>Update the native 800x600 cursor coordinate without advancing the current ADV page.</summary>
     public void UpdatePointer(int x, int y)
@@ -315,7 +353,9 @@ public sealed class VirtualMachine
             ? ReadStr(operand)
             : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    private enum FrameOutcome { Returned, Halted, RanOff }
+    private sealed class RootReloadRequestedException : Exception { }
+    private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
+    private enum FrameOutcome { Returned, DebugReturned, RootReload, Halted, RanOff }
 
     public void Run(int entryOffset = 0)
     {
@@ -324,12 +364,63 @@ public sealed class VirtualMachine
         if (entryOffset == 0 && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
             Globals[SceneEntryCoroutineGate] = 1;
 
-        var top = new ExecFrame(_s, _s.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0);
-        var outcome = RunFrame(top, FrameCause.TopScene);
-        if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
-        else if (outcome == FrameOutcome.Returned) HaltReason ??= "exit";
-        // Halted: HaltReason already set by the halting op.
+        Script root = _s;
+        int rootEntry = root.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
+        FrameCause cause = FrameCause.TopScene;
+        while (true)
+        {
+            var outcome = RunFrame(new ExecFrame(root, rootEntry), cause);
+            if (outcome == FrameOutcome.RootReload)
+            {
+                // Native 0x9 performs the scene reset before attempting the resource-0 load. Keep
+                // that ordering even when a diagnostic provider cannot resolve the root script.
+                ResetSceneContextForRootReload();
+                var reloaded = _provider?.GetById(0);
+                if (reloaded == null)
+                {
+                    HaltReason ??= "root-reload-unresolved:0x0";
+                    break;
+                }
+                root = reloaded;
+                rootEntry = root.IndexByOffset.TryGetValue(0, out int ri) ? ri : 0;
+                cause = FrameCause.RootReload;
+                continue;
+            }
+            if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
+            else if (outcome is FrameOutcome.Returned or FrameOutcome.DebugReturned) HaltReason ??= "exit";
+            // Halted: HaltReason already set by the halting op.
+            break;
+        }
         _sink.Emit(TraceEvent.Halt(HaltReason ?? "unknown", Steps));
+    }
+
+    private void ResetSceneContextForRootReload()
+    {
+        Gfx.ResetSceneContext();
+        _valueSwitchTargets.Clear();
+        lock (_interactiveLock)
+        {
+            _interactiveFrame = null;
+            _rawInputFrame = null;
+            _mouseButtonState = 0;
+            _mouseWheelDelta = 0;
+            _heldInputCallbackMask = 0;
+            _queuedInputCallbackMask = 0;
+        }
+        lock (_debugControlLock)
+        {
+            _debugActiveFrame = null;
+            _debugActiveFrameId = 0;
+            _debugFrameReturnRequest = null;
+        }
+        _autoMessageEnabled = false;
+        _autoVoicePending = false;
+        _messageSkipEnabled = false;
+        _messageSkipServiceActive = false;
+        _advTextStyle = AdvTextStyle.Default;
+        TextHistory.SetRecordingEnabled(true);
+        _host.SetMessageSkipActive(false);
+        _host.ResetSceneContext();
     }
 
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
@@ -342,6 +433,16 @@ public sealed class VirtualMachine
             previousRawInputFrame = _rawInputFrame;
         }
         var prev = _cur; _cur = frame; _depth++;
+        ExecFrame? previousDebugActiveFrame;
+        long previousDebugActiveFrameId;
+        lock (_debugControlLock)
+        {
+            previousDebugActiveFrame = _debugActiveFrame;
+            previousDebugActiveFrameId = _debugActiveFrameId;
+            _debugActiveFrame = frame;
+            _debugActiveFrameId = ++_debugNextFrameId;
+            _activeFrameNames.Add(frame.Script.Name);
+        }
         bool hostContextEntered = false;
         try
         {
@@ -350,22 +451,35 @@ public sealed class VirtualMachine
             _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
             var outcome = FrameOutcome.RanOff;
             int pc = frame.Pc;
-            while (pc >= 0 && pc < frame.Script.Instructions.Count)
+            try
             {
-                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
-                Steps++;
-                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
-                int next = Step(frame.Script.Instructions[pc], pc);
-                _host.FrameYield();
-                if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
-                if (next == HALT) { outcome = FrameOutcome.Halted; break; }
-                pc = next;
+                while (pc >= 0 && pc < frame.Script.Instructions.Count)
+                {
+                    if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
+                    Steps++;
+                    if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
+                    int next = Step(frame.Script.Instructions[pc], pc);
+                    _host.FrameYield();
+                    if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
+                    if (next == ROOT_RELOAD) { outcome = FrameOutcome.RootReload; break; }
+                    if (next == HALT) { outcome = FrameOutcome.Halted; break; }
+                    if (TryConsumeDebugFrameReturn(frame)) { outcome = FrameOutcome.DebugReturned; break; }
+                    pc = next;
+                }
             }
+            catch (RootReloadRequestedException) { outcome = FrameOutcome.RootReload; }
             _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
             return outcome;
         }
         finally
         {
+            lock (_debugControlLock)
+            {
+                if (ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) _debugFrameReturnRequest = null;
+                if (_activeFrameNames.Count > 0) _activeFrameNames.RemoveAt(_activeFrameNames.Count - 1);
+                _debugActiveFrame = previousDebugActiveFrame;
+                _debugActiveFrameId = previousDebugActiveFrameId;
+            }
             lock (_interactiveLock)
             {
                 if (cause == FrameCause.CallScript)
@@ -386,6 +500,20 @@ public sealed class VirtualMachine
         }
     }
 
+    private bool TryConsumeDebugFrameReturn(ExecFrame frame)
+    {
+        if (Volatile.Read(ref _debugFrameReturnRequest) is not { } pending
+            || !ReferenceEquals(pending.Frame, frame)) return false;
+        lock (_debugControlLock)
+        {
+            if (!ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) return false;
+            foreach (var (address, value) in _debugFrameReturnRequest.GlobalWrites)
+                Globals[address] = value;
+            _debugFrameReturnRequest = null;
+            return true;
+        }
+    }
+
     private bool ServiceHotspotCallback()
     {
         int target;
@@ -403,6 +531,7 @@ public sealed class VirtualMachine
                 if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
                 int next = Step(_cur.Script.Instructions[pc], pc);
                 _host.FrameYield();
+                if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
                 if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
                 if (next == HALT) break;
                 pc = next;
@@ -593,11 +722,10 @@ public sealed class VirtualMachine
             }
             case "exit": return FRAME_RETURN;
             case "exit-script":
-                // Native op 0x9 clears the process-initial root flag before returning control to
-                // the root-script loader. Root reload itself remains represented by the port's
-                // existing frame/session boundary; retaining the flag here prevents LOGO/OP replay.
+                // Native op 0x9 clears the process-initial flag, disposes every active script frame,
+                // resets scene-owned services, and loads raw script resource 0 as the new root.
                 _initialRootRun = false;
-                return FRAME_RETURN;
+                return ROOT_RELOAD;
             case "call-script":
             {
                 long id = a.Count > 0 ? Read(a[0]) : 0;
@@ -614,6 +742,7 @@ public sealed class VirtualMachine
                 var entry = child.IndexByOffset.TryGetValue(0, out var ci) ? ci : 0;
                 var outcome = RunFrame(new ExecFrame(child, entry), FrameCause.CallScript, id);
                 if (outcome == FrameOutcome.Halted) return HALT;   // propagate whole-VM halt up
+                if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD; // discard every caller frame
                 return pc + 1;                                      // Returned / RanOff: resume caller
             }
             case "show-text":
