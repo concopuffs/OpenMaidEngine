@@ -2186,6 +2186,25 @@ unchanged.
 
 ---
 
+### Startup string predicate and unit-data block copy — `0x194` / `0x1b0` (2026-07-21)
+
+The natural Game Start capture reached two previously unnamed effectful handlers. They are independent
+contracts even though both appeared in the same startup fallback inventory.
+
+`op_0x194_string_equals@0x426e20` resolves operands 2 and 3 as SYS4 strings, passes their data pointers and
+explicit byte lengths to the native comparison helper, and writes `comparison == 0` to integer operand 1.
+It is therefore an equality predicate, not a string assignment. The release corpus uses the result in
+conditional branches; `GAMESTART@0x134c` compares `INPUTNAME` with `"?"`, while INIT2 also compares
+`INPUTNAME` with an empty string during default-name initialization.
+
+`op_0x1b0_copy_dwords@0x427060` fetches operand 3 as a cell count, resolves operands 1 and 2 as source and
+destination pointers, and calls `memcpy(destination, source, count * 4)`. The capture reached it three times
+inside `UNITECH`/`CALCCC`, immediately after opcode `0x63`. The copy itself is proven; the pointer-producing
+semantics of `0x63` remain unresolved, so the pair should be implemented only after that companion handler
+is understood.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.

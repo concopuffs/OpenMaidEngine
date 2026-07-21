@@ -259,6 +259,24 @@ means step 16, not step 1), making argument 10 about 160 ms and argument 30 abou
 voice ids were reaching `play-voice` but failing the port's SC-section-only lookup because ROOM owns no SC
 section. Voice resolution now uses the same scene-first, type-checked raw fallback as frontend textures.
 
+**Natural Game Start diagnostic gate (2026-07-21; captured).** The opt-in `-StartupDiagnostics` route kept
+the persistent `SYSTEM4` root and native exit semantics and added no seeds, boot prefix, timing changes, or
+input automation. A user-driven cold boot traversed the complete initialization family, `LOGO`/`LOGO.AGF`,
+`OP`/`OP.AGF`, `INIT`, `TITLE`, `GAMESTART`, its nested unit-data setup, and finally raw script `0x22` /
+`SC0000`. It stopped at the first stable wait, `SC0000@0x83c`, whose preceding text instruction is
+`SC0000@0x834` (`――かつて、戦いがあった。`). The 97,730-event timeline contains 96,908 opcode steps and
+129 distinct opcodes; the Godot log has no warnings/errors, both movies start and stop normally, no audio
+resource is unresolved, and no VM halt occurs.
+
+The 137 fallback events are not a single boot blocker. Most are declaration/statement/line markers already
+proven safe, or deliberately deferred profile/read-text operations (`0x1a2`, `0x1a3`, `0x1cb`). The reached
+effectful unknowns divide into SYSTEM4 layout setup and unit-data initialization. Native follow-up identifies
+`0x194` as a string-equality predicate reached in `INIT2` and `GAMESTART`, and `0x1b0` as a dword-block copy
+paired with still-unresolved pointer-preparation opcode `0x63` in `UNITECH`/`CALCCC`. This makes `0x194` the
+smallest directly boot-relevant implementation slice; the `0x63`/`0x1b0` pair is the larger subsequent
+backend-data slice. Closing Godot currently releases a parked ADV wait before process teardown, so the page
+map may contain one trailing shutdown-only page; the final timeline `input-wait` is the authoritative stop.
+
 ## Stage B2 — Faithful full boot
 
 Replace `--boot`'s diagnostic seeding and separately injected inherited surfaces with normal boot execution.

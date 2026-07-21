@@ -141,6 +141,19 @@ the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. The local `run-go
 make that route explicit with `--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes. On VM termination the console prints
 the exact halt reason and step count before the generic on-screen `-end-` marker. User args (after `--`):
+
+The local launchers also accept **`-StartupDiagnostics`** for a native-faithful cold boot through TITLE,
+Game Start, and SC0000. The switch overrides `run-godot.cmd`'s usual `-NativeDebugMenu` convenience for
+that run and adds no `--boot`, seeds, timing changes, screenshots, or input injection. It writes four
+disposable files under `build/validation/title-newgame/`: `godot.log` (Godot warnings/errors),
+`timeline.jsonl` (ordered VM/host/compositor evidence), `histogram.txt` (executed opcode and hot-call-site
+counts), and `page-map.jsonl` (authoritative wait/text locations and call stack). After Godot closes, the
+PowerShell launcher reports each artifact's byte size and warns if any was not flushed. Run
+`run-godot.cmd -StartupDiagnostics`, choose Game Start normally, stop at the first stable SC0000 input
+wait, optionally press F3, and close the window normally. Until shutdown cancellation is separated from
+ADV input release, normal window close can append one trailing shutdown-only record to `page-map.jsonl`;
+use the last `input-wait` event in `timeline.jsonl` as the authoritative manual stop coordinate.
+
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
@@ -163,8 +176,9 @@ the exact halt reason and step count before the generic on-screen `-end-` marker
   created automatically.
 - `--transition-click-ms <n>` — diagnostic-only input injector: after a foreground transition has been active for `n` virtual milliseconds, send one click through the real input lifecycle. The click completes/consumes the transition and does not advance a stable page. Use with `--timeline-log`, `--gfx-log`, and windowed `--shot-sequence`; omit for normal play.
 - `--timeline-log <jsonl>` — diagnostic-only synchronized event stream for a real Godot run. Records every
-  executed script byte offset/opcode, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,
-  `halted`), BGM events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
+  executed script byte offset/opcode, script-frame entry/exit with depth/cause/outcome, resolved call-script
+  ids/names, unknown-fallback `stub` events, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,
+  `halted`), audio events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
   `--scene SC0000 --boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 

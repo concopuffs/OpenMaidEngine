@@ -18,14 +18,30 @@ public sealed class GodotTraceSink : ITraceSink
     public readonly ConcurrentQueue<long> CallScripts = new();
     public void Emit(in TraceEvent e)
     {
-        if (e.Kind == TraceEventKind.CallScript) CallScripts.Enqueue(e.Id);
+        if (e.Kind == TraceEventKind.CallScript)
+        {
+            CallScripts.Enqueue(e.Id);
+            _timeline?.Event("call-script", new()
+            {
+                ["id"] = $"0x{e.Id:x}", ["resolved_name"] = e.Name,
+            });
+        }
         if (e.Kind == TraceEventKind.FrameEnter && e.Name != null)
         {
             _scripts.Push(e.Name);
             PublishCallStack();
+            _timeline?.Event("frame-enter", new()
+            {
+                ["name"] = e.Name, ["depth"] = e.Depth,
+                ["cause"] = e.Cause.ToString(), ["call_id"] = $"0x{e.Id:x}",
+            });
         }
         else if (e.Kind == TraceEventKind.FrameExit && _scripts.Count > 0)
         {
+            _timeline?.Event("frame-exit", new()
+            {
+                ["name"] = e.Name, ["depth"] = e.Depth, ["outcome"] = e.Text,
+            });
             _scripts.Pop();
             PublishCallStack();
         }
@@ -35,6 +51,11 @@ public sealed class GodotTraceSink : ITraceSink
             _locator.Step(script, e.Ins.Offset);
             _timeline?.Step(script, e.Ins.Offset, e.Opcode, e.Depth);
         }
+        else if (e.Kind == TraceEventKind.Stub)
+            _timeline?.Event("stub", new()
+            {
+                ["stub_opcode"] = $"0x{e.Opcode:x}", ["pc_index"] = e.Pc,
+            });
         else if (e.Kind == TraceEventKind.Halt)
             _timeline?.State("halted", new() { ["reason"] = e.Text, ["steps"] = e.Steps });
     }

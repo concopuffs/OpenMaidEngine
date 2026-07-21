@@ -206,6 +206,16 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
 
+### 0x194 `string-equals` (string-equals, argc 3)
+- **summary:** (out)(left)(right) - compare two complete SYS4 strings and write 1 when equal, otherwise 0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c.
+
+### 0x1b0 `copy-dwords` (copy-dwords, argc 3)
+- **summary:** (source)(destination)(count) - copy count consecutive 32-bit cells from source to destination.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves pointer operands 1 and 2, and calls memcpy(destination, source, count*4). The natural Game Start diagnostic reached it three times in UNITECH/CALCCC initialization, paired with unresolved pointer-preparation opcode 0x63.
+
 ## control
 
 ### 0x1 `throw-exit-request` (throw-exit-request, argc 0)
@@ -1056,10 +1066,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x194 `u00425480` (u00425480, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x195 `u00425580` (u00425580, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1121,10 +1127,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1af `u004245C0` (u004245C0, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b0 `u0041A510` (u0041A510, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

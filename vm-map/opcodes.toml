@@ -3109,33 +3109,33 @@ observed_types = ["string", "g-str", "l-str", "l-ptr", "l-str-ptr"]
 
 [[opcode]]
 op = 0x194
-label = "u00425480"
+label = "string-equals"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00425480"
-category = "unknown"
-summary = ""
+name = "string-equals"
+category = "compute"
+summary = "(out)(left)(right) - compare two complete SYS4 strings and write 1 when equal, otherwise 0."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "left"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "right"
 observed_types = ["string", "l-str", "l-str-ptr"]
 
 [[opcode]]
@@ -3793,33 +3793,33 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1b0
-label = "u0041A510"
+label = "copy-dwords"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041A510"
-category = "unknown"
-summary = ""
+name = "copy-dwords"
+category = "compute"
+summary = "(source)(destination)(count) - copy count consecutive 32-bit cells from source to destination."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves pointer operands 1 and 2, and calls memcpy(destination, source, count*4). The natural Game Start diagnostic reached it three times in UNITECH/CALCCC initialization, paired with unresolved pointer-preparation opcode 0x63."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "source"
 observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "destination"
 observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "count"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
