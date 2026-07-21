@@ -434,6 +434,23 @@ that value during synchronous movie-graph initialization and retains it per movi
 slots return -1; unavailable timing metadata warns and returns -1 rather than exposing native's undefined
 failure output.
 
+The next visual comparison found all field-HUD numbers absent while their labels, bars, and source artwork
+were present, plus apparently blank unit/weapon text. Native and script-side tracing resolves this into two
+bounded opcode gaps rather than missing game state:
+
+- `0x13a` registers one of 11 `(surface, atlas x/y, digit width/height)` styles, and `0x23b` expands a
+  decimal value into retained per-digit objects with zero-pad/center/left/right layout flags. `DRAWCHP.BIN`
+  contains eight style registrations and 22 numeric draws covering the visible turn/control/mana/level and
+  HP/SP/FS fields. Both opcodes are currently unimplemented, which precisely explains the blank values.
+- `DRAWCHP.BIN` already reads and submits the unit and weapon strings to `0x204`, but its two preceding
+  `0x1a6` centering calls are unimplemented. Native `0x1a6` returns `strlen(CP932_bytes) >> 1`; skipping it
+  places the strings at x=257 on a 263-pixel scratch surface, so the existing compositor clips them.
+
+The exact native contracts and addresses live in `docs/engine-re.md`; opcode-source metadata is in
+`vm-map/opcodes.toml`. No runtime implementation was made in this investigation. The next field slice is
+therefore to implement the shared 11-style numeric renderer and the encoded-byte-length calculation, then
+recheck the same `DEBUGMAP` HUD before pursuing any state seeding.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:

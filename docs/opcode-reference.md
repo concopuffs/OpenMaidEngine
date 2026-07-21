@@ -237,6 +237,13 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c. The C# VM implements ordinal equality through the shared string resolver, covering literal, global, local, global-string-pointer, and local-string-pointer operands; the traced natural-boot regression proves the reached GAMESTART call no longer falls back.
 
+### 0x1a6 `half-byte-string-length` (halve-strlen, argc 2)
+- **summary:** Write half the resolved string's byte length, using integer truncation.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a6_half_byte_strlen@0x427020 resolves operand 2, scans to NUL, and vm_operand_write(1, strlen_bytes >> 1). DRAWCHP sites 0x9b3/0x9e2 multiply the result by 21 and subtract it from x=257 before draw-string.
+
+Native applies strlen to the NUL-terminated engine byte string and shifts the byte count right by one. DRAWCHP uses this Shift-JIS-oriented width proxy to center unit and weapon names before rasterizing them into a scratch surface.
+
 ### 0x1b0 `copy-dwords` (copy-dwords, argc 3)
 - **summary:** (source)(destination)(count) - copy count consecutive 32-bit cells from source to destination.
 - **grounding:** source=investigation, confidence=high
@@ -411,6 +418,14 @@ The handler uses an alpha step of 1 and timer interval=argument when argument <=
 - **summary:** (out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
+
+### 0x13a `register-numeric-glyph-style` (u0041F3A0, argc 6)
+- **summary:** Register one of 11 decimal-glyph atlas styles as (surface slot, source x/y, digit width/height).
+- **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x23b
+- **evidence:** Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to the selected five-dword record at EngineCtx+0x55180 after enforcing style_index<11. Corpus: 74 sites in 24 scripts; DRAWCHP has eight registrations immediately before its stylized HUD-number draws.
+
+The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error.
 
 ### 0x1f6 `clear-retained-gfx-objects` (clear-retained-gfx-objects, argc 0)
 - **summary:** Clear the complete retained gfx-object registry while preserving allocated surface resources. Subsequent object queries return absent until draw/geometry operations recreate records.
@@ -649,6 +664,14 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **summary:** (handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint.
+
+### 0x23b `draw-decimal-glyphs` (u00422460, argc 7)
+- **summary:** Draw an integer as decimal glyph objects from a style registered by opcode 0x13a.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x13a
+- **evidence:** Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy.
+
+First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. Invalid or unregistered style indices raise the engine's script error.
 
 ### 0x23d `release-transient-surfaces` (release-transient-surfaces, argc 0)
 - **summary:** Stop movie bindings and release transient gfx surface slots 42 through 999 inclusive, preserving system-owned slots 0 through 41.
@@ -1075,10 +1098,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x13a `u0041F3A0` (u0041F3A0, argc 6)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x13f `check-bit` (check-bit, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -1140,10 +1159,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1a5 `set-font` (set-font, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x1a6 `halve-strlen` (halve-strlen, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
@@ -1216,10 +1231,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x23a `u00422420` (u00422420, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23b `u00422460` (u00422460, argc 7)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

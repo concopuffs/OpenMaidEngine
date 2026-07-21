@@ -2814,43 +2814,44 @@ argc = 6
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041F3A0"
-category = "unknown"
-summary = ""
+name = "register-numeric-glyph-style"
+category = "draw"
+summary = "Register one of 11 decimal-glyph atlas styles as (surface slot, source x/y, digit width/height)."
+details = "The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to the selected five-dword record at EngineCtx+0x55180 after enforcing style_index<11. Corpus: 74 sites in 24 scripts; DRAWCHP has eight registrations immediately before its stylized HUD-number draws."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "style_index"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface_slot"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "atlas_x"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "atlas_y"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "digit_width"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "digit_height"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -3559,23 +3560,24 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "halve-strlen"
-category = "unknown"
-summary = ""
+name = "half-byte-string-length"
+category = "compute"
+summary = "Write half the resolved string's byte length, using integer truncation."
+details = "Native applies strlen to the NUL-terminated engine byte string and shifts the byte count right by one. DRAWCHP uses this Shift-JIS-oriented width proxy to center unit and weapon names before rasterizing them into a scratch surface."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a6_half_byte_strlen@0x427020 resolves operand 2, scans to NUL, and vm_operand_write(1, strlen_bytes >> 1). DRAWCHP sites 0x9b3/0x9e2 multiply the result by 21 and subtract it from x=257 before draw-string."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "string"
 observed_types = ["l-str", "l-str-ptr"]
 
 [[opcode]]
@@ -6299,48 +6301,49 @@ argc = 7
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422460"
-category = "unknown"
-summary = ""
+name = "draw-decimal-glyphs"
+category = "draw"
+summary = "Draw an integer as decimal glyph objects from a style registered by opcode 0x13a."
+details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. Invalid or unregistered style indices raise the engine's script error."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x13a]
+evidence = "Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "base_handle"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "style_index"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "value"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "destination_x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "destination_y"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "digit_capacity"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "flags"
 observed_types = ["imm"]
 
 [[opcode]]
