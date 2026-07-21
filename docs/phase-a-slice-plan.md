@@ -1244,6 +1244,17 @@ the existing test bootstrap still finds root script fixtures through `Paths.Scri
 and changing that unrelated bootstrap was outside this movie slice. Final validation: engine **132/132**,
 Godot build with zero warnings, threaded `SELFTEST OK`, and opcode-map lint clean.
 
+**Pre-roll decode-warning follow-up (2026-07-21).** SC0000 could print
+`AGF decode failed CHAPTER.AGF: expected an ACGF image` immediately before successful MPEG playback.
+This was a port-side compositor race, not corrupt media or bad catalog resolution: op `0x236` exposed the
+movie's `.AGF` resource binding while the VFS read/DirectShow graph setup was still synchronous, and the
+first-frame resolver fell through to the still-image AGF decoder. Movie surfaces are now registered before
+the VFS read, remain blank until their first dynamic frame, and the VM publishes the movie resource binding
+only after synchronous host setup returns. The same pending-frame guard also covers modal movies. A focused
+regression locks the blank-during-setup boundary; validation is **271/271** engine tests, a zero-warning Godot
+build, and threaded `SELFTEST OK`. The headless screenshot harness did not terminate at its requested page;
+the subsequent live SC0000 recheck passed with normal playback and no spurious AGF warning.
+
 ### Phase A — SC0000 textbox/control-strip one-shot blend correction DONE (2026-07-11)
 
 The lower white panel noted after movie publication and the white-outline controls had one shared cause,

@@ -38,6 +38,7 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public System.Action? OnPlayMovie;
     public long? MovieStopTimeMs;
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<int> ClearedRenderTargets = new();
@@ -151,6 +152,7 @@ internal class RecordingHost : IHost
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+        OnPlayMovie?.Invoke();
         return MovieStopTimeMs;
     }
     public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)

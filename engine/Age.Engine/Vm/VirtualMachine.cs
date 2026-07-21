@@ -1422,10 +1422,13 @@ public sealed class VirtualMachine
                     Gfx.RemapObjectSurface(movieHandle, surfaceSlot, 0);
                     surfaceSlot = 0;
                 }
+                // Graph construction is synchronous. Keep the existing created surface blank during that
+                // boundary; publishing the movie resource first would let a concurrent compositor mistake
+                // the MPEG payload's .AGF name for a still image before the host registers/decodes it.
+                long? stopTimeMs = _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
                 // The native CMovieToTexture renderer replaces the pixels of the already-created surface.
                 // Retain the same resource binding so the compositor resolves live movie frames for its objects.
                 Gfx.SetSurface(surfaceSlot, resourceId, 0);
-                long? stopTimeMs = _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
                 Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs);
                 return pc + 1; // native cmd size 9 resumes at the next instruction; playback is asynchronous
             }

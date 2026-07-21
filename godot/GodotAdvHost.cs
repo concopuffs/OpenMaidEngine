@@ -762,8 +762,14 @@ public sealed class GodotAdvHost : IHost
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveResIdTexture(long resId)
     {
         lock (_imageLock)
+        {
             if (_movieFrames.TryGetValue(resId, out var movie))
                 return (movie.Image, movie.Name, movie.RawIndex, true);
+            // Movie payloads use the same .AGF extension as still images. While DirectShow is opening
+            // the graph (or before its first sample arrives), keep the already-created surface blank
+            // instead of falling through to AgfDecoder and misclassifying the MPEG program stream.
+            if (_movieBySurface.Values.Contains(resId)) return null;
+        }
         var asset = _res.ResolveRawTexture(resId);
         var image = asset != null ? Decode(asset) : null;
         return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
@@ -825,16 +831,18 @@ public sealed class GodotAdvHost : IHost
                             long syncMask, bool modal, out long? stopTimeMs)
     {
         stopTimeMs = null;
+        // Publish the movie identity before the potentially long VFS read and DirectShow graph setup.
+        // The compositor can therefore distinguish a legitimate blank pre-roll surface from a still AGF.
+        ReleaseSurface(surfaceSlot);
+        lock (_imageLock)
+        {
+            _movieBySurface[surfaceSlot] = resourceId;
+            _completedMovies.Remove(resourceId);
+        }
+        _slotDims[surfaceSlot] = (800, 600); // SC0000 creates this native-sized surface immediately beforehand.
         try
         {
             var movie = _res.ReadMovie(asset);
-            ReleaseSurface(surfaceSlot);
-            lock (_imageLock)
-            {
-                _movieBySurface[surfaceSlot] = resourceId;
-                _completedMovies.Remove(resourceId);
-            }
-            _slotDims[surfaceSlot] = (800, 600); // SC0000 creates this native-sized surface immediately beforehand.
             _timeline?.Event("movie-start", new()
             {
                 ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
@@ -844,6 +852,14 @@ public sealed class GodotAdvHost : IHost
         }
         catch (System.Exception e)
         {
+            lock (_imageLock)
+            {
+                if (_movieBySurface.TryGetValue(surfaceSlot, out long registered) && registered == resourceId)
+                    _movieBySurface.Remove(surfaceSlot);
+                _movieFrames.Remove(resourceId);
+                _completedMovies.Remove(resourceId);
+            }
+            _slotDims.Remove(surfaceSlot);
             Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
         }

@@ -101,6 +101,33 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void PlayMovieKeepsCreatedSurfaceBlankDuringSynchronousHostSetup()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MOVIE-PREROLL", new List<(int, Operand[])>
+        {
+            (0x1f8, new[] { new Operand(0, 5), new Operand(0, 800), new Operand(0, 600), new Operand(0, 0) }),
+            (0x1fb, new[]
+            {
+                new Operand(0, 1), new Operand(0, 5), new Operand(0, 0), new Operand(0, 0),
+                new Operand(0, 800), new Operand(0, 600), new Operand(0, 0), new Operand(0, 0),
+            }),
+            (0x236, new[] { new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2), new Operand(0, 0) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        VirtualMachine? vm = null;
+        long resourceDuringSetup = -1;
+        host.OnPlayMovie = () => resourceDuringSetup = vm!.Gfx.SnapshotVisibleObjects().Single().SurfaceResId;
+        vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(0, resourceDuringSetup);
+        Assert.Equal(0x33, vm.Gfx.SnapshotVisibleObjects().Single().SurfaceResId);
+    }
+
+    [Fact]
     public void QueryMovieStopTimeReturnsTheValueRetainedByPlayMovie()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
