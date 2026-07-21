@@ -298,6 +298,17 @@ returns to SYSTEM4. SYSTEM4 resumes at `0x2b0`; the nonzero `G[0xaba5c]` suppres
 coordinator keeps the requested `G[0x699]`, performs its normal scene-entry setup, and calls that script at
 `0x477`. Other developer choices directly call utility scripts such as `DEBUG.BIN` from TITLE instead.
 
+The complete post-`0x1` menu accounts for all eight base-catalog `DEBUG*.BIN` records; no other fixed-id
+caller was found in the corpus. `ADVデバッグ` writes packed id `0x325f` (`DEBUGADV.BIN`) to `G[0x699]`, and
+`ADVデバッグ（PG用）` similarly writes `0x3294` (`DEBUGADV2.BIN`); these are the two coordinator-return paths.
+The remaining choices are direct nested TITLE calls: `迷宮` calls `0x338c`/`DEBUGMAP.BIN`; both the base and
+PG-oriented dungeon/base choices use `0x338d`/`DEBUGMAP2.BIN` with different surrounding mode writes;
+`迷宮（敵確認用）` calls `0x3390`/`DEBUGMAP3.BIN`; `戦闘` calls `0x338e`/`DEBUGBTL.BIN` then `BTL.BIN`;
+`戦闘エフェクト` calls `DEBUGBTL.BIN`, `0x338f`/`DEBUGANIME.BIN`, then `BTL.BIN`; and `システムテスト`
+calls `0x3391`/`DEBUG.BIN`. Thus every authored path is behind the same non-returning exit request in this
+retail executable. The generic SYSTEM4 computed call can technically accept any packed id, but no separate
+normal-game writer of these eight fixed ids appears in the static corpus.
+
 This also confirms three distinct cleanup owners around a debug launch: the selected script's own terminal
 subroutines, SYSTEM4's ordinary post-child cleanup (including all ten SFX channels and retained scene
 objects), and op `0x9`'s whole-stack scene reset when that opcode is actually executed. An arbitrary VM
