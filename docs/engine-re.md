@@ -2503,6 +2503,34 @@ native-string code page is configurable for other container frontends and defaul
 calculation also stops at an embedded NUL before shifting. Focused tests cover CP932 mixed-width strings,
 all three numeric layout flags, zero padding, retained-object replacement, and invalid/unregistered styles.
 
+### BUNKI popup sizing and placement — opcodes `0x2c5` and `0x195` (2026-07-21)
+
+Field confirmation popups and TITLE's shipped developer menu share `BUNKI.BIN`; neither uses the ordinary
+VN text-layout overlay. BUNKI creates surface 200, draws its strings into that surface through opcode
+`0x204`, decorates it with the common menu frame, and binds the completed surface as a retained object.
+
+`op_0x2c5_byte_strlen@0x42a690` takes `(destination, string)`, resolves operand 2 as an engine byte string,
+scans to its NUL terminator, and writes the raw byte count. This differs from a Unicode character count but
+matches BUNKI's later conversion: it finds the longest choice/title byte length, adds four bytes of padding,
+multiplies by 21, and divides by two to obtain the full-width glyph-space estimate used for panel width and
+the shared left edge of the primary labels.
+
+The port currently skips `0x2c5`, leaving BUNKI's maximum-length local at zero. For FIELD's
+`待機`/`帰還`/`キャンセル` popup, the panel still hits the same 240-pixel minimum but the computed label
+origin moves from surface x=67 to x=120, a 53-pixel right shift which makes `キャンセル` touch/spill beyond
+the frame. TITLE's longer developer choices should expand the surface beyond 240 pixels; the skipped result
+instead keeps the minimum panel and makes the overflow much larger.
+
+The corrected native/port comparison also exposes an independent 30-pixel vertical error. Dispatch slot
+`ctx[0x26c93+0x195]` resolves to `op_0x195_string_not_equals@0x426f20`, the inverse of sibling opcode
+`0x194`: it compares two complete engine strings and writes one when their byte ranges differ. BUNKI invokes
+it three times to test whether optional title global string `0x7da` is nonempty. The skipped opcode does not
+write zero for an empty title. At the final test (`BUNKI@0x905`), destination local `0x99` still contains a
+nonzero graphics handle from frame construction, so the following branch falsely draws/reserves the title
+row and advances the choice y cursor by `0x1e` even though the empty title has no visible glyphs. Implementing
+`0x195` therefore removes the exact one-row downward shift; this is not a Godot font-baseline discrepancy or
+an inherited VN cursor indent.
+
 ---
 
 ## Native walls backlog (targets for this loop)

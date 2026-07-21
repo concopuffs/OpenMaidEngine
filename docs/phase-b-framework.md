@@ -453,6 +453,18 @@ measures the configured native encoding (CP932 for SYS4). Focused coverage plus 
 suite, zero-warning Godot build, and threaded frontend selftest pass. The next field action is the manual
 visual recheck of the same `DEBUGMAP` HUD before pursuing any state seeding.
 
+That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
+discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat
+popup and TITLE's shipped developer menu. Both routes use `BUNKI.BIN`'s temporary-surface renderer rather
+than the ordinary VN overlay. Native RE identifies the missing input as opcode `0x2c5`, raw byte-string
+length: BUNKI uses it to size the panel and compute a common primary-label x origin. With the opcode skipped,
+the destination stays zero; the FIELD popup shifts 53 pixels right and the longer developer menu incorrectly
+remains at its 240-pixel minimum. Corrected native/port screenshots reveal a separate exact one-row vertical
+shift: BUNKI uses missing opcode `0x195` (`string-not-equals`) to test its optional title against the empty
+string. Because a skipped opcode leaves its destination untouched, the final test reuses a nonzero graphics
+handle and falsely advances the choice cursor by 30 pixels. The next bounded implementation is therefore the
+shared CP932 byte-length opcode `0x2c5` plus inverse string comparison `0x195`, followed by a visual recheck.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:

@@ -3142,33 +3142,34 @@ observed_types = ["string", "l-str", "l-str-ptr"]
 
 [[opcode]]
 op = 0x195
-label = "u00425580"
+label = "string-not-equals"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00425580"
-category = "unknown"
-summary = ""
+name = "string-not-equals"
+category = "compute"
+summary = "(out)(left)(right) - compare two complete SYS4 strings and write 1 when different, otherwise 0."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: dispatch slot ctx[0x26c93+0x195] is op_0x195_string_not_equals@0x426f20. It resolves operands 2 and 3 as engine strings, compares their complete byte ranges through the same worker as sibling op 0x194, and writes compare_result!=0 to operand 1. Corpus: 17 sites; 15 immediately branch on the result. BUNKI uses three comparisons against the empty string for its optional title row."
+details = "This is the logical inverse of op 0x194 string-equals. Skipping it is stateful: the destination is not cleared. At BUNKI@0x905, local 0x99 still contains a nonzero graphics handle, so the missing write falsely reserves a 30-pixel title row and shifts every choice down."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "left"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "right"
 observed_types = ["string", "g-str"]
 
 [[opcode]]
@@ -6771,23 +6772,24 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "strlen"
-category = "unknown"
-summary = ""
+name = "byte-string-length"
+category = "compute"
+summary = "Write the resolved NUL-terminated engine string's raw byte length."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x2c5_byte_strlen@0x42a690 resolves operand 2, scans byte-by-byte through the terminating NUL, and writes the byte count to operand 1. Corpus: 23 sites in 10 scripts. BUNKI uses two sites to size its temporary menu surface and horizontally place all primary option strings."
+details = "This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all option/title byte lengths, adds four bytes of padding, and converts the result to pixels; skipping the opcode leaves its local maximum at zero, forcing the minimum-width menu and shifting every primary label right."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "string"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
 
 [[opcode]]

@@ -237,6 +237,13 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c. The C# VM implements ordinal equality through the shared string resolver, covering literal, global, local, global-string-pointer, and local-string-pointer operands; the traced natural-boot regression proves the reached GAMESTART call no longer falls back.
 
+### 0x195 `string-not-equals` (string-not-equals, argc 3)
+- **summary:** (out)(left)(right) - compare two complete SYS4 strings and write 1 when different, otherwise 0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: dispatch slot ctx[0x26c93+0x195] is op_0x195_string_not_equals@0x426f20. It resolves operands 2 and 3 as engine strings, compares their complete byte ranges through the same worker as sibling op 0x194, and writes compare_result!=0 to operand 1. Corpus: 17 sites; 15 immediately branch on the result. BUNKI uses three comparisons against the empty string for its optional title row.
+
+This is the logical inverse of op 0x194 string-equals. Skipping it is stateful: the destination is not cleared. At BUNKI@0x905, local 0x99 still contains a nonzero graphics handle, so the missing write falsely reserves a 30-pixel title row and shifts every choice down.
+
 ### 0x1a6 `half-byte-string-length` (halve-strlen, argc 2)
 - **summary:** Write half the resolved string's byte length, using integer truncation.
 - **grounding:** source=investigation, confidence=high
@@ -248,6 +255,13 @@ Native applies strlen to the NUL-terminated engine byte string and shifts the by
 - **summary:** (source)(destination)(count) - copy count consecutive 32-bit cells from source to destination.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves addressable operands 1 and 2 through vm_operand_resolve_address@0x425a50, and calls memcpy(destination, source, count*4). Corpus: 65 calls across direct global/local spans and local pointers; 43 are immediately preceded by take-address 0x63. The C# VM copies resolved integer-cell spans while retaining local/global address domains; focused tests cover direct spans and aliased pointers, and the traced natural boot reaches the UNITECH/CALCCC pair without fallback.
+
+### 0x2c5 `byte-string-length` (strlen, argc 2)
+- **summary:** Write the resolved NUL-terminated engine string's raw byte length.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x2c5_byte_strlen@0x42a690 resolves operand 2, scans byte-by-byte through the terminating NUL, and writes the byte count to operand 1. Corpus: 23 sites in 10 scripts. BUNKI uses two sites to size its temporary menu surface and horizontally place all primary option strings.
+
+This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all option/title byte lengths, adds four bytes of padding, and converts the result to pixels; skipping the opcode leaves its local maximum at zero, forcing the minimum-width menu and shifting every primary label right.
 
 ## control
 
@@ -1134,10 +1148,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x195 `u00425580` (u00425580, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x196 `display-furigana` (display-furigana, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -1257,10 +1267,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x2c0 `u004231C0` (u004231C0, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
-
-### 0x2c5 `strlen` (strlen, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
 
 ### 0x2c6 `u0042B5E0` (u0042B5E0, argc 2)
 - **summary:** —
