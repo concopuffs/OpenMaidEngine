@@ -278,18 +278,33 @@ been proven; only recording suppression is reset. Focused tests cover a three-fr
 resolution to `SYSTEM4.BIN`.
 
 **Frontend exit request is not a root reload (`0x1`, 2026-07-20).** Native
-`op_0x1_throw_exit_request@0x4162e0` constructs reason value one and raises the engine's non-returning C++
-control exception (`DAT_005a9710`). Its only two corpus sites establish the intent: TITLE executes it after
-the fifth main-menu action's sound and delay, while SYSTEM4 executes it after reporting an invalid execution
-mode. The Windows/frontend catch policy—full exit versus returning to title—is outside this opcode handler
-and is not implemented in the Godot frontend yet.
+`op_0x1_throw_exit_request@0x4162e0` constructs a four-byte value-one payload and throws it with
+`ThrowInfo@0x5a9710`. The catchable-type metadata resolves that object to the named RTTI type
+`Command_Exit_Exception` (`TypeDescriptor@0x5b13e8`), rather than an undifferentiated integer exception.
+Its only two corpus sites establish the intent: TITLE executes it after the fifth main-menu action's sound
+and delay, while SYSTEM4 executes it after reporting an invalid execution mode.
+
+The catcher is the outer native message/scheduler loop now recovered as
+`engine_main_tick_with_exception_policy@0x411840`. Its MSVC `FuncInfo@0x5a9750` has a typed catch entry for
+`Command_Exit_Exception` at `catch_CommandExitException_set_exit_result@0x412648`. That funclet forces the
+enclosing result to one and returns continuation `0x412961`, which performs loop teardown and returns to the
+frontend. It never changes `frame_pc`. This matters because the dispatcher itself advances `frame_pc` only
+after an opcode handler returns; `0x1` throws instead, so neither the dispatcher nor the catcher advances
+past it. A distinct generic error-dialog policy at `0x412689` proves that fall-through is explicit: result
+two retries the same instruction, result four adds the decoded instruction length before restarting the
+loop, and other results exit. `Command_Exit_Exception` bypasses that policy entirely.
+
+The Windows/frontend policy that follows the returned exit request—full exit versus returning to
+title—is outside this opcode handler and is not implemented in the Godot frontend yet.
 
 TITLE happens to contain a developer menu immediately after its `0x1`, including a `call-script` to
-`DEBUG.BIN`; that code is unreachable in the native flow because the handler never returns. The port still
-treats unknown `0x1` as a fall-through stub, so selecting the fifth TITLE action would expose that menu by
-accident. This is a known discrepancy, not a legitimate route for validating `0x9`. End-to-end visual
-validation of the native `SYSTEM4 -> TITLE -> child -> 0x9 -> SYSTEM4 -> TITLE` history therefore remains
-deferred until the frontend exit/return-to-title boundary or a natural game-over/completion route exists.
+`DEBUG.BIN`; that code is unreachable in the native flow because the handler never returns. The port's
+former unknown-op fallback did expose that menu when selecting TITLE's fifth action, providing a useful
+visual confirmation of the static mapping but not a legitimate retail route. Opcode `0x1` now propagates a
+process-exit request through hotspot callbacks and nested script frames and ends the VM session without
+executing the following bytecode. End-to-end visual validation of the native
+`SYSTEM4 -> TITLE -> child -> 0x9 -> SYSTEM4 -> TITLE` history remains deferred until the frontend
+exit/return-to-title boundary or a natural game-over/completion route exists.
 
 The unreachable developer menu nevertheless records the game's intended debug-scene handoff. Its two ADV
 viewer choices write `G[0]=1`, `G[0xaba5c]=-1`, `G[0x62ccf]=0`, and a raw script id into `G[0x699]`, then

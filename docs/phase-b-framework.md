@@ -148,8 +148,9 @@ to SYSTEM4; op `0x9` performs a tested whole-stack reload of SYSTEM4; selected g
 survive; and scene-owned presentation/input state is released. Manual validation of a natural gameplay
 route through the first `0x9` remains deferred: Himegari's readily accessible return-to-title choice belongs
 to the still-unimplemented frontend exit-request policy, while the other known natural paths require later
-gameplay, game over, or completion. Do not use TITLE's currently exposed post-`0x1` developer-menu
-fallthrough as evidence; native `0x1` is non-returning. See `docs/engine-re.md`.
+gameplay, game over, or completion. Do not use TITLE's post-`0x1` developer menu as evidence; native `0x1`
+is non-returning, and the port now propagates that exit request instead of falling through into the hidden
+bytecode. See `docs/engine-re.md`.
 
 **Godot debug scene launcher (2026-07-20; implemented and manually validated).** The first version
 is deliberately narrower than arbitrary hot swapping:

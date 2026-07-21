@@ -354,8 +354,9 @@ public sealed class VirtualMachine
             : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private sealed class RootReloadRequestedException : Exception { }
+    private sealed class ProcessExitRequestedException : Exception { }
     private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
-    private enum FrameOutcome { Returned, DebugReturned, RootReload, Halted, RanOff }
+    private enum FrameOutcome { Returned, DebugReturned, RootReload, ExitRequested, Halted, RanOff }
 
     public void Run(int entryOffset = 0)
     {
@@ -388,6 +389,7 @@ public sealed class VirtualMachine
             }
             if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
             else if (outcome is FrameOutcome.Returned or FrameOutcome.DebugReturned) HaltReason ??= "exit";
+            else if (outcome == FrameOutcome.ExitRequested) HaltReason ??= "exit-request";
             // Halted: HaltReason already set by the halting op.
             break;
         }
@@ -468,6 +470,7 @@ public sealed class VirtualMachine
                 }
             }
             catch (RootReloadRequestedException) { outcome = FrameOutcome.RootReload; }
+            catch (ProcessExitRequestedException) { outcome = FrameOutcome.ExitRequested; }
             _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
             return outcome;
         }
@@ -720,6 +723,10 @@ public sealed class VirtualMachine
                 Write(a[0], visits == 0 ? (terminal == 0 ? 1 : 0) : terminal);
                 return pc + 1;
             }
+            case "throw-exit-request":
+                // Native op 0x1 throws Command_Exit_Exception through callbacks and nested script
+                // frames. The outer engine loop catches it and exits without advancing frame_pc.
+                throw new ProcessExitRequestedException();
             case "exit": return FRAME_RETURN;
             case "exit-script":
                 // Native op 0x9 clears the process-initial flag, disposes every active script frame,
@@ -743,6 +750,7 @@ public sealed class VirtualMachine
                 var outcome = RunFrame(new ExecFrame(child, entry), FrameCause.CallScript, id);
                 if (outcome == FrameOutcome.Halted) return HALT;   // propagate whole-VM halt up
                 if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD; // discard every caller frame
+                if (outcome == FrameOutcome.ExitRequested) throw new ProcessExitRequestedException();
                 return pc + 1;                                      // Returned / RanOff: resume caller
             }
             case "show-text":
