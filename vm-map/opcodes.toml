@@ -824,28 +824,28 @@ observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0x63
-label = "u00414A60"
+label = "take-address"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414A60"
-category = "unknown"
-summary = ""
+name = "take-address"
+category = "compute"
+summary = "(destination_pointer)(source) - store the underlying typed storage address of source in destination_pointer; a pointer source aliases its existing target."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2 op_0x63_take_address@0x426ac0 calls vm_operand_resolve_address@0x425a50 for operand 2 with unsubscripted indices -1/-1, then vm_pointer_operand_write@0x416090 for operand 1. The resolver returns a backing-cell address for direct global/local integer or string operands and the already-stored target for pointer operands. Corpus: 92 calls; destination is always local-ptr, while sources are local-ptr x81, local-int x7, and global-int x4. The C# VM preserves the local/global address domain and supports the native string-pointer destination forms; the traced natural boot reaches the UNITECH/CALCCC pair without fallback."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination pointer"
 observed_types = ["l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "source addressable cell or pointer target"
 observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode]]
@@ -3121,7 +3121,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c."
+evidence = "Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c. The C# VM implements ordinal equality through the shared string resolver, covering literal, global, local, global-string-pointer, and local-string-pointer operands; the traced natural-boot regression proves the reached GAMESTART call no longer falls back."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3805,7 +3805,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves pointer operands 1 and 2, and calls memcpy(destination, source, count*4). The natural Game Start diagnostic reached it three times in UNITECH/CALCCC initialization, paired with unresolved pointer-preparation opcode 0x63."
+evidence = "Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves addressable operands 1 and 2 through vm_operand_resolve_address@0x425a50, and calls memcpy(destination, source, count*4). Corpus: 65 calls across direct global/local spans and local pointers; 43 are immediately preceded by take-address 0x63. The C# VM copies resolved integer-cell spans while retaining local/global address domains; focused tests cover direct spans and aliased pointers, and the traced natural boot reaches the UNITECH/CALCCC pair without fallback."
 
 [[opcode.semantics.args]]
 i = 1

@@ -186,6 +186,11 @@
 
 Operand 2 names the base cell itself: a global-bank operand produces a global reference and a local-bank operand produces a local reference. Operand 3 is added as the element offset. Pointer destinations retain that address domain; reading or writing the pointer dereferences the corresponding bank. Non-pointer destinations receive the addressed value. The same domain-preserving address model applies to lookup-array-2d (0x12c).
 
+### 0x63 `take-address` (take-address, argc 2)
+- **summary:** (destination_pointer)(source) - store the underlying typed storage address of source in destination_pointer; a pointer source aliases its existing target.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2 op_0x63_take_address@0x426ac0 calls vm_operand_resolve_address@0x425a50 for operand 2 with unsubscripted indices -1/-1, then vm_pointer_operand_write@0x416090 for operand 1. The resolver returns a backing-cell address for direct global/local integer or string operands and the already-stored target for pointer operands. Corpus: 92 calls; destination is always local-ptr, while sources are local-ptr x81, local-int x7, and global-int x4. The C# VM preserves the local/global address domain and supports the native string-pointer destination forms; the traced natural boot reaches the UNITECH/CALCCC pair without fallback.
+
 ### 0x64 `copy-inline-int-array` (copy-inline-int-array, argc 2)
 - **summary:** (destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination.
 - **grounding:** source=investigation, confidence=high
@@ -209,12 +214,12 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 ### 0x194 `string-equals` (string-equals, argc 3)
 - **summary:** (out)(left)(right) - compare two complete SYS4 strings and write 1 when equal, otherwise 0.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c.
+- **evidence:** Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 through the string resolver, compares their byte ranges through FUN_004017a0, and writes compare_result==0 to integer operand 1. INIT2 and GAMESTART use it as a branch predicate for INPUTNAME/default-name handling; the natural Game Start diagnostic reached one GAMESTART call at 0x134c. The C# VM implements ordinal equality through the shared string resolver, covering literal, global, local, global-string-pointer, and local-string-pointer operands; the traced natural-boot regression proves the reached GAMESTART call no longer falls back.
 
 ### 0x1b0 `copy-dwords` (copy-dwords, argc 3)
 - **summary:** (source)(destination)(count) - copy count consecutive 32-bit cells from source to destination.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves pointer operands 1 and 2, and calls memcpy(destination, source, count*4). The natural Game Start diagnostic reached it three times in UNITECH/CALCCC initialization, paired with unresolved pointer-preparation opcode 0x63.
+- **evidence:** Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves addressable operands 1 and 2 through vm_operand_resolve_address@0x425a50, and calls memcpy(destination, source, count*4). Corpus: 65 calls across direct global/local spans and local pointers; 43 are immediately preceded by take-address 0x63. The C# VM copies resolved integer-cell spans while retaining local/global address domains; focused tests cover direct spans and aliased pointers, and the traced natural boot reaches the UNITECH/CALCCC pair without fallback.
 
 ## control
 
@@ -917,10 +922,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x5f `gre` (gre, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x63 `u00414A60` (u00414A60, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x6e `show-text` (show-text, argc 2)
 - **summary:** —

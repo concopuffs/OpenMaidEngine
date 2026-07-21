@@ -289,19 +289,28 @@ public sealed class VirtualMachine
         T_LINT => VmAddress.LocalInteger((int)op.Value),
         T_LFLOAT => VmAddress.LocalFloat((int)op.Value),
         T_LSTR => VmAddress.LocalString((int)op.Value),
+        T_GPTR or T_GSTRPTR => VmAddress.Global((int)Gi(Globals, (int)op.Value)),
         T_LPTR => Ga(_cur.Locals.P, (int)op.Value),
         T_LSTRPTR => Ga(_cur.Locals.SP, (int)op.Value),
         _ => VmAddress.Global((int)op.Value),
     };
 
+    private bool TryStoreAddress(Operand destination, VmAddress address)
+    {
+        switch (destination.Type)
+        {
+            case T_LPTR: _cur.Locals.P[(int)destination.Value] = address; return true;
+            case T_LSTRPTR: _cur.Locals.SP[(int)destination.Value] = address; return true;
+            case T_GPTR: case T_GSTRPTR: Globals[(int)destination.Value] = address.Address; return true;
+            default: return false;
+        }
+    }
+
     private void LookupStore(Operand dst, VmAddress addr)
     {
+        if (TryStoreAddress(dst, addr)) return;
         switch (dst.Type)
         {
-            case T_LPTR: _cur.Locals.P[(int)dst.Value] = addr; break;
-            case T_LSTRPTR: _cur.Locals.SP[(int)dst.Value] = addr; break;
-            case T_GPTR: Globals[(int)dst.Value] = addr.Address; break;
-            case T_GSTRPTR: Globals[(int)dst.Value] = addr.Address; break;
             default:
                 if (IsStr(dst)) WriteStr(dst, ReadStringCell(addr));
                 else Write(dst, ReadIntCell(addr));
@@ -572,6 +581,9 @@ public sealed class VirtualMachine
             case "shl": Write(a[0], Read(a[1]) << (int)(Read(a[2]) & 31)); return pc + 1;
             case "eq":  Write(a[0], Read(a[1]) == Read(a[2]) ? 1 : 0); return pc + 1;
             case "ne":  Write(a[0], Read(a[1]) != Read(a[2]) ? 1 : 0); return pc + 1;
+            case "string-equals":
+                Write(a[0], string.Equals(ReadStr(a[1]), ReadStr(a[2]), StringComparison.Ordinal) ? 1 : 0);
+                return pc + 1;
             case "lt":  Write(a[0], Read(a[1]) <  Read(a[2]) ? 1 : 0); return pc + 1;
             case "lte": Write(a[0], Read(a[1]) <= Read(a[2]) ? 1 : 0); return pc + 1;
             case "gr":  Write(a[0], Read(a[1]) >  Read(a[2]) ? 1 : 0); return pc + 1;
@@ -585,6 +597,13 @@ public sealed class VirtualMachine
                 LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]))); return pc + 1;
             case "lookup-array-2d":
                 LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]) * Read(a[3]) + Read(a[4]))); return pc + 1;
+            case "take-address": // 0x63: pointer destination <- underlying address of operand 2
+                if (!TryStoreAddress(a[0], BaseAddr(a[1])))
+                {
+                    HaltReason ??= $"take-address-destination-type:{a[0].Type}";
+                    return HALT;
+                }
+                return pc + 1;
             case "copy-inline-int-array": // 0x64: count dword followed by plain file values
             {
                 int offset = checked((int)Read(a[1]));
@@ -603,6 +622,22 @@ public sealed class VirtualMachine
                 int count = (int)rawCount;
                 for (int i = 0; i < count; i++)
                     WriteConsecutive(a[0], i, unchecked((int)_cur.Script.BodyDwords[offset + 1 + i]));
+                return pc + 1;
+            }
+            case "copy-dwords": // 0x1b0: memcpy(count * 4) across resolved integer-cell spans
+            {
+                int count = checked((int)Read(a[2]));
+                if (count < 0)
+                {
+                    HaltReason ??= $"copy-dwords-negative-count:{count}";
+                    return HALT;
+                }
+                VmAddress source = BaseAddr(a[0]);
+                VmAddress destination = BaseAddr(a[1]);
+                var values = new long[count];
+                for (int i = 0; i < count; i++)
+                    values[i] = unchecked((int)ReadIntCell(source.Offset(i)));
+                for (int i = 0; i < count; i++) WriteIntCell(destination.Offset(i), values[i]);
                 return pc + 1;
             }
             case "find-hit-rectangle": // 0x12e: inclusive rectangle intersection over addressed arrays

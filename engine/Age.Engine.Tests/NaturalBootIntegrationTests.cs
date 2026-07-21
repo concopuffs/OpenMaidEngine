@@ -10,11 +10,17 @@ public class NaturalBootIntegrationTests
     private sealed class StopAtSc0000Sink : ITraceSink
     {
         public readonly List<string> Entered = new();
+        public bool SawStringEqualsStub;
+        public bool SawUnitDataCopyStub;
         public Action<string>? OnEnter;
-        public bool TracingSteps => false;
+        public bool TracingSteps => true;
 
         public void Emit(in TraceEvent e)
         {
+            if (e.Kind == TraceEventKind.Stub && e.Opcode == 0x194)
+                SawStringEqualsStub = true;
+            if (e.Kind == TraceEventKind.Stub && e.Opcode is 0x63 or 0x1b0)
+                SawUnitDataCopyStub = true;
             if (e.Kind == TraceEventKind.FrameEnter && e.Name != null)
             {
                 Entered.Add(e.Name);
@@ -114,5 +120,7 @@ public class NaturalBootIntegrationTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0));
         Assert.Equal(0x22, vm.Globals.GetValueOrDefault(0x699));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x6c1));
+        Assert.False(sink.SawStringEqualsStub);
+        Assert.False(sink.SawUnitDataCopyStub);
     }
 }

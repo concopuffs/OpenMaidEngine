@@ -272,10 +272,17 @@ The 137 fallback events are not a single boot blocker. Most are declaration/stat
 proven safe, or deliberately deferred profile/read-text operations (`0x1a2`, `0x1a3`, `0x1cb`). The reached
 effectful unknowns divide into SYSTEM4 layout setup and unit-data initialization. Native follow-up identifies
 `0x194` as a string-equality predicate reached in `INIT2` and `GAMESTART`, and `0x1b0` as a dword-block copy
-paired with still-unresolved pointer-preparation opcode `0x63` in `UNITECH`/`CALCCC`. This makes `0x194` the
-smallest directly boot-relevant implementation slice; the `0x63`/`0x1b0` pair is the larger subsequent
-backend-data slice. Closing Godot currently releases a parked ADV wait before process teardown, so the page
-map may contain one trailing shutdown-only page; the final timeline `input-wait` is the authoritative stop.
+paired with still-unresolved pointer-preparation opcode `0x63` in `UNITECH`/`CALCCC`. `0x194` is now
+implemented for every supported SYS4 string operand form, with focused equality/inequality and
+compare-then-branch regressions. A step-traced natural-boot test reaches SC0000 without a `0x194` fallback;
+static coverage now reports 10/12 INIT2 opcodes and 44/47 GAMESTART opcodes handled, with the remaining
+GAMESTART profile operations still deliberately deferred. The reached `0x63`/`0x1b0` unit-data pair is
+also implemented: native `0x63` aliases a typed backing-cell address into a pointer, while `0x1b0` copies a
+counted dword span through direct or pointer endpoints. The traced natural boot reaches both without
+fallback; UNITECH is now 31/31 handled and CALCCC 14/15, with only deferred profile op `0x1a2` remaining.
+The next reached effectful cluster to investigate is SYSTEM4's paired `0x79`/`0x1c1` setup. Closing Godot
+currently releases a parked ADV wait before process teardown, so the page map may contain one trailing
+shutdown-only page; the final timeline `input-wait` is the authoritative stop.
 
 ## Stage B2 — Faithful full boot
 

@@ -2197,11 +2197,33 @@ It is therefore an equality predicate, not a string assignment. The release corp
 conditional branches; `GAMESTART@0x134c` compares `INPUTNAME` with `"?"`, while INIT2 also compares
 `INPUTNAME` with an empty string during default-name initialization.
 
-`op_0x1b0_copy_dwords@0x427060` fetches operand 3 as a cell count, resolves operands 1 and 2 as source and
-destination pointers, and calls `memcpy(destination, source, count * 4)`. The capture reached it three times
-inside `UNITECH`/`CALCCC`, immediately after opcode `0x63`. The copy itself is proven; the pointer-producing
-semantics of `0x63` remain unresolved, so the pair should be implemented only after that companion handler
-is understood.
+The port now executes `0x194` through the common string resolver and ordinal equality, so every operand
+form accepted by that resolver shares one contract: inline literal, global string, local string, global
+string pointer, and local string pointer. Focused tests cover equality and inequality across those forms
+plus the release GAMESTART compare-then-`jcc` shape. The full traced SYSTEM4-to-SC0000 regression reaches
+GAMESTART without emitting a `0x194` fallback.
+
+`op_0x63_take_address@0x426ac0` is the companion address operation. It passes operand 2 and unsubscripted
+indices `-1/-1` to `vm_operand_resolve_address@0x425a50`, then stores the returned address in operand 1
+through `vm_pointer_operand_write@0x416090`. The resolver returns the backing-cell address for direct
+global/local integer or string operands; for pointer operands it returns the target already held by the
+pointer, not the address of the pointer slot. Thus `0x63(dst_ptr, source)` is typed address aliasing. All 92
+release-corpus sites use a local integer-pointer destination; sources are local pointers 81 times, local
+integers seven times, and global integers four times.
+
+`op_0x1b0_copy_dwords@0x427060` fetches operand 3 as a cell count, resolves addressable operands 1 and 2 as
+source and destination, and calls `memcpy(destination, source, count * 4)`. The corpus has 65 calls: direct
+global/local spans as well as local pointers, with 43 immediately preceded by `0x63`. The boot capture
+reached the pair in `UNITECH`/`CALCCC`; those scripts use it to copy record-shaped arrays between per-entity
+tables and working buffers.
+
+The port now maps both operations onto its domain-preserving `VmAddress` model. Direct local/global cells
+retain their bank, aliasing an existing pointer retains its target bank, and `0x1b0` copies consecutive
+32-bit integer cells through the resolved endpoints. Focused tests cover local-to-global, global-to-local,
+an alias of a `lookup-array` result, direct spans, and the native string-pointer destination form of
+`0x63`. The step-traced SYSTEM4-to-SC0000 regression reaches both operations without fallback. Static
+coverage is consequently 31/31 handled for UNITECH and 14/15 for CALCCC; CALCCC's only remaining gap is
+the deliberately deferred shared-profile write `0x1a2`.
 
 ---
 
