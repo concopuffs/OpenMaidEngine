@@ -30,6 +30,7 @@
 ### 0x75 `set-font-size` (set-font-size, argc 1)
 - **summary:** (pixels) - set the primary text font height and rebuild its native rasterization state.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x205
 - **evidence:** Ghidra /v2: op_0x75_handler@0x41ea10 calls text_set_primary_font_size@0x415bd0 on ctx+0x14940. The worker writes the negated pixel height to both primary LOGFONT states, derives width, and rebuilds font resources. HISTORY.BIN selects 22 pixels while active and restores 24 on exit.
 
 ### 0x76 `set-text-color` (set-text-color, argc 1)
@@ -127,6 +128,7 @@
 ### 0x204 `draw-string` (draw-string, argc 4)
 - **summary:** (surface_slot)(x)(y)(string) - rasterize a CP932 string immediately into a numbered graphics surface using current font/color/effect state.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x205
 - **evidence:** Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string, fetches surface/x/y, then calls draw_string_to_surface@0x450150 on text manager ctx+0x14940. The worker validates and locks gfx-manager surface table +0xa590[slot], chooses text_raster_string_uncached@0x459d90 or cached/effect path @0x45b600, rasterizes GDI GetGlyphOutlineA bitmaps through text_blit_glyph_bitmap@0x458c80 using font/color state +0x4d0/+0x458, then unlocks. SC0000 0x9b2 draws the speaker name into 400x30 surface 0xd at (1,1); following 0x1fb binds it to retained object 0xe678 at (74,444).
 
 ### 0x20a `publish-adv-text-layout` (u00420CE0, argc 1)
@@ -497,6 +499,14 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **summary:** 0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the default textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength). Mode 1 is SRCALPHA/ONE additive glow with ARGB alpha scaling the source contribution and RGB providing multiplicative modulation. Mode 2 conditionally forces ONE/ZERO for the selected render target and is used by 0x223 transition sources; mode 3 selects a subtractive special path. Surfaceless mode-0 fill consumption remains distinct.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9. Correct D3D9 constants at 0x4774c0 prove mode 1 writes SRCBLEND=5/SRCALPHA and DESTBLEND=2/ONE, not INVSRCALPHA. TITLE draws two opaque-black, no-colorkey SO022 flame sprites with mode 1; additive composition removes black and preserves the blue glow, verified in a windowed capture. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white.
+
+### 0x205 `draw-formatted-integer` (u00420A60, argc 6)
+- **summary:** Format an integer into a fixed-width decimal field and rasterize it immediately into a numbered graphics surface using the current font/color/effect state.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x75, 0x204
+- **evidence:** Ghidra /v2: op_0x205_handler@0x422ab0 fetches (surface,x,y,value,width,flags), calls format_integer_for_surface@0x407190, then draw_string_to_surface@0x450150. DRAWENP contains all 16 previously stubbed calls responsible for its level, HP/SP/FS, and stat values.
+
+The field width includes an optional sign. Bit 0 zero-pads; bit 1 centers omitted leading cells; bit 2 left-aligns; bits 3/4 request '+' for positive/zero; bit 5 renders zero with '-'. With bit 16, output remains half-width ASCII and omitted-cell x adjustment uses half the current font cell advance; otherwise the formatter converts digits/signs to full-width CP932. Default alignment preserves the field's right edge by shifting x right for each omitted leading cell.
 
 ### 0x208 `get-texture-size` (get-texture-size, argc 3)
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
@@ -1223,10 +1233,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1c8 `toString` (toString, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x205 `u00420A60` (u00420A60, argc 6)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x207 `u00420B00` (u00420B00, argc 8)
 - **summary:** —

@@ -2539,6 +2539,30 @@ embedded-NUL termination, all observed comparison operand classes, and the exact
 case. The full 281-test engine suite, zero-warning Godot build, and threaded frontend selftest pass; manual
 DEBUGMAP and developer-menu visual rechecks remain.
 
+### Formatted integers on text surfaces — opcode `0x205` (2026-07-21)
+
+The deployment picker opened from an empty DEBUGMAP deployment slot uses a third numeric path. Its red
+unit-information card is built by `DRAWENP.BIN` on temporary surface `0x51`: ordinary `0x204` calls draw
+labels and separators such as `LV` and `/`, while 16 calls to previously skipped opcode `0x205` draw the
+level, current/maximum HP/SP/FS, and the two stat columns. This explains why the values alone were absent
+even after the separate `0x13a`/`0x23b` retained-glyph HUD path was restored.
+
+`op_0x205_handler@0x422ab0` takes
+`(surface_slot, x, y, value, field_width, flags)`. It records the 13-dword instruction length, calls
+`format_integer_for_surface@0x407190`, and sends the returned string and adjusted x coordinate to the same
+`draw_string_to_surface@0x450150` worker used by opcode `0x204`. The field width includes an optional sign.
+Flag bit `0x1` zero-pads, `0x2` centers omitted leading cells, and `0x4` left-aligns; the default keeps the
+field's right edge fixed by moving x right for omitted cells. Bits `0x8`/`0x10` request a plus sign for a
+positive/zero value, while bit `0x20` gives zero a minus sign. Bit `0x10000`, used by every `DRAWENP` site,
+keeps half-width ASCII and uses half the current font-cell advance; without it,
+`ascii_to_fullwidth_cp932_inplace@0x417800` converts the formatted field to full-width CP932.
+
+The VM now routes the formatted result through the existing styled surface-text host path, preserving the
+font, color, and effect changes surrounding each call. Focused tests reproduce DRAWENP's exact level-80
+call and cover half-width right alignment, zero padding, and the observed full-width left-aligned variant.
+DRAWENP is now 36/36 opcodes and 611/611 instructions handled; all 284 engine tests, the zero-warning Godot
+build, and threaded frontend selftest pass.
+
 ---
 
 ## Native walls backlog (targets for this loop)

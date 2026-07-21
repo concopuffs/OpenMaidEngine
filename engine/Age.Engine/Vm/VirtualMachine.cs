@@ -327,6 +327,60 @@ public sealed class VirtualMachine
         return _nativeStringEncoding.GetByteCount(nul < 0 ? value : value[..nul]);
     }
 
+    private string FormatIntegerForSurface(ref int x, int value, int fieldWidth, int flags)
+    {
+        int width = Math.Max(0, fieldWidth);
+        var field = new char[Math.Max(1, width)];
+        bool signed = value < 0
+            || (value > 0 && (flags & 0x08) != 0)
+            || (value == 0 && (flags & 0x30) != 0);
+        char sign = value < 0 || (value == 0 && (flags & 0x10) == 0 && (flags & 0x20) != 0) ? '-' : '+';
+        int digitSlots = width - (signed ? 1 : 0);
+        int first = 0;
+        long magnitude = value < 0 ? -(long)value : value;
+
+        for (int pos = digitSlots - 1; pos >= 0; pos--)
+        {
+            if (pos == digitSlots - 1 || magnitude != 0 || (flags & 0x01) != 0)
+            {
+                field[pos + (signed ? 1 : 0)] = (char)('0' + magnitude % 10);
+                first = pos;
+            }
+            magnitude /= 10;
+        }
+
+        if (signed)
+            field[first] = digitSlots < 0 ? '#' : sign;
+
+        int length = first;
+        while (length < field.Length && field[length] != '\0') length++;
+        string text = new(field, first, length - first);
+
+        // Native uses the primary LOGFONT cell height as a fixed-width advance, halved for ASCII.
+        // Odd heights (and the engine's 32/33-pixel special cases) are rounded down on font rebuild.
+        int fontSize = _advTextStyle.PrimaryFontSize > 0 ? _advTextStyle.PrimaryFontSize : 24;
+        int cellAdvance = fontSize == 33 ? 31
+            : fontSize == 32 || (fontSize & 1) != 0 ? fontSize - 1
+            : fontSize;
+        if ((flags & 0x04) == 0)
+        {
+            int divisor = (flags & 0x10000) != 0 ? 2 : 1;
+            if ((flags & 0x02) != 0) divisor *= 2;
+            x += (cellAdvance * first) / divisor;
+        }
+
+        if ((flags & 0x10000) == 0)
+            text = string.Concat(text.Select(c => c switch
+            {
+                >= '0' and <= '9' => (char)('０' + c - '0'),
+                '-' => '－',
+                >= 'A' and <= 'Z' => (char)('Ａ' + c - 'A'),
+                >= 'a' and <= 'z' => (char)('ａ' + c - 'a'),
+                _ => '？',
+            }));
+        return text;
+    }
+
     private static VmAddress Ga(Dictionary<int, VmAddress> d, int k)
         => d.TryGetValue(k, out var value) ? value : VmAddress.Global(0);
 
@@ -977,6 +1031,15 @@ public sealed class VirtualMachine
                 _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]),
                                           _advTextStyle);
                 return pc + 1;
+            case "u00420A60":                 // pre-reference compatibility
+            case "draw-formatted-integer":   // 0x205 (surface slot, x, y, value, field width, flags)
+            {
+                int x = (int)Read(a[1]);
+                string text = FormatIntegerForSurface(
+                    ref x, unchecked((int)Read(a[3])), (int)Read(a[4]), (int)Read(a[5]));
+                _host.DrawStringToSurface((int)Read(a[0]), x, (int)Read(a[2]), text, _advTextStyle);
+                return pc + 1;
+            }
             case "wait-for-input":
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }

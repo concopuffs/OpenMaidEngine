@@ -467,6 +467,16 @@ focused CP932/NUL, operand-resolution, and stale-destination regressions. All 28
 Godot build, and threaded selftest pass. The next bounded action is a visual recheck of the DEBUGMAP popup and
 TITLE developer menu.
 
+The subsequent DEBUGMAP deployment-picker comparison exposed a separate numeric renderer in
+`DRAWENP.BIN`. Its red unit-information card draws labels and `/` separators through `0x204`, but draws
+level, HP/SP/FS pairs, and both stat columns through 16 calls to opcode `0x205`. Native `0x205` formats a
+fixed-width signed decimal field, applies zero-pad/alignment/half-width flags, adjusts the x anchor for
+suppressed leading cells, and rasterizes the result into the same temporary surface using current text
+style. The shared VM implementation now covers that path; focused tests use DRAWENP's exact level call and
+the observed half-width, zero-padded, and full-width variants. DRAWENP is now 611/611 instructions handled;
+all 284 engine tests, the zero-warning Godot build, and threaded frontend selftest pass. A manual
+deployment-card visual recheck remains.
+
 ## Later Phase B breadth
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:

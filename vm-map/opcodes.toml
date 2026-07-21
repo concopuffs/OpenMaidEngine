@@ -4920,43 +4920,44 @@ argc = 6
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420A60"
-category = "unknown"
-summary = ""
+name = "draw-formatted-integer"
+category = "draw"
+summary = "Format an integer into a fixed-width decimal field and rasterize it immediately into a numbered graphics surface using the current font/color/effect state."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x75, 0x204]
+evidence = "Ghidra /v2: op_0x205_handler@0x422ab0 fetches (surface,x,y,value,width,flags), calls format_integer_for_surface@0x407190, then draw_string_to_surface@0x450150. DRAWENP contains all 16 previously stubbed calls responsible for its level, HP/SP/FS, and stat values."
+details = "The field width includes an optional sign. Bit 0 zero-pads; bit 1 centers omitted leading cells; bit 2 left-aligns; bits 3/4 request '+' for positive/zero; bit 5 renders zero with '-'. With bit 16, output remains half-width ASCII and omitted-cell x adjustment uses half the current font cell advance; otherwise the formatter converts digits/signs to full-width CP932. Default alignment preserves the field's right edge by shifting x right for each omitted leading cell."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination surface slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "y"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "value"
 observed_types = ["g-int", "l-int", "l-ptr"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "field width (characters, including sign)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "format/alignment flags"
 observed_types = ["imm"]
 
 [[opcode]]
