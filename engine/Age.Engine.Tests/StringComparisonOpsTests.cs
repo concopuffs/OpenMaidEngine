@@ -94,4 +94,84 @@ public class StringComparisonOpsTests
 
         Assert.Equal(1, vm.Globals[0x600]);
     }
+
+    [Fact]
+    public void StringNotEquals_HandlesEqualDifferentAndPointerOperands()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        int lookup = table.ByLabel("lookup-array")!.Value;
+        int move = table.ByLabel("mov")!.Value;
+        var script = ScriptAssembler.Assemble(table, "STRING_NOT_EQUALS", new List<(int, Operand[])>
+        {
+            (move, new[] { new Operand(LocalString, 0), new Operand(InlineString, 0) }),
+            (lookup, new[]
+            {
+                new Operand(LocalStringPointer, 0), new Operand(GlobalString, 0x300),
+                new Operand(Immediate, 2),
+            }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 0), new Operand(InlineString, 0), new Operand(InlineString, 1),
+            }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 1), new Operand(GlobalString, 0x301), new Operand(InlineString, 0),
+            }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 2), new Operand(LocalString, 0), new Operand(InlineString, 0),
+            }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 3), new Operand(LocalStringPointer, 0), new Operand(InlineString, 0),
+            }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 4), new Operand(GlobalStringPointer, 0x400),
+                new Operand(InlineString, 0),
+            }),
+            (move, new[] { new Operand(GlobalInt, 0x500), new Operand(LocalInt, 0) }),
+            (move, new[] { new Operand(GlobalInt, 0x501), new Operand(LocalInt, 1) }),
+            (move, new[] { new Operand(GlobalInt, 0x502), new Operand(LocalInt, 2) }),
+            (move, new[] { new Operand(GlobalInt, 0x503), new Operand(LocalInt, 3) }),
+            (move, new[] { new Operand(GlobalInt, 0x504), new Operand(LocalInt, 4) }),
+            (0x2, Array.Empty<Operand>()),
+        }, new[] { "姫狩り", "姫狩り", "姫狩り違い" });
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.GlobalStrings[0x301] = "姫狩り違い";
+        vm.GlobalStrings[0x302] = "姫狩り";
+        vm.Globals[0x400] = 0x302;
+
+        vm.Run();
+
+        Assert.Equal(new long[] { 0, 1, 0, 0, 0 }, new[]
+        {
+            vm.Globals[0x500], vm.Globals[0x501], vm.Globals[0x502],
+            vm.Globals[0x503], vm.Globals[0x504],
+        });
+    }
+
+    [Fact]
+    public void StringNotEquals_OverwritesBunkiStaleHandleWhenTitleIsEmpty()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        int move = table.ByLabel("mov")!.Value;
+        var script = ScriptAssembler.Assemble(table, "BUNKI_EMPTY_TITLE", new List<(int, Operand[])>
+        {
+            // BUNKI reuses local 0x99 for frame handles before testing its optional title.
+            (move, new[] { new Operand(LocalInt, 0x99), new Operand(Immediate, 0xea71) }),
+            (0x195, new[]
+            {
+                new Operand(LocalInt, 0x99), new Operand(GlobalString, 0x7da),
+                new Operand(InlineString, 0),
+            }),
+            (move, new[] { new Operand(GlobalInt, 0x600), new Operand(LocalInt, 0x99) }),
+            (0x2, Array.Empty<Operand>()),
+        }, new[] { "" });
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(0, vm.Globals[0x600]);
+    }
 }

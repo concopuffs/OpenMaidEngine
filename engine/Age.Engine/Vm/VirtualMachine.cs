@@ -660,6 +660,9 @@ public sealed class VirtualMachine
             case "string-equals":
                 Write(a[0], string.Equals(ReadStr(a[1]), ReadStr(a[2]), StringComparison.Ordinal) ? 1 : 0);
                 return pc + 1;
+            case "string-not-equals":
+                Write(a[0], string.Equals(ReadStr(a[1]), ReadStr(a[2]), StringComparison.Ordinal) ? 0 : 1);
+                return pc + 1;
             case "lt":  Write(a[0], Read(a[1]) <  Read(a[2]) ? 1 : 0); return pc + 1;
             case "lte": Write(a[0], Read(a[1]) <= Read(a[2]) ? 1 : 0); return pc + 1;
             case "gr":  Write(a[0], Read(a[1]) >  Read(a[2]) ? 1 : 0); return pc + 1;
@@ -671,6 +674,9 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
+                return pc + 1;
+            case "strlen": // 0x2c5: raw strlen(native encoded bytes)
+                Write(a[0], NativeStringByteLength(ReadStr(a[1])));
                 return pc + 1;
             case "lookup-array":
                 LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]))); return pc + 1;

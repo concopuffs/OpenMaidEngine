@@ -129,4 +129,28 @@ public class NumericGlyphOpsTests
         Assert.Equal(2, vm.Globals[100]); // four CP932 bytes, not three .NET chars
         Assert.Equal(3, vm.Globals[101]); // six CP932 bytes
     }
+
+    [Fact]
+    public void ByteStringLengthUsesNativeCp932BytesAndStopsAtNul()
+    {
+        var table = T();
+        var scene = ScriptAssembler.Assemble(table, "BYTE-LENGTH", new List<(int, Operand[])>
+        {
+            (0x2c5, new[] { L(0), S(0) }),
+            (0x55, new[] { G(100), L(0) }),
+            (0x55, new[] { LS(0), S(1) }),
+            (0x2c5, new[] { L(1), LS(0) }),
+            (0x55, new[] { G(101), L(1) }),
+            (0x2c5, new[] { L(2), S(2) }),
+            (0x55, new[] { G(102), L(2) }),
+            Exit(),
+        }, new[] { "AB姫", "リリィ", "AB\0姫" });
+        var vm = new VirtualMachine(scene, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(4, vm.Globals[100]); // two ASCII + one double-byte CP932 glyph
+        Assert.Equal(6, vm.Globals[101]); // three double-byte CP932 glyphs through a string pointer
+        Assert.Equal(2, vm.Globals[102]); // native strlen stops before the embedded NUL
+    }
 }

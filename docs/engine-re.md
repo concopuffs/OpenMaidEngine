@@ -2515,7 +2515,7 @@ matches BUNKI's later conversion: it finds the longest choice/title byte length,
 multiplies by 21, and divides by two to obtain the full-width glyph-space estimate used for panel width and
 the shared left edge of the primary labels.
 
-The port currently skips `0x2c5`, leaving BUNKI's maximum-length local at zero. For FIELD's
+Before implementation, the port skipped `0x2c5`, leaving BUNKI's maximum-length local at zero. For FIELD's
 `待機`/`帰還`/`キャンセル` popup, the panel still hits the same 240-pixel minimum but the computed label
 origin moves from surface x=67 to x=120, a 53-pixel right shift which makes `キャンセル` touch/spill beyond
 the frame. TITLE's longer developer choices should expand the surface beyond 240 pixels; the skipped result
@@ -2530,6 +2530,14 @@ nonzero graphics handle from frame construction, so the following branch falsely
 row and advances the choice y cursor by `0x1e` even though the empty title has no visible glyphs. Implementing
 `0x195` therefore removes the exact one-row downward shift; this is not a Godot font-baseline discrepancy or
 an inherited VN cursor indent.
+
+Both operations are now implemented as shared VM semantics. `0x2c5` uses the same configurable native-string
+encoding helper as `0x1a6` (CP932 for SYS4), stops at an embedded NUL, and writes the unshifted byte count.
+`0x195` is ordinal inequality through the existing literal/global/local/string-pointer resolver and always
+writes zero or one, so stale destinations cannot leak into the branch. Focused tests cover mixed-width CP932,
+embedded-NUL termination, all observed comparison operand classes, and the exact BUNKI empty-title stale-handle
+case. The full 281-test engine suite, zero-warning Godot build, and threaded frontend selftest pass; manual
+DEBUGMAP and developer-menu visual rechecks remain.
 
 ---
 

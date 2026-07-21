@@ -242,7 +242,7 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: dispatch slot ctx[0x26c93+0x195] is op_0x195_string_not_equals@0x426f20. It resolves operands 2 and 3 as engine strings, compares their complete byte ranges through the same worker as sibling op 0x194, and writes compare_result!=0 to operand 1. Corpus: 17 sites; 15 immediately branch on the result. BUNKI uses three comparisons against the empty string for its optional title row.
 
-This is the logical inverse of op 0x194 string-equals. Skipping it is stateful: the destination is not cleared. At BUNKI@0x905, local 0x99 still contains a nonzero graphics handle, so the missing write falsely reserves a 30-pixel title row and shifts every choice down.
+This is the logical inverse of op 0x194 string-equals. Skipping it is stateful: the destination is not cleared. At BUNKI@0x905, local 0x99 still contains a nonzero graphics handle, so the missing write falsely reserves a 30-pixel title row and shifts every choice down. The C# VM implements ordinal inequality through the shared string resolver; focused tests cover literal/global/local/pointer operands and the exact empty-title stale-handle overwrite.
 
 ### 0x1a6 `half-byte-string-length` (halve-strlen, argc 2)
 - **summary:** Write half the resolved string's byte length, using integer truncation.
@@ -261,7 +261,7 @@ Native applies strlen to the NUL-terminated engine byte string and shifts the by
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x2c5_byte_strlen@0x42a690 resolves operand 2, scans byte-by-byte through the terminating NUL, and writes the byte count to operand 1. Corpus: 23 sites in 10 scripts. BUNKI uses two sites to size its temporary menu surface and horizontally place all primary option strings.
 
-This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all option/title byte lengths, adds four bytes of padding, and converts the result to pixels; skipping the opcode leaves its local maximum at zero, forcing the minimum-width menu and shifting every primary label right.
+This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all option/title byte lengths, adds four bytes of padding, and converts the result to pixels; skipping the opcode leaves its local maximum at zero, forcing the minimum-width menu and shifting every primary label right. The C# VM shares the configurable native-string byte counter used by op 0x1a6 (CP932 by default), including embedded-NUL termination; focused tests cover literals and local-string pointers.
 
 ## control
 

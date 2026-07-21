@@ -462,8 +462,10 @@ the destination stays zero; the FIELD popup shifts 53 pixels right and the longe
 remains at its 240-pixel minimum. Corrected native/port screenshots reveal a separate exact one-row vertical
 shift: BUNKI uses missing opcode `0x195` (`string-not-equals`) to test its optional title against the empty
 string. Because a skipped opcode leaves its destination untouched, the final test reuses a nonzero graphics
-handle and falsely advances the choice cursor by 30 pixels. The next bounded implementation is therefore the
-shared CP932 byte-length opcode `0x2c5` plus inverse string comparison `0x195`, followed by a visual recheck.
+handle and falsely advances the choice cursor by 30 pixels. Both shared operations are now implemented with
+focused CP932/NUL, operand-resolution, and stale-destination regressions. All 281 engine tests, the zero-warning
+Godot build, and threaded selftest pass. The next bounded action is a visual recheck of the DEBUGMAP popup and
+TITLE developer menu.
 
 ## Later Phase B breadth
 
