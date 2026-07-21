@@ -221,6 +221,13 @@ Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see 
 This also names the whole call graph statically (build/callscript-names.json).
 
 
+### 0x9 `exit-script` (exit-script, argc 0)
+- **summary:** () - terminate the active script lifecycle and return to root script id 0. Before the native engine resets/reloads the root, it clears the initial-root-run flag queried by op 0x130 so LOGO/OP are not replayed.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x9_handler@0x418f50 stores zero to EngineCtx+0x54ff0, calls scene_context_init_reset, and loads root script resource id 0. Corpus sites are terminal scene/control exits rather than ordinary local returns.
+
+The port retains its earlier frame/session-boundary representation of root return, but now performs the proven process-lifecycle side effect by clearing its VM-owned initial-root-run flag. A faithful whole-stack root reload remains part of the broader persistent scene-coordinator work, not the startup-movie slice.
+
 ### 0x7b `coroutine-save-yield-handlers` (u0041ADB0, argc 2)
 - **summary:** (handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index); its generic handler prologue records the 5-dword instruction length. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator).
 - **grounding:** source=investigation, confidence=high
@@ -282,6 +289,13 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **summary:** Clear native run/service bit 0x1000; if the secondary context is active, clear the same bit there. SC0000 executes it once after the initial SFX-channel reset, with no VM-visible result.
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **evidence:** Ghidra op 0xd9 handler 0x416da0: ctx->run_state_flags &= ~0x1000; when ctx+0x6f8b8 is nonzero, also clears bit 0x1000 at ctx+0x53d20. No operands, calls, or return value.
+
+### 0x130 `get-initial-root-run` (get-initial-root-run, argc 1)
+- **summary:** (out) - write the engine's initial-root-run flag. It is initialized to 1 when the AGE context is constructed and cleared by op 0x9 before that opcode resets state and reloads root script id 0. SYSTEM4 uses the value to call LOGO.BIN and OP.BIN only on the process's initial root run.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x130_get_initial_root_run@0x4295b0 copies EngineCtx+0x54ff0 to operand 1. FUN_00413860 initializes +0x54ff0 to 1 at 0x413cc7/0x413d15; op_0x9_handler@0x418f50 is its only later writer and clears it before scene_context_init_reset plus script_frame_load_resource(...,0). Corpus: sole site SYSTEM4@0x29a branches to LOGO.BIN then OP.BIN only when the returned value is nonzero.
+
+Implemented as process-lifecycle state owned by the persistent VM: it begins at one and op 0x9 clears it. It is not a script global, save/profile value, command-line seed, or script-name special case.
 
 ### 0x140 `coroutine-label-yield` (u0041F9C0, argc 4)
 - **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
@@ -424,6 +438,13 @@ For slots below 1000 the native worker obtains that surface's level-0 D3D textur
 - **evidence:** Ghidra /v2: op_0x20e_clear_render_target@0x4174f0 passes renderer ctx+0x46188 to d3d_clear_render_target_black@0x471460. The worker calls device pointer +0x410, vtable +0xac with (0,NULL,3,0,1.0f,0). DATA1: 345 calls in 167 scripts; 57 directly follow 0x20d and 143 directly follow 0x1f6.
 
 This is a target-pixel operation, not retained-object teardown. It invokes IDirect3DDevice9::Clear with zero rectangles, flags D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER (3), color 0, depth 1.0, and stencil 0. The port tracks 0x20d target ownership and forwards the clear to the host; its retained compositor already rebuilds the backbuffer from black.
+
+### 0x20f `play-modal-movie-to-surface` (play-modal-movie-to-surface, argc 3)
+- **summary:** (raw_resource_id)(surface_slot)(movie_flags) - open a universal raw-catalog MPEG asset into an existing retained surface, start its native movie graph, and arm modal run-state bit 0x2000 so script execution remains parked until the movie completes or is skipped. This is the LOGO/OP/ED whole-movie path, distinct from non-modal scene movie op 0x236.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x20f_play_modal_movie_to_surface@0x422e50 shares the movie-object allocation, DirectShow graph open, audio-route, and volume setup used by 0x236, then calls movie_start_modal_playback@0x463280, ORs EngineCtx+0xa0ce4 with 0x2000, and marks movie presentation dirty. The main loop and window procedure special-case run-state 0x2000. Corpus has exactly three sites: LOGO (0x335f,42,4), OP (0x3364,42,4), and ED (0x3324,42,dynamic flags). Those ids are universal raw SYS4INI indexes for MPEG-pack LOGO.AGF, OP.AGF, and ED.AGF; each script releases its surface only after 0x20f resumes.
+
+Implemented through IHost.PlayModalMovieToSurface. ResourceMap.ResolveRawMovie deliberately bypasses scene manifests while retaining MPEG signature validation in ReadMovie. Godot reuses the asynchronous decoder/retained-surface compositor, parks only the VM thread until EOF, and treats mouse click or Accept/Cancel input as completion before wrapper cleanup releases the decoder. MPEG audio remains a separate backend/audio-clock contract.
 
 ### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
 - **summary:** 0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table.
@@ -795,10 +816,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x9 `exit-script` (exit-script, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
 ### 0x21 `u00418860` (u00418860, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -975,10 +992,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x130 `u00415F40` (u00415F40, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x132 `u0041EF00` (u0041EF00, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1140,10 +1153,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x207 `u00420B00` (u00420B00, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x20f `u00420E40` (u00420E40, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

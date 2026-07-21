@@ -35,6 +35,7 @@ public sealed class VirtualMachine
     private long _autoMessageTime0Ms = 500;
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
+    private bool _initialRootRun = true;
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
@@ -590,8 +591,13 @@ public sealed class VirtualMachine
                 Write(a[0], visits == 0 ? (terminal == 0 ? 1 : 0) : terminal);
                 return pc + 1;
             }
-            case "exit":
-            case "exit-script": return FRAME_RETURN;
+            case "exit": return FRAME_RETURN;
+            case "exit-script":
+                // Native op 0x9 clears the process-initial root flag before returning control to
+                // the root-script loader. Root reload itself remains represented by the port's
+                // existing frame/session boundary; retaining the flag here prevents LOGO/OP replay.
+                _initialRootRun = false;
+                return FRAME_RETURN;
             case "call-script":
             {
                 long id = a.Count > 0 ? Read(a[0]) : 0;
@@ -1028,6 +1034,19 @@ public sealed class VirtualMachine
                 _host.FadeBgm((int)Read(a[0]), Read(a[1])); return pc + 1;
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
                 return pc + 1;
+            case "get-initial-root-run": // 0x130 (out)
+                Write(a[0], _initialRootRun ? 1 : 0);
+                return pc + 1;
+            case "play-modal-movie-to-surface": // 0x20f (raw resource)(surface)(movie flags)
+            {
+                long rawResourceId = Read(a[0]);
+                int surfaceSlot = (int)Read(a[1]);
+                // The modal and scene-local paths share retained-surface composition. The host's
+                // distinct entry point preserves 0x20f's raw-id resolver and blocking lifecycle.
+                Gfx.SetSurface(surfaceSlot, rawResourceId, 0);
+                _host.PlayModalMovieToSurface(rawResourceId, surfaceSlot, Read(a[2]));
+                return pc + 1;
+            }
             case "u004221A0":           // pre-reference compatibility
             case "play-movie-to-surface": // 0x236 (resource)(surface)(movie flags)(sync mask)
             {

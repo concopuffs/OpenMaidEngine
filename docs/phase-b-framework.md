@@ -106,6 +106,18 @@ while Godot treated them as active-script manifest ids. The new packed-raw resol
 through the existing channel players. A synchronized TITLE→GAMESTART→TITLE trace records every load/start
 with its filename, and manual validation confirms they are audible; BGM remains unaffected.
 
+**Pre-title video sequence implemented (2026-07-20).** SYSTEM4 already owns the native sequence; the
+port did not lose an executable-side launcher. Its sole op `0x130` call returns an engine initial-root flag
+that is one at context construction and cleared only when op `0x9` resets/reloads root script id zero.
+SYSTEM4 calls `LOGO.BIN` and `OP.BIN` only while that flag is nonzero. The former stubbed-zero output
+explained the direct jump to TITLE. LOGO and OP then use the modal movie op
+`0x20f` with raw catalog movies `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`; existing `0x236` is the distinct
+non-modal, scene-local movie-to-surface path. The VM now models the initial-root flag and clears it at its
+existing op-`0x9` lifecycle boundary. Godot resolves a typed raw MPEG asset, reuses the asynchronous decoder
+and retained compositor, and parks the VM until EOF or mouse/Accept/Cancel input. Focused natural-boot tests
+prove `LOGO -> OP -> INIT -> TITLE` ordering and exact movie operands. MPEG audio remains explicitly deferred
+until the decoder abstraction has an engine-owned synchronized audio/volume contract.
+
 ## Stage B1 — Persistent session and scene coordinator
 
 Replace the single-SC0000-root assumption with an application-owned session that runs SYSTEM4 as its root.

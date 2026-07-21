@@ -180,13 +180,14 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "exit-script"
-category = "unknown"
-summary = ""
+category = "control"
+summary = "() - terminate the active script lifecycle and return to root script id 0. Before the native engine resets/reloads the root, it clears the initial-root-run flag queried by op 0x130 so LOGO/OP are not replayed."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x9_handler@0x418f50 stores zero to EngineCtx+0x54ff0, calls scene_context_init_reset, and loads root script resource id 0. Corpus sites are terminal scene/control exits rather than ordinary local returns."
+details = "The port retains its earlier frame/session-boundary representation of root return, but now performs the proven process-lifecycle side effect by clearing its VM-owned initial-root-run flag. A faithful whole-stack root reload remains part of the broader persistent scene-coordinator work, not the startup-movie slice."
 
 [[opcode]]
 op = 0x21
@@ -2612,23 +2613,24 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x130
-label = "u00415F40"
+label = "get-initial-root-run"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415F40"
-category = "unknown"
-summary = ""
+name = "get-initial-root-run"
+category = "control"
+summary = "(out) - write the engine's initial-root-run flag. It is initialized to 1 when the AGE context is constructed and cleared by op 0x9 before that opcode resets state and reloads root script id 0. SYSTEM4 uses the value to call LOGO.BIN and OP.BIN only on the process's initial root run."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x130_get_initial_root_run@0x4295b0 copies EngineCtx+0x54ff0 to operand 1. FUN_00413860 initializes +0x54ff0 to 1 at 0x413cc7/0x413d15; op_0x9_handler@0x418f50 is its only later writer and clears it before scene_context_init_reset plus script_frame_load_resource(...,0). Corpus: sole site SYSTEM4@0x29a branches to LOGO.BIN then OP.BIN only when the returned value is nonzero."
+details = "Implemented as process-lifecycle state owned by the persistent VM: it begins at one and op 0x9 clears it. It is not a script global, save/profile value, command-line seed, or script-name special case."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_initial_root_run"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -5169,33 +5171,34 @@ evidence = "Ghidra /v2: op_0x20e_clear_render_target@0x4174f0 passes renderer ct
 
 [[opcode]]
 op = 0x20f
-label = "u00420E40"
+label = "play-modal-movie-to-surface"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420E40"
-category = "unknown"
-summary = ""
+name = "play-modal-movie-to-surface"
+category = "draw"
+summary = "(raw_resource_id)(surface_slot)(movie_flags) - open a universal raw-catalog MPEG asset into an existing retained surface, start its native movie graph, and arm modal run-state bit 0x2000 so script execution remains parked until the movie completes or is skipped. This is the LOGO/OP/ED whole-movie path, distinct from non-modal scene movie op 0x236."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x20f_play_modal_movie_to_surface@0x422e50 shares the movie-object allocation, DirectShow graph open, audio-route, and volume setup used by 0x236, then calls movie_start_modal_playback@0x463280, ORs EngineCtx+0xa0ce4 with 0x2000, and marks movie presentation dirty. The main loop and window procedure special-case run-state 0x2000. Corpus has exactly three sites: LOGO (0x335f,42,4), OP (0x3364,42,4), and ED (0x3324,42,dynamic flags). Those ids are universal raw SYS4INI indexes for MPEG-pack LOGO.AGF, OP.AGF, and ED.AGF; each script releases its surface only after 0x20f resumes."
+details = "Implemented through IHost.PlayModalMovieToSurface. ResourceMap.ResolveRawMovie deliberately bypasses scene manifests while retaining MPEG signature validation in ReadMovie. Godot reuses the asynchronous decoder/retained-surface compositor, parks only the VM thread until EOF, and treats mouse click or Accept/Cancel input as completion before wrapper cleanup releases the decoder. MPEG audio remains a separate backend/audio-clock contract."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "raw_resource_id"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface_slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "movie_flags"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

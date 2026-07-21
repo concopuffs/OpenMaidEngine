@@ -103,4 +103,8 @@ public interface IHost
     // Native op 0x236 binds a DirectShow movie decoder to an existing retained texture surface.
     // Playback is non-modal: the VM advances to the following instruction while the host publishes frames.
     void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) { }
+    // Native op 0x20f uses a universal raw-catalog id and parks script execution until the movie
+    // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host
+    // owns the modal wait so its render loop can continue publishing frames.
+    void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags) { }
 }

@@ -249,6 +249,28 @@ not a thin handle seed: it calls 23 data initializers in order (`EBINIT`, `CNINI
 Godot now runs SYSTEM4 itself by default, so this complete sequence and its host-visible side effects execute
 in one VM; Godot `--boot` remains only for an explicit direct-scene diagnostic such as `--scene SC0000`.
 
+**Startup-video gate and modal player (2026-07-20).** The apparently optional `LOGO`/`OP` calls are
+deterministic first-process-run behavior, not a profile/save decision. `SYSTEM4@0x29a` calls op `0x130` and
+executes `LOGO.BIN@0x2a4` then `OP.BIN@0x2a7` when its result is nonzero. Native
+`op_0x130_get_initial_root_run@0x4295b0` returns `EngineCtx+0x54ff0`; context construction initializes that
+field to one, while `op_0x9_handler` is its only later writer and clears it before resetting engine state and
+reloading root script id zero. The port now owns the same flag in the persistent VM: it begins at one,
+`0x130` writes it, and the existing op-`0x9` lifecycle boundary clears it. It is not a boot seed or profile
+value. Full native whole-stack root reload remains part of the broader scene-coordinator work.
+
+Both child scripts create/draw 800x600 surface 42 and call op `0x20f`; their resource ids are universal raw
+SYS4INI indexes `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`. `ED.BIN` is the only other corpus user, with
+`0x3324`/`ED.AGF`. All three payloads begin with MPEG program-stream pack code `00 00 01 BA`.
+`op_0x20f_play_modal_movie_to_surface@0x422e50` shares the movie allocation/open/audio setup used by
+non-modal scene-movie op `0x236`, then starts playback and sets run-state bit `0x2000`; the engine main loop
+and window procedure treat that state as the modal whole-movie service. This parks the script at the opcode
+until EOF or input cancellation, after which the script's following instructions release the object/surface.
+The port implements `0x20f` through a typed raw-movie resolver and a distinct modal host call. The existing
+asynchronous decoder publishes frames through the retained surface while only the VM thread is parked;
+EOF, mouse click, Accept, or Cancel resumes the wrapper so its scripted cleanup releases surface 42.
+`0x236` retains its scene-local, non-modal contract. Both paths still intentionally leave the MPEG audio
+pin unrendered; synchronized movie audio remains a deliberate backend/audio-clock slice.
+
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
 instruction-offset set. The captured New Game route is:
 

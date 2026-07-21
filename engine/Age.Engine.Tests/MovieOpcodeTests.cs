@@ -9,6 +9,46 @@ using Xunit;
 public class MovieOpcodeTests
 {
     [Fact]
+    public void InitialRootFlagStartsSetAndClearsWhenExitScriptRuns()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var root = ScriptAssembler.Assemble(table, "ROOT", new List<(int, Operand[])>
+        {
+            (0x130, new[] { new Operand(3, 0x100) }),
+            (0x9, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(root, table, new RecordingHost());
+
+        vm.Run();
+        Assert.Equal(1, vm.Globals[0x100]);
+
+        vm.Globals[0x100] = -1;
+        vm.Run();
+        Assert.Equal(0, vm.Globals[0x100]);
+    }
+
+    [Fact]
+    public void ModalMovieDispatchesRawResourceSurfaceAndFlags()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MODAL", new List<(int, Operand[])>
+        {
+            (0x20f, new[] { new Operand(0, 0x335f), new Operand(0, 42), new Operand(0, 4) }),
+            (0x55, new[] { new Operand(3, 0x1234), new Operand(0, 0x5678) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { (0x335fL, 42, 4L) }, host.ModalMovies);
+        Assert.Equal(0x5678, vm.Globals[0x1234]);
+        vm.Gfx.BindDraw(1, 42, 0, 0, 1, 1, 0, 0);
+        Assert.Equal(0x335f, vm.Gfx.SnapshotVisibleObjects().Single().SurfaceResId);
+    }
+
+    [Fact]
     public void Sc0000ResumesImmediatelyAfterMovieOpcodeAtBytecodeOffset13d1()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -66,6 +106,20 @@ public class MovieOpcodeTests
         var movie = resources.ReadMovie(entry!);
         Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
         Assert.Equal(8_194_052, movie.Bytes.Length);
+    }
+
+    [Theory]
+    [InlineData(0x335f, "LOGO.AGF")]
+    [InlineData(0x3364, "OP.AGF")]
+    public void ModalMoviePayloadResolvesFromUniversalRawCatalog(int rawId, string expectedName)
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var entry = resources.ResolveRawMovie(rawId);
+
+        Assert.Equal(expectedName, entry?.Name);
+        var movie = resources.ReadMovie(entry!);
+        Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
     }
 
     [Fact]

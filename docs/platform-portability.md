@@ -23,7 +23,7 @@ also softer Windows assumptions that should be tested or replaced before claimin
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
-| SC0000 movie decode | `godot/DirectShowMovieDecoder.cs`: DirectShow COM objects plus `ole32.dll` `CoInitializeEx` / `CoUninitialize` | Movie startup cannot run outside Windows | Introduce a decoder interface and backend factory; retain DirectShow on Windows while adding a portable MPEG backend |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `godot/DirectShowMovieDecoder.cs`: DirectShow COM objects plus `ole32.dll` `CoInitializeEx` / `CoUninitialize` | Movie playback cannot run outside Windows | Introduce a decoder interface and backend factory; retain DirectShow on Windows while adding a portable MPEG backend |
 | Movie integration | `godot/Main.cs` directly constructs and stores `DirectShowMovieDecoder`; `Main` is marked `SupportedOSPlatform("windows")` | The frontend has no runtime fallback or OS-specific source selection | Type `MovieRuntime` against the decoder interface, select by platform/build, and move the Windows annotation to the DirectShow backend |
 | Movie audio | DirectShow connects only the video pin to the sample grabber/null renderer | The MPEG audio stream is intentionally silent on every platform | Design a PCM/audio-clock contract or let a future backend own synchronized A/V; separate feature slice |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
@@ -42,8 +42,8 @@ Godot abstractions.
 The existing connection is localized but one abstraction short of being replaceable without edits:
 
 ```
-VM op 0x236
-  -> IHost.PlayMovieToSurface
+VM op 0x236 (non-modal) / op 0x20f (modal)
+  -> IHost.PlayMovieToSurface / PlayModalMovieToSurface
   -> VFS-owned MoviePayload bytes
   -> DirectShowMovieDecoder
   -> newest RGBA frame
@@ -59,8 +59,9 @@ interface. A future cleanup should:
 2. Add an injected factory that accepts `MoviePayload` and selects an available backend.
 3. Keep DirectShow in a Windows-specific source set or assembly, with its platform annotation local to it.
 4. Implement a portable MPEG program-stream backend that produces the same top-down RGBA8 frames.
-5. Preserve newest-frame-wins delivery, asynchronous playback, synchronous open failure, EOF notification,
-   and the retained-surface lifecycle already validated for opcode `0x236`.
+5. Preserve newest-frame-wins delivery, asynchronous decode, synchronous open failure, EOF notification,
+   and the retained-surface lifecycle already validated for opcode `0x236`; expose modal completion/cancel
+   separately for `0x20f` rather than blocking inside the decoder backend.
 6. Treat synchronized movie audio as a separate extension of the contract rather than coupling it to the
    compositor.
 

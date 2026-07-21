@@ -41,6 +41,16 @@ public sealed class ResourceMap
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
 
+    /// <summary>Resolve op 0x20f's universal raw-catalog movie id without applying the executing
+    /// script's manifest base. AGE stores these MPEG program streams under .AGF names; ReadMovie
+    /// validates the payload signature before playback.</summary>
+    public AssetEntry? ResolveRawMovie(long rawId)
+    {
+        var entry = _catalog.ResolveRaw(rawId);
+        return entry is { IsPlaceholder: false } &&
+               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
+    }
+
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
     public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
 

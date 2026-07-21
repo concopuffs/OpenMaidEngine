@@ -39,6 +39,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x53d60` | `ctx_record_base` | `void*` | 0x78-byte context-record array base (coroutine/script contexts) |
 | `0x53d64` | `frame_script_resource_id` | `uint` | raw packed SYS4/AAI resource id for this 0x78-byte script frame; persisted ReadTextDB script key |
 | `0x53d88` | `frame_instruction_word_count` | `int` | current decoded instruction length in dwords for each 0x78-byte script frame; interpreter advances PC by this value * 4 |
+| `0x54ff0` | `initial_root_run` | `int` | initialized to 1 at AGE context construction; queried by op 0x130 and cleared by op 0x9 before root script id 0 is reloaded |
 | `0x550fc` | `message_skip_display_enabled` | `int` | persistent all-message Skip state returned by op 0x19a for the ADV control-strip active overlay |
 | `0x55100` | `adv_skip_service_enabled` | `int` | ADV presentation lifecycle gate: op 0x19b clears it while preserving the persistent Skip toggle; op 0x19c sets it before recomputing active message/read skip |
 | `0x55104` | `auto_message_enabled` | `int` | ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes |

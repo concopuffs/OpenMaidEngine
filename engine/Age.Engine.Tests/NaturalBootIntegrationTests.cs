@@ -99,6 +99,13 @@ public class NaturalBootIntegrationTests
         {
             "SYSTEM4.BIN", "INITCONFIG.BIN", "INIT2.BIN",
         }, sink.Entered.Take(3));
+        int logo = sink.Entered.IndexOf("LOGO.BIN");
+        int opening = sink.Entered.IndexOf("OP.BIN");
+        int init = sink.Entered.IndexOf("INIT.BIN");
+        int title = sink.Entered.IndexOf("TITLE.BIN");
+        Assert.True(logo >= 0 && logo < opening && opening < init && init < title,
+            $"entered={string.Join(",", sink.Entered)}");
+        Assert.Equal(new[] { (0x335fL, 42, 4L), (0x3364L, 42, 4L) }, host.ModalMovies);
         Assert.Contains("TITLE.BIN", sink.Entered);
         Assert.Contains("GAMESTART.BIN", sink.Entered);
         Assert.Contains("UNITECH.BIN", sink.Entered);

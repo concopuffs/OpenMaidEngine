@@ -386,6 +386,12 @@ public partial class Main : Godot.Control
             _vm.UpdatePointer(p.X, p.Y);
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
+            if (mb.Pressed && _host.IsModalMovieWaiting)
+            {
+                _host.SignalInput();
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             // AGE exposes the physical left button twice: raw mask 0x1 for the timed mouse callback,
             // and the configured primary action (default input callback index 4). Script-owned callback
             // loops consume both channels without releasing the enclosing ADV page wait.
@@ -408,6 +414,13 @@ public partial class Main : Godot.Control
         UpdateAgeInputCallback(e, "ui_right", 3);
         UpdateAgeInputCallback(e, "ui_accept", 4);
         UpdateAgeInputCallback(e, "ui_cancel", 5);
+        if (_host.IsModalMovieWaiting
+            && (e.IsActionPressed("ui_accept") || e.IsActionPressed("ui_cancel")))
+        {
+            _host.SignalInput();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e.IsActionPressed("ui_accept")
             && !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive) _host.SignalInput();
     }

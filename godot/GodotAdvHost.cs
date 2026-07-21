@@ -48,11 +48,14 @@ public sealed class GodotAdvHost : IHost
     private long _waitIndicatorStartedMs;
     private bool _waitIndicatorEnabled;
     private volatile bool _advPagePresentationSuspended;
+    private volatile bool _modalMovieWaiting;
+    private volatile bool _modalMovieCancelled;
     private GfxState? _foregroundGfx;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
     public volatile bool IsSleeping;
     public volatile bool IsTextRevealing;
+    public bool IsModalMovieWaiting => _modalMovieWaiting;
     private int _presentRequested = 1;
     private long _transitionStartedAtMs = -1;
     public long TransitionStartedAtMs => System.Threading.Interlocked.Read(ref _transitionStartedAtMs);
@@ -342,6 +345,13 @@ public sealed class GodotAdvHost : IHost
     // the foreground lifecycle; it never pre-arms or advances the following stable input wait.
     public void SignalInput()
     {
+        if (_modalMovieWaiting)
+        {
+            _modalMovieCancelled = true;
+            _timeline?.State("modal-movie-cancel", new());
+            _frameSignal.Set();
+            return;
+        }
         if (IsTextRevealing)
         {
             lock (_textLock) _advTextForceComplete = true;
@@ -566,6 +576,54 @@ public sealed class GodotAdvHost : IHost
         string scene = CurrentScene;
         var asset = _res.Resolve(scene, resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return; }
+        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false);
+    }
+
+    public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
+    {
+        var asset = _res.ResolveRawMovie(rawResourceId);
+        if (asset == null)
+        {
+            Godot.GD.Print($"modal movie unresolved raw:0x{rawResourceId:x}");
+            return;
+        }
+
+        _modalMovieCancelled = false;
+        _modalMovieWaiting = true;
+        try
+        {
+            if (!StartMovie(asset, rawResourceId, surfaceSlot, movieFlags, 0, modal: true)) return;
+            _timeline?.State("modal-movie-wait", new()
+            {
+                ["resource"] = rawResourceId, ["surface"] = surfaceSlot, ["file"] = asset.Name,
+            });
+            while (!_stopping && !_modalMovieCancelled)
+            {
+                lock (_imageLock)
+                    if (_completedMovies.Contains(rawResourceId)) break;
+                _frameSignal.WaitOne(50);
+            }
+
+            // Cancellation is a completed modal presentation from the script's perspective. The
+            // wrapper's following surface-release opcode performs the ordinary decoder teardown.
+            if (_modalMovieCancelled)
+                lock (_imageLock) _completedMovies.Add(rawResourceId);
+            _timeline?.State("running", new()
+            {
+                ["modal_movie_complete"] = !_modalMovieCancelled,
+                ["modal_movie_cancelled"] = _modalMovieCancelled,
+            });
+        }
+        finally
+        {
+            _modalMovieWaiting = false;
+            _modalMovieCancelled = false;
+        }
+    }
+
+    private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
+                            long syncMask, bool modal)
+    {
         try
         {
             var movie = _res.ReadMovie(asset);
@@ -579,11 +637,16 @@ public sealed class GodotAdvHost : IHost
             _timeline?.Event("movie-start", new()
             {
                 ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
-                ["flags"] = movieFlags, ["sync_mask"] = syncMask,
+                ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
             _main.CallDeferred("PlayMovie", movie.Bytes, movie.Name, resourceId, asset.RawIndex);
+            return true;
         }
-        catch (System.Exception e) { Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}"); }
+        catch (System.Exception e)
+        {
+            Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
+            return false;
+        }
     }
 
     public void ReleaseSurface(int slot)

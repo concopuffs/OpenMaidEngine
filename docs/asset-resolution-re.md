@@ -115,8 +115,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    The active manifest is frame-local, not fixed to the root scene: every VM call frame brackets host work
    with its script context. `set-texture` resolves the local id at load time and retains the normalized raw
    catalog id in the graphics surface, so that surface remains stable after a nested helper returns or a
-   sibling script becomes active. Voice and movie calls likewise resolve against the executing frame;
-   SFX is the separate universal packed-id family documented below.
+   sibling script becomes active. Voice and scene-movie op `0x236` likewise resolve against the executing
+   frame; modal whole-movie op `0x20f` and SFX are separate universal raw/packed-id families documented below.
 4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
    resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
@@ -268,7 +268,7 @@ Channel, loop, interruption, timing, fade, load/start, and release behavior is u
 
 ### SC0000 movie payload and presentation (2026-07-11)
 
-The only implemented site is SC0000 `0x236@0x13c8`. Scene-local resource `0x33` resolves through the
+The scene-local implementation was first validated at SC0000 `0x236@0x13c8`. Resource `0x33` resolves through the
 authoritative catalog to `DATA1.ALF:CHAPTER.AGF` (archive offset 3,908,816; size 8,194,052). Despite the
 `.AGF` name, its payload begins with MPEG program-stream pack start code `00 00 01 BA`; the installed asset
 is MPEG-1 program stream video at 800x600, 29.97 fps, approximately 11.98 seconds, with video stream `E0`
@@ -296,6 +296,24 @@ unrendered. The real-scene trace remains a separate extracted-present test
 because the current `Paths.Scripts()` test bootstrap still locates its root `*.BIN` fixtures there; migrating
 that test/bootstrap path is unrelated to movie asset loading and was not folded into this slice.
 
+### Modal startup/ending movie resources (implemented 2026-07-20)
+
+Opcode `0x20f` uses universal raw SYS4INI indexes rather than the executing script's manifest. Its complete
+corpus is `LOGO.BIN (0x335f,42,4)`, `OP.BIN (0x3364,42,4)`, and
+`ED.BIN (0x3324,42,dynamic_flags)`. Raw records `0x335f`, `0x3364`, and `0x3324` are respectively
+`LOGO.AGF`, `OP.AGF`, and `ED.AGF`; all begin with MPEG pack code `00 00 01 BA`. The current
+`ResourceMap.Resolve(scene,id)` path correctly returns out-of-range for the large LOGO/OP values, proving
+that an implementation must expose a typed raw-movie resolver rather than add manifest fallbacks globally.
+Native `0x20f` also arms modal run-state `0x2000`; unlike `0x236`, these six-instruction wrapper scripts
+depend on the movie service itself to park until EOF/input cancellation before they release surface 42.
+
+`ResourceMap.ResolveRawMovie` now supplies that typed universal lookup, while `ReadMovie` remains the MPEG
+signature gate. `IHost.PlayModalMovieToSurface` is distinct from the scene-local non-modal call: Godot
+reuses the asynchronous DirectShow frame decoder and retained compositor but parks the VM thread until EOF
+or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
+The decoder still intentionally leaves audio unrendered; OP/ED audio parity needs an explicit synchronized
+movie-audio/backend contract rather than an unmanaged default-device side path.
+
 VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
 records. All records carry selector 1 and literal `$1$` names. The full directory has stable SHA-256
@@ -307,8 +325,8 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 ### Deliberate non-goals
 
 - Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
-- AGF encoding, movie audio, or generalized video APIs. The implemented movie path is deliberately limited
-  to SC0000's existing `0x236` site and Windows' native DirectShow MPEG decoder.
+- AGF encoding, movie audio, or generalized video APIs. Implemented `0x236` and `0x20f` playback remains
+  deliberately limited to Windows' native DirectShow MPEG decoder.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
   ordered mod roots can be layered onto the same store later.
 - Removing the extraction/conversion tools immediately. They remain independent parity oracles until the

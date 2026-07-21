@@ -36,6 +36,7 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<bool> MessageSkipChanges = new();
@@ -128,6 +129,8 @@ internal class RecordingHost : IHost
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
     public void PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
         => Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+    public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
+        => ModalMovies.Add((rawResourceId, surfaceSlot, movieFlags));
 }
 
 internal sealed class MapProvider : IScriptProvider
