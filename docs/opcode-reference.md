@@ -188,6 +188,13 @@
 - **grounding:** source=frida, confidence=high
 - **evidence:** Ghidra /v2: op_0x2bf_schedule_sfx_start@0x425240 calls sfx_set_delay@0x482720 on the ctx+0x14024 sound facade. The worker's native error text names Function:SetDelay, validates channel<=9, and stores active/progress/delay/start-mode state. Existing SC0000 trace: SetDelay(channel 4, mode 0, 100) is followed about 109 ms later by the ordinary sfx_channel_start worker on channel 4 with mode 0 and no intervening 0xb5.
 
+### 0x2c0 `schedule-voice-playback` (schedule-voice-playback, argc 3)
+- **summary:** Arm delayed voice playback: (voice_id, playback_variant, delay_ms). The engine main tick starts the voice after the monotonic deadline.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x2c0_schedule_voice_playback@0x425290 forwards three operands to voice_schedule_delayed_playback@0x488480 on the text/ADV service at EngineCtx+0x14508. That worker stores active=1, start=0, delay at +0x424, voice id at +0x428, and variant at +0x42c. engine_main_tick_with_exception_policy calls voice_tick_delayed_playback@0x4884d0; after unsigned elapsed >= delay it clears the request and calls voice_play_indexed_asset(voice_id,variant). Corpus: one BTL site at 0x2f6e.
+
+The setter replaces the single pending request, marks it active, and clears its start timestamp. On the first service tick the worker captures the current millisecond time; once unsigned elapsed time reaches delay_ms it clears the request and calls the ordinary indexed-voice player with voice_id and playback_variant. BTL's only call selects a randomized combat voice id, variant 0, and an entity-specific delay.
+
 ## compute
 
 ### 0x60 `random-modulo` (u0041A270, argc 2)
@@ -224,6 +231,27 @@ Operand 2 names the base cell itself: a global-bank operand produces a global re
 
 Implemented with domain-preserving addressed-array access, native signed 32-bit key addition/overflow, stable insertion ordering, repeated count reads, and the native unconditional out_indices[0]=0 write. Focused tests lock stability/overflow/zero-count behavior; a natural SYSTEM4-to-SC0000 state carried into release CHMENU proves the initial slot remains selected after the real roster sort.
 
+### 0x132 `reset-int-queue` (reset-int-queue, argc 1)
+- **summary:** (queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Valid queue ids are 0..10.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, immediately before packing and enqueueing the origin coordinate for their flood fills.
+
+Implemented as 11 VM-lifetime queue slots. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic.
+
+### 0x133 `enqueue-int` (enqueue-int, argc 2)
+- **summary:** (queue_id, value) - append one integer to the selected engine FIFO, compacting consumed entries or growing its storage when required.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x133_enqueue_int@0x4218d0 validates queue_id 0..10, fetches value, and calls int_queue_enqueue@0x408930 on ctx's selected queue. The helper appends at end_index, compacts unread entries when read_index is nonzero, or grows capacity by the 0x100-dword quantum. All four corpus sites are in ATSEEK/MVSEEK and enqueue coordinates packed as (x << 16) + y.
+
+Implemented with signed 32-bit value normalization into the selected FIFO. The port diagnoses invalid or never-reset slots; every shipped use resets queue 0 before enqueueing.
+
+### 0x134 `try-dequeue-int` (try-dequeue-int, argc 3)
+- **summary:** (queue_id, out_success, out_value) - consume the next integer from the selected FIFO, writing success=1 and the value; write success=0 when empty.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x134_try_dequeue_int@0x429620 validates queue_id 0..10 and compares the selected queue's read_index with end_index. When nonempty it reads data[read_index], increments read_index, updates the high-water index, writes 1 to operand 2, and writes the item to operand 3; when empty it writes 0 to operand 2. Native still writes a non-item implementation value to operand 3 on failure, but both shipped callers branch on out_success before reading out_value. ATSEEK and MVSEEK use the opcode as the loop head for their coordinate flood fills.
+
+Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword; empty writes success=0 and retains the prior value destination because native's failure value is an unusable implementation pointer. Focused tests cover slot independence, ordering, empty/reset behavior, and signed values; real MVSEEK/ATSEEK regressions prove both searches expand beyond the origin.
+
 ### 0x135 `bit-set` (bit-set, argc 2)
 - **summary:** (value)(bit_index) - set the indexed bit in the destination integer.
 - **grounding:** source=investigation, confidence=high
@@ -233,6 +261,16 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 - **summary:** (value)(bit_index) - clear the indexed bit in the destination integer.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
+
+### 0x191 `absolute-value` (absolute-value, argc 2)
+- **summary:** Write the signed 32-bit absolute value of operand 2 to operand 1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x191_handler@0x426de0 computes (value ^ (value >> 31)) - (value >> 31) and writes it through vm_operand_write. All five Himegari calls are in SELACT, where it normalizes a signed preview delta before drawing it.
+
+### 0x193 `concat` (concat, argc 3)
+- **summary:** Concatenate operand 2 followed by operand 3 and replace the destination string. Sources are resolved before the write, so destination/source aliasing is supported.
+- **grounding:** source=inference, confidence=high
+- **evidence:** Kelebek identifies param1 = param2.concat(param3). Corpus ordering confirms direction and aliasing: ADDEXP builds level/result messages with both literal-prefix concat(dst, literal, dst) and append concat(dst, dst, literal); BTL has eight calls.
 
 ### 0x194 `string-equals` (string-equals, argc 3)
 - **summary:** (out)(left)(right) - compare two complete SYS4 strings and write 1 when equal, otherwise 0.
@@ -257,6 +295,11 @@ Native applies strlen to the NUL-terminated engine byte string and shifts the by
 - **summary:** (source)(destination)(count) - copy count consecutive 32-bit cells from source to destination.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves addressable operands 1 and 2 through vm_operand_resolve_address@0x425a50, and calls memcpy(destination, source, count*4). Corpus: 65 calls across direct global/local spans and local pointers; 43 are immediately preceded by take-address 0x63. The C# VM copies resolved integer-cell spans while retaining local/global address domains; focused tests cover direct spans and aliased pointers, and the traced natural boot reaches the UNITECH/CALCCC pair without fallback.
+
+### 0x1c8 `toString` (toString, argc 2)
+- **summary:** Convert the source signed 32-bit integer to its invariant decimal string and replace the destination string.
+- **grounding:** source=inference, confidence=high
+- **evidence:** Kelebek identifies integer-to-string conversion. All five corpus sites are in ADDEXP and feed concat immediately: level numbers, signed deployment-cost deltas, and movement deltas. Source types are global/local integer and the destination is a local string.
 
 ### 0x2c5 `byte-string-length` (strlen, argc 2)
 - **summary:** Write the resolved NUL-terminated engine string's raw byte length.
@@ -294,6 +337,22 @@ Native mechanism (dispatch table `handler(op)=ctx[0x26c93+op]`, op 0x03 -> FUN_0
 Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see its entry.
 This also names the whole call graph statically (build/callscript-names.json).
 
+
+### 0x6 `preload-script-slot` (preload-script-slot, argc 2)
+- **summary:** (script_id, frame_slot) - load and allocate a script into a numbered engine context slot without executing it. Valid slots are 0..39.
+- **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x8
+- **evidence:** Ghidra /v2: op_0x6_preload_script_slot@0x41bdb0 fetches script_id and frame_slot, saves the current context index, selects frame_slot, rejects values above 39, calls script_frame_load_resource(ctx+0x54fe8, script_id), restores the caller index, and throws on load failure. SYSTEM4's only three sites preload ATSEEK.BIN (0x337f) into slot 0x1d, SETROUTE.BIN (0x3380) into 0x1e, and MVSEEK.BIN (0x3381) into 0x1f before INIT2.
+
+Implemented as persistent VM-owned preloaded slots containing the resolved script id and one reusable ExecFrame. Replacing a slot allocates a fresh frame/local bank; invalid slots, absent providers, and unresolved scripts halt diagnostically. Root scene reload clears the slots before SYSTEM4 registers them again.
+
+### 0x8 `call-preloaded-script-slot` (call-preloaded-script-slot, argc 1)
+- **summary:** (frame_slot) - restart and execute the script previously loaded into that engine context slot, returning to the caller when it exits.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x6
+- **evidence:** Ghidra /v2: op_0x8_call_preloaded_script_slot@0x41bf00 fetches frame_slot, switches cur_ctx_index to it, errors if frame_codebase is null, stores the caller context index into the selected slot's ctx_record_base, resets its PC to codebase and instruction length to zero, and returns to the dispatcher. op_0x2_exit_or_return_frame@0x417940 disposes only an adjacent child (parent+1==current); SYSTEM4's non-adjacent slots 0x1d..0x1f therefore retain their allocated local banks between calls. Corpus has 64 sites, exclusively slots 0x1d/0x1e/0x1f. FIELD uses 0x1f for MVSEEK, 0x1d for ATSEEK, and 0x1e for SETROUTE.
+
+Implemented by recursively executing the reusable preloaded ExecFrame while preserving its local banks across invocations, restarting at script offset zero, and propagating halt/root-reload/exit outcomes like ordinary call-script. The port emits normal call-script trace events for observability. Focused tests prove code restart plus local persistence and drive the real MVSEEK through SYSTEM4's exact 0x06/0x08 ABI.
 
 ### 0x9 `exit-script` (exit-script, argc 0)
 - **summary:** () - discard the complete active script stack, reset scene-owned engine services, and load raw script resource 0 as the new root. The global VM banks and process-owned configuration survive; the initial-root-run flag queried by op 0x130 is cleared so LOGO/OP are not replayed.
@@ -343,6 +402,11 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **evidence:** Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section.
 
 Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class), and the native arm helper clamps duration to a minimum of 1 ms. ROOM's input loop deliberately uses sleep(0), making it a one-engine-tick yield rather than a no-op. The handler also records its generic 3-dword instruction length and runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for max(1, scaled duration) ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity).
+
+### 0xd0 `get-monotonic-time-ms` (get-monotonic-time-ms, argc 1)
+- **summary:** Write the native monotonic millisecond clock to operand 1. Battle presentation uses paired samples around timed callback sequences to calculate elapsed time.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xd0_handler@0x428860 calls imp_winmm_timeGetTime and writes the returned 32-bit tick count to operand 1. BTL samples it before and after its timed HP/damage presentation; MVRTN has the other two corpus calls.
 
 ### 0xd3 `begin-timed-callback-sequence` (u00425960, argc 0)
 - **summary:** Clear and initialize the current script frame's timed local-callback sequence.
@@ -507,6 +571,13 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **evidence:** Ghidra /v2: op_0x205_handler@0x422ab0 fetches (surface,x,y,value,width,flags), calls format_integer_for_surface@0x407190, then draw_string_to_surface@0x450150. DRAWENP contains all 16 previously stubbed calls responsible for its level, HP/SP/FS, and stat values.
 
 The field width includes an optional sign. Bit 0 zero-pads; bit 1 centers omitted leading cells; bit 2 left-aligns; bits 3/4 request '+' for positive/zero; bit 5 renders zero with '-'. With bit 16, output remains half-width ASCII and omitted-cell x adjustment uses half the current font cell advance; otherwise the formatter converts digits/signs to full-width CP932. Default alignment preserves the field's right edge by shifting x right for each omitted leading cell.
+
+### 0x207 `copy-surface-rect` (copy-surface-rect, argc 8)
+- **summary:** Copy a rectangular pixel region between mutable graphics surfaces: (source_surface, destination_surface, source_x, source_y, width, height, destination_x, destination_y).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x207_handler@0x422b50 constructs source [x,y,x+w,y+h] and destination [dx,dy,dx+w,dy+h] rectangles and calls gfx_copy_surface_rect@0x477da0. The worker validates both surface slots, clips both rectangles together, marks the destination dirty, and copies through locked D3D surfaces. Corpus: 15 calls total: DRAWMINIMAP 8, STATUS 3, READICON 2, DRAWTIP 2.
+
+The worker clips the paired source and destination rectangles against both surfaces while preserving their correspondence, returns successfully for an empty clipped rectangle, and marks the destination surface dirty. Himegari uses the opcode for minimap markers plus STATUS, READICON, and DRAWTIP surface composition.
 
 ### 0x208 `get-texture-size` (get-texture-size, argc 3)
 - **summary:** 0x208 (slot)(out_w)(out_h) — writes the loaded texture's width/height into two output globals; keystone for bytecode-computed sprite/bg geometry (SC0000 label_12649)
@@ -689,6 +760,11 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint.
 
+### 0x23a `query-movie-surface-active` (query-movie-surface-active, argc 2)
+- **summary:** Write whether a movie-backed surface has a nonzero playback/synchronization state at surface object offset 0x42c; an empty surface slot writes zero.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x23a_handler@0x42a440 indexes the surface table by operand 2, writes zero for a null slot, otherwise writes surface+0x42c != 0. All four corpus sites are movie completion polling loops: BTL checks active combat-movie surfaces 7+, while FIELD and USEMAGIC poll surface 42 between present-frame, frame-time sampling, and sleep(16).
+
 ### 0x23b `draw-decimal-glyphs` (u00422460, argc 7)
 - **summary:** Draw an integer as decimal glyph objects from a style registered by opcode 0x13a.
 - **grounding:** source=investigation, confidence=high
@@ -696,6 +772,11 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **evidence:** Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy.
 
 First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. Invalid or unregistered style indices raise the engine's script error.
+
+### 0x23c `sample-frame-time` (sample-frame-time, argc 0)
+- **summary:** Shift the current retained-presentation timestamp to the previous-frame field, then sample the native monotonic millisecond clock as the new current timestamp.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x23c_handler@0x417580 copies EngineCtx frame_timer at +0x51b64 to +0x51b68, then stores imp_winmm_timeGetTime() at +0x51b64. BTL, ADDEXP, SHOWGROW, USEMAGIC, and FIELD place it at presentation/present-frame boundaries.
 
 ### 0x23d `release-transient-surfaces` (release-transient-surfaces, argc 0)
 - **summary:** Stop movie bindings and release transient gfx surface slots 42 through 999 inclusive, preserving system-owned slots 0 through 41.
@@ -729,6 +810,11 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **summary:** Load an AGF by universal packed SYS4INI/AAI catalog id into a retained surface slot using native surface mode 1 and the same RGB colorkey contract as set-texture (0x1f9).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instruction-length 7 and is contract-identical to gfx_op_0x1f9_load_surface through release, asset_open_indexed_entry, RGB colorkey conversion, load failure, and cleanup. Its mode-1 gfx_surface_mode1_ctor selects a tiled large-image wrapper: gfx_tiled_surface_create@0x432ff0 splits the logical dimensions into DAT_005b15b0-sized ordinary mode-0 child textures; gfx_tiled_surface_upload_agf@0x431a10 decodes and uploads each region; gfx_tiled_surface_blit@0x4316b0 subdivides a requested logical source rectangle across those tiles. It is not a spritesheet interpretation or alternate blend mode, so the port's contiguous CPU image is behaviorally equivalent. Corpus literals are universal raw indexes, including FIELD 0x32da..0x32dd -> SO005/SO007/SO008A/SO007A, and therefore bypass scene-section normalization.
+
+### 0x24e `set-gfx-animation-service-flags` (set-gfx-animation-service-flags, argc 1)
+- **summary:** Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. The mapped field is also read by op 0x243: bit 1 suppresses its force-complete/clock-reset request.
 
 ## input
 
@@ -966,14 +1052,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x6 `u00417E80` (u00417E80, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x8 `u00417FC0` (u00417FC0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x21 `u00418860` (u00418860, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1098,25 +1176,9 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0xd0 `u00415830` (u00415830, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x12c `lookup-array-2d` (lookup-array-2d, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x132 `u0041EF00` (u0041EF00, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x133 `u0041EFF0` (u0041EFF0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x134 `u0041F050` (u0041F050, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x137 `u0041F1C0` (u0041F1C0, argc 1)
 - **summary:** —
@@ -1146,15 +1208,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x191 `u0041A4A0` (u0041A4A0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x192 `set-string` (set-string, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x193 `concat` (concat, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
@@ -1230,27 +1284,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1c8 `toString` (toString, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x207 `u00420B00` (u00420B00, argc 8)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x230 `u00421E70` (u00421E70, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x233 `u00421FB0` (u00421FB0, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23a `u00422420` (u00422420, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23c `u004162B0` (u004162B0, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
@@ -1263,14 +1301,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x24d `u00422E90` (u00422E90, argc 12)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x24e `u00422EA0` (u00422EA0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x2c0 `u004231C0` (u004231C0, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

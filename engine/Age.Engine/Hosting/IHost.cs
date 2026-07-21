@@ -13,6 +13,10 @@ public readonly record struct AdvAutoWaitState(
 public readonly record struct SurfaceRectFill(
     int SurfaceSlot, int X, int Y, int Width, int Height, int Alpha, long Rgb);
 
+public readonly record struct SurfaceRectCopy(
+    int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
+    int Width, int Height, int DestinationX, int DestinationY);
+
 public interface IHost
 {
     /// <summary>Report a recoverable runtime discrepancy while allowing script execution to continue.</summary>
@@ -36,6 +40,7 @@ public interface IHost
     void EndTextHistoryPresentation() { }
     int MessageWindowAlphaSetting => 0;
     void FillSurfaceRect(SurfaceRectFill fill) { }
+    void CopySurfaceRect(SurfaceRectCopy copy) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
     // Op 0x1ce explicitly starts/stops the same animated marker that op 0x72 starts for an ADV wait.
@@ -87,6 +92,7 @@ public interface IHost
     void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument) { }
     void CreateTexture(int slot, int width, int height);
     void SetTexture(long resourceId, int slot);
+    void SetTexture(long resourceId, int slot, long colorKey) => SetTexture(resourceId, slot);
     void ReleaseSurface(int slot) { }
     /// <summary>Clear the selected target's pixels; -1 denotes the main backbuffer.</summary>
     void ClearRenderTarget(int surfaceSlot) { }
@@ -101,6 +107,7 @@ public interface IHost
     // Native voice playback retains a second start argument: ordinary dialogue passes 0,
     // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.
     void PlayVoice(long id, int playbackVariant) => PlayVoice(id);
+    void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs) { }
     // Native op 0x1cf stores a transient control mask. Bit 0 suppresses the automatic
     // BGM attenuation normally applied when a voice starts.
     void SetVoiceBgmDuckControl(long flags) { }
@@ -117,6 +124,7 @@ public interface IHost
     /// when the host could not obtain usable timing metadata. Native op 0x23f queries this state
     /// immediately after 0x236 returns.</returns>
     long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) => null;
+    bool IsMovieSurfaceActive(int surfaceSlot) => false;
     // Native op 0x20f uses a universal raw-catalog id and parks script execution until the movie
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host
     // owns the modal wait so its render loop can continue publishing frames.

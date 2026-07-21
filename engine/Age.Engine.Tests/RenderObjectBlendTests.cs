@@ -94,6 +94,25 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
+    public void CreatedSurfaceMode0_UsesPackedAlphaAsOpacityAndRgbAsModulation()
+    {
+        var g = new GfxState();
+        g.CreateSurface(3);
+        g.BindDraw(0x100, 3, 0, 0, 10, 10, 0, 0);
+        g.SetStaticObjectColorResolved(0x100, 0, 0x40, 0x102030);
+
+        var rendered = g.SnapshotVisibleObjects().Single();
+
+        Assert.Equal(0, rendered.SurfaceResId);
+        Assert.Equal(-1, rendered.ColorKey);
+        Assert.Equal(0x40, rendered.Alpha);
+        Assert.Equal(0, rendered.TintStrength);
+        Assert.Equal(0x102030, rendered.Tint);
+        Assert.True(rendered.MultiplyTint);
+        Assert.Equal(BlendKind.Alpha, rendered.Blend);
+    }
+
+    [Fact]
     public void Mode1_UsesAdditiveBlendWithArgbSourceScaleAndRgbModulation()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);

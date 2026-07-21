@@ -474,8 +474,107 @@ fixed-width signed decimal field, applies zero-pad/alignment/half-width flags, a
 suppressed leading cells, and rasterizes the result into the same temporary surface using current text
 style. The shared VM implementation now covers that path; focused tests use DRAWENP's exact level call and
 the observed half-width, zero-padded, and full-width variants. DRAWENP is now 611/611 instructions handled;
-all 284 engine tests, the zero-warning Godot build, and threaded frontend selftest pass. A manual
-deployment-card visual recheck remains.
+all 284 engine tests, the zero-warning Godot build, and threaded frontend selftest pass. The manual
+deployment-card comparison now passes.
+
+### Post-DEBUGMAP script audit and next slice (2026-07-21)
+
+The next slice should prove one complete **player attack and battle presentation** from the working
+DEBUGMAP field: deploy a unit, enter its action flow, choose a reachable target, resolve one `BTL` exchange,
+observe the HP/damage presentation settle, and return to an interactive `FIELD`. This is a stronger next
+gate than expanding save/configuration or polishing isolated menus because the underlying gameplay scripts
+are already much closer to complete than their presentation suggests:
+
+- `CALCSCOPE`, `CALCARR`, `CALCBTPARAM`, `CALCREVISE`, `CALCOCC`, and `CALCDMG` are fully handled; so are
+  `BTANINIT`, `SETEN`, `REMOVECH`, and the ordinary map renderers.
+- `BTL` has 2,194 of 2,215 static instructions handled (including one safe no-op) and 78 of 85 distinct
+  opcodes handled. Its remaining cluster is presentation-oriented: elapsed-time sampling (`0xd0`),
+  frame-time sampling (`0x23c`), movie
+  completion polling (`0x23a`), animation-service flags (`0x24e`), result-string construction (`0x193`),
+  profile bookkeeping (`0x1a2`), and delayed combat voice playback (`0x2c0`).
+- `SELACT` has only five calls to missing `0x191`, now proven to be signed absolute value. `ADDEXP` is
+  similarly blocked mainly on string concatenation/decimal conversion plus two frame-time samples.
+- FIELD itself has only 31 unhandled instructions out of 7,933. Save/load/profile and read-skip services
+  account for several of those and need not block the first attack loop.
+
+The implementation order inside that slice should be evidence-driven and checkpointed: first `0x191` plus
+the battle clock/frame cluster (`0xd0`, `0x23c`, `0x23a`, `0x24e`), then `0x193`/`0x1c8` for battle and EXP
+messages. The sole `0x2c0` site is now proven audio-only, so delayed combat voice can follow the visible
+exchange rather than block it.
+
+The existing Godot `FrameClock` is already the correct millisecond timebase, so this does not require a new
+scheduler. Defer `0x1a2` profile persistence unless the attack trace proves its value affects same-session
+combat state.
+
+One independent low-risk cleanup is now precisely scoped but should not displace the attack gate: opcode
+`0x207` is a clipped surface-to-surface rectangle copy. Its 15 corpus calls restore eight minimap marker
+copies plus STATUS/READICON/DRAWTIP composition. It is a good first commit or visual checkpoint within the
+next work period, but it does not unlock combat state. After the first player attack returns cleanly to
+FIELD, the next decision gate is enemy-turn/end-turn behavior, then stage-clear/win-loss transition—not
+save/profile breadth.
+
+The subsequent manual movement check found and closed a prerequisite earlier in that path. `MVSEEK`'s three
+effectful gaps (`0x132`-`0x134`) are native reset/enqueue/try-dequeue operations on one of 11 engine integer
+FIFOs. With the trio stubbed, queue 0's packed-coordinate flood fill wrote only the origin and exited because
+the dequeue-success local stayed zero. That produced the exact observed state: Wait remained available on
+the current tile, but no blue range overlay or other clickable movement target existed. The VM now owns the
+11 FIFO slots and implements all three operations. Focused service tests plus seeded executions of the real
+`MVSEEK.BIN` and `ATSEEK.BIN` prove movement costs and attack distances expand to neighboring tiles; both
+scripts are now 100% handled. All 298 engine tests, the zero-warning Godot build, threaded selftest, opcode
+validation, and full-corpus decode validation pass. The manual movement/overlay recheck is the next acceptance
+gate, followed by the pending one-attack return to FIELD.
+
+That first recheck remained broken because the direct worker tests bypassed SYSTEM4's persistent service
+frames. SYSTEM4 uses missing `0x06` to preload ATSEEK, SETROUTE, and MVSEEK into frame slots `0x1d`-`0x1f`;
+FIELD uses missing `0x08` to invoke them. Native RE proves that `0x06` allocates a script in a selected slot
+without running it, while `0x08` restarts that slot at codebase and returns to the caller without discarding
+its local bank. Both are now implemented as reusable VM frames and cleared on root reload. A focused test
+proves restart/local persistence, and a bridge regression drives the real MVSEEK through the exact
+`0x06(0x3381,0x1f)` / `0x08(0x1f)` ABI. All 300 engine tests, opcode validation, the zero-warning Godot
+build, and threaded selftest pass. Manual DEBUGMAP acceptance now confirms that the complete live path shows
+reachable-tile overlays, accepts movement, and reaches working player combat. The next bounded work is to
+investigate the concrete combat discrepancies found during that acceptance run.
+
+### Player-attack runtime frontier implemented (2026-07-21; manual attack pending)
+
+The selected attack-path opcode cluster is now implemented. `0x191` preserves native signed-32-bit absolute
+value behavior (including `INT_MIN`); `0xd0` and `0x23c` sample the shared monotonic/frame clock; `0x23a`
+queries live movie-surface completion; and `0x24e` retains animation-service flags, including bit 1's
+suppression of `0x243`. `0x193` and `0x1c8` now build aliased battle/progression strings, while `0x2c0`
+replaces and services one delayed combat-voice request on the Godot frame clock.
+
+The independent `0x207` checkpoint also landed as a real mutable-surface path. Created textures own RGBA
+buffers, static sources apply their load-time color key before copying, paired source/destination clipping
+is platform-neutral, overlapping self-copies use stable source pixels, and the compositor resolves generated
+surfaces by slot even though they have no asset resource id. This covers minimap markers and the shared
+STATUS/READICON/DRAWTIP background composition family.
+
+Static coverage after implementation is: SELACT 59/59 opcodes and 1,099/1,099 instructions; ADDEXP 45/45
+opcodes handled (including its two proven safe markers) and 310/310 instructions; DRAWMINIMAP, STATUS,
+READICON, and DRAWTIP are all 100%; BTL is 84/85 opcodes handled and 2,213/2,215 instructions handled when
+its safe marker is included. BTL's only remaining gap is two `0x1a2` shared-profile bookkeeping writes.
+Those remain intentionally deferred until save/profile ownership is implemented because neither write feeds
+the current exchange.
+
+Focused regressions cover exact dispatch, signed edge cases, string aliasing, clock rollover truncation,
+movie polling, animation reset suppression, delayed voice operands, paired clipping, overlap, and colorkey
+transparency. The next gate is manual: execute one player attack from DEBUGMAP, confirm HP/damage and combat
+voice presentation settle, and verify control returns to interactive FIELD. If that passes, proceed to an
+enemy-turn/end-turn slice; if it fails, use the first concrete visual/control discrepancy rather than the
+deferred profile write as the investigation entry point.
+
+**Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
+as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only
+host fill left the new pixel buffer transparent. Implementing the fill alone made the panel solid gray and
+covered FIELD's paper minimap backing, exposing the second half of the contract: native created/render-target
+surfaces are not loaded mode-0 textures and are not surfaceless fills. BUNKI draws created surface 3 with
+alpha `0xd0`; FIELD draws it beneath the minimap with alpha `0x40`. Created-surface mode 0 now uses packed
+alpha as opacity and packed RGB as multiplicative modulation, while loaded textures retain their established
+opaque/alpha-inert behavior. Created surfaces also carry no-colorkey `-1` rather than key-black zero. Focused
+regressions cover clipped RGBA replacement and the exact created-surface blend classification; all 295 engine
+tests, the zero-warning Godot build, and threaded selftest pass. Manual recheck confirms both the translucent
+BUNKI panel and minimap paper are correct. The movement/overlay recheck described above is now the next manual
+gate on the one-player-attack acceptance path.
 
 ## Later Phase B breadth
 

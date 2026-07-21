@@ -127,49 +127,51 @@ evidence = ""
 
 [[opcode]]
 op = 0x6
-label = "u00417E80"
+label = "preload-script-slot"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00417E80"
-category = "unknown"
-summary = ""
+name = "preload-script-slot"
+category = "control"
+summary = "(script_id, frame_slot) - load and allocate a script into a numbered engine context slot without executing it. Valid slots are 0..39."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x6_preload_script_slot@0x41bdb0 fetches script_id and frame_slot, saves the current context index, selects frame_slot, rejects values above 39, calls script_frame_load_resource(ctx+0x54fe8, script_id), restores the caller index, and throws on load failure. SYSTEM4's only three sites preload ATSEEK.BIN (0x337f) into slot 0x1d, SETROUTE.BIN (0x3380) into 0x1e, and MVSEEK.BIN (0x3381) into 0x1f before INIT2."
+details = "Implemented as persistent VM-owned preloaded slots containing the resolved script id and one reusable ExecFrame. Replacing a slot allocates a fresh frame/local bank; invalid slots, absent providers, and unresolved scripts halt diagnostically. Root scene reload clears the slots before SYSTEM4 registers them again."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "script_id"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "frame_slot"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x8
-label = "u00417FC0"
+label = "call-preloaded-script-slot"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00417FC0"
-category = "unknown"
-summary = ""
+name = "call-preloaded-script-slot"
+category = "control"
+summary = "(frame_slot) - restart and execute the script previously loaded into that engine context slot, returning to the caller when it exits."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x6]
+evidence = "Ghidra /v2: op_0x8_call_preloaded_script_slot@0x41bf00 fetches frame_slot, switches cur_ctx_index to it, errors if frame_codebase is null, stores the caller context index into the selected slot's ctx_record_base, resets its PC to codebase and instruction length to zero, and returns to the dispatcher. op_0x2_exit_or_return_frame@0x417940 disposes only an adjacent child (parent+1==current); SYSTEM4's non-adjacent slots 0x1d..0x1f therefore retain their allocated local banks between calls. Corpus has 64 sites, exclusively slots 0x1d/0x1e/0x1f. FIELD uses 0x1f for MVSEEK, 0x1d for ATSEEK, and 0x1e for SETROUTE."
+details = "Implemented by recursively executing the reusable preloaded ExecFrame while preserving its local banks across invocations, restarting at script offset zero, and propagating halt/root-reload/exit outcomes like ordinary call-script. The port emits normal call-script trace events for observability. Focused tests prove code restart plus local persistence and drive the real MVSEEK through SYSTEM4's exact 0x06/0x08 ABI."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "frame_slot"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2104,23 +2106,23 @@ evidence = "Ghidra /v2: op_0xcd_dispatch_mouse_callback@0x417e10 compares timeGe
 
 [[opcode]]
 op = 0xd0
-label = "u00415830"
+label = "get-monotonic-time-ms"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415830"
-category = "unknown"
-summary = ""
+name = "get-monotonic-time-ms"
+category = "control"
+summary = "Write the native monotonic millisecond clock to operand 1. Battle presentation uses paired samples around timed callback sequences to calculate elapsed time."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xd0_handler@0x428860 calls imp_winmm_timeGetTime and writes the returned 32-bit tick count to operand 1. BTL samples it before and after its timed HP/damage presentation; MVRTN has the other two corpus calls."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_time_ms"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -2658,80 +2660,83 @@ observed_types = ["g-int", "l-int"]
 
 [[opcode]]
 op = 0x132
-label = "u0041EF00"
+label = "reset-int-queue"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041EF00"
-category = "unknown"
-summary = ""
+name = "reset-int-queue"
+category = "compute"
+summary = "(queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Valid queue ids are 0..10."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, immediately before packing and enqueueing the origin coordinate for their flood fills."
+details = "Implemented as 11 VM-lifetime queue slots. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "queue_id"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x133
-label = "u0041EFF0"
+label = "enqueue-int"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041EFF0"
-category = "unknown"
-summary = ""
+name = "enqueue-int"
+category = "compute"
+summary = "(queue_id, value) - append one integer to the selected engine FIFO, compacting consumed entries or growing its storage when required."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x133_enqueue_int@0x4218d0 validates queue_id 0..10, fetches value, and calls int_queue_enqueue@0x408930 on ctx's selected queue. The helper appends at end_index, compacts unread entries when read_index is nonzero, or grows capacity by the 0x100-dword quantum. All four corpus sites are in ATSEEK/MVSEEK and enqueue coordinates packed as (x << 16) + y."
+details = "Implemented with signed 32-bit value normalization into the selected FIFO. The port diagnoses invalid or never-reset slots; every shipped use resets queue 0 before enqueueing."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "queue_id"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "value"
 observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x134
-label = "u0041F050"
+label = "try-dequeue-int"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041F050"
-category = "unknown"
-summary = ""
+name = "try-dequeue-int"
+category = "compute"
+summary = "(queue_id, out_success, out_value) - consume the next integer from the selected FIFO, writing success=1 and the value; write success=0 when empty."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x134_try_dequeue_int@0x429620 validates queue_id 0..10 and compares the selected queue's read_index with end_index. When nonempty it reads data[read_index], increments read_index, updates the high-water index, writes 1 to operand 2, and writes the item to operand 3; when empty it writes 0 to operand 2. Native still writes a non-item implementation value to operand 3 on failure, but both shipped callers branch on out_success before reading out_value. ATSEEK and MVSEEK use the opcode as the loop head for their coordinate flood fills."
+details = "Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword; empty writes success=0 and retains the prior value destination because native's failure value is an unusable implementation pointer. Focused tests cover slot independence, ordering, empty/reset behavior, and signed values; real MVSEEK/ATSEEK regressions prove both searches expand beyond the origin."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "queue_id"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "out_success"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "out_value"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3028,28 +3033,28 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x191
-label = "u0041A4A0"
+label = "absolute-value"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041A4A0"
-category = "unknown"
-summary = ""
+name = "absolute-value"
+category = "compute"
+summary = "Write the signed 32-bit absolute value of operand 2 to operand 1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x191_handler@0x426de0 computes (value ^ (value >> 31)) - (value >> 31) and writes it through vm_operand_write. All five Himegari calls are in SELACT, where it normalizes a signed preview delta before drawing it."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_absolute_value"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "value"
 observed_types = ["g-int"]
 
 [[opcode]]
@@ -3086,27 +3091,27 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "concat"
-category = "unknown"
-summary = ""
+category = "compute"
+summary = "Concatenate operand 2 followed by operand 3 and replace the destination string. Sources are resolved before the write, so destination/source aliasing is supported."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "inference"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Kelebek identifies param1 = param2.concat(param3). Corpus ordering confirms direction and aliasing: ADDEXP builds level/result messages with both literal-prefix concat(dst, literal, dst) and append concat(dst, dst, literal); BTL has eight calls."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination"
 observed_types = ["g-str", "l-str"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "left"
 observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "right"
 observed_types = ["string", "g-str", "l-str", "l-ptr", "l-str-ptr"]
 
 [[opcode]]
@@ -4154,22 +4159,22 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "toString"
-category = "unknown"
-summary = ""
+category = "compute"
+summary = "Convert the source signed 32-bit integer to its invariant decimal string and replace the destination string."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "inference"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Kelebek identifies integer-to-string conversion. All five corpus sites are in ADDEXP and feed concat immediately: level numbers, signed deployment-cost deltas, and movement deltas. Source types are global/local integer and the destination is a local string."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "destination"
 observed_types = ["l-str"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "signed_integer"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
@@ -4962,58 +4967,59 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x207
-label = "u00420B00"
+label = "copy-surface-rect"
 argc = 8
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00420B00"
-category = "unknown"
-summary = ""
+name = "copy-surface-rect"
+category = "draw"
+summary = "Copy a rectangular pixel region between mutable graphics surfaces: (source_surface, destination_surface, source_x, source_y, width, height, destination_x, destination_y)."
+details = "The worker clips the paired source and destination rectangles against both surfaces while preserving their correspondence, returns successfully for an empty clipped rectangle, and marks the destination surface dirty. Himegari uses the opcode for minimap markers plus STATUS, READICON, and DRAWTIP surface composition."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x207_handler@0x422b50 constructs source [x,y,x+w,y+h] and destination [dx,dy,dx+w,dy+h] rectangles and calls gfx_copy_surface_rect@0x477da0. The worker validates both surface slots, clips both rectangles together, marks the destination dirty, and copies through locked D3D surfaces. Corpus: 15 calls total: DRAWMINIMAP 8, STATUS 3, READICON 2, DRAWTIP 2."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "source_surface"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "destination_surface"
 observed_types = ["imm", "g-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "source_x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "source_y"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "width"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "height"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "destination_x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "destination_y"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -6272,28 +6278,28 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x23a
-label = "u00422420"
+label = "query-movie-surface-active"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422420"
-category = "unknown"
-summary = ""
+name = "query-movie-surface-active"
+category = "draw"
+summary = "Write whether a movie-backed surface has a nonzero playback/synchronization state at surface object offset 0x42c; an empty surface slot writes zero."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x23a_handler@0x42a440 indexes the surface table by operand 2, writes zero for a null slot, otherwise writes surface+0x42c != 0. All four corpus sites are movie completion polling loops: BTL checks active combat-movie surfaces 7+, while FIELD and USEMAGIC poll surface 42 between present-frame, frame-time sampling, and sleep(16)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out_active"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface_slot"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
@@ -6350,19 +6356,19 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x23c
-label = "u004162B0"
+label = "sample-frame-time"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004162B0"
-category = "unknown"
-summary = ""
+name = "sample-frame-time"
+category = "draw"
+summary = "Shift the current retained-presentation timestamp to the previous-frame field, then sample the native monotonic millisecond clock as the new current timestamp."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x23c_handler@0x417580 copies EngineCtx frame_timer at +0x51b64 to +0x51b68, then stores imp_winmm_timeGetTime() at +0x51b64. BTL, ADDEXP, SHOWGROW, USEMAGIC, and FIELD place it at presentation/present-frame boundaries."
 
 [[opcode]]
 op = 0x23d
@@ -6622,23 +6628,23 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x24e
-label = "u00422EA0"
+label = "set-gfx-animation-service-flags"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422EA0"
-category = "unknown"
-summary = ""
+name = "set-gfx-animation-service-flags"
+category = "draw"
+summary = "Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. The mapped field is also read by op 0x243: bit 1 suppresses its force-complete/clock-reset request."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "flags"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -6737,33 +6743,34 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x2c0
-label = "u004231C0"
+label = "schedule-voice-playback"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004231C0"
-category = "unknown"
-summary = ""
+name = "schedule-voice-playback"
+category = "audio"
+summary = "Arm delayed voice playback: (voice_id, playback_variant, delay_ms). The engine main tick starts the voice after the monotonic deadline."
+details = "The setter replaces the single pending request, marks it active, and clears its start timestamp. On the first service tick the worker captures the current millisecond time; once unsigned elapsed time reaches delay_ms it clears the request and calls the ordinary indexed-voice player with voice_id and playback_variant. BTL's only call selects a randomized combat voice id, variant 0, and an entity-specific delay."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x2c0_schedule_voice_playback@0x425290 forwards three operands to voice_schedule_delayed_playback@0x488480 on the text/ADV service at EngineCtx+0x14508. That worker stores active=1, start=0, delay at +0x424, voice id at +0x428, and variant at +0x42c. engine_main_tick_with_exception_policy calls voice_tick_delayed_playback@0x4884d0; after unsigned elapsed >= delay it clears the request and calls voice_play_indexed_asset(voice_id,variant). Corpus: one BTL site at 0x2f6e."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "voice_id"
 observed_types = ["l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "playback_variant"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "delay_ms"
 observed_types = ["l-ptr"]
 
 [[opcode]]

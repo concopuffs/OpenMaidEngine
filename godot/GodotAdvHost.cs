@@ -17,6 +17,10 @@ public sealed class GodotAdvHost : IHost
     private readonly Stack<string> _scriptContexts = new();
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
+    // Mutable AGE surfaces are published by replacing immutable RgbaImage snapshots, so the compositor
+    // can safely finish reading an old frame while the VM prepares a copied-rectangle update.
+    private readonly Dictionary<int, RgbaImage> _surfaceImages = new();
+    private readonly Dictionary<int, long> _surfaceColorKeys = new();
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> normalized raw catalog id
     private readonly Dictionary<long, (RgbaImage Image, string Name, int RawIndex)> _movieFrames = new();
     private readonly Dictionary<int, long> _movieBySurface = new();
@@ -47,6 +51,8 @@ public sealed class GodotAdvHost : IHost
     private volatile bool _messageSkipActive;
     private int _voiceBgmDuckControl;
     private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
+    private readonly object _scheduledVoiceLock = new();
+    private (AudioPayload Audio, int PlaybackVariant, uint DelayMs, uint? StartMs)? _scheduledVoice;
     private int _activeWaitLayout;
     private long _waitIndicatorStartedMs;
     private bool _waitIndicatorEnabled;
@@ -218,10 +224,30 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_textLock)
         {
-            if (!_surfaceText.TryGetValue(fill.SurfaceSlot, out var draws)) return;
-            int right = fill.X + System.Math.Max(0, fill.Width);
-            int bottom = fill.Y + System.Math.Max(0, fill.Height);
-            draws.RemoveAll(draw => draw.X >= fill.X && draw.X < right && draw.Y >= fill.Y && draw.Y < bottom);
+            if (_surfaceText.TryGetValue(fill.SurfaceSlot, out var draws))
+            {
+                long right = (long)fill.X + System.Math.Max(0, fill.Width);
+                long bottom = (long)fill.Y + System.Math.Max(0, fill.Height);
+                draws.RemoveAll(draw => draw.X >= fill.X && draw.X < right
+                    && draw.Y >= fill.Y && draw.Y < bottom);
+            }
+        }
+
+        RgbaImage? destination = ResolveSurfacePixels(fill.SurfaceSlot);
+        if (destination == null && _slotDims.TryGetValue(fill.SurfaceSlot, out var dimensions)
+            && dimensions.W >= 0 && dimensions.H >= 0)
+            destination = new RgbaImage(dimensions.W, dimensions.H,
+                new byte[checked(dimensions.W * dimensions.H * 4)]);
+        if (destination != null)
+        {
+            var updated = new RgbaImage(destination.Width, destination.Height,
+                (byte[])destination.Pixels.Clone());
+            if (RgbaSurfaceOps.FillRect(updated, fill.X, fill.Y, fill.Width, fill.Height,
+                                        unchecked((byte)fill.Alpha), fill.Rgb))
+            {
+                lock (_imageLock) _surfaceImages[fill.SurfaceSlot] = updated;
+                System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+            }
         }
         _timeline?.Event("surface-fill", new()
         {
@@ -663,6 +689,7 @@ public sealed class GodotAdvHost : IHost
             _messageSkipActive = false;
             _queuedSkippedVoice = null;
         }
+        lock (_scheduledVoiceLock) _scheduledVoice = null;
         System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
@@ -685,7 +712,33 @@ public sealed class GodotAdvHost : IHost
     }
 
     // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
-    public void PulseFrame() => _frameSignal.Set();
+    public void PulseFrame()
+    {
+        (AudioPayload Audio, int PlaybackVariant)? due = null;
+        lock (_scheduledVoiceLock)
+        {
+            if (_scheduledVoice is { } pending)
+            {
+                uint now = unchecked((uint)_clock.NowMs);
+                if (!pending.StartMs.HasValue)
+                    _scheduledVoice = pending with { StartMs = now };
+                else if (unchecked(now - pending.StartMs.Value) >= pending.DelayMs)
+                {
+                    due = (pending.Audio, pending.PlaybackVariant);
+                    _scheduledVoice = null;
+                }
+            }
+        }
+        if (due.HasValue)
+        {
+            _timeline?.Event("voice-scheduled-start", new()
+            {
+                ["file"] = due.Value.Audio.Name, ["playback_variant"] = due.Value.PlaybackVariant,
+            });
+            DispatchVoice(due.Value.Audio, due.Value.PlaybackVariant);
+        }
+        _frameSignal.Set();
+    }
 
     // Ordinary opcode bursts run to the next service boundary without frame pacing. Persistent message
     // Skip removes most of those boundaries, but native adv_interpreter_tick still executes one opcode per
@@ -732,12 +785,27 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_textLock) _surfaceText.Remove(slot);
         lock (_textLock) _surfaceResources.Remove(slot);
-        _slotDims[slot] = (width, height);
+        int safeWidth = System.Math.Max(0, width);
+        int safeHeight = System.Math.Max(0, height);
+        lock (_imageLock)
+        {
+            _surfaceImages[slot] = new RgbaImage(safeWidth, safeHeight,
+                new byte[checked(safeWidth * safeHeight * 4)]);
+            _surfaceColorKeys.Remove(slot);
+        }
+        _slotDims[slot] = (safeWidth, safeHeight);
         if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
     }
 
-    public void SetTexture(long resourceId, int slot)
+    public void SetTexture(long resourceId, int slot) => SetTexture(resourceId, slot, -1);
+
+    public void SetTexture(long resourceId, int slot, long colorKey)
     {
+        lock (_imageLock)
+        {
+            _surfaceImages.Remove(slot);
+            _surfaceColorKeys[slot] = colorKey;
+        }
         lock (_textLock)
         {
             _surfaceText.Remove(slot);
@@ -757,6 +825,49 @@ public sealed class GodotAdvHost : IHost
     // the visible objects each frame in ascending-handle order. No immediate blit here.
     public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
 
+    public void CopySurfaceRect(SurfaceRectCopy copy)
+    {
+        RgbaImage? source = ResolveSurfacePixels(copy.SourceSurface);
+        RgbaImage? destination = ResolveSurfacePixels(copy.DestinationSurface);
+        if (destination == null && _slotDims.TryGetValue(copy.DestinationSurface, out var dimensions)
+            && dimensions.W >= 0 && dimensions.H >= 0)
+            destination = new RgbaImage(dimensions.W, dimensions.H,
+                new byte[checked(dimensions.W * dimensions.H * 4)]);
+        if (source == null || destination == null)
+        {
+            ReportWarning($"surface copy unresolved source={copy.SourceSurface} destination={copy.DestinationSurface}");
+            return;
+        }
+
+        var updated = new RgbaImage(destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
+        if (RgbaSurfaceOps.CopyRect(source, updated, copy.SourceX, copy.SourceY, copy.Width, copy.Height,
+                                   copy.DestinationX, copy.DestinationY))
+        {
+            lock (_imageLock) _surfaceImages[copy.DestinationSurface] = updated;
+            System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        }
+        _timeline?.Event("surface-copy", new()
+        {
+            ["source"] = copy.SourceSurface, ["source_x"] = copy.SourceX, ["source_y"] = copy.SourceY,
+            ["w"] = copy.Width, ["h"] = copy.Height, ["destination"] = copy.DestinationSurface,
+            ["destination_x"] = copy.DestinationX, ["destination_y"] = copy.DestinationY,
+        });
+    }
+
+    private RgbaImage? ResolveSurfacePixels(int slot)
+    {
+        lock (_imageLock)
+            if (_surfaceImages.TryGetValue(slot, out var mutable)) return mutable;
+        long resourceId;
+        lock (_textLock)
+            if (!_surfaceResources.TryGetValue(slot, out resourceId)) return null;
+        var resolved = ResolveResIdTexture(resourceId);
+        if (resolved == null) return null;
+        long colorKey;
+        lock (_imageLock) colorKey = _surfaceColorKeys.GetValueOrDefault(slot, -1);
+        return RgbaSurfaceOps.WithColorKey(resolved.Value.Image, colorKey);
+    }
+
     /// <summary>Resolve a gfx surface through scene-local or universal raw-id addressing and decode it
     /// from the loose-first asset store.</summary>
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveResIdTexture(long resId)
@@ -775,6 +886,15 @@ public sealed class GodotAdvHost : IHost
         return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
     }
 
+    public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveSurfaceTexture(
+        int surfaceSlot, long fallbackResourceId)
+    {
+        lock (_imageLock)
+            if (_surfaceImages.TryGetValue(surfaceSlot, out var surface))
+                return (surface, $"<surface:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
+        return fallbackResourceId != 0 ? ResolveResIdTexture(fallbackResourceId) : null;
+    }
+
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         string scene = CurrentScene;
@@ -782,6 +902,13 @@ public sealed class GodotAdvHost : IHost
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         return StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
                           out long? stopTimeMs) ? stopTimeMs : null;
+    }
+
+    public bool IsMovieSurfaceActive(int surfaceSlot)
+    {
+        lock (_imageLock)
+            return _movieBySurface.TryGetValue(surfaceSlot, out long resourceId)
+                && !_completedMovies.Contains(resourceId);
     }
 
     public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
@@ -873,6 +1000,8 @@ public sealed class GodotAdvHost : IHost
         {
             if (!_movieBySurface.Remove(slot, out resourceId))
             {
+                _surfaceImages.Remove(slot);
+                _surfaceColorKeys.Remove(slot);
                 lock (_textLock)
                 {
                     _surfaceText.Remove(slot);
@@ -888,6 +1017,8 @@ public sealed class GodotAdvHost : IHost
             }
             _movieFrames.Remove(resourceId);
             _completedMovies.Remove(resourceId);
+            _surfaceImages.Remove(slot);
+            _surfaceColorKeys.Remove(slot);
         }
         lock (_textLock)
         {
@@ -925,6 +1056,8 @@ public sealed class GodotAdvHost : IHost
                     _movieFrames.Remove(resourceId);
                     _completedMovies.Remove(resourceId);
                 }
+                _surfaceImages.Remove(slot);
+                _surfaceColorKeys.Remove(slot);
                 _slotDims.Remove(slot);
             }
         }
@@ -1035,6 +1168,21 @@ public sealed class GodotAdvHost : IHost
     {
         System.Threading.Volatile.Write(ref _voiceBgmDuckControl, unchecked((int)flags));
         _timeline?.State("voice-bgm-duck-control", new() { ["flags"] = flags });
+    }
+
+    public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
+    {
+        var asset = _res.ResolveVoice(CurrentScene, id);
+        var audio = asset != null ? LoadAudio(asset) : null;
+        _timeline?.Event("voice-scheduled", new()
+        {
+            ["id"] = id, ["file"] = audio?.Name, ["playback_variant"] = playbackVariant,
+            ["delay_ms"] = unchecked((uint)delayMs),
+        });
+        lock (_scheduledVoiceLock)
+            _scheduledVoice = audio == null
+                ? null
+                : (audio, playbackVariant, unchecked((uint)delayMs), null);
     }
 
     public void LoadSoundEffect(long resourceId, int channel)

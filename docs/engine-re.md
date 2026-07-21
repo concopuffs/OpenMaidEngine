@@ -1024,6 +1024,14 @@ Ghidra functions renamed + plate-commented, saved).
   generic tint-strength control. Mode 3 remains separately scoped beyond the completed mode-1 path, and
   surfaceless mode-0 fills remain a distinct consumer case.
 
+Created/render-target surfaces are a third mode-0 consumer, distinct from both loaded textures and an object
+with no surface. SYSTEM4 creates and fills surface 3; BUNKI draws it with alpha `0xd0`, while FIELD draws it
+beneath the minimap with alpha `0x40`. Original screenshots show the former as a translucent tinted panel and
+the latter allowing the sidebar paper through. Therefore created surfaces consume packed alpha as object
+opacity and packed RGB as multiplicative modulation. The port retains created-surface identity separately
+even though these surfaces have resource id zero; their no-colorkey sentinel is `-1`, not active key-black
+zero. Loaded mode-0 textures keep the established opaque/alpha-inert behavior above.
+
 **TITLE SO022 additive proof (2026-07-20).** TITLE loads type-1 8-bpp `SO022.AGF` with no alpha plane and
 no color key, binds two 140×140 spritesheet objects, and calls `0x203(handle,1,255,0xffffff)` for both.
 Ordinary alpha composition therefore produces opaque black squares around the blue flames. Native mode-1
@@ -1698,8 +1706,11 @@ effect snapshot, and clears stale labels whenever `0x71` resets that layout.
 
 The same slice implements the support calls at their natural seams. Op `0x131` reads a host configuration
 property (currently defaulting to zero; choosing a profile/config persistence backend remains deferred),
-`0x20b` clears the addressed region of the mutable name-strip text surface, and `0x222` requests one retained
-recomposition boundary. Surface text is now a list rather than one draw per slot: HISTORY's five 600x30
+`0x20b` replaces every clipped RGBA pixel in the addressed mutable-surface rectangle and clears modeled text
+draws anchored inside it, and `0x222` requests one retained recomposition boundary. This pixel write matters
+outside HISTORY: SYSTEM4 fills created surface 3 opaque white, then BUNKI applies mode-0 tint plus `0xd0`
+opacity to produce its translucent menu interior. FIELD reuses the surface at `0x40` opacity under its
+minimap. Surface text is now a list rather than one draw per slot: HISTORY's five 600x30
 source rows therefore retain five independent speaker names, and compositor source-rectangle clipping maps
 each one into its bound object. A real-script regression retains SC0000 page one, runs unmodified
 `HISTORY.BIN`, observes a non-empty rendered row, and reaches its `(0,60000)` presentation call.
@@ -2562,6 +2573,105 @@ font, color, and effect changes surrounding each call. Focused tests reproduce D
 call and cover half-width right alignment, zero padding, and the observed full-width left-aligned variant.
 DRAWENP is now 36/36 opcodes and 611/611 instructions handled; all 284 engine tests, the zero-warning Godot
 build, and threaded frontend selftest pass.
+
+### DEBUGMAP-to-battle frontier opcode cluster (2026-07-21)
+
+A static call-graph/coverage pass from `FIELD.BIN` through selection, movement, combat, damage, growth, and
+status helpers shows that the next gameplay risk is presentation plumbing rather than battle arithmetic.
+The following native handlers were decoded while bounding that slice:
+
+- `op_0x191_absolute_value@0x426de0` writes
+  `(value ^ (value >> 31)) - (value >> 31)` through operand 1. This is signed 32-bit absolute value; all
+  five corpus sites are in `SELACT.BIN`, normalizing a signed preview delta before display.
+- `op_0xd0_get_monotonic_time_ms@0x428860` writes `timeGetTime()` to operand 1. `BTL.BIN` samples it around
+  its timed callback/HP presentation, and `MVRTN.BIN` contains the other two calls. The port's host-owned
+  `FrameClock.NowMs` is the matching monotonic, speed-scaled service timebase.
+- `op_0x23c_sample_frame_time@0x417580` shifts `EngineCtx+0x51b64` to `+0x51b68`, then stores
+  `timeGetTime()` as the new current timestamp. BTL callback frames, FIELD/USEMAGIC movie loops, ADDEXP,
+  and SHOWGROW place it next to presentation boundaries.
+- `op_0x23a_query_movie_surface_active@0x42a440` writes zero for an empty surface slot; otherwise it writes
+  whether the movie-surface field at `+0x42c` is nonzero. All four corpus sites use that result as a movie
+  completion-loop predicate: BTL scans its active combat surfaces, while FIELD and USEMAGIC poll slot 42.
+- `op_0x24e_set_gfx_animation_service_flags@0x425070` copies its operand directly to
+  `EngineCtx.gfx_animation_service_flags` (`+0x51b80`). BTL brackets combat presentation with 1/0 and
+  GAMECLEAR uses 3/0. Bit 1 is independently consumed by opcode `0x243` to suppress a force-complete and
+  animation-clock-reset request.
+- `op_0x207_copy_surface_rect@0x422b50` builds source/destination rectangles from
+  `(source_surface, destination_surface, source_x, source_y, width, height, destination_x, destination_y)`
+  and calls `gfx_copy_surface_rect@0x477da0`. The worker validates both slots, clips both rectangles while
+  preserving their correspondence, treats an empty intersection as success, marks the destination dirty,
+  and copies through locked D3D surfaces. Its 15 corpus sites are isolated to DRAWMINIMAP (8), STATUS (3),
+  READICON (2), and DRAWTIP (2).
+- `op_0x2c0_schedule_voice_playback@0x425290` forwards
+  `(voice_id, playback_variant, delay_ms)` to `voice_schedule_delayed_playback@0x488480` on the service at
+  `EngineCtx+0x14508`. The setter marks one pending request active and clears its start timestamp. The main
+  engine tick calls `voice_tick_delayed_playback@0x4884d0`, which captures the first tick then, after
+  unsigned elapsed time reaches the delay, clears the request and invokes
+  `voice_play_indexed_asset(voice_id, playback_variant)`. BTL's sole call schedules a randomized combat
+  voice with variant 0 and an entity-specific delay; it is presentation-only, not battle state.
+
+These handlers and their newly understood workers are renamed/commented in Ghidra `/v2`; the program was saved.
+The exact source metadata lives in `vm-map/opcodes.toml`. The port now implements this cluster against the
+shared Godot frame clock, retained graphics state, movie decoder state, mutable RGBA surfaces, and delayed
+voice service. `0x207` copies colorkey-baked source pixels into immutable published snapshots so compositor
+reads cannot race VM-side mutations. The first complete player attack remains the manual acceptance test;
+the implementation deliberately leaves BTL's two `0x1a2` shared-profile writes deferred because they do
+not feed same-exchange combat state.
+
+### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
+
+The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot
+move" is caused by the only three effectful gaps in `MVSEEK.BIN`, not by `CALCSCOPE` or FIELD input. AGE
+provides 11 context-owned integer FIFO slots:
+
+- `op_0x132_reset_int_queue@0x4217d0` validates `queue_id <= 10`, destroys any existing object in the
+  selected slot, and allocates a fresh 0x1c-byte FIFO. `int_queue_construct@0x4074c0` allocates 0x100
+  dwords, uses another 0x100 dwords as its growth quantum, and zeros the read/end/high-water indices.
+- `op_0x133_enqueue_int@0x4218d0` validates the slot and calls `int_queue_enqueue@0x408930`. The helper
+  appends at the end, first compacting consumed entries when possible or growing storage when necessary.
+- `op_0x134_try_dequeue_int@0x429620` writes `(success=1, value)` and advances the read index when the FIFO
+  is nonempty; otherwise it writes `success=0`. Its value output is not meaningful on failure, and both
+  shipped callers branch on success before inspecting it.
+
+Only `MVSEEK.BIN` and `ATSEEK.BIN` use this cluster. Both reset queue 0, pack map coordinates as
+`(x << 16) + y`, enqueue the origin, and repeatedly dequeue a tile and enqueue accepted neighbors.
+`MVSEEK` writes the origin's movement cost before invoking the queue ops. The former generic stubs left the
+origin valid but left `0x134`'s zero-initialized success local unchanged, so the flood fill exited on its
+first loop test. This exactly explained why clicking the occupied tile still reached Wait while neither
+reachable overlays nor movement targets existed; `ATSEEK` was blocked identically.
+
+The port now retains 11 VM-lifetime integer FIFO slots and implements reset/enqueue/try-dequeue with native
+signed-dword behavior. It diagnoses invalid or never-reset slots; shipped scripts always reset queue 0
+first. On empty dequeue it writes `success=0` and retains the value destination rather than reproducing the
+native handler's unusable implementation-pointer value. Focused tests cover independent slots, FIFO order,
+signed values, empty reads, and reset replacement. Real-script tests seed a bounded passable grid and prove
+that shipped `MVSEEK.BIN` populates all four neighboring movement costs while `ATSEEK.BIN` populates attack
+distance 1 around the origin. Both scripts are now 100% handled. The handlers and queue helpers are
+renamed/commented in Ghidra `/v2`; the program was saved.
+
+The first live recheck after that FIFO implementation still showed no movement, exposing the caller layer
+that the direct real-script tests had bypassed. SYSTEM4 does not leave these workers to ordinary
+`call-script`: its only three opcode `0x06` sites preload `ATSEEK.BIN` (`0x337f`) into EngineCtx frame slot
+`0x1d`, `SETROUTE.BIN` (`0x3380`) into slot `0x1e`, and `MVSEEK.BIN` (`0x3381`) into slot `0x1f`. FIELD and
+the route helpers then contain 64 total opcode `0x08` calls targeting only those three slots. Both opcodes
+were still generic effectful stubs, so live FIELD never entered MVSEEK despite the now-correct worker.
+
+Native `op_0x6_preload_script_slot@0x41bdb0` temporarily selects a caller-specified context index (valid
+range 0..39), calls the ordinary script resource loader there, then restores the current index without
+executing the loaded script. `op_0x8_call_preloaded_script_slot@0x41bf00` switches to the selected loaded
+context, records the caller context as its return target, resets its PC to codebase, and begins execution.
+`op_0x2_exit_or_return_frame@0x417940` disposes only an adjacent child (`parent+1 == current`); the
+non-adjacent service slots therefore survive return with their local banks allocated.
+
+The VM now models those persistent preloaded frames, clears them on root-scene reset, and emits normal
+call-script trace events when invoked. A focused worker proves repeated `0x08` calls restart code while
+retaining locals. A second regression uses the exact SYSTEM4 ABI—`0x06(0x3381,0x1f)` followed by
+`0x08(0x1f)`—to run the shipped MVSEEK and populate all four neighboring movement costs. FIELD's five
+formerly skipped `0x08` instructions are handled, as are all indirect MVSEEK/ATSEEK/SETROUTE consumers.
+The two native handlers are renamed/commented in Ghidra `/v2`; the program was saved.
+Manual DEBUGMAP acceptance confirms that reachable-tile overlays and movement now work through this live
+route and that player combat is reachable. Any remaining work at this frontier should start from the
+concrete combat discrepancies observed in that run rather than from movement search or dispatch.
 
 ---
 

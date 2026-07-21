@@ -53,6 +53,12 @@ public sealed class VirtualMachine
     private volatile bool _advSkipServiceEnabled;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
+    // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
+    // slot zero as their packed-coordinate flood-fill worklist; op 0x132 replaces a slot.
+    private readonly Queue<int>?[] _intQueues = new Queue<int>?[11];
+    // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
+    // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
+    private readonly Dictionary<int, PreloadedScriptSlot> _preloadedScriptSlots = new();
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
@@ -493,6 +499,7 @@ public sealed class VirtualMachine
     private sealed class RootReloadRequestedException : Exception { }
     private sealed class ProcessExitRequestedException : Exception { }
     private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
+    private sealed record PreloadedScriptSlot(long ScriptId, ExecFrame Frame);
     private enum FrameOutcome { Returned, DebugReturned, RootReload, ExitRequested, Halted, RanOff }
 
     public void Run(int entryOffset = 0)
@@ -537,6 +544,7 @@ public sealed class VirtualMachine
     {
         Gfx.ResetSceneContext();
         _valueSwitchTargets.Clear();
+        _preloadedScriptSlots.Clear();
         lock (_interactiveLock)
         {
             _interactiveFrame = null;
@@ -717,6 +725,25 @@ public sealed class VirtualMachine
             case "string-not-equals":
                 Write(a[0], string.Equals(ReadStr(a[1]), ReadStr(a[2]), StringComparison.Ordinal) ? 0 : 1);
                 return pc + 1;
+            case "concat":
+            {
+                string left = ReadStr(a[1]);
+                string right = ReadStr(a[2]);
+                WriteStr(a[0], left + right);
+                return pc + 1;
+            }
+            case "toString":
+                WriteStr(a[0], unchecked((int)Read(a[1])).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return pc + 1;
+            case "absolute-value":
+            {
+                int value = unchecked((int)Read(a[1]));
+                int sign = value >> 31;
+                Write(a[0], unchecked((value ^ sign) - sign));
+                return pc + 1;
+            }
+            case "get-monotonic-time-ms":
+                Write(a[0], unchecked((int)_host.InputClockMilliseconds)); return pc + 1;
             case "lt":  Write(a[0], Read(a[1]) <  Read(a[2]) ? 1 : 0); return pc + 1;
             case "lte": Write(a[0], Read(a[1]) <= Read(a[2]) ? 1 : 0); return pc + 1;
             case "gr":  Write(a[0], Read(a[1]) >  Read(a[2]) ? 1 : 0); return pc + 1;
@@ -837,6 +864,62 @@ public sealed class VirtualMachine
                         position--;
                     }
                     WriteIntCell(output.Offset(position), sourceIndex);
+                }
+                return pc + 1;
+            }
+            case "u0041EF00":
+            case "reset-int-queue": // 0x132 (queue_id): destroy/recreate one of 11 native FIFO slots
+            {
+                int queueId = unchecked((int)Read(a[0]));
+                if ((uint)queueId >= (uint)_intQueues.Length)
+                {
+                    HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
+                    return HALT;
+                }
+                _intQueues[queueId] = new Queue<int>(0x100);
+                return pc + 1;
+            }
+            case "u0041EFF0":
+            case "enqueue-int": // 0x133 (queue_id, value)
+            {
+                int queueId = unchecked((int)Read(a[0]));
+                if ((uint)queueId >= (uint)_intQueues.Length)
+                {
+                    HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
+                    return HALT;
+                }
+                if (_intQueues[queueId] is not { } queue)
+                {
+                    HaltReason ??= $"int-queue-uninitialized:{queueId}";
+                    return HALT;
+                }
+                queue.Enqueue(unchecked((int)Read(a[1])));
+                return pc + 1;
+            }
+            case "u0041F050":
+            case "try-dequeue-int": // 0x134 (queue_id, out_success, out_value)
+            {
+                int queueId = unchecked((int)Read(a[0]));
+                if ((uint)queueId >= (uint)_intQueues.Length)
+                {
+                    HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
+                    return HALT;
+                }
+                if (_intQueues[queueId] is not { } queue)
+                {
+                    HaltReason ??= $"int-queue-uninitialized:{queueId}";
+                    return HALT;
+                }
+                if (queue.TryDequeue(out int value))
+                {
+                    Write(a[1], 1);
+                    Write(a[2], value);
+                }
+                else
+                {
+                    // Native writes success=0 and an implementation pointer to operand 3. Shipped
+                    // callers branch on success before reading it, so retain the prior destination.
+                    Write(a[1], 0);
                 }
                 return pc + 1;
             }
@@ -976,6 +1059,60 @@ public sealed class VirtualMachine
                 if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD; // discard every caller frame
                 if (outcome == FrameOutcome.ExitRequested) throw new ProcessExitRequestedException();
                 return pc + 1;                                      // Returned / RanOff: resume caller
+            }
+            case "u00417E80":
+            case "preload-script-slot": // 0x06 (script_id, frame_slot), valid slots 0..39
+            {
+                long id = Read(a[0]);
+                int slot = unchecked((int)Read(a[1]));
+                if ((uint)slot >= 40)
+                {
+                    HaltReason ??= $"preloaded-script-slot-out-of-range:{slot}";
+                    return HALT;
+                }
+                if (_provider == null)
+                {
+                    HaltReason ??= $"preloaded-script-provider-unavailable:0x{id:x}";
+                    return HALT;
+                }
+                var script = _provider.GetById(id);
+                if (script == null)
+                {
+                    HaltReason ??= $"preloaded-script-unresolved:0x{id:x}";
+                    return HALT;
+                }
+                int entry = script.IndexByOffset.TryGetValue(0, out int loadedEntry) ? loadedEntry : 0;
+                _preloadedScriptSlots[slot] = new PreloadedScriptSlot(id, new ExecFrame(script, entry));
+                return pc + 1;
+            }
+            case "u00417FC0":
+            case "call-preloaded-script-slot": // 0x08 (frame_slot)
+            {
+                int slot = unchecked((int)Read(a[0]));
+                if ((uint)slot >= 40)
+                {
+                    HaltReason ??= $"preloaded-script-slot-out-of-range:{slot}";
+                    return HALT;
+                }
+                if (!_preloadedScriptSlots.TryGetValue(slot, out var loaded))
+                {
+                    HaltReason ??= $"preloaded-script-slot-empty:{slot}";
+                    return HALT;
+                }
+                if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return HALT; }
+
+                CallScriptDispatches++;
+                _sink.Emit(TraceEvent.CallScript(loaded.ScriptId, loaded.Frame.Script.Name));
+                // PC restarts at codebase while the native slot's local banks remain allocated.
+                // Balanced local calls leave this empty; clearing the port-only emission guard makes
+                // each invocation an independent diagnostic activation.
+                loaded.Frame.CallStack.Clear();
+                loaded.Frame.EmitSeen.Clear();
+                var outcome = RunFrame(loaded.Frame, FrameCause.CallScript, loaded.ScriptId);
+                if (outcome == FrameOutcome.Halted) return HALT;
+                if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD;
+                if (outcome == FrameOutcome.ExitRequested) throw new ProcessExitRequestedException();
+                return pc + 1;
             }
             case "show-text":
                 foreach (var o in a)
@@ -1398,7 +1535,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
                 _host.ReleaseSurface((int)Read(a[0]));
-                Gfx.ClearSurface((int)Read(a[0]));
+                Gfx.CreateSurface((int)Read(a[0]));
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
             {
@@ -1408,8 +1545,9 @@ public sealed class VirtualMachine
                     System.Console.Error.WriteLine($"[settex] resId=0x{requestedResourceId:x}->0x{resolvedResourceId:x} slot={(int)Read(a[1])} " +
                         $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
                 _host.ReleaseSurface((int)Read(a[1]));
-                Gfx.SetSurface((int)Read(a[1]), resolvedResourceId, a.Count > 2 ? Read(a[2]) : 0);
-                _host.SetTexture(resolvedResourceId, (int)Read(a[1]));
+                long colorKey = a.Count > 2 ? Read(a[2]) : -1;
+                Gfx.SetSurface((int)Read(a[1]), resolvedResourceId, colorKey);
+                _host.SetTexture(resolvedResourceId, (int)Read(a[1]), colorKey);
                 return pc + 1;   // host still tracks dims for get-texture-size
             }
             case "u00422EB0":                 // pre-reference compatibility
@@ -1423,7 +1561,7 @@ public sealed class VirtualMachine
                 int surfaceSlot = (int)Read(a[1]);
                 _host.ReleaseSurface(surfaceSlot);
                 Gfx.SetSurface(surfaceSlot, rawResourceId, Read(a[2]));
-                _host.SetTexture(rawResourceId, surfaceSlot);
+                _host.SetTexture(rawResourceId, surfaceSlot, Read(a[2]));
                 return pc + 1;
             }
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
@@ -1471,6 +1609,11 @@ public sealed class VirtualMachine
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                     (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
                 return pc + 1;
+            case "copy-surface-rect": // 0x207: paired-clipped source-to-destination surface copy
+                _host.CopySurfaceRect(new SurfaceRectCopy(
+                    (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                    (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
+                return pc + 1;
             case "clear-retained-gfx-objects": // 0x1f6: erase object records, but preserve surfaces
                 Gfx.ClearRetainedObjects(); return pc + 1;
             case "select-render-target": // 0x20d: slot <1000 selects a surface; >=1000 restores backbuffer
@@ -1492,6 +1635,8 @@ public sealed class VirtualMachine
                 _host.PlayVoice(Read(a[0]), 1); return pc + 1;
             case "set-voice-bgm-duck-control": // 0x1cf: bit 0 suppresses automatic voice ducking
                 _host.SetVoiceBgmDuckControl(Read(a[0])); return pc + 1;
+            case "schedule-voice-playback": // 0x2c0: replace the pending delayed combat voice request
+                _host.ScheduleVoicePlayback(Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
                 _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
             case "u0041D050":           // 0xb5 / semantics: sfx-start
@@ -1626,6 +1771,10 @@ public sealed class VirtualMachine
                 Write(a[0], stopTimeMs.Value);
                 return pc + 1;
             }
+            case "query-movie-surface-active": // 0x23a (out)(surface slot)
+                Write(a[0], _host.IsMovieSurfaceActive((int)Read(a[1])) ? 1 : 0); return pc + 1;
+            case "sample-frame-time": // 0x23c: previous <- current; current <- monotonic time
+                Gfx.SampleFrameTime(_host.InputClockMilliseconds); return pc + 1;
             case "set-gfx-geom3-c":     // 0x1ff: set current translation matrix
                 Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "u00420620":             // upstream ABI label
@@ -1666,6 +1815,8 @@ public sealed class VirtualMachine
                 Gfx.SetOneShotAnimationControl(Read(a[0]), Read(a[1])); return pc + 1;
             case "reset-anim-clock": // 0x243: force unprotected one-shots and reset the global service clock
                 Gfx.ResetAnimClock(); return pc + 1;
+            case "set-gfx-animation-service-flags": // 0x24e: bit 1 suppresses op 0x243
+                Gfx.SetAnimationServiceFlags(Read(a[0])); return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
                 Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;

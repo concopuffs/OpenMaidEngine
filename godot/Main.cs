@@ -673,6 +673,10 @@ public partial class Main : Godot.Control
             int dstY = (int)System.Math.Round(projected.Y);
             float opacity = v.Alpha / 255f * globalOpacity;  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
+            var rawObject = _vm.Gfx.TryGet(v.Handle);
+            var surfaceTexture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
+                : null;
             string outcome;
             if (v.SurfaceTransition is { } transition)
             {
@@ -680,7 +684,7 @@ public partial class Main : Godot.Control
                 outcome = $"TRANSITION slot={transition.TargetSlot} key=0x{transition.CommandKey:x} " +
                           $"progress={transition.Progress:0.000} forced={transition.Forced} layers={layers}";
             }
-            else if (v.SurfaceResId == 0)
+            else if (v.SurfaceResId == 0 && surfaceTexture == null)
             {
                 // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Its presence
                 // is the tint STRENGTH (0=absent, 255=solid), scaled by any object opacity. Uncolored surfaceless
@@ -702,24 +706,22 @@ public partial class Main : Godot.Control
             }
             else
             {
-                var texture = _host.ResolveResIdTexture(v.SurfaceResId);
+                var texture = surfaceTexture ?? _host.ResolveResIdTexture(v.SurfaceResId);
                 if (texture == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
                 else
                 {
                     BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
                               localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic, v.Blend);
-                    var raw = _vm.Gfx.TryGet(v.Handle);
-                    outcome = $"slot={raw?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
+                    outcome = $"slot={rawObject?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
                               $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
                               $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                               $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
                               $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
-                              $"mode={raw?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
+                              $"mode={rawObject?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
                               ColorTimeline(v.ColorTransition);
                 }
             }
             if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
-            var rawObject = _vm.Gfx.TryGet(v.Handle);
             if (includeSurfaceText && rawObject != null)
             {
                 foreach (var surfaceText in _host.SnapshotSurfaceText(rawObject.SourceSlot))
@@ -880,7 +882,11 @@ public partial class Main : Godot.Control
             if (source.RangeTransform is { } rangeTransform)
                 affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
-            if (source.SurfaceResId == 0)
+            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            var texture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+                : null;
+            if (source.SurfaceResId == 0 && texture == null)
             {
                 if (source.Blend == BlendKind.Opaque) continue;
                 int w = source.W > 0 ? source.W : 800, h = source.H > 0 ? source.H : 600;
@@ -888,7 +894,7 @@ public partial class Main : Godot.Control
             }
             else
             {
-                var texture = _host.ResolveResIdTexture(source.SurfaceResId);
+                texture ??= _host.ResolveResIdTexture(source.SurfaceResId);
                 if (texture == null) continue;
                 BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
                           source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,

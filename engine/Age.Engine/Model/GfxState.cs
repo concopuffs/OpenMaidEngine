@@ -145,6 +145,9 @@ public sealed class GfxState
     // Retained for its opcode family; 0x21e scale and 0x220 translation use frame-time directly instead. ----
     public long AnimClockDurationTicks { get; private set; }
     public long AnimClockGeneration { get; private set; }
+    public long AnimationServiceFlags { get; private set; }
+    public uint PreviousFrameTimeMilliseconds { get; private set; }
+    public uint CurrentFrameTimeMilliseconds { get; private set; }
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
@@ -307,6 +310,7 @@ public sealed class GfxState
             _objects.Clear();
             _fieldTable.Clear();
             _surfaces.Clear();
+            _createdSurfaces.Clear();
             _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
             CurrentObject = 0;
@@ -316,6 +320,9 @@ public sealed class GfxState
             _rangeTransform = new GfxObject();
             AnimClockDurationTicks = 0;
             AnimClockGeneration++;
+            AnimationServiceFlags = 0;
+            PreviousFrameTimeMilliseconds = 0;
+            CurrentFrameTimeMilliseconds = 0;
         }
     }
 
@@ -323,6 +330,9 @@ public sealed class GfxState
 
     // ---- surfaces (image buffers per slot): ctx+0x52bd4[slot], from create/set-texture ----
     private readonly Dictionary<int, (long ResId, long ColorKey)> _surfaces = new();
+    // Created surfaces have real pixels but no asset resource id. Keep their class separate from both
+    // loaded textures and truly surfaceless objects because native mode-0 consumes packed alpha differently.
+    private readonly HashSet<int> _createdSurfaces = new();
     // A separate entry models the native CMovieToTexture object attached to a surface. A null value means
     // the movie object exists but its host decoder supplied no usable IMediaPosition stop time.
     private readonly Dictionary<int, long?> _movieStopTimesMs = new();
@@ -332,6 +342,7 @@ public sealed class GfxState
         lock (_lock)
         {
             _surfaces[slot] = (resId, colorKey);
+            _createdSurfaces.Remove(slot);
             _movieStopTimesMs.Remove(slot);
         }
     }
@@ -366,6 +377,7 @@ public sealed class GfxState
             for (int slot = firstSlot; slot < end; slot++)
             {
                 _surfaces.Remove(slot);
+                _createdSurfaces.Remove(slot);
                 _movieStopTimesMs.Remove(slot);
                 _surfaceTransitions.Remove(slot);
             }
@@ -463,12 +475,24 @@ public sealed class GfxState
             o.ColorAnim = true;
         }
     }
+    public void CreateSurface(int slot)
+    {
+        lock (_lock)
+        {
+            _surfaces[slot] = (0, -1); // create-texture: real mutable pixels, no asset id or color key
+            _createdSurfaces.Add(slot);
+            _movieStopTimesMs.Remove(slot);
+        }
+    }
+
     public void ClearSurface(int slot)
     {
         lock (_lock)
         {
-            _surfaces[slot] = (0, 0); // create-texture (blank)
+            _surfaces.Remove(slot);
+            _createdSurfaces.Remove(slot);
             _movieStopTimesMs.Remove(slot);
+            _surfaceTransitions.Remove(slot);
         }
     }
 
@@ -801,12 +825,27 @@ public sealed class GfxState
         lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
     }
 
+    public void SetAnimationServiceFlags(long flags)
+    {
+        lock (_lock) AnimationServiceFlags = unchecked((uint)flags);
+    }
+
+    public void SampleFrameTime(long nowMilliseconds)
+    {
+        lock (_lock)
+        {
+            PreviousFrameTimeMilliseconds = CurrentFrameTimeMilliseconds;
+            CurrentFrameTimeMilliseconds = unchecked((uint)nowMilliseconds);
+        }
+    }
+
     /// <summary>Op 0x243: force ordinary finite channels to their endpoints and reset the separate
     /// global animation-service clock. Op-0x242-detached objects ignore the completion request.</summary>
     public void ResetAnimClock()
     {
         lock (_lock)
         {
+            if ((AnimationServiceFlags & 2) != 0) return;
             ForceCompleteOneShotChannels();
             AnimClockDurationTicks = 0;
             AnimClockGeneration++;
@@ -856,7 +895,10 @@ public sealed class GfxState
                 if (!o.Visible) continue;
                 bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
                                   o.RotationChannelEnabled || o.TranslationEnabled;
-                var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, 0L);
+                // Created/mutable surfaces have no file resource id but remain a distinct surface class.
+                // Zero is an active "key black" value, so created and absent slots both default to -1.
+                var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, -1L);
+                bool createdSurface = _createdSurfaces.Contains(o.SourceSlot);
 
                 // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
                 // armed the one-shot channel, its current/target ARGB instead supplies opacity and D3D-style
@@ -897,6 +939,13 @@ public sealed class GfxState
                         // Native transition-source mode: 0xffffffff is opaque identity modulation,
                         // not a request to replace every texel with white.
                         alpha = a; strength = 0; blend = BlendKind.Alpha;
+                    }
+                    else if (createdSurface)
+                    {
+                        // Native created/render-target surfaces use packed alpha as object opacity.
+                        // SYSTEM4/BUNKI relies on this for translucent panels; FIELD uses the same surface
+                        // at alpha 0x40 beneath the minimap so the paper chrome remains visible.
+                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
                     }
                     else if (resId != 0)
                     {

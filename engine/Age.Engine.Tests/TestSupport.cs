@@ -24,6 +24,7 @@ internal class RecordingHost : IHost
     public int HistoryPresentationEnds;
     public readonly List<int> ClearedTextLayouts = new();
     public readonly List<SurfaceRectFill> SurfaceFills = new();
+    public readonly List<SurfaceRectCopy> SurfaceCopies = new();
     public readonly List<(long First, long Count)> PresentedRanges = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
     public readonly List<bool> WaitIndicatorEnabledChanges = new();
@@ -32,6 +33,7 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Channel)> SfxLoads = new();
     public readonly List<long> Voices = new();
     public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
+    public readonly List<(long Id, int PlaybackVariant, long DelayMs)> ScheduledVoiceRequests = new();
     public readonly List<long> VoiceBgmDuckControls = new();
     public readonly List<int> SfxStarts = new();
     public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
@@ -40,6 +42,7 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public System.Action? OnPlayMovie;
     public long? MovieStopTimeMs;
+    public readonly HashSet<int> ActiveMovieSurfaces = new();
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
@@ -78,6 +81,7 @@ internal class RecordingHost : IHost
     }
     public int MessageWindowAlphaSetting { get; set; }
     public void FillSurfaceRect(SurfaceRectFill fill) => SurfaceFills.Add(fill);
+    public void CopySurfaceRect(SurfaceRectCopy copy) => SurfaceCopies.Add(copy);
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
@@ -143,6 +147,8 @@ internal class RecordingHost : IHost
         VoiceRequests.Add((id, playbackVariant));
     }
     public void SetVoiceBgmDuckControl(long flags) => VoiceBgmDuckControls.Add(flags);
+    public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
+        => ScheduledVoiceRequests.Add((id, playbackVariant, delayMs));
     public void LoadSoundEffect(long resourceId, int channel) => SfxLoads.Add((resourceId, channel));
     public void StartSoundEffect(int channel) => SfxStarts.Add(channel);
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
@@ -155,6 +161,7 @@ internal class RecordingHost : IHost
         OnPlayMovie?.Invoke();
         return MovieStopTimeMs;
     }
+    public bool IsMovieSurfaceActive(int surfaceSlot) => ActiveMovieSurfaces.Contains(surfaceSlot);
     public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((rawResourceId, surfaceSlot, movieFlags));
 }
