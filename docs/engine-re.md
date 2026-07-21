@@ -2311,6 +2311,40 @@ enabled. That transient channel is kept separate from persistent op-`0x88` Skip,
 cannot clear the user's toggle; both channels share the existing text completion, wait advance, voice
 deferral, and skip cadence. This needs no profile storage, boot seed, or game-specific conditional.
 
+### ADV right-click/X system-menu path (2026-07-21)
+
+Right-click during ADV is not a frontend-owned menu shortcut. It is the same script-owned keyed-hotspot
+mechanism already partially modeled for SC0000. SYSTEM4 maps physical right mouse and keyboard X to logical
+action 7. Each of the 136 SC-family scripts registers a 1x1 dummy rectangle whose activation callback is
+the local branch that cancels the ADV hotspot wait, calls raw script id `0x1f` (`MENU.BIN`), then rebuilds
+the parent ADV controls and redraws the retained page. Opcode `0x97` binds action 7 to that rectangle.
+
+Native `adv_input_service_poll@0x411230` polls the configured logical-action mask first, then calls
+`input_hotspot_poll_bound_action_callback@0x403fb0`. The helper scans armed records in registration order;
+for each nonnegative op-`0x97` action index it tests `mask & (1 << action)` and returns the record's ordinary
+activation callback PC. This is the missing port seam. `HotspotRegistry.BindKey` already retains the action
+on the matching record, but no code consumes `Entry.InputBit`; Godot currently routes only pointer-left
+activation and action-4/5 page advance. Right mouse therefore reaches `InputBindings` as action 7 but never
+queues the MENU callback.
+
+The first implementation slice is narrow and engine-generic: expose bound-action activation on the armed
+hotspot registry, route pressed keyboard/mouse/joystick logical-action masks through it before ordinary page
+advance, wake the existing callback service, and reuse the same consume/rearm behavior as pointer activation.
+No MENU-specific branch belongs in Godot or the VM.
+
+The reached script path is promising but should be validated incrementally. `MENU.BIN` is 48/49 opcodes
+handled and its only static gap is op `0x80`; `INFO.BIN`, which selects character/enemy/voice/affinity/item
+information pages, is 30/30 handled. The large `CHMENU` and five `INFO*` detail screens are roughly
+91.5–95% handled and may expose secondary visual/data gaps after the shell opens. SAVE and CONFIG are only
+about 80% handled and remain separate storage/audio-settings work, not prerequisites for opening or closing
+the system menu.
+
+The sole `MENU.BIN` gap is now decoded: `op_0x80_set_default_gfx_object_slot@0x41ed40` stores operand 1 at
+EngineCtx `+0x14e08`; `op_0x1d9_handler@0x420a30` substitutes that selected slot only when its explicit
+object-slot operand is zero. MENU-family scripts select slots 7/8/9 on entry and restore slot 1 during
+teardown. This selector should join the input bridge implementation for state correctness, though the
+surveyed MENU/INFO scripts do not themselves call op `0x1d9`, so it is not the cause of the missing launch.
+
 ---
 
 ## Native walls backlog (targets for this loop)

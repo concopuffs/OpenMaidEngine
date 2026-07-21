@@ -395,6 +395,11 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 
 The handler uses an alpha step of 1 and timer interval=argument when argument <=64. Above 64 it uses step=16 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host.
 
+### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
+- **summary:** (slot) - select the retained graphics-object slot used when op 0x1d9 receives explicit slot zero.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x80_set_default_gfx_object_slot@0x41ed40 writes operand 1 to EngineCtx+0x14e08. op_0x1d9_handler@0x420a30 reads that field only when its operand-1 object slot is zero, otherwise it indexes the explicit slot; both paths write object+0x70. MENU-family scripts select working slots 7/8/9 on entry and restore slot 1 during teardown.
+
 ### 0x131 `get-message-window-alpha` (get-message-window-alpha, argc 1)
 - **summary:** (out) - read the configured `message:MesWinAlpha` value used to alpha-modulate the ADV chrome.
 - **grounding:** source=investigation, confidence=high
@@ -700,10 +705,10 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **evidence:** Ghidra /v2: op_0x94_arm_hotspot_wait@0x4166d0 sets ctx+0xc6e4=1 and calls input_hotspot_arm_cursor_tracking@0x404230 with 10000. SC0000 executes it immediately after the five control-strip and three keyed registrations.
 
 ### 0x97 `bind-hotspot-key` (u0041C150, argc 5)
-- **summary:** (x)(y)(w)(h)(input_bit) - find the already-registered rectangle with identical bounds and bind an input/key bit number to it.
+- **summary:** (x)(y)(w)(h)(logical_action) - find the already-registered rectangle with identical bounds and bind a logical input action to its activation callback.
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **depends on:** 0x90
-- **evidence:** Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's key-bit array. SC0000 binds bits 0, 8, and 7 to its three 1x1 keyed records.
+- **evidence:** Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's logical-action field. adv_input_service_poll@0x411230 passes the configured live action mask to input_hotspot_poll_bound_action_callback@0x403fb0, which returns the first matching record's activation PC. All 136 SC-family scripts bind action 7 to the callback that calls MENU.BIN; SYSTEM4 maps both right mouse and X to action 7.
 
 ### 0xcc `register-mouse-callback` (mouse_callback, argc 2)
 - **summary:** (poll_interval_ms)(target_pc) - register a timed per-frame mouse callback in the current script.
@@ -966,10 +971,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=med
 
 ### 0x7f `u00414C60` (u00414C60, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x80 `u0041AF00` (u0041AF00, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

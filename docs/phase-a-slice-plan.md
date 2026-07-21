@@ -2206,3 +2206,21 @@ persistent-toggle survival across a physical press/release.
 
 **Next:** manually hold LeftCtrl through text reveal and multiple waits in SC0000, then confirm release
 returns to normal cadence and that the on-screen Skip toggle remains active if enabled during the test.
+
+### Slice B1 ADV right-click system-menu path investigated (2026-07-21)
+
+The native and corpus paths agree end to end. SYSTEM4 maps right mouse and X to logical action 7; every one
+of the 136 SC-family scripts binds action 7 through op `0x97` to a dummy hotspot whose activation branch
+calls `MENU.BIN`. Native `adv_input_service_poll` resolves these bindings against the live logical-action
+mask before ordinary page advance. The port already stores the binding in `HotspotRegistry.Entry.InputBit`,
+but nothing reads it, so action 7 stops after registration even though the physical input layer is correct.
+
+`MENU.BIN` is 48/49 handled, and its INFO selector is 30/30. The only MENU gap, op `0x80`, is a default
+retained graphics-object-slot selector consumed by op `0x1d9`; it is straightforward state but not the
+launch blocker. Larger character/info detail screens are about 91.5–95% handled and should be treated as
+follow-up discrepancies reached through manual use. SAVE/CONFIG remain separate, storage-sensitive work.
+
+**Next:** implement one generic bound-action hotspot activation API, route pressed keyboard/mouse/controller
+action masks through it before page advance, and implement op `0x80`'s engine-owned selector. Add a focused
+synthetic bound-action test plus an SC0000 action-7 regression that proves the real `MENU.BIN` frame is
+entered and the parent ADV wait is restored after return.

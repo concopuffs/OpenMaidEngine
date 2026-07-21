@@ -1312,18 +1312,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AF00"
-category = "unknown"
-summary = ""
+name = "set-default-gfx-object-slot"
+category = "draw"
+summary = "(slot) - select the retained graphics-object slot used when op 0x1d9 receives explicit slot zero."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x80_set_default_gfx_object_slot@0x41ed40 writes operand 1 to EngineCtx+0x14e08. op_0x1d9_handler@0x420a30 reads that field only when its operand-1 object slot is zero, otherwise it indexes the explicit slot; both paths write object+0x70. MENU-family scripts select working slots 7/8/9 on entry and restore slot 1 during teardown."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "default retained graphics-object slot"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -1577,12 +1577,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "bind-hotspot-key"
 category = "input"
-summary = "(x)(y)(w)(h)(input_bit) - find the already-registered rectangle with identical bounds and bind an input/key bit number to it."
+summary = "(x)(y)(w)(h)(logical_action) - find the already-registered rectangle with identical bounds and bind a logical input action to its activation callback."
 noop_headless = true
 source = "investigation"
 confidence = "high"
 depends_on = [0x90]
-evidence = "Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's key-bit array. SC0000 binds bits 0, 8, and 7 to its three 1x1 keyed records."
+evidence = "Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclusive rect as op 0x90 and calls input_hotspot_bind_key_bit@0x403f50. That worker searches registered rects for exact equality and stores operand 5 in the record's logical-action field. adv_input_service_poll@0x411230 passes the configured live action mask to input_hotspot_poll_bound_action_callback@0x403fb0, which returns the first matching record's activation PC. All 136 SC-family scripts bind action 7 to the callback that calls MENU.BIN; SYSTEM4 maps both right mouse and X to action 7."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1606,7 +1606,7 @@ observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = "input/key bit index"
+role = "logical action index"
 observed_types = ["imm"]
 
 [[opcode]]

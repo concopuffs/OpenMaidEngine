@@ -73,6 +73,11 @@ name = "gfx_obj_ptr_table"
 type = "void*"
 note = "per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c)"
 [[field]]
+offset = 0x14e08
+name = "gfx_default_object_slot"
+type = "int"
+note = "op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero"
+[[field]]
 offset = 0x14ea0
 name = "text_line_spacing"
 type = "int"
