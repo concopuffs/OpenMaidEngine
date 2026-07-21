@@ -14,6 +14,9 @@ public static class AdvTextLayoutBootstrap
     {
         int? defineOpcode = table.ByLabel("define-adv-text-layout");
         int? resetOpcode = table.ByLabel("reset-adv-text-layout");
+        int? resetCursorOpcode = table.ByLabel("set-adv-text-reset-cursor");
+        int? boundsOpcode = table.ByLabel("set-adv-text-bounds");
+        int? addOpcode = table.ByLabel("add");
         if (defineOpcode == null || resetOpcode == null) return 0;
 
         bool foundDefinition = false;
@@ -46,6 +49,81 @@ public static class AdvTextLayoutBootstrap
             }
             break;
         }
+
+        // SYSTEM4 configures the cursor restored by future resets and the right/bottom overflow bounds
+        // after the initial define/reset run. Most operands are immediate; slot 1 computes its bounds with
+        // two constant add instructions. Interpret only that small, data-only expression vocabulary rather
+        // than entering SYSTEM4's later menu/session flow.
+        if (resetCursorOpcode != null && boundsOpcode != null)
+        {
+            var localInts = new Dictionary<int, long>();
+            bool inLayoutBlock = false;
+            int cursorConfigurations = 0;
+            int boundConfigurations = 0;
+            foreach (var instruction in systemScript.Instructions)
+            {
+                if (!inLayoutBlock)
+                {
+                    if (instruction.Opcode != defineOpcode.Value) continue;
+                    inLayoutBlock = true;
+                }
+
+                if (addOpcode != null && instruction.Opcode == addOpcode.Value)
+                {
+                    if (instruction.Args.Count == 3 && instruction.Args[0].Type == 9
+                        && TryResolveConstant(instruction.Args[1], localInts, out long left)
+                        && TryResolveConstant(instruction.Args[2], localInts, out long right))
+                        localInts[checked((int)instruction.Args[0].Value)] = left + right;
+                    continue;
+                }
+
+                if (instruction.Opcode == resetCursorOpcode.Value)
+                {
+                    var values = ResolveConfiguration(instruction, localInts, systemScript.Name);
+                    history.SetResetCursor(values[0], values[1], values[2]);
+                    cursorConfigurations++;
+                }
+                else if (instruction.Opcode == boundsOpcode.Value)
+                {
+                    var values = ResolveConfiguration(instruction, localInts, systemScript.Name);
+                    history.SetBounds(values[0], values[1], values[2]);
+                    boundConfigurations++;
+                }
+
+                if (cursorConfigurations >= definitions && boundConfigurations >= definitions) break;
+            }
+        }
         return definitions;
+    }
+
+    private static int[] ResolveConfiguration(
+        Instruction instruction, IReadOnlyDictionary<int, long> localInts, string scriptName)
+    {
+        if (instruction.Args.Count != 3)
+            throw new InvalidDataException(
+                $"{scriptName}@0x{instruction.Offset:x}: ADV layout configuration must use three operands");
+        var values = new int[3];
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (!TryResolveConstant(instruction.Args[i], localInts, out long value))
+                throw new InvalidDataException(
+                    $"{scriptName}@0x{instruction.Offset:x}: ADV layout configuration operand {i + 1} " +
+                    "is not an immediate or constant local integer");
+            values[i] = checked((int)value);
+        }
+        return values;
+    }
+
+    private static bool TryResolveConstant(
+        Operand operand, IReadOnlyDictionary<int, long> localInts, out long value)
+    {
+        if (operand.Type == 0)
+        {
+            value = operand.Value;
+            return true;
+        }
+        if (operand.Type == 9 && localInts.TryGetValue(checked((int)operand.Value), out value)) return true;
+        value = 0;
+        return false;
     }
 }

@@ -40,7 +40,9 @@ public readonly record struct AdvTextLayoutSnapshot(
     int OriginX,
     int OriginY,
     int CursorX,
-    int CursorY);
+    int CursorY,
+    int Right,
+    int Bottom);
 
 /// <summary>
 /// One semantic counterpart of AGE's 0x48-byte retained text record. Metadata uses
@@ -80,8 +82,12 @@ public sealed class AdvTextHistory
         public int Height;
         public int OriginX;
         public int OriginY;
+        public int ResetCursorX;
+        public int ResetCursorY;
         public int CursorX;
         public int CursorY;
+        public int Right;
+        public int Bottom;
     }
 
     private readonly List<AdvTextHistoryRecord> _records = new();
@@ -105,6 +111,8 @@ public sealed class AdvTextHistory
         layout.Height = height;
         layout.OriginX = originX;
         layout.OriginY = originY;
+        layout.Right = width;
+        layout.Bottom = height;
         AppendBoundary(slot);
     }
 
@@ -112,9 +120,25 @@ public sealed class AdvTextHistory
     {
         int slot = SelectLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
-        layout.CursorX = 0;
-        layout.CursorY = 0;
+        layout.CursorX = layout.ResetCursorX;
+        layout.CursorY = layout.ResetCursorY;
         AppendBoundary(slot);
+    }
+
+    public void SetResetCursor(int requestedSlot, int x, int y)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        layout.ResetCursorX = x;
+        layout.ResetCursorY = y;
+    }
+
+    public void SetBounds(int requestedSlot, int right, int bottom)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        layout.Right = right;
+        layout.Bottom = bottom;
     }
 
     public void SetCursor(int requestedSlot, int x, int y)
@@ -132,6 +156,9 @@ public sealed class AdvTextHistory
         layout.OriginX = x;
         layout.OriginY = y;
     }
+
+    public AdvTextLayoutSnapshot GetLayoutSnapshot(int requestedSlot)
+        => SnapshotLayout(ResolveLayout(requestedSlot));
 
     public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style,
                            AdvTextHistoryRecordFlags flags = AdvTextHistoryRecordFlags.None)
@@ -291,7 +318,8 @@ public sealed class AdvTextHistory
     {
         var layout = GetOrCreateLayout(slot);
         return new AdvTextLayoutSnapshot(slot, layout.Width, layout.Height,
-            layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY);
+            layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY,
+            layout.Right, layout.Bottom);
     }
 
     private void AppendBoundary(int slot)
@@ -325,7 +353,8 @@ public sealed class AdvTextHistory
 
         var layout = GetOrCreateLayout(slot);
         var snapshot = new AdvTextLayoutSnapshot(slot, layout.Width, layout.Height,
-            layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY);
+            layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY,
+            layout.Right, layout.Bottom);
         _records.Add(new AdvTextHistoryRecord(kind, flags, snapshot, style, text, value, auxValue, sourceOffset));
     }
 }

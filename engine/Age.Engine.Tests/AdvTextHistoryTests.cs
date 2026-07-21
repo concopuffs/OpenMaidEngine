@@ -45,7 +45,7 @@ public class AdvTextHistoryTests
                 Assert.Equal(123, metadata.Value);
                 Assert.Equal(1, metadata.AuxValue);
                 Assert.Equal((24, 0xf0e0d0L), (metadata.Style.PrimaryFontSize, metadata.Style.TextColor));
-                Assert.Equal(new AdvTextLayoutSnapshot(1, 640, 160, 80, 430, 12, 34), metadata.Layout);
+                Assert.Equal(new AdvTextLayoutSnapshot(1, 640, 160, 80, 430, 12, 34, 640, 160), metadata.Layout);
             },
             voice =>
             {
@@ -109,7 +109,27 @@ public class AdvTextHistoryTests
         var record = Assert.Single(history.Records);
         Assert.Equal("new", record.Text);
         Assert.False(record.Flags.HasFlag(AdvTextHistoryRecordFlags.GroupStart));
-        Assert.Equal(new AdvTextLayoutSnapshot(3, 320, 90, 20, 400, 0, 0), record.Layout);
+        Assert.Equal(new AdvTextLayoutSnapshot(3, 320, 90, 20, 400, 0, 0, 320, 90), record.Layout);
+    }
+
+    [Fact]
+    public void ConfiguredCursorIsDeferredUntilResetWhileBoundsApplyToTheLayout()
+    {
+        var history = new AdvTextHistory();
+        history.DefineLayout(1, 800, 160, 0, 430);
+        history.ResetLayout(1);
+        history.SetCursor(1, 12, 34);
+
+        history.SetResetCursor(1, 100, 47);
+        history.SetBounds(1, 720, 147);
+
+        Assert.Equal(new AdvTextLayoutSnapshot(1, 800, 160, 0, 430, 12, 34, 720, 147),
+                     history.GetLayoutSnapshot(1));
+
+        history.ResetLayout(1);
+
+        Assert.Equal(new AdvTextLayoutSnapshot(1, 800, 160, 0, 430, 100, 47, 720, 147),
+                     history.GetLayoutSnapshot(1));
     }
 
     [Fact]

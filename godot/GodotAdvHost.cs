@@ -159,6 +159,20 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
+    /// <summary>
+    /// Layout that owns the ordinary ADV overlay. Nested callback scripts such as HISTORY can select and
+    /// mutate other layouts while the parent wait remains parked; those transient selections must not move
+    /// the parent page when its overlay becomes visible again.
+    /// </summary>
+    public int AdvPageLayoutSlot
+    {
+        get
+        {
+            lock (_textLock)
+                return IsWaiting && _activeWaitLayout != 0 ? _activeWaitLayout : _currentAdvLayout;
+        }
+    }
+
     public IReadOnlyList<SurfaceTextDraw> SnapshotSurfaceText(int surfaceSlot)
     {
         lock (_textLock)

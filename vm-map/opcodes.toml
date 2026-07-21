@@ -1182,33 +1182,33 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x79
-label = "u0041AD30"
+label = "set-adv-text-reset-cursor"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AD30"
-category = "unknown"
-summary = ""
+name = "set-adv-text-reset-cursor"
+category = "adv"
+summary = "(layout_slot)(x)(y) - configure the cursor coordinates restored by a later reset of the selected ADV text layout. Slot 0 selects the current layout. This does not move the live cursor immediately; opcode 0x7a does that."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x70, 0x71]
+evidence = "Ghidra /v2: op_0x79_set_adv_text_reset_cursor@0x41eb50 reads three operands and calls adv_text_layout_set_reset_cursor@0x44fed0. Slot 0 resolves through the manager current-layout field at +0x4c8; the selected layout pointer is manager+0x414[slot], and x/y are stored at layout +0x1c/+0x20. adv_text_layout_reset_cursor_and_bounds_record@0x455070 later copies those configured values into the initial retained record on layout reset. SYSTEM4 has all nine corpus sites, paired with 0x1c1 after defining/resetting layouts 1..9; slot 1 configures (100,47), layouts 2..6 configure (45,42), layouts 7/8 (53,10), and layout 9 (10,10). Port implementation stores the configured cursor separately from the live cursor, restores it on 0x71, and replays the SYSTEM4 configuration in the direct-scene bootstrap."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot (0 = current)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "reset cursor x"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "reset cursor y"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -4092,33 +4092,33 @@ evidence = ""
 
 [[opcode]]
 op = 0x1c1
-label = "u0041B820"
+label = "set-adv-text-bounds"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B820"
-category = "unknown"
-summary = ""
+name = "set-adv-text-bounds"
+category = "adv"
+summary = "(layout_slot)(right)(bottom) - configure the selected ADV text layout's right and bottom overflow boundaries in layout-local coordinates. Slot 0 selects the current layout."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x70, 0x71]
+evidence = "Ghidra /v2: op_0x1c1_set_adv_text_bounds@0x41f6c0 reads three operands and calls adv_text_layout_set_bounds@0x44ff00. That helper stores right/bottom at layout +0x24/+0x28; adv_text_layout_reset_cursor_and_bounds_record@0x455070 copies them into the initial retained record, and adv_text_layout_check_overflow@0x45efc0 compares glyph end coordinates against them. SYSTEM4 has all nine sites, paired with 0x79. Slot 1 computes (720,147), layouts 2..6 use (645,135), layout 7 (495,180), layout 8 (495,60), and layout 9 (250,368), proving these are layout-local boundary coordinates rather than width/height deltas. Port implementation retains the configured bounds in engine-owned layout snapshots and sizes ordinary/history Godot labels from right-cursor_x and bottom-cursor_y."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "layout slot (0 = current)"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "right overflow boundary"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "bottom overflow boundary"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

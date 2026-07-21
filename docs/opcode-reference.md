@@ -8,11 +8,13 @@
 ### 0x70 `define-adv-text-layout` (define-adv-text-layout, argc 5)
 - **summary:** (layout_slot)(width)(height)(x)(y) - configure an ADV text layout/surface and, when history recording is enabled, append its logical history index and arm the next retained record as a group start.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x79, 0x1c1
 - **evidence:** Ghidra /v2: op_0x70_handler@0x41e4e0 forwards the five operands and ctx+0x55110 to adv_text_layout_define@0x4550e0. The worker stores width/height/origin, creates or resizes surface slot layout+0x14, appends {layout_slot,current_record_count} to the 8-byte history index unless suppression bit31 is set, and arms manager+0xd40[slot] so the next 0x48-byte record receives group-start flag bit0.
 
 ### 0x71 `reset-adv-text-layout` (reset-adv-text-layout, argc 1)
 - **summary:** (layout_slot) - clear/reset an ADV text layout, append a retained-history boundary when recording is enabled, snapshot the current code/text position, and commit pending ReadTextDB records. T1 entries target these structural reset sites.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x79, 0x1c1
 - **evidence:** Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; the worker clears the selected layout and appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20.
 
 ### 0x72 `wait-for-input` (wait-for-input, argc 1)
@@ -44,6 +46,12 @@
 - **summary:** (mode) - select the current text raster/effect mode.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x78_handler@0x41eb10 writes operand 1 to text-manager+0x558 and rebuilds font state. Direct draw and text_history_render_records branch on this field (including a distinct mode-3 offset path). HISTORY.BIN selects mode 3 and restores mode 3 with the normal ADV font preset.
+
+### 0x79 `set-adv-text-reset-cursor` (set-adv-text-reset-cursor, argc 3)
+- **summary:** (layout_slot)(x)(y) - configure the cursor coordinates restored by a later reset of the selected ADV text layout. Slot 0 selects the current layout. This does not move the live cursor immediately; opcode 0x7a does that.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x70, 0x71
+- **evidence:** Ghidra /v2: op_0x79_set_adv_text_reset_cursor@0x41eb50 reads three operands and calls adv_text_layout_set_reset_cursor@0x44fed0. Slot 0 resolves through the manager current-layout field at +0x4c8; the selected layout pointer is manager+0x414[slot], and x/y are stored at layout +0x1c/+0x20. adv_text_layout_reset_cursor_and_bounds_record@0x455070 later copies those configured values into the initial retained record on layout reset. SYSTEM4 has all nine corpus sites, paired with 0x1c1 after defining/resetting layouts 1..9; slot 1 configures (100,47), layouts 2..6 configure (45,42), layouts 7/8 (53,10), and layout 9 (10,10). Port implementation stores the configured cursor separately from the live cursor, restores it on 0x71, and replays the SYSTEM4 configuration in the direct-scene bootstrap.
 
 ### 0x7a `set-adv-text-cursor` (set-adv-text-cursor, argc 3)
 - **summary:** (layout_slot)(x)(y) - set the cursor in the selected ADV text layout's last 20-byte record. Slot 0 selects the current layout.
@@ -79,6 +87,12 @@
 - **summary:** (enabled) - enable or suppress retained ADV text-history recording. Zero suppresses recording; one enables it.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x55110 for operand 0 and zero for operand 1, rejecting other values. Text/layout/metadata/voice paths test or propagate that high bit before appending retained history. HISTORY.BIN disables recording at entry and reenables it at exit so the backlog UI does not record itself.
+
+### 0x1c1 `set-adv-text-bounds` (set-adv-text-bounds, argc 3)
+- **summary:** (layout_slot)(right)(bottom) - configure the selected ADV text layout's right and bottom overflow boundaries in layout-local coordinates. Slot 0 selects the current layout.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x70, 0x71
+- **evidence:** Ghidra /v2: op_0x1c1_set_adv_text_bounds@0x41f6c0 reads three operands and calls adv_text_layout_set_bounds@0x44ff00. That helper stores right/bottom at layout +0x24/+0x28; adv_text_layout_reset_cursor_and_bounds_record@0x455070 copies them into the initial retained record, and adv_text_layout_check_overflow@0x45efc0 compares glyph end coordinates against them. SYSTEM4 has all nine sites, paired with 0x79. Slot 1 computes (720,147), layouts 2..6 use (645,135), layout 7 (495,180), layout 8 (495,60), and layout 9 (250,368), proving these are layout-local boundary coordinates rather than width/height deltas. Port implementation retains the configured bounds in engine-owned layout snapshots and sizes ordinary/history Godot labels from right-cursor_x and bottom-cursor_y.
 
 ### 0x1ce `set-adv-wait-indicator-enabled` (u0041B9F0, argc 1)
 - **summary:** (enabled) - explicitly start or stop the animated ADV input-wait indicator service.
@@ -931,10 +945,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x79 `u0041AD30` (u0041AD30, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x7f `u00414C60` (u00414C60, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1148,10 +1158,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1ba `u0041D850` (u0041D850, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1c1 `u0041B820` (u0041B820, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

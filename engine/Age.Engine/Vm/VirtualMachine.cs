@@ -827,12 +827,23 @@ public sealed class VirtualMachine
                                          (int)Read(a[3]), (int)Read(a[4]));
                 return pc + 1;
             case "reset-adv-text-layout": // 0x71: reset layout and begin the next logical retained group
-                TextHistory.ResetLayout((int)Read(a[0]));
-                _host.ClearRenderedAdvTextLayout((int)Read(a[0]));
+            {
+                int requestedSlot = (int)Read(a[0]);
+                TextHistory.ResetLayout(requestedSlot);
+                var layout = TextHistory.GetLayoutSnapshot(requestedSlot);
+                _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
+                _host.ClearRenderedAdvTextLayout(layout.Slot);
+                return pc + 1;
+            }
+            case "set-adv-text-reset-cursor": // 0x79: configure cursor restored by a later 0x71
+                TextHistory.SetResetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
                 return pc + 1;
             case "set-adv-text-cursor": // 0x7a (layout slot, x, y); slot 0 means current natively
                 TextHistory.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
                 _host.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
+            case "set-adv-text-bounds": // 0x1c1: layout-local right/bottom overflow boundaries
+                TextHistory.SetBounds((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+                return pc + 1;
             case "configure-adv-wait-indicator": // 0x73: per-layout animated input-wait marker
                 _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),

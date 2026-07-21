@@ -41,7 +41,7 @@ public class HistoryPresentationOpsTests
         var render = Assert.Single(host.HistoryRenders);
         Assert.Equal((4, 0, "retained dialogue"),
             (render.LayoutSlot, render.FirstRecordIndex, render.Text));
-        Assert.Equal(new AdvTextLayoutSnapshot(4, 600, 150, 65, 150, 45, 42), render.Layout);
+        Assert.Equal(new AdvTextLayoutSnapshot(4, 600, 150, 65, 150, 45, 42, 600, 150), render.Layout);
         Assert.Equal((24, 0xffffffL, 0x606060L, 8),
             (render.Style.PrimaryFontSize, render.Style.TextColor, render.Style.EffectColor,
              render.Style.LineSpacing));

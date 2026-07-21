@@ -714,8 +714,10 @@ public partial class Main : Godot.Control
         _text.Visible = !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive;
         if (!_text.Visible) return;
         var t = _host.SnapshotAdvText();
-        _text.Position = new Vector2(t.X, 430 + t.Y);
-        _text.Size = new Vector2(System.Math.Max(1, 720 - t.X), System.Math.Max(1, 147 - t.Y));
+        var layout = _vm.TextHistory.GetLayoutSnapshot(_host.AdvPageLayoutSlot);
+        _text.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
+        _text.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
+                                 System.Math.Max(1, layout.Bottom - layout.CursorY));
         int count = System.Math.Clamp(t.VisibleGlyphs, 0, t.Text.Length);
         _text.Text = count == 0 ? "" : t.Text[..count];
     }
@@ -733,8 +735,8 @@ public partial class Main : Godot.Control
             }
             var layout = batch.Layout;
             label.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
-            label.Size = new Vector2(System.Math.Max(1, layout.Width - layout.CursorX),
-                                     System.Math.Max(1, layout.Height - layout.CursorY));
+            label.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
+                                     System.Math.Max(1, layout.Bottom - layout.CursorY));
             label.Text = batch.Text;
             ApplyAdvTextStyle(label, batch.Style);
             label.Visible = true;

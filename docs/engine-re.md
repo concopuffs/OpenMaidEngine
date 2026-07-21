@@ -2227,6 +2227,45 @@ the deliberately deferred shared-profile write `0x1a2`.
 
 ---
 
+### ADV layout reset cursor and overflow bounds — `0x79` / `0x1c1` (2026-07-21)
+
+SYSTEM4 uses these two three-operand operations as a pair while constructing its nine ADV layouts. They
+configure persistent layout properties used by later resets; neither operation draws text or moves the
+current cursor immediately.
+
+`op_0x79_set_adv_text_reset_cursor@0x41eb50` reads `(layout_slot, x, y)` and calls
+`adv_text_layout_set_reset_cursor@0x44fed0`. Slot zero resolves through the current-layout selector at
+manager `+0x4c8`; otherwise the helper selects `manager+0x414[slot]`. It writes `x/y` to layout
+`+0x1c/+0x20`. This is distinct from `0x7a`, whose `adv_text_set_cursor@0x4530f0` path modifies the live
+cursor record immediately.
+
+`op_0x1c1_set_adv_text_bounds@0x41f6c0` reads `(layout_slot, right, bottom)` and calls
+`adv_text_layout_set_bounds@0x44ff00`, which writes the pair to layout `+0x24/+0x28`. They are absolute
+layout-local overflow coordinates. `adv_text_layout_check_overflow@0x45efc0` compares glyph end x/y
+against those fields and returns horizontal/vertical overflow bits. When a layout resets,
+`adv_text_layout_reset_cursor_and_bounds_record@0x455070` replaces its retained state with a five-dword
+record `{0, reset_x, reset_y, right, bottom}` copied from all four configured fields.
+
+The corpus supplies a complete consistency check: all nine sites for each opcode are in SYSTEM4 and
+alternate after layouts 1–9 are defined and initially reset. Layout 1 configures cursor `(100,47)` and
+bounds `(720,147)`; layouts 2–6 use `(45,42)` and `(645,135)`; layout 7 uses `(53,10)` and `(495,180)`;
+layout 8 uses `(53,10)` and `(495,60)`; layout 9 uses `(10,10)` and `(250,368)`. Layout 1 computes its
+bounds as `100+620` and `47+100`, further excluding width/height-delta semantics.
+
+The port now keeps configured reset cursor and right/bottom bounds in its engine-owned layout state.
+`0x70` initializes bounds from width/height, `0x79` changes only the deferred reset cursor, `0x1c1`
+changes the bounds, and `0x71` restores the configured cursor while notifying the host of the concrete
+selected slot. Retained snapshots carry the boundaries, and ordinary/history Godot labels are positioned
+from the layout origin and sized from `right-cursor_x` / `bottom-cursor_y`; the former hardcoded slot-1
+rectangle is gone. The ordinary overlay remains bound to the parent input wait's captured layout while a
+nested callback such as HISTORY selects and renders into layouts 2–6; closing the callback therefore
+reveals the retained parent text at its original geometry rather than consulting the callback's last
+current-layout selection. The direct-scene SYSTEM4 bootstrap also recognizes all nine configuration pairs and
+evaluates the two constant `add` expressions used for slot 1 without entering SYSTEM4's control flow. This
+is script-owned state, with no boot seed or game-specific coordinates in the runtime.
+
+---
+
 ## Native walls backlog (targets for this loop)
 
 - ~~**call-script dispatch**~~ — **SOLVED** (above): `call-script <id>` = raw SYS4INI file index.

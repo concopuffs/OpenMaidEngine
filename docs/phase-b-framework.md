@@ -280,8 +280,12 @@ GAMESTART profile operations still deliberately deferred. The reached `0x63`/`0x
 also implemented: native `0x63` aliases a typed backing-cell address into a pointer, while `0x1b0` copies a
 counted dword span through direct or pointer endpoints. The traced natural boot reaches both without
 fallback; UNITECH is now 31/31 handled and CALCCC 14/15, with only deferred profile op `0x1a2` remaining.
-The next reached effectful cluster to investigate is SYSTEM4's paired `0x79`/`0x1c1` setup. Closing Godot
-currently releases a parked ADV wait before process teardown, so the page map may contain one trailing
+SYSTEM4's paired `0x79`/`0x1c1` setup is now natively resolved and implemented: `0x79` configures the
+cursor restored by later layout resets, while `0x1c1` configures layout-local right/bottom overflow
+boundaries. `AdvTextHistory`, VM dispatch, the direct-scene SYSTEM4 bootstrap, and ordinary/history Godot
+label geometry now share that script-owned state; the former slot-1 hardcoding is removed. The next
+natural Game Start diagnostic should identify the next reached effectful fallback. Closing Godot currently
+releases a parked ADV wait before process teardown, so the page map may contain one trailing
 shutdown-only page; the final timeline `input-wait` is the authoritative stop.
 
 ## Stage B2 — Faithful full boot
