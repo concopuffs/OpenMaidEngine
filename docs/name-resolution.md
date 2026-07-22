@@ -87,8 +87,8 @@ free handholds — several of which we've already built:
 1. **The `*INIT` scripts are the writers, and we already extracted them.** `EBINIT`/`ITINIT`/
    `SKINIT`/`CGINIT`/`MPINIT` populate global arrays with names and data (`build/data/*.json`).
    The base address `EBINIT` writes 277 unit names into *is* the unit-name table. Each JSON's
-   `name_array_base`, `desc_array_bases`, and `field_columns` are literally global addresses we
-   can label by which table wrote them.
+   `name_array_base`, `desc_array_bases`, `field_columns`, and `record_field_columns` are literally
+   global addresses and access shapes we can label by which table wrote them.
 2. **Strings anchor the string side for free.** `set-string` writes skill names to
    `global-string 0x23a3…` → that array is the skill-name table. `*MES` tables likewise.
 3. **Access shape reveals structure without names.** A global read as `base[unit*stride + col]`
@@ -106,14 +106,14 @@ label the ~dozen hottest globals first (biggest readability payoff), grow the re
 (all evidence) + `build/global-var-map.md` (labelled subset). It ingests `build/data/*.json`
 (name/desc/field bases), scans the 481-script corpus for each global's **access shape**
 (2D-table base + stride, 1D-array base, row-index, scalar), and ranks "current entity" index
-pointers by purity. **Current result: 15,918 of 49,386 distinct globals labelled** —
+pointers by purity. **Current result: 4,960 of 41,611 distinct globals labelled** —
 
 | kind | count | example |
 |---|---|---|
 | string tables (names/descs/messages) | 3,206 | `0x23a2` = skill-name lookup base |
-| per-entity data-field arrays (from *INIT) | 12,311 | dense = shared fields, `?` = sparse per-entity |
+| per-entity data-field arrays (from *INIT) | 1,353 | dense = shared fields, `?` = sparse per-entity |
 | row-major record tables (from access shape) | 122 | `0x52383` = record-table[stride 30] |
-| 1D arrays | 307 | |
+| 1D arrays | 253 | |
 | index / "current entity" pointers | 26 | `0x152616` (purity 0.51), `0xeff75` (0.95) |
 
 **Validated against `RECOVER`:** the map independently reproduces its hand-traced layout —
@@ -148,15 +148,30 @@ Semantic recovery is an evidence ladder, cheapest and strongest first:
    promoting guesses. Use dynamic observation only for fields that remain ambiguous after static consumers.
 
 `tools/init_table_profile.py ITINIT --build` materializes steps 1–2 in
-`build/data/ITINIT-field-profile.{json,md}`. The first pass names eleven stable ITINIT arrays: catalog sort
+`build/data/ITINIT-field-profile.{json,md}`. The initial pass names thirteen parallel arrays: catalog sort
 key, random-item tier, item category, icon id, shared ITMES handler id, attack and defense elements, weapon
-class, granted skill id, and minimum/maximum range. The strongest joins are independently human-readable:
-attack/defense values index AFINIT's Japanese attribute strings, granted-skill values resolve to SKINIT, all
-handler values resolve to ITMES.BIN, and every min/max-range record says `range 2` in its item description.
+class, granted skill id, minimum/maximum range, essence recovery, and an equipment sex mask. The strongest
+joins are independently human-readable: attack/defense values index AFINIT's Japanese attribute strings,
+granted-skill values resolve to SKINIT, all handler values resolve to ITMES.BIN, and every min/max-range
+record says `range 2` in its item description.
 
-The remaining 764 ITINIT write bases are not automatically 764 item fields. Most occur once because ITINIT
-also initializes linked effect/stat arrays while defining an item. Treat the profile's `population` and
-consumer evidence as a classification aid before assigning table ownership.
+The apparent 764 additional ITINIT field bases were a structural artifact, not 764 sparse arrays. For each
+write, subtracting `item_id * stride` and comparing the destination with corpus-observed `lookup-array-2d`
+consumers assigns all 764 writes unambiguously to six row-major tables and 43 populated columns:
+
+| base | stride | populated writes | semantic role |
+|---|---:|---:|---|
+| `0x8e7b9` | 5 | 20 | character-id equipment whitelist |
+| `0x906f9` | 30 | 36 | attack-inflicted condition levels |
+| `0x97c29` | 30 | 11 | equipped/passive condition levels |
+| `0x9f541` | 14 | 301 | additive equipment stat modifiers |
+| `0xa2bf1` | 10 | 379 | per-stat tuning curve ids |
+| `0xa5301` | 3 | 17 | HP/SP/FS recovery amounts |
+
+`extract_init.py` now records these as `record_fields["base/stride/column"]` rather than inventing a
+one-off `fields` base for every row. Applying the same rule also exposes 17 linked SKINIT columns and 83
+linked EBINIT columns. This correction reduces the auto map's false INIT-field labels from 12,311 to 1,353;
+the raw write data was valid, but its former ownership model was not.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -202,8 +217,8 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** Finish ITINIT's repeatedly populated fields and linked
-   effect arrays, then run the same profiler on SKINIT and EBINIT. Add explicit foreign-key joins (item →
+1. **Continue INIT semantics by evidence density.** Resolve ITINIT stat column 8 and the remaining condition
+   enum columns, then run the same profiler on SKINIT and EBINIT. Add explicit foreign-key joins (item →
    skill, unit → attack/skill) once the target table ids are confirmed. Do not infer meaning from column
    position alone.
 2. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other

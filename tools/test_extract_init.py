@@ -45,6 +45,12 @@ def test_real_name_tables() -> None:
     check(by_id[101]["desc"] == "ＨＰ３０回復", "ITINIT item 101 keeps its description")
     check(by_id[1]["fields"]["0x8c879"] == 10,
           "ITINIT columns use the runtime lookup base")
+    check(len({key for record in items for key in record["fields"]}) == 13,
+          "ITINIT has thirteen parallel-array fields")
+    check(len({key for record in items for key in record.get("record_fields", {})}) == 43,
+          "ITINIT linked row-major tables expose 43 populated columns")
+    check(by_id[101]["record_fields"]["0xa5301/3/0"] == 30,
+          "ITINIT item 101 stores HP recovery in row-major column zero")
 
 
 if __name__ == "__main__":

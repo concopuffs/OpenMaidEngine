@@ -20,6 +20,7 @@ Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|num
 from __future__ import annotations
 import json
 import sys
+from functools import cache
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -89,6 +90,44 @@ def _infer_record_span(string_addrs):
     return max(counts, key=lambda delta: (counts[delta], delta))
 
 
+@cache
+def _known_record_tables():
+    """Return corpus-observed (base, stride) pairs used by lookup-array-2d.
+
+    INIT scripts often populate linked row-major tables while defining an
+    entity.  Treating every such write as `destination - entity_id` invents a
+    different one-off parallel column for every row.  Consumer bytecode gives
+    us the unambiguous table base and stride instead.
+    """
+    tables = set()
+    for path in paths.scripts().values():
+        try:
+            script = sys4load.load(path)
+        except sys4load.Sys4Error:
+            continue
+        for ins in script.instructions:
+            if (sys4load.display_label(ins.opcode) == "lookup-array-2d"
+                    and len(ins.args) >= 5
+                    and ins.args[1][0] in (T_GLOBAL_INT, 6)
+                    and ins.args[3][0] == T_IMM
+                    and ins.args[3][1] > 0):
+                tables.add((ins.args[1][1], ins.args[3][1]))
+    return tuple(sorted(tables))
+
+
+def _record_table_cell(destination, record_id):
+    matches = []
+    for base, stride in _known_record_tables():
+        column = destination - (base + record_id * stride)
+        if 0 <= column < stride:
+            matches.append((base, stride, column))
+    if len(matches) > 1:
+        raise ValueError(
+            f"ambiguous record-table destination 0x{destination:x} for id {record_id}: {matches}"
+        )
+    return matches[0] if matches else None
+
+
 def extract_name(scr):
     string_addrs = [
         ins.args[0][1]
@@ -112,17 +151,31 @@ def extract_name(scr):
             # boundary: ITINIT begins with 101 consecutive name-only records,
             # which the old heuristic collapsed into item zero.
             if name_write_base <= addr < name_write_base + record_span:
-                cur = {"id": addr - name_base, "name": txt, "fields": {}}
+                cur = {"id": addr - name_base, "name": txt, "fields": {}, "record_fields": {}}
                 records.append(cur); desc_slot = 0
             elif cur is not None:
                 key = "desc" if desc_slot == 0 else f"desc{desc_slot}"
                 cur[key] = txt; desc_bases.setdefault(key, addr - cur["id"]); desc_slot += 1
         elif ins.opcode == MOV and cur is not None and ins.args and ins.args[0][0] == T_GLOBAL_INT:
-            cur["fields"][f"0x{ins.args[0][1] - cur['id']:x}"] = _val(ins.args[1])
+            destination = ins.args[0][1]
+            cell = _record_table_cell(destination, cur["id"])
+            if cell is None:
+                cur["fields"][f"0x{destination - cur['id']:x}"] = _val(ins.args[1])
+            else:
+                base, stride, column = cell
+                cur["record_fields"][f"0x{base:x}/{stride}/{column}"] = _val(ins.args[1])
+    for record in records:
+        if not record["record_fields"]:
+            del record["record_fields"]
+    record_columns = sorted(
+        {key for record in records for key in record.get("record_fields", {})},
+        key=lambda key: tuple(int(part, 0) for part in key.split("/")),
+    )
     return records, {"name_array_base": f"0x{name_base:x}",
                      "name_write_base": f"0x{name_write_base:x}",
                      "first_record_id": first_record_id,
                      "record_span": record_span,
+                     "record_field_columns": record_columns,
                      "desc_array_bases": {k: f"0x{v:x}" for k, v in sorted(desc_bases.items())}}
 
 
@@ -201,17 +254,23 @@ def write_data_index(data_dir: Path) -> None:
         "bases remain available in every record; confirmed field meanings live in",
         "`vm-map/globals.toml` and the generated `docs/global-reference.md`.",
         "",
-        "| file | mode | records | field bases |",
-        "|---|---|---:|---:|",
+        "| file | mode | records | array fields | record columns |",
+        "|---|---|---:|---:|---:|",
     ]
     for filename, data in tables:
         columns = len(data.get("field_columns") or [])
-        lines.append(f"| `{filename}` | {data['mode']} | {data['record_count']} | {columns} |")
+        record_columns = len(data.get("record_field_columns") or [])
+        lines.append(
+            f"| `{filename}` | {data['mode']} | {data['record_count']} | "
+            f"{columns} | {record_columns} |"
+        )
     lines += [
         "",
         "Name-mode tables expose one-based runtime `id` values, the lookup `name_array_base`,",
         "the first populated `name_write_base`, and the reserved `record_span`. Fields are keyed",
         "by the runtime lookup base used by `lookup-array`, not merely the first written cell.",
+        "Linked row-major fields are stored separately in `record_fields`, keyed as",
+        "`base/stride/column` from corpus-observed `lookup-array-2d` consumers.",
         "",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence. `STINIT` still requires a bespoke mixed numeric/string parser.",

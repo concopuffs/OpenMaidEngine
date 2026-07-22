@@ -117,6 +117,86 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x8e7b9"
+name = "item_character_whitelist"
+category = "data-table"
+type = "int[1000][5]"
+value_domain = "EBINIT character ids; up to five per item"
+usage = "Sparse ITINIT row-major table with stride 5. CHMENU rejects an item when column 0 is populated and the selected party slot's character id is absent from the row. Unique accessories 471/472 allow one character each, while crossover accessories 480..485 allow character ids 2, 3, and 4. Unused trailing columns remain zero."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8ff29"
+name = "item_sex_restriction_mask"
+category = "data-table"
+type = "int[1000]"
+value_domain = "bit mask; shipped ITINIT populates value 4 on two items"
+usage = "Sparse ITINIT equipment restriction. CHMENU tests this mask against EBINIT field 0x71eae, whose values partition male, female, and sexless units; both populated items carry bit 2 and are therefore female-only."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x906f9"
+name = "item_attack_status_levels"
+category = "data-table"
+type = "int[1000][30]"
+value_domain = "condition strength 1..5; zero means absent"
+usage = "Sparse ITINIT row-major table consumed by USEITEM and CALCILL when applying an item's attack effects. Confirmed condition columns from item descriptions are 2 HP drain, 3 SP drain, 4 FS drain, 6 charm, 7 confusion, 8 paralysis, 9 poison, 10 water-flow, and 11 fear."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x97c29"
+name = "item_equipped_status_levels"
+category = "data-table"
+type = "int[1000][30]"
+value_domain = "condition strength 1..5; zero means absent"
+usage = "Sparse ITINIT row-major table added to a unit's 30-column condition state by CALCREVISE. Item descriptions identify populated columns 9 poison, 11 fear, 13 regeneration, and 14 exaltation; these are passive equipped effects, distinct from item_attack_status_levels."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x9f541"
+name = "item_stat_modifiers"
+category = "data-table"
+type = "int[1000][14]"
+value_domain = "signed additive stat values; shipped populated values are positive"
+usage = "ITINIT row-major equipment modifiers added directly to the unit's 14-column stat record by CALCREVISE. Descriptions and consumers establish columns 0 accuracy, 1 evasion, 2 physical attack, 3 physical defense, 4 magic attack, 5 magic defense, 6 speed, 7 luck, 9 capture power, 10 movement, 11 max HP, 12 max SP, and 13 max FS; column 8 remains unnamed."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa2bf1"
+name = "item_tuning_curve_ids"
+category = "data-table"
+type = "int[1000][10]"
+value_domain = "curve ids 1..18; zero means the field cannot be tuned"
+usage = "ITINIT row-major table selecting an equipment-growth curve for each of the ten tunable fields. TUNE, IMPROVE, DRAWTIP, and CALCREVISE combine each nonzero curve id with the item's corresponding tuning level and index the shared curve-value table at 0xab6fa. Columns align with item_stat_modifiers columns 0..9."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa5301"
+name = "item_resource_recovery_amounts"
+category = "data-table"
+type = "int[1000][3]"
+value_domain = "recovery amount; zero means absent"
+usage = "Sparse ITINIT row-major consumable table. USEITEM applies columns 0, 1, and 2 to the matching three-column unit resource record; descriptions prove these are HP, SP, and FS respectively (for example item 101 stores HP 30, and item 107 stores 999/99/99 for full recovery)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa62a1"
+name = "item_essence_recovery_amount"
+category = "data-table"
+type = "int[1000]"
+value_domain = "50 in the shipped table"
+usage = "Sparse ITINIT consumable field. Item 106, Blood Price Healing Hand, describes essence recovery 50 and stores 50 here; USEITEM follows the dedicated essence-recovery path and scales the value before updating the selected unit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x0"
 name = "system_flow_request"
 category = "choice-output"

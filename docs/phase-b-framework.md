@@ -714,10 +714,12 @@ gate on the one-player-attack acceptance path.
 extractor itself was audited. It now preserves sparse one-based ids and corrects ITINIT from 189 malformed
 records to 287 items (plus SKINIT 129→131 skills); regression checks cover the real tables. A reusable field
 profiler reports distributions, examples, and direct script/opcode consumers. The ITINIT pilot has curated
-eleven high-confidence arrays in `vm-map/globals.toml`: sort key, random tier, category, icon, behavior
-handler, attack/defense element, weapon class, granted skill, and min/max range. Next semantic work should
-classify the remaining repeatedly populated ITINIT bases, then apply the same workflow to SKINIT and EBINIT;
-STINIT's bespoke parser remains a separate extraction task.
+thirteen parallel arrays plus six linked row-major tables in `vm-map/globals.toml`. The latter account for
+all 764 writes previously misidentified as separate sparse item fields: character restrictions, attack and
+equipped condition levels, stat modifiers, tuning curves, and HP/SP/FS recovery. The extractor now emits
+these as `record_fields[base/stride/column]`, which also exposes 17 linked SKINIT and 83 linked EBINIT
+columns. Next semantic work should profile those two tables and resolve ITINIT's remaining unnamed stat and
+condition columns; STINIT's bespoke parser remains a separate extraction task.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

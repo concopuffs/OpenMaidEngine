@@ -60,6 +60,11 @@ items 1–101 into the first record and treated consecutive item names as descri
 and counts are indexed in `build/data/README.md`; field semantics are curated in `vm-map/globals.toml` and
 described by the workflow in `docs/name-resolution.md`.
 
+The same audit found that linked row-major writes must not be normalized as independent parallel arrays.
+Corpus `lookup-array-2d` bases and strides assign every such ITINIT write unambiguously to six tables (43
+populated columns), while SKINIT and EBINIT expose 17 and 83 linked columns respectively. Generated records
+now keep these under `record_fields[base/stride/column]`; `fields` contains only genuine parallel arrays.
+
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill
 text), `CIMES` (15 KB), `MAMES`, `INFOMES`, `MES` — where most translatable text

@@ -49,32 +49,58 @@ def value_key(value) -> str:
 
 def profile_columns(data: dict) -> list[dict]:
     records = data["records"]
-    values: dict[int, list] = collections.defaultdict(list)
-    examples: dict[int, list[dict]] = collections.defaultdict(list)
+    values: dict[str, list] = collections.defaultdict(list)
+    examples: dict[str, list[dict]] = collections.defaultdict(list)
+    identities: dict[str, dict] = {}
     for record in records:
         for address, value in record.get("fields", {}).items():
             base = int(address, 16)
-            values[base].append(value)
-            if len(examples[base]) < 5:
-                examples[base].append({
+            key = f"0x{base:x}"
+            identities[key] = {
+                "key": key, "kind": "parallel-array", "base": key,
+                "stride": None, "column": None,
+            }
+            values[key].append(value)
+            if len(examples[key]) < 5:
+                examples[key].append({
+                    "id": record["id"],
+                    "name": record.get("name", ""),
+                    "value": value,
+                })
+        for key, value in record.get("record_fields", {}).items():
+            base_text, stride_text, column_text = key.split("/")
+            base = int(base_text, 16)
+            stride = int(stride_text)
+            column = int(column_text)
+            normalized_key = f"0x{base:x}/{stride}/{column}"
+            identities[normalized_key] = {
+                "key": normalized_key,
+                "kind": "record-column",
+                "base": f"0x{base:x}",
+                "stride": stride,
+                "column": column,
+            }
+            values[normalized_key].append(value)
+            if len(examples[normalized_key]) < 5:
+                examples[normalized_key].append({
                     "id": record["id"],
                     "name": record.get("name", ""),
                     "value": value,
                 })
 
     rows = []
-    for base, vals in values.items():
+    for key, vals in values.items():
         common = collections.Counter(value_key(value) for value in vals).most_common(6)
         numeric = vals and all(isinstance(value, int) for value in vals)
         rows.append({
-            "base": f"0x{base:x}",
+            **identities[key],
             "population": len(vals),
             "coverage": len(vals) / len(records) if records else 0.0,
             "distinct_values": len({value_key(value) for value in vals}),
             "min": min(vals) if numeric else None,
             "max": max(vals) if numeric else None,
             "common": [{"value": value, "count": count} for value, count in common],
-            "examples": examples[base],
+            "examples": examples[key],
             "references": 0,
             "reader_scripts": [],
             "reference_ops": [],
@@ -83,7 +109,9 @@ def profile_columns(data: dict) -> list[dict]:
 
 
 def add_direct_references(rows: list[dict], source_name: str) -> None:
-    by_base = {int(row["base"], 16): row for row in rows}
+    by_base: dict[int, list[dict]] = collections.defaultdict(list)
+    for row in rows:
+        by_base[int(row["base"], 16)].append(row)
     scripts: dict[int, collections.Counter] = {
         base: collections.Counter() for base in by_base
     }
@@ -104,20 +132,21 @@ def add_direct_references(rows: list[dict], source_name: str) -> None:
                 scripts[value][name] += 1
                 ops[value][f"{sys4load.display_label(ins.opcode)}:arg{arg_index + 1}"] += 1
 
-    for base, row in by_base.items():
-        row["references"] = sum(scripts[base].values())
-        row["reader_scripts"] = [
-            {"script": script, "count": count}
-            for script, count in scripts[base].most_common()
-        ]
-        row["reference_ops"] = [
-            {"operation": operation, "count": count}
-            for operation, count in ops[base].most_common()
-        ]
+    for base, base_rows in by_base.items():
+        for row in base_rows:
+            row["references"] = sum(scripts[base].values())
+            row["reader_scripts"] = [
+                {"script": script, "count": count}
+                for script, count in scripts[base].most_common()
+            ]
+            row["reference_ops"] = [
+                {"operation": operation, "count": count}
+                for operation, count in ops[base].most_common()
+            ]
 
 
 def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
-    ranked = sorted(rows, key=lambda row: (-row["population"], -row["references"], row["base"]))
+    ranked = sorted(rows, key=lambda row: (-row["population"], -row["references"], row["key"]))
     shown = ranked[:limit]
     lines = [
         f"# {data['table']} field profile",
@@ -126,10 +155,10 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         "> This is evidence for investigation; confirmed names live in `vm-map/globals.toml`.",
         "",
         f"- records: {data['record_count']}",
-        f"- populated global-array bases: {len(rows)}",
+        f"- populated fields: {len(rows)}",
         f"- rows shown: {len(shown)} (ranked by record coverage, then consumer references)",
         "",
-        "| base | populated | distinct | range | direct refs | readers | common values | examples |",
+        "| field | populated | distinct | range | direct refs | readers | common values | examples |",
         "|---|---:|---:|---|---:|---|---|---|",
     ]
     for row in shown:
@@ -142,7 +171,7 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             for entry in row["examples"][:3]
         ).replace("|", "\\|")
         lines.append(
-            f"| `{row['base']}` | {row['population']}/{data['record_count']} "
+            f"| `{row['key']}` | {row['population']}/{data['record_count']} "
             f"({row['coverage']:.0%}) | {row['distinct_values']} | {value_range} | "
             f"{row['references']} | {readers} | {common} | {examples} |"
         )
@@ -165,8 +194,12 @@ def main() -> int:
         "table": data["table"],
         "source": data["source"],
         "record_count": data["record_count"],
-        "field_base_count": len(rows),
-        "columns": sorted(rows, key=lambda row: int(row["base"], 16)),
+        "field_column_count": len(rows),
+        "parallel_array_count": sum(row["kind"] == "parallel-array" for row in rows),
+        "record_column_count": sum(row["kind"] == "record-column" for row in rows),
+        "columns": sorted(rows, key=lambda row: (
+            int(row["base"], 16), row["stride"] or 0, row["column"] or 0
+        )),
     }
     markdown = render_markdown(data, rows, args.limit)
     print(markdown)
