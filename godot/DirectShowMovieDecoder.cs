@@ -18,7 +18,7 @@ internal interface ISampleGrabberCB
 /// Decoded RGB32 samples are copied into process memory and consumed by Godot's retained compositor.
 /// </summary>
 [SupportedOSPlatform("windows")]
-internal sealed class DirectShowMovieDecoder : IDisposable, ISampleGrabberCB
+internal sealed class DirectShowMovieDecoder : IMovieDecoder, ISampleGrabberCB
 {
     private readonly byte[] _payload;
     private readonly Thread _thread;

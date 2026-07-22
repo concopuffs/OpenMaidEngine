@@ -582,9 +582,55 @@ an infinite callback count: the total horizon starts at `base_time + 1000`, and 
 loop polls `0x23a` until surfaces 7..10 are inactive. MVB908's stop log occurs after that loop. As a bounded
 safety correction, decoder failure now becomes an explicitly completed zero-duration effect, while started
 movies have a stop-time-based completion watchdog so a missing EOF cannot hold `0x21c` forever. **NEXT:**
-manually recheck the same exchange. If it still stalls, capture the VM/service coordinate after BTL cleanup
-as a separate timed-presentation issue; otherwise proceed to the software MPEG backend for real 280x352
-duration/frames. Preserve created destination dimensions and failed-movie identity through that backend change.
+replace DirectShow through the bounded FFmpeg plan below. The user confirmed that combat can still stall, but
+that symptom remains tabled until the replacement removes DirectShow as a variable. Preserve created destination
+dimensions and failed-movie identity through the backend change.
+
+### Portable FFmpeg movie backend selected; bounded implementation plan (2026-07-21)
+
+FFmpeg is selected as the single movie backend for stock content and future profiles. The exact native ABI,
+dependency pin, corpus codec inventory, timing contract, and packaging rules live in
+`docs/platform-portability.md`; this section owns execution order and acceptance.
+
+1. **Completed — land the seam without changing behavior.** Add `IMovieDecoder` plus an injected factory, type
+   `MovieRuntime` against the interface, and adapt DirectShow temporarily. Cover synchronous metadata, frame
+   handoff, EOF, failure-as-completed, replacement, cancellation, and disposal with fakes. This commit must retain
+   current live behavior and gives the FFmpeg work a testable boundary.
+2. **Completed — prove the native ABI in isolation on Windows x64.** Add the C shim and pinned shared FFmpeg dependency,
+   then open VFS-owned bytes without a temporary file. The initial gate decodes changing RGBA frames and positive
+   stop times from one formerly failing 280x352 effect (`MVB961` or `MVB238`), aligned `MVB908`, and 800x600
+   `CHAPTER`. It must also reject a truncated payload with a bounded diagnostic and survive repeated open/close.
+   Do not switch the live runtime at this step.
+3. **Next — implement managed pacing and switch the factory.** Decode on a cancellable worker using FFmpeg timestamps
+   and a monotonic clock, publish only due frames, delay EOF completion through the final presentation interval,
+   and retain the existing watchdog. Make FFmpeg the default with no dimension/effect dispatch and exercise both
+   non-modal `0x236` and modal/cancellable `0x20f` paths.
+4. **Run the installed-corpus gate.** Every one of the 213 MPEG payloads must open, report its expected display
+   dimensions and a positive stop time, produce a correctly sized RGBA frame, maintain nondecreasing timestamps,
+   reach EOF, and dispose within a bound. Normal tests use small project-authored 280-wide and aligned MPEG
+   fixtures so decoder behavior is never disabled when the original install is absent; the full local sweep is
+   an additional release/acceptance gate. Spot comparisons against DirectShow-compatible assets establish timing
+   tolerance before DirectShow is removed.
+5. **Validate the live sequences, then delete DirectShow.** Recheck LOGO/OP cancellation, SC0000 CHAPTER,
+   aligned and 280-wide battle effects, combat cleanup, and the previously observed post-effect stall. Once those
+   pass, delete the COM declarations/temp-file path and Windows platform annotation rather than retaining a
+   fallback. If combat still stalls with FFmpeg, capture the VM/service coordinate after BTL cleanup and treat it
+   as a separate battle-timeline defect.
+6. **Complete distributable packaging.** Bundle pinned dynamically linked libraries and exact license/source
+   provenance per target, validate loader isolation from machine-installed codecs, then add Linux/macOS build and
+   smoke gates. Timestamped PCM delivery and Godot `AudioStreamGenerator` integration remain a later movie-audio
+   slice; the video replacement must merely avoid closing that path.
+
+Steps 1 and 2 landed on 2026-07-21 without changing live playback: `Main` owns an
+`IMovieDecoderFactory`, `MovieRuntime` is backend-neutral, and the default factory still constructs DirectShow.
+The isolated Windows-x64 C ABI opens VFS bytes through seekable custom AVIO and decodes changing RGBA frames from
+both formerly failing 280x352 effects (`MVB961` = 500 ms, `MVB238` = 866 ms), aligned `MVB908` (333 ms), and
+800x600 `CHAPTER` (12016 ms). Truncated input is rejected with a bounded error and ten repeated open/decode/close
+cycles pass. During the full-suite gate, direct swscale output into a managed array exposed native heap corruption;
+conversion now targets an FFmpeg-owned aligned frame and copies only the exact visible RGBA rows across the ABI.
+The complete 313-test suite, three additional 312-test concurrency-sensitive repeats, zero-warning Godot build,
+and threaded selftest pass. Step 3 is the next bounded slice; do not infer that combat is fixed until the paced
+backend is selected live and revalidated.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

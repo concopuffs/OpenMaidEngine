@@ -72,6 +72,20 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 |---|---|---|---|
 | `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py SC0000 14 [--map <jsonl>] [--context N]` | `build/page-map-<SCENE>.jsonl` + script corpus → stdout |
 
+## Native FFmpeg movie shim (Windows x64)
+
+These PowerShell tools build the isolated native movie gate; they do not switch live Godot playback away from
+DirectShow. The dependency manifest pins an immutable LGPL shared FFmpeg archive and SHA-256.
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, hash-check, extract, and version-check the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
+| `native/age_movie_ffmpeg/build-win64.ps1` | Discover the MSVC x64 toolchain, build `age_movie_ffmpeg.dll`, and stage its exact shared-library/license dependencies. | `.\\native\\age_movie_ffmpeg\\build-win64.ps1 -SdkRoot <bootstrap-output> [-OutputDirectory <dir>]` | C ABI source + FFmpeg SDK → disposable `build/native/win-x64/` by default |
+
+The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
+`runtimes/win-x64/native` locations. Build the shim before running the `FfmpegShim*` tests; no original-game
+movie is copied into the repository or native output.
+
 ## Engine (C#) — VM core, CLI, Godot frontend
 
 The `engine/` .NET solution (`AgeEngine.sln`) is the runtime VM; `godot/` is the ADV frontend. Not

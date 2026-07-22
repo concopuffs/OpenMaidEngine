@@ -56,6 +56,7 @@ public partial class Main : Godot.Control
     // 0x236 creates its graph synchronously on the VM thread so 0x23f can query timing immediately.
     // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
+    private IMovieDecoderFactory _movieDecoderFactory = new DirectShowMovieDecoderFactory();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private readonly System.Collections.Generic.HashSet<long> _movieCompletionNotified = new();
     private GodotTraceSink _trace = null!;
@@ -1183,7 +1184,7 @@ public partial class Main : Godot.Control
         try
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
-            var runtime = new MovieRuntime(assetName, assetId, new DirectShowMovieDecoder(payload));
+            var runtime = MovieRuntime.Open(assetName, assetId, payload, _movieDecoderFactory);
             stopTimeMs = runtime.Decoder.StopTimeMs;
             while (!_pendingMovies.TryAdd(resourceId, runtime))
                 if (_pendingMovies.TryRemove(resourceId, out var prior)) prior.Decoder.Dispose();
@@ -1240,16 +1241,6 @@ public partial class Main : Godot.Control
         }
         _movieFrameSeen.Remove(resourceId);
         _movieCompletionNotified.Remove(resourceId);
-    }
-
-    private sealed record MovieRuntime(string Name, int AssetId, DirectShowMovieDecoder Decoder,
-                                       long StartedAtTimestamp, long WatchdogMs)
-    {
-        public MovieRuntime(string name, int assetId, DirectShowMovieDecoder decoder)
-            : this(name, assetId, decoder, Stopwatch.GetTimestamp(),
-                   decoder.StopTimeMs is >= 0 and var stopTime
-                       ? System.Math.Clamp(stopTime + 2000, 5000, 300000)
-                       : 30000) { }
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";

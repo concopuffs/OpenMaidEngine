@@ -23,8 +23,8 @@ also softer Windows assumptions that should be tested or replaced before claimin
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `godot/DirectShowMovieDecoder.cs`: DirectShow COM objects plus `ole32.dll` `CoInitializeEx` / `CoUninitialize` | Movie playback cannot run outside Windows; the current Windows filter stack also rejects the installed MPEG effects whose display width is 8 mod 16 | Introduce a decoder interface and backend factory; use a software MPEG backend for portable coverage and as the Windows fallback for unsupported effect dimensions |
-| Movie integration | `godot/Main.cs` directly constructs and stores `DirectShowMovieDecoder`; `Main` is marked `SupportedOSPlatform("windows")` | The frontend has no runtime fallback or OS-specific source selection | Type `MovieRuntime` against the decoder interface, select by platform/build, and move the Windows annotation to the DirectShow backend |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | Live playback still uses `godot/DirectShowMovieDecoder.cs`; the isolated `native/age_movie_ffmpeg` C ABI and `FfmpegMovieSession` probe path now decode the representative VFS movies | Live movies remain Windows-only and the selected live backend still rejects installed MPEG effects whose display width is 8 mod 16 | Add timestamp pacing to the proven FFmpeg path, select it as the sole live factory, run the corpus/live gates, then delete DirectShow |
+| Movie integration | `MovieRuntime` now owns `IMovieDecoder` from an injected `IMovieDecoderFactory`; `Main` deliberately selects `DirectShowMovieDecoderFactory` and remains marked `SupportedOSPlatform("windows")` | Backend ownership is portable, but the selected live implementation is not yet | Implement the FFmpeg `IMovieDecoder`, switch the factory, and remove the Windows annotation when DirectShow is deleted |
 | Movie audio | DirectShow connects only the video pin to the sample grabber/null renderer | The MPEG audio stream is intentionally silent on every platform | Design a PCM/audio-clock contract or let a future backend own synchronized A/V; separate feature slice |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
@@ -45,27 +45,57 @@ The existing connection is localized but one abstraction short of being replacea
 VM op 0x236 (non-modal) / op 0x20f (modal)
   -> IHost.PlayMovieToSurface / PlayModalMovieToSurface
   -> VFS-owned MoviePayload bytes
-  -> DirectShowMovieDecoder
+  -> IMovieDecoderFactory
+     -> DirectShowMovieDecoder (current live selection)
+     -> FfmpegMovieSession -> age_movie C ABI (isolated gate only)
   -> newest RGBA frame
   -> retained movie surface
   -> Godot compositor
 ```
 
-Everything before and after `DirectShowMovieDecoder` is portable. The backend currently exposes the right
-conceptual operations (`StopTimeMs`, `TryTakeFrame`, `IsCompleted`, and `Dispose`) but they are not formalized as an
-interface. A future cleanup should:
+Everything before and after the selected decoder is portable. The replacement decision is an in-process
+FFmpeg backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. FFmpeg
+`n8.1.2-29-g703dcc25b9` is pinned by immutable release URL and SHA-256 in
+`native/age_movie_ffmpeg/dependency-win64.json`; changing that pin requires rerunning the full installed-movie
+gate. The shim dynamically links an LGPL build made without GPL or nonfree components and
+uses only `libavformat`, `libavcodec`, `libavutil`, and `libswscale` for the video slice. `libswresample` and the
+MPEG audio decoders may be packaged now, but PCM delivery remains a separate slice. Release artifacts must carry
+the matching FFmpeg source/configuration and notices required by FFmpeg's
+[license checklist](https://ffmpeg.org/legal.html).
 
-1. Add an `IMovieDecoder` contract for synchronous stop-time metadata, frame delivery, completion, failure,
-   and disposal. Stop time must be available before `0x236` returns so an immediately following `0x23f`
-   remains deterministic.
-2. Add an injected factory that accepts `MoviePayload` and selects an available backend.
-3. Keep DirectShow in a Windows-specific source set or assembly, with its platform annotation local to it.
-4. Implement a portable MPEG program-stream backend that produces the same top-down RGBA8 frames.
-5. Preserve newest-frame-wins delivery, asynchronous decode, synchronous open failure, EOF notification,
-   and the retained-surface lifecycle already validated for opcode `0x236`; expose modal completion/cancel
-   separately for `0x20f` rather than blocking inside the decoder backend.
-6. Treat synchronized movie audio as a separate extension of the contract rather than coupling it to the
-   compositor.
+The boundary has two layers:
+
+1. A small native `age_movie` ABI owns all FFmpeg objects and version-sensitive calls. It accepts a borrowed
+   byte span only for the duration of `open`, copies it into native-owned memory, creates a seekable custom
+   `AVIOContext`, probes the MPEG program stream, and returns immutable video metadata. Sequential decode returns
+   one top-down tightly packed RGBA8 frame plus its normalized presentation timestamp. Conversion occurs in an
+   FFmpeg-owned aligned frame; only exact visible row bytes are copied into the caller's tightly packed buffer.
+   Return statuses distinguish frame, EOF, invalid arguments, undersized output, and decoder failure; the open
+   call returns a bounded UTF-8 diagnostic and an opened handle retains its last decode error. Close accepts a
+   null handle, and managed `SafeHandle` ownership guarantees one close for each successfully opened handle. No
+   FFmpeg pointer crosses the ABI.
+2. Managed `IMovieDecoder` owns the native handle and the paced worker. Synchronous construction provides
+   `StopTimeMs` before `0x236` returns. The worker uses a monotonic playback origin, decodes ahead by at most one
+   frame, publishes frames when their timestamps become due, and retains newest-frame-wins behavior if Godot is
+   late. EOF becomes completion only after the final frame's presentation interval/stop time, so surface cleanup
+   cannot erase the last frame immediately. Disposal interrupts waits and joins without depending on Godot's main
+   thread.
+
+`StopTimeMs` performs a bounded packet scan over the seekable in-memory payload and takes the longest usable
+FFmpeg format duration, video-stream duration, timestamp span, or constant-frame-rate packet-count duration. This
+accounts for the final MPEG presentation interval that FFmpeg's stream duration can omit (`MVB908` is ten 30 fps
+frames: 333 ms, not the raw stream field's 316 ms). The result is converted to integer milliseconds with the same
+positive truncation used by native op `0x23f`, then the demuxer rewinds before playback. Streams with no usable
+duration evidence fail initialization for the stock-content path rather than inventing timing. The existing host
+safety rule still converts any backend initialization failure into an
+explicitly completed zero-duration movie identity, and the presentation watchdog remains a last-resort guard for
+an initialized backend that never reaches EOF.
+
+The factory is injection for tests and future decoder replacement, not runtime codec roulette. Once the FFmpeg
+corpus gate passes it becomes the only shipped movie backend on every platform and DirectShow is deleted. Modal
+completion/cancel remains owned above the decoder by the existing `0x20f` host path. A future audio implementation
+will consume timestamped PCM and may become the presentation clock; it must not change the VM-facing stop-time,
+surface, or cancellation contracts.
 
 This replacement is now also required for Windows gameplay parity. Archive-backed probes on 2026-07-21
 show that the current DirectShow graph accepts tested MPEG widths divisible by 16 (208, 288, 304, 400, and
@@ -73,10 +103,29 @@ show that the current DirectShow graph accepts tested MPEG widths divisible by 1
 The dominant combat-effect family is 280x352 (125 installed `MVB` assets), so retaining DirectShow as the
 only Windows decoder is insufficient even though SC0000's 800x600 `CHAPTER.AGF` works.
 
-An OS-specific build is also viable: include DirectShow only in Windows exports and a different decoder in
-other exports. The current plain `net8.0` project has no conditional backend selection. COM declarations may
-compile on another OS, but `[SupportedOSPlatform]` is analyzer metadata rather than a runtime guard, and
-loading `ole32.dll` or DirectShow CLSIDs will fail there.
+An archive scan on the same date classified all 213 installed movie payloads as MPEG-1 program streams with
+MPEG-1 video and no MPEG-2 sequence extensions. Of those, 184 are video-only and 29 contain MPEG audio. The
+large LOGO/OP/ED family uses MPEG Audio Layer II, while 25 small 120x120 `MVS` movies use Layer I. That inventory
+is why the narrower `pl_mpeg` library was rejected as the primary backend: it fits every installed video stream
+but only decodes Layer II audio and explicitly ignores program-stream PTS in its high-level synchronization.
+FFmpeg covers the complete installed codec set and leaves the mod/profile boundary open without selecting a
+different decoder per effect.
+
+Native deliverables are RID-specific and bundled with the Godot export; the runtime must not discover an
+arbitrary system FFmpeg. The first implementation gate is Windows x64 because that is the current runnable
+target, but the C ABI and loader paths must reserve Windows x64, Linux x64, macOS x64, and macOS arm64 from the
+start. Builds use shared libraries, `$ORIGIN`/`@loader_path`-style local lookup on Unix targets, recorded source
+hashes and configure arguments, and no committed original-game data. Packaging automation is part of completing
+the backend, not a prerequisite for the first native decode spike.
+
+The Windows-x64 spike is now complete. `bootstrap-win64.ps1` verifies the immutable archive SHA before
+extraction, and `build-win64.ps1` builds the shim with MSVC and places the DLL, import artifacts, required LGPL
+shared libraries, and license under disposable `build/native/win-x64`. The managed resolver accepts
+`AGE_FFMPEG_NATIVE_DIR` for the isolated gate and otherwise reserves application-local and
+`runtimes/<rid>/native` lookup. Representative VFS results are `MVB961` 280x352/500 ms, `MVB238`
+280x352/866 ms, `MVB908` 400x400/333 ms, and `CHAPTER` 800x600/12016 ms, all with changing frames and
+nondecreasing timestamps. Malformed input and repeated teardown are covered. This is not yet distributable
+packaging and does not change the current DirectShow live selection.
 
 ## Cross-platform validation gates
 

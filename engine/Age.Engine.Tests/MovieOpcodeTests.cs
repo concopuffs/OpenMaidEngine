@@ -8,6 +8,73 @@ using Xunit;
 
 public class MovieOpcodeTests
 {
+    private sealed class FakeMovieDecoder : IMovieDecoder
+    {
+        public long? StopTimeMs { get; init; }
+        public bool IsCompleted { get; set; }
+        public bool Disposed { get; private set; }
+        public RgbaImage? Frame { get; set; }
+
+        public bool TryTakeFrame(out RgbaImage frame)
+        {
+            if (Frame == null) { frame = default!; return false; }
+            frame = Frame;
+            Frame = null;
+            return true;
+        }
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class FakeMovieDecoderFactory(FakeMovieDecoder decoder) : IMovieDecoderFactory
+    {
+        public MoviePayload? OpenedPayload { get; private set; }
+        public IMovieDecoder Open(MoviePayload movie)
+        {
+            OpenedPayload = movie;
+            return decoder;
+        }
+    }
+
+    [Fact]
+    public void MovieRuntimeUsesInjectedDecoderAndRetainsSynchronousMetadata()
+    {
+        var decoder = new FakeMovieDecoder
+        {
+            StopTimeMs = 1876,
+            Frame = new RgbaImage(1, 1, new byte[] { 1, 2, 3, 4 }),
+        };
+        var factory = new FakeMovieDecoderFactory(decoder);
+        var payload = new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba });
+
+        var runtime = MovieRuntime.Open("TEST.AGF", 7, payload, factory);
+
+        Assert.Same(payload, factory.OpenedPayload);
+        Assert.Same(decoder, runtime.Decoder);
+        Assert.Equal(1876, runtime.Decoder.StopTimeMs);
+        Assert.Equal(5000, runtime.WatchdogMs);
+        Assert.True(runtime.Decoder.TryTakeFrame(out var frame));
+        Assert.Equal(new byte[] { 1, 2, 3, 4 }, frame.Pixels);
+        runtime.Decoder.Dispose();
+        Assert.True(decoder.Disposed);
+    }
+
+    [Theory]
+    [InlineData(null, 30000)]
+    [InlineData(-1L, 30000L)]
+    [InlineData(10000L, 12000L)]
+    [InlineData(500000L, 300000L)]
+    public void MovieRuntimeComputesBoundedWatchdogFromDecoderMetadata(long? stopTimeMs, long expected)
+    {
+        var decoder = new FakeMovieDecoder { StopTimeMs = stopTimeMs };
+        var runtime = MovieRuntime.Open("TEST.AGF", 7,
+            new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba }),
+            new FakeMovieDecoderFactory(decoder));
+
+        Assert.Equal(expected, runtime.WatchdogMs);
+        runtime.Decoder.Dispose();
+    }
+
     [Fact]
     public void InitialRootFlagStartsSetAndClearsWhenExitScriptRuns()
     {
@@ -251,5 +318,82 @@ public class MovieOpcodeTests
                 changed = !firstPixels.AsSpan().SequenceEqual(later.Pixels);
         }
         Assert.True(changed, "DirectShow should deliver changing MPEG frames, not one retained still");
+    }
+
+    [Theory]
+    [InlineData(0x2be3, "MVB961.AGF", 280, 352, 500)]
+    [InlineData(0x2b94, "MVB238.AGF", 280, 352, 866)]
+    [InlineData(0x2bc2, "MVB908.AGF", 400, 400, 333)]
+    [InlineData(0x33, "CHAPTER.AGF", 800, 600, 12016)]
+    public void FfmpegShimDecodesRepresentativeVfsMovie(int resourceId, string expectedName,
+                                                        int expectedWidth, int expectedHeight,
+                                                        long expectedStopTimeMs)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(resourceId)!);
+
+        using var movie = new FfmpegMovieSession(payload);
+
+        Assert.Equal(expectedName, payload.Name);
+        Assert.Equal(expectedWidth, movie.Info.Width);
+        Assert.Equal(expectedHeight, movie.Info.Height);
+        Assert.Equal(expectedStopTimeMs, movie.Info.StopTimeMs);
+        Assert.True(movie.TryDecodeNextVideoFrame(out var first));
+        Assert.Equal(expectedWidth * expectedHeight * 4, first.Image.Pixels.Length);
+        Assert.True(first.PresentationTimeMs >= 0);
+        bool changed = false;
+        long priorTimestamp = first.PresentationTimeMs;
+        for (int frameIndex = 0; frameIndex < 30 && movie.TryDecodeNextVideoFrame(out var later); frameIndex++)
+        {
+            Assert.True(later.PresentationTimeMs >= priorTimestamp);
+            priorTimestamp = later.PresentationTimeMs;
+            if (!first.Image.Pixels.AsSpan().SequenceEqual(later.Image.Pixels))
+            {
+                changed = true;
+                break;
+            }
+        }
+        Assert.True(changed, $"{expectedName} should deliver changing decoded frames");
+    }
+
+    [Fact]
+    public void FfmpegShimRejectsTruncatedMovieWithBoundedDiagnostic()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var payload = new MoviePayload("TRUNCATED.AGF", new byte[] { 0, 0, 1, 0xba, 0x21, 0, 1, 0 });
+
+        var error = Assert.Throws<InvalidDataException>(() => new FfmpegMovieSession(payload));
+
+        Assert.Contains("TRUNCATED.AGF", error.Message);
+        Assert.Contains("FFmpeg", error.Message);
+    }
+
+    [Fact]
+    public void FfmpegShimSupportsRepeatedOpenAndClose()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(0x2bc2)!);
+
+        for (int iteration = 0; iteration < 10; iteration++)
+        {
+            using var movie = new FfmpegMovieSession(payload);
+            Assert.True(movie.TryDecodeNextVideoFrame(out _));
+        }
+    }
+
+    private static void ConfigureFfmpegNativeProbe()
+    {
+        string nativeDirectory = Environment.GetEnvironmentVariable("AGE_FFMPEG_NATIVE_DIR")
+            ?? Path.Combine(Paths.Build, "native", "win-x64");
+        Assert.True(File.Exists(Path.Combine(nativeDirectory, "age_movie_ffmpeg.dll")),
+            $"Build the FFmpeg shim first: native/age_movie_ffmpeg/build-win64.ps1 (expected {nativeDirectory})");
+        Environment.SetEnvironmentVariable("AGE_FFMPEG_NATIVE_DIR", nativeDirectory);
     }
 }
