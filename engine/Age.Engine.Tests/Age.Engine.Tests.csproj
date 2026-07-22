@@ -29,6 +29,7 @@
     <Compile Include="..\..\godot\PageLocatorState.cs" Link="PageLocatorState.cs" />
     <Compile Include="..\..\godot\GodotTimelineLog.cs" Link="GodotTimelineLog.cs" />
     <Compile Include="..\..\godot\GodotTraceSink.cs" Link="GodotTraceSink.cs" />
+    <Compile Include="..\..\godot\PerformanceFrameLog.cs" Link="PerformanceFrameLog.cs" />
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
     <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />

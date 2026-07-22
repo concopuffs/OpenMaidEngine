@@ -2309,11 +2309,10 @@ sampled coordinates.
   ablations only if the phase timings do not isolate the cost. Commit the baseline percentiles and exact
   canonical runtime coordinates here. A real unit-heavy story dungeon is deferred until it is practical
   to reach reproducibly.
-- [ ] **P2 - fidelity-neutral CPU wins.** Remove normal-path diagnostic allocation and refine the ambiguous
-  presentation/affine counters, then avoid recomposition between discrete spritesheet cell changes and
-  benchmark translation, affine, and safe opaque raster fast paths. Land only changes with measured wins
-  and focused differential raster/presentation coverage.
-- [ ] **P3 - GPU retained-renderer prototype.** Upload decoded/color-key texture variants once and mirror
+- [x] **P2 - fidelity-neutral CPU wins.** P2a-P2f are implemented and measured. DEBUGMAP now meets its p95
+  frame budget with near-zero steady allocation; the SC0000 exit capture remains 65.18/71.76 ms p50/p95 in
+  the severe full-screen/additive band, so P2 closes and triggers P3 rather than more CPU special cases.
+- [ ] **P3 - GPU retained-renderer prototype (triggered).** Upload decoded/color-key texture variants once and mirror
   ordinary retained objects into GPU-native Godot drawing while preserving handle z-order, atlas regions,
   transforms, opacity/tint, and blend mode. Begin with dungeon sprites and ordinary translated textures;
   compare selected frames against the software oracle behind a backend switch.
@@ -2421,19 +2420,19 @@ few layers but extreme full-screen/additive pixel work, while DEBUGMAP has hundr
 many sampled through the affine path, and discrete animation that currently requests a recomposition every
 Godot frame. Execute the following in order, retaining the software compositor as the pixel oracle.
 
-1. **P2a - remove diagnostic-only allocation from normal rendering.** Construct per-object outcome strings
+1. [x] **P2a - remove diagnostic-only allocation from normal rendering.** Construct per-object outcome strings
    and final `z` decision strings only when `--gfx-log` or `--timeline-log` actually supplied a decisions
    dictionary. Preserve byte-for-byte diagnostic output when enabled. Re-run DEBUGMAP and require a large
    reduction from its approximately 3.59 MB median allocation per recomposition without worsening raster
    time; if less than 70% disappears, use an allocation trace to identify the remaining owners before
    doing speculative collection tuning.
-2. **P2b - measure the two ambiguous dirty/raster categories.** Extend the low-overhead counters only as
+2. [x] **P2b - measure the two ambiguous dirty/raster categories.** Extend the low-overhead counters only as
    needed to distinguish VM-requested, continuous-channel, and discrete-cell presentation, and to split
    pure fractional translation from scale/rotation/general affine work. The current log proves that the
    broad categories matter but cannot tell whether DEBUGMAP's roughly 526 apparent affine layers are
    camera-induced fractional translations or genuine scale/rotation. Do not change sampling semantics on
    that assumption alone.
-3. **P2c - reproduce the native shared dirty/cell cadence.** Native does not give each visible sprite a
+3. [x] **P2c - reproduce the native shared dirty/cell cadence.** Native does not give each visible sprite a
    host-frame redraw timer. One shared current/previous millisecond frame-time pair feeds every channel;
    op `0x231` compares the source cell selected at those two samples and raises graphics dirty only when it
    changes. Retained mutations and genuinely continuous channels still redraw as required, while an
@@ -2444,21 +2443,28 @@ Godot frame. Execute the following in order, retaining the software compositor a
    deadlines. Cover clone-before/after-first-sample, reconfiguration, differing periods, wraparound, and
    exact boundary cases. The DEBUGMAP acceptance metric is recompositions per second and total delivered
    frame time; the separately reported p50/p95 cost of frames that do recompose must remain visible.
-4. **P2d - turn translation-like affine work into a verified fast path.** If P2b confirms pure unit-matrix
-   fractional translations, implement the nearest-neighbor-equivalent translated raster path and prove it
+4. [x] **P2d - specialize the measured axis-aligned scale work.** P2b disproved the fractional-translation
+   hypothesis: the new DEBUGMAP capture reports zero fractional and zero general-affine layers, with every
+   non-integer layer classified as axis-aligned scale. Implement the nearest-neighbor-equivalent scale path and prove it
    byte-for-byte against the existing inverse-mapped oracle across positive/negative coordinates,
    half-pixel boundaries, clipping, opacity/tint, and every blend mode. This is the highest-potential
    DEBUGMAP per-compose CPU win because the existing translated loop is much cheaper than a general matrix
    inverse and transform per destination pixel.
-5. **P2e - specialize the remaining hot pixel loops.** In descending evidence value, benchmark:
-   incremental inverse coordinates across an affine scanline; axis-aligned scale specialization; and
-   opaque/full-opacity/unmodulated translated row copies or alpha-run copies where source transparency
-   permits. Use randomized differential raster tests against the current implementation plus the SC0000
+5. [x] **P2e - specialize the remaining hot pixel loops.** The measured axis-aligned scale specialization is
+   complete. Benchmark opaque/full-opacity/unmodulated translated and scaled pixel loops next, using direct
+   copies for fully opaque source texels and the existing blend arithmetic at transparent edges. General
+   incremental inverse coordinates are low priority because the measured FIELD workload has no general-
+   affine layers. Use randomized differential raster tests against the current implementation plus the SC0000
    and DEBUGMAP captures. Address the dynamic color-key full-frame clone separately because it explains an
    allocation/source-prep spike but neither primary raster plateau. Do not spend time on snapshot, clear,
    `Image.SetData`, texture upload, VM dispatch, or parallel rasterization while their measured contribution is
    small or a retained GPU renderer is the cleaner boundary.
-6. **P2 exit gate and P3 trigger.** After the safe CPU batch, repeat equivalent SC0000 and DEBUGMAP runs.
+6. [x] **P2f - remove the measured per-frame collection owners.** Replace `Transform2DMath.Build`'s heap
+   4x4 matrices with an equivalent value-type affine-3D representation, and let the compositor reuse a
+   caller-owned, handle-sorted `RenderObject` snapshot buffer. Preserve the allocating snapshot overload for
+   callers which retain independent samples. Require exact matrix/sort differential coverage and direct
+   zero-allocation assertions after warm-up; confirm the real path with the allocation-phase CSV columns.
+7. **P2 exit gate and P3 trigger.** After the safe CPU batch, repeat equivalent SC0000 and DEBUGMAP runs.
    Report both end-to-end cadence and recomposed-frame p50/p95/p99. If either workload's required
    recompositions remain above 16.67 ms p95, begin P3 rather than accumulating increasingly complex CPU
    special cases. The expected P3 prototype mirrors ordinary translated/atlas dungeon objects into Godot
@@ -2469,6 +2475,217 @@ Godot frame. Execute the following in order, retaining the software compositor a
 
 Each landed optimization gets a before/after row in this document with capture path, canonical runtime
 coordinate, p50/p95/p99, allocation, recomposition rate, and raster-work counters. Revert or leave behind a
-disabled experiment when it does not produce a repeatable real-path improvement. The immediate
-implementation slice is P2a followed by P2b; those make the next user capture cheaper and sufficiently
-specific to choose the correct P2c/P2d implementation without another story-progression dependency.
+disabled experiment when it does not produce a repeatable real-path improvement. The next capture validates
+P2a-P2c together and uses P2b's new categories to choose P2d without another story-progression dependency.
+
+### P2a-P2c implementation checkpoint (2026-07-22)
+
+Normal runs no longer construct per-object compositor outcome or final z-decision strings unless
+`--gfx-log` or `--timeline-log` requested that evidence. This removes the known DEBUGMAP diagnostic-only
+allocation source while preserving the diagnostic path. The performance CSV now records five independent
+presentation reasons (host request, legacy screen transition, retained mutation, continuous channel, and
+discrete source-cell change) and separates fractional translation, axis-aligned scale, and general affine
+layers while retaining the original aggregate affine count.
+
+`GfxState` now publishes retained mutation generations once and samples one shared current/previous frame
+time pair on every host tick. Continuously varying channels remain frame-driven. Visible op-`0x231`
+spritesheets request composition only when their selected cells differ between the shared samples, and
+clone-before-first-sample records seed together. VM object writes that previously escaped the model lock are
+now applied through synchronized setters so publication cannot race ahead of the retained write. Opcode
+`0xc8` sleep completion no longer requests presentation by itself; preceding graphics writes are covered by
+the mutation generation instead.
+
+Focused coverage includes single-publication mutation behavior, exact cell boundaries and wrap, differing
+object-local periods, reconfiguration, clones made before and after the first sample, continuous-channel
+behavior, and a 51-object phase-locked family producing five—not 255—source-cell publication events per
+second. The complete engine suite, Godot build/selftest, and a new comparable windowed DEBUGMAP capture are
+the closeout gates. Until that capture is analyzed, the allocation and recomposition improvements are
+implemented expectations rather than measured before/after results.
+
+### P2 capture 3 - DEBUGMAP after allocation/cadence changes (2026-07-22)
+
+`build/perf/run-20260722-121910-248.csv` is the first post-P2a-P2c windowed DEBUGMAP run. Its FIELD interval
+contains 1,028 frames over 53.5 seconds and 1,023 recompositions (19.12/s), so discrete-cell scheduling did
+not reduce end-to-end cadence in this workload. The reason columns explain why rather than invalidating the
+shared-cell implementation: 1,014 FIELD rows have a continuous-channel reason. FIELD creates one visible
+op-`0x232` color pulse at `FIELD@0x9691` (handle `0xc802`, period 2,000 ms), which legitimately changes the
+composed output between spritesheet boundaries. The 50 ms hover callback also produced 712 host-publication
+requests, including idle callbacks; callback completion is now no longer treated as dirty, while actual
+retained and host-surface mutations continue to publish themselves.
+
+P2a was useful but missed its stated allocation gate. Recomposition allocation p50 fell from 3,593,400 to
+3,172,128 bytes (-421,272, 11.7%); p95 fell from 3,629,816 to 3,178,544 bytes (-451,272, 12.4%). Raster p50
+was effectively unchanged (45.43 versus 45.52 ms), as expected for an allocation-only edit. The next logger
+schema splits remaining allocation among snapshot, composition, source preparation, `Image.SetData`, and UI
+so the next capture supplies bounded allocation attribution rather than prompting collection tuning.
+
+The new transform counters decisively redirect P2d. Recomposed FIELD frames average 447.7 integer layers and
+506.3 axis-aligned-scale layers; fractional-translation and general-affine maxima are both zero. The busy
+28-34 second interval averages about 2.35-2.39 million candidates and 54 ms main time, while the final
+off-map idle interval falls to about 1.58 million and 26 ms. P2d therefore adds an axis-aligned inverse-map
+path which caches the source column once per layer and computes the source row once per scanline, retaining
+the existing center-sample/floor and blend arithmetic. Pooled lookup storage avoids per-layer garbage.
+Five hundred deterministic randomized blit/fill cases compare byte-for-byte with the previous general
+inverse-mapped oracle across positive/negative scales, fractional placement, clipping, opacity, tint,
+multiplicative modulation, and alpha/additive/opaque modes. A repeat DEBUGMAP capture is still required to
+measure the real-path raster win and the new allocation phases. All 345 engine tests pass and the Godot
+project builds with zero warnings/errors.
+
+An environment audit after this capture found four Godot game/console pairs still alive from July 11 and
+July 21. Each game process consumed about 0.41 CPU-seconds during a two-second sample (roughly 80% of one
+logical core in aggregate). They predate both P1 and this capture, so workload attribution, allocation deltas,
+and the transform-category correction remain actionable, but its absolute frame-time acceptance numbers are
+provisional. The eight processes were terminated with user authorization before the following capture.
+
+### P2 capture 4 - DEBUGMAP after axis-aligned scale specialization (2026-07-22)
+
+`build/perf/run-20260722-130024-542.csv` is the clean post-P2d windowed comparison, captured after the stale
+Godot processes above were closed. The stable FIELD workload still visits about 962 objects and draws about
+961 layers: approximately 433 integer translations, 526 axis-aligned scales, zero fractional translations,
+and zero general affine layers. Around 900 layers are classified opaque. Camera position changes clipped
+candidate pixels, but it does not materially reduce retained traversal, layer count, source pixels, or the
+continuous-channel presentation cadence.
+
+For equivalent 2.2-2.5 million candidate-pixel frames, recomposition p50/p95/p99 fell from
+53.71/60.50/62.72 ms in capture 3 to 21.52/22.26/22.75 ms. Raster p50/p95 fell from 50.77/57.27 ms to
+19.07/19.52 ms: a 62.4% median raster reduction with the same workload band. The final 1.5-1.9 million
+candidate-pixel off-map band fell from 27.34/32.34 ms recomposition p50/p95 to 14.73/15.89 ms. Delivered
+steady cadence consequently rises from about 19 recompositions/s to 44-48/s over the busy map and about
+64/s off-map. P2d is a large, repeatable real-path win; busy-map p95 nevertheless remains above the
+16.67 ms P2 exit target.
+
+The new allocation phases attribute the remaining steady busy-map p50/p95 almost exactly: total
+3,178,544/3,178,544 bytes, retained snapshot 961,600/961,600, compositor 2,216,664/2,216,664, source
+preparation zero, `Image.SetData` zero, and UI 88/88. Camera position barely changes that total because the
+snapshot and compositor collections still cover the full retained set. Allocation is now a clear GC/long-run
+stability target, but raster remains the direct busy-frame budget blocker. P2e therefore starts with the
+full-opacity/unmodulated hot pixel loops used by the roughly 900 opaque layers; after that measured capture,
+reduce the two identified per-frame collection owners rather than tuning the GC.
+
+### P2e unmodulated source-over specialization implemented (2026-07-22)
+
+The translated and axis-aligned-scale raster loops now detect full object opacity, zero effective tint,
+non-multiplicative color, and non-additive blending once per layer. In that common mode, alpha-zero texels
+remain skipped, alpha-255 texels become exact four-byte copies, and partially transparent edge texels retain
+the previous integer source-over arithmetic. The general tinted, faded, multiplicative, and additive paths
+are unchanged. This targets the approximately 900 opaque FIELD layers measured in capture 4 without
+assuming that their color-keyed source rectangles contain no transparent pixels.
+
+Four hundred focused translated/scaled cases cover both opaque and alpha blend classifications with source
+alpha values 0, 1, 254, and 255 against the retained pre-fast-path oracle. The complete engine suite passes
+at 346 tests, the Godot build has zero warnings/errors, and threaded `SELFTEST OK`. **Next:** repeat the same
+DEBUGMAP camera/idle/off-map workload. Retain P2e only if the busy 2.2-2.5 million candidate-pixel band shows
+a repeatable win; then address the measured snapshot/compositor allocation owners before the P2 exit capture.
+
+### P2 capture 5 - DEBUGMAP after unmodulated source-over specialization (2026-07-22)
+
+`build/perf/run-20260722-132318-886.csv` is the comparable post-P2e windowed run. In the matched 2.2-2.5
+million candidate-pixel band, recomposition p50/p95/p99 fell from 21.52/22.26/22.75 ms to
+15.35/16.18/19.26 ms, while raster p50/p95 fell from 19.07/19.52 ms to 12.66/13.23 ms. That is a 28.7%
+median recomposition reduction and a 33.6% median raster reduction; steady busy-map delivery rises from
+about 44-48 to 61-66 recompositions/s. The 1.5-1.9 million candidate off-map band falls from
+14.73/15.89 ms recomposition p50/p95 to 9.45/11.21 ms. P2e is retained: busy-map p95 now fits the 16.67 ms
+target, although allocation/GC outliers leave p99 above it.
+
+Allocation remains unchanged at 3,178,544 bytes p50/p95 in the busy band. Capture-wide gen-0/gen-1/gen-2
+counts are 184/52/34 over 3,111 FIELD recompositions, versus 147/49/34 over only 2,274 recompositions in
+capture 4; normalized collection rates therefore do not regress, but short-lived garbage remains the clear
+tail-latency and long-run-stability target.
+
+### P2f measured allocation owners removed (2026-07-22)
+
+The compositor allocation phase was dominated by `Transform2DMath.Build`: it created about eleven
+`double[16]` matrices for every rendered object. It now composes the same row-vector operations through a
+twelve-double value-type affine-3D matrix and projects to `Affine2D` only at the boundary. Five hundred
+randomized scale/translation/anchor/one-shot/cyclic-rotation cases match every output double bit-for-bit
+against the former array implementation, and 10,000 warmed builds allocate zero bytes.
+
+The retained snapshot phase no longer uses `Dictionary.OrderBy` or returns a newly grown list to the Godot
+hot path. `GfxState` maintains a sorted handle index alongside its O(1) object dictionary, and fills a
+compositor-owned reusable `List<RenderObject>` under the existing lock. The returning overload remains for
+callers needing an independent snapshot. Ten warmed 1,000-object samples allocate zero bytes and preserve
+ascending handle order. The complete engine suite passes at 349 tests, the Godot build has zero
+warnings/errors, and threaded `SELFTEST OK`. **Next:** repeat the comparable DEBUGMAP run and verify the
+snapshot/compositor allocation columns collapse without changing the capture-5 frame-time distribution;
+then repeat SC0000 for the P2 exit/P3 decision.
+
+### P2 capture 6 - DEBUGMAP after primary allocation removal (2026-07-22)
+
+`build/perf/run-20260722-133412-146.csv` confirms P2f's primary allocation changes on the real path. In the
+matched busy band, total allocation p50/p95 falls from 3,178,544/3,178,544 to 262,160/262,160 bytes
+(-91.8%). Retained snapshot allocation is exactly zero; compositor allocation falls from 2,216,664 to
+261,880 bytes. Capture-wide gen-0/gen-1/gen-2 collections fall from 184/52/34 to 21/8/5 despite broadly
+similar duration and 2,709 FIELD recompositions. Snapshot p50/p95 falls from 0.165/0.328 ms to
+0.097/0.141 ms.
+
+Raster remains stable at 12.70/13.36 ms p50/p95 versus capture 5's 12.66/13.23 ms. End-to-end busy
+recomposition improves slightly from 15.35/16.18/19.26 ms p50/p95/p99 to 15.10/15.87/16.25 ms; the much
+tighter p99 is consistent with the measured GC reduction. Matched off-map recomposition improves from
+9.45/11.21/13.20 ms to 9.04/10.02/11.35 ms. P2f therefore preserves the raster win while removing the
+large short-lived collection owners.
+
+The stable 261,880-byte compositor remainder scales almost exactly with FIELD's approximately 961 retained
+objects. The first hypothesis was the per-object `SnapshotSurfaceText` array copy, so the compositor was
+changed to reuse a caller-owned `List<SurfaceTextDraw>` under the existing text lock; the returning overload
+remains available to callers needing an independent snapshot. Capture 7 below disproves that attribution.
+
+### P2 capture 7 - residual allocation probe (2026-07-22)
+
+`build/perf/run-20260722-134322-530.csv` is the requested short steady DEBUGMAP idle probe. Across 1,208
+full FIELD recompositions, total allocation remains 259,952/261,728 bytes p50/p95, with snapshot allocation
+zero and compositor allocation 259,672/261,448 bytes. The surface-text buffer therefore has no material
+effect in this workload and is only a harmless general cleanup. Recomposition remains in the expected
+camera-dependent range at 14.19/16.46 ms p50/p95 for an average 2.38 million candidate pixels.
+
+The exact remaining owner is `MovieSurfaceRegistry.TryResolveResource`: every ordinary still-texture
+fallback constructed a LINQ `Where` plus descending sort pipeline to look for a live movie frame, including
+when the movie registry was empty. This occurred once per retained object and explains the stable roughly
+270 bytes/object remainder. The registry now scans its live bindings directly while retaining the rule that
+the newest published playback of a resource wins. A focused test covers matching/missing lookups and newest-
+playback selection; 10,000 pairs allocate zero bytes after warm-up. All 350 engine tests, the zero-warning
+Godot build, and threaded `SELFTEST OK` pass. **Next:** one final short DEBUGMAP idle probe confirms the
+compositor remainder is gone, then SC0000 through the pre-CHAPTER burst supplies the P2 exit/P3 decision.
+
+### P2 capture 8 - DEBUGMAP allocation closeout (2026-07-22)
+
+`build/perf/run-20260722-140820-530.csv` confirms the movie-registry correction. Across 820 full steady
+FIELD recompositions, total allocation is 4,416 bytes p50/p95/p99 and compositor allocation is 4,136 bytes;
+snapshot, source preparation, and `Image.SetData` remain zero, while UI accounts for 88 bytes. This is a
+99.86% reduction from capture 4's 3,178,544-byte steady total and a 98.3% reduction from capture 7's
+259,952-byte residual. FIELD itself performs zero gen-0, gen-1, or gen-2 collections in this probe; every
+capture-wide collection occurred during boot/map setup.
+
+One FIELD row allocates 1,415,744 bytes during composition at `FIELD.BIN@0x1029` as a one-time reusable-
+capacity/cache warm-up. It triggers no collection and completes in 14.78 ms, so it is neither a steady owner
+nor a visible stall. At an average 2.32 million candidate pixels, recomposition p50/p95/p99 is
+13.90/15.86/18.89 ms and raster p50/p95 is 11.32/13.22 ms, consistent with the post-P2e/P2f distribution.
+DEBUGMAP therefore closes with busy p95 inside 16.67 ms and effectively allocation-free steady rendering.
+**Next:** repeat SC0000 through the original pre-CHAPTER burst and compare against capture 1's exact
+`SC0000@0x123de` plateau before deciding whether P2 exits or the full-screen/additive case triggers P3.
+
+### P2 exit capture 9 - SC0000 pre-CHAPTER and post-movie text (2026-07-22)
+
+`build/perf/run-20260722-141200-995.csv` repeats capture 1 through the CHAPTER movie and the following text.
+Across every recomposition parked at `SC0000.BIN@0x123de`, recomposition p50/p95/p99 improves from
+21.85/57.40/82.70 ms to 15.39/31.71/66.38 ms. Movie sampling itself remains small: twelve active rows have
+`movie_ms` p50/p95/max 0.20/0.99/1.06 ms, so decoding/presentation is not the reported burst bottleneck.
+
+The acceptance decision uses equivalent severe rows rather than the mixed coordinate aggregate. For frames
+with at least 3.5 million candidate pixels, recomposition p50/p95/p99 falls from 76.43/88.42/90.11 ms to
+65.15/71.74/72.03 ms; raster p50/p95 remains 64.11/71.15 ms. These 52 rows average 4.29 million candidate
+pixels, 10.7 layers, 4.6 additive layers, 8.3 viewport-covering layers, two general-affine layers, and less
+than 0.9 KB managed allocation. The worst comparable frame is 72.21 ms. P2's CPU fast paths therefore save
+roughly 15-19% in this burst but leave it around 14-15 delivered frames/s, more than four times the
+16.67 ms budget. No allocation or scheduler optimization can close that gap.
+
+A separate later interval still clones about 1.92 MB per recomposition while applying a color key to a
+dynamic frame. It is an independent GC issue already anticipated by the action plan, but it does not occur
+in the severe additive plateau and cannot change the exit decision. Treat it as part of the GPU texture/
+shader ownership work rather than delaying P3 for another software-raster special case.
+
+**P2 exit decision:** close the fidelity-neutral CPU batch and begin P3. The prototype mirrors ordinary
+retained texture/fill objects into GPU-native Godot drawing behind a backend switch, preserves handle z-order,
+atlas source rectangles, colorkey, tint/opacity, additive blending, and the exact affine transform, and keeps
+the software compositor as the pixel-parity oracle/fallback. First acceptance is the same
+`SC0000@0x123de` severe band below 16.67 ms p95 without regressing DEBUGMAP presentation or movie/text
+composition; only then make GPU rendering the default.

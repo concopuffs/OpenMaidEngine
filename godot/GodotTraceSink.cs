@@ -97,6 +97,12 @@ public sealed class GodotTraceSink : ITraceSink
         }
     }
 
+    /// <summary>Allocation-free current coordinate for once-per-frame diagnostics.</summary>
+    public GodotTraceStepSnapshot? LatestStep
+    {
+        get { lock (_snapshotLock) return _latestStep; }
+    }
+
     private string[] CurrentCallStackLocked()
     {
         var stack = _scripts.ToArray();

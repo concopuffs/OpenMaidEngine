@@ -7,6 +7,17 @@ using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 
+[Flags]
+public enum HostPresentationReason
+{
+    None = 0,
+    HostRequest = 1,
+    ScreenTransition = 2,
+    RetainedMutation = 4,
+    ContinuousChannel = 8,
+    DiscreteSourceCell = 16,
+}
+
 [SupportedOSPlatform("windows")]
 public sealed class GodotAdvHost : IHost
 {
@@ -183,6 +194,16 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_textLock)
             return _surfaceText.TryGetValue(surfaceSlot, out var draws) ? draws.ToArray() : Array.Empty<SurfaceTextDraw>();
+    }
+
+    public void SnapshotSurfaceText(int surfaceSlot, List<SurfaceTextDraw> snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (_textLock)
+        {
+            snapshot.Clear();
+            if (_surfaceText.TryGetValue(surfaceSlot, out var draws)) snapshot.AddRange(draws);
+        }
     }
 
     public void ClearRenderedAdvTextLayout(int layoutSlot)
@@ -481,7 +502,12 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void InputCallbackCompleted(GfxState gfx)
-        => Interlocked.Exchange(ref _presentRequested, 1);
+    {
+        // Callback completion itself is not native graphics dirtiness. Any retained writes made by the
+        // callback are published through GfxState's mutation generation; host-owned surface writes set
+        // _presentRequested at their actual mutation sites. FIELD services a 50 ms hover callback even
+        // while the pointer is idle, so an unconditional request here recreates its sleep-poll overdraw.
+    }
 
     public long InputClockMilliseconds => _clock.NowMs;
 
@@ -639,12 +665,22 @@ public sealed class GodotAdvHost : IHost
     // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
     // once, then continue only while the sampled retained scene can actually change. Text reveal is a separate
     // Godot Label; waiting/sleeping alone do not alter background pixels.
-    public bool ShouldRecomposite(GfxState gfx)
+    public HostPresentationReason ConsumePresentationReasons(GfxState gfx)
     {
         bool screenTransitionActive;
         lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
-        return System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0 ||
-               screenTransitionActive || gfx.HasActiveVisualPresentation(_clock.NowMs);
+        var reasons = HostPresentationReason.None;
+        if (System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0)
+            reasons |= HostPresentationReason.HostRequest;
+        if (screenTransitionActive) reasons |= HostPresentationReason.ScreenTransition;
+        GfxPresentationReason gfxReasons = gfx.ConsumePresentationReasons(_clock.NowMs);
+        if ((gfxReasons & GfxPresentationReason.RetainedMutation) != 0)
+            reasons |= HostPresentationReason.RetainedMutation;
+        if ((gfxReasons & GfxPresentationReason.ContinuousChannel) != 0)
+            reasons |= HostPresentationReason.ContinuousChannel;
+        if ((gfxReasons & GfxPresentationReason.DiscreteSourceCell) != 0)
+            reasons |= HostPresentationReason.DiscreteSourceCell;
+        return reasons;
     }
 
     public void Stop()
@@ -760,9 +796,6 @@ public sealed class GodotAdvHost : IHost
         long ms = NormalizeSleepMilliseconds(duration, SleepScale);
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
-        // A sleep is a service boundary: make preceding retained writes visible once even when no animation
-        // channel is active during the hold.
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsSleeping = true;
         while (_clock.NowMs < deadline)
         {

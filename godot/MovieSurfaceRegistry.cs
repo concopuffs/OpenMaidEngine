@@ -94,16 +94,18 @@ internal sealed class MovieSurfaceRegistry
     {
         lock (_lock)
         {
-            foreach (var binding in _byPlayback.Values
-                         .Where(binding => binding.ResourceId == resourceId)
-                         .OrderByDescending(binding => binding.PlaybackId))
+            long newestPlaybackId = long.MinValue;
+            MovieSurfaceFrame? newestFrame = null;
+            foreach (var binding in _byPlayback.Values)
             {
-                if (!_frames.TryGetValue(binding.PlaybackId, out var found)) continue;
-                frame = found;
-                return true;
+                if (binding.ResourceId != resourceId || binding.PlaybackId <= newestPlaybackId ||
+                    !_frames.TryGetValue(binding.PlaybackId, out var found))
+                    continue;
+                newestPlaybackId = binding.PlaybackId;
+                newestFrame = found;
             }
-            frame = null;
-            return false;
+            frame = newestFrame;
+            return newestFrame != null;
         }
     }
 

@@ -86,6 +86,8 @@ public partial class Main : Godot.Control
     private string? _timelineLogPath;            // --timeline-log <jsonl>: synchronized VM/host/compositor evidence
     private GodotTimelineLog? _timeline;
     private int _timelineFrame;
+    private string? _perfLogPath;                // --perf-log <csv>: low-overhead frame/compositor timings + work
+    private PerformanceFrameLog? _perf;
 
     public override void _Ready()
     {
@@ -184,6 +186,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--shot-sequence" && i + 1 < userArgs.Length) _seqDir = userArgs[i + 1];
             if (userArgs[i] == "--gfx-log" && i + 1 < userArgs.Length) _gfxLogPath = userArgs[i + 1];
             if (userArgs[i] == "--timeline-log" && i + 1 < userArgs.Length) _timelineLogPath = userArgs[i + 1];
+            if (userArgs[i] == "--perf-log" && i + 1 < userArgs.Length) _perfLogPath = userArgs[i + 1];
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
@@ -225,6 +228,7 @@ public partial class Main : Godot.Control
         var resources = scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load();
         _host = new GodotAdvHost(this, resources, scene, _clock, _locator, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
         _trace = new GodotTraceSink(_locator, _timeline);
+        if (_perfLogPath != null) _perf = new PerformanceFrameLog(_perfLogPath);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
         _table = table;
@@ -322,51 +326,80 @@ public partial class Main : Godot.Control
         _clock.Advance(delta);
         _timelineFrame++;
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
-        _host?.PulseFrame();
-        UpdateVoicePlaybackState();
-        AdoptPendingMovies();
-        UpdateMovieFrames();
-        if (!_selftest && _vm != null && _host != null && _host.ShouldRecomposite(_vm.Gfx))
-            Recomposite();   // native publishes retained mutations only at present/service boundaries
-        if (!_selftest && _host != null) UpdateAdvTextPresentation();
-        if (!_selftest && _host != null) UpdateAdvWaitIndicatorPresentation();
-        if (!_selftest && _host != null) UpdateHistoryTextPresentation();
-        // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
-        // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
-        if (_seqDir != null && _seqIdx < _seqFrames && !_done)
+        var perf = _perf;
+        var step = perf != null ? _trace.LatestStep : null;
+        perf?.BeginFrame(_timelineFrame, _clock.NowMs, delta,
+                         step?.Script ?? "<startup>", step?.Offset ?? -1, step?.Opcode ?? -1);
+        try
         {
-            System.IO.Directory.CreateDirectory(_seqDir);
-            // Headless has no rendered viewport texture (GetImage() is null). Still advance/count/quit so the
-            // real-run trace-histogram can profile the live path without a display; only the PNG grab is skipped.
-            var fimg = GetViewport().GetTexture()?.GetImage();
-            fimg?.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
-            _seqIdx++;
-            if (_seqIdx >= _seqFrames) { GD.Print($"SEQ saved {_seqIdx} frames -> {_seqDir}"); GetTree().Quit(0); }
-            return;
-        }
-        // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
-        if (_shotPath != null && !_shotDone && _host != null && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
-        {
-            if (++_shotSettle >= _shotSettleTarget)
+            long phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            _host?.PulseFrame();
+            perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
+
+            phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            UpdateVoicePlaybackState();
+            AdoptPendingMovies();
+            UpdateMovieFrames();
+            perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);
+
+            phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            HostPresentationReason presentationReasons = !_selftest && _vm != null && _host != null
+                ? _host.ConsumePresentationReasons(_vm.Gfx)
+                : HostPresentationReason.None;
+            bool shouldRecomposite = presentationReasons != HostPresentationReason.None;
+            perf?.RecordPresentationReasons((int)presentationReasons);
+            perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
+            long allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            if (shouldRecomposite)
+                Recomposite();   // native publishes retained mutations only at present/service boundaries
+            perf?.RecordRecomposeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+
+            phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            if (!_selftest && _host != null) UpdateAdvTextPresentation();
+            if (!_selftest && _host != null) UpdateAdvWaitIndicatorPresentation();
+            if (!_selftest && _host != null) UpdateHistoryTextPresentation();
+            perf?.RecordUiAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+            perf?.RecordUi(PerformanceFrameLog.Timestamp() - phase);
+
+            // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
+            // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
+            if (_seqDir != null && _seqIdx < _seqFrames && !_done)
             {
-                _shotDone = true;
-                var img = GetViewport().GetTexture().GetImage();
-                img.SavePng(_shotPath);
-                GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
-                ReportSubroutines();
-                GetTree().Quit(0);
+                System.IO.Directory.CreateDirectory(_seqDir);
+                // Headless has no rendered viewport texture (GetImage() is null). Still advance/count/quit so the
+                // real-run trace-histogram can profile the live path without a display; only the PNG grab is skipped.
+                var fimg = GetViewport().GetTexture()?.GetImage();
+                fimg?.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
+                _seqIdx++;
+                if (_seqIdx >= _seqFrames) { GD.Print($"SEQ saved {_seqIdx} frames -> {_seqDir}"); GetTree().Quit(0); }
+                return;
             }
-            return;
+            // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
+            if (_shotPath != null && !_shotDone && _host != null && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
+            {
+                if (++_shotSettle >= _shotSettleTarget)
+                {
+                    _shotDone = true;
+                    var img = GetViewport().GetTexture().GetImage();
+                    img.SavePng(_shotPath);
+                    GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
+                    ReportSubroutines();
+                    GetTree().Quit(0);
+                }
+                return;
+            }
+            if (_done && !_ended)
+            {
+                _ended = true;
+                DumpHistogram();
+                GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
+                ReportSubroutines();
+                ShowEnd();
+                if (_selftest) RunSelfTest();
+            }
         }
-        if (_done && !_ended)
-        {
-            _ended = true;
-            DumpHistogram();
-            GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
-            ReportSubroutines();
-            ShowEnd();
-            if (_selftest) RunSelfTest();
-        }
+        finally { perf?.EndFrame(); }
     }
 
     // _Input (not _UnhandledInput): the root Control consumes mouse clicks as GUI input before they
@@ -688,6 +721,12 @@ public partial class Main : Godot.Control
     public override void _ExitTree()
     {
         DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); _locator?.Dispose();
+        if (_perf != null)
+        {
+            _perf.Dispose();
+            GD.Print($"[perf-log] wrote {_perf.FrameCount} frames / {_perf.RecompositeCount} recomposites -> {_perf.Path}");
+            _perf = null;
+        }
         foreach (var movie in _pendingMovies.Values) movie.Decoder.Dispose();
         _pendingMovies.Clear();
         foreach (var movie in _movies.Values) movie.Decoder.Dispose();
@@ -718,30 +757,62 @@ public partial class Main : Godot.Control
     // GfxState and applied here; object opacity comes only from the actual blend/color path.
     private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
     private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
+    private readonly System.Collections.Generic.List<RenderObject> _visibleSnapshot = new(1024);
+    private readonly System.Collections.Generic.List<SurfaceTextDraw> _surfaceTextSnapshot = new();
 
     private void Recomposite()
     {
+        if (_perf != null)
+        {
+            var presentStep = _trace.LatestStep;
+            _perf.RecordPresentationCoordinate(presentStep?.Script ?? "<startup>",
+                                               presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
+        }
+        long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+        bool hasScreenTransition = _host.TrySnapshotScreenTransition(out var transition);
+        _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+        _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
+        _perf?.BeginRecomposite(hasScreenTransition);
+
+        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         System.Array.Clear(_screenPixels);
         foreach (var label in _surfaceTextLabels) label.Visible = false;
+        _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
         int surfaceTextLabelIndex = 0;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
-        if (_host.TrySnapshotScreenTransition(out var transition))
+        if (hasScreenTransition)
         {
+            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
             // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
             CompositeVisibleObjects(transition.Source, 1f, ref surfaceTextLabelIndex, decisions, false);
             FillQuad(0, 0, ScreenWidth, ScreenHeight, 0, (float)transition.Progress);
             CompositeVisibleObjects(transition.Target, (float)transition.Progress,
                                     ref surfaceTextLabelIndex, decisions, false);
+            _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
         else
         {
-            var visible = _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs); // synchronized objects + ranges
-            CompositeVisibleObjects(visible, 1f, ref surfaceTextLabelIndex, decisions, true);
+            phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot); // synchronized objects + ranges
+            _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+            _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
+            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            CompositeVisibleObjects(_visibleSnapshot, 1f, ref surfaceTextLabelIndex, decisions, true);
+            _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
+        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         _screen.SetData(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8, _screenPixels);
+        _perf?.RecordSetDataAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+        _perf?.RecordSetData(PerformanceFrameLog.Timestamp() - phase);
+        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         _screenTex.Update(_screen);
+        _perf?.RecordTextureUpdate(PerformanceFrameLog.Timestamp() - phase);
         if (decisions != null) LogGfxDecisionChanges(decisions);
+        _perf?.EndRecomposite();
     }
 
     private void CompositeVisibleObjects(IReadOnlyList<RenderObject> visible, float globalOpacity,
@@ -752,6 +823,7 @@ public partial class Main : Godot.Control
         int z = 0;
         foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
+            _perf?.RecordObject(v.TimeVarying);
             var t = v.Transform;
             var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
@@ -763,16 +835,23 @@ public partial class Main : Godot.Control
             float opacity = v.Alpha / 255f * globalOpacity;  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
             var rawObject = _vm.Gfx.TryGet(v.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             var surfaceTexture = rawObject != null
                 ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
                 : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
             bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
-            string outcome;
+            // These strings exist only for --gfx-log/timeline diagnostics. DEBUGMAP visits roughly one
+            // thousand retained objects per composition, so formatting them unconditionally creates
+            // several megabytes of short-lived garbage even in an ordinary run.
+            string? outcome = null;
             if (v.SurfaceTransition is { } transition)
             {
+                _perf?.RecordTransitionLayer();
                 int layers = DrawTransitionRange(visible, transition);
-                outcome = $"TRANSITION slot={transition.TargetSlot} key=0x{transition.CommandKey:x} " +
-                          $"progress={transition.Progress:0.000} forced={transition.Forced} layers={layers}";
+                if (decisions != null)
+                    outcome = $"TRANSITION slot={transition.TargetSlot} key=0x{transition.CommandKey:x} " +
+                              $"progress={transition.Progress:0.000} forced={transition.Forced} layers={layers}";
             }
             else if (v.SurfaceResId == 0 && surfaceTexture == null)
             {
@@ -785,37 +864,54 @@ public partial class Main : Godot.Control
                     // One-shot/mode-1 packed color supplies opacity directly. Static mode-0 fills retain
                     // the tint-strength convention used by the existing effect objects.
                     float fillA = v.MultiplyTint ? opacity : opacity * strength;
+                    _perf?.RecordFillLayer();
                     FillAffineQuad(baseW, baseH, localToDest, v.Tint, fillA);
-                    outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
-                              $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
-                              $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
-                              $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}" +
-                              ColorTimeline(v.ColorTransition);
+                    if (decisions != null)
+                        outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
+                                  $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
+                                  $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
+                                  $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}" +
+                                  ColorTimeline(v.ColorTransition);
                 }
-                else outcome = "SKIP(no-resId, opaque render-target)";
+                else
+                {
+                    _perf?.RecordSkippedLayer();
+                    if (decisions != null) outcome = "SKIP(no-resId, opaque render-target)";
+                }
             }
             else
             {
-                var texture = surfaceTexture
-                    ?? (movieSurfaceBound ? null : _host.ResolveResIdTexture(v.SurfaceResId));
-                if (texture == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
+                var texture = surfaceTexture;
+                if (texture == null && !movieSurfaceBound)
+                {
+                    resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+                    texture = _host.ResolveResIdTexture(v.SurfaceResId);
+                    _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+                }
+                if (texture == null)
+                {
+                    _perf?.RecordSkippedLayer();
+                    if (decisions != null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
+                }
                 else
                 {
                     BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
                               localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic, v.Blend);
-                    outcome = $"slot={rawObject?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
-                              $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
-                              $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
-                              $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
-                              $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
-                              $"mode={rawObject?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
-                              ColorTimeline(v.ColorTransition);
+                    if (decisions != null)
+                        outcome = $"slot={rawObject?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
+                                  $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
+                                  $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
+                                  $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
+                                  $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
+                                  $"mode={rawObject?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
+                                  ColorTimeline(v.ColorTransition);
                 }
             }
             if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
             if (includeSurfaceText && rawObject != null)
             {
-                foreach (var surfaceText in _host.SnapshotSurfaceText(rawObject.SourceSlot))
+                _host.SnapshotSurfaceText(rawObject.SourceSlot, _surfaceTextSnapshot);
+                foreach (var surfaceText in _surfaceTextSnapshot)
                 {
                     if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
                         surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
@@ -969,25 +1065,42 @@ public partial class Main : Godot.Control
         {
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
+            _perf?.RecordObject(source.TimeVarying);
             var affine = Transform2DMath.Build(source.Transform, source.Rotation).FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
             var rawObject = _vm.Gfx.TryGet(source.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             var texture = rawObject != null
                 ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
                 : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
             bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
             if (source.SurfaceResId == 0 && texture == null)
             {
-                if (source.Blend == BlendKind.Opaque) continue;
+                if (source.Blend == BlendKind.Opaque)
+                {
+                    _perf?.RecordSkippedLayer();
+                    continue;
+                }
                 int w = source.W > 0 ? source.W : 800, h = source.H > 0 ? source.H : 600;
+                _perf?.RecordFillLayer();
                 FillAffineQuad(w, h, affine, source.Tint, opacity * source.TintStrength / 255f);
             }
             else
             {
-                if (!movieSurfaceBound) texture ??= _host.ResolveResIdTexture(source.SurfaceResId);
-                if (texture == null) continue;
+                if (!movieSurfaceBound && texture == null)
+                {
+                    resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+                    texture = _host.ResolveResIdTexture(source.SurfaceResId);
+                    _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+                }
+                if (texture == null)
+                {
+                    _perf?.RecordSkippedLayer();
+                    continue;
+                }
                 BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
                           source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,
                           texture.Value.IsDynamic, source.Blend);
@@ -1039,6 +1152,8 @@ public partial class Main : Godot.Control
         // right<=left or bottom<=top. FIELD deliberately creates zero-area prototype objects from SO005;
         // expanding those dimensions to the full texture leaks the entire spritesheet onto the map.
         if (w <= 0 || h <= 0) return;
+        long sourcePrepStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long sourcePrepAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         var cacheKey = (assetId, colorKey);
         int sourceWidth, sourceHeight;
         byte[] sourcePixels;
@@ -1077,16 +1192,24 @@ public partial class Main : Godot.Control
         int sh = h;
         sw = System.Math.Min(sw, sourceWidth - srcX);
         sh = System.Math.Min(sh, sourceHeight - srcY);
+        _perf?.RecordSourcePrep(PerformanceFrameLog.Timestamp() - sourcePrepStarted);
+        _perf?.RecordSourcePrepAllocation(PerformanceFrameLog.AllocatedBytes() - sourcePrepAllocated);
         if (sw <= 0 || sh <= 0) return;
+        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
             _screenPixels, ScreenWidth, ScreenHeight, sourcePixels, sourceWidth, sourceHeight,
             srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint, blend);
+        _perf?.RecordRaster(sw, sh, localToDest, ScreenWidth, ScreenHeight, dynamic, blend,
+                            PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
     private void FillAffineQuad(int w, int h, Age.Engine.Model.Affine2D localToDest, long tint, float alpha)
     {
+        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         Age.Engine.Model.SoftwareAffineRasterizer.FillRgba(
             _screenPixels, ScreenWidth, ScreenHeight, w, h, localToDest, tint, alpha);
+        _perf?.RecordRaster(w, h, localToDest, ScreenWidth, ScreenHeight, false, BlendKind.Alpha,
+                            PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
     // Alpha-blend a solid tint (0xRRGGBB) rectangle over the screen — the surfaceless fade/flash fill.
@@ -1094,6 +1217,7 @@ public partial class Main : Godot.Control
     {
         int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
         if (ia == 0) return;
+        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
         byte[] dst = _screenPixels;
         int dw = ScreenWidth, dh = ScreenHeight;
@@ -1110,6 +1234,10 @@ public partial class Main : Godot.Control
                 dst[di + 2] = (byte)((tb * ia + dst[di + 2] * (255 - ia)) / 255);
                 dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + ia);
             }
+        _perf?.RecordFillLayer();
+        _perf?.RecordRaster(w, h, new Affine2D(1, 0, 0, 1, dstX, dstY),
+                            ScreenWidth, ScreenHeight, false, BlendKind.Alpha,
+                            PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
     // Make colorkey-matching texels transparent (native colorkey is baked at surface load).

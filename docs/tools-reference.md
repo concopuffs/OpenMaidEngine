@@ -217,10 +217,19 @@ time, pulse/movie/UI time, and a compositor breakdown: recomposition, clear, ret
 resolution/decode, color-key/source preparation, raster, `Image.SetData`, and `ImageTexture.Update`. Workload columns report transition
 state, retained object visits, time-varying object visits, drawn/fill/transition/skipped layers, integer/
 affine/singular raster paths, dynamic/opaque/alpha/additive layers, source pixels, clipped affine bounding-
-box candidate pixels, full-screen layers, main-thread managed allocations, and GC collection deltas. The
+box candidate pixels, full-screen layers, main-thread managed allocations, and GC collection deltas.
+Presentation-reason columns distinguish host publication requests, legacy screen transitions, retained VM
+mutations, continuously sampled channels, and discrete spritesheet cell changes. Affine work is additionally
+split into fractional translation, axis-aligned scale, and general affine layers while retaining the aggregate
+`affine_layers` column for comparison with the first two captures. The
+allocation total is split into recomposition, retained snapshot, compositor, source-preparation,
+`Image.SetData`, and Godot UI phases so a normal windowed capture can attribute remaining managed garbage
+without enabling a high-volume trace. The
 writer replaces the target, buffers 120 rows between flushes, and prints its frame/recomposition counts on
 normal shutdown. Use a windowed Release-equivalent run at speed 1 for performance evidence; headless runs
-validate the schema only. Do not combine baseline captures with `--shot-sequence`, `--gfx-log`, or
+validate the schema only. Before a baseline, verify that no older Godot game processes remain alive; an
+apparently closed window can otherwise leave a renderer consuming CPU and contaminate later runs. Do not
+combine baseline captures with `--shot-sequence`, `--gfx-log`, or
 `--timeline-log`, whose diagnostics add substantial or differently shaped work. Example from `age-reimpl/`:
 `godot --path godot -- --scene SC0000 --boot --perf-log ../build/perf/sc0000.csv`.
 

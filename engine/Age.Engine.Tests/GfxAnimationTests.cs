@@ -26,6 +26,25 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void CallerOwnedVisibleSnapshot_ReusesStorageAndPreservesHandleOrder()
+    {
+        var g = new GfxState();
+        for (int i = 999; i >= 0; i--)
+            g.BindDraw(0x1000 + i, 1, 0, 0, 1, 1, i, 0);
+        var snapshot = new List<RenderObject>();
+        g.SnapshotVisibleObjects(0, snapshot); // Grow and warm the buffer outside the measured interval.
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 10; i++) g.SnapshotVisibleObjects(i, snapshot);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+        Assert.Equal(1000, snapshot.Count);
+        Assert.Equal(0x1000, snapshot[0].Handle);
+        Assert.Equal(0x1000 + 999, snapshot[^1].Handle);
+    }
+
+    [Fact]
     public void CurrentScaleSetter_ExpandsGlowAroundItsAnchor()
     {
         var g = new GfxState();
@@ -94,18 +113,22 @@ public class GfxAnimationTests
 
         var unchanged = VisibleObject();
         Assert.False(unchanged.HasActiveVisualPresentation(1000));
+        Assert.False(unchanged.SnapshotVisibleObjects(1000).Single().TimeVarying);
 
         var spritesheet = VisibleObject();
         spritesheet.SetSrcRect(7, 4, 1, 0, 800);
         Assert.True(spritesheet.HasActiveVisualPresentation(1000));
+        Assert.True(spritesheet.SnapshotVisibleObjects(1000).Single().TimeVarying);
 
         var color = VisibleObject();
         color.SetColorAnim(7, 1000, GfxState.PackColor(0x80, 0xff0000));
         Assert.True(color.HasActiveVisualPresentation(1000));
+        Assert.True(color.SnapshotVisibleObjects(1000).Single().TimeVarying);
 
         var rotation = VisibleObject();
         rotation.SetRotationCycle(7, 1000, (0, 0, 1));
         Assert.True(rotation.HasActiveVisualPresentation(1000));
+        Assert.True(rotation.SnapshotVisibleObjects(1000).Single().TimeVarying);
     }
 
     [Fact]
@@ -127,6 +150,108 @@ public class GfxAnimationTests
         Assert.Equal((0, 200, 200, 200), (fifth.SrcX, fifth.SrcY, fifth.W, fifth.H));
         Assert.Equal((600, 200, 200, 200), (eighth.SrcX, eighth.SrcY, eighth.W, eighth.H));
         Assert.Equal((0, 0, 200, 200), (wrapped.SrcX, wrapped.SrcY, wrapped.W, wrapped.H));
+    }
+
+    [Fact]
+    public void PresentationReasons_PublishMutationOnce_AndSpritesheetOnlyAtCellBoundaries()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x37, -1);
+        g.BindDraw(7, 4, 0, 0, 16, 16, 0, 0);
+        g.SetSrcRect(7, frameCount: 4, columns: 2, cell: 0, period: 200);
+
+        Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1000));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1199));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1200));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1399));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1400));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1599));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1600));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1799));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1800));
+    }
+
+    [Fact]
+    public void PresentationReasons_CloneBeforeFirstSampleSharesPhase_AndCloneAfterKeepsIt()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x37, -1);
+        g.BindDraw(10, 4, 0, 0, 16, 16, 0, 0);
+        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 200);
+        Assert.True(g.CloneObject(10, 11));
+
+        Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1000));
+        Assert.Equal(1000, g.TryGet(10)!.SrcStart);
+        Assert.Equal(1000, g.TryGet(11)!.SrcStart);
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1200));
+        Assert.Equal(g.SnapshotVisibleObjects(1200).Single(x => x.Handle == 10).SrcX,
+                     g.SnapshotVisibleObjects(1200).Single(x => x.Handle == 11).SrcX);
+
+        Assert.True(g.CloneObject(10, 12));
+        Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1250));
+        Assert.Equal(1000, g.TryGet(12)!.SrcStart);
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1400));
+        var cells = g.SnapshotVisibleObjects(1400).Select(x => x.SrcX).Distinct().ToArray();
+        Assert.Single(cells);
+    }
+
+    [Fact]
+    public void PresentationReasons_UsesObjectLocalPeriods_AndReconfigurationRestartsAtSharedSample()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x37, -1);
+        g.BindDraw(10, 4, 0, 0, 16, 16, 0, 0);
+        g.BindDraw(11, 4, 0, 0, 16, 16, 0, 0);
+        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 100);
+        g.SetSrcRect(11, frameCount: 4, columns: 2, cell: 0, period: 250);
+        g.ConsumePresentationReasons(1000);
+
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1099));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1100));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1199));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1200));
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1249));
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1250));
+
+        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 400);
+        Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1250));
+        Assert.Equal(1250, g.TryGet(10)!.SrcStart);
+        Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1499));
+        // The second object's 250 ms boundary and the reconfigured object's 400 ms boundary coincide here.
+        Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1650));
+    }
+
+    [Fact]
+    public void PresentationReasons_ContinuousChannelRemainsFrameDriven()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 5, -1);
+        g.BindDraw(7, 1, 0, 0, 64, 64, 0, 0);
+        g.SetColorAnim(7, 1000, GfxState.PackColor(0x80, 0xff0000));
+
+        var first = g.ConsumePresentationReasons(1000);
+        Assert.True((first & GfxPresentationReason.RetainedMutation) != 0);
+        Assert.True((first & GfxPresentationReason.ContinuousChannel) != 0);
+        Assert.Equal(GfxPresentationReason.ContinuousChannel, g.ConsumePresentationReasons(1016));
+    }
+
+    [Fact]
+    public void PresentationReasons_PhaseLockedUnitFamilyPublishesFiveCellChangesPerSecond()
+    {
+        var g = new GfxState();
+        g.SetSurface(4, 0x37, -1);
+        g.BindDraw(100, 4, 0, 0, 16, 16, 0, 0);
+        g.SetSrcRect(100, frameCount: 4, columns: 2, cell: 0, period: 200);
+        for (long handle = 101; handle < 151; handle++) Assert.True(g.CloneObject(100, handle));
+        g.ConsumePresentationReasons(1000);
+
+        int cellChanges = 0;
+        for (long now = 1001; now <= 2000; now++)
+            if ((g.ConsumePresentationReasons(now) & GfxPresentationReason.DiscreteSourceCell) != 0)
+                cellChanges++;
+
+        Assert.Equal(5, cellChanges);
+        Assert.Single(g.Objects.Select(pair => g.TryGet(pair.Handle)!.SrcStart).Distinct());
     }
 
     [Fact]

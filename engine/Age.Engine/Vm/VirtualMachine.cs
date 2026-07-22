@@ -1712,16 +1712,16 @@ public sealed class VirtualMachine
                 Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return pc + 1;
             }
             case "set-gfx-geom3":       // 0x217 (handle)(a)(b)(c) -> V18
-                Gfx.GetOrCreate(Read(a[0])).V18 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+                Gfx.SetObjectAnchor(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "set-gfx-geom3-b":     // 0x219 (handle)(a)(b)(c) -> V24
-                Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+                Gfx.SetObjectPosition(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "u0041AF00":           // 0x80: default object slot substituted by native op 0x1d9
             case "set-default-gfx-object-slot":
                 Gfx.SetDefaultObjectSlot((int)Read(a[0])); return pc + 1;
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
             case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
-                Gfx.GetOrCreate(Read(a[0])).V24 = (Read(a[2]), Read(a[3]), Read(a[4])); return pc + 1;
+                Gfx.SetObjectPosition(Read(a[0]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "u004219E0":                  // pre-reference compatibility
             case "set-gfx-range-transform":   // 0x229 (first)(count)(anchor x/y/z)
                 Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
@@ -1782,10 +1782,10 @@ public sealed class VirtualMachine
             case "gfx-set-scale-current": // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
                 Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "set-gfx-field64":     // 0x212 (idx)(val)
-                Gfx.GetOrCreate(Read(a[0])).Field64 = Read(a[1]); return pc + 1;
+                Gfx.SetObjectField64(Read(a[0]), Read(a[1])); return pc + 1;
             case "set-gfx-xy":          // 0x213 (idx)(x)(y)
             {
-                var o = Gfx.GetOrCreate(Read(a[0])); o.Field68 = Read(a[1]); o.Field6c = Read(a[2]); return pc + 1;
+                Gfx.SetObjectFields68And6c(Read(a[0]), Read(a[1]), Read(a[2])); return pc + 1;
             }
             case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
                 Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;

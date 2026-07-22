@@ -40,46 +40,74 @@ public static class Transform2DMath
 {
     public static Affine2D Build(TransformState t, RotationCycleState cycle = default)
     {
-        double[] m = Identity();
+        Matrix3D m = Identity();
         m = Mul(m, Translation(-t.AnchorX, -t.AnchorY, -t.AnchorZ));
         m = Mul(m, Scale(t.ScaleX, t.ScaleY, t.ScaleZ));
         m = Mul(m, AxisAngle(t.RotationAxisX, t.RotationAxisY, t.RotationAxisZ, t.RotationAngleDegrees));
         m = Mul(m, Translation(t.TranslateX, t.TranslateY, t.TranslateZ));
         if (cycle.Enabled) m = Mul(m, AxisAngle(cycle.AxisX, cycle.AxisY, cycle.AxisZ, cycle.AngleDegrees));
         m = Mul(m, Translation(t.AnchorX, t.AnchorY, t.AnchorZ));
-        return new(m[0], m[1], m[4], m[5], m[12], m[13]);
+        return new(m.M11, m.M12, m.M21, m.M22, m.TX, m.TY);
     }
 
     public static (double X, double Y) Apply(double x, double y, TransformState transform,
                                              RotationCycleState cycle = default)
         => Build(transform, cycle).Apply(x, y);
 
-    private static double[] Identity() => new double[] { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
-    private static double[] Scale(double x, double y, double z)
-        => new double[] { x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1 };
-    private static double[] Translation(double x, double y, double z)
-        => new double[] { 1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1 };
+    // AGE composes affine 4x4 row-vector matrices, whose last column is always (0,0,0,1). Carry only
+    // the 3x3 linear part and translation row as a value type: the old double[16] implementation allocated
+    // about eleven arrays per rendered object, or roughly 2.2 MB on every DEBUGMAP composition.
+    private readonly record struct Matrix3D(
+        double M11, double M12, double M13,
+        double M21, double M22, double M23,
+        double M31, double M32, double M33,
+        double TX, double TY, double TZ);
 
-    private static double[] AxisAngle(double x, double y, double z, double degrees)
+    private static Matrix3D Identity() => new(
+        1,0,0, 0,1,0, 0,0,1, 0,0,0);
+
+    private static Matrix3D Scale(double x, double y, double z) => new(
+        x,0,0, 0,y,0, 0,0,z, 0,0,0);
+
+    private static Matrix3D Translation(double x, double y, double z) => new(
+        1,0,0, 0,1,0, 0,0,1, x,y,z);
+
+    private static Matrix3D AxisAngle(double x, double y, double z, double degrees)
     {
         double len = System.Math.Sqrt(x*x + y*y + z*z);
         if (len < 1e-12 || System.Math.Abs(degrees) < 1e-12) return Identity();
         x /= len; y /= len; z /= len;
         double r = degrees * System.Math.PI / 180.0, c = System.Math.Cos(r), s = System.Math.Sin(r), q = 1-c;
-        return new double[] {
-            x*x*q+c,   x*y*q+z*s, x*z*q-y*s, 0,
-            x*y*q-z*s, y*y*q+c,   y*z*q+x*s, 0,
-            x*z*q+y*s, y*z*q-x*s, z*z*q+c,   0,
-            0,0,0,1
-        };
+        return new(
+            x*x*q+c,   x*y*q+z*s, x*z*q-y*s,
+            x*y*q-z*s, y*y*q+c,   y*z*q+x*s,
+            x*z*q+y*s, y*z*q-x*s, z*z*q+c,
+            0,0,0);
     }
 
-    private static double[] Mul(double[] a, double[] b)
+    private static Matrix3D Mul(Matrix3D a, Matrix3D b) => new(
+        Sum4(a.M11*b.M11, a.M12*b.M21, a.M13*b.M31, 0),
+        Sum4(a.M11*b.M12, a.M12*b.M22, a.M13*b.M32, 0),
+        Sum4(a.M11*b.M13, a.M12*b.M23, a.M13*b.M33, 0),
+        Sum4(a.M21*b.M11, a.M22*b.M21, a.M23*b.M31, 0),
+        Sum4(a.M21*b.M12, a.M22*b.M22, a.M23*b.M32, 0),
+        Sum4(a.M21*b.M13, a.M22*b.M23, a.M23*b.M33, 0),
+        Sum4(a.M31*b.M11, a.M32*b.M21, a.M33*b.M31, 0),
+        Sum4(a.M31*b.M12, a.M32*b.M22, a.M33*b.M32, 0),
+        Sum4(a.M31*b.M13, a.M32*b.M23, a.M33*b.M33, 0),
+        Sum4(a.TX*b.M11, a.TY*b.M21, a.TZ*b.M31, b.TX),
+        Sum4(a.TX*b.M12, a.TY*b.M22, a.TZ*b.M32, b.TY),
+        Sum4(a.TX*b.M13, a.TY*b.M23, a.TZ*b.M33, b.TZ));
+
+    // Accumulate in the same order as the former 4x4 loop so boundary-sensitive nearest-neighbour
+    // projection retains its floating-point behavior while avoiding an intermediate array.
+    private static double Sum4(double a, double b, double c, double d)
     {
-        var o = new double[16];
-        for (int row=0; row<4; row++)
-            for (int col=0; col<4; col++)
-                for (int k=0; k<4; k++) o[row*4+col] += a[row*4+k] * b[k*4+col];
-        return o;
+        double result = 0;
+        result += a;
+        result += b;
+        result += c;
+        result += d;
+        return result;
     }
 }

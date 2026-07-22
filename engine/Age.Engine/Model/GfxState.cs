@@ -14,6 +14,15 @@ public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
                                                  double AxisX, double AxisY, double AxisZ,
                                                  double AngleDegrees = 0);
 
+[System.Flags]
+public enum GfxPresentationReason
+{
+    None = 0,
+    RetainedMutation = 1,
+    ContinuousChannel = 2,
+    DiscreteSourceCell = 4,
+}
+
 /// <summary>Sampled op-0x223 type-0 surface transition. Range A is already present in normal z-order;
 /// the compositor draws range B over it with <paramref name="Progress"/> to form the native crossfade.</summary>
 public readonly record struct SurfaceTransitionState(long CommandKey, int TargetSlot,
@@ -62,7 +71,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            bool MultiplyTint,
                                            SurfaceTransitionState? SurfaceTransition = null,
                                            ColorTransitionState? ColorTransition = null,
-                                           Affine2D? RangeTransform = null);
+                                           Affine2D? RangeTransform = null,
+                                           bool TimeVarying = false);
 
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
@@ -142,6 +152,9 @@ public sealed class GfxState
     // Populated lazily by the geometry SET ops and draw-texture. Op 0x215 queries this same native map and
     // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
     private readonly Dictionary<long, GfxObject> _objects = new();
+    // Native composition is handle-ascending z order. Mutations maintain this small index so snapshots do
+    // not rebuild/sort a dictionary-sized LINQ buffer, while hot handle lookup remains O(1).
+    private readonly List<long> _orderedObjectHandles = new();
     private readonly NumericGlyphStyle[] _numericGlyphStyles = new NumericGlyphStyle[11];
 
     // Ops 0x229-0x22e address one embedded gfx-object record outside the ordinary object map. Its sampled
@@ -164,6 +177,12 @@ public sealed class GfxState
     public long AnimationServiceFlags { get; private set; }
     public uint PreviousFrameTimeMilliseconds { get; private set; }
     public uint CurrentFrameTimeMilliseconds { get; private set; }
+    private long _previousFrameTimeMs;
+    private long _currentFrameTimeMs;
+    private long _mutationGeneration;
+    private long _publishedMutationGeneration;
+
+    private void MarkRetainedMutation() => _mutationGeneration++;
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
@@ -178,8 +197,14 @@ public sealed class GfxState
         // (Monitor) so the callers that already hold it are fine.
         lock (_lock)
         {
-            if (!_objects.TryGetValue(handle, out var o)) { o = new GfxObject(); _objects[handle] = o; }
+            if (!_objects.TryGetValue(handle, out var o))
+            {
+                o = new GfxObject();
+                _objects[handle] = o;
+                InsertOrderedHandle(handle);
+            }
             CurrentObject = handle;
+            MarkRetainedMutation();
             return o;
         }
     }
@@ -187,6 +212,31 @@ public sealed class GfxState
     public void SetDefaultObjectSlot(int slot)
     {
         lock (_lock) DefaultObjectSlot = slot;
+    }
+
+    public void SetObjectAnchor(long handle, (long X, long Y, long Z) anchor)
+    {
+        lock (_lock) GetOrCreate(handle).V18 = anchor;
+    }
+
+    public void SetObjectPosition(long handle, (long X, long Y, long Z) position)
+    {
+        lock (_lock) GetOrCreate(handle).V24 = position;
+    }
+
+    public void SetObjectField64(long handle, long value)
+    {
+        lock (_lock) GetOrCreate(handle).Field64 = value;
+    }
+
+    public void SetObjectFields68And6c(long handle, long value68, long value6c)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.Field68 = value68;
+            o.Field6c = value6c;
+        }
     }
 
     /// <summary>Op 0x229: reset the embedded range transform, select [first, first+count), and set its
@@ -198,6 +248,7 @@ public sealed class GfxState
             _rangeTransformFirst = first;
             _rangeTransformCount = System.Math.Max(0, count);
             _rangeTransform = new GfxObject { V18 = anchor };
+            MarkRetainedMutation();
         }
     }
 
@@ -205,13 +256,20 @@ public sealed class GfxState
     public void SetRangeScaleCurrent((long X, long Y, long Z) percent)
     {
         lock (_lock)
+        {
             _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+            MarkRetainedMutation();
+        }
     }
 
     /// <summary>Op 0x22c: immediately replace the embedded range transform's current translation.</summary>
     public void SetRangeTranslationCurrent((long X, long Y, long Z) translation)
     {
-        lock (_lock) _rangeTransform.TranslationCurrent = translation;
+        lock (_lock)
+        {
+            _rangeTransform.TranslationCurrent = translation;
+            MarkRetainedMutation();
+        }
     }
 
     /// <summary>Op 0x22d: arm the range transform's delayed one-shot scale target.</summary>
@@ -224,6 +282,7 @@ public sealed class GfxState
             _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
             _rangeTransform.ScaleEnabled = durationMs > 0;
             _rangeTransform.OneShotStartMs = -1;
+            MarkRetainedMutation();
         }
     }
 
@@ -233,6 +292,7 @@ public sealed class GfxState
         lock (_lock)
         {
             if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
+            bool destinationIsNew = !_objects.ContainsKey(destinationHandle);
             _objects[destinationHandle] = new GfxObject
             {
                 V18 = s.V18, V24 = s.V24, V16c = s.V16c,
@@ -258,7 +318,9 @@ public sealed class GfxState
                 RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
                 RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
             };
+            if (destinationIsNew) InsertOrderedHandle(destinationHandle);
             CurrentObject = destinationHandle;
+            MarkRetainedMutation();
             return true;
         }
     }
@@ -280,7 +342,10 @@ public sealed class GfxState
     {
         lock (_lock)
             if (_objects.TryGetValue(handle, out var obj) && obj.SourceSlot == fromSlot)
+            {
                 obj.SourceSlot = toSlot;
+                MarkRetainedMutation();
+            }
     }
     public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
 
@@ -288,7 +353,12 @@ public sealed class GfxState
     {
         lock (_lock)   // re-entrant: EraseRange already holds _lock
         {
-            _objects.Remove(handle);
+            if (_objects.Remove(handle))
+            {
+                int index = _orderedObjectHandles.BinarySearch(handle);
+                if (index >= 0) _orderedObjectHandles.RemoveAt(index);
+                MarkRetainedMutation();
+            }
         }
     }
 
@@ -312,7 +382,9 @@ public sealed class GfxState
         lock (_lock)
         {
             _objects.Clear();
+            _orderedObjectHandles.Clear();
             CurrentObject = 0;
+            MarkRetainedMutation();
         }
     }
 
@@ -324,6 +396,7 @@ public sealed class GfxState
         lock (_lock)
         {
             _objects.Clear();
+            _orderedObjectHandles.Clear();
             _fieldTable.Clear();
             _surfaces.Clear();
             _createdSurfaces.Clear();
@@ -339,6 +412,9 @@ public sealed class GfxState
             AnimationServiceFlags = 0;
             PreviousFrameTimeMilliseconds = 0;
             CurrentFrameTimeMilliseconds = 0;
+            _previousFrameTimeMs = 0;
+            _currentFrameTimeMs = 0;
+            MarkRetainedMutation();
         }
     }
 
@@ -360,6 +436,7 @@ public sealed class GfxState
             _surfaces[slot] = (resId, colorKey);
             _createdSurfaces.Remove(slot);
             _movieStopTimesMs.Remove(slot);
+            MarkRetainedMutation();
         }
     }
 
@@ -399,6 +476,7 @@ public sealed class GfxState
             }
             if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
                 CurrentRenderTargetSlot = -1;
+            MarkRetainedMutation();
         }
     }
 
@@ -498,6 +576,7 @@ public sealed class GfxState
             _surfaces[slot] = (0, -1); // create-texture: real mutable pixels, no asset id or color key
             _createdSurfaces.Add(slot);
             _movieStopTimesMs.Remove(slot);
+            MarkRetainedMutation();
         }
     }
 
@@ -509,6 +588,7 @@ public sealed class GfxState
             _createdSurfaces.Remove(slot);
             _movieStopTimesMs.Remove(slot);
             _surfaceTransitions.Remove(slot);
+            MarkRetainedMutation();
         }
     }
 
@@ -526,6 +606,7 @@ public sealed class GfxState
                 RangeBStart = rangeBStart, RangeBCount = System.Math.Max(0, rangeBCount),
                 DelayMs = System.Math.Max(0, delayMs), DurationMs = System.Math.Max(0, durationMs),
             };
+            MarkRetainedMutation();
         }
     }
 
@@ -684,6 +765,7 @@ public sealed class GfxState
             int completed = 0;
             foreach (var t in _surfaceTransitions.Values)
                 if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+            if (completed > 0) MarkRetainedMutation();
             return completed;
         }
     }
@@ -883,7 +965,12 @@ public sealed class GfxState
     /// <summary>Op 0x238: set its separate global animation-service duration and reset marker.</summary>
     public void SetAnimClock(long durationTicks)
     {
-        lock (_lock) { AnimClockDurationTicks = durationTicks; AnimClockGeneration++; }
+        lock (_lock)
+        {
+            AnimClockDurationTicks = durationTicks;
+            AnimClockGeneration++;
+            MarkRetainedMutation();
+        }
     }
 
     public void SetAnimationServiceFlags(long flags)
@@ -895,6 +982,8 @@ public sealed class GfxState
     {
         lock (_lock)
         {
+            _previousFrameTimeMs = _currentFrameTimeMs;
+            _currentFrameTimeMs = nowMilliseconds;
             PreviousFrameTimeMilliseconds = CurrentFrameTimeMilliseconds;
             CurrentFrameTimeMilliseconds = unchecked((uint)nowMilliseconds);
         }
@@ -910,7 +999,63 @@ public sealed class GfxState
             ForceCompleteOneShotChannels();
             AnimClockDurationTicks = 0;
             AnimClockGeneration++;
+            MarkRetainedMutation();
         }
+    }
+
+    /// <summary>Sample the shared native frame clock and report why the retained scene needs publishing.
+    /// Continuous channels remain frame-driven; op-0x231 spritesheets become dirty only when the shared
+    /// previous/current samples select different cells. Retained VM writes are published exactly once.</summary>
+    public GfxPresentationReason ConsumePresentationReasons(long nowMs)
+    {
+        lock (_lock)
+        {
+            _previousFrameTimeMs = _currentFrameTimeMs;
+            _currentFrameTimeMs = nowMs;
+            PreviousFrameTimeMilliseconds = unchecked((uint)_previousFrameTimeMs);
+            CurrentFrameTimeMilliseconds = unchecked((uint)_currentFrameTimeMs);
+
+            GfxPresentationReason reasons = GfxPresentationReason.None;
+            if (_publishedMutationGeneration != _mutationGeneration)
+            {
+                _publishedMutationGeneration = _mutationGeneration;
+                reasons |= GfxPresentationReason.RetainedMutation;
+            }
+
+            if (_surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
+                _rangeTransform.TranslationEnabled ||
+                _objects.Values.Any(o => o.Visible &&
+                    (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                     o.TranslationEnabled ||
+                     (o.ColorAnim && o.ColorPeriod > 0) ||
+                     (o.RotationEnabled && o.RotationPeriodMs > 0))))
+                reasons |= GfxPresentationReason.ContinuousChannel;
+
+            foreach (var o in _objects.Values)
+            {
+                if (!o.Visible || !o.SrcAnim || o.SrcPeriod <= 0 || o.SrcFrameCount < 1) continue;
+                if (o.SrcStart < 0)
+                {
+                    // Prototype clones made before first publication all enter here in the same shared sample,
+                    // reproducing FIELD's native phase lock.
+                    o.SrcStart = nowMs;
+                    continue;
+                }
+                if (SourceCellAt(o, _previousFrameTimeMs) != SourceCellAt(o, _currentFrameTimeMs))
+                {
+                    reasons |= GfxPresentationReason.DiscreteSourceCell;
+                    break;
+                }
+            }
+            return reasons;
+        }
+    }
+
+    private static long SourceCellAt(GfxObject o, long nowMs)
+    {
+        long elapsed = System.Math.Max(0, nowMs - o.SrcStart);
+        return elapsed / o.SrcPeriod % o.SrcFrameCount;
     }
 
     /// <summary>Back-compat: snapshot with no animation clock (nowMs = 0) — deterministic, for headless
@@ -925,10 +1070,22 @@ public sealed class GfxState
     /// alpha/tint. Channel Start fields seed to nowMs on first sight.</summary>
     public IReadOnlyList<RenderObject> SnapshotVisibleObjects(long nowMs)
     {
+        var list = new List<RenderObject>();
+        SnapshotVisibleObjects(nowMs, list);
+        return list;
+    }
+
+    /// <summary>Fill a caller-owned snapshot buffer. The Godot compositor reuses one list so its backing
+    /// array survives across frames; callers that need an independently retained snapshot should use the
+    /// returning overload.</summary>
+    public void SnapshotVisibleObjects(long nowMs, List<RenderObject> list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
         lock (_lock)
         {
-            var list = new List<RenderObject>();
+            list.Clear();
             Affine2D? rangeAffine = null;
+            bool rangeTimeVarying = false;
             if (_rangeTransformCount > 0)
             {
                 var r = _rangeTransform;
@@ -944,15 +1101,16 @@ public sealed class GfxState
                     ref r.TranslationEnabled, nowMs);
                 if (!r.ScaleEnabled && !r.RotationChannelEnabled && !r.TranslationEnabled)
                     r.OneShotStartMs = -1;
+                rangeTimeVarying = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
                 rangeAffine = Transform2DMath.Build(new TransformState(
                     rangeScale.X, rangeScale.Y, rangeScale.Z,
                     rangeTranslation.X, rangeTranslation.Y, rangeTranslation.Z,
                     r.V18.X, r.V18.Y, r.V18.Z,
                     rangeRotation.X, rangeRotation.Y, rangeRotation.Z, rangeRotation.Angle));
             }
-            foreach (var kv in _objects.OrderBy(k => k.Key))
+            foreach (long handle in _orderedObjectHandles)
             {
-                var o = kv.Value;
+                var o = _objects[handle];
                 if (!o.Visible) continue;
                 bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
                                   o.RotationChannelEnabled || o.TranslationEnabled;
@@ -1064,9 +1222,17 @@ public sealed class GfxState
                 SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
                     ? SampleTransition(st, nowMs) : null;
                 Affine2D? objectRangeTransform = rangeAffine is { } ra &&
-                    kv.Key >= _rangeTransformFirst && kv.Key - _rangeTransformFirst < _rangeTransformCount
+                    handle >= _rangeTransformFirst && handle - _rangeTransformFirst < _rangeTransformCount
                     ? ra : null;
-                list.Add(new RenderObject(kv.Key, resId, ck, srcX, srcY, w, h,
+                bool timeVarying =
+                    o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                    o.TranslationEnabled ||
+                    (o.SrcAnim && o.SrcPeriod > 0) ||
+                    (o.ColorAnim && o.ColorPeriod > 0) ||
+                    (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                    transition is { Progress: < 1.0 } ||
+                    (objectRangeTransform != null && rangeTimeVarying);
+                list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new TransformState(scale.X, scale.Y, scale.Z,
                                                              translation.X, translation.Y, translation.Z,
@@ -1076,10 +1242,15 @@ public sealed class GfxState
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
                                                                  o.RotationAxis.Z, cycleAngle),
                                           alpha, tint, strength, blend, multiplyTint, transition,
-                                          colorTransition, objectRangeTransform));
+                                          colorTransition, objectRangeTransform, timeVarying));
             }
-            return list;
         }
+    }
+
+    private void InsertOrderedHandle(long handle)
+    {
+        int index = _orderedObjectHandles.BinarySearch(handle);
+        if (index < 0) _orderedObjectHandles.Insert(~index, handle);
     }
 
     private static (long Packed, ColorTransitionState State) SampleOneShotColor(GfxObject o, long nowMs)
