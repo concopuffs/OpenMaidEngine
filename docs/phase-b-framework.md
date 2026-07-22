@@ -577,12 +577,14 @@ resolution; VM surface state and Godot caches retain the full selector. Focused 
 texture/voice ids and append-pack identity; 302 engine tests, a zero-warning Godot build, and threaded
 selftest pass. Manual combat acceptance confirms the split: 400x400 MVB908 plays and completes, while
 280x352 MVB961/MVB238 resolve correctly but DirectShow rejects their graph connection with `0x80040217`.
-The user observed a stall after the sequence; failed movies are marked complete and the successful movie's
-stop log proves the shared movie wait resumed, but failed `0x23f` duration remains `-1` and the final stalled
-VM/service coordinate was not logged. **NEXT:** replace the decoder boundary with a software MPEG path that
-returns real duration/frames for 280x352 effects and regress failure as nonblocking. If the stall remains,
-capture it as a separate BTL timed-presentation issue. Preserve created destination dimensions and failed
-movie identity through the backend change.
+The user observed a stall after the sequence. Static BTL tracing proves failed `0x23f == -1` cannot create
+an infinite callback count: the total horizon starts at `base_time + 1000`, and the explicit post-callback
+loop polls `0x23a` until surfaces 7..10 are inactive. MVB908's stop log occurs after that loop. As a bounded
+safety correction, decoder failure now becomes an explicitly completed zero-duration effect, while started
+movies have a stop-time-based completion watchdog so a missing EOF cannot hold `0x21c` forever. **NEXT:**
+manually recheck the same exchange. If it still stalls, capture the VM/service coordinate after BTL cleanup
+as a separate timed-presentation issue; otherwise proceed to the software MPEG backend for real 280x352
+duration/frames. Preserve created destination dimensions and failed-movie identity through that backend change.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

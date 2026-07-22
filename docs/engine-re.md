@@ -1268,11 +1268,14 @@ initialization returns. It applies native seconds-to-milliseconds truncation and
 `IHost.PlayMovieToSurface` into a movie-surface record owned by `GfxState`. Decoder construction moved from
 the deferred Godot callback to the VM-side synchronous open boundary; the ready decoder is staged in a
 thread-safe pending registry and adopted by the main thread before frame sampling, preserving asynchronous
-presentation. `0x23f` silently returns -1 for an empty movie slot. If the movie record exists but DirectShow
-returned an error, non-finite value, or value outside native signed-32-bit range, the port emits
-`movie stop-time unavailable ...; returning -1` and returns -1. This is the chosen safe substitute for
-native's ignored-HRESULT/uninitialized-output edge case. A normal Game Start through SC0000 was manually
-validated without the warning, confirming that the installed movie's ordinary metadata path succeeds.
+presentation. `0x23f` silently returns -1 for an empty movie slot. Native ignores the HRESULT for a non-null
+movie's stop-time query and has no meaningful contract for the port-only case where the installed host
+decoder cannot construct a graph for a shipped asset. The port therefore models backend failure as an
+explicitly completed movie with stop time 0. This gives BTL an immediate-effect duration rather than feeding
+its timeline -1. Started decoders also have a duration-based completion watchdog (minimum five seconds,
+reported stop time plus two seconds, maximum five minutes; 30 seconds without timing) so missing EOF cannot
+hold the shared `0x21c` wait indefinitely. A normal Game Start through SC0000 was manually validated with
+ordinary positive timing.
 
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
 

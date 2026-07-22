@@ -1684,7 +1684,10 @@ public sealed class VirtualMachine
                 // The native CMovieToTexture renderer replaces the pixels of the already-created surface.
                 // Retain the same resource binding so the compositor resolves live movie frames for its objects.
                 Gfx.SetSurface(surfaceSlot, resourceId, 0);
-                Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs);
+                // Native never encounters a missing system decoder for shipped assets. If a host backend
+                // cannot initialize one, model the valid movie as completing immediately: BTL feeds this
+                // value into its effect timeline, where zero is a safe duration and -1 is not meaningful.
+                Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs ?? 0);
                 return pc + 1; // native cmd size 9 resumes at the next instruction; playback is asynchronous
             }
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----

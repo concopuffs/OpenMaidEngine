@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Text.Json;
@@ -56,6 +57,7 @@ public partial class Main : Godot.Control
     // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
+    private readonly System.Collections.Generic.HashSet<long> _movieCompletionNotified = new();
     private GodotTraceSink _trace = null!;
     private PageLocatorState _locator = null!;
     private bool _locatorHudVisible;
@@ -1190,7 +1192,6 @@ public partial class Main : Godot.Control
         catch (System.Exception e)
         {
             GD.Print($"movie decode failed {assetName}: {e.Message}");
-            _host.NotifyMovieCompleted(resourceId); // release a pending 0x21c boundary on deterministic load failure
             return false;
         }
     }
@@ -1202,6 +1203,7 @@ public partial class Main : Godot.Control
             if (!_pendingMovies.TryRemove(resourceId, out var movie)) continue;
             if (_movies.Remove(resourceId, out var prior)) prior.Decoder.Dispose();
             _movies[resourceId] = movie;
+            _movieCompletionNotified.Remove(resourceId);
             GD.Print($"movie started {movie.Name} ({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS)");
         }
     }
@@ -1217,7 +1219,14 @@ public partial class Main : Godot.Control
                 if (_movieFrameSeen.Add(resourceId))
                     GD.Print($"movie first frame {movie.Name}: {frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
             }
-            if (movie.Decoder.IsCompleted) _host.NotifyMovieCompleted(resourceId);
+            bool watchdogExpired = Stopwatch.GetElapsedTime(movie.StartedAtTimestamp).TotalMilliseconds
+                                   >= movie.WatchdogMs;
+            if ((movie.Decoder.IsCompleted || watchdogExpired) && _movieCompletionNotified.Add(resourceId))
+            {
+                if (watchdogExpired && !movie.Decoder.IsCompleted)
+                    GD.Print($"movie completion watchdog {movie.Name}: forcing completion after {movie.WatchdogMs} ms");
+                _host.NotifyMovieCompleted(resourceId);
+            }
         }
     }
 
@@ -1230,9 +1239,18 @@ public partial class Main : Godot.Control
             GD.Print($"movie stopped {movie.Name} at render frame {_timelineFrame}");
         }
         _movieFrameSeen.Remove(resourceId);
+        _movieCompletionNotified.Remove(resourceId);
     }
 
-    private sealed record MovieRuntime(string Name, int AssetId, DirectShowMovieDecoder Decoder);
+    private sealed record MovieRuntime(string Name, int AssetId, DirectShowMovieDecoder Decoder,
+                                       long StartedAtTimestamp, long WatchdogMs)
+    {
+        public MovieRuntime(string name, int assetId, DirectShowMovieDecoder decoder)
+            : this(name, assetId, decoder, Stopwatch.GetTimestamp(),
+                   decoder.StopTimeMs is >= 0 and var stopTime
+                       ? System.Math.Clamp(stopTime + 2000, 5000, 300000)
+                       : 30000) { }
+    }
 
     public void AppendLine(string text) => _text.Text += text + "\n";
     public void PageBreak()

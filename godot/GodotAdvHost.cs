@@ -897,8 +897,9 @@ public sealed class GodotAdvHost : IHost
         string scene = CurrentScene;
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
-        return StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                          out long? stopTimeMs) ? stopTimeMs : null;
+        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
+                   out long? stopTimeMs);
+        return stopTimeMs ?? 0;
     }
 
     public bool IsMovieSurfaceActive(int surfaceSlot)
@@ -972,7 +973,14 @@ public sealed class GodotAdvHost : IHost
                 ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
-            return _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.PackedId, out stopTimeMs);
+            bool started = _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.PackedId,
+                                              out stopTimeMs);
+            if (!started)
+            {
+                stopTimeMs = 0;
+                NotifyMovieCompleted(resourceId);
+            }
+            return started;
         }
         catch (System.Exception e)
         {
@@ -984,6 +992,8 @@ public sealed class GodotAdvHost : IHost
                 _completedMovies.Remove(resourceId);
             }
             _slotDims.Remove(surfaceSlot);
+            stopTimeMs = 0;
+            NotifyMovieCompleted(resourceId);
             Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
         }

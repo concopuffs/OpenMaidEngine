@@ -171,13 +171,14 @@ public class MovieOpcodeTests
     }
 
     [Fact]
-    public void QueryMovieStopTimeWarnsAndReturnsMinusOneWhenMetadataIsUnavailable()
+    public void LoadedMovieWithoutBackendMetadataUsesImmediateZeroDuration()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "MISSING-MOVIE-TIME", new List<(int, Operand[])>
         {
             (0x236, new[] { new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2), new Operand(0, 0) }),
             (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
+            (0x23a, new[] { new Operand(3, 0x1235), new Operand(0, 5) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var host = new RecordingHost();
@@ -185,10 +186,11 @@ public class MovieOpcodeTests
 
         vm.Run();
 
-        Assert.Equal(-1, vm.Globals[0x1234]);
-        string warning = Assert.Single(host.Warnings);
-        Assert.Contains("movie stop-time unavailable MISSING-MOVIE-TIME@", warning);
-        Assert.Contains("surface=5; returning -1", warning);
+        Assert.Equal(0, vm.Globals[0x1234]);
+        Assert.True(vm.Gfx.TryGetMovieStopTime(5, out long? retained));
+        Assert.Equal(0, retained);
+        Assert.Equal(0, vm.Globals[0x1235]);
+        Assert.Empty(host.Warnings);
     }
 
     [Fact]

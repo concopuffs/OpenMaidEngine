@@ -343,19 +343,28 @@ bytes) and `MVB238` (`0x2b94`, 143,364 bytes) both declare 280x352 and fail at
 completion, and is stopped by script cleanup. This is decisive backend evidence rather than a resolver,
 VFS, signature, or corrupt-asset problem.
 
-The user nevertheless observed the combat presentation stall after that sequence. The existing failure
-path calls `NotifyMovieCompleted` immediately, and the successful `movie stopped MVB908` line proves the
-shared `0x21c` movie wait reached completion at least for the logged sequence. The log contains no VM offset
-or transition-state record after cleanup, so it does not yet prove that DirectShow itself owns the final
-stall. One remaining non-native input is concrete: failed graphs make `0x23f` return `-1`, which BTL stores
-in its per-effect duration table at `0x2b31`; a real fallback decoder must instead supply duration and normal
-completion. If the stall survives that backend correction, capture the VM/service boundary at the stall and
-treat it as a separate BTL timed-presentation bug.
+The user nevertheless observed the combat presentation stall after that sequence. Static BTL tracing rules
+out `0x23f == -1` as an infinite-loop mechanism by itself. `local 0x44`, the total effect horizon, is first
+set to `base_time + 1000` at `0x2230`; each effect can only extend that maximum with
+`effect_start + duration` at `0x2b64..0x2b8b`. A failed duration of -1 can understate that one extension but
+cannot make the callback count negative. After callbacks, `0x2492..0x2515` independently scans movie
+surfaces 7..10 through `0x23a`, sleeping 16 ms only while one reports active. The successful
+`movie stopped MVB908` line is emitted by the subsequent `0x2518` cleanup, proving that explicit movie wait
+exited in the logged run. The final stall therefore was not localized; it may be after movie cleanup.
+
+The port now nevertheless makes decoder failure safe and deterministic. A valid `0x236` movie whose host
+backend cannot initialize is marked completed explicitly and receives stop time 0, meaning an immediate
+effect, rather than the former diagnostic -1. Empty movie slots retain native `0x23f == -1`. Successfully
+started decoders also carry a completion watchdog: the larger of five seconds or reported stop time plus
+two seconds (capped at five minutes), with a 30-second default when timing is unavailable. Expiry forces the
+same completed state so a backend that starts but never signals EOF cannot hold `0x21c` indefinitely. If the
+reported combat stall survives this guard, capture the VM/service coordinate after `0x2518` and treat it as
+a separate BTL timed-presentation bug.
 
 The remaining implementation boundary is the already-planned decoder interface/factory plus a software
 MPEG backend that handles the installed non-16-aligned effects, and preservation of the destination
 surface's created dimensions instead of replacing every movie surface with the SC0000-specific 800x600
-value. Failure must remain nonblocking and suppress bogus still-AGF fallback. Regressions must cover at
+value. Failure is now nonblocking and suppresses bogus still-AGF fallback. Regressions must cover at
 least a 280x352 effect (`MVB001`), a 400x400 effect (`MVB914`), immediate `0x23f` stop time, RGBA frame
 publication, completion, failure completion, and release.
 
