@@ -31,11 +31,12 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x46d14` | `query_table_46d14` | `void*` | stride-0x14 table read by op 0x216 |
 | `0x50ba4` | `gfx_render_target_table` | `void*` | retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d |
 | `0x51b44` | `gfx_current_render_target` | `int` | retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer |
-| `0x51b64` | `frame_timer` | `int` | frame timer at retained_gfx_manager+0xb550; present updates 0x51b64/0x51b68 and object animation samples it |
-| `0x51b6c` | `gfx_dirty_a` | `int` | retained_gfx_manager+0xb558 redraw-dirty flag; active finite object channels set it even when detached by 0x242; op 0x1f6 clears it |
+| `0x51b64` | `frame_timer_current` | `int` | current shared millisecond presentation timestamp at retained_gfx_manager+0xb550; active outer-engine ticks and op 0x23c sample timeGetTime, and every retained animation channel samples it |
+| `0x51b68` | `frame_timer_previous` | `int` | previous shared presentation timestamp at retained_gfx_manager+0xb554; shifted from current before each new sample, and op 0x231 compares current/previous source cells to raise redraw dirty only at cell changes |
+| `0x51b6c` | `gfx_dirty_a` | `int` | retained_gfx_manager+0xb558 redraw-dirty flag; retained mutations and continuous channels set it, while op 0x231 sets it only when the sampled source cell differs across the shared current/previous frame timestamps; op 0x1f6 clears it |
 | `0x51b70` | `gfx_force_complete` | `int` | retained_gfx_manager+0xb55c requests forced completion of one-shot channels; op 0x1f6 clears it |
 | `0x51b74` | `gfx_dirty_b` | `int` | retained_gfx_manager+0xb560 blocking-presentation dirty flag; active finite object channels set it unless obj+0x2d0 bit 0 detaches them |
-| `0x51b78` | `anim_clock_elapsed` | `int` | global anim clock elapsed at retained_gfx_manager+0xb564; op 0x238 and object reset 0x1f6 zero it |
+| `0x51b78` | `anim_clock_start` | `int` | start timestamp for the separate finite-animation service window at retained_gfx_manager+0xb564; seeded from frame_timer_current by gfx_animation_service_poll, while op 0x238, op 0x243, and object reset 0x1f6 zero it |
 | `0x51b7c` | `anim_clock_duration` | `int` | global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it |
 | `0x51b80` | `gfx_animation_service_flags` | `uint` | retained_gfx_manager+0xb56c service flags; bit 1 suppresses op 0x243 force-complete/clock-reset request |
 | `0x52bd4` | `surfaces` | `void*` | surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate |

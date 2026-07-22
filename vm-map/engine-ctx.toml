@@ -129,14 +129,19 @@ type = "void*"
 note = "retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d"
 [[field]]
 offset = 0x51b64
-name = "frame_timer"
+name = "frame_timer_current"
 type = "int"
-note = "frame timer at retained_gfx_manager+0xb550; present updates 0x51b64/0x51b68 and object animation samples it"
+note = "current shared millisecond presentation timestamp at retained_gfx_manager+0xb550; active outer-engine ticks and op 0x23c sample timeGetTime, and every retained animation channel samples it"
+[[field]]
+offset = 0x51b68
+name = "frame_timer_previous"
+type = "int"
+note = "previous shared presentation timestamp at retained_gfx_manager+0xb554; shifted from current before each new sample, and op 0x231 compares current/previous source cells to raise redraw dirty only at cell changes"
 [[field]]
 offset = 0x51b78
-name = "anim_clock_elapsed"
+name = "anim_clock_start"
 type = "int"
-note = "global anim clock elapsed at retained_gfx_manager+0xb564; op 0x238 and object reset 0x1f6 zero it"
+note = "start timestamp for the separate finite-animation service window at retained_gfx_manager+0xb564; seeded from frame_timer_current by gfx_animation_service_poll, while op 0x238, op 0x243, and object reset 0x1f6 zero it"
 [[field]]
 offset = 0x51b7c
 name = "anim_clock_duration"
@@ -151,7 +156,7 @@ note = "retained_gfx_manager+0xb530 selected surface slot; -1 denotes device bac
 offset = 0x51b6c
 name = "gfx_dirty_a"
 type = "int"
-note = "retained_gfx_manager+0xb558 redraw-dirty flag; active finite object channels set it even when detached by 0x242; op 0x1f6 clears it"
+note = "retained_gfx_manager+0xb558 redraw-dirty flag; retained mutations and continuous channels set it, while op 0x231 sets it only when the sampled source cell differs across the shared current/previous frame timestamps; op 0x1f6 clears it"
 [[field]]
 offset = 0x51b70
 name = "gfx_force_complete"

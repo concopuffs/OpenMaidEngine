@@ -2270,3 +2270,205 @@ Godot selftest.
 produced no `movie stop-time unavailable` warning, confirming the ordinary DirectShow timing handoff.
 
 **Next:** continue with the next concrete discrepancy reached by manual testing.
+
+## Performance tuning sidebar (started 2026-07-22)
+
+This bounded effort addresses frame-time collapse during simultaneous retained effects (first observed in
+SC0000 immediately before the CHAPTER movie) and in unit-heavy dungeon presentation. Earlier work already
+removed redraws during static waits, batched the CPU backbuffer, cached decoded source pixels, and added an
+integer-translation raster path. The remaining architecture still rebuilds an 800x600 RGBA backbuffer in
+C# and uploads the complete image whenever any visual channel is active. Effect bursts multiply full-screen
+and general-affine pixel work; a single ambient spritesheet channel also keeps that path active every Godot
+frame even when its discrete source cell has not changed.
+
+The effort will keep `GfxState` as the backend-neutral AGE truth and retain the current software renderer as
+a fidelity oracle. Optimization claims require repeatable frame-time evidence from the real interactive
+path, not screenshot-sequence runs whose PNG I/O dominates timing.
+
+### Target workloads and success measures
+
+Use three fixed workloads: a static ADV wait (control), the SC0000 pre-CHAPTER burst, and the
+DEBUGMAP/FIELD camera-pan stress case as the current dungeon proxy. Save loading is not yet available, so
+reaching a reproducibly unit-heavy story dungeon is disproportionate to this sidebar; add that validation
+later when save loading or progression makes it practical. Capture the exact script/offset alongside each
+frame. Compare equivalent Release/windowed runs by median, p95, and p99 frame time, recomposition time,
+raster time, upload time, allocation rate, visible/time-varying object count, raster path, and candidate
+pixel count. Track both presentation cadence and the cost of each recomposed frame: reducing how often an
+unchanged discrete animation is drawn must not disguise an over-budget frame when it does change. The
+immediate target is sustained 60 FPS where the native presentation has no intentional lower cadence; p95
+must remain under 16.67 ms on the development machine, with no screenshot or behavioral regression at the
+sampled coordinates.
+
+### Execution slices
+
+- [x] **P0 - frame/compositor performance log.** Add an opt-in `--perf-log <csv>` diagnostic. Record bounded,
+  buffered per-frame phase timings, compositor workload counters, managed allocations/GC deltas, and the
+  current VM script/offset/opcode. Document the schema and validate the writer independently of Godot.
+- [x] **P1 - capture and attribution.** Record the static ADV control, SC0000 burst, and DEBUGMAP/FIELD
+  dungeon proxy without `--gfx-log`, `--timeline-log`, or frame PNG capture. Use controlled compose/upload
+  ablations only if the phase timings do not isolate the cost. Commit the baseline percentiles and exact
+  canonical runtime coordinates here. A real unit-heavy story dungeon is deferred until it is practical
+  to reach reproducibly.
+- [ ] **P2 - fidelity-neutral CPU wins.** Remove normal-path diagnostic allocation and refine the ambiguous
+  presentation/affine counters, then avoid recomposition between discrete spritesheet cell changes and
+  benchmark translation, affine, and safe opaque raster fast paths. Land only changes with measured wins
+  and focused differential raster/presentation coverage.
+- [ ] **P3 - GPU retained-renderer prototype.** Upload decoded/color-key texture variants once and mirror
+  ordinary retained objects into GPU-native Godot drawing while preserving handle z-order, atlas regions,
+  transforms, opacity/tint, and blend mode. Begin with dungeon sprites and ordinary translated textures;
+  compare selected frames against the software oracle behind a backend switch.
+- [ ] **P4 - GPU special paths and backend decision.** Extend the prototype through affine effects,
+  additive/tint channels, created surfaces, transitions, and movie surfaces. Adopt it as the default only
+  after target-workload frame evidence and visual equivalence; otherwise retain documented CPU fallbacks
+  for unsupported paths.
+
+Do not optimize VM dispatch or investigate GPU stalls without evidence from P0/P1. `--trace-histogram`
+remains the opcode-frequency tool; it is not a frame profiler. Godot's generic frame monitor is useful
+corroboration, but the project log owns the AGE-object and raster-work attribution required by these slices.
+
+### P0 frame/compositor performance log implemented (2026-07-22)
+
+Godot now accepts `--perf-log <csv>`. The buffered writer records one row per `_Process` frame with the
+VM script/offset/opcode at frame entry and the actual presentation boundary, Godot delta, measured main-loop
+phases, managed allocations/GC deltas, and
+the retained compositor's clear/snapshot/resolve/source-prep/raster/SetData/texture-upload split. Its workload counters
+include actual object/layer visits, sampled time-varying objects, transition and blend categories, integer
+versus affine paths, dynamic sources, source-pixel area, and clipped destination bounding-box candidates.
+The writer and affine clipping calculation are Godot-independent and directly unit tested. `RenderObject`
+now exposes whether its sampled object still has an active finite, spritesheet, color, rotation, surface, or
+range-transform channel; this is observation only and does not alter scheduling.
+
+The threaded selftest wrote 101 coordinate-bearing rows and remained `SELFTEST OK`. A five-frame headless
+SC0000 schema smoke used isolated output paths and exercised one real recomposition, producing populated
+snapshot/resolve/object/skip counters; its dummy-renderer viewport warnings are why headless numbers are not
+performance evidence. Validation: 337 engine tests pass, including the new CSV/clipping and time-varying
+object regressions, and the Godot build has zero warnings/errors. **Next:** P1 must capture windowed, speed-1
+control/pre-CHAPTER/quiet-dungeon/unit-heavy-dungeon runs without the high-volume diagnostics, then record
+their exact coordinates and percentile attribution here before selecting P2 changes.
+
+For the duration of P1/P2 collection, `run-godot.cmd` now opts into timestamped performance capture on every
+windowed run. The launcher creates `build/perf/run-yyyyMMdd-HHmmss-fff.csv` and prints its path, allowing a
+normal play session to cover multiple reported passages without restarting solely for instrumentation.
+Direct PowerShell launches remain opt-in through `-PerfLog`, and selftests remain unprofiled. Remove this
+temporary batch-file default when the performance effort closes.
+
+### P1 capture 1 - SC0000 through the pre-CHAPTER burst (2026-07-22)
+
+`build/perf/run-20260722-105708-610.csv` is the first controlled interactive capture: 3,307 frames over
+55.1 seconds, including 2,836 SC0000 frames and 1,273 SC0000 recompositions. Static SC0000 frames establish
+the control inside the same run: across 1,563 non-recomposited frames, measured main-loop p50/p95/p99 was
+0.014/0.024/0.032 ms. The active renderer is the problem: SC0000 recompositions measured main-loop
+p50/p95/p99 21.80/55.35/82.69 ms; raster p95 was 54.57 ms, while snapshot p95 was 0.017 ms,
+`Image.SetData` p95 0.456 ms, and texture upload p95 0.215 ms.
+
+The reported simultaneous-effect lag is one contiguous 83-frame plateau (frames 1618-1700, virtual time
+20,727-26,306 ms) parked at presentation boundary `SC0000@0x123de` (`0x21c`). Its main-loop p50/p95/max was
+64.28/87.82/91.54 ms, equivalent to roughly 15.6 FPS at the median and 11.4 FPS at p95. Rasterization was
+98.4% of mean main-loop time. The workload grows from 8 to 12 drawn layers and averages 3.85 million clipped
+candidate pixels per frame (4.98 million maximum), with as many as three general-affine layers, five
+additive layers, and ten viewport-covering layers. The worst frame spent 90.82 of 91.54 ms rasterizing
+11 layers; snapshot, resolution, source prep, SetData, and upload together remained below one millisecond.
+
+A secondary lead appears outside the severe plateau: recomposited allocation p95 is 1,961,448 bytes and
+source-prep p95 is 2.81 ms, with 0.991 correlation between the two. The size closely matches one 800x600
+RGBA clone, and the affected rows have three dynamic layers; this is strong evidence for the existing
+dynamic-color-key clone path, but it is not the cause of the 80-90 ms plateau (whose source prep is about
+0.003 ms). Treat clone removal as a later independent P2 win.
+
+This capture confirms the CPU rasterizer as the SC0000 bottleneck and makes upload/snapshot optimization a
+low priority. P1 remains open until quiet- and unit-heavy-dungeon captures establish whether discrete
+spritesheet scheduling is enough for dungeons or whether their pixel workload independently requires the
+GPU retained-renderer path.
+
+### P1 capture 2 - DEBUGMAP/FIELD camera pan (2026-07-22)
+
+`build/perf/run-20260722-112100-189.csv` is a 1,381-frame interactive DEBUGMAP stress run. The map portion
+contains 800 recomposited frames over 39.8 seconds. It measured main-loop p50/p95/p99
+49.17/64.59/68.39 ms and raster p50/p95 45.58/59.36 ms. Snapshot, resolution, source preparation,
+`Image.SetData`, and texture upload again remain small in steady state; raster time correlates 0.987 with
+main-loop time. The dominant idle/pan boundary is `FIELD.BIN@0x1029` (`0xc8`): 438 samples average roughly
+962 visited objects, 961 submitted layers, 51 time-varying objects, and 2.16 million clipped candidate
+pixels. Its main-loop p50/p95 is 49.05/59.03 ms.
+
+Camera position materially changes work rather than eliminating the bottleneck. Across representative
+50-frame windows, candidate pixels range from 1.12 to 3.10 million and average main-loop time from 28.1 to
+63.8 ms; candidate count correlates 0.858 with main time. Object count alone is not enough to explain the
+range. At the same approximately 962-object FIELD boundary, unusually light frames with 953 integer and
+only seven affine layers render 1.20 million candidates in about 10.3 ms, while typical frames with roughly
+432 integer and 526 affine layers render 1.6-2.5 million candidates in about 26-60 ms. General-affine pixel
+sampling is therefore a major dungeon cost in addition to the persistent layer traversal.
+
+The run exposes two independent secondary issues. Recomposited FIELD frames allocate about 3.59 MB at the
+median and trigger 32 gen-0, ten gen-1, and five gen-2 collections. The compositor currently formats a
+verbose outcome string for every visited object even when neither `--gfx-log` nor `--timeline-log` created
+the decisions dictionary; gating that diagnostic formatting is the first low-risk P2 allocation fix. One
+outlier (frame 1065) spends 37.99 ms resolving a resource and 48.69 ms rasterizing for a 90.53 ms total;
+the following steady frames return to raster dominance, so resource-resolution/GC stalls should be tracked
+separately from the continuous map cost.
+
+DEBUGMAP is sufficient as an intentionally heavy retained-map stress case: it confirms that discrete-cell
+scheduling can remove unnecessary frames from the 51 animated objects, but cannot make a recomposed frame
+with hundreds of mostly affine layers fit a 16.67 ms budget by itself. P2 should gate unused diagnostic
+strings, add discrete-cell scheduling, and benchmark affine/opaque fast paths. A representative real
+unit-heavy dungeon remains a later validation workload once save loading or progression makes it practical;
+DEBUGMAP is the accepted P1/P3 stress proxy for now.
+
+### Evidence-driven performance action plan (2026-07-22)
+
+The save-loading limitation makes DEBUGMAP/FIELD the accepted dungeon proxy for this effort, so P1 is
+closed. The SC0000 plateau and DEBUGMAP steady map load exercise complementary failure modes: SC0000 has
+few layers but extreme full-screen/additive pixel work, while DEBUGMAP has hundreds of retained layers,
+many sampled through the affine path, and discrete animation that currently requests a recomposition every
+Godot frame. Execute the following in order, retaining the software compositor as the pixel oracle.
+
+1. **P2a - remove diagnostic-only allocation from normal rendering.** Construct per-object outcome strings
+   and final `z` decision strings only when `--gfx-log` or `--timeline-log` actually supplied a decisions
+   dictionary. Preserve byte-for-byte diagnostic output when enabled. Re-run DEBUGMAP and require a large
+   reduction from its approximately 3.59 MB median allocation per recomposition without worsening raster
+   time; if less than 70% disappears, use an allocation trace to identify the remaining owners before
+   doing speculative collection tuning.
+2. **P2b - measure the two ambiguous dirty/raster categories.** Extend the low-overhead counters only as
+   needed to distinguish VM-requested, continuous-channel, and discrete-cell presentation, and to split
+   pure fractional translation from scale/rotation/general affine work. The current log proves that the
+   broad categories matter but cannot tell whether DEBUGMAP's roughly 526 apparent affine layers are
+   camera-induced fractional translations or genuine scale/rotation. Do not change sampling semantics on
+   that assumption alone.
+3. **P2c - reproduce the native shared dirty/cell cadence.** Native does not give each visible sprite a
+   host-frame redraw timer. One shared current/previous millisecond frame-time pair feeds every channel;
+   op `0x231` compares the source cell selected at those two samples and raises graphics dirty only when it
+   changes. Retained mutations and genuinely continuous channels still redraw as required, while an
+   opcode-`0xc8` poll iteration alone does not. Track retained mutation publication so FIELD's `sleep(1)`
+   input loop stops forcing unchanged compositions, and replace “any spritesheet is active” with shared
+   cell-change detection. FIELD's prototype `0x9c40` is configured once at 200 ms/four cells and cloned
+   before first presentation, so the unit family is phase-locked at 5 Hz rather than 51 independent
+   deadlines. Cover clone-before/after-first-sample, reconfiguration, differing periods, wraparound, and
+   exact boundary cases. The DEBUGMAP acceptance metric is recompositions per second and total delivered
+   frame time; the separately reported p50/p95 cost of frames that do recompose must remain visible.
+4. **P2d - turn translation-like affine work into a verified fast path.** If P2b confirms pure unit-matrix
+   fractional translations, implement the nearest-neighbor-equivalent translated raster path and prove it
+   byte-for-byte against the existing inverse-mapped oracle across positive/negative coordinates,
+   half-pixel boundaries, clipping, opacity/tint, and every blend mode. This is the highest-potential
+   DEBUGMAP per-compose CPU win because the existing translated loop is much cheaper than a general matrix
+   inverse and transform per destination pixel.
+5. **P2e - specialize the remaining hot pixel loops.** In descending evidence value, benchmark:
+   incremental inverse coordinates across an affine scanline; axis-aligned scale specialization; and
+   opaque/full-opacity/unmodulated translated row copies or alpha-run copies where source transparency
+   permits. Use randomized differential raster tests against the current implementation plus the SC0000
+   and DEBUGMAP captures. Address the dynamic color-key full-frame clone separately because it explains an
+   allocation/source-prep spike but neither primary raster plateau. Do not spend time on snapshot, clear,
+   `Image.SetData`, texture upload, VM dispatch, or parallel rasterization while their measured contribution is
+   small or a retained GPU renderer is the cleaner boundary.
+6. **P2 exit gate and P3 trigger.** After the safe CPU batch, repeat equivalent SC0000 and DEBUGMAP runs.
+   Report both end-to-end cadence and recomposed-frame p50/p95/p99. If either workload's required
+   recompositions remain above 16.67 ms p95, begin P3 rather than accumulating increasingly complex CPU
+   special cases. The expected P3 prototype mirrors ordinary translated/atlas dungeon objects into Godot
+   canvas items behind a backend switch, uploads decoded/color-key variants once, and updates retained
+   items only when their state changes. It must preserve handle order, transforms, tint/opacity, and blend
+   behavior and compare selected output against the software oracle before expanding to SC0000's affine,
+   additive, transition, created-surface, and movie special paths in P4.
+
+Each landed optimization gets a before/after row in this document with capture path, canonical runtime
+coordinate, p50/p95/p99, allocation, recomposition rate, and raster-work counters. Revert or leave behind a
+disabled experiment when it does not produce a repeatable real-path improvement. The immediate
+implementation slice is P2a followed by P2b; those make the next user capture cheaper and sufficiently
+specific to choose the correct P2c/P2d implementation without another story-progression dependency.

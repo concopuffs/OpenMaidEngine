@@ -701,6 +701,41 @@ both annotated) and grepping the SC0000 opening settles the animation model and 
 Op `0x234` is the independent rotation cycle above. Op `0x238` still configures the separate
 `ctx+0x51b78/+0x51b7c` animation service used by its own family.
 
+##### Shared frame clock and cyclic source-cell cadence (2026-07-22)
+
+The native scheduler confirms the shared-clock recollection, with one important distinction between a
+shared **timebase** and universal phase. `engine_main_tick_with_exception_policy@0x411840` samples
+`timeGetTime()` once per active outer presentation tick, first shifting retained-gfx manager current time
+`+0xb550` (`EngineCtx+0x51b64`) into previous time `+0xb554` (`EngineCtx+0x51b68`). Opcode `0x23c`
+explicitly performs the same shift/sample; it does not create another timer or impose a fixed frame rate.
+Every cyclic object channel reads that shared pair, but each channel owns a start timestamp and period in
+its retained object record. `gfx_animation_service_poll@0x407640` and op `0x238`'s
+manager `+0xb564/+0xb568` start/duration window are separate finite-animation service state, not the cyclic
+spritesheet clock.
+
+Op `0x231` is already natively cell-change-driven. `gfx_worker_anim_srcrect@0x47eec0` resets object start
+`+0x21c` and stores period `+0x230`, frame count `+0x238`, and columns `+0x23c`.
+`gfx_object_anim_interpolate@0x473ed0` seeds that start from the shared current timestamp on the first
+sample and selects `floor((current-start)/period) % frame_count`. It performs the same calculation with the
+shared previous timestamp and raises manager redraw-dirty `+0xb558` only when the selected cells differ.
+Other retained mutations raise dirty directly; continuously varying cyclic channels keep it raised. The
+outer loop renders only for retained dirty state or a new movie frame. Merely completing an opcode `0xc8`
+sleep/poll interval is not itself a native graphics-dirty request.
+
+FIELD's DEBUGMAP unit family is more tightly synchronized than the general model permits. At
+`FIELD@0x924a`, the script configures prototype handle `0x9c40` as `(period=200 ms, frames=4, columns=2)`.
+The following loop calls `DRAWCH`, whose `0x21d` clones that complete retained record from `0x9c40` to
+`0x9c40+entity_index`. Ordinary bytecode executes burst-fast and there is no render between prototype setup
+and those clones, so every copied start remains zero and their first render seeds the same shared timestamp.
+Those unit sprites are therefore phase-locked at one cell change every 200 ms (5 Hz), even though the
+engine generally permits different object-local starts and periods.
+
+**Port implication:** replace the current “any spritesheet is active” redraw predicate with native-style
+shared current/previous sampling and request a composition only when at least one visible sampled cell
+changes. The FIELD `sleep(1)` input-poll loop must also stop requesting a redraw when no retained mutation
+occurred. This is a fidelity correction as well as an optimization; it preserves phase-locking for cloned
+records and does not invent 51 independent timers.
+
 ##### `label_1235a` animation-section boundary (2026-07-10)
 
 The section helper computes the maximum configured duration and arms it with `0x238`, then reads
@@ -1061,7 +1096,7 @@ visible glow on the ordinary interactive path. This glow is a retained scaled/ro
 fade animates so smooth ramping could join slice A. Findings (Ghidra `gfx_object_anim_interpolate`
 `0x473ed0`, annotated+saved): the bit-2 anim family (op `0x234`) interpolates **5 independent sub-channels**
 (color `obj+0x240`/period `obj+0x220`, two matrices, rotation `0x168`=360°, src-rect scroll), each on the
-**global frame clock `retained-gfx owner+0xb550` (`EngineCtx+0x51b64`)** (advanced per present, NOT the
+**global frame clock `retained-gfx owner+0xb550` (`EngineCtx+0x51b64`)** (sampled by the active outer engine tick, NOT the
 op-`0x238` clock `ctx+0x51b7c`), and each
 **ping-pongs** (triangle wave, folded at period/2) — i.e. these are *oscillating/pulsing* effects, not
 one-shot fades. The `0x202`/`0x203` color (`obj+0x60` static / `obj+0x64` animated, sets

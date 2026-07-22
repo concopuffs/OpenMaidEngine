@@ -210,6 +210,27 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   `--scene SC0000 --boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 
+**Godot performance frame log:** `--perf-log <csv>` enables a buffered, diagnostic-only capture of the real
+Godot path. Each row carries VM `script`/`offset`/`opcode` at frame entry and again at the actual presentation
+boundary (`present_*`), Godot `delta_ms`, measured main-loop
+time, pulse/movie/UI time, and a compositor breakdown: recomposition, clear, retained snapshot, texture
+resolution/decode, color-key/source preparation, raster, `Image.SetData`, and `ImageTexture.Update`. Workload columns report transition
+state, retained object visits, time-varying object visits, drawn/fill/transition/skipped layers, integer/
+affine/singular raster paths, dynamic/opaque/alpha/additive layers, source pixels, clipped affine bounding-
+box candidate pixels, full-screen layers, main-thread managed allocations, and GC collection deltas. The
+writer replaces the target, buffers 120 rows between flushes, and prints its frame/recomposition counts on
+normal shutdown. Use a windowed Release-equivalent run at speed 1 for performance evidence; headless runs
+validate the schema only. Do not combine baseline captures with `--shot-sequence`, `--gfx-log`, or
+`--timeline-log`, whose diagnostics add substantial or differently shaped work. Example from `age-reimpl/`:
+`godot --path godot -- --scene SC0000 --boot --perf-log ../build/perf/sc0000.csv`.
+
+During the tracked performance-tuning effort, `run-godot.cmd` passes the launcher's `-PerfLog` switch by
+default. Every windowed batch-file launch creates `build/perf/run-yyyyMMdd-HHmmss-fff.csv` and prints the
+absolute target before Godot starts; normal shutdown flushes it and prints the captured frame/recomposition
+counts. This temporary batch-file default does not affect direct `run-godot.ps1` launches, whose `-PerfLog`
+switch remains explicit, and it does not add a log to `-SelfTest`. Remove the batch-file opt-in after the
+performance effort is accepted.
+
 **Godot debug scene launcher:** press **F4** while the natural boot is showing TITLE. TITLE's visible menu is
 a live 1 ms sleep/input-poll loop rather than an ADV `wait-for-input`; the launcher identifies that exact
 active child frame and returns it cooperatively at the next completed opcode boundary. The overlay enumerates
