@@ -54,58 +54,41 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    all 13206 `offset+size` fit inside their real `.ALF`; 837 name-matched files → 0 size mismatches.
    `files[]` preserves directory order (feeds step 2's order-correlation). Re-run:
    `py -3.11 -X utf8 tools/parse_sys4ini.py --check`. (Ref: asmodean's `exs4alf` / GARbro Eushully `ArcALF.cs`.)
-2. **Resolve `resId → asset file`.** **✅ SOLVED for scene-manifest references (2026-07-06);
-   system/global raw ids are a separate path identified 2026-07-10.**
+2. **Resolve `resource_id → asset file`.** **NATIVE RULE CONFIRMED IN GHIDRA (2026-07-21): resource
+   operands are universal packed SYS4INI/AAI ids. There is no scene-relative path or fallback.**
 
-   **The rule:** SYS4INI's file list is organized into **SECTIONS, one per scene** — each is a
-   `SCxxxx.BIN` script entry followed by that scene's **asset MANIFEST**: every asset it references,
-   across *all* archives and types (EV/BG/CS/AE graphics **and** OGG/WAV audio), interleaved in usage
-   order. `file_number` is the **0-based index within the section**. So:
+   `asset_catalog_parse_base_tables@0x44e7e0` creates one flat base entry array in serialized SYS4INI
+   order. `asset_open_indexed_entry@0x44f390` receives the operand unchanged. If its high byte is zero,
+   native bounds-checks and directly indexes that base array. Otherwise the signed high byte selects a
+   mounted AAI catalog and the low 24 bits index only that catalog. The selected record then follows exact
+   loose-basename-first, bounded-ALF-second opening. The opener receives no executing-script identity,
+   section base, or active manifest and contains no fallback branch.
 
-   > **`resId → files[ section_base(scene) + resId ]`**, where `section_base` = the start of the SYS4INI
-   > section containing the scene's `SCxxxx.BIN`.
+   This one contract is shared by script loading, `set-texture` (`0x1f9`), mode-1 texture load (`0x249`),
+   voice, SFX, cursor, and both movie paths. Type-specific facades should filter the selected packed record
+   after lookup, not reinterpret the numeric id. `play-bgm` remains the separate direct-name exception:
+   `BGM{id:03d}.OGG`.
 
-   The manifest rule holds first for `set-texture(resId)` and `play-voice(id)`. Non-SC frontend scripts
-   such as ROOM instead carry universal raw catalog ids, so both typed resolvers fall back to raw lookup
-   when the executing script has no SC section. **⚠ `play-bgm` is the EXCEPTION —
-   it does NOT use the manifest; it uses direct literal names `BGM{id:03d}.OGG` (see step 4, by-ear
-   corrected 2026-07-06).** **Tool:** `tools/resolve_asset.py --build` → `build/asset-sections.json`
-   (359 sections, 136 scenes); `resolve_asset.py <SCENE> [resId]` resolves. **Validated:** `file_number ==
-   position − section_base` for 12848/13206 files (97%); SC0000 resolves 17/17 across archives vs the Frida
-   capture (`0x25→EV052CA`, `0x36→BG030A` background, `0x6c→EM* effect`); 586/595 distinct captured loads
-   (all sections) satisfy `files[base+fn]==name`. This is the derivable rule that generalizes to any
-   AGE game with the same container — **the "scope" was just which SYS4INI section the scene lives in.**
-   (The old `play-bgm 5→BGM006` validation point was a mis-attribution — the real game plays BGM005.)
+   SC0010 provides the decisive static check that SC0000 could not because SC0000 begins at catalog zero.
+   SC0010 bytecode executes `set-texture 0x21`; raw entry `0x21` is `SO013A.AGF`, while adding SC0010's
+   catalog position `0x11e` lands on unrelated `COL0023.OGG`. Its first voices are `0x120`, `0x121`, and
+   `0x122`, which directly name raw `LILA1414.OGG`, `LILB0053.OGG`, and `LILC0054.OGG`. Their
+   `file_number` values 2/3/4 describe grouping inside the SC0010 run, but native bytecode already contains
+   the absolute indexes `0x11e + file_number`.
 
-   **System/global-id exception (identified 2026-07-10; implemented).** Some SYSTEM4 loads use
-   the SYS4INI record's universal `raw_index` directly, including the two `@` placeholder records, rather
-   than a scene-local manifest index. `SYSTEM4.BIN` writes `G[0x69b]=0x337e`, then
-   `set-texture(G[0x69b], slot=0x11)`. SYS4INI `raw_index 0x337e` is `DATA1/SO001.AGF`, the shared
-   800×300 RGBA system-chrome sheet. `ResourceMap.ResolveTexture` therefore tries the active script's
-   scene manifest first and then the distinct universal raw-id lookup; the scene-manifest rule above
-   remains correct for ordinary SC texture/voice ids. ROOM voice `0x3365`, for example, resolves as raw
-   `EUA0016.OGG`; treating it only as a ROOM-local id produces no asset because ROOM owns no SC range.
+   The former `files[section_base(scene)+resId]` model inverted that relationship. The 586/595 Frida
+   correlation and the strong `file_number == position - group_start` pattern remain useful evidence about
+   catalog construction/order, but they do not describe runtime resolution. SC0000 starting at zero hid
+   the mistake, while later large ids often fell outside the invented scene range and happened to reach the
+   port's raw fallback. Low raw ids used from later scripts can instead be silently misresolved today.
+   `tools/resolve_asset.py` and `build/asset-sections.json` are therefore correlation/manifest-inventory
+   diagnostics only; they must not drive runtime lookup.
 
-   **Explicit raw texture loader (identified and implemented 2026-07-21).** Opcode `0x249` is the
-   unambiguous packed raw-id texture path even while a scene section is active. It shares `0x1f9`'s surface
-   replacement, AGF decode, and RGB colorkey contract, but passes native surface mode 1 and does not apply
-   the executing frame's section base. FIELD uses `0x32da..0x32dd`, the universal SYS4INI indexes for
-   `SO005.AGF`, `SO007.AGF`, `SO008A.AGF`, and `SO007A.AGF`, to populate map-sheet surfaces `0x3e..0x41`.
-   The port therefore forwards those ids directly to `ResolveRawTexture`; it must not run them through
-   `ResolveTextureResourceId` first. Native mode 1 is a large-image wrapper which tiles the same decoded
-   logical pixels over ordinary child textures; it is not a different AGF/spritesheet interpretation or
-   blend rule. The port's contiguous CPU image is therefore equivalent for rendering purposes.
-
-   *How we got here (condensed):* first confirmed `resId == file_number` via Frida load-order correlation
-   for SC0000's opening, but `file_number` is not globally unique so a per-scene "scope" was needed. A long
-   hunt for the selector (thought it was native scene state; even tried reading `G[0x62424]` live — the
-   VM global memory is structured/packed, see `docs/global-memory-re.md`) missed the real structure until a
-   **full multi-archive capture** (user domain tip: DATA1 holds BG/CS/CB/CA/CP graphics by name prefix, not
-   just DATA2 EV CGs) revealed `file_number == SYS4INI position` inside per-scene sections. Superseded tools:
-   `tools/correlate_scope.py`, `vm0.py --settex` (VM set-texture trace; still useful, but vm0 diverges on
-   branchy non-opening scenes — use the C# VM to trace those). Runtime note for future work: the game is
-   **packed** (main VM logic in a per-run heap `r-x` region) and streams archives through a heap block-cache
-   via `ReadFile` (not mmap); the stable AGF decoder is `AGE.EXE+0x74f1f`.
+   `0x1f9` and `0x249` also do not represent scene-local versus raw addressing. Both pass the same packed
+   operand unchanged to the same opener and use the same colorkey/load path. Their native distinction is
+   surface mode: `0x1f9` creates ordinary mode 0, while `0x249` creates the tiled large-image mode 1 wrapper.
+   FIELD's `0x32da..0x32dd` map sheets and SYSTEM4's `0x337e` SO001 are ordinary examples of the universal
+   base indexes used throughout the corpus, not special fallback cases.
 3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Age.Engine/Sys4/ResourceMap.cs`
    (Resolve + BMP path) + `GodotAdvHost` texture ops → `TextureRect` compositing behind the dialogue;
    `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
@@ -125,25 +108,22 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    still injects the same known inherited layout and surface state because it intentionally bypasses
    SYSTEM4; that shortcut is no longer the shipped/default route.
 
-   The active manifest is frame-local, not fixed to the root scene: every VM call frame brackets host work
-   with its script context. `set-texture` resolves the local id at load time and retains the normalized raw
-   catalog id in the graphics surface, so that surface remains stable after a nested helper returns or a
-   sibling script becomes active. Voice and scene-movie op `0x236` likewise resolve against the executing
-   frame; modal whole-movie op `0x20f` and SFX are separate universal raw/packed-id families documented below.
+   Resource lookup is independent of the active VM frame. Every texture surface retains the packed catalog
+   id supplied by bytecode, and nested helpers/sibling scripts use the same global base/append catalogs.
+   Script-context bracketing remains useful for diagnostics/page location, but it must not alter texture,
+   voice, cursor, SFX, or movie resolution.
 4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
    resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
    (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
    → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
    (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
-   addressing — the earlier "unified graphics+audio manifest" claim was WRONG for BGM:**
-   - **Voice** (`play-voice`) → SC-section manifest `files[base+id]` at **offset 0**, with a type-checked
-     universal-raw fallback for frontend scripts without an SC section (same as textures). Proven:
-     the manifest interleaves graphics/voice (`files[35]=EV049AA`, `[36]=MAN999`, `[37]=EV052CA`, `[38]=SYL0001`),
-     so `id-1` would land voices on `.AGF` (silent) — they play, so offset is exactly 0.
-   - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), NOT the manifest.
-     Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`; the manifest gave BGM006/009 = off-by-one) and proven
-     by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the manifest mis-resolved
+   addressing:**
+   - **Voice** (`play-voice`) → the universal packed SYS4INI/AAI resource contract shared with textures
+     and movies. Native passes the bytecode operand unchanged to `asset_open_indexed_entry`.
+   - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), not the packed
+     resource table. Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`) and proven
+     by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the old scene model mis-resolved
      to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `GodotAdvHost.PlayBgm` uses it.
      The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
 
@@ -151,8 +131,8 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    packed catalog ids through the same byte store while retaining the existing channel lifecycle. See
    `docs/phase-a-slice-plan.md`.
    Diagnostic: `Age.Cli audio <SCENE>`.
-5. **Movies** (`OP`/`MVB`, MPEG) — SC0000 `0x236` now resolves its scene-local id through the same catalog
-   and reads owned payload bytes through `IAssetStore`; see the movie section below.
+5. **Movies** (`OP`/`MVB`, MPEG) — `0x236` and `0x20f` receive universal packed resource ids and read the
+   selected payload through `IAssetStore`; see the movie sections below.
 
 ## Validation reality (why this is the big haul)
 
@@ -164,25 +144,24 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 ## Status
 
-A2b-background: **steps 1–3 landed.** Step 1 = `build/asset-index.json`. Step 2 = **`resId →
-files[section_base(scene) + resId]`** via SYS4INI per-scene sections (`tools/resolve_asset.py` +
-`build/asset-sections.json`) — no runtime capture, all archives/types plus SC-section voice and typed raw
-fallback for non-SC frontend scripts. Step 3 = **first-pass
+A2b-background: **steps 1–3 landed, but step 2's resolver must be corrected.** Step 1 =
+`build/asset-index.json`. Step 2 originally normalized through inferred per-scene sections; native RE now
+proves runtime operands are already universal packed ids. `tools/resolve_asset.py` and
+`build/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
-alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): **`play-voice`
-uses the SC manifest first** (`files[base+id]`) and universal raw lookup for non-SC frontend scripts;
-**`play-bgm` uses direct names** (`BGM{id:03d}.OGG`) — NOT unified.
+alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): voice uses the
+universal packed catalog; **`play-bgm` uses direct names** (`BGM{id:03d}.OGG`).
 
 ## Native SFX resource proof (2026-07-11; addressing corrected 2026-07-20)
 
-SFX uses a universal packed catalog id, not the scene-local graphics/voice rule. A zero high byte directly
+SFX uses the universal packed catalog rule shared by graphics/voice/movies. A zero high byte directly
 indexes SYS4INI; a nonzero high byte selects the matching AAI mount and uses the low 24-bit index. The
 matching native trace at SC0000 `0xc29` captures raw id `0x28`, channel 0, which is
 `DATA1/E0808.WAV`; SC0000 being the first section previously hid the distinction. TITLE makes it decisive:
 `0x2aea` is raw `SE020.WAV` for hover, `0x3321` is raw `SE015.WAV` for activation, and neither fits TITLE's
-14-entry manifest. `play-bgm` remains the separate direct-name family.
+14-entry inferred group. `play-bgm` remains the separate direct-name family.
 
 The Phase-A backend now resolves the OGG/WAV catalog entry and opens it through `IAssetStore`; Godot decodes
 the returned bytes into its existing BGM, voice, and fixed SC0000 SFX channel players. The earlier
@@ -197,18 +176,18 @@ behavior:
 > resolve the resource record → try a loose file with that record's name in the game/mod root → otherwise
 > read exactly `offset..offset+size` from the record's ALF → decode the contained format in process.
 
-Native evidence already proves this ordering for scripts: `resource_open_by_raw_id@0x44f390` indexes the
+Native evidence proves this ordering for scripts: `asset_open_indexed_entry@0x44f390` indexes the
 80-byte SYS4 record and calls `CreateFileA(record.name)` before opening `record.archive`, seeking to
 `record.offset`, and reading `record.size`. The same service is the correct common seam for scripts,
-graphics, voice/SFX, and movie bytes. Resolution and opening must remain separate: scene-local ids and
-universal `raw_index` ids select a record differently, but both records flow through the same loose-first
-store.
+graphics, voice/SFX, and movie bytes. Resolution and opening remain separate only by concern: the universal
+packed id selects one record, then the store applies loose-first/archive-second opening. There is no
+scene-local numeric addressing mode.
 
 ### Proposed layers
 
 1. **Catalog + read-only ALF store (VFS-A DONE).** `Sys4AssetCatalog` parses SYS4INI at runtime while preserving all 13208 raw records
-   (including the two `@` placeholders), archive names, scene sections, and the existing three lookup modes:
-   universal raw id, scene-local manifest id, and direct name where the opcode family genuinely uses one.
+   (including the two `@` placeholders), archive names, diagnostic scene groupings, universal packed ids,
+   and direct-name lookup where an opcode family genuinely uses it.
    An ALF is a payload container at this layer: open the named archive and return a bounded stream/byte range
    at the indexed offset/size. Before that fallback, probe the configured loose override roots by the record's
    exact basename. `Sys4AssetStore` opens a separate read-only file handle per request and constrains archive
@@ -235,18 +214,17 @@ store.
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
-4. **Runtime consumers (complete for scripts, textures, and current audio families).** `ResourceMap.ResolveTexture` preserves
-   scene-local resolution and falls back to universal raw ids for SYSTEM4 assets; `GodotAdvHost` caches
-   decoded RGBA surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`.
-   Godot no longer reads `build/textures/*.BMP`. BGM direct-name, scene-first/raw-fallback voice, and packed-raw SFX
-   entries are opened through the same `IAssetStore`. `ResourceMap.ResolveSoundEffect` owns op `0xb4`'s
-   `ResolvePacked` lookup and audio filtering; the existing Godot WAV/channel path consumes its result.
-   Extraction and conversion tools remain diagnostics.
+4. **Runtime consumers (packed-id correction pending).** Script loading and SFX already use
+   `ResolvePacked`. Texture/voice/non-modal movie facades still contain the disproven scene-first/raw-fallback
+   compatibility layer and must be switched to the same typed packed lookup. Godot caches decoded RGBA
+   surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`; it no longer reads
+   `build/textures/*.BMP`. BGM remains direct-name. Extraction, grouping, and conversion tools remain
+   diagnostics.
 
 ### Acceptance gates
 
-- Catalog: 13208 raw slots / 13206 real base entries; every ALF range is in bounds; scene-local mappings
-  remain identical to the current resolver and `raw_index 0x337e` resolves to `SO001.AGF`.
+- Catalog: 13208 raw slots / 13206 real base entries; every ALF range is in bounds; packed base/append
+  selection matches native and `raw_index 0x337e` resolves to `SO001.AGF`.
 - Store: representative base reads are byte-identical to `extracted/`; a temporary loose file with the same
   record name wins, and removing it deterministically reveals the archive bytes. Root path traversal is
   rejected and archive reads are bounded/thread-safe.
@@ -298,7 +276,7 @@ dimensions, hotspot, transparent background, grayscale, and a non-gray palette p
 
 ### SC0000 movie payload and presentation (2026-07-11)
 
-The scene-local implementation was first validated at SC0000 `0x236@0x13c8`. Resource `0x33` resolves through the
+The first implementation was validated at SC0000 `0x236@0x13c8`. Universal base-catalog id `0x33` resolves through the
 authoritative catalog to `DATA1.ALF:CHAPTER.AGF` (archive offset 3,908,816; size 8,194,052). Despite the
 `.AGF` name, its payload begins with MPEG program-stream pack start code `00 00 01 BA`; the installed asset
 is MPEG-1 program stream video at 800x600, 29.97 fps, approximately 11.98 seconds, with video stream `E0`
@@ -328,8 +306,8 @@ that test/bootstrap path is unrelated to movie asset loading and was not folded 
 
 ### BTL combat-effect movie resolution and decoder boundary (diagnosed 2026-07-21)
 
-BTL's movie call at `BTL.BIN@0x2b21` is the same non-modal opcode `0x236`, but its table supplies universal
-raw SYS4INI ids because `BTL.BIN` has no `SC####` manifest section. The first accepted combat run reached
+BTL's movie call at `BTL.BIN@0x2b21` is the same non-modal opcode `0x236` and, like every native resource
+consumer, its table supplies universal packed SYS4INI ids. The first accepted combat run reached
 five such ids:
 
 | Raw id | Catalog asset | MPEG size | Sequence size |
@@ -341,10 +319,10 @@ five such ids:
 | `0x2bca` | `MVB914.AGF` | 133,124 bytes | 400x400 |
 
 All five archive payloads begin with MPEG program-stream pack code `00 00 01 BA`; none is a corrupt still
-AGF. `GodotAdvHost.PlayMovieToSurface` currently calls only `ResourceMap.Resolve(BTL,id)`, which must return
-null because the catalog builds local ranges only for `SC####.BIN`. Texture and voice resolution already
-use the required ordering: active SC manifest first, then a type-checked universal raw fallback. Non-modal
-movie resolution needs the same typed ordering. The logged `AGF decode failed MVB914.AGF` is downstream:
+AGF. `GodotAdvHost.PlayMovieToSurface` currently calls the port's scene-relative `ResourceMap.Resolve`,
+which returns null because BTL owns no inferred SC group. Native instead passes the id unchanged to the
+universal packed opener. Texture and voice facades require the same correction, not a new movie-only
+fallback. The logged `AGF decode failed MVB914.AGF` is downstream:
 after movie lookup fails, no movie identity is registered, the VM still binds the raw id to the surface,
 and the compositor falls through to the still-image decoder because MPEG movies also use `.AGF` names.
 
@@ -357,8 +335,8 @@ are 280x352. Requesting RGB24 instead of RGB32 does not change negotiation. The 
 failure to DirectShow/filter compatibility with these non-16-aligned MPEG display widths; it does not prove
 which internal stock filter imposes the restriction.
 
-The correct implementation boundary therefore has three parts: add a typed scene-first/raw-fallback
-resolver for non-modal movies; introduce the already-planned decoder interface/factory and a software MPEG
+The correct implementation boundary therefore has three parts: switch all ordinary typed resource
+consumers to the native universal packed lookup; introduce the already-planned decoder interface/factory and a software MPEG
 fallback that handles the installed non-16-aligned effects; and preserve the destination surface's created
 dimensions instead of replacing every movie surface with the SC0000-specific 800x600 value. Decoder failure
 should also leave a completed movie identity long enough to suppress bogus still-AGF fallback. Regressions
@@ -367,17 +345,15 @@ must cover at least raw BTL resolution, a 280x352 effect (`MVB001`), a 400x400 e
 
 ### Modal startup/ending movie resources (implemented 2026-07-20)
 
-Opcode `0x20f` uses universal raw SYS4INI indexes rather than the executing script's manifest. Its complete
+Opcode `0x20f` uses the same universal packed resource contract as `0x236`. Its complete
 corpus is `LOGO.BIN (0x335f,42,4)`, `OP.BIN (0x3364,42,4)`, and
-`ED.BIN (0x3324,42,dynamic_flags)`. Raw records `0x335f`, `0x3364`, and `0x3324` are respectively
-`LOGO.AGF`, `OP.AGF`, and `ED.AGF`; all begin with MPEG pack code `00 00 01 BA`. The current
-`ResourceMap.Resolve(scene,id)` path correctly returns out-of-range for the large LOGO/OP values, proving
-that an implementation must expose a typed raw-movie resolver rather than add manifest fallbacks globally.
+`ED.BIN (0x3324,42,dynamic_flags)`. Base records `0x335f`, `0x3364`, and `0x3324` are respectively
+`LOGO.AGF`, `OP.AGF`, and `ED.AGF`; all begin with MPEG pack code `00 00 01 BA`.
 Native `0x20f` also arms modal run-state `0x2000`; unlike `0x236`, these six-instruction wrapper scripts
 depend on the movie service itself to park until EOF/input cancellation before they release surface 42.
 
-`ResourceMap.ResolveRawMovie` now supplies that typed universal lookup, while `ReadMovie` remains the MPEG
-signature gate. `IHost.PlayModalMovieToSurface` is distinct from the scene-local non-modal call: Godot
+`ResourceMap.ResolveRawMovie` currently supplies that typed universal lookup, while `ReadMovie` remains the MPEG
+signature gate. `IHost.PlayModalMovieToSurface` is distinct from the non-modal call for lifecycle only: Godot
 reuses the asynchronous DirectShow frame decoder and retained compositor but parks the VM thread until EOF
 or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
 The decoder still intentionally leaves audio unrendered; OP/ED audio parity needs an explicit synchronized
@@ -394,8 +370,8 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 ### Deliberate non-goals
 
 - Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
-- AGF encoding, movie audio, or generalized video APIs. Implemented `0x236` and `0x20f` playback remains
-  deliberately limited to Windows' native DirectShow MPEG decoder.
+- AGF encoding or movie audio. A decoder interface/software MPEG fallback is now required for the installed
+  non-16-aligned MVB effects; synchronized audio remains a separate slice.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
   ordered mod roots can be layered onto the same store later.
 - Removing the extraction/conversion tools immediately. They remain independent parity oracles until the

@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Static, general asset resolver: (scene, resId) -> asset file. Solves asset resolution
-(docs/asset-resolution-re.md) with NO runtime capture.
+"""Diagnostic SYS4INI scene-group correlation tool; NOT a native runtime resource resolver.
 
-Mechanism (proven): SYS4INI's file list is organized into SECTIONS, one per scene -- each is a
+SYS4INI's file list is organized into SECTIONS, one per scene -- each is a
 `SCxxxx.BIN` script entry followed by that scene's asset MANIFEST (all assets it references, across
 every archive and type: EV/BG/CS/AE event & sprite graphics, OGG/WAV audio, ...). `file_number` is
-the 0-based index within the section. So a bytecode resId resolves as:
+usually the 0-based index within that grouping. This tool explores the correlation:
 
     resId  ->  files[ section_base(scene) + resId ]
 
-where section_base(scene) is the start of the SYS4INI section containing the scene's script.
-This is the same rule for set-texture(resId), play-bgm(id), play-voice(id) -- one unified manifest.
-Validated: 97% of files fit `fn == position - section_base`; SC0000's opening resolves 17/17 vs
-Frida ground truth; 586/595 captured loads across all sections satisfy `files[base+fn] == name`.
+That relationship explained 97% of file ordering and 586/595 captured load/name pairs, but Ghidra
+native RE on 2026-07-21 proved bytecode operands are already universal packed SYS4INI/AAI ids.
+asset_open_indexed_entry applies no section base. Do not use this tool's scene-relative output in
+runtime code; see docs/asset-resolution-re.md.
 
 Usage:
   py -3.11 -X utf8 tools/resolve_asset.py --build            # emit build/asset-sections.json
-  py -3.11 -X utf8 tools/resolve_asset.py <SCENE> [resId]    # resolve one, or dump the manifest
+  py -3.11 -X utf8 tools/resolve_asset.py <SCENE> [resId]    # inspect one correlation, or dump a group
 """
 from __future__ import annotations
 import json

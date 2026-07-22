@@ -339,10 +339,11 @@ SYS4INI indexes `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`. `ED.BIN` is the only 
 non-modal scene-movie op `0x236`, then starts playback and sets run-state bit `0x2000`; the engine main loop
 and window procedure treat that state as the modal whole-movie service. This parks the script at the opcode
 until EOF or input cancellation, after which the script's following instructions release the object/surface.
-The port implements `0x20f` through a typed raw-movie resolver and a distinct modal host call. The existing
+The port implements `0x20f` through a typed packed-movie resolver and a distinct modal host call. The existing
 asynchronous decoder publishes frames through the retained surface while only the VM thread is parked;
 EOF, mouse click, Accept, or Cancel resumes the wrapper so its scripted cleanup releases surface 42.
-`0x236` retains its scene-local, non-modal contract. Both paths still intentionally leave the MPEG audio
+`0x236` retains its non-modal contract; native passes its packed resource operand through the same universal
+catalog opener as `0x20f`. Both paths still intentionally leave the MPEG audio
 pin unrendered; synchronized movie audio remains a deliberate backend/audio-clock slice.
 
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
@@ -1765,7 +1766,7 @@ The semantic text/index records remain untouched, so reopening History rebuilds 
 cannot leave the old labels above the resumed ADV page.
 
 Stored voice replay now follows the native split. Ordinary op `0xc4` and History op `0x1bd` share the
-section-manifest resolver, Skip replacement queue, and Auto voice-pending state, but carry variants 0 and 1
+packed-resource resolver, Skip replacement queue, and Auto voice-pending state, but carry variants 0 and 1
 respectively through `IHost.PlayVoice`. Both append their pair to the backlog when recording is enabled;
 History's surrounding `0x1bb(0)` suppression prevents the replay from recording itself. Native
 `voice_play_indexed_asset@0x488330` stores that variant in the channel-12 sound-buffer state before starting
@@ -2100,6 +2101,28 @@ replacement. The selector extraction is an arithmetic `SAR 24`, so ids whose hig
 index before the mount table rather than slots `0x80..0xff`; the port rejects those selectors instead of
 inventing unsigned behavior. `/v2` names/comments this mount/load/open chain and is saved.
 
+**Universal packed resource addressing confirmed (2026-07-21).** `asset_catalog_parse_base_tables@0x44e7e0`
+parses one entry count and copies one flat array of 0x50-byte SYS4INI records in serialized order.
+`asset_open_indexed_entry@0x44f390` directly bounds-checks a high-byte-zero operand against that count and
+indexes `entries[id]`; a nonzero high byte takes the AAI branch described above. It receives neither
+`EngineCtx` nor a script-frame/scene identifier and contains no section-base calculation or fallback.
+
+The callers pass their operands unchanged: `script_frame_load_resource@0x40e980`,
+`gfx_op_0x1f9_load_surface@0x422360`, `op_0x249_load_raw_texture_surface@0x424b20`,
+`voice_play_indexed_asset@0x488330`, SFX/cursor services, and
+`movie_to_texture_open_asset_graph@0x463e20`. For movies, `op_0x236_play_movie_to_surface@0x423ee0`
+fetches operand 1 and immediately forwards it to that helper. Thus scene-local and raw-fallback are not
+native modes: ordinary resource operands are already universal packed SYS4INI/AAI ids.
+
+SC0010 supplies a clean corpus proof outside SC0000's base-zero coincidence. Its `set-texture 0x21` must
+open raw entry `0x21` (`SO013A.AGF`); adding SC0010's catalog position `0x11e` instead selects unrelated
+`COL0023.OGG`. Its `play-voice 0x120/0x121/0x122` operands directly select
+`LILA1414/LILB0053/LILC0054.OGG`, whose SC0010-local file numbers are 2/3/4. The catalog grouping relation
+is therefore `absolute id = group start + file_number`; the compiler has already performed that addition.
+The port's scene-first compatibility resolver inverted this relationship and must be replaced by typed
+`ResolvePacked` lookup for texture, voice, and movie consumers. Ghidra `/v2` renames the catalog parser and
+entry-name helper, corrects the opener/caller comments, and is saved.
+
 ---
 
 ### ADV text line spacing -- opcode `0x8b` (2026-07-19)
@@ -2288,12 +2311,12 @@ retained objects when `0x20c` targets an offscreen surface, composites the captu
 source on the shared frame clock, blocks the VM through the endpoint, and only then permits the following
 surface release/root reload. Headless hosts retain their non-rendering no-op policy.
 
-The same manual pass exposed a separate resource-addressing issue after `0x6c` was fixed: ROOM did execute
-`play-voice`, but `GodotAdvHost` attempted only SC-section resolution. ROOM is a frontend script without an
-SC section, and its voice operands `0x3365..0x3376` are universal raw SYS4INI indices (for example raw
-`0x3365` is `EUA0016.OGG`). Voice resolution now matches the already-required texture rule: try the active
-SC section first, then a type-checked raw-catalog fallback. SC0000's local `0x24 -> MAN999.OGG` mapping is
-unchanged.
+The same manual pass exposed a resource-addressing issue after `0x6c` was fixed: ROOM did execute
+`play-voice`, but `GodotAdvHost` attempted only inferred SC-section resolution. ROOM's voice operands
+`0x3365..0x3376` are universal packed SYS4INI indices (for example `0x3365` is `EUA0016.OGG`). The first
+compatibility fix tried an SC section and then a type-checked base-catalog fallback. Subsequent native RE
+proved there is no first stage: ROOM and SC scripts alike pass an already absolute packed id directly to
+the catalog opener. SC0000's `0x24 -> MAN999.OGG` works because that scene's inferred group begins at zero.
 
 ---
 

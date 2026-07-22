@@ -84,7 +84,7 @@ frame sharing globals. `trace`/`audio`/`gfx` stay **provider-less** (call-script
 subsystem oracles. Test scenes are **synthesized** via `Age.Engine/Sys4/ScriptAssembler` (see
 [[testing-synthesize-dont-disable]]: synthesize test data, never disable a feature to keep a golden green).
 
-The runtime SYS4 front-end is `Sys4AssetCatalog` (raw-id, scene-local, and name views), `IAssetStore` /
+The runtime SYS4 front-end is `Sys4AssetCatalog` (universal packed-id and name views; scene groupings are diagnostic only), `IAssetStore` /
 `Sys4AssetStore` (exact-basename loose roots, then a bounded ALF range), and `Sys4ScriptProvider` (cached
 root/call-script parsing). Generated asset/callscript JSON remains a tooling and test oracle only.
 
@@ -206,7 +206,7 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 |---|---|---|---|
 | `tools/frida/capture_native_transforms.py` | Capture native `0x21f`/`0x223`/`0x234` worker operands, corrected integer base/anchor coordinates, all one-shot/cyclic retained fields, the one-shot 4×4 matrix, and the final post-cyclic 4×4 matrix. Optional handle filter; read-only. | `py -3.11 -u -X utf8 tools/frida/capture_native_transforms.py [secs] [pid|AGE.EXE] [--handle 0xHANDLE]` | running game → `build/native-transform-trace.jsonl` |
 | `parse_sys4ini.py` | Parse `SYS4INI.BIN` (S4IC422, LZSS-compressed) into the diagnostic JSON asset-index mirror — name ↔ archive ↔ offset ↔ size for all DATA*.ALF. Each real entry carries universal `raw_index`; the runtime parses SYS4INI itself, while these generated files remain tooling/test oracles. Also emits the `call-script <id> → name` annotation map. | `parse_sys4ini.py [--check]` (`--check` validates vs `extracted/` + `.ALF` sizes) | `姫狩り…/SYS4INI.BIN` → `build/asset-index.json` + `build/callscript-names.json` |
-| `resolve_asset.py` | ★ **The static asset resolver.** SYS4INI is sectioned (one per scene: `SCxxxx.BIN` + its cross-archive manifest; `file_number` = index within section). Resolves `resId → files[section_base(scene) + resId]` for graphics AND audio, no capture. | `resolve_asset.py --build` · `resolve_asset.py <SCENE> [resId]` | `build/asset-index.json` → `build/asset-sections.json`; resolves any (scene, resId) |
+| `resolve_asset.py` | **Historical scene-group correlation diagnostic, not a runtime resolver.** Builds/queries the strong `file_number ≈ position − group_start` relationship that helped classify SYS4INI ordering. Native RE proves bytecode resources are already universal packed ids, so do not feed this tool's scene-relative result to runtime lookup. | `resolve_asset.py --build` · `resolve_asset.py <SCENE> [resId]` | `build/asset-index.json` → `build/asset-sections.json`; inspects inferred groups |
 | `resolve_frida_reads.py` | Rescue noisy Frida archive-read offsets → asset names via the index (per-archive range search; drops 0x20000 paging reads); recovers the per-scene asset load order. | `resolve_frida_reads.py [reads.log] [-o out.json]` | `build/frida-reads.log` + `build/asset-index.json` → `build/frida-asset-loads.json` |
 | `convert_agf.py` | Convert AGF stills to BMP via `AGF2BMP2AGF.exe` (searches all `extracted/DATA*`). `--scene` batch-converts a scene's whole SYS4INI manifest. Since VFS-C, output is a diagnostic pixel-parity oracle; the runtime decodes AGF bytes directly. | `convert_agf.py EV052CA.AGF …` · `convert_agf.py --scene SC0000` | `extracted/DATA*/*.AGF` → `build/textures/*.BMP` |
 

@@ -101,7 +101,7 @@ scene return plus boundary cleanup still belongs to B1 completion.
 
 **TITLE SFX packed-raw correction (2026-07-20).** Hover and activation callbacks were already executing their
 scripted `0xb5` starts. The load failed earlier because op `0xb4` uses universal packed SYS4INI/AAI ids,
-while Godot treated them as active-script manifest ids. The new packed-raw resolver maps TITLE's
+while Godot treated them as active-script manifest ids. The packed resolver maps TITLE's
 `0x2aea`/`SE020.WAV` hover, `0x3321`/`SE015.WAV` activation, and GAMESTART's `0x2aeb`/`SE013.WAV` cancel
 through the existing channel players. A synchronized TITLE→GAMESTART→TITLE trace records every load/start
 with its filename, and manual validation confirms they are audible; BGM remains unaffected.
@@ -111,9 +111,9 @@ port did not lose an executable-side launcher. Its sole op `0x130` call returns 
 that is one at context construction and cleared only when op `0x9` resets/reloads root script id zero.
 SYSTEM4 calls `LOGO.BIN` and `OP.BIN` only while that flag is nonzero. The former stubbed-zero output
 explained the direct jump to TITLE. LOGO and OP then use the modal movie op
-`0x20f` with raw catalog movies `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`; existing `0x236` is the distinct
-non-modal, scene-local movie-to-surface path. The VM now models the initial-root flag and clears it at the
-op-`0x9` whole-stack root-reload boundary. Godot resolves a typed raw MPEG asset, reuses the asynchronous decoder
+`0x20f` with packed catalog movies `0x335f`/`LOGO.AGF` and `0x3364`/`OP.AGF`; existing `0x236` is the distinct
+non-modal movie-to-surface path and uses the same packed lookup. The VM now models the initial-root flag and clears
+it at the op-`0x9` whole-stack root-reload boundary. Godot resolves a typed MPEG asset, reuses the asynchronous decoder
 and retained compositor, and parks the VM until EOF or mouse/Accept/Cancel input. Focused natural-boot tests
 prove `LOGO -> OP -> INIT -> TITLE` ordering and exact movie operands. MPEG audio remains explicitly deferred
 until the decoder abstraction has an engine-owned synchronized audio/volume contract.
@@ -257,7 +257,8 @@ rechecked on the updated build. The first recheck confirmed the transition was v
 follow-up corrections: the decompiled alpha-step branch had initially been read backwards (`arg<=64`
 means step 16, not step 1), making argument 10 about 160 ms and argument 30 about 480 ms; and ROOM's raw
 voice ids were reaching `play-voice` but failing the port's SC-section-only lookup because ROOM owns no SC
-section. Voice resolution now uses the same scene-first, type-checked raw fallback as frontend textures.
+section. The initial compatibility fix added a raw fallback, but later native RE proved the broader rule:
+voice and frontend texture operands are already universal packed catalog ids and never receive a scene base.
 
 **Natural Game Start diagnostic gate (2026-07-21; captured).** The opt-in `-StartupDiagnostics` route kept
 the persistent `SYSTEM4` root and native exit semantics and added no seeds, boot prefix, timing changes, or
@@ -562,15 +563,18 @@ transparency. Manual DEBUGMAP acceptance reached player combat and exposed the n
 combat-effect movies do not play. The resolver/decoder diagnosis is canonical in
 `docs/asset-resolution-re.md`; fix that bounded movie path before proceeding to enemy-turn/end-turn breadth.
 
-**Combat-effect movie gap diagnosed; implementation pending.** BTL's `0x236@0x2b21` consumes universal
-raw MVB ids because BTL has no SC manifest, while the host currently permits only scene-local resolution.
+**Combat-effect movie gap diagnosed; native resolver generalized; implementation pending.** BTL's
+`0x236@0x2b21` consumes universal packed MVB ids, exactly as texture, voice, script-load, and modal-movie
+consumers do. Native Ghidra analysis shows that none of those paths applies an SC section base or fallback;
+the port's scene-first compatibility resolver is therefore generally wrong, not merely incomplete for BTL.
 That explains each `movie unresolved BTL:...` warning and the secondary attempt to decode MPEG-backed
-`MVB914.AGF` as a still image. A raw-catalog decoder probe also found a separate backend wall: the current
+`MVB914.AGF` as a still image. A packed-catalog decoder probe also found a separate backend wall: the current
 DirectShow graph handles `MVB914` (400x400) but rejects the reached 280x352 MVB001/MVB004/MVB955/MVB958
 assets with `0x80040217`. Broader samples tie current compatibility to 16-aligned display widths, while 125
-installed MVB assets use 280x352. The next slice is therefore typed scene-first/raw movie resolution plus
-the existing portable-decoder seam and a software fallback for these effects, with destination dimensions
-and failed-movie identity preserved correctly.
+installed MVB assets use 280x352. The next bounded slice is to replace typed texture, voice, and movie
+consumers with universal packed resolution and regress SC0010's low texture/voice ids plus BTL effects.
+The existing portable-decoder seam and a software fallback for 280x352 effects remain the following,
+separate step, with destination dimensions and failed-movie identity preserved correctly.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only
