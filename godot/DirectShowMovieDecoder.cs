@@ -35,6 +35,7 @@ internal sealed class DirectShowMovieDecoder : IMovieDecoder, ISampleGrabberCB
     private IMediaControl? _control;
 
     public bool IsCompleted => _completed;
+    public string? Failure => _error;
     /// <summary>The graph's IMediaPosition stop time converted exactly as native op 0x23f does:
     /// seconds * 1000, truncated toward zero. Null means DirectShow supplied no usable value.</summary>
     public long? StopTimeMs { get; private set; }

@@ -873,8 +873,8 @@ public sealed class GodotAdvHost : IHost
         {
             if (_movieFrames.TryGetValue(resId, out var movie))
                 return (movie.Image, movie.Name, movie.AssetId, true);
-            // Movie payloads use the same .AGF extension as still images. While DirectShow is opening
-            // the graph (or before its first sample arrives), keep the already-created surface blank
+            // Movie payloads use the same .AGF extension as still images. While the decoder is opening
+            // (or before its first frame arrives), keep the already-created surface blank
             // instead of falling through to AgfDecoder and misclassifying the MPEG program stream.
             if (_movieBySurface.Values.Contains(resId)) return null;
         }
@@ -956,7 +956,7 @@ public sealed class GodotAdvHost : IHost
                             long syncMask, bool modal, out long? stopTimeMs)
     {
         stopTimeMs = null;
-        // Publish the movie identity before the potentially long VFS read and DirectShow graph setup.
+        // Publish the movie identity before the potentially long VFS read and synchronous decoder setup.
         // The compositor can therefore distinguish a legitimate blank pre-roll surface from a still AGF.
         ReleaseSurface(surfaceSlot);
         lock (_imageLock)

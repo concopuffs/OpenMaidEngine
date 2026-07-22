@@ -601,11 +601,11 @@ dependency pin, corpus codec inventory, timing contract, and packaging rules liv
    stop times from one formerly failing 280x352 effect (`MVB961` or `MVB238`), aligned `MVB908`, and 800x600
    `CHAPTER`. It must also reject a truncated payload with a bounded diagnostic and survive repeated open/close.
    Do not switch the live runtime at this step.
-3. **Next — implement managed pacing and switch the factory.** Decode on a cancellable worker using FFmpeg timestamps
+3. **Completed — implement managed pacing and switch the factory.** Decode on a cancellable worker using FFmpeg timestamps
    and a monotonic clock, publish only due frames, delay EOF completion through the final presentation interval,
    and retain the existing watchdog. Make FFmpeg the default with no dimension/effect dispatch and exercise both
    non-modal `0x236` and modal/cancellable `0x20f` paths.
-4. **Run the installed-corpus gate.** Every one of the 213 MPEG payloads must open, report its expected display
+4. **Next — run the installed-corpus gate.** Every one of the 213 MPEG payloads must open, report its expected display
    dimensions and a positive stop time, produce a correctly sized RGBA frame, maintain nondecreasing timestamps,
    reach EOF, and dispose within a bound. Normal tests use small project-authored 280-wide and aligned MPEG
    fixtures so decoder behavior is never disabled when the original install is absent; the full local sweep is
@@ -631,6 +631,21 @@ conversion now targets an FFmpeg-owned aligned frame and copies only the exact v
 The complete 313-test suite, three additional 312-test concurrency-sensitive repeats, zero-warning Godot build,
 and threaded selftest pass. Step 3 is the next bounded slice; do not infer that combat is fixed until the paced
 backend is selected live and revalidated.
+
+Step 3 landed on 2026-07-22. `FfmpegMovieDecoder` owns the native session on a cancellable background thread,
+decodes at most one frame ahead, waits against a monotonic `Stopwatch` clock for each normalized PTS, preserves
+newest-frame-wins handoff, and reports EOF only after the larger of declared stop time or the final frame interval.
+Disposal interrupts a far-future frame wait and joins the worker; asynchronous decode failure records a diagnostic
+and completes the decoder so AGE cannot remain blocked. `Main` now selects `FfmpegMovieDecoderFactory`, while the
+Godot build stages the shim and its five local shared-library dependencies beside `Himegari.dll`. DirectShow stays
+in-tree but is no longer selected; delete it only after the corpus and live acceptance gates. Deterministic fake-
+clock tests cover due-frame publication, final completion, cancellation, and failure. Real paced probes cover
+formerly failing 280x352 `MVB961` and aligned `MVB908`. A natural headless SYSTEM4 smoke played and released
+`LOGO.AGF` at its reported 7288 ms, then opened 106919 ms `OP.AGF` and published its first frame before bounded
+shutdown. The user then confirmed the opening movies play correctly in a normal windowed run. The complete suite
+is 318 tests, the Godot build is warning-free, and threaded selftest passes. **NEXT:** run the 213-payload
+installed-corpus gate, then validate SC0000 CHAPTER and the original battle exchange before removing DirectShow
+or judging the tabled combat stall.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

@@ -25,6 +25,7 @@
     <Compile Include="..\..\godot\IMovieDecoder.cs" Link="IMovieDecoder.cs" />
     <Compile Include="..\..\godot\MovieRuntime.cs" Link="MovieRuntime.cs" />
     <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
+    <Compile Include="..\..\godot\FfmpegMovieDecoder.cs" Link="FfmpegMovieDecoder.cs" />
     <Compile Include="..\..\godot\DirectShowMovieDecoder.cs" Link="DirectShowMovieDecoder.cs" />
   </ItemGroup>
 

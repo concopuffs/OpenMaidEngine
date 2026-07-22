@@ -74,8 +74,8 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 
 ## Native FFmpeg movie shim (Windows x64)
 
-These PowerShell tools build the isolated native movie gate; they do not switch live Godot playback away from
-DirectShow. The dependency manifest pins an immutable LGPL shared FFmpeg archive and SHA-256.
+These PowerShell tools build the selected Windows-x64 live movie backend. The dependency manifest pins an
+immutable LGPL shared FFmpeg archive and SHA-256.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
@@ -84,7 +84,9 @@ DirectShow. The dependency manifest pins an immutable LGPL shared FFmpeg archive
 
 The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
 `runtimes/win-x64/native` locations. Build the shim before running the `FfmpegShim*` tests; no original-game
-movie is copied into the repository or native output.
+movie is copied into the repository or native output. When `build/native/win-x64/age_movie_ffmpeg.dll` exists,
+`dotnet build godot/Himegari.csproj` also stages the shim, its five DLL dependencies, and `FFmpeg-LICENSE.txt`
+beside `Himegari.dll` for development playback.
 
 ## Engine (C#) — VM core, CLI, Godot frontend
 

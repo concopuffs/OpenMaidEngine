@@ -10,6 +10,7 @@ internal interface IMovieDecoder : IDisposable
 {
     long? StopTimeMs { get; }
     bool IsCompleted { get; }
+    string? Failure { get; }
     bool TryTakeFrame(out RgbaImage frame);
 }
 

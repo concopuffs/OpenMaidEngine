@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
@@ -12,6 +13,7 @@ public class MovieOpcodeTests
     {
         public long? StopTimeMs { get; init; }
         public bool IsCompleted { get; set; }
+        public string? Failure { get; set; }
         public bool Disposed { get; private set; }
         public RgbaImage? Frame { get; set; }
 
@@ -35,6 +37,57 @@ public class MovieOpcodeTests
             return decoder;
         }
     }
+
+    private sealed class FakeFfmpegFrameSource(FfmpegMovieInfo info,
+                                                params FfmpegVideoFrame[] frames) : IFfmpegFrameSource
+    {
+        private readonly Queue<FfmpegVideoFrame> _frames = new(frames);
+        private int _decodeCalls;
+        public FfmpegMovieInfo Info { get; } = info;
+        public int FailOnDecodeCall { get; init; } = -1;
+        public bool Disposed { get; private set; }
+
+        public bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame)
+        {
+            if (_decodeCalls++ == FailOnDecodeCall)
+                throw new InvalidDataException("synthetic decode failure");
+            return _frames.TryDequeue(out frame!);
+        }
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class ManualMoviePacingClock : IMoviePacingClock, IDisposable
+    {
+        private readonly AutoResetEvent _advanced = new(false);
+        private long _now;
+        private long _waitingFor = -1;
+
+        public bool WaitUntil(long elapsedMilliseconds, WaitHandle cancellation)
+        {
+            Interlocked.Exchange(ref _waitingFor, elapsedMilliseconds);
+            while (Interlocked.Read(ref _now) < elapsedMilliseconds)
+            {
+                int signalled = WaitHandle.WaitAny(new[] { cancellation, _advanced });
+                if (signalled == 0) return false;
+            }
+            return true;
+        }
+
+        public void AdvanceTo(long elapsedMilliseconds)
+        {
+            Interlocked.Exchange(ref _now, elapsedMilliseconds);
+            _advanced.Set();
+        }
+
+        public bool WaitForDeadline(long elapsedMilliseconds) =>
+            SpinWait.SpinUntil(() => Interlocked.Read(ref _waitingFor) == elapsedMilliseconds, 1000);
+
+        public void Dispose() => _advanced.Dispose();
+    }
+
+    private static FfmpegVideoFrame SyntheticMovieFrame(byte value, long timestamp) =>
+        new(new RgbaImage(1, 1, new[] { value, value, value, (byte)255 }), timestamp);
 
     [Fact]
     public void MovieRuntimeUsesInjectedDecoderAndRetainsSynchronousMetadata()
@@ -73,6 +126,78 @@ public class MovieOpcodeTests
 
         Assert.Equal(expected, runtime.WatchdogMs);
         runtime.Decoder.Dispose();
+    }
+
+    [Fact]
+    public void FfmpegDecoderPublishesOnlyDueFramesAndCompletesAfterFinalInterval()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 100, 20, 1, false),
+            SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 50));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        RgbaImage? first = null;
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            if (!decoder.TryTakeFrame(out var frame)) return false;
+            first = frame;
+            return true;
+        }, 1000));
+        Assert.Equal((byte)1, first!.Pixels[0]);
+        Assert.True(clock.WaitForDeadline(50));
+        Assert.False(decoder.TryTakeFrame(out _));
+
+        clock.AdvanceTo(49);
+        Assert.False(decoder.TryTakeFrame(out _));
+        clock.AdvanceTo(50);
+        RgbaImage? second = null;
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            if (!decoder.TryTakeFrame(out var frame)) return false;
+            second = frame;
+            return true;
+        }, 1000));
+        Assert.Equal((byte)2, second!.Pixels[0]);
+
+        Assert.True(clock.WaitForDeadline(100));
+        clock.AdvanceTo(99);
+        Assert.False(decoder.IsCompleted);
+        clock.AdvanceTo(100);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+        Assert.Null(decoder.Failure);
+    }
+
+    [Fact]
+    public void FfmpegDecoderDisposalInterruptsFutureFrameWait()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 60040, 25, 1, false),
+            SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 60000));
+        using var clock = new ManualMoviePacingClock();
+        var decoder = new FfmpegMovieDecoder(source, clock);
+        Assert.True(clock.WaitForDeadline(60000));
+
+        var elapsed = Stopwatch.StartNew();
+        decoder.Dispose();
+
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1));
+        Assert.True(source.Disposed);
+    }
+
+    [Fact]
+    public void FfmpegDecoderFailureCompletesInsteadOfStrandingMovieWait()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 100, 20, 1, false), SyntheticMovieFrame(1, 0))
+        {
+            FailOnDecodeCall = 1,
+        };
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+        Assert.Equal("synthetic decode failure", decoder.Failure);
     }
 
     [Fact]
@@ -386,6 +511,38 @@ public class MovieOpcodeTests
             using var movie = new FfmpegMovieSession(payload);
             Assert.True(movie.TryDecodeNextVideoFrame(out _));
         }
+    }
+
+    [Theory]
+    [InlineData(0x2be3, 280, 500, 450)]
+    [InlineData(0x2bc2, 400, 333, 300)]
+    public void FfmpegPacedDecoderKeepsRealMovieAliveThroughItsStopTime(
+        int resourceId, int expectedWidth, long expectedStopTimeMs, long minimumElapsedMs)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(resourceId)!);
+        var elapsed = Stopwatch.StartNew();
+        using var decoder = new FfmpegMovieDecoder(payload);
+
+        RgbaImage? first = null;
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            if (!decoder.TryTakeFrame(out var frame)) return false;
+            first = frame;
+            return true;
+        }, 2000));
+        Assert.Equal(expectedWidth, first!.Width);
+        Assert.Equal(expectedStopTimeMs, decoder.StopTimeMs);
+        Assert.False(decoder.IsCompleted);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 2000));
+        Assert.True(elapsed.ElapsedMilliseconds >= minimumElapsedMs,
+            $"{expectedStopTimeMs} ms movie completed after only {elapsed.ElapsedMilliseconds} ms");
+        Assert.Null(decoder.Failure);
+        Assert.True(decoder.TryTakeFrame(out var final));
+        Assert.Equal(expectedWidth, final.Width);
     }
 
     private static void ConfigureFfmpegNativeProbe()

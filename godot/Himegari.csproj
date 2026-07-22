@@ -7,4 +7,12 @@
   <ItemGroup>
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="Exists('..\build\native\win-x64\age_movie_ffmpeg.dll')">
+    <None Include="..\build\native\win-x64\*.dll"
+          Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\build\native\win-x64\FFmpeg-LICENSE.txt"
+          Link="FFmpeg-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

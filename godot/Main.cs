@@ -53,10 +53,10 @@ public partial class Main : Godot.Control
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
-    // 0x236 creates its graph synchronously on the VM thread so 0x23f can query timing immediately.
+    // 0x236 opens its decoder synchronously on the VM thread so 0x23f can query timing immediately.
     // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
-    private IMovieDecoderFactory _movieDecoderFactory = new DirectShowMovieDecoderFactory();
+    private IMovieDecoderFactory _movieDecoderFactory = new FfmpegMovieDecoderFactory();
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private readonly System.Collections.Generic.HashSet<long> _movieCompletionNotified = new();
     private GodotTraceSink _trace = null!;
@@ -1224,6 +1224,8 @@ public partial class Main : Godot.Control
                                    >= movie.WatchdogMs;
             if ((movie.Decoder.IsCompleted || watchdogExpired) && _movieCompletionNotified.Add(resourceId))
             {
+                if (movie.Decoder.Failure is { } failure)
+                    GD.Print($"movie decode failed {movie.Name}: {failure}");
                 if (watchdogExpired && !movie.Decoder.IsCompleted)
                     GD.Print($"movie completion watchdog {movie.Name}: forcing completion after {movie.WatchdogMs} ms");
                 _host.NotifyMovieCompleted(resourceId);
