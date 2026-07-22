@@ -2312,11 +2312,11 @@ sampled coordinates.
 - [x] **P2 - fidelity-neutral CPU wins.** P2a-P2f are implemented and measured. DEBUGMAP now meets its p95
   frame budget with near-zero steady allocation; the SC0000 exit capture remains 65.18/71.76 ms p50/p95 in
   the severe full-screen/additive band, so P2 closes and triggers P3 rather than more CPU special cases.
-- [ ] **P3 - GPU retained-renderer prototype (triggered).** Upload decoded/color-key texture variants once and mirror
+- [x] **P3 - GPU retained-renderer prototype.** Upload decoded/color-key texture variants once and mirror
   ordinary retained objects into GPU-native Godot drawing while preserving handle z-order, atlas regions,
   transforms, opacity/tint, and blend mode. Begin with dungeon sprites and ordinary translated textures;
   compare selected frames against the software oracle behind a backend switch.
-- [ ] **P4 - GPU special paths and backend decision.** Extend the prototype through affine effects,
+- [x] **P4 - GPU special paths and backend decision.** Extend the prototype through affine effects,
   additive/tint channels, created surfaces, transitions, and movie surfaces. Adopt it as the default only
   after target-workload frame evidence and visual equivalence; otherwise retain documented CPU fallbacks
   for unsupported paths.
@@ -2689,3 +2689,108 @@ atlas source rectangles, colorkey, tint/opacity, additive blending, and the exac
 the software compositor as the pixel-parity oracle/fallback. First acceptance is the same
 `SC0000@0x123de` severe band below 16.67 ms p95 without regressing DEBUGMAP presentation or movie/text
 composition; only then make GPU rendering the default.
+
+### P3 retained-GPU prototype implemented; workload acceptance pending (2026-07-22)
+
+`--render-backend gpu` now mirrors the synchronized `GfxState` snapshot into a pooled Godot `Sprite2D`
+stage. Static decoded/color-key variants upload once; mutable created surfaces and movie frames update a
+surface-keyed dynamic texture, so concurrent playbacks of the same resource cannot overwrite each other.
+Each retained item preserves handle/child order, atlas source rectangle, nearest filtering, the exact sampled
+affine matrix, opacity, multiplicative tint, source/tint LERP, and source-alpha/additive canvas blending.
+Surfaceless affine fills use a shared one-pixel texture. The software compositor remains the default for
+direct launches and is selected whole-frame for legacy whole-screen transitions or the still-unobserved
+additive LERP-tint combination; diagnostics which depend on software decision strings also stay on the oracle.
+
+The performance CSV now records backend, GPU draw-item count, texture uploads, and upload CPU time while
+retaining the common object/layer/transform/candidate-pixel workload columns. A real Vulkan smoke exercised
+54 GPU recompositions without Godot errors after startup; warmed three-item frames required about
+0.02-0.10 ms of main-thread synchronization, while the first texture publications took about 2-3 ms. This
+is not the target burst and is only a plumbing measurement.
+
+The first visual comparison initially produced a false black result because the direct `SC0000` validation
+command omitted its required `--boot` SYSTEM4/INIT state. Repeating with `--boot` restored the opening event
+CG in both backends. At the settled first narration page, the GPU and software 800x450 retained-art regions
+match in geometry/content; every differing channel is at most one RGB value and the differences are confined
+to the soft lower fade, consistent with Godot floating-point versus software integer blend rounding. The
+automated `--shot` harness forces pre-page transition waits, so its abrupt fade is not cadence evidence.
+
+For this effort `run-godot.cmd` temporarily enabled both timestamped perf capture and the GPU prototype;
+that temporary launch behavior was removed at P4 closeout. **Next:** use the natural SYSTEM4 route
+at speed 1 for the SC0000 pre-CHAPTER burst and DEBUGMAP camera/unit workload. Accept P3 only if the original
+`SC0000@0x123de` severe band reaches less than 16.67 ms p95 and manual viewing finds no texture, ordering,
+movie, text, fade-cadence, or dungeon-sprite regression. Then take P4's screen/range-transition GPU path and
+backend-default decision.
+
+### P3 capture 10 - SC0000 GPU target and P4 range-transition trigger (2026-07-22)
+
+`build/perf/run-20260722-145338-127.csv` covers the natural SYSTEM4 route through the CHAPTER movie and
+following text. The user reports the original burst is “much, much smoother.” The log confirms that the GPU
+path removes the pixel-throughput wall: 199 matched `SC0000@0x123de` rows with at least 3.5 million candidate
+pixels have main-thread p50/p95/p99/max 0.068/0.117/0.119/0.124 ms and recomposition
+0.048/0.083/0.085/0.093 ms, versus the P2 software baseline's 65.15/71.74 ms p50/p95. All of those frames
+arrive at the capture's 10.0 ms presentation cadence. Across 3,048 GPU recompositions, p95/p99/max is
+3.23/4.43/13.14 ms; static reuse avoids texture uploads, while dynamic/movie publication remains bounded.
+
+The mixed hotspot still contained 67 intentional software fallbacks (2.2% of recompositions), all for one
+type-0 retained range-transition object rather than a legacy whole-screen transition. Fifty-one ordinary
+eight-layer rows cost about 17-18 ms, twelve ten-layer affine/additive rows cost about 53-55 ms, and the final
+four twelve-layer rows reached 64-66 ms. These sparse fallbacks dominate the aggregate p95 even though the
+ordinary GPU frames are far below budget, so they trigger the narrow P4 range-transition slice.
+
+### P4 type-0 retained range transition moved to GPU; recapture pending (2026-07-22)
+
+The GPU compositor now handles the exact existing software-oracle rule: range A remains in normal retained
+order, and when the transition placeholder is visited, range B is republished there with the sampled
+transition progress multiplying each source object's opacity. Texture/fill resolution, affine transforms,
+color key, tint, additive blend, dynamic-surface identity, and common perf counters use the same GPU paths as
+ordinary objects. Whole-screen host transitions and additive LERP-tint remain bounded software fallbacks.
+
+A bootstrapped SC0000 page-1 capture exercises the GPU range path and matches the saved software reference:
+the complete 800x600 frame differs only by at most one RGB value, with 46,468 changed pixels confined to the
+soft y=376..449 fade and 121 independently animated chrome pixels. The Godot build has zero warnings/errors,
+the capture log has no runtime warning/error, threaded `SELFTEST OK`, and `git diff --check` passes.
+**Next:** repeat the natural SC0000 pre-CHAPTER run once to prove `render_backend=0` disappears from this
+coordinate and the mixed severe-band p95 is below 16.67 ms, then run the DEBUGMAP camera/unit acceptance case.
+
+### P4 capture 11 - SC0000 range-transition closeout passes (2026-07-22)
+
+`build/perf/run-20260722-150316-085.csv` repeats the natural SYSTEM4-to-CHAPTER route after the GPU range
+implementation. All 3,111 recompositions use `render_backend=1`; there are zero software fallbacks anywhere
+in the run. Across the original `SC0000@0x123de` severe band (215 rows with at least 3.5 million candidate
+pixels), main-thread p50/p95/p99/max is 0.075/0.132/0.175/0.562 ms and recomposition is
+0.051/0.091/0.124/0.533 ms. Every severe frame arrives in 10.0-10.42 ms and none exceeds the 16.67 ms
+budget. The whole run's recomposition p95/p99/max is 3.10/3.57/9.03 ms; dynamic/movie upload p95 is
+0.192 ms and movie sampling p95 is 0.005 ms.
+
+This closes the original SC0000 performance defect: equivalent severe software frames were
+65.15/71.74 ms p50/p95 after P2 and are now 0.075/0.132 ms on the GPU submission path, with the user's
+manual run already reporting the burst as much smoother. The P4 range-transition fallback is accepted for
+SC0000. **Next:** run DEBUGMAP with the established pan/idle/unit-group/off-map sequence. If its sprites,
+camera, pulse effects, and frame delivery remain correct, accept P3 as the retained backend and decide the
+small remaining whole-screen fallback/default-switch cleanup.
+
+### P3 capture 12 - DEBUGMAP passes; performance effort accepted (2026-07-22)
+
+`build/perf/run-20260722-152956-766.csv` follows the established slight-pan/idle/unit-group/pan/off-map
+sequence. The user reports the result looks good visually. All 6,247 recompositions use the GPU, including
+5,496 FIELD frames; there are zero software fallbacks. FIELD averages 962 visited objects, 961 actual draw
+items, 51 time-varying objects, 434 integer layers, and 525 axis-aligned-scale layers per composition.
+
+In the matched 2.2-2.5 million candidate-pixel band, main-thread p50/p95/p99 falls from the final software
+baseline's 13.90/15.86/18.89 ms to 2.14/2.33/2.78 ms; recomposition is 2.03/2.19/2.66 ms. The >=2.5M band
+remains 2.14/2.90/5.40 ms main-thread p50/p95/p99 with a 10.99 ms max. Off-map frames with no visible draws
+fall to about 0.02 ms. The normal FIELD path allocates only a few KB of diagnostic/accounting state and the
+matched band performs no collections.
+
+One ordinary 961-item FIELD frame measured 22.04 ms without texture uploads, allocation growth, snapshot,
+or resource-resolution cost; adjacent frames immediately returned to the normal distribution. It is one
+scheduler/driver-like outlier among 5,496 FIELD recompositions, while FIELD p99 is 2.79 ms, so it does not
+represent a recurring retained-renderer bottleneck. A separate first-capacity growth row uploads seven
+textures, allocates 3.06 MB, and still completes in 10.99 ms.
+
+**Acceptance:** P3/P4 close successfully. GPU retained rendering is now the ordinary backend; the software
+compositor remains available via `--render-backend software`, owns high-volume decision diagnostics, and is
+the bounded fallback for legacy whole-screen host transitions or an unobserved additive-LERP combination.
+`run-godot.cmd` no longer forces `-PerfLog` or a renderer switch, fulfilling the temporary-launch cleanup;
+`run-godot.ps1 -PerfLog` remains available for future targeted captures. The original SC0000 burst and
+DEBUGMAP animated-unit workload are both visually accepted and comfortably within frame budget.

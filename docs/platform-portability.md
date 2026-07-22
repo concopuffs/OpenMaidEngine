@@ -25,6 +25,7 @@ replaced before claiming portable exports.
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
+| Retained graphics presentation | Backend-neutral `GfxState`; accepted default Godot `Sprite2D` GPU stage plus the retained software pixel oracle, using runtime `ImageTexture`, canvas transforms/materials, and no native graphics API | GPU backend caches static/color-key variants, updates dynamic surfaces, handles retained range transitions, and falls back whole-frame for the legacy host screen-transition path | Godot owns D3D/Vulkan/Metal/OpenGL selection; validate shader/blend/filter behavior per target rather than adding a platform renderer |
 | AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `FfmpegMovieDecoder` is the selected live factory over the project-owned `native/age_movie_ffmpeg` ABI; `DirectShowMovieDecoder` remains unselected pending deletion | Windows-x64 passes the complete 213-payload installed-corpus gate; other native targets and the remaining windowed CHAPTER/combat checks are pending | Run the windowed live gates, then delete DirectShow and add target-specific native builds |
 | Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory, and the FFmpeg worker paces PTS against a monotonic clock with cancellation/failure completion | Concurrent/restarted uses of one asset have independent frame/completion/teardown state; `Main` remains annotated Windows because only the win-x64 bundle is available | Recheck the corrected combat lifecycle, then add Linux/macOS builds and remove the Windows annotation after DirectShow is deleted |
 | Movie audio | FFmpeg detects the audio stream but the current ABI returns video frames only | MPEG movie audio remains intentionally silent | Extend the ABI with timestamped PCM and select an audio/presentation clock; separate feature slice |
@@ -35,9 +36,10 @@ replaced before claiming portable exports.
 | Native RE tools | Frida/Ghidra helpers target the original `AGE.EXE`; supporting utilities include Windows executables and Windows command conventions | Development/research only | Keep separate from export requirements; document platform prerequisites per tool |
 | Python workflow | Operating guide uses Windows `py -3.11` invocation | Developer workflow only | Add equivalent `python3` instructions if non-Windows development becomes active |
 
-No authored runtime code currently calls native DirectSound or Direct3D. Mentions of those APIs in
-`docs/engine-re.md` describe the original AGE implementation. The port's ordinary audio and rendering use
-Godot abstractions.
+No authored runtime code currently calls native DirectSound, Direct3D, Vulkan, Metal, or OpenGL. Mentions of
+those APIs in `docs/engine-re.md` describe the original AGE implementation. Both the software-oracle display
+and retained GPU prototype use Godot abstractions, so accepting the GPU backend does not add an OS graphics
+dependency.
 
 ## Movie backend replacement seam
 

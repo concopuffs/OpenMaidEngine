@@ -36,7 +36,8 @@ public sealed class PerformanceFrameLog : IDisposable
             "clear_ms,snapshot_ms,resolve_ms,source_prep_ms,raster_ms,set_data_ms,texture_update_ms,ui_ms," +
             "allocated_bytes,recompose_allocated_bytes,snapshot_allocated_bytes," +
             "composite_allocated_bytes,source_prep_allocated_bytes,set_data_allocated_bytes," +
-            "ui_allocated_bytes,gen0,gen1,gen2,recomposited,screen_transition," +
+            "ui_allocated_bytes,gen0,gen1,gen2,recomposited,render_backend,screen_transition," +
+            "gpu_draw_items,gpu_texture_uploads,gpu_texture_upload_ms," +
             "present_host_request,present_screen_transition,present_retained_mutation," +
             "present_continuous_channel,present_discrete_cell,object_visits," +
             "time_varying_objects,draw_layers,fill_layers,transition_layers,skipped_layers," +
@@ -95,6 +96,13 @@ public sealed class PerformanceFrameLog : IDisposable
     public void RecordUiAllocation(long bytes) => _current.UiAllocatedBytes += Math.Max(0, bytes);
     public void RecordSetData(long ticks) => _current.SetDataTicks += ticks;
     public void RecordTextureUpdate(long ticks) => _current.TextureUpdateTicks += ticks;
+    public void RecordGpu(int drawItems, int textureUploads, long textureUploadTicks)
+    {
+        _current.GpuBackend = true;
+        _current.GpuDrawItems += drawItems;
+        _current.GpuTextureUploads += textureUploads;
+        _current.GpuTextureUploadTicks += textureUploadTicks;
+    }
 
     public void BeginRecomposite(bool screenTransition)
     {
@@ -131,8 +139,22 @@ public sealed class PerformanceFrameLog : IDisposable
                              int destinationWidth, int destinationHeight, bool dynamic,
                              BlendKind blend, long ticks)
     {
-        _current.DrawLayers++;
         _current.RasterTicks += ticks;
+        RecordLayer(sourceWidth, sourceHeight, localToDest, destinationWidth, destinationHeight,
+                    dynamic, blend);
+    }
+
+    public void RecordGpuLayer(int sourceWidth, int sourceHeight, Affine2D localToDest,
+                               int destinationWidth, int destinationHeight, bool dynamic,
+                               BlendKind blend)
+        => RecordLayer(sourceWidth, sourceHeight, localToDest, destinationWidth, destinationHeight,
+                       dynamic, blend);
+
+    private void RecordLayer(int sourceWidth, int sourceHeight, Affine2D localToDest,
+                             int destinationWidth, int destinationHeight, bool dynamic,
+                             BlendKind blend)
+    {
+        _current.DrawLayers++;
         _current.SourcePixels += Math.Max(0L, (long)sourceWidth * sourceHeight);
         long candidates = EstimateCandidatePixels(localToDest, sourceWidth, sourceHeight,
                                                    destinationWidth, destinationHeight);
@@ -228,7 +250,9 @@ public sealed class PerformanceFrameLog : IDisposable
         Append(b, f.SnapshotAllocatedBytes); Append(b, f.CompositeAllocatedBytes);
         Append(b, f.SourcePrepAllocatedBytes); Append(b, f.SetDataAllocatedBytes);
         Append(b, f.UiAllocatedBytes); Append(b, f.Gen0); Append(b, f.Gen1); Append(b, f.Gen2);
-        Append(b, f.Recomposited ? 1 : 0); Append(b, f.ScreenTransition ? 1 : 0);
+        Append(b, f.Recomposited ? 1 : 0); Append(b, f.GpuBackend ? 1 : 0);
+        Append(b, f.ScreenTransition ? 1 : 0);
+        Append(b, f.GpuDrawItems); Append(b, f.GpuTextureUploads); AppendTicks(b, f.GpuTextureUploadTicks);
         Append(b, f.PresentHostRequest ? 1 : 0); Append(b, f.PresentScreenTransition ? 1 : 0);
         Append(b, f.PresentRetainedMutation ? 1 : 0); Append(b, f.PresentContinuousChannel ? 1 : 0);
         Append(b, f.PresentDiscreteCell ? 1 : 0);
@@ -286,12 +310,13 @@ public sealed class PerformanceFrameLog : IDisposable
         public string Script = "<unknown>";
         public string PresentScript = "<none>";
         public int PresentOffset = -1, PresentOpcode = -1;
-        public bool Recomposited, ScreenTransition;
+        public bool Recomposited, GpuBackend, ScreenTransition;
         public bool PresentHostRequest, PresentScreenTransition, PresentRetainedMutation;
         public bool PresentContinuousChannel, PresentDiscreteCell;
         public long ObjectVisits, TimeVaryingObjects, DrawLayers, FillLayers, TransitionLayers, SkippedLayers;
         public long IntegerLayers, FractionalTranslationLayers, AxisAlignedScaleLayers;
         public long GeneralAffineLayers, AffineLayers, SingularLayers, DynamicLayers;
         public long OpaqueLayers, AlphaLayers, AdditiveLayers, SourcePixels, CandidatePixels, FullScreenLayers;
+        public long GpuDrawItems, GpuTextureUploads, GpuTextureUploadTicks;
     }
 }

@@ -20,6 +20,8 @@ public partial class Main : Godot.Control
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
+    private GpuRetainedRenderer _gpuRenderer = null!;
+    private bool _useGpuBackend = true;
     private ImageTexture? _ageCursorTexture;
     private TextureRect _waitIndicator = null!;
     private ImageTexture? _waitIndicatorSheet;
@@ -103,6 +105,7 @@ public partial class Main : Godot.Control
         };
         AddChild(_screenView);   // added first -> draws behind the text/status labels
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _gpuRenderer = new GpuRetainedRenderer(this);
 
         // Native ADV wait marker: a tiny independently animated atlas region. Keeping it separate from the
         // 800x600 software backbuffer avoids recompositing the entire retained scene throughout static waits.
@@ -187,6 +190,14 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--gfx-log" && i + 1 < userArgs.Length) _gfxLogPath = userArgs[i + 1];
             if (userArgs[i] == "--timeline-log" && i + 1 < userArgs.Length) _timelineLogPath = userArgs[i + 1];
             if (userArgs[i] == "--perf-log" && i + 1 < userArgs.Length) _perfLogPath = userArgs[i + 1];
+            if (userArgs[i] == "--render-backend" && i + 1 < userArgs.Length)
+            {
+                if (userArgs[i + 1].Equals("gpu", System.StringComparison.OrdinalIgnoreCase))
+                    _useGpuBackend = true;
+                else if (userArgs[i + 1].Equals("software", System.StringComparison.OrdinalIgnoreCase))
+                    _useGpuBackend = false;
+                else GD.PushWarning($"unknown --render-backend '{userArgs[i + 1]}'; using gpu");
+            }
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
@@ -208,6 +219,7 @@ public partial class Main : Godot.Control
 
         if (!double.IsFinite(speed) || speed <= 0) speed = 1.0;
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
+        GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
@@ -721,6 +733,7 @@ public partial class Main : Godot.Control
     public override void _ExitTree()
     {
         DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); _locator?.Dispose();
+        _gpuRenderer?.Dispose();
         if (_perf != null)
         {
             _perf.Dispose();
@@ -762,6 +775,202 @@ public partial class Main : Godot.Control
 
     private void Recomposite()
     {
+        bool gpuSnapshotCaptured = false;
+        if (_useGpuBackend && TryRecompositeGpu(out gpuSnapshotCaptured)) return;
+        _gpuRenderer.Visible = false;
+        _screenView.Visible = true;
+        RecompositeSoftware(gpuSnapshotCaptured ? _visibleSnapshot : null);
+    }
+
+    private bool TryRecompositeGpu(out bool snapshotCaptured)
+    {
+        snapshotCaptured = false;
+        // Preserve the existing high-volume object/timeline diagnostics exactly. They are debugging tools,
+        // not performance workloads, and their software decision strings remain the canonical evidence.
+        if (_gfxLogPath != null || _timeline != null) return false;
+
+        long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+        if (_host.TrySnapshotScreenTransition(out _)) return false; // P4: whole-screen offscreen targets
+        _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot);
+        snapshotCaptured = true;
+        _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+        _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
+
+        // Additive LERP-tint has not appeared in the target workloads and needs a dedicated additive shader
+        // variant before leaving the software oracle.
+        if (_visibleSnapshot.Any(v =>
+            v.Blend == BlendKind.Additive && !v.MultiplyTint && v.TintStrength > 0))
+            return false;
+
+        if (_perf != null)
+        {
+            var presentStep = _trace.LatestStep;
+            _perf.RecordPresentationCoordinate(presentStep?.Script ?? "<startup>",
+                                               presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
+        }
+        _perf?.BeginRecomposite(screenTransition: false);
+        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        foreach (var label in _surfaceTextLabels) label.Visible = false;
+        _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
+
+        int surfaceTextLabelIndex = 0;
+        _gpuRenderer.BeginFrame();
+        foreach (var v in _visibleSnapshot)
+        {
+            _perf?.RecordObject(v.TimeVarying);
+            var affine = Transform2DMath.Build(v.Transform, v.Rotation).FromLocalOrigin(v.DstX, v.DstY);
+            if (v.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
+            float opacity = v.Alpha / 255f;
+            var rawObject = _vm.Gfx.TryGet(v.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            var texture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
+                : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+
+            if (v.SurfaceTransition is { } transition)
+            {
+                _perf?.RecordTransitionLayer();
+                DrawTransitionRangeGpu(_visibleSnapshot, transition);
+            }
+            else if (v.SurfaceResId == 0 && texture == null)
+            {
+                if (v.Blend != BlendKind.Opaque)
+                {
+                    int width = v.W > 0 ? v.W : ScreenWidth;
+                    int height = v.H > 0 ? v.H : ScreenHeight;
+                    float fillOpacity = v.MultiplyTint
+                        ? opacity
+                        : opacity * v.TintStrength / 255f;
+                    _perf?.RecordFillLayer();
+                    if (_gpuRenderer.DrawFill(width, height, affine, v.Tint, fillOpacity))
+                        _perf?.RecordGpuLayer(width, height, affine, ScreenWidth, ScreenHeight,
+                                              dynamic: false, BlendKind.Alpha);
+                }
+                else _perf?.RecordSkippedLayer();
+            }
+            else
+            {
+                if (texture == null && !movieSurfaceBound)
+                {
+                    resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+                    texture = _host.ResolveResIdTexture(v.SurfaceResId);
+                    _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+                }
+                if (texture == null) _perf?.RecordSkippedLayer();
+                else
+                {
+                    var resolved = texture.Value;
+                    bool drawn = _gpuRenderer.DrawTexture(resolved.Image, resolved.AssetId, v.ColorKey,
+                        v.SrcX, v.SrcY, v.W, v.H, affine, v.Tint, v.TintStrength,
+                        opacity, v.MultiplyTint, resolved.IsDynamic,
+                        rawObject?.SourceSlot ?? v.Handle, v.Blend);
+                    if (drawn)
+                        _perf?.RecordGpuLayer(v.W, v.H, affine, ScreenWidth, ScreenHeight,
+                                              resolved.IsDynamic, v.Blend);
+                }
+            }
+
+            if (rawObject != null)
+            {
+                _host.SnapshotSurfaceText(rawObject.SourceSlot, _surfaceTextSnapshot);
+                foreach (var surfaceText in _surfaceTextSnapshot)
+                {
+                    if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
+                        surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
+                    var textPos = affine.Apply(surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
+                    var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
+                    label.Position = new Vector2((float)textPos.X, (float)textPos.Y);
+                    label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
+                                             System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
+                    label.Text = surfaceText.Text;
+                    ApplyAdvTextStyle(label, surfaceText.Style);
+                    label.Visible = true;
+                }
+            }
+        }
+
+        var stats = _gpuRenderer.EndFrame();
+        _perf?.RecordGpu(stats.DrawItems, stats.TextureUploads, stats.TextureUploadTicks);
+        _screenView.Visible = false;
+        _gpuRenderer.Visible = true;
+        _perf?.EndRecomposite();
+        return true;
+    }
+
+    // Native type-0 retained range transition: range A has already passed through ordinary z-order;
+    // republish range B at the transition placeholder with progress-scaled source opacity. This mirrors
+    // DrawTransitionRange's software-oracle order without allocating an offscreen CPU surface.
+    private int DrawTransitionRangeGpu(IReadOnlyList<RenderObject> visible, SurfaceTransitionState transition)
+    {
+        int drawn = 0;
+        long end = transition.RangeBStart + transition.RangeBCount;
+        foreach (var source in visible)
+        {
+            if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
+                continue;
+            _perf?.RecordObject(source.TimeVarying);
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation)
+                .FromLocalOrigin(source.DstX, source.DstY);
+            if (source.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
+            float opacity = source.Alpha / 255f * (float)transition.Progress;
+            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            var texture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+                : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+
+            if (source.SurfaceResId == 0 && texture == null)
+            {
+                if (source.Blend == BlendKind.Opaque)
+                {
+                    _perf?.RecordSkippedLayer();
+                    continue;
+                }
+                int width = source.W > 0 ? source.W : ScreenWidth;
+                int height = source.H > 0 ? source.H : ScreenHeight;
+                _perf?.RecordFillLayer();
+                if (_gpuRenderer.DrawFill(width, height, affine, source.Tint,
+                    opacity * source.TintStrength / 255f))
+                {
+                    _perf?.RecordGpuLayer(width, height, affine, ScreenWidth, ScreenHeight,
+                                          dynamic: false, BlendKind.Alpha);
+                    drawn++;
+                }
+                continue;
+            }
+
+            if (!movieSurfaceBound && texture == null)
+            {
+                resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+                texture = _host.ResolveResIdTexture(source.SurfaceResId);
+                _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+            }
+            if (texture == null)
+            {
+                _perf?.RecordSkippedLayer();
+                continue;
+            }
+            var resolved = texture.Value;
+            if (_gpuRenderer.DrawTexture(resolved.Image, resolved.AssetId, source.ColorKey,
+                source.SrcX, source.SrcY, source.W, source.H, affine, source.Tint, source.TintStrength,
+                opacity, source.MultiplyTint, resolved.IsDynamic,
+                rawObject?.SourceSlot ?? source.Handle, source.Blend))
+            {
+                _perf?.RecordGpuLayer(source.W, source.H, affine, ScreenWidth, ScreenHeight,
+                                      resolved.IsDynamic, source.Blend);
+                drawn++;
+            }
+        }
+        return drawn;
+    }
+
+    private void RecompositeSoftware(IReadOnlyList<RenderObject>? sampledVisible = null)
+    {
         if (_perf != null)
         {
             var presentStep = _trace.LatestStep;
@@ -796,11 +1005,12 @@ public partial class Main : Godot.Control
         {
             phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot); // synchronized objects + ranges
+            if (sampledVisible == null)
+                _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot); // synchronized objects + ranges
             _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
             _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            CompositeVisibleObjects(_visibleSnapshot, 1f, ref surfaceTextLabelIndex, decisions, true);
+            CompositeVisibleObjects(sampledVisible ?? _visibleSnapshot, 1f, ref surfaceTextLabelIndex, decisions, true);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;

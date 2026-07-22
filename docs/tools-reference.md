@@ -225,7 +225,15 @@ split into fractional translation, axis-aligned scale, and general affine layers
 allocation total is split into recomposition, retained snapshot, compositor, source-preparation,
 `Image.SetData`, and Godot UI phases so a normal windowed capture can attribute remaining managed garbage
 without enabling a high-volume trace. The
-writer replaces the target, buffers 120 rows between flushes, and prints its frame/recomposition counts on
+`render_backend` column is `0` for the software compositor and `1` for the opt-in retained GPU path;
+`gpu_draw_items`, `gpu_texture_uploads`, and `gpu_texture_upload_ms` distinguish cheap retained-item updates
+from new/static or changed/dynamic texture publication. Existing layer/transform/pixel workload columns are
+populated for either backend, while `raster_ms`, `set_data_ms`, and `texture_update_ms` remain zero on a native
+GPU presentation. GPU retained rendering is the normal backend; select the correctness oracle explicitly
+with `--render-backend software` or the local launcher's `-SoftwareRenderer` switch. An explicit
+`--render-backend gpu` is accepted but normally unnecessary.
+
+The writer replaces the target, buffers 120 rows between flushes, and prints its frame/recomposition counts on
 normal shutdown. Use a windowed Release-equivalent run at speed 1 for performance evidence; headless runs
 validate the schema only. Before a baseline, verify that no older Godot game processes remain alive; an
 apparently closed window can otherwise leave a renderer consuming CPU and contaminate later runs. Do not
@@ -233,12 +241,10 @@ combine baseline captures with `--shot-sequence`, `--gfx-log`, or
 `--timeline-log`, whose diagnostics add substantial or differently shaped work. Example from `age-reimpl/`:
 `godot --path godot -- --scene SC0000 --boot --perf-log ../build/perf/sc0000.csv`.
 
-During the tracked performance-tuning effort, `run-godot.cmd` passes the launcher's `-PerfLog` switch by
-default. Every windowed batch-file launch creates `build/perf/run-yyyyMMdd-HHmmss-fff.csv` and prints the
-absolute target before Godot starts; normal shutdown flushes it and prints the captured frame/recomposition
-counts. This temporary batch-file default does not affect direct `run-godot.ps1` launches, whose `-PerfLog`
-switch remains explicit, and it does not add a log to `-SelfTest`. Remove the batch-file opt-in after the
-performance effort is accepted.
+`run-godot.ps1 -PerfLog` creates `build/perf/run-yyyyMMdd-HHmmss-fff.csv` and prints the absolute target
+before Godot starts; normal shutdown flushes it and prints the captured frame/recomposition counts. The
+performance effort's temporary `run-godot.cmd` opt-in was removed after GPU acceptance, so ordinary batch-file
+runs no longer write a log. Selftests also remain unprofiled.
 
 **Godot debug scene launcher:** press **F4** while the natural boot is showing TITLE. TITLE's visible menu is
 a live 1 ms sleep/input-poll loop rather than an ADV `wait-for-input`; the launcher identifies that exact
