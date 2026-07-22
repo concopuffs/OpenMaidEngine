@@ -575,9 +575,14 @@ assets with `0x80040217`. Broader samples tie current compatibility to 16-aligne
 installed MVB assets use 280x352. Texture, voice, and both movie consumers now use universal packed
 resolution; VM surface state and Godot caches retain the full selector. Focused tests prove SC0010's low
 texture/voice ids and append-pack identity; 302 engine tests, a zero-warning Godot build, and threaded
-selftest pass. **NEXT:** manually re-enter combat and confirm the BTL ids now resolve into the movie backend.
-The expected remaining failures are the known 280x352 DirectShow graphs; defer decoder replacement until
-that resolver-only acceptance check, preserving destination dimensions and failed-movie identity afterward.
+selftest pass. Manual combat acceptance confirms the split: 400x400 MVB908 plays and completes, while
+280x352 MVB961/MVB238 resolve correctly but DirectShow rejects their graph connection with `0x80040217`.
+The user observed a stall after the sequence; failed movies are marked complete and the successful movie's
+stop log proves the shared movie wait resumed, but failed `0x23f` duration remains `-1` and the final stalled
+VM/service coordinate was not logged. **NEXT:** replace the decoder boundary with a software MPEG path that
+returns real duration/frames for 280x352 effects and regress failure as nonblocking. If the stall remains,
+capture it as a separate BTL timed-presentation issue. Preserve created destination dimensions and failed
+movie identity through the backend change.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

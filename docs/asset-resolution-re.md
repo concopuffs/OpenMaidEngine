@@ -323,12 +323,9 @@ five such ids:
 | `0x2bca` | `MVB914.AGF` | 133,124 bytes | 400x400 |
 
 All five archive payloads begin with MPEG program-stream pack code `00 00 01 BA`; none is a corrupt still
-AGF. `GodotAdvHost.PlayMovieToSurface` currently calls the port's scene-relative `ResourceMap.Resolve`,
-which returns null because BTL owns no inferred SC group. Native instead passes the id unchanged to the
-universal packed opener. Texture and voice facades require the same correction, not a new movie-only
-fallback. The logged `AGF decode failed MVB914.AGF` is downstream:
-after movie lookup fails, no movie identity is registered, the VM still binds the raw id to the surface,
-and the compositor falls through to the still-image decoder because MPEG movies also use `.AGF` names.
+AGF. Universal packed resolution was implemented across texture, voice, and both movie paths on 2026-07-21.
+The following manual combat run produced no `movie unresolved` warnings: the BTL ids reached
+`ResourceMap.ResolveMovie`, VFS reads, and the movie backend as native requires.
 
 Resolution is not the only blocker. An archive-backed probe of the actual Windows backend found that the
 current DirectShow graph decodes `MVB914` and exposes a positive stop time, but rejects all four 280x352
@@ -339,13 +336,28 @@ are 280x352. Requesting RGB24 instead of RGB32 does not change negotiation. The 
 failure to DirectShow/filter compatibility with these non-16-aligned MPEG display widths; it does not prove
 which internal stock filter imposes the restriction.
 
-The correct implementation boundary therefore has three parts: switch all ordinary typed resource
-consumers to the native universal packed lookup; introduce the already-planned decoder interface/factory and a software MPEG
-fallback that handles the installed non-16-aligned effects; and preserve the destination surface's created
-dimensions instead of replacing every movie surface with the SC0000-specific 800x600 value. Decoder failure
-should also leave a completed movie identity long enough to suppress bogus still-AGF fallback. Regressions
-must cover at least raw BTL resolution, a 280x352 effect (`MVB001`), a 400x400 effect (`MVB914`), immediate
-`0x23f` stop time, RGBA frame publication, completion, and release.
+The resolver-only acceptance run makes that split visible in one exchange. `MVB961` (`0x2be3`, 112,644
+bytes) and `MVB238` (`0x2b94`, 143,364 bytes) both declare 280x352 and fail at
+`IGraphBuilder.Connect(sourceOut, sampleGrabberIn)` with `0x80040217`. In the same run `MVB908`
+(`0x2bc2`, 126,980 bytes) declares 400x400, starts with a 333 ms stop time, publishes RGBA frames, reaches
+completion, and is stopped by script cleanup. This is decisive backend evidence rather than a resolver,
+VFS, signature, or corrupt-asset problem.
+
+The user nevertheless observed the combat presentation stall after that sequence. The existing failure
+path calls `NotifyMovieCompleted` immediately, and the successful `movie stopped MVB908` line proves the
+shared `0x21c` movie wait reached completion at least for the logged sequence. The log contains no VM offset
+or transition-state record after cleanup, so it does not yet prove that DirectShow itself owns the final
+stall. One remaining non-native input is concrete: failed graphs make `0x23f` return `-1`, which BTL stores
+in its per-effect duration table at `0x2b31`; a real fallback decoder must instead supply duration and normal
+completion. If the stall survives that backend correction, capture the VM/service boundary at the stall and
+treat it as a separate BTL timed-presentation bug.
+
+The remaining implementation boundary is the already-planned decoder interface/factory plus a software
+MPEG backend that handles the installed non-16-aligned effects, and preservation of the destination
+surface's created dimensions instead of replacing every movie surface with the SC0000-specific 800x600
+value. Failure must remain nonblocking and suppress bogus still-AGF fallback. Regressions must cover at
+least a 280x352 effect (`MVB001`), a 400x400 effect (`MVB914`), immediate `0x23f` stop time, RGBA frame
+publication, completion, failure completion, and release.
 
 ### Modal startup/ending movie resources (implemented 2026-07-20)
 
