@@ -16,6 +16,8 @@ __pycache__/
 # .NET (engine/) build output
 engine/**/bin/
 engine/**/obj/
+tools/**/bin/
+tools/**/obj/
 .vs/
 
 # Godot / C# (future)

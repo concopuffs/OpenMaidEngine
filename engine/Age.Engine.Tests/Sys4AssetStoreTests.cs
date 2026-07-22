@@ -40,6 +40,23 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    public void CompletePackedAssetEnumerationPreservesBaseThenAppendOrder()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var append = Assert.Single(catalog.AppendPacks).Value;
+
+        var assets = catalog.EnumerateAssets();
+
+        Assert.Equal(catalog.Files.Count + append.Files.Count, assets.Count);
+        Assert.Equal(0, assets[0].PackedId);
+        Assert.Same(catalog.Files[0], assets[0].Asset);
+        Assert.Equal(0x01000000, assets[catalog.Files.Count].PackedId);
+        Assert.Same(append.Files[0], assets[catalog.Files.Count].Asset);
+        Assert.Equal(catalog.EnumerateScripts(), assets.Where(entry =>
+            entry.Asset.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
     public void CompleteAppendDirectoryAndPayloadsMatchBinExtractAlf()
     {
         string temp = Path.Combine(Path.GetTempPath(), "age-vfsb-oracle-" + Guid.NewGuid().ToString("N"));

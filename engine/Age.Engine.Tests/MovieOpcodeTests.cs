@@ -100,10 +100,11 @@ public class MovieOpcodeTests
         var factory = new FakeMovieDecoderFactory(decoder);
         var payload = new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba });
 
-        var runtime = MovieRuntime.Open("TEST.AGF", 7, payload, factory);
+        var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123, payload, factory);
 
         Assert.Same(payload, factory.OpenedPayload);
         Assert.Same(decoder, runtime.Decoder);
+        Assert.Equal(0x123, runtime.ResourceId);
         Assert.Equal(1876, runtime.Decoder.StopTimeMs);
         Assert.Equal(5000, runtime.WatchdogMs);
         Assert.True(runtime.Decoder.TryTakeFrame(out var frame));
@@ -120,7 +121,7 @@ public class MovieOpcodeTests
     public void MovieRuntimeComputesBoundedWatchdogFromDecoderMetadata(long? stopTimeMs, long expected)
     {
         var decoder = new FakeMovieDecoder { StopTimeMs = stopTimeMs };
-        var runtime = MovieRuntime.Open("TEST.AGF", 7,
+        var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123,
             new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba }),
             new FakeMovieDecoderFactory(decoder));
 

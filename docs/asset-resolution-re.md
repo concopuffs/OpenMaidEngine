@@ -361,12 +361,15 @@ same completed state so a backend that starts but never signals EOF cannot hold 
 reported combat stall survives this guard, capture the VM/service coordinate after `0x2518` and treat it as
 a separate BTL timed-presentation bug.
 
-The remaining implementation boundary is the already-planned decoder interface/factory plus a software
-MPEG backend that handles the installed non-16-aligned effects, and preservation of the destination
-surface's created dimensions instead of replacing every movie surface with the SC0000-specific 800x600
-value. Failure is now nonblocking and suppresses bogus still-AGF fallback. Regressions must cover at
-least a 280x352 effect (`MVB001`), a 400x400 effect (`MVB914`), immediate `0x23f` stop time, RGBA frame
-publication, completion, failure completion, and release.
+The FFmpeg replacement and destination-surface work are recorded in `docs/platform-portability.md` and
+`docs/phase-b-framework.md`. Movie identity also remains typed across the entire retained-surface lifecycle.
+The packed catalog is immutable while mounted, so once an id enters the movie path its `.AGF`-named MPEG
+payload cannot fall through to the ACGF still decoder before the first frame or after the last live binding
+is detached. The latter guard closes a real cross-thread cleanup window: BTL clears `GfxState` and releases
+the host surface in one VM instruction, while the compositor may hold a snapshot from immediately before
+that pair. Without remembered movie typing, the snapshot briefly attempted to decode MVB955/MVB004/MVB914
+as still images after successful playback and printed false `expected an ACGF image` warnings. This does not
+retain a frame or playback instance; it only prevents an immutable movie resource from being reclassified.
 
 ### Modal startup/ending movie resources (implemented 2026-07-20)
 

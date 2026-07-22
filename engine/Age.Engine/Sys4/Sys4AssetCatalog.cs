@@ -179,23 +179,27 @@ public sealed class Sys4AssetCatalog
         .Where(f => f.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
         .Select(f => f.Name.ToUpperInvariant()).ToArray();
 
+    /// <summary>Enumerate every real asset in native packed-id order, including mounted append packs.</summary>
+    public IReadOnlyList<PackedAssetEntry> EnumerateAssets()
+    {
+        var assets = new List<PackedAssetEntry>();
+        AddAssets(this, assets);
+        foreach (var append in _appendPacks.OrderBy(pair => pair.Key).Select(pair => pair.Value))
+            AddAssets(append, assets);
+        return assets;
+    }
+
     /// <summary>Enumerate every script in native packed-id order, including mounted append packs.
     /// Placeholder slots and non-script assets are excluded without collapsing raw indices.</summary>
     public IReadOnlyList<PackedAssetEntry> EnumerateScripts()
-    {
-        var scripts = new List<PackedAssetEntry>();
-        AddScripts(this, scripts);
-        foreach (var append in _appendPacks.OrderBy(pair => pair.Key).Select(pair => pair.Value))
-            AddScripts(append, scripts);
-        return scripts;
-    }
+        => EnumerateAssets().Where(entry =>
+            entry.Asset.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)).ToArray();
 
-    private static void AddScripts(Sys4AssetCatalog catalog, List<PackedAssetEntry> scripts)
+    private static void AddAssets(Sys4AssetCatalog catalog, List<PackedAssetEntry> assets)
     {
         long selector = (long)catalog.PackId << 24;
         foreach (var entry in catalog.Files)
-            if (entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
-                scripts.Add(new PackedAssetEntry(selector | (uint)entry.RawIndex, entry));
+            assets.Add(new PackedAssetEntry(selector | (uint)entry.RawIndex, entry));
     }
 
     private static Dictionary<string, (int Start, int End)> BuildSceneRanges(IReadOnlyList<AssetEntry> files)

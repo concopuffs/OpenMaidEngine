@@ -605,7 +605,7 @@ dependency pin, corpus codec inventory, timing contract, and packaging rules liv
    and a monotonic clock, publish only due frames, delay EOF completion through the final presentation interval,
    and retain the existing watchdog. Make FFmpeg the default with no dimension/effect dispatch and exercise both
    non-modal `0x236` and modal/cancellable `0x20f` paths.
-4. **Next — run the installed-corpus gate.** Every one of the 213 MPEG payloads must open, report its expected display
+4. **Completed — run the installed-corpus gate.** Every one of the 213 MPEG payloads must open, report its expected display
    dimensions and a positive stop time, produce a correctly sized RGBA frame, maintain nondecreasing timestamps,
    reach EOF, and dispose within a bound. Normal tests use small project-authored 280-wide and aligned MPEG
    fixtures so decoder behavior is never disabled when the original install is absent; the full local sweep is
@@ -643,9 +643,47 @@ clock tests cover due-frame publication, final completion, cancellation, and fai
 formerly failing 280x352 `MVB961` and aligned `MVB908`. A natural headless SYSTEM4 smoke played and released
 `LOGO.AGF` at its reported 7288 ms, then opened 106919 ms `OP.AGF` and published its first frame before bounded
 shutdown. The user then confirmed the opening movies play correctly in a normal windowed run. The complete suite
-is 318 tests, the Godot build is warning-free, and threaded selftest passes. **NEXT:** run the 213-payload
-installed-corpus gate, then validate SC0000 CHAPTER and the original battle exchange before removing DirectShow
-or judging the tabled combat stall.
+is 318 tests, the Godot build is warning-free, and threaded selftest passes. That established the prerequisite
+for the installed-corpus gate recorded below.
+
+Step 4 completed on 2026-07-22. `tools/movie-corpus-gate` selects MPEG program streams by signature from the
+complete native-order VFS catalog and runs the unpaced FFmpeg session to EOF. The acceptance run discovered the
+expected 213 assets and passed all 213 under the 30-second per-item bound; every stream reported independent
+matching dimensions, positive duration/frame rate, correctly sized RGBA frames, nondecreasing timestamps,
+changing imagery, EOF, and clean teardown. The run decoded 15,788 frames across all twelve installed dimension
+variants in 8.1 seconds; the longest item, 263-second `ED.AGF`, decoded in 4.4 seconds. Detailed compatibility
+evidence lives in `docs/platform-portability.md`, and reproduction/report options live in
+`docs/tools-reference.md`. This moved acceptance to step 5's windowed SC0000 `CHAPTER`, aligned plus 280-wide
+combat effects, combat cleanup, and prior-stall checks. DirectShow remains unselected but in-tree until those
+manual checks pass.
+
+The first post-corpus combat recheck still stalled after an apparently absent effect. The ordinary Godot log
+ruled out an FFmpeg decode/EOF failure: both reached battle batches opened, published first frames, and stopped
+(`MVB005`/`MVB952`/`MVB913`, then `MVB921`/`MVB126`/`MVB953`) with no decoder failure or watchdog. F6 was added as
+an observe-only bounded JSON snapshot of the current/recent VM path, host waits, movie/surface lifecycle, and
+blocking finite gfx channels.
+
+The first F6 capture localized the stall exactly to BTL's `0x2492..0x2515` movie polling loop, parked at the
+16 ms sleep `BTL@0x250a`. Gfx had no blocking timed presentation, and the only real decoder (`MVB033`, surface
+44) was complete. Surfaces 7 and 8 nevertheless retained incomplete/no-frame registrations for already stopped
+`MVB953` and `MVB126`, so op `0x23a` could never clear. The user's observation that the last effect frame remained
+until replacement was the same ownership defect: movie frames, completion, and decoder dictionaries were keyed
+by shared resource id even though BTL can bind/restart one asset through multiple surfaces. Releasing one binding
+removed shared state while another surface registration survived forever.
+
+Movie ownership is now keyed by a unique playback instance; resource id is asset identity only. Each surface
+resolves its own instance frame/completion, replacing a surface invalidates late callbacks from only its prior
+instance, and releasing one of two same-resource playbacks cannot affect the other. Blank pre-roll surfaces no
+longer borrow a concurrent instance's frame, and console/timeline diagnostics include playback ids. Duplicate-
+resource and replacement regressions pass, as do all 327 engine tests, the zero-warning Godot build, threaded
+selftest, and the 213/213 unpaced corpus gate. A quick repeat of the same combat exchange no longer stalled.
+The run did expose false `AGF decode failed ... expected an ACGF image` lines after successful first frames and
+immediately before teardown. This was not FFmpeg failure: the compositor could retain a pre-release `GfxState`
+snapshot for one frame after the host detached the movie binding, then send the `.AGF`-named MPEG id through the
+still-image fallback. Runtime-learned movie resource typing now survives instance teardown and suppresses only
+that invalid fallback; it does not retain the frame or decoder. The focused cleanup regression, all 328 engine
+tests, zero-warning Godot build, and threaded selftest pass. **NEXT:** perform a longer combat/return-to-FIELD
+acceptance run, then delete DirectShow if the remaining live gate stays clean.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

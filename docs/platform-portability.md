@@ -25,8 +25,8 @@ replaced before claiming portable exports.
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `FfmpegMovieDecoder` is the selected live factory over the project-owned `native/age_movie_ffmpeg` ABI; `DirectShowMovieDecoder` remains unselected pending deletion | Windows-x64 live playback now covers formerly rejected 280-wide effects, but other native targets and the full 213-payload gate remain | Run the corpus and windowed live gates, then delete DirectShow and add target-specific native builds |
-| Movie integration | `MovieRuntime` owns `IMovieDecoder` from an injected factory; the FFmpeg worker paces PTS against a monotonic clock and supports cancellation/failure completion | Backend ownership is portable, while `Main` remains annotated Windows because only the win-x64 bundle is available | Add Linux/macOS builds and remove the Windows annotation after DirectShow is deleted |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `FfmpegMovieDecoder` is the selected live factory over the project-owned `native/age_movie_ffmpeg` ABI; `DirectShowMovieDecoder` remains unselected pending deletion | Windows-x64 passes the complete 213-payload installed-corpus gate; other native targets and the remaining windowed CHAPTER/combat checks are pending | Run the windowed live gates, then delete DirectShow and add target-specific native builds |
+| Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory, and the FFmpeg worker paces PTS against a monotonic clock with cancellation/failure completion | Concurrent/restarted uses of one asset have independent frame/completion/teardown state; `Main` remains annotated Windows because only the win-x64 bundle is available | Recheck the corrected combat lifecycle, then add Linux/macOS builds and remove the Windows annotation after DirectShow is deleted |
 | Movie audio | FFmpeg detects the audio stream but the current ABI returns video frames only | MPEG movie audio remains intentionally silent | Extend the ABI with timestamped PCM and select an audio/presentation clock; separate feature slice |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
@@ -134,6 +134,16 @@ copies the shim, five required shared libraries, and FFmpeg license beside `Hime
 smoke completed 7288 ms `LOGO.AGF`, opened 106919 ms `OP.AGF`, and published frames from both without loading
 DirectShow; the user subsequently confirmed both opening movies work in normal windowed playback. Full
 export/source-offer packaging and non-Windows builds remain outstanding.
+
+The Windows-x64 installed-corpus gate passed on 2026-07-22 with the pinned dependency: all 213 signature-selected
+MPEG payloads opened and reached EOF under a 30-second per-item bound. It decoded all 15,788 frames across twelve
+display sizes (120x120 through 800x600), independently matched sequence-header dimensions, found positive
+duration and frame-rate metadata, verified tightly packed RGBA size and nondecreasing timestamps, observed
+changing imagery in every asset, and closed every session. The set includes all 184 video-only and 29 audio-bearing
+streams; audio presence is detected but PCM remains intentionally undelivered. The 263-second `ED.AGF` was the
+slowest decode at 4.4 seconds in the deliberately unpaced gate, so its prior 30-second failure was test-harness
+whole-frame hashing overhead rather than a decoder incompatibility. The disposable machine report is
+`build/movie-corpus-ffmpeg.json`; invocation and report semantics are canonical in `docs/tools-reference.md`.
 
 ## Cross-platform validation gates
 

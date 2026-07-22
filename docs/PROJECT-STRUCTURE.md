@@ -45,6 +45,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── extract_phase2.py                   batch: disasm + text + data extraction
     │   ├── extract_init.py, global_map.py …    *INIT parsers, global-var map builder
     │   ├── validate_opcode_table*.py           decode-coverage validators
+    │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
     │   └── probe_*.py                          format reverse-engineering probes (historical)
     │
     ├── bin/                                  3rd-party binaries we use (not ours, not the game's)

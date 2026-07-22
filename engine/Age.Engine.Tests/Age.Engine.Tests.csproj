@@ -26,6 +26,11 @@
     <Compile Include="..\..\godot\MovieRuntime.cs" Link="MovieRuntime.cs" />
     <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
     <Compile Include="..\..\godot\FfmpegMovieDecoder.cs" Link="FfmpegMovieDecoder.cs" />
+    <Compile Include="..\..\godot\PageLocatorState.cs" Link="PageLocatorState.cs" />
+    <Compile Include="..\..\godot\GodotTimelineLog.cs" Link="GodotTimelineLog.cs" />
+    <Compile Include="..\..\godot\GodotTraceSink.cs" Link="GodotTraceSink.cs" />
+    <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
+    <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
     <Compile Include="..\..\godot\DirectShowMovieDecoder.cs" Link="DirectShowMovieDecoder.cs" />
   </ItemGroup>
 

@@ -14,6 +14,12 @@ internal readonly record struct FfmpegMovieInfo(
 
 internal sealed record FfmpegVideoFrame(RgbaImage Image, long PresentationTimeMs);
 
+internal interface IFfmpegFrameSource : IDisposable
+{
+    FfmpegMovieInfo Info { get; }
+    bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame);
+}
+
 /// <summary>Sequential, unpaced access to the project-owned FFmpeg C ABI for isolated probes and playback.</summary>
 internal sealed class FfmpegMovieSession : IFfmpegFrameSource
 {

@@ -31,6 +31,22 @@ public readonly record struct NumericGlyphStyle(int SurfaceSlot, int AtlasX, int
     public bool Registered => SurfaceSlot != 0;
 }
 
+public sealed record BlockingGfxObjectDiagnostic(
+    long Handle, int SourceSlot, long StartMs, long ControlFlags,
+    bool ColorEnabled, long ColorDelayMs, long ColorDurationMs,
+    bool ScaleEnabled, long ScaleDelayMs, long ScaleDurationMs,
+    bool RotationEnabled, long RotationDelayMs, long RotationDurationMs,
+    bool TranslationEnabled, long TranslationDelayMs, long TranslationDurationMs);
+
+public sealed record GfxDiagnosticSnapshot(
+    long NowMs, bool HasActiveTimedPresentation, int ObjectCount, int VisibleObjectCount,
+    int ActiveSurfaceTransitionCount, long AnimationServiceFlags,
+    long AnimClockDurationTicks, long AnimClockGeneration,
+    uint PreviousFrameTimeMilliseconds, uint CurrentFrameTimeMilliseconds,
+    long RangeTransformFirst, long RangeTransformCount,
+    BlockingGfxObjectDiagnostic? BlockingRangeTransform,
+    IReadOnlyList<BlockingGfxObjectDiagnostic> BlockingObjects);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
@@ -544,6 +560,51 @@ public sealed class GfxState
                                             (o.OneShotColorEnabled || o.ScaleEnabled ||
                                              o.RotationChannelEnabled || o.TranslationEnabled));
     }
+
+    /// <summary>Observe-only state for a runtime stall capture. It identifies the exact finite channels
+    /// which can keep the host's op-0x21c presentation wait active.</summary>
+    public GfxDiagnosticSnapshot CaptureDiagnosticSnapshot(long nowMs)
+    {
+        lock (_lock)
+        {
+            BlockingGfxObjectDiagnostic? range = HasBlockingChannels(_rangeTransform)
+                ? DescribeBlockingObject(-1, _rangeTransform)
+                : null;
+            var objects = _objects
+                .Where(pair => pair.Value.Visible
+                    && (pair.Value.OneShotAnimationControlFlags & 1) == 0
+                    && HasBlockingChannels(pair.Value))
+                .OrderBy(pair => pair.Key)
+                .Select(pair => DescribeBlockingObject(pair.Key, pair.Value))
+                .ToArray();
+            return new GfxDiagnosticSnapshot(
+                nowMs,
+                _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                    || range != null || objects.Length != 0,
+                _objects.Count,
+                _objects.Values.Count(o => o.Visible),
+                _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0),
+                AnimationServiceFlags,
+                AnimClockDurationTicks,
+                AnimClockGeneration,
+                PreviousFrameTimeMilliseconds,
+                CurrentFrameTimeMilliseconds,
+                _rangeTransformFirst,
+                _rangeTransformCount,
+                range,
+                objects);
+        }
+    }
+
+    private static bool HasBlockingChannels(GfxObject o)
+        => o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled;
+
+    private static BlockingGfxObjectDiagnostic DescribeBlockingObject(long handle, GfxObject o)
+        => new(handle, o.SourceSlot, o.OneShotStartMs, o.OneShotAnimationControlFlags,
+            o.OneShotColorEnabled, o.ColorDelayMs, o.ColorDurationMs,
+            o.ScaleEnabled, o.ScaleDelayMs, o.ScaleDurationMs,
+            o.RotationChannelEnabled, o.RotationDelayMs, o.RotationDurationMs,
+            o.TranslationEnabled, o.TranslationDelayMs, o.TranslationDurationMs);
 
     /// <summary>Op 0x242: replace the retained object's animation-control word. Native bit 0 makes its
     /// finite one-shot channels nonblocking and immune to op 0x243 forced completion.</summary>

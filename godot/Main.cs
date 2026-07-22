@@ -393,6 +393,12 @@ public partial class Main : Godot.Control
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (e is InputEventKey diagnosticKey && diagnosticKey.Keycode == Key.F6)
+        {
+            if (diagnosticKey.Pressed && !diagnosticKey.Echo) CaptureStallDiagnostic();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (_debugSceneLauncher?.Visible == true)
         {
             if (e is InputEventKey escape && escape.Pressed && !escape.Echo && escape.Keycode == Key.Escape)
@@ -500,6 +506,86 @@ public partial class Main : Godot.Control
 
     private static bool IsAdvanceAction(int action) => action is 4 or 5;
     private static bool HasAdvanceAction(int mask) => (mask & ((1 << 4) | (1 << 5))) != 0;
+
+    private void CaptureStallDiagnostic()
+    {
+        try
+        {
+            long nowMs = _clock.NowMs;
+            GodotTraceSnapshot trace = _trace.Snapshot();
+            var activeMovies = _movies
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new
+                {
+                    playback_id = pair.Key,
+                    resource_id = pair.Value.ResourceId,
+                    name = pair.Value.Name,
+                    asset_id = pair.Value.AssetId,
+                    stop_time_ms = pair.Value.Decoder.StopTimeMs,
+                    decoder_completed = pair.Value.Decoder.IsCompleted,
+                    decoder_failure = pair.Value.Decoder.Failure,
+                    frame_seen = _movieFrameSeen.Contains(pair.Key),
+                    completion_notified = _movieCompletionNotified.Contains(pair.Key),
+                    watchdog_ms = pair.Value.WatchdogMs,
+                    elapsed_ms = (long)Stopwatch.GetElapsedTime(pair.Value.StartedAtTimestamp).TotalMilliseconds,
+                })
+                .ToArray();
+            var pendingMovies = _pendingMovies
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new
+                {
+                    playback_id = pair.Key,
+                    resource_id = pair.Value.ResourceId,
+                    name = pair.Value.Name,
+                    asset_id = pair.Value.AssetId,
+                    stop_time_ms = pair.Value.Decoder.StopTimeMs,
+                    decoder_completed = pair.Value.Decoder.IsCompleted,
+                    decoder_failure = pair.Value.Decoder.Failure,
+                })
+                .ToArray();
+            var snapshot = new
+            {
+                format_version = 1,
+                captured_utc = System.DateTimeOffset.UtcNow.ToString("O"),
+                render_frame = _timelineFrame,
+                clock_ms = nowMs,
+                vm = new
+                {
+                    steps = _vm.Steps,
+                    halt_reason = _vm.HaltReason,
+                    done = _done,
+                    trace,
+                },
+                host = _host.CaptureDiagnosticSnapshot(),
+                gfx = _vm.Gfx.CaptureDiagnosticSnapshot(nowMs),
+                active_movies = activeMovies,
+                pending_movies = pendingMovies,
+            };
+
+            string directory = ProjectSettings.GlobalizePath("user://diagnostics");
+            System.IO.Directory.CreateDirectory(directory);
+            string path = System.IO.Path.Combine(directory,
+                $"stall-{System.DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.json");
+            var jsonOptions = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            };
+            System.IO.File.WriteAllText(path, JsonSerializer.Serialize(snapshot, jsonOptions));
+            string coordinate = trace.CurrentOffset >= 0
+                ? $"{System.IO.Path.GetFileNameWithoutExtension(trace.CurrentScript).ToUpperInvariant()}@0x{trace.CurrentOffset:x}"
+                : trace.CurrentScript;
+            string clipboard = $"{coordinate} · stall snapshot {path}";
+            DisplayServer.ClipboardSet(clipboard);
+            _status.Text = $"Diagnostic saved: {coordinate} (path copied)";
+            GD.Print($"[diagnostic] stall snapshot {coordinate} -> {path}");
+        }
+        catch (System.Exception exception)
+        {
+            _status.Text = "Diagnostic capture failed; see Godot log.";
+            GD.Print($"[diagnostic] stall snapshot failed: {exception}");
+        }
+    }
 
     private void ToggleDebugSceneLauncher()
     {
@@ -680,6 +766,7 @@ public partial class Main : Godot.Control
             var surfaceTexture = rawObject != null
                 ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
                 : null;
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
             string outcome;
             if (v.SurfaceTransition is { } transition)
             {
@@ -709,7 +796,8 @@ public partial class Main : Godot.Control
             }
             else
             {
-                var texture = surfaceTexture ?? _host.ResolveResIdTexture(v.SurfaceResId);
+                var texture = surfaceTexture
+                    ?? (movieSurfaceBound ? null : _host.ResolveResIdTexture(v.SurfaceResId));
                 if (texture == null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
                 else
                 {
@@ -889,6 +977,7 @@ public partial class Main : Godot.Control
             var texture = rawObject != null
                 ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
                 : null;
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
             if (source.SurfaceResId == 0 && texture == null)
             {
                 if (source.Blend == BlendKind.Opaque) continue;
@@ -897,7 +986,7 @@ public partial class Main : Godot.Control
             }
             else
             {
-                texture ??= _host.ResolveResIdTexture(source.SurfaceResId);
+                if (!movieSurfaceBound) texture ??= _host.ResolveResIdTexture(source.SurfaceResId);
                 if (texture == null) continue;
                 BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
                           source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,
@@ -1177,17 +1266,18 @@ public partial class Main : Godot.Control
         CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
     }
 
-    public bool TryPlayMovie(byte[] mpegBytes, string assetName, long resourceId, int assetId,
+    public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId,
+                             long resourceId, int assetId,
                              out long? stopTimeMs)
     {
         stopTimeMs = null;
         try
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
-            var runtime = MovieRuntime.Open(assetName, assetId, payload, _movieDecoderFactory);
+            var runtime = MovieRuntime.Open(assetName, assetId, resourceId, payload, _movieDecoderFactory);
             stopTimeMs = runtime.Decoder.StopTimeMs;
-            while (!_pendingMovies.TryAdd(resourceId, runtime))
-                if (_pendingMovies.TryRemove(resourceId, out var prior)) prior.Decoder.Dispose();
+            while (!_pendingMovies.TryAdd(playbackId, runtime))
+                if (_pendingMovies.TryRemove(playbackId, out var prior)) prior.Decoder.Dispose();
             return true;
         }
         catch (System.Exception e)
@@ -1199,50 +1289,52 @@ public partial class Main : Godot.Control
 
     private void AdoptPendingMovies()
     {
-        foreach (var (resourceId, _) in _pendingMovies)
+        foreach (var (playbackId, _) in _pendingMovies)
         {
-            if (!_pendingMovies.TryRemove(resourceId, out var movie)) continue;
-            if (_movies.Remove(resourceId, out var prior)) prior.Decoder.Dispose();
-            _movies[resourceId] = movie;
-            _movieCompletionNotified.Remove(resourceId);
-            GD.Print($"movie started {movie.Name} ({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS)");
+            if (!_pendingMovies.TryRemove(playbackId, out var movie)) continue;
+            if (_movies.Remove(playbackId, out var prior)) prior.Decoder.Dispose();
+            _movies[playbackId] = movie;
+            _movieCompletionNotified.Remove(playbackId);
+            GD.Print($"movie started {movie.Name} playback={playbackId} " +
+                     $"({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS)");
         }
     }
 
     private void UpdateMovieFrames()
     {
         if (_host == null) return;
-        foreach (var (resourceId, movie) in _movies)
+        foreach (var (playbackId, movie) in _movies)
         {
             if (movie.Decoder.TryTakeFrame(out var frame))
             {
-                _host.PublishMovieFrame(resourceId, movie.Name, movie.AssetId, frame);
-                if (_movieFrameSeen.Add(resourceId))
-                    GD.Print($"movie first frame {movie.Name}: {frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
+                _host.PublishMovieFrame(playbackId, movie.Name, movie.AssetId, frame);
+                if (_movieFrameSeen.Add(playbackId))
+                    GD.Print($"movie first frame {movie.Name} playback={playbackId}: " +
+                             $"{frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
             }
             bool watchdogExpired = Stopwatch.GetElapsedTime(movie.StartedAtTimestamp).TotalMilliseconds
                                    >= movie.WatchdogMs;
-            if ((movie.Decoder.IsCompleted || watchdogExpired) && _movieCompletionNotified.Add(resourceId))
+            if ((movie.Decoder.IsCompleted || watchdogExpired) && _movieCompletionNotified.Add(playbackId))
             {
                 if (movie.Decoder.Failure is { } failure)
                     GD.Print($"movie decode failed {movie.Name}: {failure}");
                 if (watchdogExpired && !movie.Decoder.IsCompleted)
                     GD.Print($"movie completion watchdog {movie.Name}: forcing completion after {movie.WatchdogMs} ms");
-                _host.NotifyMovieCompleted(resourceId);
+                _host.NotifyMovieCompleted(playbackId);
             }
         }
     }
 
-    public void StopMovie(long resourceId)
+    public void StopMovie(long playbackId)
     {
-        if (_pendingMovies.TryRemove(resourceId, out var pending)) pending.Decoder.Dispose();
-        if (_movies.Remove(resourceId, out var movie))
+        if (_pendingMovies.TryRemove(playbackId, out var pending)) pending.Decoder.Dispose();
+        if (_movies.Remove(playbackId, out var movie))
         {
             movie.Decoder.Dispose();
-            GD.Print($"movie stopped {movie.Name} at render frame {_timelineFrame}");
+            GD.Print($"movie stopped {movie.Name} playback={playbackId} at render frame {_timelineFrame}");
         }
-        _movieFrameSeen.Remove(resourceId);
-        _movieCompletionNotified.Remove(resourceId);
+        _movieFrameSeen.Remove(playbackId);
+        _movieCompletionNotified.Remove(playbackId);
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";

@@ -72,6 +72,13 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 |---|---|---|---|
 | `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py SC0000 14 [--map <jsonl>] [--context N]` | `build/page-map-<SCENE>.jsonl` + script corpus → stdout |
 
+In a live Godot run, **F6** writes an observe-only stall snapshot under
+`user://diagnostics/stall-<timestamp>.json`, prints the absolute path, and copies
+`SCRIPT@offset · stall snapshot <path>` to the clipboard. The JSON contains the current call stack, a bounded
+128-instruction ring, VM/host wait flags, surface/movie completion state, decoder state, and the exact finite
+graphics channels capable of holding an op-`0x21c` presentation wait. Press it while the apparent stall is still
+active; unlike `--timeline-log`, it does not require a special launch or emit a continuous per-op stream.
+
 ## Native FFmpeg movie shim (Windows x64)
 
 These PowerShell tools build the selected Windows-x64 live movie backend. The dependency manifest pins an
@@ -81,12 +88,17 @@ immutable LGPL shared FFmpeg archive and SHA-256.
 |---|---|---|---|
 | `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, hash-check, extract, and version-check the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-win64.ps1` | Discover the MSVC x64 toolchain, build `age_movie_ffmpeg.dll`, and stage its exact shared-library/license dependencies. | `.\\native\\age_movie_ffmpeg\\build-win64.ps1 -SdkRoot <bootstrap-output> [-OutputDirectory <dir>]` | C ABI source + FFmpeg SDK → disposable `build/native/win-x64/` by default |
+| `tools/movie-corpus-gate` | Discover every MPEG program stream stored under an `.AGF` catalog entry, decode every video frame through the unpaced FFmpeg session, validate independent sequence dimensions, metadata, RGBA size, timestamps, EOF, timeout, and teardown, then emit a per-asset JSON report. Exit 0 means the expected corpus count and every asset passed; exit 1 is a gate failure; exit 2 means the native shim is absent. | `dotnet run --project tools/movie-corpus-gate -- --output build/movie-corpus-ffmpeg.json --expected-count 213 --max-item-ms 30000` · optional `--native-dir <dir>` | `SYS4INI.BIN` + loose/ALF VFS assets + staged FFmpeg shim → stdout progress + disposable `build/movie-corpus-ffmpeg.json` |
 
 The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
 `runtimes/win-x64/native` locations. Build the shim before running the `FfmpegShim*` tests; no original-game
 movie is copied into the repository or native output. When `build/native/win-x64/age_movie_ffmpeg.dll` exists,
 `dotnet build godot/Himegari.csproj` also stages the shim, its five DLL dependencies, and `FFmpeg-LICENSE.txt`
 beside `Himegari.dll` for development playback.
+
+The corpus gate intentionally bypasses presentation waits: it validates decode compatibility and lifecycle,
+not wall-clock playback pacing. `--expected-count` makes additions, omissions, or profile changes explicit;
+changing the pinned FFmpeg dependency requires rerunning this gate.
 
 ## Engine (C#) — VM core, CLI, Godot frontend
 

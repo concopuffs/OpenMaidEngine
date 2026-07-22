@@ -22,9 +22,7 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, RgbaImage> _surfaceImages = new();
     private readonly Dictionary<int, long> _surfaceColorKeys = new();
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
-    private readonly Dictionary<long, (RgbaImage Image, string Name, int AssetId)> _movieFrames = new();
-    private readonly Dictionary<int, long> _movieBySurface = new();
-    private readonly HashSet<long> _completedMovies = new();
+    private readonly MovieSurfaceRegistry _movieSurfaces = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the engine's 800x600
     // primary surface, but op 0x1fa releases it like any other slot; subsequent size queries must return 0x0.
@@ -869,15 +867,13 @@ public sealed class GodotAdvHost : IHost
     /// loose-first asset store.</summary>
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveResIdTexture(long resId)
     {
-        lock (_imageLock)
-        {
-            if (_movieFrames.TryGetValue(resId, out var movie))
-                return (movie.Image, movie.Name, movie.AssetId, true);
-            // Movie payloads use the same .AGF extension as still images. While the decoder is opening
-            // (or before its first frame arrives), keep the already-created surface blank
-            // instead of falling through to AgfDecoder and misclassifying the MPEG program stream.
-            if (_movieBySurface.Values.Contains(resId)) return null;
-        }
+        if (_movieSurfaces.TryResolveResource(resId, out var movie) && movie != null)
+            return (movie.Image, movie.Name, movie.AssetId, true);
+        // Movie payloads use the same .AGF extension as still images. Do not misclassify the MPEG program
+        // stream before its first frame or during the cleanup frame after its surface binding is detached.
+        // Packed catalog identity is immutable, so a resource which entered the typed movie path remains
+        // a movie even when it has no live playback.
+        if (_movieSurfaces.IsKnownMovieResource(resId)) return null;
         var asset = _res.ResolveTexture(resId);
         var image = asset != null ? Decode(asset) : null;
         return asset != null && image != null ? (image, asset.Name, asset.PackedId, false) : null;
@@ -886,11 +882,16 @@ public sealed class GodotAdvHost : IHost
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveSurfaceTexture(
         int surfaceSlot, long fallbackResourceId)
     {
+        if (_movieSurfaces.TryResolveSurface(surfaceSlot, out var movie) && movie != null)
+            return (movie.Image, movie.Name, movie.AssetId, true);
+        if (_movieSurfaces.IsBound(surfaceSlot)) return null;
         lock (_imageLock)
             if (_surfaceImages.TryGetValue(surfaceSlot, out var surface))
                 return (surface, $"<surface:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
         return fallbackResourceId != 0 ? ResolveResIdTexture(fallbackResourceId) : null;
     }
+
+    public bool IsMovieSurfaceBound(int surfaceSlot) => _movieSurfaces.IsBound(surfaceSlot);
 
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
@@ -898,15 +899,32 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   out long? stopTimeMs);
+                   out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
     }
 
     public bool IsMovieSurfaceActive(int surfaceSlot)
+        => _movieSurfaces.IsActive(surfaceSlot);
+
+    public GodotHostDiagnosticSnapshot CaptureDiagnosticSnapshot()
     {
-        lock (_imageLock)
-            return _movieBySurface.TryGetValue(surfaceSlot, out long resourceId)
-                && !_completedMovies.Contains(resourceId);
+        IReadOnlyList<MovieSurfaceDiagnostic> movies = _movieSurfaces.Snapshot();
+        IReadOnlyList<long> completed = _movieSurfaces.CompletedPlaybackIds();
+        bool screenTransitionActive;
+        lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
+        return new GodotHostDiagnosticSnapshot(
+            CurrentScene,
+            IsWaiting,
+            IsTransitionWaiting,
+            IsSleeping,
+            IsTextRevealing,
+            _modalMovieWaiting,
+            _advPagePresentationSuspended,
+            _messageSkipActive,
+            screenTransitionActive,
+            TransitionStartedAtMs,
+            movies,
+            completed);
     }
 
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
@@ -923,22 +941,22 @@ public sealed class GodotAdvHost : IHost
         try
         {
             if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
-                            out _)) return;
+                            out _, out long playbackId)) return;
             _timeline?.State("modal-movie-wait", new()
             {
-                ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = asset.Name,
+                ["resource"] = resourceId, ["playback"] = playbackId,
+                ["surface"] = surfaceSlot, ["file"] = asset.Name,
             });
             while (!_stopping && !_modalMovieCancelled)
             {
-                lock (_imageLock)
-                    if (_completedMovies.Contains(resourceId)) break;
+                if (!_movieSurfaces.IsActive(surfaceSlot)) break;
                 _frameSignal.WaitOne(50);
             }
 
             // Cancellation is a completed modal presentation from the script's perspective. The
             // wrapper's following surface-release opcode performs the ordinary decoder teardown.
             if (_modalMovieCancelled)
-                lock (_imageLock) _completedMovies.Add(resourceId);
+                _movieSurfaces.Complete(playbackId);
             _timeline?.State("running", new()
             {
                 ["modal_movie_complete"] = !_modalMovieCancelled,
@@ -953,16 +971,18 @@ public sealed class GodotAdvHost : IHost
     }
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            long syncMask, bool modal, out long? stopTimeMs)
+                            long syncMask, bool modal, out long? stopTimeMs, out long playbackId)
     {
         stopTimeMs = null;
-        // Publish the movie identity before the potentially long VFS read and synchronous decoder setup.
-        // The compositor can therefore distinguish a legitimate blank pre-roll surface from a still AGF.
-        ReleaseSurface(surfaceSlot);
+        // A playback is a surface-owned instance, not the shared resource id. BTL can schedule the same
+        // asset on multiple surfaces; replacing one binding must not erase another binding's completion.
+        MovieSurfaceBinding binding = _movieSurfaces.Begin(surfaceSlot, resourceId, out var replaced);
+        playbackId = binding.PlaybackId;
+        if (replaced is { } prior) _main.CallDeferred("StopMovie", prior.PlaybackId);
         lock (_imageLock)
         {
-            _movieBySurface[surfaceSlot] = resourceId;
-            _completedMovies.Remove(resourceId);
+            _surfaceImages.Remove(surfaceSlot);
+            _surfaceColorKeys.Remove(surfaceSlot);
         }
         _slotDims[surfaceSlot] = (800, 600); // SC0000 creates this native-sized surface immediately beforehand.
         try
@@ -970,30 +990,24 @@ public sealed class GodotAdvHost : IHost
             var movie = _res.ReadMovie(asset);
             _timeline?.Event("movie-start", new()
             {
-                ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
+                ["resource"] = resourceId, ["playback"] = playbackId,
+                ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
-            bool started = _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.PackedId,
+            bool started = _main.TryPlayMovie(movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId,
                                               out stopTimeMs);
             if (!started)
             {
                 stopTimeMs = 0;
-                NotifyMovieCompleted(resourceId);
+                NotifyMovieCompleted(playbackId);
             }
             return started;
         }
         catch (System.Exception e)
         {
-            lock (_imageLock)
-            {
-                if (_movieBySurface.TryGetValue(surfaceSlot, out long registered) && registered == resourceId)
-                    _movieBySurface.Remove(surfaceSlot);
-                _movieFrames.Remove(resourceId);
-                _completedMovies.Remove(resourceId);
-            }
+            _movieSurfaces.Abandon(playbackId, out _);
             _slotDims.Remove(surfaceSlot);
             stopTimeMs = 0;
-            NotifyMovieCompleted(resourceId);
             Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
         }
@@ -1002,28 +1016,11 @@ public sealed class GodotAdvHost : IHost
     public void ReleaseSurface(int slot)
     {
         lock (_screenTransitionLock) _renderTargetSnapshots.Remove(slot);
-        long resourceId;
+        MovieSurfaceRelease movieRelease = _movieSurfaces.ReleaseIfCompleted(slot);
+        if (movieRelease.Kind == MovieSurfaceReleaseKind.Active)
+            return; // Static surface setup before 0x21c must not evict an active movie playback.
         lock (_imageLock)
         {
-            if (!_movieBySurface.Remove(slot, out resourceId))
-            {
-                _surfaceImages.Remove(slot);
-                _surfaceColorKeys.Remove(slot);
-                lock (_textLock)
-                {
-                    _surfaceText.Remove(slot);
-                    _surfaceResources.Remove(slot);
-                }
-                _slotDims.Remove(slot);
-                return;
-            }
-            if (!_completedMovies.Contains(resourceId))
-            {
-                _movieBySurface[slot] = resourceId;
-                return; // SC0000 prepares following static surfaces before 0x21c; the movie remains retained.
-            }
-            _movieFrames.Remove(resourceId);
-            _completedMovies.Remove(resourceId);
             _surfaceImages.Remove(slot);
             _surfaceColorKeys.Remove(slot);
         }
@@ -1033,8 +1030,17 @@ public sealed class GodotAdvHost : IHost
             _surfaceResources.Remove(slot);
         }
         _slotDims.Remove(slot);
-        _timeline?.Event("movie-stop", new() { ["resource"] = resourceId, ["surface"] = slot });
-        _main.CallDeferred("StopMovie", resourceId);
+        if (movieRelease.Kind == MovieSurfaceReleaseKind.Released)
+        {
+            var binding = movieRelease.Binding;
+            _timeline?.Event("movie-stop", new()
+            {
+                ["resource"] = binding.ResourceId,
+                ["playback"] = binding.PlaybackId,
+                ["surface"] = slot,
+            });
+            _main.CallDeferred("StopMovie", binding.PlaybackId);
+        }
     }
 
     public void ClearRenderTarget(int surfaceSlot)
@@ -1049,7 +1055,7 @@ public sealed class GodotAdvHost : IHost
 
     public void ReleaseSurfaceRange(int firstSlot, int count)
     {
-        var stoppedMovies = new System.Collections.Generic.HashSet<long>();
+        IReadOnlyList<MovieSurfaceBinding> stoppedMovies = _movieSurfaces.ReleaseRange(firstSlot, count);
         int end = checked(firstSlot + count);
         lock (_screenTransitionLock)
             for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
@@ -1057,12 +1063,6 @@ public sealed class GodotAdvHost : IHost
         {
             for (int slot = firstSlot; slot < end; slot++)
             {
-                if (_movieBySurface.Remove(slot, out long resourceId))
-                {
-                    stoppedMovies.Add(resourceId);
-                    _movieFrames.Remove(resourceId);
-                    _completedMovies.Remove(resourceId);
-                }
                 _surfaceImages.Remove(slot);
                 _surfaceColorKeys.Remove(slot);
                 _slotDims.Remove(slot);
@@ -1076,37 +1076,36 @@ public sealed class GodotAdvHost : IHost
                 _surfaceResources.Remove(slot);
             }
         }
-        foreach (long resourceId in stoppedMovies)
+        foreach (MovieSurfaceBinding binding in stoppedMovies)
         {
-            _timeline?.Event("movie-stop", new() { ["resource"] = resourceId, ["range_release"] = true });
-            _main.CallDeferred("StopMovie", resourceId);
+            _timeline?.Event("movie-stop", new()
+            {
+                ["resource"] = binding.ResourceId,
+                ["playback"] = binding.PlaybackId,
+                ["range_release"] = true,
+            });
+            _main.CallDeferred("StopMovie", binding.PlaybackId);
         }
         _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
     }
 
     // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's
     // sample callback: the retained object keeps its surface binding while only the surface pixels change.
-    public void PublishMovieFrame(long resourceId, string name, int assetId, RgbaImage frame)
+    public void PublishMovieFrame(long playbackId, string name, int assetId, RgbaImage frame)
     {
-        lock (_imageLock) _movieFrames[resourceId] = (frame, name, assetId);
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        if (_movieSurfaces.PublishFrame(playbackId, frame, name, assetId))
+            System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
 
-    public void NotifyMovieCompleted(long resourceId)
+    public void NotifyMovieCompleted(long playbackId)
     {
-        lock (_imageLock)
-            if (!_completedMovies.Add(resourceId)) return;
-        _timeline?.Event("movie-complete", new() { ["resource"] = resourceId });
+        if (!_movieSurfaces.Complete(playbackId)) return;
+        _timeline?.Event("movie-complete", new() { ["playback"] = playbackId });
         _frameSignal.Set();
     }
 
     private bool HasActiveMoviePresentation()
-    {
-        lock (_imageLock)
-            foreach (long resourceId in _movieBySurface.Values)
-                if (!_completedMovies.Contains(resourceId)) return true;
-        return false;
-    }
+        => _movieSurfaces.HasActivePlayback;
 
     private RgbaImage? Decode(AssetEntry asset)
     {
@@ -1254,6 +1253,11 @@ public sealed class GodotAdvHost : IHost
 }
 
 public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);
+public sealed record GodotHostDiagnosticSnapshot(
+    string CurrentScene, bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
+    bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,
+    bool IsMessageSkipActive, bool IsScreenTransitionActive, long TransitionStartedAtMs,
+    IReadOnlyList<MovieSurfaceDiagnostic> MovieSurfaces, IReadOnlyList<long> CompletedMoviePlaybackIds);
 public readonly record struct LegacyScreenTransitionSnapshot(
     IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress);
 

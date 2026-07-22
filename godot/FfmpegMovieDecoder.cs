@@ -4,12 +4,6 @@ using System.IO;
 using System.Threading;
 using Age.Engine.Sys4;
 
-internal interface IFfmpegFrameSource : IDisposable
-{
-    FfmpegMovieInfo Info { get; }
-    bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame);
-}
-
 internal interface IMoviePacingClock
 {
     bool WaitUntil(long elapsedMilliseconds, WaitHandle cancellation);
