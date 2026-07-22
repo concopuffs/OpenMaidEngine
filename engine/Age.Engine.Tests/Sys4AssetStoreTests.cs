@@ -22,6 +22,7 @@ public class Sys4AssetStoreTests
         Assert.All(append.Files, entry =>
         {
             Assert.Equal(1, entry.PackId);
+            Assert.Equal(0x01000000 | entry.RawIndex, entry.PackedId);
             Assert.StartsWith("$1$", entry.Name);
             Assert.Equal("APPEND01.ALF", entry.Archive);
         });
@@ -178,14 +179,14 @@ public class Sys4AssetStoreTests
         Assert.Equal("BGM005.OGG", bgm?.Name);
         AssertOgg(resources.ReadAudio(bgm!));
 
-        var voice = resources.ResolveVoice("SC0000", 0x24);
+        var voice = resources.ResolveVoice(0x24);
         Assert.Equal("MAN999.OGG", voice?.Name);
         AssertOgg(resources.ReadAudio(voice!));
 
-        var roomVoice = resources.ResolveVoice("ROOM", 0x3365);
+        var roomVoice = resources.ResolveVoice(0x3365);
         Assert.Equal("EUA0016.OGG", roomVoice?.Name);
         AssertOgg(resources.ReadAudio(roomVoice!));
-        Assert.Null(resources.ResolveVoice("ROOM", 0x337e)); // SO001.AGF is not voice audio.
+        Assert.Null(resources.ResolveVoice(0x337e)); // SO001.AGF is not voice audio.
 
         var sfx = resources.ResolveSoundEffect(0x28);
         Assert.Equal("E0808.WAV", sfx?.Name);
@@ -194,7 +195,6 @@ public class Sys4AssetStoreTests
         Assert.Equal("RIFF", Encoding.ASCII.GetString(wav.Bytes, 0, 4));
         Assert.Equal("WAVE", Encoding.ASCII.GetString(wav.Bytes, 8, 4));
 
-        Assert.Null(resources.Resolve("TITLE", 0x2aea));
         Assert.Equal("SE020.WAV", resources.ResolveSoundEffect(0x2aea)?.Name);
         Assert.Equal("SE013.WAV", resources.ResolveSoundEffect(0x2aeb)?.Name);
         Assert.Equal("SE015.WAV", resources.ResolveSoundEffect(0x3321)?.Name);
@@ -202,6 +202,33 @@ public class Sys4AssetStoreTests
         Assert.Null(resources.ResolveSoundEffect(0x02000000)); // unmounted append selector.
 
         Assert.Throws<InvalidDataException>(() => resources.ReadAudio(catalog.ResolveName("SO001.AGF")!));
+    }
+
+    [Fact]
+    public void Sc0010LowOperandsAreAlreadyUniversalPackedIds()
+    {
+        var resources = ResourceMap.Load();
+
+        Assert.Equal("SO013A.AGF", resources.ResolveTexture(0x21)?.Name);
+        Assert.Equal("LILA1414.OGG", resources.ResolveVoice(0x120)?.Name);
+        Assert.Equal("LILB0053.OGG", resources.ResolveVoice(0x121)?.Name);
+        Assert.Equal("LILC0054.OGG", resources.ResolveVoice(0x122)?.Name);
+
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        Assert.Equal("COL0023.OGG", catalog.ResolveRaw(0x11e + 0x21)?.Name);
+    }
+
+    [Fact]
+    public void TypedResourceResolutionPreservesAppendPackSelector()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog);
+        var append = Assert.Single(catalog.AppendPacks).Value;
+        var texture = Assert.Single(append.Files.Where(entry =>
+            entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase)).Take(1));
+
+        Assert.Same(texture, resources.ResolveTexture(texture.PackedId));
+        Assert.NotEqual(texture, resources.ResolveTexture(texture.RawIndex));
     }
 
     [Fact]

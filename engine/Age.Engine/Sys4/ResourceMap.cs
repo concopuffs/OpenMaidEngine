@@ -1,8 +1,8 @@
 namespace Age.Engine.Sys4;
 
 /// <summary>
-/// Compatibility facade over the runtime SYS4 catalog. Scene-local graphics/voice/movie ids resolve
-/// through the executing script's manifest; BGM uses direct names; SFX/cursors use universal packed ids.
+/// Typed facade over the runtime SYS4 catalog. Graphics, voice, movie, SFX, and cursor operands use
+/// universal packed ids; BGM uses direct names.
 /// See docs/asset-resolution-re.md.
 /// </summary>
 public sealed class ResourceMap
@@ -18,43 +18,26 @@ public sealed class ResourceMap
 
     public static ResourceMap Load() => new(Sys4AssetCatalog.Load(Paths.Sys4Ini));
 
-    /// <summary>Resolve a scene-local resId to its asset, or null if out of range / unknown scene.</summary>
-    public AssetEntry? Resolve(string scene, long resId)
+    /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF texture record.</summary>
+    public AssetEntry? ResolveTexture(long resourceId)
     {
-        return _catalog.ResolveScene(scene, resId);
-    }
-
-    /// <summary>Resolve graphics normally through the scene manifest, with the universal raw-id
-    /// fallback used by SYSTEM4-owned assets such as SO001.</summary>
-    public AssetEntry? ResolveTexture(string scene, long resId)
-    {
-        var entry = _catalog.ResolveScene(scene, resId) ?? _catalog.ResolveRaw(resId);
+        var entry = _catalog.ResolvePacked(resourceId);
         return entry is { IsPlaceholder: false } &&
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
 
-    /// <summary>Resolve voice audio through the active SC section when one exists, then through the
-    /// universal raw catalog used by non-SC frontend scripts such as ROOM.</summary>
-    public AssetEntry? ResolveVoice(string scene, long resId)
+    /// <summary>Resolve a universal packed SYS4INI/AAI id to a voice audio record.</summary>
+    public AssetEntry? ResolveVoice(long resourceId)
     {
-        var entry = _catalog.ResolveScene(scene, resId) ?? _catalog.ResolveRaw(resId);
+        var entry = _catalog.ResolvePacked(resourceId);
         return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
     }
 
-    /// <summary>Resolve an already-normalized packed catalog id without applying a scene section base.</summary>
-    public AssetEntry? ResolveRawTexture(long rawId)
+    /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF-named movie record. ReadMovie
+    /// validates the MPEG signature because still images use the same extension.</summary>
+    public AssetEntry? ResolveMovie(long resourceId)
     {
-        var entry = _catalog.ResolvePacked(rawId);
-        return entry is { IsPlaceholder: false } &&
-               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
-    }
-
-    /// <summary>Resolve op 0x20f's universal raw-catalog movie id without applying the executing
-    /// script's manifest base. AGE stores these MPEG program streams under .AGF names; ReadMovie
-    /// validates the payload signature before playback.</summary>
-    public AssetEntry? ResolveRawMovie(long rawId)
-    {
-        var entry = _catalog.ResolveRaw(rawId);
+        var entry = _catalog.ResolvePacked(resourceId);
         return entry is { IsPlaceholder: false } &&
                entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
     }
@@ -81,7 +64,7 @@ public sealed class ResourceMap
 
     /// <summary>
     /// Resolve a BGM id to its catalog entry. BGM is addressed by DIRECT LITERAL NAME (BGM{id:D3}.OGG), NOT the
-    /// per-scene section manifest that voices/textures use. Confirmed by ear (play-bgm 5->BGM005, 8->BGM008)
+    /// universal packed resource table used by voices/textures. Confirmed by ear (play-bgm 5->BGM005, 8->BGM008)
     /// and by the play-bgm 0x23->BGM035 case: BGM035 is a real standalone track (the BGM set skips 030-034),
     /// which the manifest mis-resolved to a graphics entry. See docs/asset-resolution-re.md.
     /// </summary>

@@ -252,16 +252,16 @@ public partial class Main : Godot.Control
         // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
         if (directSceneHarness && resources.ResolveName("SO001.AGF") is { } systemChrome)
         {
-            _host.SetTexture(systemChrome.RawIndex, 0x11);
-            _vm.Gfx.SetSurface(0x11, systemChrome.RawIndex, 0);
+            _host.SetTexture(systemChrome.PackedId, 0x11);
+            _vm.Gfx.SetSurface(0x11, systemChrome.PackedId, 0);
         }
         // SYSTEM4 also loads SO000 and configures op 0x73 before entering scene code. The Phase-A
         // single-scene harness does not replay those graphics side effects, so inject their exact state
         // alongside the existing SO001 bootstrap until Phase B runs the complete SYSTEM4 entrypoint.
         if (directSceneHarness && resources.ResolveName("SO000.AGF") is { } waitIndicator)
         {
-            _host.SetTexture(waitIndicator.RawIndex, 0x0c);
-            _vm.Gfx.SetSurface(0x0c, waitIndicator.RawIndex, 0xff00);
+            _host.SetTexture(waitIndicator.PackedId, 0x0c);
+            _vm.Gfx.SetSurface(0x0c, waitIndicator.PackedId, 0xff00);
             _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
                 1, 385, 140, 0x0c, 0, 0, 30, 27, 12, 48));
         }
@@ -1174,14 +1174,14 @@ public partial class Main : Godot.Control
         CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
     }
 
-    public bool TryPlayMovie(byte[] mpegBytes, string assetName, long resourceId, int rawIndex,
+    public bool TryPlayMovie(byte[] mpegBytes, string assetName, long resourceId, int assetId,
                              out long? stopTimeMs)
     {
         stopTimeMs = null;
         try
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
-            var runtime = new MovieRuntime(assetName, rawIndex, new DirectShowMovieDecoder(payload));
+            var runtime = new MovieRuntime(assetName, assetId, new DirectShowMovieDecoder(payload));
             stopTimeMs = runtime.Decoder.StopTimeMs;
             while (!_pendingMovies.TryAdd(resourceId, runtime))
                 if (_pendingMovies.TryRemove(resourceId, out var prior)) prior.Decoder.Dispose();
@@ -1213,7 +1213,7 @@ public partial class Main : Godot.Control
         {
             if (movie.Decoder.TryTakeFrame(out var frame))
             {
-                _host.PublishMovieFrame(resourceId, movie.Name, movie.RawIndex, frame);
+                _host.PublishMovieFrame(resourceId, movie.Name, movie.AssetId, frame);
                 if (_movieFrameSeen.Add(resourceId))
                     GD.Print($"movie first frame {movie.Name}: {frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
             }
@@ -1232,7 +1232,7 @@ public partial class Main : Godot.Control
         _movieFrameSeen.Remove(resourceId);
     }
 
-    private sealed record MovieRuntime(string Name, int RawIndex, DirectShowMovieDecoder Decoder);
+    private sealed record MovieRuntime(string Name, int AssetId, DirectShowMovieDecoder Decoder);
 
     public void AppendLine(string text) => _text.Text += text + "\n";
     public void PageBreak()

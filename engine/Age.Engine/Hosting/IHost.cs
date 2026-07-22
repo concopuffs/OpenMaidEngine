@@ -21,11 +21,9 @@ public interface IHost
 {
     /// <summary>Report a recoverable runtime discrepancy while allowing script execution to continue.</summary>
     void ReportWarning(string message) => System.Console.Error.WriteLine(message);
-    // Script-local resource ids resolve against the currently executing frame's SYS4INI section.
-    // Interactive hosts track this stack; headless hosts may keep the no-op/default identity behavior.
+    // Script context is retained for diagnostics/page location; resource operands are universal packed ids.
     void EnterScriptContext(string scriptName) { }
     void ExitScriptContext() { }
-    long ResolveTextureResourceId(long resourceId) => resourceId;
     void ShowText(int offset, string text);
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
@@ -125,8 +123,8 @@ public interface IHost
     /// immediately after 0x236 returns.</returns>
     long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) => null;
     bool IsMovieSurfaceActive(int surfaceSlot) => false;
-    // Native op 0x20f uses a universal raw-catalog id and parks script execution until the movie
+    // Native op 0x20f uses a universal packed id and parks script execution until the movie
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host
     // owns the modal wait so its render loop can continue publishing frames.
-    void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags) { }
+    void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags) { }
 }

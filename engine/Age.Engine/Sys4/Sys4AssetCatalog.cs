@@ -14,7 +14,11 @@ public sealed record AssetEntry(
     int ArchiveId = -1,
     int FileNumber = -1,
     bool IsPlaceholder = false,
-    int PackId = 0);
+    int PackId = 0)
+{
+    /// <summary>The exact packed SYS4INI/AAI id AGE uses to address this record.</summary>
+    public int PackedId => checked((PackId << 24) | RawIndex);
+}
 
 /// <summary>A real catalog entry paired with the packed resource id AGE uses at runtime.</summary>
 public sealed record PackedAssetEntry(long PackedId, AssetEntry Asset);

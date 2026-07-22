@@ -54,8 +54,9 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    all 13206 `offset+size` fit inside their real `.ALF`; 837 name-matched files → 0 size mismatches.
    `files[]` preserves directory order (feeds step 2's order-correlation). Re-run:
    `py -3.11 -X utf8 tools/parse_sys4ini.py --check`. (Ref: asmodean's `exs4alf` / GARbro Eushully `ArcALF.cs`.)
-2. **Resolve `resource_id → asset file`.** **NATIVE RULE CONFIRMED IN GHIDRA (2026-07-21): resource
-   operands are universal packed SYS4INI/AAI ids. There is no scene-relative path or fallback.**
+2. **Resolve `resource_id → asset file`.** **NATIVE RULE CONFIRMED IN GHIDRA AND IMPLEMENTED
+   (2026-07-21): resource operands are universal packed SYS4INI/AAI ids. There is no scene-relative path
+   or fallback.**
 
    `asset_catalog_parse_base_tables@0x44e7e0` creates one flat base entry array in serialized SYS4INI
    order. `asset_open_indexed_entry@0x44f390` receives the operand unchanged. If its high byte is zero,
@@ -80,7 +81,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    correlation and the strong `file_number == position - group_start` pattern remain useful evidence about
    catalog construction/order, but they do not describe runtime resolution. SC0000 starting at zero hid
    the mistake, while later large ids often fell outside the invented scene range and happened to reach the
-   port's raw fallback. Low raw ids used from later scripts can instead be silently misresolved today.
+   port's former raw fallback. Low raw ids used from later scripts could instead be silently misresolved.
    `tools/resolve_asset.py` and `build/asset-sections.json` are therefore correlation/manifest-inventory
    diagnostics only; they must not drive runtime lookup.
 
@@ -144,9 +145,10 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 
 ## Status
 
-A2b-background: **steps 1–3 landed, but step 2's resolver must be corrected.** Step 1 =
-`build/asset-index.json`. Step 2 originally normalized through inferred per-scene sections; native RE now
-proves runtime operands are already universal packed ids. `tools/resolve_asset.py` and
+A2b-background: **steps 1–3 landed; step 2's packed resolver was corrected 2026-07-21.** Step 1 =
+`build/asset-index.json`. Step 2 originally normalized through inferred per-scene sections; native RE proved
+runtime operands are already universal packed ids, and every typed runtime facade now uses that contract.
+`tools/resolve_asset.py` and
 `build/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
@@ -214,12 +216,14 @@ scene-local numeric addressing mode.
    on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
-4. **Runtime consumers (packed-id correction pending).** Script loading and SFX already use
-   `ResolvePacked`. Texture/voice/non-modal movie facades still contain the disproven scene-first/raw-fallback
-   compatibility layer and must be switched to the same typed packed lookup. Godot caches decoded RGBA
-   surfaces by catalog identity and supplies synchronous dimensions to opcode `0x208`; it no longer reads
-   `build/textures/*.BMP`. BGM remains direct-name. Extraction, grouping, and conversion tools remain
-   diagnostics.
+4. **Runtime consumers (packed-id correction complete 2026-07-21).** Script loading, textures, voice,
+   SFX, cursors, and modal/non-modal movies all select through `ResolvePacked` before type filtering. The VM
+   retains bytecode operands unchanged instead of asking the host for scene normalization. Godot caches
+   decoded RGBA and movie identities by the full packed id, preserving AAI selectors rather than colliding
+   with equal low indexes in the base catalog. It supplies synchronous dimensions to opcode `0x208` and no
+   longer reads `build/textures/*.BMP`. BGM remains direct-name. Focused regressions cover SC0010's low
+   `0x21` texture and `0x120..0x122` voices plus append-pack identity. Extraction, grouping, and conversion
+   tools remain diagnostics.
 
 ### Acceptance gates
 
@@ -352,7 +356,7 @@ corpus is `LOGO.BIN (0x335f,42,4)`, `OP.BIN (0x3364,42,4)`, and
 Native `0x20f` also arms modal run-state `0x2000`; unlike `0x236`, these six-instruction wrapper scripts
 depend on the movie service itself to park until EOF/input cancellation before they release surface 42.
 
-`ResourceMap.ResolveRawMovie` currently supplies that typed universal lookup, while `ReadMovie` remains the MPEG
+`ResourceMap.ResolveMovie` supplies that typed universal lookup, while `ReadMovie` remains the MPEG
 signature gate. `IHost.PlayModalMovieToSurface` is distinct from the non-modal call for lifecycle only: Godot
 reuses the asynchronous DirectShow frame decoder and retained compositor but parks the VM thread until EOF
 or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.

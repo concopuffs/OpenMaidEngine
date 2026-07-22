@@ -55,9 +55,7 @@ internal class RecordingHost : IHost
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public int CursorClearCount;
     public int SceneContextResets;
-    public long TextureResourceIdOffset;
     public void ReportWarning(string message) => Warnings.Add(message);
-    public long ResolveTextureResourceId(long resourceId) => resourceId + TextureResourceIdOffset;
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
@@ -162,8 +160,8 @@ internal class RecordingHost : IHost
         return MovieStopTimeMs;
     }
     public bool IsMovieSurfaceActive(int surfaceSlot) => ActiveMovieSurfaces.Contains(surfaceSlot);
-    public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
-        => ModalMovies.Add((rawResourceId, surfaceSlot, movieFlags));
+    public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
+        => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
 }
 
 internal sealed class MapProvider : IScriptProvider

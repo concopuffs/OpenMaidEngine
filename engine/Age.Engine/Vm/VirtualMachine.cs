@@ -1539,29 +1539,27 @@ public sealed class VirtualMachine
                 _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return pc + 1;
             case "set-texture":   // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
             {
-                long requestedResourceId = Read(a[0]);
-                long resolvedResourceId = _host.ResolveTextureResourceId(requestedResourceId);
+                long resourceId = Read(a[0]);
                 if (_diagSetTexture)   // AGE_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
-                    System.Console.Error.WriteLine($"[settex] resId=0x{requestedResourceId:x}->0x{resolvedResourceId:x} slot={(int)Read(a[1])} " +
+                    System.Console.Error.WriteLine($"[settex] resId=0x{resourceId:x} slot={(int)Read(a[1])} " +
                         $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
                 _host.ReleaseSurface((int)Read(a[1]));
                 long colorKey = a.Count > 2 ? Read(a[2]) : -1;
-                Gfx.SetSurface((int)Read(a[1]), resolvedResourceId, colorKey);
-                _host.SetTexture(resolvedResourceId, (int)Read(a[1]), colorKey);
+                Gfx.SetSurface((int)Read(a[1]), resourceId, colorKey);
+                _host.SetTexture(resourceId, (int)Read(a[1]), colorKey);
                 return pc + 1;   // host still tracks dims for get-texture-size
             }
             case "u00422EB0":                 // pre-reference compatibility
-            case "load-raw-texture-surface":  // 0x249 (raw catalog id)(slot)(colorkey)
+            case "load-raw-texture-surface":  // 0x249 (packed resource id)(slot)(colorkey)
             {
                 // Native shares 0x1f9's release/load/colorkey path, but constructs its mode-1
-                // surface subclass and receives an already-global SYS4INI catalog index. The
-                // CPU compositor does not need the D3D subclass distinction; it does need the
-                // resource id to bypass the executing script's scene-section normalization.
-                long rawResourceId = Read(a[0]);
+                // surface subclass. Both texture opcodes receive the same universal packed id;
+                // the CPU compositor does not need the D3D subclass distinction.
+                long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
                 _host.ReleaseSurface(surfaceSlot);
-                Gfx.SetSurface(surfaceSlot, rawResourceId, Read(a[2]));
-                _host.SetTexture(rawResourceId, surfaceSlot, Read(a[2]));
+                Gfx.SetSurface(surfaceSlot, resourceId, Read(a[2]));
+                _host.SetTexture(resourceId, surfaceSlot, Read(a[2]));
                 return pc + 1;
             }
             case "draw-texture":   // 0x1fb (handle)(slot)(srcX)(srcY)(w)(h)(dstX)(dstY) — bind object -> surface + rect + pos
@@ -1652,14 +1650,14 @@ public sealed class VirtualMachine
             case "get-initial-root-run": // 0x130 (out)
                 Write(a[0], _initialRootRun ? 1 : 0);
                 return pc + 1;
-            case "play-modal-movie-to-surface": // 0x20f (raw resource)(surface)(movie flags)
+            case "play-modal-movie-to-surface": // 0x20f (packed resource)(surface)(movie flags)
             {
-                long rawResourceId = Read(a[0]);
+                long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
-                // The modal and scene-local paths share retained-surface composition. The host's
-                // distinct entry point preserves 0x20f's raw-id resolver and blocking lifecycle.
-                Gfx.SetSurface(surfaceSlot, rawResourceId, 0);
-                _host.PlayModalMovieToSurface(rawResourceId, surfaceSlot, Read(a[2]));
+                // Modal and non-modal paths share packed resolution and retained-surface composition.
+                // The distinct host entry point owns only 0x20f's blocking lifecycle.
+                Gfx.SetSurface(surfaceSlot, resourceId, 0);
+                _host.PlayModalMovieToSurface(resourceId, surfaceSlot, Read(a[2]));
                 return pc + 1;
             }
             case "u004221A0":           // pre-reference compatibility

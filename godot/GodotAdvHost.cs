@@ -16,13 +16,13 @@ public sealed class GodotAdvHost : IHost
     private readonly object _scriptContextLock = new();
     private readonly Stack<string> _scriptContexts = new();
     private readonly object _imageLock = new();
-    private readonly Dictionary<int, RgbaImage?> _images = new();        // raw catalog id -> decoded pixels
+    private readonly Dictionary<int, RgbaImage?> _images = new();        // packed catalog id -> decoded pixels
     // Mutable AGE surfaces are published by replacing immutable RgbaImage snapshots, so the compositor
     // can safely finish reading an old frame while the VM prepares a copied-rectangle update.
     private readonly Dictionary<int, RgbaImage> _surfaceImages = new();
     private readonly Dictionary<int, long> _surfaceColorKeys = new();
-    private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> normalized raw catalog id
-    private readonly Dictionary<long, (RgbaImage Image, string Name, int RawIndex)> _movieFrames = new();
+    private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
+    private readonly Dictionary<long, (RgbaImage Image, string Name, int AssetId)> _movieFrames = new();
     private readonly Dictionary<int, long> _movieBySurface = new();
     private readonly HashSet<long> _completedMovies = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
@@ -101,9 +101,6 @@ public sealed class GodotAdvHost : IHost
             if (_scriptContexts.TryPop(out var popped)) scene = popped;
         if (scene != null) _timeline?.Event("script-context-exit", new() { ["scene"] = scene });
     }
-
-    public long ResolveTextureResourceId(long resourceId)
-        => _res.ResolveTexture(CurrentScene, resourceId)?.RawIndex ?? resourceId;
 
     public void ShowText(int offset, string text)
     {
@@ -301,13 +298,13 @@ public sealed class GodotAdvHost : IHost
             if (!_waitIndicators.TryGetValue(_activeWaitLayout, out config)) return null;
             if (!_surfaceResources.TryGetValue(config.SurfaceSlot, out resourceId)) return null;
         }
-        var asset = _res.ResolveRawTexture(resourceId);
+        var asset = _res.ResolveTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         if (asset == null || image == null || config.CellWidth <= 0 || config.CellHeight <= 0) return null;
         int frames = System.Math.Max(1, config.TerminalFrame + 1);
         long period = System.Math.Max(1, config.FramePeriodMs);
         int frame = (int)((_clock.NowMs - _waitIndicatorStartedMs) / period % frames);
-        return new AdvWaitIndicatorSnapshot(image, asset.Name, asset.RawIndex, config, frame);
+        return new AdvWaitIndicatorSnapshot(image, asset.Name, asset.PackedId, config, frame);
     }
 
     public volatile int Pages;   // VM-thread page counter (incremented before IsWaiting so shot-gating can't race)
@@ -811,7 +808,7 @@ public sealed class GodotAdvHost : IHost
             _surfaceText.Remove(slot);
             _surfaceResources[slot] = resourceId;
         }
-        var asset = _res.ResolveRawTexture(resourceId);
+        var asset = _res.ResolveTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
         if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(asset?.Name ?? "<none>")}");
@@ -868,22 +865,22 @@ public sealed class GodotAdvHost : IHost
         return RgbaSurfaceOps.WithColorKey(resolved.Value.Image, colorKey);
     }
 
-    /// <summary>Resolve a gfx surface through scene-local or universal raw-id addressing and decode it
-    /// from the loose-first asset store.</summary>
+    /// <summary>Resolve a gfx surface through universal packed addressing and decode it from the
+    /// loose-first asset store.</summary>
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveResIdTexture(long resId)
     {
         lock (_imageLock)
         {
             if (_movieFrames.TryGetValue(resId, out var movie))
-                return (movie.Image, movie.Name, movie.RawIndex, true);
+                return (movie.Image, movie.Name, movie.AssetId, true);
             // Movie payloads use the same .AGF extension as still images. While DirectShow is opening
             // the graph (or before its first sample arrives), keep the already-created surface blank
             // instead of falling through to AgfDecoder and misclassifying the MPEG program stream.
             if (_movieBySurface.Values.Contains(resId)) return null;
         }
-        var asset = _res.ResolveRawTexture(resId);
+        var asset = _res.ResolveTexture(resId);
         var image = asset != null ? Decode(asset) : null;
-        return asset != null && image != null ? (image, asset.Name, asset.RawIndex, false) : null;
+        return asset != null && image != null ? (image, asset.Name, asset.PackedId, false) : null;
     }
 
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveSurfaceTexture(
@@ -898,7 +895,7 @@ public sealed class GodotAdvHost : IHost
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         string scene = CurrentScene;
-        var asset = _res.Resolve(scene, resourceId);
+        var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         return StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
                           out long? stopTimeMs) ? stopTimeMs : null;
@@ -911,12 +908,12 @@ public sealed class GodotAdvHost : IHost
                 && !_completedMovies.Contains(resourceId);
     }
 
-    public void PlayModalMovieToSurface(long rawResourceId, int surfaceSlot, long movieFlags)
+    public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
     {
-        var asset = _res.ResolveRawMovie(rawResourceId);
+        var asset = _res.ResolveMovie(resourceId);
         if (asset == null)
         {
-            Godot.GD.Print($"modal movie unresolved raw:0x{rawResourceId:x}");
+            Godot.GD.Print($"modal movie unresolved packed:0x{resourceId:x}");
             return;
         }
 
@@ -924,23 +921,23 @@ public sealed class GodotAdvHost : IHost
         _modalMovieWaiting = true;
         try
         {
-            if (!StartMovie(asset, rawResourceId, surfaceSlot, movieFlags, 0, modal: true,
+            if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
                             out _)) return;
             _timeline?.State("modal-movie-wait", new()
             {
-                ["resource"] = rawResourceId, ["surface"] = surfaceSlot, ["file"] = asset.Name,
+                ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = asset.Name,
             });
             while (!_stopping && !_modalMovieCancelled)
             {
                 lock (_imageLock)
-                    if (_completedMovies.Contains(rawResourceId)) break;
+                    if (_completedMovies.Contains(resourceId)) break;
                 _frameSignal.WaitOne(50);
             }
 
             // Cancellation is a completed modal presentation from the script's perspective. The
             // wrapper's following surface-release opcode performs the ordinary decoder teardown.
             if (_modalMovieCancelled)
-                lock (_imageLock) _completedMovies.Add(rawResourceId);
+                lock (_imageLock) _completedMovies.Add(resourceId);
             _timeline?.State("running", new()
             {
                 ["modal_movie_complete"] = !_modalMovieCancelled,
@@ -975,7 +972,7 @@ public sealed class GodotAdvHost : IHost
                 ["resource"] = resourceId, ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
-            return _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.RawIndex, out stopTimeMs);
+            return _main.TryPlayMovie(movie.Bytes, movie.Name, resourceId, asset.PackedId, out stopTimeMs);
         }
         catch (System.Exception e)
         {
@@ -1079,9 +1076,9 @@ public sealed class GodotAdvHost : IHost
 
     // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's
     // sample callback: the retained object keeps its surface binding while only the surface pixels change.
-    public void PublishMovieFrame(long resourceId, string name, int rawIndex, RgbaImage frame)
+    public void PublishMovieFrame(long resourceId, string name, int assetId, RgbaImage frame)
     {
-        lock (_imageLock) _movieFrames[resourceId] = (frame, name, rawIndex);
+        lock (_imageLock) _movieFrames[resourceId] = (frame, name, assetId);
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
 
@@ -1105,20 +1102,19 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_imageLock)
         {
-            if (_images.TryGetValue(asset.RawIndex, out var cached)) return cached;
-            try { return _images[asset.RawIndex] = _res.DecodeTexture(asset); }
+            if (_images.TryGetValue(asset.PackedId, out var cached)) return cached;
+            try { return _images[asset.PackedId] = _res.DecodeTexture(asset); }
             catch (System.Exception e)
             {
                 Godot.GD.Print($"AGF decode failed {asset.Name}: {e.Message}");
-                _images[asset.RawIndex] = null;
+                _images[asset.PackedId] = null;
                 return null;
             }
         }
     }
 
     // ---- audio ops (OGG plays natively in Godot) ----
-    // BGM: addressed by direct name (BGM{id:D3}.OGG), NOT the manifest. Voice: SC-section first,
-    // then universal raw id for frontend scripts such as ROOM that do not own an SC section.
+    // BGM is addressed by direct name (BGM{id:D3}.OGG); voice uses the universal packed catalog.
     public void PlayBgm(long id)
     {
         var asset = _res.ResolveBgm(id);
@@ -1131,7 +1127,7 @@ public sealed class GodotAdvHost : IHost
 
     public void PlayVoice(long id, int playbackVariant)
     {
-        var asset = _res.ResolveVoice(CurrentScene, id);
+        var asset = _res.ResolveVoice(id);
         var audio = asset != null ? LoadAudio(asset) : null;
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
             ["playback_variant"] = playbackVariant });
@@ -1172,7 +1168,7 @@ public sealed class GodotAdvHost : IHost
 
     public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
     {
-        var asset = _res.ResolveVoice(CurrentScene, id);
+        var asset = _res.ResolveVoice(id);
         var audio = asset != null ? LoadAudio(asset) : null;
         _timeline?.Event("voice-scheduled", new()
         {

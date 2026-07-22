@@ -342,7 +342,7 @@ public class HistoryInteractionOpsTests
         Assert.Equal(new[] { (expectedVoice, checked((int)expectedVariant)) }, host.VoiceRequests);
 
         var resources = ResourceMap.Load();
-        var voice = Assert.IsType<AssetEntry>(resources.Resolve("SC0000", expectedVoice));
+        var voice = Assert.IsType<AssetEntry>(resources.ResolveVoice(expectedVoice));
         Assert.Equal("MAN999.OGG", voice.Name);
         Assert.NotEmpty(resources.ReadAudio(voice).Bytes);
     }

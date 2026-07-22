@@ -561,20 +561,23 @@ Focused regressions cover exact dispatch, signed edge cases, string aliasing, cl
 movie polling, animation reset suppression, delayed voice operands, paired clipping, overlap, and colorkey
 transparency. Manual DEBUGMAP acceptance reached player combat and exposed the next concrete frontier:
 combat-effect movies do not play. The resolver/decoder diagnosis is canonical in
-`docs/asset-resolution-re.md`; fix that bounded movie path before proceeding to enemy-turn/end-turn breadth.
+`docs/asset-resolution-re.md`; packed resolution is now corrected, with manual BTL validation and the
+separate decoder decision remaining before enemy-turn/end-turn breadth.
 
-**Combat-effect movie gap diagnosed; native resolver generalized; implementation pending.** BTL's
+**Universal packed resource resolver implemented; combat movie validation pending.** BTL's
 `0x236@0x2b21` consumes universal packed MVB ids, exactly as texture, voice, script-load, and modal-movie
 consumers do. Native Ghidra analysis shows that none of those paths applies an SC section base or fallback;
-the port's scene-first compatibility resolver is therefore generally wrong, not merely incomplete for BTL.
+the port's former scene-first compatibility resolver was therefore generally wrong, not merely incomplete for BTL.
 That explains each `movie unresolved BTL:...` warning and the secondary attempt to decode MPEG-backed
 `MVB914.AGF` as a still image. A packed-catalog decoder probe also found a separate backend wall: the current
 DirectShow graph handles `MVB914` (400x400) but rejects the reached 280x352 MVB001/MVB004/MVB955/MVB958
 assets with `0x80040217`. Broader samples tie current compatibility to 16-aligned display widths, while 125
-installed MVB assets use 280x352. The next bounded slice is to replace typed texture, voice, and movie
-consumers with universal packed resolution and regress SC0010's low texture/voice ids plus BTL effects.
-The existing portable-decoder seam and a software fallback for 280x352 effects remain the following,
-separate step, with destination dimensions and failed-movie identity preserved correctly.
+installed MVB assets use 280x352. Texture, voice, and both movie consumers now use universal packed
+resolution; VM surface state and Godot caches retain the full selector. Focused tests prove SC0010's low
+texture/voice ids and append-pack identity; 302 engine tests, a zero-warning Godot build, and threaded
+selftest pass. **NEXT:** manually re-enter combat and confirm the BTL ids now resolve into the movie backend.
+The expected remaining failures are the known 280x352 DirectShow graphs; defer decoder replacement until
+that resolver-only acceptance check, preserving destination dimensions and failed-movie identity afterward.
 
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only

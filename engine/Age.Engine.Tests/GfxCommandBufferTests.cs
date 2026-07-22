@@ -126,7 +126,7 @@ public class GfxCommandBufferTests
     }
 
     [Fact]
-    public void RawTextureLoadBypassesSceneResourceNormalizationAndFeedsRetainedDraws()
+    public void ModeOneTextureLoadPreservesPackedIdAndFeedsRetainedDraws()
     {
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "RAW-GFX", new List<(int, Operand[])>
@@ -135,7 +135,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { I(0x100), I(0x3e), I(0), I(0), I(100), I(100), I(20), I(30) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost { TextureResourceIdOffset = 0x1000 };
+        var host = new RecordingHost();
         var vm = new VirtualMachine(scene, t, host);
 
         vm.Run();

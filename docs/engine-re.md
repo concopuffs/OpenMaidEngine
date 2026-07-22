@@ -2119,9 +2119,11 @@ open raw entry `0x21` (`SO013A.AGF`); adding SC0010's catalog position `0x11e` i
 `COL0023.OGG`. Its `play-voice 0x120/0x121/0x122` operands directly select
 `LILA1414/LILB0053/LILC0054.OGG`, whose SC0010-local file numbers are 2/3/4. The catalog grouping relation
 is therefore `absolute id = group start + file_number`; the compiler has already performed that addition.
-The port's scene-first compatibility resolver inverted this relationship and must be replaced by typed
-`ResolvePacked` lookup for texture, voice, and movie consumers. Ghidra `/v2` renames the catalog parser and
-entry-name helper, corrects the opener/caller comments, and is saved.
+The port's former scene-first compatibility resolver inverted this relationship. On 2026-07-21 it was
+replaced by typed `ResolvePacked` lookup for texture, voice, and both movie consumers; the VM now preserves
+the operand unchanged and Godot cache/movie identities retain the complete packed selector. SC0010 low-id
+and installed append-pack regressions cover the two failure modes. Ghidra `/v2` renames the catalog parser
+and entry-name helper, corrects the opener/caller comments, and is saved.
 
 ---
 

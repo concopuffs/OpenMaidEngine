@@ -75,7 +75,7 @@ public class AgfDecoderTests
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var store = new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
         var resources = new ResourceMap(catalog, store);
-        Assert.Equal("SO001.AGF", resources.ResolveTexture("SC0000", 0x337e)?.Name);
+        Assert.Equal("SO001.AGF", resources.ResolveTexture(0x337e)?.Name);
         var image = AgfDecoder.Decode(store, catalog.ResolveRaw(0x337e)!);
         Assert.Equal((800, 300), (image.Width, image.Height));
         Assert.Contains(image.Pixels.Where((_, i) => (i & 3) == 3), a => a is > 0 and < 255);
@@ -89,7 +89,7 @@ public class AgfDecoderTests
     public void InstalledFieldMapSheetsResolveAndDecodeByRawCatalogIndex(int rawId, string name)
     {
         var resources = ResourceMap.Load();
-        var asset = resources.ResolveRawTexture(rawId);
+        var asset = resources.ResolveTexture(rawId);
         Assert.NotNull(asset);
         Assert.Equal(name, asset.Name);
         var image = resources.DecodeTexture(asset);

@@ -196,7 +196,7 @@ public class MovieOpcodeTests
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
-        var entry = resources.Resolve("SC0000", 0x33);
+        var entry = resources.ResolveMovie(0x33);
 
         Assert.Equal("CHAPTER.AGF", entry?.Name);
         var movie = resources.ReadMovie(entry!);
@@ -207,11 +207,11 @@ public class MovieOpcodeTests
     [Theory]
     [InlineData(0x335f, "LOGO.AGF")]
     [InlineData(0x3364, "OP.AGF")]
-    public void ModalMoviePayloadResolvesFromUniversalRawCatalog(int rawId, string expectedName)
+    public void ModalMoviePayloadResolvesFromUniversalPackedCatalog(int resourceId, string expectedName)
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
-        var entry = resources.ResolveRawMovie(rawId);
+        var entry = resources.ResolveMovie(resourceId);
 
         Assert.Equal(expectedName, entry?.Name);
         var movie = resources.ReadMovie(entry!);
@@ -224,7 +224,7 @@ public class MovieOpcodeTests
         if (!OperatingSystem.IsWindows()) return;
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
-        var entry = resources.Resolve("SC0000", 0x33)!;
+        var entry = resources.ResolveMovie(0x33)!;
         using var decoder = new DirectShowMovieDecoder(resources.ReadMovie(entry));
 
         Assert.True(decoder.StopTimeMs > 0, "DirectShow should expose a positive IMediaPosition stop time");

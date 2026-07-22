@@ -15,7 +15,6 @@ public class CallScriptTests
     {
         public virtual void EnterScriptContext(string scriptName) { }
         public virtual void ExitScriptContext() { }
-        public virtual long ResolveTextureResourceId(long resourceId) => resourceId;
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
@@ -51,9 +50,6 @@ public class CallScriptTests
         {
             Events.Add($"exit:{_contexts.Pop()}");
         }
-
-        public override long ResolveTextureResourceId(long resourceId)
-            => resourceId + (_contexts.Peek() == "CALLEE" ? 700 : 70);
 
         public override void SetTexture(long resourceId, int slot) => Textures.Add((resourceId, slot));
     }
@@ -133,7 +129,7 @@ public class CallScriptTests
     }
 
     [Fact]
-    public void ScriptLocalTextureIdsFollowTheActiveNestedFrame()
+    public void PackedTextureIdsRemainUnchangedAcrossNestedFrames()
     {
         var t = Table();
         var callee = Asm(t, "CALLEE",
@@ -149,7 +145,7 @@ public class CallScriptTests
 
         vm.Run();
 
-        Assert.Equal(new[] { (77L, 1), (707L, 2), (77L, 3) }, host.Textures);
+        Assert.Equal(new[] { (7L, 1), (7L, 2), (7L, 3) }, host.Textures);
         Assert.Equal(new[] { "enter:CALLER", "enter:CALLEE", "exit:CALLEE", "exit:CALLER" }, host.Events);
     }
 }

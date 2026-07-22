@@ -43,7 +43,7 @@ if (args[0] == "audio")
     var sceneName = args[1];
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = ResourceMap.Load();
-    var host = new AudioTraceHost(res, sceneKey);
+    var host = new AudioTraceHost(res);
     var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
     foreach (var s in args.Skip(2))
@@ -70,7 +70,7 @@ if (args[0] == "gfx")
     var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = ResourceMap.Load();
-    var host = new GfxTraceHost(res, sceneKey);
+    var host = new GfxTraceHost(res);
     var session = new GameSession();
     foreach (var s in args.Where(a => a.Contains('=')))
     {
@@ -100,7 +100,7 @@ if (args[0] == "gfx")
     var vis = vm.Gfx.SnapshotVisibleObjects();
     Console.WriteLine($"  visible objects ({vis.Count}, ascending-handle = z-order):");
     foreach (var v in vis)
-        Console.WriteLine($"    h=0x{v.Handle:x} surf=0x{v.SurfaceResId:x} ({res.Resolve(sceneKey, v.SurfaceResId)?.Name ?? "?"}) src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY})");
+        Console.WriteLine($"    h=0x{v.Handle:x} surf=0x{v.SurfaceResId:x} ({res.ResolveTexture(v.SurfaceResId)?.Name ?? "?"}) src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY})");
     return 0;
 }
 
@@ -345,17 +345,16 @@ sealed class TraceSetup : IDisposable
 sealed class AudioTraceHost : IHost
 {
     private readonly ResourceMap _res;
-    private readonly string _scene;
     public List<(string Kind, long Id, string Resolved)> Events { get; } = new();
-    public AudioTraceHost(ResourceMap res, string scene) { _res = res; _scene = scene; }
+    public AudioTraceHost(ResourceMap res) { _res = res; }
     public void PlayBgm(long id)                        // BGM: direct name, not the manifest
     {
         var entry = _res.ResolveBgm(id);
         Events.Add(("play-bgm", id, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>"));
     }
-    public void PlayVoice(long id)                      // voice: SC section, then frontend raw id
+    public void PlayVoice(long id)                      // voice: universal packed catalog id
     {
-        var e = _res.ResolveVoice(_scene, id);
+        var e = _res.ResolveVoice(id);
         Events.Add(("play-voice", id, e == null ? "<unresolved>" : $"{e.Archive} {e.Name}"));
     }
     public void ShowText(int offset, string text) { }
@@ -371,12 +370,11 @@ sealed class AudioTraceHost : IHost
 sealed class GfxTraceHost : IHost
 {
     private readonly ResourceMap _res;
-    private readonly string _scene;
     private readonly Dictionary<int, string?> _slotAsset = new(); // slot -> resolved AGF name (or null)
     // slot -> dimensions of the currently allocated surface. Slot 0 starts as the engine's primary surface.
     private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
     public List<string> Events { get; } = new();
-    public GfxTraceHost(ResourceMap res, string scene) { _res = res; _scene = scene; }
+    public GfxTraceHost(ResourceMap res) { _res = res; }
 
     public (int Width, int Height) GetTextureSize(int slot)
     {
@@ -387,7 +385,7 @@ sealed class GfxTraceHost : IHost
 
     public void SetTexture(long resId, int slot)
     {
-        var e = _res.ResolveTexture(_scene, resId);
+        var e = _res.ResolveTexture(resId);
         RgbaImage? image = e != null ? _res.DecodeTexture(e) : null;
         _slotAsset[slot] = e?.Name;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
