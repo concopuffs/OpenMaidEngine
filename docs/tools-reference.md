@@ -54,7 +54,9 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `extract_phase2.py` | Batch: disassembly + text corpora for every script. | `extract_phase2.py` | corpus → `build/disasm/*.asm`, `build/text/{dialogue.jsonl,strings.jsonl,*.strings.txt}`, `build/manifest.json` |
-| `extract_init.py` | Parse a `*INIT` data table (auto-detects name / numeric / footer shape). | `extract_init.py <TABLE> [OUTNAME] [--mode …]` | `<TABLE>.BIN` → `build/data/<OUTNAME>.json` |
+| `extract_init.py` | Parse a `*INIT` data table (auto-detects name / numeric / footer shape). Name tables infer their reserved record span, preserve sparse one-based runtime ids, and distinguish lookup bases from first written cells. Also refreshes the generated data index. | `extract_init.py <TABLE> [OUTNAME] [--mode …]` | `<TABLE>.BIN` → `build/data/<OUTNAME>.json`, `build/data/README.md` |
+| `init_table_profile.py` | Build the static investigation surface for an extracted name/numeric table: per-base population/value distributions, representative records, and direct opcode/script consumers. Findings are evidence only; confirmed meanings go in `vm-map/globals.toml`. | `init_table_profile.py <TABLE> [--build] [--limit N]` | `build/data/<TABLE>.json` + corpus → stdout; with `--build`, `build/data/<TABLE>-field-profile.{json,md}` |
+| `test_extract_init.py`, `test_init_table_profile.py` | Regression checks for sparse one-based INIT extraction and field profiling. | run each directly | — |
 | `global_map.py` | Build the partial global-variable name map from static evidence. | `global_map.py` | corpus + `build/data/` → `build/global-var-map.{json,md}` |
 
 ## VM

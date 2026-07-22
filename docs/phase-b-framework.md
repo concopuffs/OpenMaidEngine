@@ -710,6 +710,15 @@ gate on the one-player-attack acceptance path.
 
 ## Later Phase B breadth
 
+**INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static
+extractor itself was audited. It now preserves sparse one-based ids and corrects ITINIT from 189 malformed
+records to 287 items (plus SKINIT 129→131 skills); regression checks cover the real tables. A reusable field
+profiler reports distributions, examples, and direct script/opcode consumers. The ITINIT pilot has curated
+eleven high-confidence arrays in `vm-map/globals.toml`: sort key, random tier, category, icon, behavior
+handler, attack/defense element, weapon class, granted skill, and min/max range. Next semantic work should
+classify the remaining repeatedly populated ITINIT bases, then apply the same workflow to SKINIT and EBINIT;
+STINIT's bespoke parser remains a separate extraction task.
+
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 
 - Remaining title/configuration/load/save branches.

@@ -52,6 +52,14 @@ Large, table-like scripts — prime candidates for data extraction:
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT`, `SPINIT`, `TRINIT`, `VIINIT`
 
+**Extracted-table correction and semantic pilot (2026-07-22).** Name-mode INIT tables use sparse,
+one-based runtime ids over fixed reserved array spans, not a new record whenever the string destination
+decreases. The corrected extractor finds SKINIT 131 skills (span 300), ITINIT 287 items (span 1000), and
+EBINIT 277 units (span 1000). In particular, the earlier ITINIT JSON's 189 records were invalid: it collapsed
+items 1–101 into the first record and treated consecutive item names as descriptions. Generated table state
+and counts are indexed in `build/data/README.md`; field semantics are curated in `vm-map/globals.toml` and
+described by the workflow in `docs/name-resolution.md`.
+
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill
 text), `CIMES` (15 KB), `MAMES`, `INFOMES`, `MES` — where most translatable text

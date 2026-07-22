@@ -102,16 +102,16 @@ free handholds — several of which we've already built:
 now, statically, from methods 1–3. A *complete* map needs Frida for the tail. It's incremental:
 label the ~dozen hottest globals first (biggest readability payoff), grow the rest on demand.
 
-**Partial map — BUILT (v1, 2026-07-06).** `tools/global_map.py` → `build/global-var-map.json`
+**Partial map — BUILT (v1, refreshed 2026-07-22).** `tools/global_map.py` → `build/global-var-map.json`
 (all evidence) + `build/global-var-map.md` (labelled subset). It ingests `build/data/*.json`
 (name/desc/field bases), scans the 481-script corpus for each global's **access shape**
 (2D-table base + stride, 1D-array base, row-index, scalar), and ranks "current entity" index
-pointers by purity. **First result: 16,354 of 49,435 distinct globals labelled** —
+pointers by purity. **Current result: 15,918 of 49,386 distinct globals labelled** —
 
 | kind | count | example |
 |---|---|---|
-| string tables (names/descs/messages) | 3,199 | `0x23a3` = skill-name table |
-| per-entity data-field arrays (from *INIT) | 12,700 | dense = shared fields, `?` = sparse per-entity |
+| string tables (names/descs/messages) | 3,206 | `0x23a2` = skill-name lookup base |
+| per-entity data-field arrays (from *INIT) | 12,311 | dense = shared fields, `?` = sparse per-entity |
 | row-major record tables (from access shape) | 122 | `0x52383` = record-table[stride 30] |
 | 1D arrays | 307 | |
 | index / "current entity" pointers | 26 | `0x152616` (purity 0.51), `0xeff75` (0.95) |
@@ -127,6 +127,36 @@ Labels are prefixed `=` to mark them as inferred aliases. Regenerate the `.asm` 
 `build/global-var-map.json` (the loader degrades gracefully).
 
 Confidence is marked per entry; labels ending `?` are low-confidence guesses.
+
+### INIT field-semantics workflow and ITINIT pilot (2026-07-22)
+
+The old name-mode extractor's boundary rule was wrong for sparse tables: it treated any increasing
+`global-string` destination as another description. ITINIT begins with 101 consecutive name-only records,
+so the generated JSON collapsed them into item zero and fabricated 67 description columns. Static consumer
+evidence also proves the tables are one-based: scripts look up item names from `0x1bd2 + item_id`, while the
+first populated name is written to `0x1bd3`. `extract_init.py` now infers the parallel-array record span from
+the dominant name-to-description delta (SKINIT 300; ITINIT/EBINIT 1000), recognizes column-zero names inside
+that span, emits the one-based runtime id, and distinguishes the lookup base from the first written cell.
+Corrected counts are **131 skills, 287 items, and 277 units**.
+
+Semantic recovery is an evidence ladder, cheapest and strongest first:
+
+1. Profile each write base across named records (population, value domain, common values and examples).
+2. Mine every direct corpus consumer of that base and identify its role from the consuming operation/script.
+3. Cross-resolve enums and foreign keys against other INIT/MES tables and visible descriptions.
+4. Curate only supported names in `vm-map/globals.toml`; retain uncertainty in the profile rather than
+   promoting guesses. Use dynamic observation only for fields that remain ambiguous after static consumers.
+
+`tools/init_table_profile.py ITINIT --build` materializes steps 1–2 in
+`build/data/ITINIT-field-profile.{json,md}`. The first pass names eleven stable ITINIT arrays: catalog sort
+key, random-item tier, item category, icon id, shared ITMES handler id, attack and defense elements, weapon
+class, granted skill id, and minimum/maximum range. The strongest joins are independently human-readable:
+attack/defense values index AFINIT's Japanese attribute strings, granted-skill values resolve to SKINIT, all
+handler values resolve to ITMES.BIN, and every min/max-range record says `range 2` in its item description.
+
+The remaining 764 ITINIT write bases are not automatically 764 item fields. Most occur once because ITINIT
+also initializes linked effect/stat arrays while defining an item. Treat the profile's `population` and
+consumer evidence as a classification aid before assigning table ownership.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -168,18 +198,22 @@ by SCJUMP/FIELD). **Known/named anchors:** `0x3234` `chapter_mode` (enum 1..9), 
 `0x6c9–0x6cd` UI toggles. Config/settings globals written by `CONFIG`/`INITCONFIG` (scene-reach 0)
 are *not* story flags — the miner over-tags them; they are recategorized `unknown` when curated.
 
-### Future step — growing the map (planned, not yet done)
+### Future step — growing the map
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other
+1. **Continue INIT semantics by evidence density.** Finish ITINIT's repeatedly populated fields and linked
+   effect arrays, then run the same profiler on SKINIT and EBINIT. Add explicit foreign-key joins (item →
+   skill, unit → attack/skill) once the target table ids are confirmed. Do not infer meaning from column
+   position alone.
+2. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other
    `set-string`/`copy-to-global` writers not covered by the `*INIT` set — pure static win,
    extends the string/data labels. (Also: most name-table bases are *read* rarely — reads
    likely go through `*MES`/an indirection; tracing that would connect names to their readers.)
-2. **Label 2D record tables by their readers** — cross-reference which scripts read each
+3. **Label 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context (e.g. RECOVER's 30-wide tables ↔ a
    status/recovery system). Static, medium effort.
-3. **Name *which stat* each field is (Frida).** The one step needing live tools: change a
+4. **Name *which stat* each field is (Frida).** The one step needing live tools: change a
    known value in-game (take damage, gain XP), watch which global moves → definitive
    `field@X = "HP"`. Reserve for the fields that matter; this is the last mile.
 

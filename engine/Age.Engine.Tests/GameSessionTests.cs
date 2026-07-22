@@ -81,7 +81,7 @@ public class GameSessionTests
     {
         // Running the SKINIT data script through the session populates the real skill table into the
         // global bank (the game's boot behavior). Cross-check vs the static extraction (build/data/SKINIT.json):
-        // skill 0 = "飛行" at global-string 0x23a3, field G[0xa6e5b] = 30.
+        // skill id 1 = "飛行" at global-string 0x23a3, field G[0xa6e5b] = 30.
         var session = new GameSession();
         var r = session.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new CaptureHost());
         Assert.Equal("exit", r.Halt);

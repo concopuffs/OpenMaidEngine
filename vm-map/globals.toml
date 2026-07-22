@@ -7,6 +7,116 @@
 note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
 
 [[global]]
+address = "0x8c879"
+name = "item_sort_key"
+category = "data-table"
+type = "int[1000]"
+value_domain = "mostly unique multiples of 10; 10..6390"
+usage = "ITINIT field for all 287 populated item ids. CHMENU, IMPROVE, and INFOIT pass this array as the primary key to op 0x12f's stable index sort, establishing it as the catalog/display ordering key. The runtime lookup base is one cell before ITINIT's first write because item ids are one-based."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8cc61"
+name = "item_random_tier"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0..6"
+usage = "ITINIT field for all 287 items. ADDRANDOMITEM and LOSTRANDOMITEM bucket eligible item ids by this value before choosing a random gain/loss; IMPROVE compares it with the current progression rank. This is the random-item availability/rarity tier, distinct from item_category."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8d049"
+name = "item_category"
+category = "data-table"
+type = "int[1000]"
+value_domain = "{0,1,2,4,8,9,10..17,19..23}"
+usage = "ITINIT field for all 287 items and ITMES's top-level behavior dispatch. Observed groups: 0 innate attacks, 1 key/story items, 2 consumables, 4 stat stones, 8 synthesis materials, 9 coins, 10..17 weapon families, 19 boots, 20 armor, 21 shields, 22 accessories, and 23 capture ropes."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8dc01"
+name = "item_icon_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1..360"
+usage = "ITINIT field for all 287 items. READICON sorts and indexes this array to select icon atlas entries; ALCHEMY, CHMENU, IMPROVE, and INFOIT use the same value for item-row presentation."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa6a71"
+name = "item_handler_script_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "12699 (0x319b, ITMES.BIN) in the shipped table"
+usage = "ITINIT field for all 287 items. Item menus look up this value and feed it directly to call-script; the packed id 0x319b resolves to ITMES.BIN, the shared per-item behavior/description dispatcher."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8dfe9"
+name = "item_attack_element"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1..8 (physical, universal, fire, ice, lightning, earth, holy, dark)"
+usage = "Populated for 107 weapons/attacks. Values exactly match the AFINIT attack-attribute string table at GStr[0x2690 + value] and the Japanese item descriptions; combat scope/parameter code consumes the same array."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8e3d1"
+name = "item_defense_element"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1..12 (AFINIT defense-attribute enum)"
+usage = "Populated for the 13 shields. Values match descriptions such as physical, universal, holy, dark, spirit, and divinity defense; DRAWTIP renders them through AFINIT's defense string table at GStr[0x26a4 + value]."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa6689"
+name = "item_weapon_class"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1..21"
+usage = "Populated for 104 weapons/innate attacks. Stable values identify weapon families (1 unarmed, 2 staff, 3 claw, 4 dagger, 5 sword, 6 chain blade, 7 spear, 8 axe, 9 bow, 11 blade boots; later values are monster/natural attack classes). CALCDMG consumes it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x9f159"
+name = "item_granted_skill_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "SKINIT skill id 1..227"
+usage = "Populated for 85 equipment items. Values cross-resolve to SKINIT (for example flying bracelet=1 Flying, transfer bracelet=21 Transfer, thief key=22 Lockpick, ropes=156 Capture Attack); CALCREVISE applies the linked skill and UI scripts display it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8d431"
+name = "item_min_range"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1 when populated"
+usage = "Populated for the 12 bows/ranged innate attacks whose descriptions say range 2. CALCSCOPE reads it as the first range bound; the paired maximum is item_max_range."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8d819"
+name = "item_max_range"
+category = "data-table"
+type = "int[1000]"
+value_domain = "2 when populated"
+usage = "Populated for the same 12 ranged items as item_min_range. CALCSCOPE reads it as the second range bound, matching every description's range-2 annotation."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x0"
 name = "system_flow_request"
 category = "choice-output"
