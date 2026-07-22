@@ -30,6 +30,7 @@
     <Compile Include="..\..\godot\GodotTimelineLog.cs" Link="GodotTimelineLog.cs" />
     <Compile Include="..\..\godot\GodotTraceSink.cs" Link="GodotTraceSink.cs" />
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
+    <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
     <Compile Include="..\..\godot\DirectShowMovieDecoder.cs" Link="DirectShowMovieDecoder.cs" />
   </ItemGroup>

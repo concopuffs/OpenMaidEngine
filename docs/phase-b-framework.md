@@ -685,6 +685,16 @@ that invalid fallback; it does not retain the frame or decoder. The focused clea
 tests, zero-warning Godot build, and threaded selftest pass. **NEXT:** perform a longer combat/return-to-FIELD
 acceptance run, then delete DirectShow if the remaining live gate stays clean.
 
+An independent long-standing console-spam issue was also localized at the same SC0000 third-CG boundary.
+`play-sound-effect 0x28` loads `E0808.WAV`, whose RIFF `LIST/INFO` metadata uses CP932; Godot assumes those
+unused fields are UTF-8 and logged each invalid byte twice because the script loaded the effect on two channels.
+This was neither the AE glow renderer nor corrupt PCM. The complete extracted corpus contains 61 affected INFO
+chunks among 238 valid WAVs, which also explains intermittent combat spam. A Godot-only adapter now strips only
+INFO metadata from the transient buffer immediately before `AudioStreamWav.LoadFromBuffer`; the shared engine,
+VFS bytes, and functional RIFF chunks are unchanged. Synthetic preservation tests and the real E0808 regression
+pass, as do all 331 engine tests, the zero-warning Godot build, and the headless loader selftest with no Unicode
+warnings.
+
 **Mutable-surface fill/blend regression corrected.** The first visual recheck exposed BUNKI's menu interior
 as transparent. SYSTEM4 creates 800x600 surface 3 and fills it opaque white through `0x20b`; the metadata-only
 host fill left the new pixel buffer transparent. Implementing the fill alone made the panel solid gray and

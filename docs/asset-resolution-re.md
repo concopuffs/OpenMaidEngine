@@ -169,6 +169,21 @@ The Phase-A backend now resolves the OGG/WAV catalog entry and opens it through 
 the returned bytes into its existing BGM, voice, and fixed SC0000 SFX channel players. The earlier
 `ResourceMap.AudioPath` extracted-file bootstrap is retired.
 
+Godot's WAV loader adds one host-specific compatibility boundary. SC0000 `0xc29` starts `E0808.WAV` with
+the EV052DA glow. Its PCM is valid, but its trailing RIFF `LIST/INFO` fields contain Japanese CP932 text
+(`IPRD`, `IGNR`, and `ICMT`). Godot assumes INFO text is UTF-8 and formerly emitted one Unicode warning per
+invalid CP932 byte each time the sound was loaded; the duplicated SC0000 burst came from loading raw id
+`0x28` on two channels. A complete extracted-corpus scan found 238 RIFF/WAVE files, 61 INFO chunks, no other
+LIST type, and no invalid RIFF containers, explaining the same warnings around combat SFX.
+
+The correction is deliberately confined to the Godot frontend. `RiffWaveSanitizer` removes only `LIST` chunks
+whose form type is `INFO` from the transient byte array passed to `AudioStreamWav.LoadFromBuffer`, updates the
+RIFF length, and preserves every functional chunk (`fmt `, `data`, `smpl`, `cue `, and unknown chunks)
+byte-for-byte, including padding. The shared engine, original loose/archive payloads, and
+`ResourceMap.ReadAudio` output remain untouched. The real E0808 Godot input shrinks from 688,570 to 688,336
+bytes while retaining an identical PCM data chunk and loads headlessly without a Unicode warning. Synthetic
+chunk/padding tests and the installed E0808 regression cover the adapter.
+
 ## Runtime asset-VFS track (VFS-A/B/C complete 2026-07-11)
 
 The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final

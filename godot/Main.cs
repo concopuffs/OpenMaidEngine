@@ -1208,7 +1208,10 @@ public partial class Main : Godot.Control
         _sfxGenerations[channel]++;
         _sfx[channel].Stop();
         _sfx[channel].Stream = null;
-        var stream = AudioStreamWav.LoadFromBuffer(wavBytes);
+        // This is intentionally a Godot-only compatibility boundary. The VFS and engine retain the
+        // original WAV bytes; only Godot's UTF-8-assuming INFO parser sees the sanitized copy.
+        byte[] godotWav = RiffWaveSanitizer.RemoveInfoMetadata(wavBytes);
+        var stream = AudioStreamWav.LoadFromBuffer(godotWav);
         if (stream == null) { GD.Print($"WAV load failed {assetName}"); return; }
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
         _sfx[channel].VolumeDb = 0;
@@ -1389,13 +1392,18 @@ public partial class Main : Godot.Control
                                       new InputEventKey { PhysicalKeycode = Key.Up }, out int upVk) && upVk == 0x26
                                   && Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Ctrl }, out int ctrlVk) && ctrlVk == 0x11;
-        ok &= launcherOk && sleepMinimumOk && inputTranslationOk;
+        var selftestResources = ResourceMap.Load();
+        AudioPayload glowSfx = selftestResources.ReadAudio(selftestResources.ResolveSoundEffect(0x28)!);
+        byte[] glowGodotWav = RiffWaveSanitizer.RemoveInfoMetadata(glowSfx.Bytes);
+        bool cp932WavMetadataOk = glowGodotWav.Length == 688_336
+                                 && AudioStreamWav.LoadFromBuffer(glowGodotWav) != null;
+        ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
-                         $"sleep-min=1ms; native-key-translation=ok");
+                         $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
-                      $"native-key-translation={inputTranslationOk}");
+                      $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 
