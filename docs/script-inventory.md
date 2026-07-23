@@ -62,7 +62,7 @@ described by the workflow in `docs/name-resolution.md`.
 
 The same audit found that linked row-major writes must not be normalized as independent parallel arrays.
 Corpus `lookup-array-2d` bases and strides assign every such ITINIT write unambiguously to six tables (44
-populated columns), while SKINIT and EBINIT expose 18 and 84 linked columns respectively. The extractor also
+populated columns), while SKINIT and EBINIT expose 18 and 82 linked columns respectively. The extractor also
 preserves the scripts' zero-minus-immediate negative writes, which carry item penalties, condition cures, and
 skill SP costs. Generated records keep linked cells under `record_fields[base/stride/column]`; `fields`
 contains only genuine parallel arrays.

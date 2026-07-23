@@ -172,7 +172,7 @@ writes) unambiguously to six row-major tables and 44 populated columns:
 | `0xa5301` | 3 | 17 | HP/SP/FS recovery amounts |
 
 `extract_init.py` now records these as `record_fields["base/stride/column"]` rather than inventing a
-one-off `fields` base for every row. Applying the same rule exposes 18 linked SKINIT columns and 84 linked
+one-off `fields` base for every row. Applying the same rule exposes 18 linked SKINIT columns and 82 linked
 EBINIT columns. This correction reduces the auto map's false INIT-field labels from 12,311 to 1,353; the raw
 write addresses were valid, but their former ownership model and omission of negative writes were not.
 
@@ -243,9 +243,9 @@ records use the shared accuracy-through-max-FS vocabulary; starting skills, drop
 brainwashed roster forms, battle portraits/cut-ins, and health-selected status art all expose named fields.
 Consumer control flow further divides the five CP sprite assets into normal/alternate compact and directional
 sheets plus the special compact sheet, and SHOWGROW proves voice column 24 is the level-up reaction. Of
-EBINIT's 110 populated profile fields, 107 now have specific semantic names. SALLY's SO012 button atlas and
-action dispatch resolve all four unlock columns as contract, brainwash, a reserved/unreachable slot, and
-sex magic. The paired eight event columns are contract, brainwash, the same reserved slot, three
+EBINIT's 108 genuine populated profile fields, 107 now have specific semantic names. SALLY's SO012 button
+atlas and action dispatch resolve all four unlock columns as contract, brainwash, a reserved/unreachable
+slot, and sex magic. The paired eight event columns are contract, brainwash, the same reserved slot, three
 form-dependent Lily sex-magic events, sacrifice, and release. The reserved slot has a switch arm but is
 deliberately skipped by both drawing and input; its event ids also lack SCJUMP mappings, so it is recorded
 as unreachable rather than assigned a speculative action.
@@ -263,8 +263,15 @@ essence yield, level cap, and base statistics. Lily's three forms are exactly ti
 heroine boss definitions generally rise with their later, stronger appearances. The static corpus contains
 no read of this array, and the `/v2` native image contains neither its global index as an instruction operand
 nor as a little-endian constant. `unit_power_tier` is therefore curated at medium confidence as descriptive
-authoring metadata, not a runtime behavior claim. EBINIT now has specific names for 108 of 110 populated
-profile fields; only two suspicious one-record writes into runtime table `0x4e693/300` remain anonymous.
+authoring metadata, not a runtime behavior claim.
+
+The apparent final two anonymous EBINIT writes were address-ownership collisions, not new fields. The flat
+global range occupied by stride-300 runtime table `0x4e693` overlaps established EBINIT parallel arrays.
+Address `0x6fd4e` can be expressed as row 456, column 91 of that table, but it is also exactly
+`unit_battle_sprite_asset_id[456]`; its value 12585 resolves to `CB456A.AGF`. Likewise `0x7a5d6` can be
+expressed as row 600, column 35, but is exactly `unit_starting_level[600] = 80`. The extractor now gives an
+already-established parallel base precedence over a coincidental row-table range match. EBINIT therefore
+has 82 genuine linked columns and specific semantic names for all 108 populated profile fields.
 
 ### STINIT mixed stage records (2026-07-23)
 

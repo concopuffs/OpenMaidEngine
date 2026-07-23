@@ -724,7 +724,7 @@ SKINIT contributes skill category/order/icon/handler, encoded range, element, st
 proc chance, and battle animation. EBINIT now contributes unit order/icon, sex and provisional species,
 elements, attacks/equipment/skills, level/cost/base/growth data, canonical variants, CP/CA/CB/CS/cut-in and
 voice assets, XP/drops, capture and compendium flags, summoning economy, essence yield, and level scaling.
-Its linked-table shapes are 18 SKINIT and 84 EBINIT populated columns. The next EB tranche identifies roster
+Its linked-table shapes are 18 SKINIT and 82 EBINIT populated columns. The next EB tranche identifies roster
 state flags, per-action unlock requirements, SCJUMP event ids, normal/brainwashed unit variants, and SALLY's
 per-unit bonus item. Combat tracing also names the shared column-8 item/skill modifier as critical chance.
 
@@ -745,8 +745,10 @@ SKINIT parallel field as the skill-change catalog inclusion flag and separates a
 skill-information visibility. The remaining item/skill work is refinement rather than an unnamed populated
 schema.
 
-The remaining EBINIT unknowns are two isolated sparse writes into a runtime table; enemy AI appears to live
-outside the static EBINIT schema. The signed boss class is now behaviorally separated: all nonzero values
+EBINIT's populated schema is now fully named. Its apparent final two sparse runtime-table writes were flat-
+address overlap collisions: they are the already-established battle-sprite asset for unit 456 and starting
+level for unit 600, not distinct stride-300 fields. Enemy AI appears to live outside the static EBINIT
+schema. The signed boss class is now behaviorally separated: all nonzero values
 receive boss protections and targeting treatment, positive values alone count as required targets under
 FIELD's defeat-boss clear rule, negative values are boss-treated adds/decoys/hazards that do not block
 victory, and either sign of class 4 selects final-boss music and tactical-map presentation. Classes 1--3

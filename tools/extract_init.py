@@ -343,6 +343,36 @@ def _record_table_cell(destination, record_id):
     return matches[0] if matches else None
 
 
+def _resolve_parallel_record_overlaps(records):
+    """Prefer an established parallel column over a row-table range collision.
+
+    The global bank is flat, so a sufficiently large row-major table can
+    contain an address that another INIT schema reaches as `base + entity_id`.
+    A parallel base repeated by other records is stronger ownership evidence
+    than one accidental in-range row/column calculation.
+    """
+    parallel_records = {}
+    for record in records:
+        for key in record.get("fields", {}):
+            parallel_records.setdefault(int(key, 0), set()).add(record["id"])
+    for record in records:
+        retained = {}
+        for key, value in record.get("record_fields", {}).items():
+            base, stride, column = (int(part, 0) for part in key.split("/"))
+            destination = base + record["id"] * stride + column
+            parallel_base = destination - record["id"]
+            if any(
+                other_id != record["id"]
+                for other_id in parallel_records.get(parallel_base, ())
+            ):
+                _store_unique(
+                    record["fields"], f"0x{parallel_base:x}", value, record["id"]
+                )
+            else:
+                retained[key] = value
+        record["record_fields"] = retained
+
+
 def extract_name(scr):
     string_addrs = [
         ins.args[0][1]
@@ -379,6 +409,7 @@ def extract_name(scr):
             else:
                 base, stride, column = cell
                 cur["record_fields"][f"0x{base:x}/{stride}/{column}"] = value
+    _resolve_parallel_record_overlaps(records)
     for record in records:
         if not record["record_fields"]:
             del record["record_fields"]

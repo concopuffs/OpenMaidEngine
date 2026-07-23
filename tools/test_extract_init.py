@@ -56,6 +56,30 @@ def test_real_name_tables() -> None:
     check(by_id[108]["record_fields"]["0x906f9/30/8"] == -5,
           "ITINIT item 108 preserves its paralysis-removal delta")
 
+    units, _ = extract_init.extract_name(sys4load.load(scripts["EBINIT.BIN"]))
+    unit_by_id = {record["id"]: record for record in units}
+    check(len({
+        key
+        for record in units
+        for key in {
+            **record.get("fields", {}),
+            **record.get("record_fields", {}),
+        }
+    }) == 108, "EBINIT exposes 108 genuine populated fields")
+    check(len({
+        key for record in units for key in record.get("record_fields", {})
+    }) == 82, "EBINIT exposes 82 genuine linked row-major columns")
+    check(
+        unit_by_id[456]["fields"]["0x6fb86"] == 12585
+        and "0x4e693/300/91" not in unit_by_id[456].get("record_fields", {}),
+        "EBINIT unit 456 keeps its battle sprite in the parallel asset column",
+    )
+    check(
+        unit_by_id[600]["fields"]["0x7a37e"] == 80
+        and "0x4e693/300/35" not in unit_by_id[600].get("record_fields", {}),
+        "EBINIT unit 600 keeps its starting level in the parallel level column",
+    )
+
     objects, _ = extract_init.extract_name(sys4load.load(scripts["OBINIT.BIN"]))
     object_by_id = {record["id"]: record for record in objects}
     check(object_by_id[17]["name"] == "針"
@@ -373,6 +397,11 @@ def test_field_semantics() -> None:
             for unit_id in (110, 115, 755, 756)
         ] == [1, -1, 4, -4],
         "paired story and final-boss records preserve victory-target sign",
+    )
+    check(
+        unit_by_id[456]["semantic_fields"]["unit_battle_sprite_asset_id"] == 12585
+        and unit_by_id[600]["semantic_fields"]["unit_starting_level"] == 80,
+        "overlapping EBINIT writes retain their established parallel semantics",
     )
 
     stages, meta = extract_init.extract_mixed(
