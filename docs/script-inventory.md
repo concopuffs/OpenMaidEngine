@@ -61,9 +61,11 @@ and counts are indexed in `build/data/README.md`; field semantics are curated in
 described by the workflow in `docs/name-resolution.md`.
 
 The same audit found that linked row-major writes must not be normalized as independent parallel arrays.
-Corpus `lookup-array-2d` bases and strides assign every such ITINIT write unambiguously to six tables (43
-populated columns), while SKINIT and EBINIT expose 17 and 83 linked columns respectively. Generated records
-now keep these under `record_fields[base/stride/column]`; `fields` contains only genuine parallel arrays.
+Corpus `lookup-array-2d` bases and strides assign every such ITINIT write unambiguously to six tables (44
+populated columns), while SKINIT and EBINIT expose 18 and 84 linked columns respectively. The extractor also
+preserves the scripts' zero-minus-immediate negative writes, which carry item penalties, condition cures, and
+skill SP costs. Generated records keep linked cells under `record_fields[base/stride/column]`; `fields`
+contains only genuine parallel arrays.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

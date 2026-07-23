@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5023 globals (94 curated, 4929 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5023 globals (119 curated, 4904 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -29,6 +29,19 @@
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
+| `0x70f0e` | unit_sort_key | high | investigation | EBINIT ordering key populated for 248 units. CHMENU, EXILE, SALLY, INFOEN, and SUMMON pass this array to op 0x12f's stable index sort or combine it with a unit id to build menu ordering keys, mirroring item_sort_key and skill_sort_key. |
+| `0x716de` | unit_icon_id | high | investigation | EBINIT icon selector populated for all 277 units. READICON returns it for unit ids; CHMENU, DRAWCHP, EXILE, SALLY, and SUMMON convert the value into icon-atlas page and cell coordinates. |
+| `0x71ac6` | unit_species_category | med | investigation | Broad EBINIT species/allegiance category for 198 units: value 1 covers humans and allied heroines, 2 covers demons including Emilio and Lily as well as many demonic monsters, and 3 covers other monsters, dragons, and elementals. CHMENU uses it for equipment restrictions, CALCDMG for category-sensitive effects, and INFOCH/INFOEN for display. |
+| `0x71eae` | unit_sex_category | high | investigation | EBINIT sex category for 251 units. Named character records establish the three values; CHMENU tests it against item_sex_restriction_mask, while INFOCH and INFOEN use the same category in unit presentation. |
+| `0x77c6e` | unit_defense_element | high | investigation | EBINIT defensive affinity for 250 units. DRAWENP renders it through the same twelve-value defense-attribute vocabulary as item_defense_element; CALCBTPARAM, BTRTN, and route scripts consume it during battle resolution. |
+| `0x78056` | unit_default_attack_item_id | high | investigation | EBINIT default attack for 250 units. Every populated value cross-resolves to ITINIT's innate-attack records; SELACT, BTL, CALCBTPARAM, CALCDMG, and CHMENU use it when no equipped weapon overrides the unit's natural attack. |
+| `0x78826` | unit_weapon_item_category | high | investigation | EBINIT weapon/equipment-family restriction for 179 units. CHMENU compares an item's item_category directly with this value when deciding whether the selected unit can equip it; Lily's forms store -1 for unrestricted handling. |
+| `0x78ff6` | unit_starting_skill_ids | high | investigation | EBINIT four-slot starting skill record. The shipped table populates the first three columns. SETEN, UNITECH, and SALLY copy the row into each runtime unit's skill list; GAMESTART, FORT, FIELD, and DRAWENP inspect the same ids, all of which cross-resolve to SKINIT. |
+| `0x79f96` | unit_deployment_cost_base | high | investigation | Base deployment/command cost for 204 units. SETCH, SETEN, and ADDEXP copy it plus the per-unit adjustment at 0x57357 into runtime cost 0x5f0bb; SALLY checks the prospective total against party capacity, while FIELD/READY add it to and REMOVECH subtracts it from the deployed-cost aggregate. |
+| `0x7a37e` | unit_starting_level | high | investigation | EBINIT initial level for 242 units. Lily's three forms store levels 1, 20, and 40. SETEN and SALLY copy or compare it while constructing a runtime unit, and UNITECH uses it when synchronizing form and character state. |
+| `0x7a766` | unit_level_cap | high | investigation | EBINIT maximum level for 243 units. ADDEXP permits level growth only while the runtime level is below this field, and SETEN uses it as the default upper bound when no scenario-specific enemy cap is supplied. |
+| `0x7af36` | unit_base_stats | high | investigation | EBINIT fourteen-column base-stat record copied wholesale into each runtime unit by SETEN, UNITECH, and SALLY. Its layout matches item_stat_modifiers: columns 2 physical attack, 3 physical defense, 4 magic attack, 5 magic defense, 6 speed, 7 luck, 10 movement, 11 max HP, 12 max SP, and 13 max FS; accuracy/evasion and other unpopulated columns begin at zero. |
+| `0x7e5e6` | unit_stat_growth_rates | high | investigation | EBINIT per-level growth record with the same fourteen-column layout as unit_base_stats. ADDEXP adds each rate to a fractional accumulator, divides by 100 to award whole stat points, and retains the remainder; SETEN and UNITECH apply the same rates when materializing units above their starting level. |
 | `0x8c879` | item_sort_key | high | investigation | ITINIT field for all 287 populated item ids. CHMENU, IMPROVE, and INFOIT pass this array as the primary key to op 0x12f's stable index sort, establishing it as the catalog/display ordering key. The runtime lookup base is one cell before ITINIT's first write because item ids are one-based. |
 | `0x8cc61` | item_random_tier | high | investigation | ITINIT field for all 287 items. ADDRANDOMITEM and LOSTRANDOMITEM bucket eligible item ids by this value before choosing a random gain/loss; IMPROVE compares it with the current progression rank. This is the random-item availability/rarity tier, distinct from item_category. |
 | `0x8d049` | item_category | high | investigation | ITINIT field for all 287 items and ITMES's top-level behavior dispatch. Observed groups: 0 innate attacks, 1 key/story items, 2 consumables, 4 stat stones, 8 synthesis materials, 9 coins, 10..17 weapon families, 19 boots, 20 armor, 21 shields, 22 accessories, and 23 capture ropes. |
@@ -39,8 +52,8 @@
 | `0x8e3d1` | item_defense_element | high | investigation | Populated for the 13 shields. Values match descriptions such as physical, universal, holy, dark, spirit, and divinity defense; DRAWTIP renders them through AFINIT's defense string table at GStr[0x26a4 + value]. |
 | `0x8e7b9` | item_character_whitelist | high | investigation | Sparse ITINIT row-major table with stride 5. CHMENU rejects an item when column 0 is populated and the selected party slot's character id is absent from the row. Unique accessories 471/472 allow one character each, while crossover accessories 480..485 allow character ids 2, 3, and 4. Unused trailing columns remain zero. |
 | `0x8ff29` | item_sex_restriction_mask | med | investigation | Sparse ITINIT equipment restriction. CHMENU tests this mask against EBINIT field 0x71eae, whose values partition male, female, and sexless units; both populated items carry bit 2 and are therefore female-only. |
-| `0x906f9` | item_attack_status_levels | high | investigation | Sparse ITINIT row-major table consumed by USEITEM and CALCILL when applying an item's attack effects. Confirmed condition columns from item descriptions are 2 HP drain, 3 SP drain, 4 FS drain, 6 charm, 7 confusion, 8 paralysis, 9 poison, 10 water-flow, and 11 fear. |
-| `0x97c29` | item_equipped_status_levels | high | investigation | Sparse ITINIT row-major table added to a unit's 30-column condition state by CALCREVISE. Item descriptions identify populated columns 9 poison, 11 fear, 13 regeneration, and 14 exaltation; these are passive equipped effects, distinct from item_attack_status_levels. |
+| `0x906f9` | item_status_delta_levels | high | investigation | Sparse ITINIT row-major table consumed by USEITEM and CALCILL when applying an item's effects. Positive values inflict or drain; -5 removes a condition (for example paralysis-removal item 108 stores -5 in column 8). Confirmed columns are 2 HP drain, 3 SP drain, 4 FS drain, 5 curse, 6 charm, 7 confusion, 8 paralysis, 9 poison, 10 water-flow, and 11 fear. |
+| `0x97c29` | item_equipped_status_levels | high | investigation | Sparse ITINIT row-major table added to a unit's 30-column condition state by CALCREVISE. Item descriptions identify populated columns 9 poison, 11 fear, 13 regeneration, and 14 exaltation; these are passive equipped effects, distinct from item_status_delta_levels. |
 | `0x9f159` | item_granted_skill_id | high | investigation | Populated for 85 equipment items. Values cross-resolve to SKINIT (for example flying bracelet=1 Flying, transfer bracelet=21 Transfer, thief key=22 Lockpick, ropes=156 Capture Attack); CALCREVISE applies the linked skill and UI scripts display it. |
 | `0x9f541` | item_stat_modifiers | high | investigation | ITINIT row-major equipment modifiers added directly to the unit's 14-column stat record by CALCREVISE. Descriptions and consumers establish columns 0 accuracy, 1 evasion, 2 physical attack, 3 physical defense, 4 magic attack, 5 magic defense, 6 speed, 7 luck, 9 capture power, 10 movement, 11 max HP, 12 max SP, and 13 max FS; column 8 remains unnamed. |
 | `0xa2bf1` | item_tuning_curve_ids | high | investigation | ITINIT row-major table selecting an equipment-growth curve for each of the ten tunable fields. TUNE, IMPROVE, DRAWTIP, and CALCREVISE combine each nonzero curve id with the item's corresponding tuning level and index the shared curve-value table at 0xab6fa. Columns align with item_stat_modifiers columns 0..9. |
@@ -48,6 +61,18 @@
 | `0xa62a1` | item_essence_recovery_amount | high | investigation | Sparse ITINIT consumable field. Item 106, Blood Price Healing Hand, describes essence recovery 50 and stores 50 here; USEITEM follows the dedicated essence-recovery path and scales the value before updating the selected unit. |
 | `0xa6689` | item_weapon_class | high | investigation | Populated for 104 weapons/innate attacks. Stable values identify weapon families (1 unarmed, 2 staff, 3 claw, 4 dagger, 5 sword, 6 chain blade, 7 spear, 8 axe, 9 bow, 11 blade boots; later values are monster/natural attack classes). CALCDMG consumes it. |
 | `0xa6a71` | item_handler_script_id | high | investigation | ITINIT field for all 287 items. Item menus look up this value and feed it directly to call-script; the packed id 0x319b resolves to ITMES.BIN, the shared per-item behavior/description dispatcher. |
+| `0xa6e5a` | skill_sort_key | high | investigation | SKINIT field populated for 129 of 131 skills. ADDEXP, ADDSKILL, CHMENU, INFOIT, and SETCH combine it with skill_category to construct deterministic skill-list ordering keys; higher-level sort operations consume the resulting indices. |
+| `0xa6f86` | skill_category | high | investigation | SKINIT category for all 131 skills. The records establish 1 movement/exploration, 2 defense/special attack, 3 utility/passive, 4 combat passive, 5 physical special, 6 offensive magic, and 7 healing magic. Combat and menu scripts dispatch directly on these values. |
+| `0xa71de` | skill_min_range_encoded | high | investigation | Populated for the 94 active skills. CALCSCOPE and CALCREVISE subtract one before using it as the lower range bound; SELACT and DRAWTIP use the same encoded bound. |
+| `0xa730a` | skill_max_range_encoded | high | investigation | Populated for the same 94 active skills as skill_min_range_encoded. CALCSCOPE subtracts one to obtain the upper bound, exactly matching descriptions such as range 3 -> stored 4 and range 9 -> stored 10. |
+| `0xa7436` | skill_attack_element | high | investigation | Populated for 60 elemental attacks and spells. Values match the Japanese descriptions and the same eight-value attack-element enum used by item_attack_element; CALCSCOPE, CALCBTPARAM, and SELACT consume it. |
+| `0xa7562` | skill_status_levels | high | investigation | Sparse SKINIT row-major condition table consumed by CALCILL when applying a skill's effects to the target unit. Skill names and descriptions identify columns 1 instant death, 6 charm, 7 confusion, 8 paralysis, 9 poison, 10 water-flow, and 11 fear; the column layout matches item_status_delta_levels. |
+| `0xa988a` | skill_icon_id | high | investigation | SKINIT icon id for all 131 skills. CHMENU and INFOIT translate it into the shared icon atlas; the six ids group movement, defense, utility, passive, physical-special, and magic icons. |
+| `0xa99b6` | skill_combat_stat_deltas | high | investigation | Sparse SKINIT row-major table applied by CALCBTPARAM for the selected action. Descriptions directly establish columns 0 accuracy, 2 physical attack, 3 physical defense, 4 magic attack, and 9 capture power; columns 1, 5, 6, and 8 share the unit combat-stat layout but need final display-name confirmation. |
+| `0xaa56e` | skill_resource_deltas | high | investigation | Sparse SKINIT resource table used throughout skill selection and resolution. Column 0 is HP recovery for the three healing spells; column 1 is the negative SP cost for all 95 active skills, exactly matching each description. Column 2 is unpopulated in the shipped table. |
+| `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
+| `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
+| `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -4939,11 +4964,7 @@
 | `0x6fb86` | — | med | auto-shape | unit-field |
 | `0x6ff6e` | — | med | auto-shape | record-table[stride 2] |
 | `0x7073e` | — | med | auto-shape | record-table[stride 2] |
-| `0x70f0e` | — | med | auto-shape | unit-field |
 | `0x712f6` | — | med | auto-shape | unit-field |
-| `0x716de` | — | med | auto-shape | unit-field |
-| `0x71ac6` | — | med | auto-shape | unit-field |
-| `0x71eae` | — | med | auto-shape | unit-field |
 | `0x72296` | — | low | auto-shape | unit-field? |
 | `0x7267e` | — | low | auto-shape | unit-field? |
 | `0x72a66` | — | low | auto-shape | unit-field? |
@@ -4956,18 +4977,9 @@
 | `0x770b6` | — | low | auto-shape | unit-field? |
 | `0x7749e` | — | low | auto-shape | unit-field? |
 | `0x77886` | — | low | auto-shape | unit-field? |
-| `0x77c6e` | — | med | auto-shape | unit-field |
-| `0x78056` | — | med | auto-shape | unit-field |
 | `0x7843e` | — | med | auto-shape | unit-field |
-| `0x78826` | — | med | auto-shape | unit-field |
 | `0x78c0e` | — | low | auto-shape | unit-field? |
-| `0x78ff6` | — | med | auto-shape | record-table[stride 4] |
-| `0x79f96` | — | med | auto-shape | unit-field |
-| `0x7a37e` | — | med | auto-shape | unit-field |
-| `0x7a766` | — | med | auto-shape | unit-field |
 | `0x7ab4e` | — | med | auto-shape | unit-field |
-| `0x7af36` | — | med | auto-shape | record-table[stride 14] |
-| `0x7e5e6` | — | med | auto-shape | record-table[stride 14] |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0x83406` | — | med | auto-shape | unit-field |
@@ -4975,19 +4987,7 @@
 | `0x8572e` | — | med | auto-shape | record-table[stride 8] |
 | `0x8766e` | — | low | auto-shape | unit-field? |
 | `0x8c877` | — | low | auto-shape | index/counter? |
-| `0xa6e5a` | — | med | auto-shape | skill-field |
-| `0xa6f86` | — | med | auto-shape | skill-field |
 | `0xa70b2` | — | low | auto-shape | skill-field? |
-| `0xa71de` | — | med | auto-shape | skill-field |
-| `0xa730a` | — | med | auto-shape | skill-field |
-| `0xa7436` | — | low | auto-shape | skill-field? |
-| `0xa7562` | — | med | auto-shape | record-table[stride 30] |
-| `0xa988a` | — | med | auto-shape | skill-field |
-| `0xa99b6` | — | med | auto-shape | record-table[stride 10] |
-| `0xaa56e` | — | med | auto-shape | record-table[stride 3] |
-| `0xaa8f2` | — | low | auto-shape | skill-field? |
-| `0xaaa1e` | — | med | auto-shape | skill-field |
-| `0xaab4a` | — | med | auto-shape | skill-field |
 | `0xaac76` | — | low | auto-shape | index/counter? |
 | `0xaacf0` | — | med | auto-shape | record-table[stride 5] |
 | `0xaad86` | — | med | auto-shape | record-table[stride 55] |

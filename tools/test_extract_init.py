@@ -47,14 +47,27 @@ def test_real_name_tables() -> None:
           "ITINIT columns use the runtime lookup base")
     check(len({key for record in items for key in record["fields"]}) == 13,
           "ITINIT has thirteen parallel-array fields")
-    check(len({key for record in items for key in record.get("record_fields", {})}) == 43,
-          "ITINIT linked row-major tables expose 43 populated columns")
+    check(len({key for record in items for key in record.get("record_fields", {})}) == 44,
+          "ITINIT linked row-major tables expose 44 populated columns")
     check(by_id[101]["record_fields"]["0xa5301/3/0"] == 30,
           "ITINIT item 101 stores HP recovery in row-major column zero")
+    check(by_id[108]["record_fields"]["0x906f9/30/8"] == -5,
+          "ITINIT item 108 preserves its paralysis-removal delta")
+
+
+def test_static_negative_write() -> None:
+    class Instruction:
+        opcode = extract_init.SUB
+        args = [(extract_init.T_GLOBAL_INT, 0x123),
+                (extract_init.T_IMM, 0), (extract_init.T_IMM, 7)]
+
+    check(extract_init._static_global_write(Instruction()) == (0x123, -7),
+          "INIT subtraction writes preserve negative values")
 
 
 if __name__ == "__main__":
     test_real_name_tables()
+    test_static_negative_write()
     if FAILS:
         raise SystemExit(f"{len(FAILS)} failed checks")
     print("all extract_init checks passed")

@@ -712,14 +712,20 @@ gate on the one-player-attack acceptance path.
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static
 extractor itself was audited. It now preserves sparse one-based ids and corrects ITINIT from 189 malformed
-records to 287 items (plus SKINIT 129→131 skills); regression checks cover the real tables. A reusable field
-profiler reports distributions, examples, and direct script/opcode consumers. The ITINIT pilot has curated
-thirteen parallel arrays plus six linked row-major tables in `vm-map/globals.toml`. The latter account for
-all 764 writes previously misidentified as separate sparse item fields: character restrictions, attack and
-equipped condition levels, stat modifiers, tuning curves, and HP/SP/FS recovery. The extractor now emits
-these as `record_fields[base/stride/column]`, which also exposes 17 linked SKINIT and 83 linked EBINIT
-columns. Next semantic work should profile those two tables and resolve ITINIT's remaining unnamed stat and
-condition columns; STINIT's bespoke parser remains a separate extraction task.
+records to 287 items (plus SKINIT 129→131 skills); regression checks cover the real tables. It also evaluates
+the INIT convention `sub destination, 0, magnitude`, preserving 113 negative ITINIT cells, 212 SKINIT cells,
+and 86 EBINIT cells that the former `mov`-only pass silently dropped. A reusable field profiler reports
+distributions, examples, and direct script/opcode consumers.
+
+The first semantic tranche now curates the strongest item, skill, and unit fields in
+`vm-map/globals.toml`. ITINIT has thirteen parallel arrays plus six linked row-major tables and 877 linked
+writes across 44 populated columns; signed fields include equipment penalties and condition-removal deltas.
+SKINIT contributes skill category/order/icon/handler, encoded range, element, status, combat/resource deltas,
+proc chance, and battle animation. EBINIT contributes unit order/icon, sex and provisional species categories,
+defense element, natural attack, weapon family, starting skills/level, level cap, deployment cost, base stats,
+and per-level growth. Its linked-table shapes are now 18 SKINIT and 84 EBINIT populated columns. Next work
+should resolve the remaining condition/stat columns and EBINIT's graphics, AI, reward, and sparse-flag tables;
+STINIT's bespoke parser remains a separate extraction task.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

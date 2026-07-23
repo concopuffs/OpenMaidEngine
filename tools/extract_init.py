@@ -3,7 +3,7 @@
 
 *INIT scripts populate parallel global arrays with static game data. Three shapes seen:
 
-  name   — records keyed by a name string. Each record: set-string(name), mov(fields..),
+  name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
            (SKINIT skills, ITINIT items, EBINIT units)
   numeric— column table with NO names: mov/copy-to-global into parallel int arrays, keyed
@@ -30,6 +30,7 @@ import sys4load
 
 SET_STRING = 0x192
 MOV = 0x55
+SUB = 0x51
 COPY_TO_GLOBAL = 0x6C
 COPY_LOCAL_ARRAY = 0x64
 T_GLOBAL_INT = 3
@@ -48,6 +49,23 @@ def _val(arg):
     """Render an operand as an int (immediate) or a {type,value} ref."""
     t, v = arg
     return v if t == T_IMM else {"type": f"0x{t:x}", "value": f"0x{v:x}"}
+
+
+def _static_global_write(ins):
+    """Return (destination, value) for statically evaluable global-int writes.
+
+    The shipped name-mode INIT scripts encode positive values with `mov` and
+    negative values with `sub destination, 0, magnitude`.  Ignoring the latter
+    silently drops costs and penalties from the extracted schema.
+    """
+    if not ins.args or ins.args[0][0] != T_GLOBAL_INT:
+        return None
+    if ins.opcode == MOV and len(ins.args) >= 2:
+        return ins.args[0][1], _val(ins.args[1])
+    if (ins.opcode == SUB and len(ins.args) >= 3
+            and ins.args[1][0] == T_IMM and ins.args[2][0] == T_IMM):
+        return ins.args[0][1], ins.args[1][1] - ins.args[2][1]
+    return None
 
 
 def read_footer_array(scr, off):
@@ -156,14 +174,14 @@ def extract_name(scr):
             elif cur is not None:
                 key = "desc" if desc_slot == 0 else f"desc{desc_slot}"
                 cur[key] = txt; desc_bases.setdefault(key, addr - cur["id"]); desc_slot += 1
-        elif ins.opcode == MOV and cur is not None and ins.args and ins.args[0][0] == T_GLOBAL_INT:
-            destination = ins.args[0][1]
+        elif cur is not None and (write := _static_global_write(ins)) is not None:
+            destination, value = write
             cell = _record_table_cell(destination, cur["id"])
             if cell is None:
-                cur["fields"][f"0x{destination - cur['id']:x}"] = _val(ins.args[1])
+                cur["fields"][f"0x{destination - cur['id']:x}"] = value
             else:
                 base, stride, column = cell
-                cur["record_fields"][f"0x{base:x}/{stride}/{column}"] = _val(ins.args[1])
+                cur["record_fields"][f"0x{base:x}/{stride}/{column}"] = value
     for record in records:
         if not record["record_fields"]:
             del record["record_fields"]

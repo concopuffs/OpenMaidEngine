@@ -128,7 +128,7 @@ Labels are prefixed `=` to mark them as inferred aliases. Regenerate the `.asm` 
 
 Confidence is marked per entry; labels ending `?` are low-confidence guesses.
 
-### INIT field-semantics workflow and ITINIT pilot (2026-07-22)
+### INIT field-semantics workflow and initial item/skill/unit mappings (2026-07-22)
 
 The old name-mode extractor's boundary rule was wrong for sparse tables: it treated any increasing
 `global-string` destination as another description. ITINIT begins with 101 consecutive name-only records,
@@ -137,7 +137,9 @@ evidence also proves the tables are one-based: scripts look up item names from `
 first populated name is written to `0x1bd3`. `extract_init.py` now infers the parallel-array record span from
 the dominant name-to-description delta (SKINIT 300; ITINIT/EBINIT 1000), recognizes column-zero names inside
 that span, emits the one-based runtime id, and distinguishes the lookup base from the first written cell.
-Corrected counts are **131 skills, 287 items, and 277 units**.
+Corrected counts are **131 skills, 287 items, and 277 units**. Name-mode INIT scripts also encode negative
+constants as `sub destination, 0, magnitude`; the extractor now evaluates that static form as well as `mov`,
+recovering 113 negative item cells, 212 negative skill cells, and 86 negative unit cells.
 
 Semantic recovery is an evidence ladder, cheapest and strongest first:
 
@@ -155,23 +157,37 @@ joins are independently human-readable: attack/defense values index AFINIT's Jap
 granted-skill values resolve to SKINIT, all handler values resolve to ITMES.BIN, and every min/max-range
 record says `range 2` in its item description.
 
-The apparent 764 additional ITINIT field bases were a structural artifact, not 764 sparse arrays. For each
-write, subtracting `item_id * stride` and comparing the destination with corpus-observed `lookup-array-2d`
-consumers assigns all 764 writes unambiguously to six row-major tables and 43 populated columns:
+The apparent per-record ITINIT field bases were a structural artifact, not hundreds of sparse arrays. For
+each write, subtracting `item_id * stride` and comparing the destination with corpus-observed
+`lookup-array-2d` consumers assigns all **877** writes (764 positive/direct writes plus 113 recovered negative
+writes) unambiguously to six row-major tables and 44 populated columns:
 
 | base | stride | populated writes | semantic role |
 |---|---:|---:|---|
 | `0x8e7b9` | 5 | 20 | character-id equipment whitelist |
-| `0x906f9` | 30 | 36 | attack-inflicted condition levels |
+| `0x906f9` | 30 | 47 | signed condition/drain deltas (positive inflicts, `-5` cures) |
 | `0x97c29` | 30 | 11 | equipped/passive condition levels |
-| `0x9f541` | 14 | 301 | additive equipment stat modifiers |
+| `0x9f541` | 14 | 403 | signed additive equipment stat modifiers |
 | `0xa2bf1` | 10 | 379 | per-stat tuning curve ids |
 | `0xa5301` | 3 | 17 | HP/SP/FS recovery amounts |
 
 `extract_init.py` now records these as `record_fields["base/stride/column"]` rather than inventing a
-one-off `fields` base for every row. Applying the same rule also exposes 17 linked SKINIT columns and 83
-linked EBINIT columns. This correction reduces the auto map's false INIT-field labels from 12,311 to 1,353;
-the raw write data was valid, but its former ownership model was not.
+one-off `fields` base for every row. Applying the same rule exposes 18 linked SKINIT columns and 84 linked
+EBINIT columns. This correction reduces the auto map's false INIT-field labels from 12,311 to 1,353; the raw
+write addresses were valid, but their former ownership model and omission of negative writes were not.
+
+The first SKINIT pass names the stable catalog and combat surface: sort key, seven-way category, icon and
+SKMES handler, encoded minimum/maximum range, attack element, condition strengths, signed combat-stat deltas,
+HP recovery/SP cost, proc chance, and battle-animation id. The negative-write fix is essential here: all 95
+active-skill SP costs are stored as `0 - cost`, so the old JSON omitted the cost column entirely.
+
+The first EBINIT pass names the unit schema shared by setup, menus, and combat: sort key, icon, sex category,
+provisional species category, defense element, natural-attack item id, allowed weapon item category, four
+starting-skill slots, deployment cost, starting level, level cap, fourteen-column base stats, and matching
+per-level stat-growth rates. These joins are structural rather than positional guesses: natural attacks and
+skills resolve into ITINIT/SKINIT ids, SETEN/UNITECH/SALLY copy the complete records into runtime unit state,
+ADDEXP performs the growth-rate divide/modulo-100 calculation, and SALLY checks deployment cost against the
+live party-capacity aggregate. Graphics, AI, reward, and sparse flag fields remain deliberately unnamed.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -217,10 +233,10 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** Resolve ITINIT stat column 8 and the remaining condition
-   enum columns, then run the same profiler on SKINIT and EBINIT. Add explicit foreign-key joins (item →
-   skill, unit → attack/skill) once the target table ids are confirmed. Do not infer meaning from column
-   position alone.
+1. **Continue INIT semantics by evidence density.** Resolve ITINIT/SKINIT's remaining stat and condition
+   columns, then work through EBINIT's graphics, AI, reward, and sparse-flag tables by consumer strength.
+   Preserve explicit item → skill and unit → attack/skill joins. Do not infer meaning from column position
+   alone.
 2. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other
    `set-string`/`copy-to-global` writers not covered by the `*INIT` set — pure static win,
    extends the string/data labels. (Also: most name-table bases are *read* rarely — reads
