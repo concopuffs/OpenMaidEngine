@@ -2835,3 +2835,23 @@ table meanings.
 **Next:** profile CNINIT as the next unresolved high-density name-mode table. Its current generic output
 has 32 records but 242 address-derived fields, making it the clearest candidate for another dedicated
 schema driven by reader-proven row/column ownership.
+
+## Data-semantics sidebar: CNINIT unit names and voice families (2026-07-23)
+
+CNINIT's former 32-record/242-field output was an ownership error, not a complex record. It is exactly two
+parallel sparse arrays with a reserved span of 1,000, both keyed by EBINIT unit id. The string array holds
+story/display names used throughout scene scripts, HISTORY, and DEBUGADV; INPUTNAME also scans it when
+rejecting a player-entered familiar name that collides with an existing name. The integer array maps a unit
+variant to a representative voice-family unit id before the shared voice-suppression lookup. All 277
+integer ids join exactly to EBINIT, 274 carry authored names, and Lily's form ids 2..4 are the three
+intentional unnamed rows.
+
+The dedicated schema now emits 277 records with one raw string field and one raw integer field, their
+canonical semantic names, the source unit's EBINIT definition name, the representative voice-family
+definition name, and an explicit alias flag. Of the 277 rows, 175 normalize to another unit id; this
+captures brainwashed, concealed-name, allied, boss, EX, corrupted, and trial variants without conflating
+their story label with EBINIT's authoring label. Every CNINIT instruction is structurally accounted for,
+and the generated profile has collapsed from 242 pseudo-fields to the two true consumer-visible arrays.
+
+**Next:** audit CGINIT's large numeric output. Determine whether its apparent 1,304-field surface is a
+legitimate gallery/resource matrix or another ownership artifact before assigning any new semantics.

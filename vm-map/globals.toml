@@ -1377,6 +1377,39 @@ confidence = "high"
 depends_on = ["0x52383"]
 
 [[global]]
+address = "0x315"
+name = "unit_story_display_names"
+category = "string-table"
+type = "string[1000]"
+value_domain = "CNINIT-authored speaker/display name indexed by EBINIT unit id"
+usage = "CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTORY draw the selected speaker's value, DEBUGADV uses it for its scripted speaker previews, and INPUTNAME rejects a player-entered familiar name that collides with any populated row. The table intentionally leaves Lily's form ids 2..4 empty."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x624bf"]
+
+[[global]]
+address = "0x624bf"
+name = "unit_voice_family_unit_ids"
+category = "data-table"
+type = "int[1000]"
+value_domain = "EBINIT unit id"
+usage = "CNINIT's sparse unit-id keyed voice-family normalization map. Story, history, field, and battle voice paths map the current unit variant through this table before selecting the family-level voice-suppression state; 175 of 277 authored rows alias a variant to another representative unit id."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x628a7", "0x2e49"]
+
+[[global]]
+address = "0x628a7"
+name = "unit_voice_suppression_flag_ids"
+category = "data-table"
+type = "int[1000]"
+value_domain = "index into character_voice_suppressed"
+usage = "Second stage of the shared voice-eligibility chain. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x2e49"]
+
+[[global]]
 address = "0x52383"
 name = "entity_condition_levels"
 category = "data-table"

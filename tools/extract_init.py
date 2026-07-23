@@ -532,6 +532,10 @@ VOCABULARY_RECORD_TABLE_BASE = 0x15A2A9
 VOCABULARY_RECORD_STRIDE = 3
 VOCABULARY_RECORD_SPAN = 200
 
+CHARACTER_NAME_ARRAY_BASE = 0x315
+CHARACTER_VOICE_FAMILY_ARRAY_BASE = 0x624BF
+CHARACTER_NAME_RECORD_SPAN = 1000
+
 CONDITION_RECORD_SPAN = 30
 CONDITION_LEVEL_COUNT = 5
 CONDITION_LEVEL_NAME_BASE = 0x25FA
@@ -1250,6 +1254,112 @@ def extract_vocabulary(scr):
         "first_record_id": 1,
         "record_span": VOCABULARY_RECORD_SPAN,
         "record_field_columns": record_columns,
+    }
+
+
+def extract_character_names(scr):
+    """Extract CNINIT's unit-id keyed display-name and voice-family arrays."""
+    by_id: dict[int, dict] = {}
+    integer_writes = 0
+    string_writes = 0
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is not None:
+            destination, canonical_unit_id = write
+            record_id = destination - CHARACTER_VOICE_FAMILY_ARRAY_BASE
+            if not (
+                1 <= record_id < CHARACTER_NAME_RECORD_SPAN
+                and isinstance(canonical_unit_id, int)
+            ):
+                raise ValueError(
+                    f"{scr.path.name}: unexpected integer write 0x{destination:x}"
+                )
+            if record_id in by_id:
+                raise ValueError(
+                    f"{scr.path.name}: duplicate unit-name row {record_id}"
+                )
+            by_id[record_id] = {
+                "id": record_id,
+                "name": None,
+                "canonical_voice_unit_id": canonical_unit_id,
+                "string_fields": {},
+                "fields": {
+                    f"0x{CHARACTER_VOICE_FAMILY_ARRAY_BASE:x}": canonical_unit_id,
+                },
+            }
+            integer_writes += 1
+            continue
+
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            record_id = ins.args[0][1] - CHARACTER_NAME_ARRAY_BASE
+            if not (1 <= record_id < CHARACTER_NAME_RECORD_SPAN):
+                raise ValueError(
+                    f"{scr.path.name}: unexpected name write 0x{ins.args[0][1]:x}"
+                )
+            if record_id not in by_id:
+                raise ValueError(
+                    f"{scr.path.name}: name without unit mapping for row {record_id}"
+                )
+            text = scr.strings.get(ins.args[1][1], (None,))[0]
+            by_id[record_id]["name"] = text
+            by_id[record_id]["string_fields"][
+                f"0x{CHARACTER_NAME_ARRAY_BASE:x}"
+            ] = text
+            string_writes += 1
+            continue
+
+        if sys4load.display_label(ins.opcode) != "exit":
+            raise ValueError(
+                f"{scr.path.name}: unexpected opcode "
+                f"{sys4load.display_label(ins.opcode)} at 0x{ins.offset:x}"
+            )
+
+    unit_definitions = {
+        record["id"]: record
+        for record in extract_name(sys4load.load(resolve("EBINIT")))[0]
+    }
+    unit_ids = set(by_id)
+    definition_ids = set(unit_definitions)
+    for record in by_id.values():
+        unit_definition = unit_definitions.get(record["id"])
+        canonical_definition = unit_definitions.get(
+            record["canonical_voice_unit_id"]
+        )
+        if unit_definition:
+            record["unit_definition_name"] = unit_definition["name"]
+        if canonical_definition:
+            record["canonical_voice_unit_name"] = canonical_definition["name"]
+        record["voice_family_alias"] = (
+            record["canonical_voice_unit_id"] != record["id"]
+        )
+
+    records = [by_id[record_id] for record_id in sorted(by_id)]
+    return records, {
+        "schema": "unit-display-names",
+        "record_span": CHARACTER_NAME_RECORD_SPAN,
+        "first_record_id": 1,
+        "name_array_base": f"0x{CHARACTER_NAME_ARRAY_BASE:x}",
+        "canonical_voice_unit_array_base": (
+            f"0x{CHARACTER_VOICE_FAMILY_ARRAY_BASE:x}"
+        ),
+        "integer_write_count": integer_writes,
+        "string_write_count": string_writes,
+        "named_record_count": sum(record["name"] is not None for record in records),
+        "unnamed_record_ids": [
+            record["id"] for record in records if record["name"] is None
+        ],
+        "voice_family_alias_count": sum(
+            record["voice_family_alias"] for record in records
+        ),
+        "unit_definition_table": "EBINIT",
+        "joined_unit_definition_count": len(unit_ids & definition_ids),
+        "cninit_ids_without_unit_definition": sorted(unit_ids - definition_ids),
+        "unit_definition_ids_without_cninit": sorted(definition_ids - unit_ids),
     }
 
 
@@ -2428,6 +2538,11 @@ def write_data_index(data_dir: Path) -> None:
         "policies, and icon ids. Top-level `recovery_protocol` validates RECOVER.BIN and links",
         "current levels, equipment/passive baselines, remaining turns, and full resource restore.",
         "",
+        "CNINIT's dedicated unit-name schema exposes 277 sparse EBINIT-keyed rows in two",
+        "parallel 1,000-cell arrays: story/display names and canonical voice-family unit ids.",
+        "Every row joins both its own EBINIT definition and the representative voice-family",
+        "definition; deliberately empty names and variant aliases remain explicit.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -2495,6 +2610,8 @@ def main() -> int:
     }[mode]
     if mode == "name" and name == "VIINIT":
         extractor = extract_vocabulary
+    elif mode == "name" and name == "CNINIT":
+        extractor = extract_character_names
     elif mode == "name" and name == "CIINIT":
         extractor = extract_character_profiles
     elif mode == "name" and name == "MAINIT":

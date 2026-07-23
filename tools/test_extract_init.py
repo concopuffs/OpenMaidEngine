@@ -911,6 +911,65 @@ def test_message_join() -> None:
     )
 
 
+def test_character_names() -> None:
+    scripts = paths.scripts()
+    records, meta = extract_init.extract_character_names(
+        sys4load.load(scripts["CNINIT.BIN"])
+    )
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 277
+        and meta["record_span"] == 1000
+        and meta["integer_write_count"] == 277
+        and meta["string_write_count"] == 274,
+        "CNINIT extracts its complete sparse 1,000-row pair of arrays",
+    )
+    check(
+        meta["joined_unit_definition_count"] == 277
+        and not meta["cninit_ids_without_unit_definition"]
+        and not meta["unit_definition_ids_without_cninit"],
+        "CNINIT ids join exactly to all 277 EBINIT definitions",
+    )
+    check(
+        meta["unnamed_record_ids"] == [2, 3, 4]
+        and all(by_id[unit_id]["name"] is None for unit_id in (2, 3, 4)),
+        "CNINIT preserves Lily's three deliberately unnamed form rows",
+    )
+    check(
+        by_id[1]["name"] == "エミリオ"
+        and by_id[1]["fields"]["0x624bf"] == 1
+        and by_id[1]["string_fields"]["0x315"] == "エミリオ",
+        "CNINIT keeps display names and voice-family ids as parallel fields",
+    )
+    check(
+        meta["voice_family_alias_count"] == 175
+        and by_id[21]["canonical_voice_unit_id"] == 5
+        and by_id[21]["unit_definition_name"] == "シルフィーヌ（洗脳状態）"
+        and by_id[21]["canonical_voice_unit_name"] == "シルフィーヌ",
+        "CNINIT joins variant rows to their canonical voice-family definitions",
+    )
+    check(
+        by_id[800]["name"] == "アセンブリア"
+        and by_id[800]["canonical_voice_unit_id"] == 240,
+        "CNINIT preserves late EX/BOSS aliases without collapsing sparse ids",
+    )
+
+    semantics = extract_init.field_semantics(records)
+    check(
+        semantics == {
+            "0x315": "unit_story_display_names",
+            "0x624bf": "unit_voice_family_unit_ids",
+        },
+        "CNINIT's two raw arrays join to their canonical semantic names",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[21]["semantic_fields"]["unit_story_display_names"] == "シルフィーヌ"
+        and by_id[21]["semantic_fields"]["unit_voice_family_unit_ids"] == 5,
+        "CNINIT records retain raw arrays beside one semantic view",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1119,6 +1178,7 @@ if __name__ == "__main__":
     test_real_message_tables()
     test_message_infrastructure()
     test_message_join()
+    test_character_names()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:
