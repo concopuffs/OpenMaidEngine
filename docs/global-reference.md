@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5030 globals (167 curated, 4863 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5030 globals (181 curated, 4849 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -115,6 +115,20 @@
 | `0xe7483` | stage_object_difficulty_mask | high | investigation | Per-object difficulty inclusion mask. SETOBJ uses check-bit with difficulty_index and rejects the object slot when the selected difficulty bit is absent. |
 | `0xe74b5` | stage_object_required_story_flags | high | investigation | Seven positive prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7613` | stage_object_forbidden_story_flags | high | investigation | Five negative prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
+| `0xe773f` | stage_enemy_spawn_tile_x | high | investigation | Direct X coordinate for a current-stage enemy slot. FIELD copies it into the runtime unit position when stage_enemy_spawn_object_slot is zero; object-linked alternatives instead inherit the referenced object's coordinates. |
+| `0xe775d` | stage_enemy_spawn_tile_y | high | investigation | Direct Y coordinate paired with stage_enemy_spawn_tile_x. FIELD and ADDEN copy the pair into the runtime unit position; object-linked alternatives instead inherit the referenced object's coordinates. |
+| `0xe777b` | stage_enemy_spawn_object_slot | high | investigation | Optional object-placement anchor for an enemy spawn. FIELD resolves nonzero entries through stage_object_type_id and uses the matching stage_object_tile_x/Y location; zero selects stage_enemy_spawn_tile_x/Y directly. |
+| `0xe7799` | stage_enemy_faction_id | high | investigation | Per-spawn faction/team selector. FIELD and ADDEN copy it into the runtime unit's faction field, use it to choose the entity-index band, and test the same value against map occupancy masks. |
+| `0xe77b7` | stage_enemy_difficulty_mask | high | investigation | Per-spawn difficulty inclusion mask. FIELD uses check-bit with difficulty_index and rejects a slot when the selected difficulty bit is absent. |
+| `0xe77f3` | stage_enemy_random_selection_weight | high | investigation | Weight for stage-enemy alternatives. FIELD groups eligible nonzero-weight slots by their stage_enemy_spawn_object_slot, sums the weights, makes a weighted random choice within each eligible group, and directly materializes zero-weight slots. |
+| `0xe7811` | stage_enemy_unit_id | high | investigation | Unit-definition id for each current-stage enemy slot. FIELD rejects zero slots, while FIELD and ADDEN pass populated ids to SETEN to copy the corresponding EBINIT definition into a runtime entity. |
+| `0xe782f` | stage_enemy_min_level | high | investigation | Scenario-specific minimum level for each stage enemy. After applying party-level auto-scaling, SETEN raises the runtime level to this floor before applying the maximum-level clamp. |
+| `0xe784d` | stage_enemy_max_level | high | investigation | Scenario-specific maximum level for each stage enemy. SETEN uses a positive value as the upper clamp unless the debug/config override is active; otherwise it falls back to the unit definition's unit_level_cap. |
+| `0xe786b` | stage_enemy_auto_level_scale_divisor | high | investigation | Scenario override for enemy auto-level scaling. SETEN divides the positive gap between the scenario base level and unit_starting_level by this value before adding it to the runtime level; zero would fall back to unit_auto_level_scale_divisor. |
+| `0xe7889` | stage_enemy_movement_routine_set_ids | high | investigation | Three difficulty-specific movement-AI routine-set ids per stage enemy. SETEN copies the row into the runtime unit, and MVRTN selects the difficulty_index column as its movement routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
+| `0xe78e3` | stage_enemy_battle_routine_set_ids | high | investigation | Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
+| `0xe793d` | stage_enemy_required_story_flags | high | investigation | Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
+| `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -265,17 +279,7 @@
 | `0xe741f` | — | low | auto-shape | array |
 | `0xe7451` | — | low | auto-shape | array |
 | `0xe770d` | — | low | auto-shape | array |
-| `0xe773f` | — | low | auto-shape | array |
-| `0xe775d` | — | low | auto-shape | array |
-| `0xe777b` | — | low | auto-shape | array |
-| `0xe7799` | — | low | auto-shape | array |
-| `0xe77b7` | — | low | auto-shape | array |
 | `0xe77d5` | — | low | auto-shape | array |
-| `0xe77f3` | — | low | auto-shape | array |
-| `0xe7811` | — | low | auto-shape | array |
-| `0xe782f` | — | low | auto-shape | array |
-| `0xe784d` | — | low | auto-shape | array |
-| `0xe786b` | — | low | auto-shape | array |
 | `0xe7e8d` | — | low | auto-shape | array |
 | `0xe8275` | — | low | auto-shape | array |
 | `0xebd0d` | — | low | auto-shape | array |
@@ -367,6 +371,7 @@
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
 | `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
+| `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 
 ## story-flag
 
@@ -412,7 +417,6 @@
 | `0xcc9f3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']. |
 | `0xccc21` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']. |
 | `0xeff77` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 2, 3]; writers=['BTRTN.BIN', 'MVRTN.BIN', 'RTN_B001.BIN', 'RTN_B002.BIN']. |
-| `0x152617` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CLOSE.BIN', 'FIELD.BIN', 'INFOEN.BIN', 'READY.BIN']. |
 | `0x1560e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']. |
 | `0x15a094` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'SELSTAGE.BIN', 'STUDY.BIN']. |
 | `0x15a095` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']. |
@@ -5019,10 +5023,6 @@
 | `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
 | `0xe6fe2` | — | med | auto-shape | record-table[stride 3] |
 | `0xe71d6` | — | med | auto-shape | record-table[stride 3] |
-| `0xe7889` | — | med | auto-shape | record-table[stride 3] |
-| `0xe78e3` | — | med | auto-shape | record-table[stride 3] |
-| `0xe793d` | — | med | auto-shape | record-table[stride 7] |
-| `0xe7a0f` | — | med | auto-shape | record-table[stride 5] |
 | `0xe865d` | — | med | auto-shape | record-table[stride 7] |
 | `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
 | `0xee035` | — | med | auto-shape | record-table[stride 3] |

@@ -15,7 +15,7 @@
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
-naming them (attack, cost, …) needs the engine global-var map — later work.
+confirmed names come from the generated engine global registry while raw keys remain provenance.
 
 Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed]
 """
@@ -484,6 +484,11 @@ def field_semantics(
     records: list[dict], array_layouts: dict[str, dict] | None = None
 ) -> dict[str, str]:
     """Map raw extracted field keys to canonical semantic names when available."""
+    footer_keys = {
+        key
+        for record in records
+        for key in record.get("footer_arrays", {})
+    }
     keys = {
         key
         for record in records
@@ -510,10 +515,14 @@ def field_semantics(
             layout = (array_layouts or {}).get(f"0x{int(parts[0], 16):x}", {})
             if stride := layout.get("stride"):
                 row, column = divmod(index, stride)
-                column_name = entry.get("columns", {}).get(
-                    str(column), f"column_{column}"
-                )
-                name = f"{name}.row_{row}.{column_name}"
+                if key in footer_keys:
+                    # A footer copy owns the complete row beginning at this offset.
+                    name = f"{name}.row_{row}"
+                else:
+                    column_name = entry.get("columns", {}).get(
+                        str(column), f"column_{column}"
+                    )
+                    name = f"{name}.row_{row}.{column_name}"
             else:
                 index_name = entry.get("columns", {}).get(str(index), f"index_{index}")
                 name = f"{name}.{index_name}"
@@ -539,7 +548,9 @@ def attach_semantic_fields(records: list[dict], semantics: dict[str, str]) -> No
                         raise ValueError(
                             f"record {record['id']}: duplicate semantic field {semantic_name}"
                         )
-                    semantic_fields[semantic_name] = value
+                    semantic_fields[semantic_name] = (
+                        value["values"] if container == "footer_arrays" else value
+                    )
         if semantic_fields:
             record["semantic_fields"] = semantic_fields
         else:
@@ -593,6 +604,78 @@ def attach_stage_object_placements(records: list[dict]) -> None:
         record["object_placements"] = objects
 
 
+def attach_stage_enemy_spawns(records: list[dict]) -> None:
+    """Assemble STINIT's parallel enemy buffers into modder-facing slot records."""
+    direct_fields = {
+        "unit_id": "0xe7811",
+        "faction_id": "0xe7799",
+        "difficulty_mask": "0xe77b7",
+        "min_level": "0xe782f",
+        "max_level": "0xe784d",
+        "auto_level_scale_divisor": "0xe786b",
+    }
+    optional_fields = {
+        "tile_x": "0xe773f",
+        "tile_y": "0xe775d",
+        "object_slot": "0xe777b",
+        "random_selection_weight": "0xe77f3",
+    }
+    routine_fields = {
+        "movement_routine_set_ids": ("0xe7889", 3),
+        "battle_routine_set_ids": ("0xe78e3", 3),
+    }
+    unknown_bases = ("0xe77d5",)
+    for record in records:
+        fields = record.get("array_fields", {})
+        footer_arrays = record.get("footer_arrays", {})
+        spawns = []
+        # Slot zero is reserved by ADDEN for its synthesized special-unit path.
+        for slot in range(1, 30):
+            unit_key = f"{direct_fields['unit_id']}/{slot}"
+            if unit_key not in fields:
+                continue
+            spawn = {"slot": slot}
+            for semantic_name, base in direct_fields.items():
+                key = f"{base}/{slot}"
+                # Faction zero is the buffer default and is meaningful to SETEN.
+                if key in fields:
+                    spawn[semantic_name] = fields[key]
+                elif semantic_name == "faction_id":
+                    spawn[semantic_name] = 0
+            for semantic_name, base in optional_fields.items():
+                if (key := f"{base}/{slot}") in fields:
+                    spawn[semantic_name] = fields[key]
+            for semantic_name, (base, stride) in routine_fields.items():
+                key = f"{base}/{slot * stride}"
+                if key in footer_arrays:
+                    spawn[semantic_name] = footer_arrays[key]["values"]
+            required = [
+                fields[key]
+                for column in range(7)
+                if (key := f"0xe793d/{slot * 7 + column}") in fields
+                and fields[key] > 0
+            ]
+            forbidden = [
+                fields[key]
+                for column in range(5)
+                if (key := f"0xe7a0f/{slot * 5 + column}") in fields
+                and fields[key] > 0
+            ]
+            if required:
+                spawn["required_story_flags"] = required
+            if forbidden:
+                spawn["forbidden_story_flags"] = forbidden
+            unknown = {
+                base: fields[f"{base}/{slot}"]
+                for base in unknown_bases
+                if f"{base}/{slot}" in fields
+            }
+            if unknown:
+                spawn["unknown_fields"] = unknown
+            spawns.append(spawn)
+        record["enemy_spawns"] = spawns
+
+
 def write_data_index(data_dir: Path) -> None:
     """Regenerate the disposable build/data index from current table JSONs."""
     tables = []
@@ -640,12 +723,13 @@ def write_data_index(data_dir: Path) -> None:
         "short description stored by the INIT script.",
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
         "names from `vm-map/globals.toml`; each record's generated `semantic_fields` is the joined",
-        "name-keyed convenience view. Raw keys remain intact as bytecode provenance.",
+        "name-keyed convenience view. Complete footer copies expose their row values there while",
+        "raw keys and footer metadata remain intact as bytecode provenance.",
         "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
-        "STINIT additionally joins the confirmed parallel object buffers into per-slot",
-        "`object_placements`; unresolved type-specific parameters remain in `unknown_fields`.",
+        "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
+        "and `enemy_spawns`; unresolved type-specific/mode parameters remain in `unknown_fields`.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -697,6 +781,7 @@ def main() -> int:
     attach_semantic_fields(recs, semantics)
     if mode == "mixed" and name == "STINIT":
         attach_stage_object_placements(recs)
+        attach_stage_enemy_spawns(recs)
     out = {"table": name, "source": scr.path.name, "magic": scr.magic, "mode": mode,
            "record_count": len(recs), **meta,
            "field_columns": cols if mode != "footer" else None,

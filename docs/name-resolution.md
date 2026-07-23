@@ -239,7 +239,7 @@ fallbacks are deliberately limited to the still-unresolved voice reactions and S
 three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into runtime table
 `0x4e693/300`).
 
-### STINIT mixed stage records (2026-07-22)
+### STINIT mixed stage records (2026-07-23)
 
 STINIT is not a name table. Its preamble allocates 29 fixed global work buffers, then 74 sparse branches
 compare `scjump_progress_a` with stage ids 1 through 170. Each selected branch populates the same current-
@@ -271,14 +271,29 @@ type id. SETOBJ tests the `{3,4,7}` masks in `0xe7483` against GAMESTART's three
 then applies seven required and five forbidden one-based ids from `0xe74b5`/`0xe7613` against the shared
 `story_event_flags` bank.
 
+The enemy pass follows the separate 30-cell family through FIELD, SETEN, ADDEN, MVRTN, and BTRTN. Slot
+zero is reserved for ADDEN's synthesized special-unit path; the stage table populates slots 1 through 29.
+`0xe7811` selects the EBINIT unit, `0xe7799` is its faction, `0xe773f`/`0xe775d` are direct tile
+coordinates, and `0xe777b` optionally anchors the unit to a stage-object slot. FIELD checks the
+three-bit difficulty mask in `0xe77b7`, uses `0xe77f3` as a weighted-random alternative value, and applies
+the seven required plus five forbidden story flags in `0xe793d`/`0xe7a0f`. SETEN proves `0xe782f`,
+`0xe784d`, and `0xe786b` are the scenario level floor, cap, and party-level scaling divisor. Finally,
+the three-value footer rows in `0xe7889` and optional `0xe78e3` become difficulty-specific movement and
+battle routine-set ids selected by MVRTN/BTRTN.
+
 Generated INIT records now retain their raw `fields`/`record_fields`/buffer keys and additionally expose a
 flat `semantic_fields` projection joined through the top-level `field_semantics` map. For STINIT, the four
 confirmed parallel buffers plus both prerequisite tables are also assembled into 2,312
 `object_placements` across 66 stages. Each placement contains its slot, type, tile coordinates, difficulty
 mask, and populated positive/negative story prerequisites. The four still-unresolved object-parameter
 buffers remain attached under `unknown_fields`, so this convenience view loses no evidence or invents names.
-The next structural batch is the separate 30-slot enemy-spawn schema and its difficulty-dependent footer
-arrays.
+The same records now contain 1,378 joined `enemy_spawns` across 66 stages, with unit/faction, direct or
+object-linked placement data when present, difficulty and story gates, level rules, random-selection
+weight, and movement/battle routine rows. Raw footer metadata stays in `footer_arrays`, while its
+`semantic_fields` value is the copied row itself. The one remaining spawn-mode cell (`0xe77d5`, always 2
+when populated) stays under `unknown_fields`: FIELD ties it to already-cleared-stage state, but the precise
+player-facing nuance is not yet strong enough to name. The next STINIT batch is the four type-specific
+object parameters plus that isolated spawn-mode gate.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -325,11 +340,11 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
 1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
-   STINIT's mixed stage records now have machine-readable investigation surfaces. Next assemble STINIT's
-   30-slot enemy-spawn schema through FIELD/SETEN/ADDEN, including its three-difficulty footer arrays; trace
-   the four remaining specialized object parameters only when their type-specific branches distinguish
-   them. Isolate EBINIT's remaining voice/action slots under the same rule. Preserve explicit joins and do
-   not infer meaning from column position alone.
+   STINIT's mixed stage records now have machine-readable investigation surfaces, including joined object
+   placements and enemy spawns. Next trace STINIT's four remaining specialized object parameters and its
+   isolated spawn-mode gate only where type-specific/runtime branches distinguish them. Isolate EBINIT's
+   remaining voice/action slots under the same rule. Preserve explicit joins and do not infer meaning from
+   column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

@@ -120,6 +120,27 @@ def test_real_mixed_table() -> None:
     )
     check(stage2_slot3["required_story_flags"] == [902],
           "STINIT object placements join positive story prerequisites")
+    extract_init.attach_stage_enemy_spawns(records)
+    first_spawn = records[0]["enemy_spawns"][0]
+    check(first_spawn == {
+        "slot": 1,
+        "unit_id": 205,
+        "faction_id": 2,
+        "difficulty_mask": 7,
+        "min_level": 1,
+        "max_level": 10,
+        "auto_level_scale_divisor": 1,
+        "object_slot": 2,
+        "movement_routine_set_ids": [1, 1, 1],
+        "forbidden_story_flags": [11],
+        "unknown_fields": {"0xe77d5": 2},
+    }, "STINIT joins confirmed enemy buffers into one spawn record")
+    stage1_slot2 = records[0]["enemy_spawns"][1]
+    check(stage1_slot2["random_selection_weight"] == 1
+          and stage1_slot2["object_slot"] == 5,
+          "STINIT preserves weighted object-linked enemy alternatives")
+    check(sum(len(record["enemy_spawns"]) for record in records) == 1378,
+          "STINIT assembles every populated enemy spawn slot")
 
 
 def test_real_message_tables() -> None:
@@ -210,6 +231,18 @@ def test_field_semantics() -> None:
         stage_semantics["0xe74b5/21"]
         == "stage_object_required_story_flags.row_3.required_flag_1",
         "mixed row buffers expose row and column semantics",
+    )
+    check(
+        stage_semantics["0xe7889/3"]
+        == "stage_enemy_movement_routine_set_ids.row_1",
+        "enemy footer copies expose whole-row semantics",
+    )
+    extract_init.attach_semantic_fields(stages, stage_semantics)
+    check(
+        stages[0]["semantic_fields"][
+            "stage_enemy_movement_routine_set_ids.row_1"
+        ] == [1, 1, 1],
+        "semantic footer fields expose row values without provenance wrappers",
     )
 
 

@@ -1683,6 +1683,16 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x152617"
+name = "current_stage_enemy_spawn_slot"
+category = "index-pointer"
+type = "int"
+value_domain = "0..29; slot 0 is ADDEN's synthesized special-unit path"
+usage = "Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x6d3"
 name = "story_event_flags"
 category = "data-table"
@@ -1793,6 +1803,160 @@ type = "int[50][5]"
 columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2", "2" = "forbidden_flag_3", "3" = "forbidden_flag_4", "4" = "forbidden_flag_5" }
 value_domain = "one-based story_event_flags ids; zero means no exclusion"
 usage = "Five negative prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object when the corresponding story_event_flags cell equals 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]
+
+[[global]]
+address = "0xe773f"
+name = "stage_enemy_spawn_tile_x"
+category = "data-table"
+type = "int[30]"
+value_domain = "map tile X coordinate, 1..25 when populated"
+usage = "Direct X coordinate for a current-stage enemy slot. FIELD copies it into the runtime unit position when stage_enemy_spawn_object_slot is zero; object-linked alternatives instead inherit the referenced object's coordinates."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe775d"
+name = "stage_enemy_spawn_tile_y"
+category = "data-table"
+type = "int[30]"
+value_domain = "map tile Y coordinate, 3..799 when populated"
+usage = "Direct Y coordinate paired with stage_enemy_spawn_tile_x. FIELD and ADDEN copy the pair into the runtime unit position; object-linked alternatives instead inherit the referenced object's coordinates."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe773f"]
+
+[[global]]
+address = "0xe777b"
+name = "stage_enemy_spawn_object_slot"
+category = "data-table"
+type = "int[30]"
+value_domain = "stage object slot 2..46; zero means use the direct tile coordinates"
+usage = "Optional object-placement anchor for an enemy spawn. FIELD resolves nonzero entries through stage_object_type_id and uses the matching stage_object_tile_x/Y location; zero selects stage_enemy_spawn_tile_x/Y directly."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe7325", "0xe7357", "0xe7389"]
+
+[[global]]
+address = "0xe7799"
+name = "stage_enemy_faction_id"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0,2,3}"
+usage = "Per-spawn faction/team selector. FIELD and ADDEN copy it into the runtime unit's faction field, use it to choose the entity-index band, and test the same value against map occupancy masks."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe77b7"
+name = "stage_enemy_difficulty_mask"
+category = "data-table"
+type = "int[30]"
+value_domain = "7 in the shipped table; bit 0/1/2 enables the spawn on the corresponding difficulty"
+usage = "Per-spawn difficulty inclusion mask. FIELD uses check-bit with difficulty_index and rejects a slot when the selected difficulty bit is absent."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x32f1"]
+
+[[global]]
+address = "0xe77f3"
+name = "stage_enemy_random_selection_weight"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0,1,2,3,10,20,30}; zero means spawn directly"
+usage = "Weight for stage-enemy alternatives. FIELD groups eligible nonzero-weight slots by their stage_enemy_spawn_object_slot, sums the weights, makes a weighted random choice within each eligible group, and directly materializes zero-weight slots."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe777b"]
+
+[[global]]
+address = "0xe7811"
+name = "stage_enemy_unit_id"
+category = "data-table"
+type = "int[30]"
+value_domain = "EBINIT unit ids 1..869; zero means unused slot"
+usage = "Unit-definition id for each current-stage enemy slot. FIELD rejects zero slots, while FIELD and ADDEN pass populated ids to SETEN to copy the corresponding EBINIT definition into a runtime entity."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe782f"
+name = "stage_enemy_min_level"
+category = "data-table"
+type = "int[30]"
+value_domain = "1..99"
+usage = "Scenario-specific minimum level for each stage enemy. After applying party-level auto-scaling, SETEN raises the runtime level to this floor before applying the maximum-level clamp."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe784d"
+name = "stage_enemy_max_level"
+category = "data-table"
+type = "int[30]"
+value_domain = "1..99"
+usage = "Scenario-specific maximum level for each stage enemy. SETEN uses a positive value as the upper clamp unless the debug/config override is active; otherwise it falls back to the unit definition's unit_level_cap."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7a766"]
+
+[[global]]
+address = "0xe786b"
+name = "stage_enemy_auto_level_scale_divisor"
+category = "data-table"
+type = "int[30]"
+value_domain = "{1,2}"
+usage = "Scenario override for enemy auto-level scaling. SETEN divides the positive gap between the scenario base level and unit_starting_level by this value before adding it to the runtime level; zero would fall back to unit_auto_level_scale_divisor."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7a37e", "0x7ab4e"]
+
+[[global]]
+address = "0xe7889"
+name = "stage_enemy_movement_routine_set_ids"
+category = "data-table"
+type = "int[30][3]"
+columns = { "0" = "difficulty_0", "1" = "difficulty_1", "2" = "difficulty_2" }
+value_domain = "movement-routine set ids 1..176"
+usage = "Three difficulty-specific movement-AI routine-set ids per stage enemy. SETEN copies the row into the runtime unit, and MVRTN selects the difficulty_index column as its movement routine table row."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x32f1", "0x152617"]
+
+[[global]]
+address = "0xe78e3"
+name = "stage_enemy_battle_routine_set_ids"
+category = "data-table"
+type = "int[30][3]"
+columns = { "0" = "difficulty_0", "1" = "difficulty_1", "2" = "difficulty_2" }
+value_domain = "battle-routine set ids 2..7; zero row falls back to the unit definition"
+usage = "Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x32f1", "0x152617"]
+
+[[global]]
+address = "0xe793d"
+name = "stage_enemy_required_story_flags"
+category = "data-table"
+type = "int[30][7]"
+columns = { "0" = "required_flag_1", "1" = "required_flag_2", "2" = "required_flag_3", "3" = "required_flag_4", "4" = "required_flag_5", "5" = "required_flag_6", "6" = "required_flag_7" }
+value_domain = "one-based story_event_flags ids; zero means no requirement"
+usage = "Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]
+
+[[global]]
+address = "0xe7a0f"
+name = "stage_enemy_forbidden_story_flags"
+category = "data-table"
+type = "int[30][5]"
+columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2", "2" = "forbidden_flag_3", "3" = "forbidden_flag_4", "4" = "forbidden_flag_5" }
+value_domain = "one-based story_event_flags ids; zero means no exclusion"
+usage = "Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1."
 source = "investigation"
 confidence = "high"
 depends_on = ["0x6d3"]

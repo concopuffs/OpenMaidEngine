@@ -72,7 +72,10 @@ buffer rather than parallel per-id arrays. Its generated records preserve four m
 six scalars, cells in 29 preallocated buffers, and all 1,396 length-prefixed footer-array copies. Confirmed
 stage field meanings and the evidence workflow live in `docs/name-resolution.md`. The first semantic join
 now assembles the confirmed type/X/Y/difficulty and story-prerequisite buffers into 2,312 object placements
-across 66 stages; unknown type-specific parameters remain raw, and the enemy-spawn buffers remain separate.
+across 66 stages. A second join assembles all 1,378 populated enemy slots across the same 66 stages,
+including unit/faction, placement, difficulty/story gates, level rules, weighted alternatives, and
+difficulty-specific movement/battle routine sets. Unknown type-specific object parameters and the isolated
+enemy spawn-mode field remain raw.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

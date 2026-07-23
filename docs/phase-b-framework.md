@@ -749,11 +749,14 @@ The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed m
 enemy AI appears to live outside the static EBINIT schema. STINIT's separate mixed parser is now complete:
 all 74 sparse stage ids retain their victory/defeat strings, six scalars, fixed-buffer cells, and 1,396
 footer-array copies. AIM/FIELD/DRAWCHP consumers establish the four condition slots, stage BGM, turn limit,
-and turn-limit outcome. The next pass establishes target clear turns, performance reward, replay behavior,
+and turn-limit outcome. Further passes establish target clear turns, performance reward, replay behavior,
 the 20-slot map-texture override list, object type/tile/difficulty fields, and seven required plus five
 forbidden story prerequisites. Generated records now carry a joined `semantic_fields` view and assemble
 2,312 object placements across 66 stages while retaining four unresolved type-specific parameters by raw
-address. The separate 30-slot enemy-spawn family remains the next evidence-driven batch.
+address. The separate 30-cell enemy family is also decoded: FIELD/SETEN/ADDEN establish unit/faction,
+direct or object-linked placement, difficulty/story gates, level floor/cap/scaling, weighted selection,
+and three difficulty-specific movement/battle routine-set ids. The generated view assembles all 1,378
+populated enemy slots across 66 stages; only one replay-linked spawn-mode field remains raw.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 
@@ -763,8 +766,8 @@ Once the natural spine and first gameplay loop are trustworthy, broaden in indep
 - Unit statistics, equipment, inventory, skills, magic, heroine forms, and progression.
 - Combat resolution presentation, enemy turns/AI services, and win/loss transitions.
 - A full chapter of ADV and the scene types encountered between gameplay segments.
-- Remaining STINIT enemy-spawn and specialized object-parameter semantics, plus other data schemas when their
-  runtime consumers make them necessary.
+- Remaining STINIT specialized object-parameter semantics and the isolated spawn-mode gate, plus other data
+  schemas when their runtime consumers make them necessary.
 
 The high-level Phase B direction remains canonical in `docs/remake-architecture-and-roadmap.md`; this file
 only provides the execution framework.
