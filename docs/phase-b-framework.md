@@ -721,11 +721,12 @@ The first semantic tranche now curates the strongest item, skill, and unit field
 `vm-map/globals.toml`. ITINIT has thirteen parallel arrays plus six linked row-major tables and 877 linked
 writes across 44 populated columns; signed fields include equipment penalties and condition-removal deltas.
 SKINIT contributes skill category/order/icon/handler, encoded range, element, status, combat/resource deltas,
-proc chance, and battle animation. EBINIT contributes unit order/icon, sex and provisional species categories,
-defense element, natural attack, weapon family, starting skills/level, level cap, deployment cost, base stats,
-and per-level growth. Its linked-table shapes are now 18 SKINIT and 84 EBINIT populated columns. Next work
-should resolve the remaining condition/stat columns and EBINIT's graphics, AI, reward, and sparse-flag tables;
-STINIT's bespoke parser remains a separate extraction task.
+proc chance, and battle animation. EBINIT now contributes unit order/icon, sex and provisional species,
+elements, attacks/equipment/skills, level/cost/base/growth data, canonical variants, CP/CA/CB/CS/cut-in and
+voice assets, XP/drops, capture and compendium flags, summoning economy, essence yield, and level scaling.
+Its linked-table shapes are 18 SKINIT and 84 EBINIT populated columns. Next work should resolve the remaining
+condition/stat columns and EBINIT's AI, route/evolution, and sparse-flag tables; STINIT's bespoke parser
+remains a separate extraction task.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

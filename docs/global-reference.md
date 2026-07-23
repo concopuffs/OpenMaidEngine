@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5023 globals (119 curated, 4904 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5023 globals (139 curated, 4884 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -29,19 +29,39 @@
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
+| `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL, FIELD, and SHOWGROW select columns for battle, map, and level-up reactions. |
+| `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects the requested variant, loads it into the status-panel texture slot, and draws it at the lower right. |
+| `0x6e7fe` | unit_map_sprite_asset_ids | high | investigation | Five-context unit sprite-sheet table for 251 units. The ids resolve to CP sprite atlases (compact AA and full directional AB sheets); FIELD and DRAWCH use them on the map, while INFOCH/INFOEN and DRAWENP reuse the same animated unit representation. |
+| `0x6fb86` | unit_battle_sprite_asset_id | high | investigation | Battle figure for 248 units. Values resolve to transparent full-body CB character/monster art; BTL loads the selected combatant's figure and INFOEN uses the same asset for the enemy detail view. |
+| `0x6ff6e` | unit_battle_portrait_asset_ids | high | investigation | Paired battle portrait assets: column 0 is the larger CA*A bust where available, and column 1 is the compact CA*D face portrait. BTL, DRAWENP, and EVOLVE select these assets for combat and unit-growth presentation. |
+| `0x7073e` | unit_battle_cutin_asset_ids | high | investigation | Paired 800-pixel-wide battle cut-ins for 64 named characters. The values resolve to CIC cropped/action and CIN full-frame illustrations; BTL is the sole consumer. |
 | `0x70f0e` | unit_sort_key | high | investigation | EBINIT ordering key populated for 248 units. CHMENU, EXILE, SALLY, INFOEN, and SUMMON pass this array to op 0x12f's stable index sort or combine it with a unit id to build menu ordering keys, mirroring item_sort_key and skill_sort_key. |
+| `0x712f6` | unit_enemy_info_listed | high | investigation | EBINIT eligibility flag for 183 enemy-information entries. INFOEN stable-sorts all unit ids, retains only rows whose value is nonzero, and then gates each retained entry's revealed state through the encounter/profile table. |
 | `0x716de` | unit_icon_id | high | investigation | EBINIT icon selector populated for all 277 units. READICON returns it for unit ids; CHMENU, DRAWCHP, EXILE, SALLY, and SUMMON convert the value into icon-atlas page and cell coordinates. |
 | `0x71ac6` | unit_species_category | med | investigation | Broad EBINIT species/allegiance category for 198 units: value 1 covers humans and allied heroines, 2 covers demons including Emilio and Lily as well as many demonic monsters, and 3 covers other monsters, dragons, and elementals. CHMENU uses it for equipment restrictions, CALCDMG for category-sensitive effects, and INFOCH/INFOEN for display. |
 | `0x71eae` | unit_sex_category | high | investigation | EBINIT sex category for 251 units. Named character records establish the three values; CHMENU tests it against item_sex_restriction_mask, while INFOCH and INFOEN use the same category in unit presentation. |
+| `0x72296` | unit_boss_class | med | investigation | Nonzero only for 112 bosses, special encounters, and map hazards. CALCDMG grants the boss adjustment, CALCILL uses it for condition immunity, and FIELD/MAGIC/USEMAGIC use it in special-unit targeting rules. Magnitude tracks increasing boss class; the distinction between positive and negative classes remains unresolved. |
+| `0x7267e` | unit_canonical_id | high | investigation | Maps 106 alternate, boss, brainwashed, EX, and enemy variants back to their canonical character or recruitable archetype. For example all Estelle bosses map to 12, brainwashed Sylphine maps to 5, and ordinary/EX orcs map to recruitable orc 52. Setup, menus, inventory, dismissal, and combat normalize through this id. |
+| `0x72a66` | unit_capturable | high | investigation | Capture eligibility for 74 ordinary enemy archetypes. SELACT and FIELD allow the capture skill only when this flag is nonzero and the acting unit's capture power meets the target-level check; successful resolution displays the explicit 'Captured the enemy' message. |
+| `0x76cce` | unit_essence_yield | high | investigation | Essence returned by SALLY's unit-conversion/release actions for 187 units. The normal path adds this value to current essence and the special path adds five times it, clamps to the essence cap, then applies the corresponding alignment adjustment; it is distinct from unit_deployment_cost_base. |
+| `0x770b6` | unit_summon_unlock_flag_index | high | investigation | Summoning-stone/unlock flag index for the 29 recruitable monster archetypes. SUMMON and SALLY subtract one and test the corresponding cell in the shared flag bank at 0x6d3 before listing or advancing the unit; GAMESTART uses presence of this mapping when restoring party slots. |
+| `0x7749e` | unit_summon_knowledge_threshold | high | investigation | Per-archetype familiarity threshold for 19 summonable units. SUMMON divides accumulated progress by it for the displayed percentage and treats zero-threshold units as limited to one copy; SALLY awards the corresponding summoning item and 'deepened understanding' message when accumulated progress reaches the threshold. |
+| `0x77886` | unit_summon_point_cost | high | investigation | Point cost for the 29 summonable unit archetypes. SUMMON compares it with the current point pool, emits 'Insufficient points' on failure, subtracts it on success, and displays the same number in each catalog row. |
 | `0x77c6e` | unit_defense_element | high | investigation | EBINIT defensive affinity for 250 units. DRAWENP renders it through the same twelve-value defense-attribute vocabulary as item_defense_element; CALCBTPARAM, BTRTN, and route scripts consume it during battle resolution. |
 | `0x78056` | unit_default_attack_item_id | high | investigation | EBINIT default attack for 250 units. Every populated value cross-resolves to ITINIT's innate-attack records; SELACT, BTL, CALCBTPARAM, CALCDMG, and CHMENU use it when no equipped weapon overrides the unit's natural attack. |
 | `0x78826` | unit_weapon_item_category | high | investigation | EBINIT weapon/equipment-family restriction for 179 units. CHMENU compares an item's item_category directly with this value when deciding whether the selected unit can equip it; Lily's forms store -1 for unrestricted handling. |
+| `0x78c0e` | unit_starting_equipment_item_id | high | investigation | Fixed equipment for 22 named/boss unit records. Values cross-resolve to weapons, shields, armor, and accessories in ITINIT. SETEN equips the item instead of unit_default_attack_item_id, UNITECH grants it on first recruitment, and INFOEN derives the displayed defense element from it when applicable. |
 | `0x78ff6` | unit_starting_skill_ids | high | investigation | EBINIT four-slot starting skill record. The shipped table populates the first three columns. SETEN, UNITECH, and SALLY copy the row into each runtime unit's skill list; GAMESTART, FORT, FIELD, and DRAWENP inspect the same ids, all of which cross-resolve to SKINIT. |
 | `0x79f96` | unit_deployment_cost_base | high | investigation | Base deployment/command cost for 204 units. SETCH, SETEN, and ADDEXP copy it plus the per-unit adjustment at 0x57357 into runtime cost 0x5f0bb; SALLY checks the prospective total against party capacity, while FIELD/READY add it to and REMOVECH subtracts it from the deployed-cost aggregate. |
 | `0x7a37e` | unit_starting_level | high | investigation | EBINIT initial level for 242 units. Lily's three forms store levels 1, 20, and 40. SETEN and SALLY copy or compare it while constructing a runtime unit, and UNITECH uses it when synchronizing form and character state. |
 | `0x7a766` | unit_level_cap | high | investigation | EBINIT maximum level for 243 units. ADDEXP permits level growth only while the runtime level is below this field, and SETEN uses it as the default upper bound when no scenario-specific enemy cap is supplied. |
+| `0x7ab4e` | unit_auto_level_scale_divisor | high | investigation | Default level-scaling divisor for 192 enemy definitions. SETEN uses a scenario override when supplied, otherwise divides the difference between scenario level and unit_starting_level by this value, adds the result to the runtime level, and clamps it to unit_level_cap. |
 | `0x7af36` | unit_base_stats | high | investigation | EBINIT fourteen-column base-stat record copied wholesale into each runtime unit by SETEN, UNITECH, and SALLY. Its layout matches item_stat_modifiers: columns 2 physical attack, 3 physical defense, 4 magic attack, 5 magic defense, 6 speed, 7 luck, 10 movement, 11 max HP, 12 max SP, and 13 max FS; accuracy/evasion and other unpopulated columns begin at zero. |
 | `0x7e5e6` | unit_stat_growth_rates | high | investigation | EBINIT per-level growth record with the same fourteen-column layout as unit_base_stats. ADDEXP adds each rate to a fractional accumulator, divides by 100 to award whole stat points, and retains the remainder; SETEN and UNITECH apply the same rates when materializing units above their starting level. |
+| `0x83406` | unit_experience_reward | high | investigation | Base experience award for 164 enemy records. BTL scales this value by the victor/defeated level difference and difficulty mode, stores the result in the ADDEXP input channel, and invokes ADDEXP for the winning unit. |
+| `0x837ee` | unit_drop_item_ids | high | investigation | Enemy drop table. Values cross-resolve to ITINIT items (for example treasure puttetto drops bronze/silver/gold coins and planet stones); BTL rolls and awards the rows, while INFOEN displays the possible drops. |
+| `0x8572e` | unit_drop_chance_percent | high | investigation | Per-slot drop chance paired with unit_drop_item_ids. BTL draws random-modulo 100 for each populated slot and awards the item when the result is below this value; only columns 0..4 are populated in shipped EBINIT. |
+| `0x8766e` | unit_large_battle_sprite | high | investigation | Presentation flag for 33 large demons, dragons, gods, and their variants. BTL and INFOEN use it to anchor the CB battle figure at the lower screen edge and omit the ordinary-unit framing treatment required by smaller sprites. |
 | `0x8c879` | item_sort_key | high | investigation | ITINIT field for all 287 populated item ids. CHMENU, IMPROVE, and INFOIT pass this array as the primary key to op 0x12f's stable index sort, establishing it as the catalog/display ordering key. The runtime lookup base is one cell before ITINIT's first write because item ids are one-based. |
 | `0x8cc61` | item_random_tier | high | investigation | ITINIT field for all 287 items. ADDRANDOMITEM and LOSTRANDOMITEM bucket eligible item ids by this value before choosing a random gain/loss; IMPROVE compares it with the current progression rank. This is the random-item availability/rarity tier, distinct from item_category. |
 | `0x8d049` | item_category | high | investigation | ITINIT field for all 287 items and ITMES's top-level behavior dispatch. Observed groups: 0 innate attacks, 1 key/story items, 2 consumables, 4 stat stones, 8 synthesis materials, 9 coins, 10..17 weapon families, 19 boots, 20 armor, 21 shields, 22 accessories, and 23 capture ropes. |
@@ -4958,34 +4978,14 @@
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x66713` | — | low | auto-shape | index/counter? |
 | `0x66715` | — | med | auto-shape | current-entity-index? |
-| `0x66716` | — | med | auto-shape | record-table[stride 30] |
-| `0x6dc46` | — | med | auto-shape | record-table[stride 3] |
-| `0x6e7fe` | — | med | auto-shape | record-table[stride 5] |
-| `0x6fb86` | — | med | auto-shape | unit-field |
-| `0x6ff6e` | — | med | auto-shape | record-table[stride 2] |
-| `0x7073e` | — | med | auto-shape | record-table[stride 2] |
-| `0x712f6` | — | med | auto-shape | unit-field |
-| `0x72296` | — | low | auto-shape | unit-field? |
-| `0x7267e` | — | low | auto-shape | unit-field? |
-| `0x72a66` | — | low | auto-shape | unit-field? |
 | `0x72e4e` | — | low | auto-shape | unit-field? |
 | `0x73236` | — | med | auto-shape | record-table[stride 4] |
 | `0x741d6` | — | med | auto-shape | record-table[stride 8] |
 | `0x76116` | — | med | auto-shape | record-table[stride 2] |
 | `0x768e6` | — | low | auto-shape | unit-field? |
-| `0x76cce` | — | med | auto-shape | unit-field |
-| `0x770b6` | — | low | auto-shape | unit-field? |
-| `0x7749e` | — | low | auto-shape | unit-field? |
-| `0x77886` | — | low | auto-shape | unit-field? |
 | `0x7843e` | — | med | auto-shape | unit-field |
-| `0x78c0e` | — | low | auto-shape | unit-field? |
-| `0x7ab4e` | — | med | auto-shape | unit-field |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
-| `0x83406` | — | med | auto-shape | unit-field |
-| `0x837ee` | — | med | auto-shape | record-table[stride 8] |
-| `0x8572e` | — | med | auto-shape | record-table[stride 8] |
-| `0x8766e` | — | low | auto-shape | unit-field? |
 | `0x8c877` | — | low | auto-shape | index/counter? |
 | `0xa70b2` | — | low | auto-shape | skill-field? |
 | `0xaac76` | — | low | auto-shape | index/counter? |

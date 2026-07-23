@@ -182,12 +182,23 @@ HP recovery/SP cost, proc chance, and battle-animation id. The negative-write fi
 active-skill SP costs are stored as `0 - cost`, so the old JSON omitted the cost column entirely.
 
 The first EBINIT pass names the unit schema shared by setup, menus, and combat: sort key, icon, sex category,
-provisional species category, defense element, natural-attack item id, allowed weapon item category, four
-starting-skill slots, deployment cost, starting level, level cap, fourteen-column base stats, and matching
-per-level stat-growth rates. These joins are structural rather than positional guesses: natural attacks and
-skills resolve into ITINIT/SKINIT ids, SETEN/UNITECH/SALLY copy the complete records into runtime unit state,
-ADDEXP performs the growth-rate divide/modulo-100 calculation, and SALLY checks deployment cost against the
-live party-capacity aggregate. Graphics, AI, reward, and sparse flag fields remain deliberately unnamed.
+provisional species category, defense element, natural-attack and starting-equipment item ids, allowed weapon
+item category, canonical variant id, four starting-skill slots, deployment cost, starting level, level cap,
+fourteen-column base stats, and matching per-level stat-growth rates. These joins are structural rather than
+positional guesses: item/skill ids resolve into ITINIT/SKINIT, SETEN/UNITECH/SALLY copy complete records into
+runtime unit state, ADDEXP performs the growth-rate divide/modulo-100 calculation, and SALLY checks deployment
+cost against the live party-capacity aggregate.
+
+The follow-up pass resolves three more coherent sub-schemas. First, SYS4INI joins and decoded dimensions/
+pixels identify six presentation tables: CP map sprite sheets, CA battle portraits, CB full-body battle
+figures, CS status illustrations, CIC/CIN battle cut-ins, and a 30-slot OGG voice bank. Second, BTL exposes
+base experience, eight item-drop ids, and their paired percentage rolls; INFOEN independently renders the
+same drop-item ids. Third, explicit menu messages and state updates identify capture eligibility, enemy-info
+listing, summon unlock indices/knowledge thresholds/point costs, essence yield, automatic enemy level
+scaling, and the large-battle-sprite layout flag. The signed `unit_boss_class` is intentionally only
+medium-confidence: every nonzero row is a boss, hazard, or special encounter and all consumers treat it as
+such, but the positive/negative class distinction remains unknown. AI and the remaining sparse flags stay
+unnamed until comparable consumer evidence exists.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -234,9 +245,9 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
 1. **Continue INIT semantics by evidence density.** Resolve ITINIT/SKINIT's remaining stat and condition
-   columns, then work through EBINIT's graphics, AI, reward, and sparse-flag tables by consumer strength.
-   Preserve explicit item → skill and unit → attack/skill joins. Do not infer meaning from column position
-   alone.
+   columns, then work through EBINIT's AI, route/evolution, and remaining sparse-flag tables by consumer
+   strength. Preserve explicit item → skill and unit → attack/skill/equipment/drop joins. Do not infer
+   meaning from column position alone.
 2. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other
    `set-string`/`copy-to-global` writers not covered by the `*INIT` set — pure static win,
    extends the string/data labels. (Also: most name-table bases are *read* rarely — reads

@@ -317,6 +317,206 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x66716"
+name = "unit_voice_asset_ids"
+category = "data-table"
+type = "int[1000][30]"
+value_domain = "SYS4INI OGG asset ids; populated columns 0, 1, and 3..24"
+usage = "EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL, FIELD, and SHOWGROW select columns for battle, map, and level-up reactions."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6dc46"
+name = "unit_status_art_asset_ids"
+category = "data-table"
+type = "int[1000][3]"
+value_domain = "SYS4INI CS*.AGF asset ids"
+usage = "Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects the requested variant, loads it into the status-panel texture slot, and draws it at the lower right."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6e7fe"
+name = "unit_map_sprite_asset_ids"
+category = "data-table"
+type = "int[1000][5]"
+value_domain = "SYS4INI CP*.AGF asset ids"
+usage = "Five-context unit sprite-sheet table for 251 units. The ids resolve to CP sprite atlases (compact AA and full directional AB sheets); FIELD and DRAWCH use them on the map, while INFOCH/INFOEN and DRAWENP reuse the same animated unit representation."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6fb86"
+name = "unit_battle_sprite_asset_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "SYS4INI CB*.AGF asset ids"
+usage = "Battle figure for 248 units. Values resolve to transparent full-body CB character/monster art; BTL loads the selected combatant's figure and INFOEN uses the same asset for the enemy detail view."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6ff6e"
+name = "unit_battle_portrait_asset_ids"
+category = "data-table"
+type = "int[1000][2]"
+value_domain = "SYS4INI CA*.AGF asset ids"
+usage = "Paired battle portrait assets: column 0 is the larger CA*A bust where available, and column 1 is the compact CA*D face portrait. BTL, DRAWENP, and EVOLVE select these assets for combat and unit-growth presentation."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x7073e"
+name = "unit_battle_cutin_asset_ids"
+category = "data-table"
+type = "int[1000][2]"
+value_domain = "SYS4INI CIC*/CIN*.AGF asset ids"
+usage = "Paired 800-pixel-wide battle cut-ins for 64 named characters. The values resolve to CIC cropped/action and CIN full-frame illustrations; BTL is the sole consumer."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x712f6"
+name = "unit_enemy_info_listed"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0/1"
+usage = "EBINIT eligibility flag for 183 enemy-information entries. INFOEN stable-sorts all unit ids, retains only rows whose value is nonzero, and then gates each retained entry's revealed state through the encounter/profile table."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x72296"
+name = "unit_boss_class"
+category = "data-table"
+type = "int[1000]"
+value_domain = "signed special/boss class -4..4; zero means ordinary unit"
+usage = "Nonzero only for 112 bosses, special encounters, and map hazards. CALCDMG grants the boss adjustment, CALCILL uses it for condition immunity, and FIELD/MAGIC/USEMAGIC use it in special-unit targeting rules. Magnitude tracks increasing boss class; the distinction between positive and negative classes remains unresolved."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x7267e"
+name = "unit_canonical_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "EBINIT canonical unit id 2..80"
+usage = "Maps 106 alternate, boss, brainwashed, EX, and enemy variants back to their canonical character or recruitable archetype. For example all Estelle bosses map to 12, brainwashed Sylphine maps to 5, and ordinary/EX orcs map to recruitable orc 52. Setup, menus, inventory, dismissal, and combat normalize through this id."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x72a66"
+name = "unit_capturable"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0/1"
+usage = "Capture eligibility for 74 ordinary enemy archetypes. SELACT and FIELD allow the capture skill only when this flag is nonzero and the acting unit's capture power meets the target-level check; successful resolution displays the explicit 'Captured the enemy' message."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x76cce"
+name = "unit_essence_yield"
+category = "data-table"
+type = "int[1000]"
+value_domain = "5..99"
+usage = "Essence returned by SALLY's unit-conversion/release actions for 187 units. The normal path adds this value to current essence and the special path adds five times it, clamps to the essence cap, then applies the corresponding alignment adjustment; it is distinct from unit_deployment_cost_base."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x770b6"
+name = "unit_summon_unlock_flag_index"
+category = "data-table"
+type = "int[1000]"
+value_domain = "global unlock indices 1952..1981"
+usage = "Summoning-stone/unlock flag index for the 29 recruitable monster archetypes. SUMMON and SALLY subtract one and test the corresponding cell in the shared flag bank at 0x6d3 before listing or advancing the unit; GAMESTART uses presence of this mapping when restoring party slots."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x7749e"
+name = "unit_summon_knowledge_threshold"
+category = "data-table"
+type = "int[1000]"
+value_domain = "3..10; zero means no repeatable summon progression"
+usage = "Per-archetype familiarity threshold for 19 summonable units. SUMMON divides accumulated progress by it for the displayed percentage and treats zero-threshold units as limited to one copy; SALLY awards the corresponding summoning item and 'deepened understanding' message when accumulated progress reaches the threshold."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x77886"
+name = "unit_summon_point_cost"
+category = "data-table"
+type = "int[1000]"
+value_domain = "6..999 points"
+usage = "Point cost for the 29 summonable unit archetypes. SUMMON compares it with the current point pool, emits 'Insufficient points' on failure, subtracts it on success, and displays the same number in each catalog row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x78c0e"
+name = "unit_starting_equipment_item_id"
+category = "data-table"
+type = "int[1000]"
+value_domain = "ITINIT item ids 203..451"
+usage = "Fixed equipment for 22 named/boss unit records. Values cross-resolve to weapons, shields, armor, and accessories in ITINIT. SETEN equips the item instead of unit_default_attack_item_id, UNITECH grants it on first recruitment, and INFOEN derives the displayed defense element from it when applicable."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x7ab4e"
+name = "unit_auto_level_scale_divisor"
+category = "data-table"
+type = "int[1000]"
+value_domain = "1 in the shipped table; zero disables automatic scaling"
+usage = "Default level-scaling divisor for 192 enemy definitions. SETEN uses a scenario override when supplied, otherwise divides the difference between scenario level and unit_starting_level by this value, adds the result to the runtime level, and clamps it to unit_level_cap."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x83406"
+name = "unit_experience_reward"
+category = "data-table"
+type = "int[1000]"
+value_domain = "10..100 base experience"
+usage = "Base experience award for 164 enemy records. BTL scales this value by the victor/defeated level difference and difficulty mode, stores the result in the ADDEXP input channel, and invokes ADDEXP for the winning unit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x837ee"
+name = "unit_drop_item_ids"
+category = "data-table"
+type = "int[1000][8]"
+value_domain = "ITINIT item ids 1..711; shipped rows populate columns 0..4"
+usage = "Enemy drop table. Values cross-resolve to ITINIT items (for example treasure puttetto drops bronze/silver/gold coins and planet stones); BTL rolls and awards the rows, while INFOEN displays the possible drops."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8572e"
+name = "unit_drop_chance_percent"
+category = "data-table"
+type = "int[1000][8]"
+value_domain = "1..100 percent; columns align with unit_drop_item_ids"
+usage = "Per-slot drop chance paired with unit_drop_item_ids. BTL draws random-modulo 100 for each populated slot and awards the item when the result is below this value; only columns 0..4 are populated in shipped EBINIT."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x8766e"
+name = "unit_large_battle_sprite"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0/1"
+usage = "Presentation flag for 33 large demons, dragons, gods, and their variants. BTL and INFOEN use it to anchor the CB battle figure at the lower screen edge and omit the ordinary-unit framing treatment required by smaller sprites."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x70f0e"
 name = "unit_sort_key"
 category = "data-table"
