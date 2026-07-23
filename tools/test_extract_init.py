@@ -330,11 +330,27 @@ def test_field_semantics() -> None:
         unit_semantics["0x741d6/8/2"] == "unit_sally_event_ids.reserved_action",
         "the unreachable SALLY action remains explicit rather than speculative",
     )
+    check(
+        unit_semantics["0x66716/30/19"] == "unit_voice_asset_ids.damage_reaction_1",
+        "BTL target-owned damage voice columns expose their semantics",
+    )
+    check(
+        unit_semantics["0x66716/30/23"] == "unit_voice_asset_ids.finishing_blow",
+        "BTL actor-owned finishing-blow voice exposes its semantics",
+    )
+    check(
+        unit_semantics["0x66716/30/17"] == "unit_voice_asset_ids.unused_slot_17",
+        "populated but unreachable voice slots remain explicit",
+    )
     extract_init.attach_semantic_fields(units, unit_semantics)
     unit_by_id = {record["id"]: record for record in units}
     check(
         unit_by_id[5]["semantic_fields"]["unit_sally_event_ids.release"] == 1360,
         "EBINIT records join SALLY release events by semantic field name",
+    )
+    check(
+        unit_by_id[5]["semantic_fields"]["unit_voice_asset_ids.defeated"] == 11523,
+        "EBINIT records join voice assets by semantic field name",
     )
 
     stages, meta = extract_init.extract_mixed(

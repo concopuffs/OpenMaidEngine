@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5030 globals (189 curated, 4841 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5033 globals (196 curated, 4837 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -21,6 +21,7 @@
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0xe6c5d` | scjump_progress_d | med | inference | SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x152618` | scjump_progress_c | med | inference | Third SCJUMP switch input (530 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
+| `0x152619` | battle_exchange_step | high | investigation | BTL's six-step alternating exchange counter. Dividing it by two selects the first, second, or third ordinary-attack/skill voice variant and related animation slots. |
 
 ## data-table
 
@@ -34,7 +35,7 @@
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
-| `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL and FIELD select mostly unresolved battle/map reaction slots, while SHOWGROW proves column 24 is the level-up reaction. Columns: 24=level_up. |
+| `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
 | `0x6e7fe` | unit_map_sprite_asset_ids | high | investigation | Five-context unit sprite-sheet table for 251 units. Even columns 0/2/4 are compact CP*AA-style presentations for normal, alternate-condition, and special-condition states; columns 1/3 are the matching normal/alternate full directional CP*AB sheets used by FIELD. INFOCH/INFOEN and DRAWENP reuse the compact representation. Columns: 0=normal_compact, 1=normal_directional, 2=alternate_compact, 3=alternate_directional, 4=special_compact. |
 | `0x6fb86` | unit_battle_sprite_asset_id | high | investigation | Battle figure for 248 units. Values resolve to transparent full-body CB character/monster art; BTL loads the selected combatant's figure and INFOEN uses the same asset for the enemy detail view. |
@@ -135,6 +136,8 @@
 | `0xe78e3` | stage_enemy_battle_routine_set_ids | high | investigation | Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
 | `0xe793d` | stage_enemy_required_story_flags | high | investigation | Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
+| `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
+| `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -301,8 +304,6 @@
 | `0x1523bd` | — | low | auto-shape | array |
 | `0x152421` | — | low | auto-shape | array |
 | `0x1525b2` | — | low | auto-shape | array |
-| `0x152877` | — | low | auto-shape | array |
-| `0x152879` | — | low | auto-shape | array |
 | `0x15287b` | — | low | auto-shape | array |
 | `0x15287d` | — | low | auto-shape | array |
 | `0x15287f` | — | low | auto-shape | array |
@@ -371,6 +372,8 @@
 | `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
+| `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
+| `0x15261b` | battle_target_side_index | high | investigation | Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices. |
 
 ## story-flag
 
@@ -3647,6 +3650,8 @@
 | `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |
 | `0x204f4` | — | low | inference | Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes. |
 | `0x6249e` | — | low | inference | Graphics-subsystem state in the 0x624xx gfx-object range (set via `mov 0x6249e,<n>` alongside `mov 0x62450,<slot>`). Likely a draw/slot parameter, NOT a story flag. Branch-read in 78 scenes. |
+| `0x15261c` | battle_hit_result | high | investigation | CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path. |
+| `0x15261d` | battle_hp_delta | high | investigation | CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling. |
 | `0x84a` | — | high | auto-shape | unit-name-table |
 | `0xc32` | — | high | auto-shape | unit-desc-table |
 | `0x101a` | — | high | auto-shape | unit-desc1-table |
@@ -5049,8 +5054,6 @@
 | `0x152101` | — | med | auto-shape | record-table[stride 3] |
 | `0x15222d` | — | med | auto-shape | record-table[stride 3] |
 | `0x152486` | — | med | auto-shape | record-table[stride 3] |
-| `0x15261a` | — | low | auto-shape | index/counter? |
-| `0x15261b` | — | low | auto-shape | index/counter? |
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |

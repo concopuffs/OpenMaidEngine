@@ -234,14 +234,21 @@ records use the shared accuracy-through-max-FS vocabulary; starting skills, drop
 brainwashed roster forms, battle portraits/cut-ins, and health-selected status art all expose named fields.
 Consumer control flow further divides the five CP sprite assets into normal/alternate compact and directional
 sheets plus the special compact sheet, and SHOWGROW proves voice column 24 is the level-up reaction. Of
-EBINIT's 110 populated profile fields, 84 now have specific semantic names. SALLY's SO012 button atlas and
+EBINIT's 110 populated profile fields, 107 now have specific semantic names. SALLY's SO012 button atlas and
 action dispatch resolve all four unlock columns as contract, brainwash, a reserved/unreachable slot, and
 sex magic. The paired eight event columns are contract, brainwash, the same reserved slot, three
 form-dependent Lily sex-magic events, sacrifice, and release. The reserved slot has a switch arm but is
 deliberately skipped by both drawing and input; its event ids also lack SCJUMP mappings, so it is recorded
-as unreachable rather than assigned a speculative action. The remaining 23 named-table fallbacks are all
-voice reactions; three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into
-runtime table `0x4e693/300`).
+as unreachable rather than assigned a speculative action.
+
+The voice bank's remaining 23 populated columns are also consumer-resolved. FIELD supplies warp, treasure-
+capture, and objective-interaction call sites. CALCDMG establishes BTL's miss/hit/critical result and
+actor/target ownership, allowing BTL's selectors to separate ordinary attack, critical, skill-use,
+damage-reaction, defeated, and finishing-blow voices. The five populated slots that no shipped selector can
+reach remain explicit `unused_slot_*` authoring fields rather than generic address fallbacks; the two battle-
+adjacent unused slots duplicate the final normal/critical skill pair in all 116 populated rows. Only three
+EBINIT profile fields remain wholly anonymous: `0x7843e` and two suspicious sparse writes into runtime table
+`0x4e693/300`.
 
 ### STINIT mixed stage records (2026-07-23)
 

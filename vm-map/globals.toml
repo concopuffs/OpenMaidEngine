@@ -380,9 +380,9 @@ address = "0x66716"
 name = "unit_voice_asset_ids"
 category = "data-table"
 type = "int[1000][30]"
-columns = { "24" = "level_up" }
+columns = { "0" = "warp", "1" = "treasure_capture", "3" = "objective_interaction", "4" = "unused_slot_4", "5" = "unused_slot_5", "6" = "unused_slot_6", "7" = "normal_attack_1", "8" = "normal_attack_2", "9" = "normal_attack_3", "10" = "critical_normal_attack", "11" = "skill_use_1", "12" = "critical_skill_1", "13" = "skill_use_2", "14" = "critical_skill_2", "15" = "skill_use_3", "16" = "critical_skill_3", "17" = "unused_slot_17", "18" = "unused_slot_18", "19" = "damage_reaction_1", "20" = "damage_reaction_2", "21" = "damage_reaction_3", "22" = "defeated", "23" = "finishing_blow", "24" = "level_up" }
 value_domain = "SYS4INI OGG asset ids; populated columns 0, 1, and 3..24"
-usage = "EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL and FIELD select mostly unresolved battle/map reaction slots, while SHOWGROW proves column 24 is the level-up reaction."
+usage = "EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows."
 source = "investigation"
 confidence = "high"
 
@@ -954,6 +954,80 @@ usage = "Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 r
 source = "investigation"
 confidence = "med"
 depends_on = []
+
+[[global]]
+address = "0x152619"
+name = "battle_exchange_step"
+category = "counter"
+type = "int"
+value_domain = "0..5"
+usage = "BTL's six-step alternating exchange counter. Dividing it by two selects the first, second, or third ordinary-attack/skill voice variant and related animation slots."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x15261a"
+name = "battle_actor_side_index"
+category = "index-pointer"
+type = "int"
+value_domain = "{0,1}"
+usage = "Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152877"]
+
+[[global]]
+address = "0x15261b"
+name = "battle_target_side_index"
+category = "index-pointer"
+type = "int"
+value_domain = "{0,1}"
+usage = "Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152877"]
+
+[[global]]
+address = "0x15261c"
+name = "battle_hit_result"
+category = "unknown"
+type = "int"
+value_domain = "-1 synthetic battle setup, 0 miss, 1 hit, 2 critical"
+usage = "CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x15261d"
+name = "battle_hp_delta"
+category = "unknown"
+type = "int"
+value_domain = "signed HP delta; positive damage, negative healing"
+usage = "CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x152877"
+name = "battle_entity_indices"
+category = "data-table"
+type = "int[2]"
+columns = { "0" = "side_0", "1" = "side_1" }
+value_domain = "runtime entity row indices"
+usage = "The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x152879"
+name = "battle_selected_skill_ids"
+category = "data-table"
+type = "int[2]"
+columns = { "0" = "side_0", "1" = "side_1" }
+value_domain = "0 for an ordinary attack, otherwise SKINIT skill id"
+usage = "Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path."
+source = "investigation"
+confidence = "high"
 
 [[global]]
 address = "0x6be"
