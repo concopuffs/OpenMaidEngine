@@ -696,6 +696,16 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x7843e"
+name = "unit_power_tier"
+category = "data-table"
+type = "int[1000]"
+value_domain = "authoring tier 0..6"
+usage = "Authoring-only EBINIT power/progression tier populated for 243 units. It is independent of species, sex, defense element, and boss class, but rises strongly with deployment cost, essence yield, level cap, and base stats. Lily's child/girl/adult forms are tiers 2/4/6, and recurring heroine boss definitions generally rise as their story appearances become stronger. No shipped script reads the array, and the /v2 native image contains no literal reference to its global index, so the descriptive name is correlation-based rather than a runtime behavior claim."
+source = "inference"
+confidence = "med"
+
+[[global]]
 address = "0x78826"
 name = "unit_weapon_item_category"
 category = "data-table"

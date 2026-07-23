@@ -246,9 +246,16 @@ capture, and objective-interaction call sites. CALCDMG establishes BTL's miss/hi
 actor/target ownership, allowing BTL's selectors to separate ordinary attack, critical, skill-use,
 damage-reaction, defeated, and finishing-blow voices. The five populated slots that no shipped selector can
 reach remain explicit `unused_slot_*` authoring fields rather than generic address fallbacks; the two battle-
-adjacent unused slots duplicate the final normal/critical skill pair in all 116 populated rows. Only three
-EBINIT profile fields remain wholly anonymous: `0x7843e` and two suspicious sparse writes into runtime table
-`0x4e693/300`.
+adjacent unused slots duplicate the final normal/critical skill pair in all 116 populated rows.
+
+The last broad EBINIT field, `0x7843e`, is an authoring-only seven-value power tier. Its 243 rows do not
+partition by species, sex, defense element, or boss class, but values rise strongly with deployment cost,
+essence yield, level cap, and base statistics. Lily's three forms are exactly tiers 2/4/6, and recurring
+heroine boss definitions generally rise with their later, stronger appearances. The static corpus contains
+no read of this array, and the `/v2` native image contains neither its global index as an instruction operand
+nor as a little-endian constant. `unit_power_tier` is therefore curated at medium confidence as descriptive
+authoring metadata, not a runtime behavior claim. EBINIT now has specific names for 108 of 110 populated
+profile fields; only two suspicious one-record writes into runtime table `0x4e693/300` remain anonymous.
 
 ### STINIT mixed stage records (2026-07-23)
 

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5033 globals (196 curated, 4837 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5033 globals (197 curated, 4836 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -60,6 +60,7 @@
 | `0x77886` | unit_summon_point_cost | high | investigation | Point cost for the 29 summonable unit archetypes. SUMMON compares it with the current point pool, emits 'Insufficient points' on failure, subtracts it on success, and displays the same number in each catalog row. |
 | `0x77c6e` | unit_defense_element | high | investigation | EBINIT defensive affinity for 250 units. DRAWENP renders it through the same twelve-value defense-attribute vocabulary as item_defense_element; CALCBTPARAM, BTRTN, and route scripts consume it during battle resolution. |
 | `0x78056` | unit_default_attack_item_id | high | investigation | EBINIT default attack for 250 units. Every populated value cross-resolves to ITINIT's innate-attack records; SELACT, BTL, CALCBTPARAM, CALCDMG, and CHMENU use it when no equipped weapon overrides the unit's natural attack. |
+| `0x7843e` | unit_power_tier | med | inference | Authoring-only EBINIT power/progression tier populated for 243 units. It is independent of species, sex, defense element, and boss class, but rises strongly with deployment cost, essence yield, level cap, and base stats. Lily's child/girl/adult forms are tiers 2/4/6, and recurring heroine boss definitions generally rise as their story appearances become stronger. No shipped script reads the array, and the /v2 native image contains no literal reference to its global index, so the descriptive name is correlation-based rather than a runtime behavior claim. |
 | `0x78826` | unit_weapon_item_category | high | investigation | EBINIT weapon/equipment-family restriction for 179 units. CHMENU compares an item's item_category directly with this value when deciding whether the selected unit can equip it; Lily's forms store -1 for unrestricted handling. |
 | `0x78c0e` | unit_starting_equipment_item_id | high | investigation | Fixed equipment for 22 named/boss unit records. Values cross-resolve to weapons, shields, armor, and accessories in ITINIT. SETEN equips the item instead of unit_default_attack_item_id, UNITECH grants it on first recruitment, and INFOEN derives the displayed defense element from it when applicable. |
 | `0x78ff6` | unit_starting_skill_ids | high | investigation | EBINIT four-slot starting skill record. The shipped table populates the first three columns. SETEN, UNITECH, and SALLY copy the row into each runtime unit's skill list; GAMESTART, FORT, FIELD, and DRAWENP inspect the same ids, all of which cross-resolve to SKINIT. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
@@ -5003,7 +5004,6 @@
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x66713` | — | low | auto-shape | index/counter? |
 | `0x66715` | — | med | auto-shape | current-entity-index? |
-| `0x7843e` | — | med | auto-shape | unit-field |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0xaac76` | — | low | auto-shape | index/counter? |

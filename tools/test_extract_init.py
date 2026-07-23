@@ -342,6 +342,10 @@ def test_field_semantics() -> None:
         unit_semantics["0x66716/30/17"] == "unit_voice_asset_ids.unused_slot_17",
         "populated but unreachable voice slots remain explicit",
     )
+    check(
+        unit_semantics["0x7843e"] == "unit_power_tier",
+        "EBINIT's authoring-only power tier joins by semantic name",
+    )
     extract_init.attach_semantic_fields(units, unit_semantics)
     unit_by_id = {record["id"]: record for record in units}
     check(
@@ -351,6 +355,13 @@ def test_field_semantics() -> None:
     check(
         unit_by_id[5]["semantic_fields"]["unit_voice_asset_ids.defeated"] == 11523,
         "EBINIT records join voice assets by semantic field name",
+    )
+    check(
+        [
+            unit_by_id[unit_id]["semantic_fields"]["unit_power_tier"]
+            for unit_id in (2, 3, 4)
+        ] == [2, 4, 6],
+        "Lily's three forms preserve the correlated 2/4/6 power tiers",
     )
 
     stages, meta = extract_init.extract_mixed(
