@@ -102,6 +102,62 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "destination tile (or its linked type-6 stage-object exit tile)"
         ),
     },
+    7: {
+        "behavior": "approach_injured_ally",
+        "parameter_fields": {
+            "movement_parameter_1": "maximum_target_route_steps",
+            "movement_parameter_2": "maximum_target_hp_percent",
+        },
+        "parameter_notes": {
+            "maximum_target_route_steps": (
+                "maximum flood-fill step distance from the acting entity; "
+                "shipped values are 5 or 10"
+            ),
+            "maximum_target_hp_percent": (
+                "inclusive current-HP percentage cutoff; shipped values are "
+                "50, 70, or 80"
+            ),
+        },
+        "target_selection": (
+            "nearest active non-self entity of the same faction whose current "
+            "HP percentage is at or below the cutoff; choose randomly among "
+            "ties, then approach a reachable tile nearest that ally"
+        ),
+        "completion": (
+            "advance the current step's progress counter after producing a "
+            "valid movement destination toward the selected ally"
+        ),
+    },
+    10: {
+        "behavior": "approach_healing_feather",
+        "parameter_fields": {
+            "movement_parameter_1": "resource_index",
+            "movement_parameter_2": "maximum_resource_percent",
+        },
+        "parameter_defaults": {
+            "movement_parameter_1": 0,
+        },
+        "parameter_notes": {
+            "resource_index": (
+                "0=HP, 1=SP, 2=FS; all shipped RTINIT cells are unwritten and "
+                "therefore use the zero/HP default"
+            ),
+            "maximum_resource_percent": (
+                "inclusive current/max percentage cutoff; shipped values are "
+                "30 or 50"
+            ),
+        },
+        "target_selection": (
+            "nearest active stage object of OBINIT type 15 (Healing Feather) "
+            "or 16 (single-use red Healing Feather), then approach a reachable "
+            "tile nearest that object"
+        ),
+        "completion": (
+            "produce a movement result only when the selected resource's "
+            "maximum is nonzero, its current percentage is at or below the "
+            "cutoff, and a reachable Healing Feather exists"
+        ),
+    },
     11: {
         "behavior": "cycle_destination_waypoints",
         "parameter_fields": {
@@ -123,6 +179,22 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "advance the entity's waypoint index modulo the largest authored "
             "waypoint ordinal after reaching the destination tile (or its "
             "linked type-6 stage-object exit tile)"
+        ),
+    },
+    12: {
+        "behavior": "approach_destination_tile_avoiding_foreign_entities",
+        "parameter_fields": {
+            "movement_parameter_1": "destination_tile_x",
+            "movement_parameter_2": "destination_tile_y",
+        },
+        "routing": (
+            "same destination and completion logic as RTN_M005, but MVSEEK "
+            "mode 2 masks the doubled-coordinate terrain cells occupied by "
+            "active entities of another faction before its flood fill"
+        ),
+        "completion": (
+            "advance the current step's progress counter after reaching the "
+            "destination tile (or its linked type-6 stage-object exit tile)"
         ),
     },
 }
@@ -937,19 +1009,24 @@ def _movement_provider_names(names: dict[int, str]) -> dict[int, str]:
     return providers
 
 
-def _join_movement_provider_semantics(step: dict) -> int:
+def _join_movement_provider_semantics(step: dict) -> tuple[int, int]:
     """Add selector-specific RTN_M semantics while retaining every raw bank."""
     selector = step.get("movement_provider_selector")
     schema = MOVEMENT_PROVIDER_PARAMETER_SCHEMAS.get(selector)
     if schema is None:
-        return 0
+        return 0, 0
     step["provider_behavior"] = schema["behavior"]
     joined = 0
+    defaulted = 0
+    defaults = schema.get("parameter_defaults", {})
     for raw_field, semantic_field in schema["parameter_fields"].items():
         if raw_field in step:
             step[semantic_field] = step[raw_field]
             joined += 1
-    return joined
+        elif raw_field in defaults:
+            step[semantic_field] = defaults[raw_field]
+            defaulted += 1
+    return joined, defaulted
 
 
 def extract_banked(scr):
@@ -969,6 +1046,7 @@ def extract_banked(scr):
     bank_cells: dict[int, set[tuple[int, int]]] = collections.defaultdict(set)
     decoded_movement_step_count = 0
     decoded_movement_parameter_count = 0
+    decoded_movement_defaulted_parameter_count = 0
 
     for offset, destination, value, bank_index, record_id, slot in writes:
         bank_base = ROUTINE_BANK_ROOT + bank_index * ROUTINE_BANK_SPAN
@@ -1016,10 +1094,16 @@ def extract_banked(scr):
                         if selector is not None else {}
                     ),
                 }
-                joined_parameter_count = _join_movement_provider_semantics(step)
+                (
+                    joined_parameter_count,
+                    defaulted_parameter_count,
+                ) = _join_movement_provider_semantics(step)
                 if selector in MOVEMENT_PROVIDER_PARAMETER_SCHEMAS:
                     decoded_movement_step_count += 1
                     decoded_movement_parameter_count += joined_parameter_count
+                    decoded_movement_defaulted_parameter_count += (
+                        defaulted_parameter_count
+                    )
                 movement_steps.append(step)
 
             battle = {
@@ -1122,6 +1206,9 @@ def extract_banked(scr):
         ),
         "decoded_movement_step_count": decoded_movement_step_count,
         "decoded_movement_parameter_count": decoded_movement_parameter_count,
+        "decoded_movement_defaulted_parameter_count": (
+            decoded_movement_defaulted_parameter_count
+        ),
         "battle_provider_scripts": {
             str(selector): name
             for selector, name in sorted(battle_providers.items())

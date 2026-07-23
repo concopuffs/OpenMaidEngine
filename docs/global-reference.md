@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5037 globals (237 curated, 4800 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5038 globals (241 curated, 4797 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -12,6 +12,7 @@
 | `0xa68` | — | med | auto-shape | TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']. |
 | `0x62ccc` | scjump_decision_out2 | low | inference | Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it. |
 | `0x62ccf` | scjump_decision_out | high | investigation | SCJUMP's selected progression decision id. Its chapter/flag decision tree writes one of 847 distinct values across 1,755 sites; SYSTEM4, FIELD, SALLY, and TRAIN use it to index scjump_scene_script_resource_ids and dispatch the corresponding SCxxxx scene script. |
+| `0xcc9f1` | movement_search_mode | high | investigation | Transient MVSEEK mode. Zero keeps the caller-supplied origin and broad search allowance; nonzero modes replace them with the current entity tile and movement+1. Mode 2 additionally masks the doubled-coordinate terrain cells occupied by active entities of another faction before the flood fill. MVSEEK resets the mode to zero on exit. |
 
 ## counter
 
@@ -37,8 +38,10 @@
 | `0x74e8` | unit_skill_ids | high | investigation | Persistent four-skill row for each playable unit. CALCCC copies positive class_change_skill_awards into the first three slots after a promotion; ADDEXP compares the before/after row to report learned or replaced skills. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type. |
+| `0x4e021` | entity_runtime_flags | high | investigation | Per-runtime-entity state flags. RTN_M007 requires bit 0 when selecting an injured ally, and MVSEEK mode 2 requires it before masking a foreign entity's occupied terrain cell. |
 | `0x4e085` | entity_current_resources | high | investigation | Per-runtime-entity current resources. DRAWCHP/DRAWENP render columns 0..2 against max-stat columns 11..13, skill/item resource deltas modify the same three columns, and movement search compares path cost with current_fs. Columns: 0=current_hp, 1=current_sp, 2=current_fs. |
 | `0x4e11b` | entity_effective_stats | high | investigation | Per-runtime-entity effective fourteen-stat row after CALCREVISE applies base data, equipment, skills, and conditions. Combat/UI consumers use columns 0..10 directly; columns 11..13 are the maxima paired with entity_current_resources HP/SP/FS. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x522ed` | entity_faction_ids | high | investigation | Per-runtime-entity faction id. RTN_M007 restricts its injured-unit target to the acting entity's faction; MVSEEK mode 2 compares this value while masking active foreign-entity cells, and ordinary movement checks the acting faction's bit in tile passability masks. |
 | `0x5231f` | entity_tile_x | high | investigation | Per-runtime-entity map X coordinate. FIELD movement and occupancy logic maintain it; movement providers pair it with entity_tile_y and compare or route from the current tile. |
 | `0x52351` | entity_tile_y | high | investigation | Per-runtime-entity map Y coordinate paired with entity_tile_x. Values use the same stage map-space cell keys as STINIT object and enemy coordinates. |
 | `0x53517` | entity_movement_routine_set_ids | high | investigation | Per-runtime-entity movement routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; MVRTN selects the current difficulty column and stores it in current_routine_set_id. |
@@ -123,6 +126,7 @@
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
 | `0xab8c7` | class_change_rule_script_ids | high | investigation | CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json. |
+| `0xaba96` | pathfinding_remaining_route_steps | high | investigation | MVSEEK's row-major reachability grid. The origin receives movement+1 and each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M007 uses the difference from the origin value as its ally-search radius; RTN_M010 ranks Healing Feathers by the negated value to choose the nearest reachable object. |
 | `0xb240e` | pathfinding_movement_costs | high | investigation | MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x] with stride 27. FIELD and RTN_M providers accept candidate destinations only when this cost is within the acting entity's current FS or a provider-specific override. |
 | `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
@@ -157,8 +161,8 @@
 | `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
 | `0xeff78` | movement_routine_provider_selectors | high | investigation | RTINIT movement bank 0. MVRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through its RTN_M001..018/051..053/061 provider table, and call-scripts the selected movement routine. |
 | `0xf4d98` | movement_routine_activation_percents | high | investigation | RTINIT movement bank 1. After all other step gates pass, MVRTN executes the provider only when random-modulo-100 is below this value. |
-| `0xf9bb8` | movement_routine_parameter_1 | high | investigation | RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005 and RTN_M011 use it as destination_tile_x; other consuming providers remain provider-specific. |
-| `0xfe9d8` | movement_routine_parameter_2 | high | investigation | RTINIT movement bank 3. RTN_M005 and RTN_M011 use it as destination_tile_y; RTN_M007/010/012 meanings remain provider-specific. |
+| `0xf9bb8` | movement_routine_parameter_1 | high | investigation | RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/012 use destination_tile_x, RTN_M007 uses maximum_target_route_steps, RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero), and RTN_M011 uses destination_tile_x. |
+| `0xfe9d8` | movement_routine_parameter_2 | high | investigation | RTINIT movement bank 3. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/011/012 use destination_tile_y, RTN_M007 uses maximum_target_hp_percent, and RTN_M010 uses maximum_resource_percent. |
 | `0x1037f8` | movement_routine_parameter_3 | high | investigation | RTINIT movement bank 4. RTN_M011 uses it as a one-based waypoint_ordinal, executing only the step whose ordinal matches the entity's current zero-based waypoint index. |
 | `0x108618` | movement_routine_parameter_4 | high | investigation | RTINIT movement bank 5. RTN_M011 uses a nonzero value as path_cost_limit_override; zero or an unwritten cell falls back to the entity's current FS. |
 | `0x112258` | movement_routine_minimum_progress_counts | high | investigation | RTINIT movement bank 7. MVRTN requires the current entity's matching movement-step progress counter to reach this value; movement providers increment those counters as their steps execute. |
@@ -219,14 +223,12 @@
 | `0x2053f` | — | low | auto-shape | array |
 | `0x4dfbd` | — | low | auto-shape | array |
 | `0x4dfef` | — | low | auto-shape | array |
-| `0x4e021` | — | low | auto-shape | array |
 | `0x4e053` | — | low | auto-shape | array |
 | `0x521f3` | — | low | auto-shape | array |
 | `0x52225` | — | low | auto-shape | array |
 | `0x52257` | — | low | auto-shape | array |
 | `0x52289` | — | low | auto-shape | array |
 | `0x522bb` | — | low | auto-shape | array |
-| `0x522ed` | — | low | auto-shape | array |
 | `0x53ede` | — | low | auto-shape | array |
 | `0x55e3b` | — | low | auto-shape | array |
 | `0x56223` | — | low | auto-shape | array |
@@ -5033,7 +5035,6 @@
 | `0xab6fa` | — | med | auto-shape | record-table[stride 11] |
 | `0xab7d6` | — | med | auto-shape | record-table[stride 11] |
 | `0xab8b2` | — | med | auto-shape | record-table[stride 7] |
-| `0xaba96` | — | med | auto-shape | record-table[stride 27] |
 | `0xb8d86` | — | med | auto-shape | record-table[stride 27] |
 | `0xbf6fe` | — | med | auto-shape | record-table[stride 27] |
 | `0xc6077` | — | med | auto-shape | record-table[stride 27] |

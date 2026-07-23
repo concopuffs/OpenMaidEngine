@@ -444,22 +444,40 @@ keeps its raw `base/20/slot` fields and complete offset-tagged assignment histor
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
-The first provider-specific join covers RTN_M005 and RTN_M011, 252 movement steps and 685 populated
-parameters in total. Both providers read banks 2/3 as `destination_tile_x` / `destination_tile_y` and
-approach that exact map tile, incrementing the current step's progress counter after arrival. Their
-alternate completion test recognizes a type-6 stage object at the authored destination and also accepts
-the object's linked exit tile.
+The provider-specific join now covers RTN_M005/007/010/011/012: 292 movement steps, 758 populated
+parameters, and seven explicit zero defaults. RTN_M005/011/012 read banks 2/3 as
+`destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
+step's progress counter after arrival. Their alternate completion test recognizes a type-6 stage object
+at the authored destination and also accepts the object's linked exit tile. RTN_M012 is byte-for-byte
+equivalent to M005 except for its MVSEEK mode: mode 2 masks the doubled-coordinate terrain cell of every
+active foreign-faction entity before the flood fill, so the generated behavior distinguishes this
+foreign-entity-avoiding route from ordinary M005.
 
 RTN_M011 is the cyclic-waypoint form. Bank 4 is a one-based `waypoint_ordinal`; only the step whose
 ordinal minus one matches `entity_patrol_waypoint_indices[current_entity]` executes. Arrival advances
 that runtime index modulo the largest RTN_M011 ordinal in the selected routine set. Bank 5 is an optional
 `path_cost_limit_override`; zero or an unwritten cell falls back to the entity's current FS.
+
+RTN_M007 is the injured-ally form. Bank 2 is `maximum_target_route_steps` (authored as 5 or 10) and bank
+3 is an inclusive `maximum_target_hp_percent` (50, 70, or 80). It runs MVSEEK from the acting entity,
+keeps active non-self entities of the same faction below the HP cutoff and within the route-step radius,
+selects randomly among the nearest tied allies, then chooses a reachable movement tile nearest that
+ally. Producing a valid destination increments the step's progress counter.
+
+RTN_M010 is the Healing Feather form. Bank 2 is a `resource_index` into current HP/SP/FS and their
+max-stat columns; all seven shipped cells are unwritten, so the generated join explicitly projects the
+zero/HP default without fabricating a raw assignment. Bank 3 is an inclusive
+`maximum_resource_percent`, authored as 30 or 50. When the selected current/max percentage passes, the
+provider chooses the nearest active OBINIT type 15 or 16 object (`治癒の羽`, full status recovery, or its
+single-use red variant) and approaches a reachable tile nearest it.
+
 `movement_steps` now carry these selector-scoped semantic fields beside the original
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
-mapping and zero/unwritten behavior. No meaning is projected onto other providers. The supporting
-runtime joins are now curated too: `entity_tile_x`/`entity_tile_y`, the fourteen-column
-`entity_effective_stats`, current HP/SP/FS, `pathfinding_movement_costs`, and the per-entity patrol
-waypoint index.
+mapping, target-selection rules, and zero/unwritten behavior. No meaning is projected onto other
+providers. The supporting runtime joins are now curated too: `entity_runtime_flags`,
+`entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
+current HP/SP/FS, `movement_search_mode`, `pathfinding_remaining_route_steps`,
+`pathfinding_movement_costs`, and the per-entity patrol waypoint index.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 

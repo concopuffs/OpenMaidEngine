@@ -371,9 +371,10 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 2
-          and meta["decoded_movement_step_count"] == 252
-          and meta["decoded_movement_parameter_count"] == 685,
+    check(meta["decoded_movement_provider_count"] == 5
+          and meta["decoded_movement_step_count"] == 292
+          and meta["decoded_movement_parameter_count"] == 758
+          and meta["decoded_movement_defaulted_parameter_count"] == 7,
           "RTINIT reports selector-specific semantic coverage")
     check([
         layout["bank_index"]
@@ -413,6 +414,26 @@ def test_real_routine_banks() -> None:
           and provider_11["waypoint_ordinal"] == 1
           and provider_11["path_cost_limit_override"] == 2,
           "RTINIT joins all four RTN_M011 waypoint parameters")
+    provider_7 = by_id[33]["movement_steps"][4]
+    check(provider_7["movement_provider_selector"] == 7
+          and provider_7["provider_behavior"] == "approach_injured_ally"
+          and provider_7["maximum_target_route_steps"] == 5
+          and provider_7["maximum_target_hp_percent"] == 80,
+          "RTINIT joins RTN_M007 injured-ally search semantics")
+    provider_10 = by_id[99]["movement_steps"][0]
+    check(provider_10["movement_provider_selector"] == 10
+          and provider_10["provider_behavior"] == "approach_healing_feather"
+          and provider_10["resource_index"] == 0
+          and provider_10["maximum_resource_percent"] == 50
+          and "movement_parameter_1" not in provider_10,
+          "RTINIT projects RTN_M010's implicit HP default beside the raw banks")
+    provider_12 = by_id[168]["movement_steps"][0]
+    check(provider_12["movement_provider_selector"] == 12
+          and provider_12["provider_behavior"]
+          == "approach_destination_tile_avoiding_foreign_entities"
+          and provider_12["destination_tile_x"] == 11
+          and provider_12["destination_tile_y"] == 68,
+          "RTINIT joins RTN_M012's route-mode destination semantics")
     check("provider_behavior" not in movement
           and "destination_tile_x" not in movement,
           "RTINIT does not leak provider-specific meanings onto undecoded selectors")
@@ -425,6 +446,11 @@ def test_real_routine_banks() -> None:
             "movement_parameter_4": "path_cost_limit_override",
         },
         "RTINIT publishes the reusable RTN_M011 parameter schema",
+    )
+    check(
+        meta["movement_provider_parameter_schemas"]["10"]["parameter_defaults"]
+        == {"movement_parameter_1": 0},
+        "RTINIT publishes RTN_M010's implicit resource-index default",
     )
     semantics = extract_init.field_semantics(records)
     check(

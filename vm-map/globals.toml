@@ -850,7 +850,7 @@ name = "movement_routine_parameter_1"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005 and RTN_M011 use it as destination_tile_x; other consuming providers remain provider-specific."
+usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/012 use destination_tile_x, RTN_M007 uses maximum_target_route_steps, RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero), and RTN_M011 uses destination_tile_x."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -861,7 +861,7 @@ name = "movement_routine_parameter_2"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 3. RTN_M005 and RTN_M011 use it as destination_tile_y; RTN_M007/010/012 meanings remain provider-specific."
+usage = "RTINIT movement bank 3. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/011/012 use destination_tile_y, RTN_M007 uses maximum_target_hp_percent, and RTN_M010 uses maximum_resource_percent."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -1165,6 +1165,17 @@ confidence = "high"
 depends_on = ["0x4e085"]
 
 [[global]]
+address = "0x4e021"
+name = "entity_runtime_flags"
+category = "data-table"
+type = "int[50]"
+value_domain = "runtime entity bitfield; bit 0 marks an active entity"
+usage = "Per-runtime-entity state flags. RTN_M007 requires bit 0 when selecting an injured ally, and MVSEEK mode 2 requires it before masking a foreign entity's occupied terrain cell."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x522ed", "0x5231f", "0x52351"]
+
+[[global]]
 address = "0x4e085"
 name = "entity_current_resources"
 category = "data-table"
@@ -1175,6 +1186,17 @@ usage = "Per-runtime-entity current resources. DRAWCHP/DRAWENP render columns 0.
 source = "investigation"
 confidence = "high"
 depends_on = ["0x4e11b"]
+
+[[global]]
+address = "0x522ed"
+name = "entity_faction_ids"
+category = "data-table"
+type = "int[50]"
+value_domain = "runtime faction/side id"
+usage = "Per-runtime-entity faction id. RTN_M007 restricts its injured-unit target to the acting entity's faction; MVSEEK mode 2 compares this value while masking active foreign-entity cells, and ordinary movement checks the acting faction's bit in tile passability masks."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e021"]
 
 [[global]]
 address = "0x5231f"
@@ -1263,6 +1285,28 @@ usage = "MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x]
 source = "investigation"
 confidence = "high"
 depends_on = ["0x4e085"]
+
+[[global]]
+address = "0xaba96"
+name = "pathfinding_remaining_route_steps"
+category = "data-table"
+type = "int[][27]"
+value_domain = "0 for unreachable; positive remaining flood-fill steps"
+usage = "MVSEEK's row-major reachability grid. The origin receives movement+1 and each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M007 uses the difference from the origin value as its ally-search radius; RTN_M010 ranks Healing Feathers by the negated value to choose the nearest reachable object."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e11b", "0x5231f", "0x52351", "0xcc9f1"]
+
+[[global]]
+address = "0xcc9f1"
+name = "movement_search_mode"
+category = "choice-output"
+type = "int"
+value_domain = "0..2"
+usage = "Transient MVSEEK mode. Zero keeps the caller-supplied origin and broad search allowance; nonzero modes replace them with the current entity tile and movement+1. Mode 2 additionally masks the doubled-coordinate terrain cells occupied by active entities of another faction before the flood fill. MVSEEK resets the mode to zero on exit."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e021", "0x4e11b", "0x522ed", "0x5231f", "0x52351"]
 
 [[global]]
 address = "0x152616"

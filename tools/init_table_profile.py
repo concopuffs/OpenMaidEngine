@@ -245,6 +245,9 @@ def profile_banked(data: dict) -> dict:
         "decoded_movement_parameter_count": data.get(
             "decoded_movement_parameter_count", 0
         ),
+        "decoded_movement_defaulted_parameter_count": data.get(
+            "decoded_movement_defaulted_parameter_count", 0
+        ),
         "available_battle_provider_count": len(
             data.get("battle_provider_scripts", {})
         ),
@@ -402,7 +405,10 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             f"({banked_profile['available_movement_provider_count']} dispatchable)",
             f"- selector-specific movement semantics: "
             f"{banked_profile['decoded_movement_step_count']} steps, "
-            f"{banked_profile['decoded_movement_parameter_count']} parameters "
+            f"{banked_profile['decoded_movement_parameter_count']} populated "
+            f"parameters + "
+            f"{banked_profile['decoded_movement_defaulted_parameter_count']} "
+            f"explicit defaults "
             f"across {banked_profile['decoded_movement_provider_count']} providers",
             f"- joined battle steps/used providers: "
             f"{banked_profile['battle_step_count']}/"

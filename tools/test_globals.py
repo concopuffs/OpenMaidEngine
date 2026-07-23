@@ -25,8 +25,14 @@ def test_load_and_lint():
     check(entries[0x5231f]["name"] == "entity_tile_x"
           and entries[0x52351]["name"] == "entity_tile_y",
           "entity map-coordinate arrays are curated")
+    check(entries[0x4e021]["name"] == "entity_runtime_flags"
+          and entries[0x522ed]["name"] == "entity_faction_ids",
+          "entity activity and faction arrays are curated")
     check(entries[0x56b20]["name"] == "entity_patrol_waypoint_indices",
           "RTN_M011 waypoint state is curated")
+    check(entries[0xaba96]["name"] == "pathfinding_remaining_route_steps"
+          and entries[0xcc9f1]["name"] == "movement_search_mode",
+          "movement-search reachability state is curated")
     check(entries[0xb240e]["name"] == "pathfinding_movement_costs",
           "movement-cost work grid is curated")
     # lint clean against a permissive address universe (curated addrs are self-consistent)
