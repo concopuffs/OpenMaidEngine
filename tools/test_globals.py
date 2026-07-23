@@ -67,6 +67,12 @@ def test_load_and_lint():
           and entries[0x56b85]["name"]
           == "enemy_encyclopedia_revealed_flags",
           "EBINIT/EIMES enemy-encyclopedia state is curated")
+    check(entries[0x15a117]["name"] == "current_character_profile_id"
+          and entries[0x15a118]["name"] == "character_profile_unit_ids"
+          and entries[0x15a17c]["name"]
+          == "character_profile_portrait_asset_ids"
+          and entries[0x45d7]["name"] == "character_profile_names",
+          "CIINIT/CIMES character-profile state is curated")
     check(entries[0x5f0ed]["name"] == "scene_decision_seen_flags",
           "glossary prerequisite seen-state is curated")
     check(entries[0x20543]["name"] == "tile_faction_traversal_masks",

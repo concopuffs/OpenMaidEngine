@@ -200,6 +200,29 @@ def main() -> int:
         "strategy": "Avoid the first encounter",
     }
     assert profile.find_message_matches(enemy_fixture, "first encounter")
+
+    character_fixture = {
+        "table": "CHARACTER",
+        "records": [
+            {
+                "id": 1,
+                "name": "Emilio",
+                "message": {
+                    "biography": "Former demon king\nNow a familiar",
+                },
+            }
+        ],
+    }
+    character_messages = profile.profile_messages(character_fixture)
+    assert character_messages["examples"][0]["title"] == ""
+    assert (
+        character_messages["examples"][0]["description"]
+        == "Former demon king\nNow a familiar"
+    )
+    assert character_messages["examples"][0]["message_fields"] == {
+        "biography": "Former demon king\nNow a familiar",
+    }
+    assert profile.find_message_matches(character_fixture, "familiar")
     print("all init_table_profile checks passed")
     return 0
 

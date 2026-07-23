@@ -105,6 +105,37 @@ def test_real_name_tables() -> None:
     )
 
 
+def test_character_profiles() -> None:
+    scripts = paths.scripts()
+    records, meta = extract_init.extract_character_profiles(
+        sys4load.load(scripts["CIINIT.BIN"])
+    )
+    by_id = {record["id"]: record for record in records}
+    check(len(records) == 24, "CIINIT extracts all 24 character profiles")
+    check(
+        meta["record_span"] == 100
+        and meta["unit_id_array_base"] == "0x15a118"
+        and meta["portrait_asset_array_base"] == "0x15a17c",
+        "CIINIT exposes the four 100-cell profile columns",
+    )
+    check(
+        meta["implicit_defaults"]
+        == {"0x15a1e0": 0, "0x15a244": 0},
+        "CIINIT records its two unwritten portrait-placement defaults",
+    )
+    check(
+        by_id[1]["name"] == "エミリオ"
+        and by_id[1]["fields"]["0x15a118"] == 1
+        and by_id[1]["fields"]["0x15a17c"] == 0x2C88,
+        "CIINIT profile 1 joins Emilio to unit and portrait resources",
+    )
+    check(
+        by_id[16]["fields"]["0x15a118"] == 0x5F
+        and "0x15a17c" not in by_id[16]["fields"],
+        "CIINIT preserves the portrait-fallback profiles",
+    )
+
+
 def test_static_negative_write() -> None:
     class Instruction:
         opcode = extract_init.SUB
@@ -581,6 +612,7 @@ def test_real_message_tables() -> None:
         "SKMES.BIN": (0xA6E59, 131, "fallthrough"),
         "VIMES.BIN": (0x15A2A8, 65, "branch-target"),
         "EIMES.BIN": (0x15A759, 192, "branch-target"),
+        "CIMES.BIN": (0x15A117, 24, "branch-target"),
     }
     for name, (selector, count, dispatch_layout) in expected.items():
         records, meta = extract_message_table.extract_messages(
@@ -639,6 +671,20 @@ def test_real_message_tables() -> None:
           and "title" not in enemies[101],
           "EIMES does not mislabel its first commentary line as a title")
 
+    character_messages, character_meta = extract_message_table.extract_messages(
+        sys4load.load(scripts["CIMES.BIN"])
+    )
+    characters = {record["id"]: record for record in character_messages}
+    check(
+        characters[1]["biography"].startswith("かつては人々を恐怖に陥れた")
+        and "title" not in characters[1],
+        "CIMES exposes its complete untitled character biography",
+    )
+    check(
+        character_meta["message_layout"] == "character-biography",
+        "CIMES records the biography-only message layout",
+    )
+
 
 def test_message_join() -> None:
     scripts = paths.scripts()
@@ -689,6 +735,26 @@ def test_message_join() -> None:
     check(
         unit_by_id[101]["message"]["strategy"] == "初遭遇時にはまず勝てない",
         "EBINIT records expose EIMES strategy text by unit id",
+    )
+
+    characters, _ = extract_init.extract_character_profiles(
+        sys4load.load(scripts["CIINIT.BIN"])
+    )
+    character_meta = extract_init.join_messages(
+        characters, sys4load.load(scripts["CIMES.BIN"])
+    )
+    character_by_id = {record["id"]: record for record in characters}
+    check(
+        character_meta["joined_count"] == 24
+        and not character_meta["init_ids_without_message"]
+        and not character_meta["message_ids_without_init"],
+        "CIINIT and CIMES form a complete 24-profile runtime-id join",
+    )
+    check(
+        character_by_id[1]["message"]["biography"].startswith(
+            "かつては人々を恐怖に陥れた"
+        ),
+        "CIINIT records expose CIMES biography text by profile id",
     )
 
 
@@ -798,6 +864,7 @@ def test_field_semantics() -> None:
 
 if __name__ == "__main__":
     test_real_name_tables()
+    test_character_profiles()
     test_static_negative_write()
     test_output_name_validation()
     test_real_mixed_table()

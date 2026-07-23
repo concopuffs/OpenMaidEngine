@@ -493,11 +493,19 @@ UNIT_STAT_COLUMNS = (
 )
 
 MESSAGE_TABLES = {
+    "CIINIT": "CIMES",
     "EBINIT": "EIMES",
     "ITINIT": "ITMES",
     "SKINIT": "SKMES",
     "VIINIT": "VIMES",
 }
+
+CHARACTER_PROFILE_NAME_ARRAY_BASE = 0x45D7
+CHARACTER_PROFILE_UNIT_ARRAY_BASE = 0x15A118
+CHARACTER_PROFILE_PORTRAIT_ARRAY_BASE = 0x15A17C
+CHARACTER_PROFILE_PORTRAIT_X_ARRAY_BASE = 0x15A1E0
+CHARACTER_PROFILE_PORTRAIT_Y_ARRAY_BASE = 0x15A244
+CHARACTER_PROFILE_RECORD_SPAN = 100
 
 VOCABULARY_NAME_ARRAY_BASE = 0x463B
 VOCABULARY_RECORD_TABLE_BASE = 0x15A2A9
@@ -1171,6 +1179,84 @@ def extract_vocabulary(scr):
         "first_record_id": 1,
         "record_span": VOCABULARY_RECORD_SPAN,
         "record_field_columns": record_columns,
+    }
+
+
+def extract_character_profiles(scr):
+    """Extract CIINIT's profile-id keyed character-information registry."""
+    records = []
+    by_id = {}
+    for ins in scr.instructions:
+        if (
+            ins.opcode != SET_STRING
+            or len(ins.args) < 2
+            or ins.args[0][0] != T_GLOBAL_STRING
+        ):
+            continue
+        record_id = ins.args[0][1] - CHARACTER_PROFILE_NAME_ARRAY_BASE
+        if not (1 <= record_id < CHARACTER_PROFILE_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: character name outside reserved id span: "
+                f"0x{ins.args[0][1]:x}"
+            )
+        text = scr.strings.get(ins.args[1][1], (None,))[0]
+        record = {"id": record_id, "name": text, "fields": {}}
+        records.append(record)
+        by_id[record_id] = record
+
+    integer_arrays = (
+        CHARACTER_PROFILE_UNIT_ARRAY_BASE,
+        CHARACTER_PROFILE_PORTRAIT_ARRAY_BASE,
+        CHARACTER_PROFILE_PORTRAIT_X_ARRAY_BASE,
+        CHARACTER_PROFILE_PORTRAIT_Y_ARRAY_BASE,
+    )
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        matched = False
+        for base in integer_arrays:
+            relative = destination - base
+            if 0 <= relative < CHARACTER_PROFILE_RECORD_SPAN:
+                if relative not in by_id:
+                    raise ValueError(
+                        f"{scr.path.name}: integer write for unnamed character "
+                        f"profile id {relative}"
+                    )
+                _store_unique(
+                    by_id[relative]["fields"],
+                    f"0x{base:x}",
+                    value,
+                    relative,
+                )
+                matched = True
+                break
+        if not matched:
+            raise ValueError(
+                f"{scr.path.name}: unexpected integer write 0x{destination:x}"
+            )
+
+    return records, {
+        "schema": "character-information-profiles",
+        "name_array_base": f"0x{CHARACTER_PROFILE_NAME_ARRAY_BASE:x}",
+        "name_write_base": f"0x{CHARACTER_PROFILE_NAME_ARRAY_BASE + 1:x}",
+        "first_record_id": 1,
+        "record_span": CHARACTER_PROFILE_RECORD_SPAN,
+        "unit_id_array_base": f"0x{CHARACTER_PROFILE_UNIT_ARRAY_BASE:x}",
+        "portrait_asset_array_base": (
+            f"0x{CHARACTER_PROFILE_PORTRAIT_ARRAY_BASE:x}"
+        ),
+        "portrait_x_offset_array_base": (
+            f"0x{CHARACTER_PROFILE_PORTRAIT_X_ARRAY_BASE:x}"
+        ),
+        "portrait_y_offset_array_base": (
+            f"0x{CHARACTER_PROFILE_PORTRAIT_Y_ARRAY_BASE:x}"
+        ),
+        "implicit_defaults": {
+            f"0x{CHARACTER_PROFILE_PORTRAIT_X_ARRAY_BASE:x}": 0,
+            f"0x{CHARACTER_PROFILE_PORTRAIT_Y_ARRAY_BASE:x}": 0,
+        },
     }
 
 
@@ -1913,7 +1999,8 @@ def write_data_index(data_dir: Path) -> None:
         "Linked row-major fields are stored separately in `record_fields`, keyed as",
         "`base/stride/column` from corpus-observed `lookup-array-2d` consumers.",
         "Where a matching `*MES` dispatcher exists, `message` preserves its player-facing",
-        "title, description, furigana, and bytecode dispatch offset separately from the",
+        "layout-specific text (title/description, summary/strategy, or biography), furigana,",
+        "and bytecode dispatch offset separately from the",
         "short description stored by the INIT script.",
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
         "names from `vm-map/globals.toml`; each record's generated `semantic_fields` is the joined",
@@ -1987,6 +2074,8 @@ def main() -> int:
     }[mode]
     if mode == "name" and name == "VIINIT":
         extractor = extract_vocabulary
+    elif mode == "name" and name == "CIINIT":
+        extractor = extract_character_profiles
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]

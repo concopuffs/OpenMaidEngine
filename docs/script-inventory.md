@@ -116,12 +116,14 @@ instantiated steps to join.
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill
 text), `CIMES` (15 KB), `MAMES`, `INFOMES`, `MES` — where most translatable text
 outside scenes lives. The generated message join covers ITMES's 287 item records, SKMES's 131 skill
-records, VIMES's complete 65-topic VIINIT glossary, and EIMES's 192 sparse EBINIT enemy-commentary
-records. ITMES/SKMES use fallthrough message bodies; VIMES/EIMES place all guards first and branch to
-later bodies. VIMES records retain title plus multiline description, while EIMES's untitled two-line
-records expose `summary` and `strategy`. CIMES has the same branch-target dispatcher shape and is the
-next unjoined message table; the smaller MAMES/INFOMES/MES scripts need separate structural
-classification.
+records, VIMES's complete 65-topic VIINIT glossary, EIMES's 192 sparse EBINIT enemy-commentary
+records, and CIMES's complete 24-profile CIINIT character registry. ITMES/SKMES use fallthrough message
+bodies; VIMES/EIMES/CIMES place all guards first and branch to later bodies. VIMES records retain title
+plus multiline description, EIMES's untitled two-line records expose `summary` and `strategy`, and
+CIMES exposes one untitled multiline `biography`. INFOCH uses each CIINIT profile id to join its displayed
+name, backing unit definition, optional portrait, and CIMES text. The smaller MAMES/INFOMES/MES scripts
+need separate structural classification; INFOMES is already known to be the information-screen handler
+router rather than a text body.
 
 ### Battle system
 `BTL` (61 KB — main battle loop), `BTRTN`, `ROUND`, `AIM`, `ATSEEK`, `MVSEEK`,

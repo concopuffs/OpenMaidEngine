@@ -36,7 +36,9 @@ def message_heading_body(message: dict) -> tuple[str, str]:
     """Return presentation-neutral heading/body text for supported MES layouts."""
     return (
         message.get("title", message.get("summary", "")),
-        message.get("description", message.get("strategy", "")),
+        message.get(
+            "description", message.get("strategy", message.get("biography", ""))
+        ),
     )
 
 
@@ -283,7 +285,9 @@ def profile_messages(data: dict) -> dict:
             "description": body,
             "message_fields": {
                 key: record["message"][key]
-                for key in ("title", "description", "summary", "strategy")
+                for key in (
+                    "title", "description", "summary", "strategy", "biography"
+                )
                 if key in record["message"]
             },
         })
@@ -307,6 +311,7 @@ def find_message_matches(data: dict, pattern: str) -> list[dict]:
             record.get("message", {}).get("description", ""),
             record.get("message", {}).get("summary", ""),
             record.get("message", {}).get("strategy", ""),
+            record.get("message", {}).get("biography", ""),
         ]))
     ]
 

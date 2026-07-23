@@ -18,6 +18,7 @@ Usage:
   py -3.11 -X utf8 tools/extract_message_table.py SKMES [OUTNAME]
   py -3.11 -X utf8 tools/extract_message_table.py VIMES
   py -3.11 -X utf8 tools/extract_message_table.py EIMES
+  py -3.11 -X utf8 tools/extract_message_table.py CIMES
 """
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ T_GLOBAL_INT = 3
 BRANCH_SENTINEL = 0xFFFFFFFF
 
 MESSAGE_LAYOUTS = {
+    "CIMES.BIN": "character-biography",
     "EIMES.BIN": "enemy-commentary",
 }
 
@@ -111,7 +113,11 @@ def _message_body(
         lines.append("".join(fragments))
     if not lines:
         return None
-    if layout == "enemy-commentary":
+    if layout == "character-biography":
+        message = {
+            "biography": "\n".join(lines),
+        }
+    elif layout == "enemy-commentary":
         message = {
             "summary": lines[0],
             "strategy": "\n".join(lines[1:]),

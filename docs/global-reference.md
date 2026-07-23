@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5041 globals (262 curated, 4779 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5042 globals (268 curated, 4774 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -193,6 +193,10 @@
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
+| `0x15a118` | character_profile_unit_ids | high | investigation | CIINIT's profile-to-unit join. INFOCH uses the selected unit id for reveal state, map sprite, short unit descriptions, species, and sex while CIMES remains keyed by the enclosing profile id. |
+| `0x15a17c` | character_profile_portrait_asset_ids | high | investigation | Optional CIINIT portrait resource indexed by character profile id. INFOCH draws it when nonzero and otherwise falls back to the backing unit's map-sprite asset. |
+| `0x15a1e0` | character_profile_portrait_x_offsets | high | investigation | INFOCH adds the selected cell to the centered portrait x coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
+| `0x15a244` | character_profile_portrait_y_offsets | high | investigation | INFOCH adds the selected cell to the bottom-aligned portrait y coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
 | `0x15a2a9` | glossary_topic_unlock_seen_decision_ids | high | investigation | VIINIT's three unlock prerequisites per glossary topic. INFOVO subtracts one from each positive value and exposes the topic when any referenced scene_decision_seen_flags cell is set; debug modes expose the same populated topics unconditionally. Columns: 0=unlock_seen_decision_1, 1=unlock_seen_decision_2, 2=unlock_seen_decision_3. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
@@ -225,7 +229,6 @@
 | `0x3ad6` | — | low | auto-shape | array |
 | `0x4315` | — | low | auto-shape | array |
 | `0x4379` | — | low | auto-shape | array |
-| `0x45d7` | — | low | auto-shape | array |
 | `0x671c` | — | low | auto-shape | array |
 | `0x671f` | — | low | auto-shape | array |
 | `0x6727` | — | low | auto-shape | array |
@@ -380,10 +383,6 @@
 | `0x156214` | — | low | auto-shape | array |
 | `0x1565fc` | — | low | auto-shape | array |
 | `0x157d6c` | — | low | auto-shape | array |
-| `0x15a118` | — | low | auto-shape | array |
-| `0x15a17c` | — | low | auto-shape | array |
-| `0x15a1e0` | — | low | auto-shape | array |
-| `0x15a244` | — | low | auto-shape | array |
 | `0x15a501` | — | low | auto-shape | array |
 | `0x15a5c9` | — | low | auto-shape | array |
 | `0x15a691` | — | low | auto-shape | array |
@@ -405,6 +404,7 @@
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
 | `0x15261b` | battle_target_side_index | high | investigation | Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices. |
+| `0x15a117` | current_character_profile_id | high | investigation | INFOCH's selected character-information row. It indexes CIINIT's name, unit, portrait, and placement arrays; CIMES compares the same id against all 24 profiles to dispatch the character biography. |
 | `0x15a2a8` | current_glossary_topic_id | high | investigation | INFOVO's selected glossary/help topic. It indexes the VIINIT title and presentation arrays, then VIMES compares it against all 65 shipped topic ids to dispatch the full player-facing explanation. |
 | `0x15a759` | current_enemy_encyclopedia_unit_id | high | investigation | INFOEN's selected enemy-encyclopedia unit id. It indexes EBINIT presentation and reveal arrays, seeds a temporary runtime entity for stat display, and EIMES compares it against 192 sparse unit ids to dispatch summary and strategy lines. |
 
@@ -464,6 +464,7 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
 | `0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
 | `0x276` | — | med | auto-shape | string-table (written by SC0130) |
 | `0x277` | — | med | auto-shape | string-table (written by SC0130) |

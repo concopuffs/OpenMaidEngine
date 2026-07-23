@@ -243,6 +243,72 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x45d7"
+name = "character_profile_names"
+category = "string-table"
+type = "string[100]"
+value_domain = "CIINIT display name indexed by character profile id; 24 populated shipped ids"
+usage = "CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a117", "0x15a118"]
+
+[[global]]
+address = "0x15a117"
+name = "current_character_profile_id"
+category = "index-pointer"
+type = "int"
+value_domain = "CIINIT character profile id in 1..24"
+usage = "INFOCH's selected character-information row. It indexes CIINIT's name, unit, portrait, and placement arrays; CIMES compares the same id against all 24 profiles to dispatch the character biography."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x45d7", "0x15a118", "0x15a17c"]
+
+[[global]]
+address = "0x15a118"
+name = "character_profile_unit_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "EBINIT unit definition id indexed by CIINIT character profile id"
+usage = "CIINIT's profile-to-unit join. INFOCH uses the selected unit id for reveal state, map sprite, short unit descriptions, species, and sex while CIMES remains keyed by the enclosing profile id."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a117", "0x66715"]
+
+[[global]]
+address = "0x15a17c"
+name = "character_profile_portrait_asset_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "SYS4 graphics resource id; zero means use the unit map sprite fallback"
+usage = "Optional CIINIT portrait resource indexed by character profile id. INFOCH draws it when nonzero and otherwise falls back to the backing unit's map-sprite asset."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a117", "0x15a118", "0x15a1e0", "0x15a244"]
+
+[[global]]
+address = "0x15a1e0"
+name = "character_profile_portrait_x_offsets"
+category = "data-table"
+type = "int[100]"
+value_domain = "signed horizontal draw offset in pixels; shipped CIINIT leaves all cells at zero"
+usage = "INFOCH adds the selected cell to the centered portrait x coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a117", "0x15a17c"]
+
+[[global]]
+address = "0x15a244"
+name = "character_profile_portrait_y_offsets"
+category = "data-table"
+type = "int[100]"
+value_domain = "signed vertical draw offset in pixels; shipped CIINIT leaves all cells at zero"
+usage = "INFOCH adds the selected cell to the bottom-aligned portrait y coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a117", "0x15a17c"]
+
+[[global]]
 address = "0x463b"
 name = "glossary_topic_titles"
 category = "string-table"

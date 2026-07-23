@@ -729,12 +729,13 @@ state flags, per-action unlock requirements, SCJUMP event ids, normal/brainwashe
 per-unit bonus item. Combat tracing also names the shared column-8 item/skill modifier as critical chance.
 
 The message-table tranche adds a reusable extractor for both shipped global-id control-flow layouts and
-joins player-facing ITMES/SKMES/VIMES/EIMES text back to INIT records. All 287 item ids, 131 skill ids,
-and 65 glossary topic ids match exactly in both directions; all 192 sparse EIMES ids resolve to EBINIT
-unit definitions. Joined records retain dispatch and message-body offsets, rendered text, and furigana.
-Title-bearing tables expose title/description, while EIMES preserves its untitled lines as enemy summary
-and strategy. The dispatch keys establish `current_item_id`, `current_skill_id`,
-`current_glossary_topic_id`, and `current_enemy_encyclopedia_unit_id` as high-confidence shared index
+joins player-facing ITMES/SKMES/VIMES/EIMES/CIMES text back to INIT records. All 287 item ids, 131 skill
+ids, 65 glossary topic ids, and 24 character-profile ids match exactly in both directions; all 192 sparse
+EIMES ids resolve to EBINIT unit definitions. Joined records retain dispatch and message-body offsets,
+rendered text, and furigana. Title-bearing tables expose title/description, EIMES preserves its untitled
+lines as enemy summary and strategy, and CIMES preserves its untitled multiline body as `biography`.
+The dispatch keys establish `current_item_id`, `current_skill_id`, `current_glossary_topic_id`,
+`current_enemy_encyclopedia_unit_id`, and `current_character_profile_id` as high-confidence shared index
 slots.
 
 VIINIT is now extracted as a sparse 200-by-3 glossary definition table: 65 populated names, one required
@@ -743,6 +744,9 @@ INFOVO evaluates those prerequisites against persistent scene-decision seen flag
 INFOEN likewise gates EBINIT's enabled enemy-information rows through persistent encounter/reveal flags.
 The generated VIINIT profile reports 65/65 VIMES coverage, while EBINIT reports 192/277 EIMES coverage;
 the remaining EBINIT rows are valid player/unused unit definitions rather than missing EIMES records.
+CIINIT defines 24 rows in four reserved 100-cell columns: displayed names, backing EBINIT unit ids,
+optional portrait resources, and default-zero portrait placement offsets. INFOCH consumes that registry,
+and the generated CIINIT profile reports complete 24/24 CIMES biography coverage.
 
 The follow-up correlation pass makes that evidence directly queryable with
 `init_table_profile.py --message-query REGEX` and moves confirmed item/skill row-column meanings into
