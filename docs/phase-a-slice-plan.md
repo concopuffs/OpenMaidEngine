@@ -2794,3 +2794,15 @@ the bounded fallback for legacy whole-screen host transitions or an unobserved a
 `run-godot.cmd` no longer forces `-PerfLog` or a renderer switch, fulfilling the temporary-launch cleanup;
 `run-godot.ps1 -PerfLog` remains available for future targeted captures. The original SC0000 burst and
 DEBUGMAP animated-unit workload are both visually accepted and comfortably within frame budget.
+
+## Data-semantics sidebar: MAINIT/MAMES and message infrastructure (2026-07-23)
+
+The current static-decoding slice closes the three remaining small MES-named targets. `extract_init.py`
+now models MAINIT as eleven one-based magic/research/growth actions in a reserved 30-cell layout and joins
+nine untitled MAMES descriptions; growth ritual ids 10 and 11 are explicitly unmatched. INFOMES is
+classified as a text-free 32-by-4, first-handler-wins INFO extension registry initialized with
+CIMES/EIMES/VIMES. MES is classified as the shared non-selecting modal renderer over caller-populated
+line and optional annotation buffers. Their stable globals are curated in `vm-map/globals.toml`, and
+structural regressions protect the registry initialization, indirect dispatch, buffer reads, and cleanup.
+
+**Next:** return to reader-proven 2D tables, beginning with RECOVER's 30-wide status/recovery structures.

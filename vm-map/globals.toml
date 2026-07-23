@@ -2219,14 +2219,69 @@ depends_on = []
 
 [[global]]
 address = "0x665d6"
-name = ""
-category = "story-flag"
+name = "modal_message_line_count"
+category = "counter"
 type = "int"
-value_domain = "?"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..10"
+usage = "Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7db"]
+
+[[global]]
+address = "0x7db"
+name = "modal_message_lines"
+category = "string-table"
+type = "string[10]"
+value_domain = "runtime UI text"
+usage = "Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x665d6"]
+
+[[global]]
+address = "0x7e5"
+name = "modal_annotation_texts"
+category = "string-table"
+type = "string[100]"
+value_domain = "optional runtime UI annotations"
+usage = "Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x665e2", "0x665e3", "0x66647"]
+
+[[global]]
+address = "0x665e2"
+name = "modal_annotation_count"
+category = "counter"
+type = "int"
+value_domain = "0..100"
+usage = "Number of populated modal_annotation_texts entries. MES and SBUNKI iterate this many annotations and clear it on dismissal; no direct shipped producer was found."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7e5"]
+
+[[global]]
+address = "0x665e3"
+name = "modal_annotation_horizontal_cells"
+category = "data-table"
+type = "int[100]"
+value_domain = "horizontal anchor cells"
+usage = "Per-annotation horizontal anchor input shared by MES and SBUNKI. Each renderer multiplies the cell by 21 pixels and offsets it by half the annotation's rendered width."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7e5", "0x665e2"]
+
+[[global]]
+address = "0x66647"
+name = "modal_annotation_row_offsets"
+category = "data-table"
+type = "int[100]"
+value_domain = "signed row offset"
+usage = "Per-annotation vertical row offset shared by MES and SBUNKI. Renderers multiply it by 30 pixels; a negative value additionally shifts the annotation left by one 21-pixel cell."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7e5", "0x665e2"]
 
 [[global]]
 address = "0x665d7"
@@ -2382,14 +2437,36 @@ depends_on = []
 
 [[global]]
 address = "0x1560e7"
-name = ""
-category = "story-flag"
+name = "current_magic_action_id"
+category = "index-pointer"
 type = "int"
-value_domain = "one of {0, 1, 2, 3, 4, 5, 6, 7}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "MAINIT action id 0..11; 0 means none"
+usage = "Shared selected magic/research/growth action id. MAGIC and STUDY index MAINIT's parallel columns with it, FIELD and USEMAGIC consume the selected action, and MAMES dispatches ids 1..9 to their untitled help descriptions."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x45b9", "0x1561f6"]
+
+[[global]]
+address = "0x45b9"
+name = "magic_action_names"
+category = "string-table"
+type = "string[30]"
+value_domain = "MAINIT magic, research, and growth-ritual names"
+usage = "MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1560e7"]
+
+[[global]]
+address = "0x1561f6"
+name = "magic_action_information_handler_script_ids"
+category = "data-table"
+type = "int[30]"
+value_domain = "packed script id; shipped ids 1..11 all equal 0x31a6 (MAMES.BIN)"
+usage = "MAINIT handler column indexed by current_magic_action_id. MAGIC and STUDY call the selected packed script id; every shipped action routes to MAMES, whose text dispatcher has authored descriptions for ids 1..9 only."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1560e7", "0x45b9"]
 
 [[global]]
 address = "0x15a094"
@@ -2404,14 +2481,37 @@ depends_on = []
 
 [[global]]
 address = "0x15a095"
-name = ""
-category = "story-flag"
+name = "information_tab_index"
+category = "index-pointer"
+type = "int"
+value_domain = "-1 or 0..4; 0 characters, 1 enemies, 2 glossary, 3 affinity, 4 items"
+usage = "Selected INFO screen tab. INFO dispatches the five tab scripts with it; INFOMES uses values 0..2 as the column of information_message_handler_script_ids for INFOCH, INFOEN, and INFOVO."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a097"]
+
+[[global]]
+address = "0x15a096"
+name = "information_message_handled"
+category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+usage = "INFOMES clears this before walking handler rows and stops when it becomes one. CIMES, EIMES, and VIMES set it after rendering a matching character, enemy, or glossary message, implementing a first-handler-wins extension chain."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a097"]
+
+[[global]]
+address = "0x15a097"
+name = "information_message_handler_script_ids"
+category = "data-table"
+type = "int[32][4]"
+columns = { "0" = "character_handler", "1" = "enemy_handler", "2" = "glossary_handler", "3" = "reserved_handler" }
+value_domain = "packed script id; zero means no handler"
+usage = "INFOMES's 32-row, four-column handler registry. INIT2 populates row zero with CIMES (0x334a), EIMES (0x334b), and VIMES (0x334c); INFOMES scans rows in order for the current tab, calls nonzero handlers, and stops after information_message_handled is set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a095", "0x15a096"]
 
 [[global]]
 address = "0x4dfbc"

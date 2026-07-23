@@ -252,6 +252,26 @@ draws the selected unit metadata and optional portrait, and then reaches CIMES t
 router. The selected `current_character_profile_id` is therefore the exact join key, not the backing unit
 id. CIMES supplies one untitled multiline `biography` for every one of the 24 CIINIT profiles.
 
+MAINIT is the corresponding 30-cell magic-action registry. Eleven one-based rows name six field magic
+actions, three research actions, and two growth rituals, with ten parallel integer columns (two entirely
+zero in the shipped initializer). The dedicated extractor preserves the whole reserved layout rather than
+mistaking the one consecutive name column for an eleven-cell table. Its final column contains packed
+information-handler script ids; every populated row points to `MAMES.BIN`. MAMES dispatches on
+`current_magic_action_id` and supplies one untitled `description` for ids 1 through 9. The growth rituals
+at ids 10 and 11 intentionally have no MAMES branch, so the generated join records nine matches and
+`init_ids_without_message: [10, 11]` instead of fabricating text.
+
+The remaining similarly named scripts are infrastructure, not definition-linked message tables.
+INFOMES has no inline strings: it clears `information_message_handled`, scans a 32-by-4 packed-script
+registry at `information_message_handler_script_ids` for the current INFO tab, calls each nonzero entry,
+and stops when a handler claims the request. INIT2 installs CIMES, EIMES, and VIMES in row zero's
+character/enemy/glossary columns; column 3 and rows 1 through 31 are reserved extension capacity. MES is
+the generic non-selecting modal renderer used throughout menus and gameplay. Callers append strings to
+`modal_message_lines` and increment `modal_message_line_count`; MES measures and draws those strings,
+waits for dismissal, and clears the buffer. MES and SBUNKI also share an optional 100-entry annotation
+text/horizontal-anchor/row-offset ABI, although no direct producer populates that secondary buffer in the
+shipped scripts.
+
 Confirmed row-column meanings are no longer prose-only. The relevant `globals.toml` entries carry a
 machine-readable `columns` map; `globals_build.py` preserves it in `build/globals.json`, and
 `extract_init.py` emits a top-level `field_semantics` mapping while retaining raw address/stride/column keys
@@ -649,20 +669,19 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, and RTINIT now have
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, RTINIT, and MAINIT now have
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
    banks are structurally decoded with every populated movement-parameter cell classified and all 1,043
    shipped movement steps joined to provider behavior. With RTINIT's used-provider surface closed and
-   ITMES/SKMES/VIMES/EIMES/CIMES joined, resume the remaining `*MES` writers and other reader-proven 2D tables;
+   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, resume other reader-proven 2D tables;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
-2. **Classify the remaining message infrastructure beyond the completed ITMES/SKMES/VIMES/EIMES/CIMES
-   joins**, starting with the smaller non-ID-dispatch MAMES/INFOMES/MES scripts and then other
-   `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
-3. **Label 2D record tables by their readers** — cross-reference which scripts read each
+2. **Label 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context (e.g. RECOVER's 30-wide tables ↔ a
    status/recovery system). Static, medium effort.
+3. **Classify other `set-string`/`copy-to-global` writers** not covered by the completed INIT/MES
+   set when their data flow reaches a current implementation need.
 4. **Name *which stat* each field is (Frida).** The one step needing live tools: change a
    known value in-game (take damage, gain XP), watch which global moves → definitive
    `field@X = "HP"`. Reserve for the fields that matter; this is the last mile.

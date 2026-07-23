@@ -73,6 +73,22 @@ def test_load_and_lint():
           == "character_profile_portrait_asset_ids"
           and entries[0x45d7]["name"] == "character_profile_names",
           "CIINIT/CIMES character-profile state is curated")
+    check(entries[0x1560e7]["name"] == "current_magic_action_id"
+          and entries[0x45b9]["name"] == "magic_action_names"
+          and entries[0x1561f6]["name"]
+          == "magic_action_information_handler_script_ids",
+          "MAINIT/MAMES action state is curated")
+    check(entries[0x15a095]["name"] == "information_tab_index"
+          and entries[0x15a096]["name"] == "information_message_handled"
+          and entries[0x15a097]["name"]
+          == "information_message_handler_script_ids",
+          "INFOMES handler registry state is curated")
+    check(entries[0x7db]["name"] == "modal_message_lines"
+          and entries[0x665d6]["name"] == "modal_message_line_count"
+          and entries[0x7e5]["name"] == "modal_annotation_texts"
+          and entries[0x665e3]["name"]
+          == "modal_annotation_horizontal_cells",
+          "MES modal-buffer state is curated")
     check(entries[0x5f0ed]["name"] == "scene_decision_seen_flags",
           "glossary prerequisite seen-state is curated")
     check(entries[0x20543]["name"] == "tile_faction_traversal_masks",

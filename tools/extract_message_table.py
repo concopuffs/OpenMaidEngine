@@ -19,6 +19,7 @@ Usage:
   py -3.11 -X utf8 tools/extract_message_table.py VIMES
   py -3.11 -X utf8 tools/extract_message_table.py EIMES
   py -3.11 -X utf8 tools/extract_message_table.py CIMES
+  py -3.11 -X utf8 tools/extract_message_table.py MAMES
 """
 from __future__ import annotations
 
@@ -41,6 +42,7 @@ BRANCH_SENTINEL = 0xFFFFFFFF
 MESSAGE_LAYOUTS = {
     "CIMES.BIN": "character-biography",
     "EIMES.BIN": "enemy-commentary",
+    "MAMES.BIN": "description",
 }
 
 
@@ -116,6 +118,10 @@ def _message_body(
     if layout == "character-biography":
         message = {
             "biography": "\n".join(lines),
+        }
+    elif layout == "description":
+        message = {
+            "description": "\n".join(lines),
         }
     elif layout == "enemy-commentary":
         message = {

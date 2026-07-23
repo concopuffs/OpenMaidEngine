@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5042 globals (268 curated, 4774 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5045 globals (277 curated, 4768 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -21,6 +21,8 @@
 |---|---|---|---|---|
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
+| `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
+| `0x665e2` | modal_annotation_count | high | investigation | Number of populated modal_annotation_texts entries. MES and SBUNKI iterate this many annotations and clear it on dismissal; no direct shipped producer was found. |
 | `0xcc9f2` | usable_action_min_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's minimum range and widens it for usable offensive and healing skills. It is the lower bound shared by the offensive and healing action-scope tables. |
 | `0xcc9f3` | usable_action_max_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's maximum range and widens it for usable offensive and healing skills. ATSEEK bounds its action-range flood fill with this value; RTN_M051/052 and RTN_M061 use it as their upper scan bound. |
 | `0xe6c5d` | scjump_progress_d | med | inference | SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
@@ -63,6 +65,8 @@
 | `0x57357` | unit_deployment_cost_adjustments | high | investigation | Persistent per-unit delta added to unit_deployment_cost_base. CALCCC increments it by class_change_deployment_cost_delta, while SETCH, SETEN, ADDEXP, and deployment scripts include it when constructing or updating runtime command cost. |
 | `0x573bb` | unit_class_change_state | high | investigation | Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x5f0ed` | scene_decision_seen_flags | high | investigation | Persistent seen-state for progression decisions. Numbered scene scripts set the current scjump_decision_out cell after playback and synchronize it through the persistence opcode; INFOVO uses VIINIT's one-based prerequisites to unlock glossary topics. |
+| `0x665e3` | modal_annotation_horizontal_cells | high | investigation | Per-annotation horizontal anchor input shared by MES and SBUNKI. Each renderer multiplies the cell by 21 pixels and offsets it by half the annotation's rendered width. |
+| `0x66647` | modal_annotation_row_offsets | high | investigation | Per-annotation vertical row offset shared by MES and SBUNKI. Renderers multiply it by 30 pixels; a negative value additionally shifts the annotation left by one 21-pixel cell. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
 | `0x6e7fe` | unit_map_sprite_asset_ids | high | investigation | Five-context unit sprite-sheet table for 251 units. Even columns 0/2/4 are compact CP*AA-style presentations for normal, alternate-condition, and special-condition states; columns 1/3 are the matching normal/alternate full directional CP*AB sheets used by FIELD. INFOCH/INFOEN and DRAWENP reuse the compact representation. Columns: 0=normal_compact, 1=normal_directional, 2=alternate_compact, 3=alternate_directional, 4=special_compact. |
@@ -193,6 +197,8 @@
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
+| `0x1561f6` | magic_action_information_handler_script_ids | high | investigation | MAINIT handler column indexed by current_magic_action_id. MAGIC and STUDY call the selected packed script id; every shipped action routes to MAMES, whose text dispatcher has authored descriptions for ids 1..9 only. |
+| `0x15a097` | information_message_handler_script_ids | high | investigation | INFOMES's 32-row, four-column handler registry. INIT2 populates row zero with CIMES (0x334a), EIMES (0x334b), and VIMES (0x334c); INFOMES scans rows in order for the current tab, calls nonzero handlers, and stops after information_message_handled is set. Columns: 0=character_handler, 1=enemy_handler, 2=glossary_handler, 3=reserved_handler. |
 | `0x15a118` | character_profile_unit_ids | high | investigation | CIINIT's profile-to-unit join. INFOCH uses the selected unit id for reveal state, map sprite, short unit descriptions, species, and sex while CIMES remains keyed by the enclosing profile id. |
 | `0x15a17c` | character_profile_portrait_asset_ids | high | investigation | Optional CIINIT portrait resource indexed by character profile id. INFOCH draws it when nonzero and otherwise falls back to the backing unit's map-sprite asset. |
 | `0x15a1e0` | character_profile_portrait_x_offsets | high | investigation | INFOCH adds the selected cell to the centered portrait x coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
@@ -211,8 +217,6 @@
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
-| `0x7db` | — | low | auto-shape | array |
-| `0x7e5` | — | low | auto-shape | array |
 | `0x2690` | — | low | auto-shape | array |
 | `0x26a4` | — | low | auto-shape | array |
 | `0x26b5` | — | low | auto-shape | array |
@@ -281,8 +285,6 @@
 | `0x66442` | — | low | auto-shape | array |
 | `0x6650a` | — | low | auto-shape | array |
 | `0x665d8` | — | low | auto-shape | array |
-| `0x665e3` | — | low | auto-shape | array |
-| `0x66647` | — | low | auto-shape | array |
 | `0x8fb41` | — | low | auto-shape | array |
 | `0xa5eb9` | — | low | auto-shape | array |
 | `0xaac78` | — | low | auto-shape | array |
@@ -379,7 +381,6 @@
 | `0x15619c` | — | low | auto-shape | array |
 | `0x1561ba` | — | low | auto-shape | array |
 | `0x1561d8` | — | low | auto-shape | array |
-| `0x1561f6` | — | low | auto-shape | array |
 | `0x156214` | — | low | auto-shape | array |
 | `0x1565fc` | — | low | auto-shape | array |
 | `0x157d6c` | — | low | auto-shape | array |
@@ -404,6 +405,8 @@
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
 | `0x15261b` | battle_target_side_index | high | investigation | Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices. |
+| `0x1560e7` | current_magic_action_id | high | investigation | Shared selected magic/research/growth action id. MAGIC and STUDY index MAINIT's parallel columns with it, FIELD and USEMAGIC consume the selected action, and MAMES dispatches ids 1..9 to their untitled help descriptions. |
+| `0x15a095` | information_tab_index | high | investigation | Selected INFO screen tab. INFO dispatches the five tab scripts with it; INFOMES uses values 0..2 as the column of information_message_handler_script_ids for INFOCH, INFOEN, and INFOVO. |
 | `0x15a117` | current_character_profile_id | high | investigation | INFOCH's selected character-information row. It indexes CIINIT's name, unit, portrait, and placement arrays; CIMES compares the same id against all 24 profiles to dispatch the character biography. |
 | `0x15a2a8` | current_glossary_topic_id | high | investigation | INFOVO's selected glossary/help topic. It indexes the VIINIT title and presentation arrays, then VIMES compares it against all 65 shipped topic ids to dispatch the full player-facing explanation. |
 | `0x15a759` | current_enemy_encyclopedia_unit_id | high | investigation | INFOEN's selected enemy-encyclopedia unit id. It indexes EBINIT presentation and reveal arrays, seeds a temporary runtime entity for stat display, and EIMES compares it against 192 sparse unit ids to dispatch summary and strategy lines. |
@@ -443,20 +446,19 @@
 | `0x624be` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 8 scripts; compared against [0]; writers=['MENU.BIN']. |
 | `0x6642c` | route_branch | med | inference | Route/branch selector: sole writer is BUNKI.BIN (分岐 = branching), enum 0..7, branch-read in 36 scenes. Selects a story branch/route. INFERENCE from the BUNKI writer + enum — confirm exact routes via a listing/sweep. |
 | `0x665d3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [1, 2, 4, 8, 32, 64, 128, 65536]; writers=['ALCHEMY.BIN', 'BUNKI.BIN', 'DEBUGADV.BIN', 'EVOLVE.BIN']. |
-| `0x665d6` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']. |
 | `0x665d7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']. |
 | `0xaba5c` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xaba5e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0xccc21` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']. |
-| `0x1560e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']. |
 | `0x15a094` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['ALCHEMY.BIN', 'EVOLVE.BIN', 'SELSTAGE.BIN', 'STUDY.BIN']. |
-| `0x15a095` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against [0]; writers=['INFO.BIN', 'INFOCH.BIN', 'MENU.BIN']. |
 
 ## string-table
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
+| `0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
+| `0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
 | `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
@@ -464,6 +466,7 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x45b9` | magic_action_names | high | investigation | MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry. |
 | `0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
 | `0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
 | `0x276` | — | med | auto-shape | string-table (written by SC0130) |
@@ -3671,6 +3674,7 @@
 | `0x6cc` | adv_hover_read_message_skip | high | investigation | Pointer-hover flag for the standard ADV read-message-only Skip button at (750,572). See adv_hover_history. |
 | `0x6cd` | adv_hover_hide_window | high | investigation | Pointer-hover flag for the standard ADV Hide-window button at (772,572). See adv_hover_history. |
 | `0x62425` | adv_hide_window_enabled | high | investigation | Native ADV-scheduler permission for the standard Hide Window action. After op 0x199 enters the registered yield-A handler, every standard ADV scene calls HIDEWIN.BIN only while this value is nonzero. No script writes it and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native-owned inherited state rather than saved-game or script boot data. The Godot scene bootstrap mirrors the original enabled value 1. |
+| `0x15a096` | information_message_handled | high | investigation | INFOMES clears this before walking handler rows and stops when it becomes one. CIMES, EIMES, and VIMES set it after rendering a matching character, enemy, or glossary message, implementing a first-handler-wins extension chain. |
 
 ## unknown
 
@@ -5081,7 +5085,6 @@
 | `0x1571b4` | — | med | auto-shape | record-table[stride 2] |
 | `0x158154` | — | med | auto-shape | record-table[stride 4] |
 | `0x1590f4` | — | med | auto-shape | record-table[stride 4] |
-| `0x15a097` | — | med | auto-shape | record-table[stride 4] |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
 

@@ -496,6 +496,7 @@ MESSAGE_TABLES = {
     "CIINIT": "CIMES",
     "EBINIT": "EIMES",
     "ITINIT": "ITMES",
+    "MAINIT": "MAMES",
     "SKINIT": "SKMES",
     "VIINIT": "VIMES",
 }
@@ -506,6 +507,22 @@ CHARACTER_PROFILE_PORTRAIT_ARRAY_BASE = 0x15A17C
 CHARACTER_PROFILE_PORTRAIT_X_ARRAY_BASE = 0x15A1E0
 CHARACTER_PROFILE_PORTRAIT_Y_ARRAY_BASE = 0x15A244
 CHARACTER_PROFILE_RECORD_SPAN = 100
+
+MAGIC_ACTION_NAME_ARRAY_BASE = 0x45B9
+MAGIC_ACTION_INTEGER_ARRAY_BASES = (
+    0x1560E8,
+    0x156106,
+    0x156124,
+    0x156142,
+    0x156160,
+    0x15617E,
+    0x15619C,
+    0x1561BA,
+    0x1561D8,
+    0x1561F6,
+)
+MAGIC_ACTION_HANDLER_ARRAY_BASE = 0x1561F6
+MAGIC_ACTION_RECORD_SPAN = 30
 
 VOCABULARY_NAME_ARRAY_BASE = 0x463B
 VOCABULARY_RECORD_TABLE_BASE = 0x15A2A9
@@ -1260,6 +1277,76 @@ def extract_character_profiles(scr):
     }
 
 
+def extract_magic_actions(scr):
+    """Extract MAINIT's action-id keyed magic/research/growth registry.
+
+    MAINIT has only one consecutive string column, so the generic name-table
+    span heuristic cannot see its reserved 30-cell stride.  Its ten integer
+    columns are equally spaced consumers of the same action id.
+    """
+    records = []
+    by_id = {}
+    for ins in scr.instructions:
+        if (
+            ins.opcode != SET_STRING
+            or len(ins.args) < 2
+            or ins.args[0][0] != T_GLOBAL_STRING
+        ):
+            continue
+        record_id = ins.args[0][1] - MAGIC_ACTION_NAME_ARRAY_BASE
+        if not (1 <= record_id < MAGIC_ACTION_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: magic-action name outside reserved id span: "
+                f"0x{ins.args[0][1]:x}"
+            )
+        text = scr.strings.get(ins.args[1][1], (None,))[0]
+        record = {"id": record_id, "name": text, "fields": {}}
+        records.append(record)
+        by_id[record_id] = record
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        matched = False
+        for base in MAGIC_ACTION_INTEGER_ARRAY_BASES:
+            record_id = destination - base
+            if 0 <= record_id < MAGIC_ACTION_RECORD_SPAN:
+                if record_id not in by_id:
+                    raise ValueError(
+                        f"{scr.path.name}: integer write for unnamed magic "
+                        f"action id {record_id}"
+                    )
+                _store_unique(
+                    by_id[record_id]["fields"],
+                    f"0x{base:x}",
+                    value,
+                    record_id,
+                )
+                matched = True
+                break
+        if not matched:
+            raise ValueError(
+                f"{scr.path.name}: unexpected integer write 0x{destination:x}"
+            )
+
+    return records, {
+        "schema": "magic-actions",
+        "name_array_base": f"0x{MAGIC_ACTION_NAME_ARRAY_BASE:x}",
+        "name_write_base": f"0x{MAGIC_ACTION_NAME_ARRAY_BASE + 1:x}",
+        "first_record_id": 1,
+        "record_span": MAGIC_ACTION_RECORD_SPAN,
+        "integer_array_bases": [
+            f"0x{base:x}" for base in MAGIC_ACTION_INTEGER_ARRAY_BASES
+        ],
+        "handler_script_array_base": (
+            f"0x{MAGIC_ACTION_HANDLER_ARRAY_BASE:x}"
+        ),
+        "implicit_default": 0,
+    }
+
+
 @cache
 def object_type_definitions() -> dict[int, dict]:
     """Load OBINIT's authoritative display and state-row metadata by object type id."""
@@ -1999,7 +2086,7 @@ def write_data_index(data_dir: Path) -> None:
         "Linked row-major fields are stored separately in `record_fields`, keyed as",
         "`base/stride/column` from corpus-observed `lookup-array-2d` consumers.",
         "Where a matching `*MES` dispatcher exists, `message` preserves its player-facing",
-        "layout-specific text (title/description, summary/strategy, or biography), furigana,",
+        "layout-specific text (title/description, summary/strategy, biography, or description-only), furigana,",
         "and bytecode dispatch offset separately from the",
         "short description stored by the INIT script.",
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
@@ -2076,6 +2163,8 @@ def main() -> int:
         extractor = extract_vocabulary
     elif mode == "name" and name == "CIINIT":
         extractor = extract_character_profiles
+    elif mode == "name" and name == "MAINIT":
+        extractor = extract_magic_actions
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]

@@ -738,6 +738,13 @@ The dispatch keys establish `current_item_id`, `current_skill_id`, `current_glos
 `current_enemy_encyclopedia_unit_id`, and `current_character_profile_id` as high-confidence shared index
 slots.
 
+The follow-up closes the three smaller MES-named scripts. MAINIT now extracts eleven records in its
+reserved 30-cell layout and joins MAMES descriptions for ids 1 through 9; its two growth rituals have no
+authored MAMES branch. INFOMES is a text-free 32-by-4 first-handler-wins extension registry initialized
+with CIMES/EIMES/VIMES, while MES renders and clears a generic caller-populated modal line buffer plus an
+optional annotation buffer shared with SBUNKI. These are stable runtime ABIs, not three additional
+translatable table shapes.
+
 VIINIT is now extracted as a sparse 200-by-3 glossary definition table: 65 populated names, one required
 one-based seen-scene decision for every topic, and a second alternative prerequisite for thirteen topics.
 INFOVO evaluates those prerequisites against persistent scene-decision seen flags before listing a topic.

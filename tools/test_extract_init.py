@@ -136,6 +136,39 @@ def test_character_profiles() -> None:
     )
 
 
+def test_magic_actions() -> None:
+    scripts = paths.scripts()
+    records, meta = extract_init.extract_magic_actions(
+        sys4load.load(scripts["MAINIT.BIN"])
+    )
+    by_id = {record["id"]: record for record in records}
+    check(len(records) == 11, "MAINIT extracts all 11 magic/research actions")
+    check(
+        meta["record_span"] == 30
+        and meta["name_array_base"] == "0x45b9"
+        and meta["handler_script_array_base"] == "0x1561f6",
+        "MAINIT exposes its reserved span and handler column",
+    )
+    check(
+        by_id[1]["name"] == "闇の治癒"
+        and by_id[1]["fields"]["0x156142"] == 10,
+        "MAINIT action 1 keeps its name and authored cost-like field",
+    )
+    check(
+        all(
+            record["fields"]["0x1561f6"] == 0x31A6
+            for record in records
+        ),
+        "MAINIT routes every action to the MAMES information handler",
+    )
+    check(
+        "0x1561d8" not in by_id[9]["fields"]
+        and by_id[10]["fields"]["0x1561d8"] == 15
+        and by_id[11]["fields"]["0x1561d8"] == 40,
+        "MAINIT preserves the sparse growth-ritual threshold column",
+    )
+
+
 def test_static_negative_write() -> None:
     class Instruction:
         opcode = extract_init.SUB
@@ -613,6 +646,7 @@ def test_real_message_tables() -> None:
         "VIMES.BIN": (0x15A2A8, 65, "branch-target"),
         "EIMES.BIN": (0x15A759, 192, "branch-target"),
         "CIMES.BIN": (0x15A117, 24, "branch-target"),
+        "MAMES.BIN": (0x1560E7, 9, "fallthrough"),
     }
     for name, (selector, count, dispatch_layout) in expected.items():
         records, meta = extract_message_table.extract_messages(
@@ -685,6 +719,106 @@ def test_real_message_tables() -> None:
         "CIMES records the biography-only message layout",
     )
 
+    magic_messages, magic_meta = extract_message_table.extract_messages(
+        sys4load.load(scripts["MAMES.BIN"])
+    )
+    magic = {record["id"]: record for record in magic_messages}
+    check(
+        magic_meta["message_layout"] == "description"
+        and "title" not in magic[1]
+        and len(magic[1]["description"]) > 0,
+        "MAMES exposes complete untitled action descriptions",
+    )
+
+
+def test_message_infrastructure() -> None:
+    scripts = paths.scripts()
+    info = sys4load.load(scripts["INFOMES.BIN"])
+    lookups = [
+        instruction
+        for instruction in info.instructions
+        if sys4load.display_label(instruction.opcode) == "lookup-array-2d"
+    ]
+    check(
+        not info.strings
+        and len(lookups) == 2
+        and all(
+            (extract_init.T_GLOBAL_INT, 0x15A097) in instruction.args
+            and (extract_init.T_GLOBAL_INT, 0x15A095) in instruction.args
+            and (extract_init.T_IMM, 4) in instruction.args
+            for instruction in lookups
+        ),
+        "INFOMES is a text-free 32x4 tab-handler registry walker",
+    )
+    check(
+        any(
+            sys4load.display_label(instruction.opcode) == "call-script"
+            and instruction.args[0][0] != extract_init.T_IMM
+            for instruction in info.instructions
+        ),
+        "INFOMES invokes registry entries through an indirect call-script",
+    )
+    init2 = sys4load.load(scripts["INIT2.BIN"])
+    initial_handlers = {
+        destination: value
+        for instruction in init2.instructions
+        if (write := extract_init._static_global_write(instruction)) is not None
+        for destination, value in [write]
+        if 0x15A097 <= destination <= 0x15A099
+    }
+    check(
+        initial_handlers
+        == {0x15A097: 0x334A, 0x15A098: 0x334B, 0x15A099: 0x334C},
+        "INIT2 installs CIMES, EIMES, and VIMES in handler row zero",
+    )
+    check(
+        any(
+            instruction.args
+            and instruction.args[0] == (extract_init.T_GLOBAL_INT, 0x15A096)
+            and extract_init._static_global_write(instruction) == (0x15A096, 0)
+            for instruction in info.instructions
+        ),
+        "INFOMES clears the first-handler-wins completion flag",
+    )
+
+    modal = sys4load.load(scripts["MES.BIN"])
+    labels = {
+        sys4load.display_label(instruction.opcode)
+        for instruction in modal.instructions
+    }
+    references = {
+        operand
+        for instruction in modal.instructions
+        for operand in instruction.args
+    }
+    check(
+        "show-text" not in labels
+        and "draw-string" in labels
+        and {
+            (extract_init.T_GLOBAL_STRING, 0x7DB),
+            (extract_init.T_GLOBAL_INT, 0x665D6),
+        } <= references,
+        "MES is a generic renderer for caller-populated modal lines",
+    )
+    check(
+        {
+            (extract_init.T_GLOBAL_STRING, 0x7E5),
+            (extract_init.T_GLOBAL_INT, 0x665E2),
+            (extract_init.T_GLOBAL_INT, 0x665E3),
+            (extract_init.T_GLOBAL_INT, 0x66647),
+        } <= references,
+        "MES retains the optional annotation text and placement ABI",
+    )
+    modal_writes = {
+        write
+        for instruction in modal.instructions
+        if (write := extract_init._static_global_write(instruction)) is not None
+    }
+    check(
+        (0x665D6, 0) in modal_writes and (0x665E2, 0) in modal_writes,
+        "MES clears both modal buffers after dismissal",
+    )
+
 
 def test_message_join() -> None:
     scripts = paths.scripts()
@@ -755,6 +889,25 @@ def test_message_join() -> None:
             "かつては人々を恐怖に陥れた"
         ),
         "CIINIT records expose CIMES biography text by profile id",
+    )
+
+    magic_actions, _ = extract_init.extract_magic_actions(
+        sys4load.load(scripts["MAINIT.BIN"])
+    )
+    magic_meta = extract_init.join_messages(
+        magic_actions, sys4load.load(scripts["MAMES.BIN"])
+    )
+    magic_by_id = {record["id"]: record for record in magic_actions}
+    check(
+        magic_meta["joined_count"] == 9
+        and magic_meta["init_ids_without_message"] == [10, 11]
+        and not magic_meta["message_ids_without_init"],
+        "MAINIT and MAMES form the expected sparse 9-of-11 action join",
+    )
+    check(
+        magic_by_id[1]["message"]["description"]
+        and "title" not in magic_by_id[1]["message"],
+        "MAINIT records expose MAMES descriptions by action id",
     )
 
 
@@ -865,6 +1018,7 @@ def test_field_semantics() -> None:
 if __name__ == "__main__":
     test_real_name_tables()
     test_character_profiles()
+    test_magic_actions()
     test_static_negative_write()
     test_output_name_validation()
     test_real_mixed_table()
@@ -872,6 +1026,7 @@ if __name__ == "__main__":
     test_real_scene_dispatch()
     test_real_routine_banks()
     test_real_message_tables()
+    test_message_infrastructure()
     test_message_join()
     test_field_semantics()
     if FAILS:
