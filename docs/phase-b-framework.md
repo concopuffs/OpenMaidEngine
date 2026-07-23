@@ -746,8 +746,10 @@ skill-information visibility. The remaining item/skill work is refinement rather
 schema.
 
 The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed meaning within boss classes;
-enemy AI appears to live outside the static EBINIT schema. STINIT's bespoke parser remains a separate
-extraction task.
+enemy AI appears to live outside the static EBINIT schema. STINIT's separate mixed parser is now complete:
+all 74 sparse stage ids retain their victory/defeat strings, six scalars, fixed-buffer cells, and 1,396
+footer-array copies. AIM/FIELD/DRAWCHP consumers establish the four condition slots, stage BGM, turn limit,
+and turn-limit outcome; the object/enemy/map buffer families remain an evidence-driven follow-up.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 
@@ -757,7 +759,8 @@ Once the natural spine and first gameplay loop are trustworthy, broaden in indep
 - Unit statistics, equipment, inventory, skills, magic, heroine forms, and progression.
 - Combat resolution presentation, enemy turns/AI services, and win/loss transitions.
 - A full chapter of ADV and the scene types encountered between gameplay segments.
-- `STINIT` and other data schemas when their runtime consumers make them necessary.
+- Remaining STINIT object/enemy/map buffer semantics and other data schemas when their runtime consumers make
+  them necessary.
 
 The high-level Phase B direction remains canonical in `docs/remake-architecture-and-roadmap.md`; this file
 only provides the execution framework.

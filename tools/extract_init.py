@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract a *INIT data table to JSON. Auto-detects the table's shape.
 
-*INIT scripts populate parallel global arrays with static game data. Three shapes seen:
+*INIT scripts populate global arrays and work buffers with static game data. Four shapes seen:
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
@@ -10,12 +10,14 @@
            by an incrementing index column. (CGINIT gallery)
   footer — copy-local-array (op 0x64) bulk-loads length-prefixed arrays from the file
            footer into per-record global arrays. The data lives in the footer. (MPINIT maps)
+  mixed  — a sparse selector dispatch writes strings, scalars, fixed-buffer cells, and
+           footer arrays for one runtime record. (STINIT stages)
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 naming them (attack, cost, …) needs the engine global-var map — later work.
 
-Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer]
+Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed]
 """
 from __future__ import annotations
 import json
@@ -37,6 +39,7 @@ COPY_LOCAL_ARRAY = 0x64
 T_GLOBAL_INT = 3
 T_GLOBAL_STRING = 5
 T_IMM = 0
+T_LOCAL_INT = 9
 
 MESSAGE_TABLES = {
     "ITINIT": "ITMES",
@@ -85,15 +88,193 @@ def read_footer_array(scr, off):
     return list(dw[off + 1: off + 1 + length])
 
 
+def _mixed_guards(scr):
+    """Find the dominant `eq local, selector-global, record-id; jcc` dispatch."""
+    candidates = []
+    instructions = scr.instructions
+    for index, ins in enumerate(instructions[:-1]):
+        if (sys4load.display_label(ins.opcode) != "eq"
+                or len(ins.args) < 3
+                or ins.args[0][0] != T_LOCAL_INT
+                or ins.args[1][0] != T_GLOBAL_INT
+                or ins.args[2][0] != T_IMM):
+            continue
+        branch = instructions[index + 1]
+        if (sys4load.display_label(branch.opcode) != "jcc"
+                or not branch.args
+                or branch.args[0] != ins.args[0]):
+            continue
+        candidates.append({
+            "index": index,
+            "offset": ins.offset,
+            "selector": ins.args[1][1],
+            "id": ins.args[2][1],
+        })
+    if not candidates:
+        return []
+    selector_counts = {}
+    for guard in candidates:
+        selector = guard["selector"]
+        selector_counts[selector] = selector_counts.get(selector, 0) + 1
+    selector = max(selector_counts, key=lambda value: (selector_counts[value], -value))
+    return [guard for guard in candidates if guard["selector"] == selector]
+
+
 def detect_mode(scr):
     ops = [ins.opcode for ins in scr.instructions]
     has_str = any(ins.opcode == SET_STRING and ins.args and ins.args[0][0] == T_GLOBAL_STRING
                   for ins in scr.instructions)
+    if has_str and len(_mixed_guards(scr)) >= 4:
+        return "mixed"
     if has_str:
         return "name"
     n_footer = ops.count(COPY_LOCAL_ARRAY)
     n_int = ops.count(MOV) + ops.count(COPY_TO_GLOBAL)
     return "footer" if n_footer >= max(4, n_int) else "numeric"
+
+
+def _eval_static_arg(arg, locals_: dict[int, int]):
+    arg_type, value = arg
+    if arg_type == T_IMM:
+        return value
+    if arg_type == T_LOCAL_INT:
+        return locals_.get(value)
+    return None
+
+
+def _mixed_array_layouts(scr, first_guard_index: int) -> dict[int, dict]:
+    """Recover fixed global-buffer lengths initialized before the dispatch."""
+    locals_: dict[int, int] = {}
+    layouts: dict[int, dict] = {}
+    for ins in scr.instructions[:first_guard_index]:
+        label = sys4load.display_label(ins.opcode)
+        if ins.args and ins.args[0][0] == T_LOCAL_INT:
+            destination = ins.args[0][1]
+            operands = [_eval_static_arg(arg, locals_) for arg in ins.args[1:]]
+            value = None
+            if label == "mov" and operands:
+                value = operands[0]
+            elif len(operands) >= 2 and None not in operands[:2]:
+                left, right = operands[:2]
+                if label == "add":
+                    value = left + right
+                elif label == "sub":
+                    value = left - right
+                elif label == "mul":
+                    value = left * right
+                elif label == "div" and right:
+                    value = left // right
+            if value is None:
+                locals_.pop(destination, None)
+            else:
+                locals_[destination] = value
+        if (ins.opcode == COPY_TO_GLOBAL
+                and len(ins.args) >= 2
+                and ins.args[0][0] == T_GLOBAL_INT):
+            length = _eval_static_arg(ins.args[1], locals_)
+            if isinstance(length, int) and length > 0:
+                layouts[ins.args[0][1]] = {"length": length}
+
+    known = dict(_known_record_tables())
+    for base, layout in layouts.items():
+        if stride := known.get(base):
+            layout["stride"] = stride
+            if layout["length"] % stride == 0:
+                layout["rows"] = layout["length"] // stride
+    return layouts
+
+
+def _mixed_buffer_key(destination: int, layouts: dict[int, dict]) -> str | None:
+    matches = [
+        (base, destination - base)
+        for base, layout in layouts.items()
+        if base <= destination < base + layout["length"]
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"ambiguous mixed-table destination 0x{destination:x}: {matches}")
+    if not matches:
+        return None
+    base, index = matches[0]
+    return f"0x{base:x}/{index}"
+
+
+def _store_unique(target: dict, key: str, value, record_id: int) -> None:
+    if key in target and target[key] != value:
+        raise ValueError(f"mixed record {record_id}: conflicting writes to {key}")
+    target[key] = value
+
+
+def extract_mixed(scr):
+    """Extract selector-dispatched records that populate a shared runtime buffer."""
+    guards = _mixed_guards(scr)
+    if not guards:
+        return [], {}
+    layouts = _mixed_array_layouts(scr, guards[0]["index"])
+    records = []
+    instructions = scr.instructions
+    for guard_index, guard in enumerate(guards):
+        end = guards[guard_index + 1]["index"] if guard_index + 1 < len(guards) else len(instructions)
+        record = {
+            "id": guard["id"],
+            "guard_offset": f"0x{guard['offset']:x}",
+            "string_fields": {},
+            "fields": {},
+            "array_fields": {},
+            "footer_arrays": {},
+        }
+        for ins in instructions[guard["index"] + 2:end]:
+            if (ins.opcode == SET_STRING
+                    and len(ins.args) >= 2
+                    and ins.args[0][0] == T_GLOBAL_STRING):
+                text = scr.strings.get(ins.args[1][1], (None,))[0]
+                _store_unique(
+                    record["string_fields"], f"0x{ins.args[0][1]:x}", text, record["id"]
+                )
+                continue
+            if (ins.opcode == COPY_LOCAL_ARRAY
+                    and len(ins.args) >= 2
+                    and ins.args[0][0] == T_GLOBAL_INT
+                    and ins.args[1][0] == T_IMM):
+                destination = ins.args[0][1]
+                footer_off = ins.args[1][1]
+                values = read_footer_array(scr, footer_off)
+                if values is None:
+                    raise ValueError(
+                        f"mixed record {record['id']}: invalid footer array 0x{footer_off:x}"
+                    )
+                key = _mixed_buffer_key(destination, layouts) or f"0x{destination:x}"
+                _store_unique(record["footer_arrays"], key, {
+                    "footer_off": f"0x{footer_off:x}",
+                    "values": values,
+                }, record["id"])
+                continue
+            if (write := _static_global_write(ins)) is not None:
+                destination, value = write
+                key = _mixed_buffer_key(destination, layouts)
+                target = record["array_fields"] if key else record["fields"]
+                _store_unique(target, key or f"0x{destination:x}", value, record["id"])
+        for key in ("string_fields", "fields", "array_fields", "footer_arrays"):
+            if not record[key]:
+                del record[key]
+        records.append(record)
+
+    layouts_json = {
+        f"0x{base:x}": layout for base, layout in sorted(layouts.items())
+    }
+    key_sort = lambda key: tuple(int(part, 0) for part in key.split("/"))
+    return records, {
+        "selector_global": f"0x{guards[0]['selector']:x}",
+        "array_layouts": layouts_json,
+        "string_field_columns": sorted({
+            key for record in records for key in record.get("string_fields", {})
+        }, key=lambda key: int(key, 16)),
+        "array_field_columns": sorted({
+            key for record in records for key in record.get("array_fields", {})
+        }, key=key_sort),
+        "footer_array_columns": sorted({
+            key for record in records for key in record.get("footer_arrays", {})
+        }, key=key_sort),
+    }
 
 
 def _infer_record_span(string_addrs):
@@ -294,7 +475,13 @@ def field_semantics(records: list[dict]) -> dict[str, str]:
     keys = {
         key
         for record in records
-        for key in (*record.get("fields", {}), *record.get("record_fields", {}))
+        for key in (
+            *record.get("string_fields", {}),
+            *record.get("fields", {}),
+            *record.get("array_fields", {}),
+            *record.get("footer_arrays", {}),
+            *record.get("record_fields", {}),
+        )
     }
     registry = _global_registry()
     semantics = {}
@@ -306,7 +493,9 @@ def field_semantics(records: list[dict]) -> dict[str, str]:
         name = entry.get("name")
         if not name:
             continue
-        if len(parts) == 3:
+        if len(parts) == 2:
+            name = f"{name}.index_{parts[1]}"
+        elif len(parts) == 3:
             column = parts[2]
             column_name = entry.get("columns", {}).get(column, f"column_{column}")
             name = f"{name}.{column_name}"
@@ -334,8 +523,8 @@ def write_data_index(data_dir: Path) -> None:
         "bases remain available in every record; confirmed field meanings live in",
         "`vm-map/globals.toml` and the generated `docs/global-reference.md`.",
         "",
-        "| file | mode | records | messages | array fields | record columns |",
-        "|---|---|---:|---:|---:|---:|",
+        "| file | mode | records | messages | scalar/array fields | strings | buffer cells | footer arrays | record columns |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for filename, data in tables:
         columns = len(data.get("field_columns") or [])
@@ -345,7 +534,9 @@ def write_data_index(data_dir: Path) -> None:
         )
         lines.append(
             f"| `{filename}` | {data['mode']} | {data['record_count']} | "
-            f"{message_count} | {columns} | {record_columns} |"
+            f"{message_count} | {columns} | {len(data.get('string_field_columns') or [])} | "
+            f"{len(data.get('array_field_columns') or [])} | "
+            f"{len(data.get('footer_array_columns') or [])} | {record_columns} |"
         )
     lines += [
         "",
@@ -360,16 +551,31 @@ def write_data_index(data_dir: Path) -> None:
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
         "names from `vm-map/globals.toml`; raw keys remain intact as bytecode provenance.",
         "",
+        "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
+        "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
-        "direct-consumer evidence. `STINIT` still requires a bespoke mixed numeric/string parser.",
+        "direct-consumer evidence.",
         "",
     ]
     (data_dir / "README.md").write_text("\n".join(lines), encoding="utf8")
 
 
 def main() -> int:
-    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
-    mode_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--mode"), None)
+    argv = []
+    mode_arg = None
+    index = 1
+    while index < len(sys.argv):
+        arg = sys.argv[index]
+        if arg == "--mode":
+            if index + 1 >= len(sys.argv):
+                raise SystemExit("--mode requires a value")
+            mode_arg = sys.argv[index + 1]
+            index += 2
+            continue
+        if arg.startswith("--"):
+            raise SystemExit(f"unknown option: {arg}")
+        argv.append(arg)
+        index += 1
     if not argv:
         raise SystemExit(__doc__)
     name = argv[0].upper().removesuffix(".BIN")
@@ -377,7 +583,12 @@ def main() -> int:
     scr = sys4load.load(resolve(name))
 
     mode = mode_arg or detect_mode(scr)
-    extractor = {"name": extract_name, "numeric": extract_numeric, "footer": extract_footer}[mode]
+    extractor = {
+        "name": extract_name,
+        "numeric": extract_numeric,
+        "footer": extract_footer,
+        "mixed": extract_mixed,
+    }[mode]
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]
@@ -403,7 +614,8 @@ def main() -> int:
             print(f"  id {r['id']:>4}  {r['global_addr']} <- footer {r['footer_off']} "
                   f"len {r['length']}  head={r['values'][:8]}")
         else:
-            f4 = {k: r['fields'][k] for k in list(r['fields'])[:4]}
+            fields = r.get("fields", {})
+            f4 = {k: fields[k] for k in list(fields)[:4]}
             print(f"  id {r['id']:>4}  {r.get('name','')!r:12} desc={r.get('desc','')!r} {f4}")
     return 0
 

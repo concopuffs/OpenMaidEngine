@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5023 globals (148 curated, 4875 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5026 globals (155 curated, 4871 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -101,6 +101,9 @@
 | `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
+| `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
+| `0xe730c` | stage_turn_limit | high | investigation | STINIT's per-stage turn limit. DRAWCHP presents the value in the stage information, while FIELD compares the current turn against it when checking stage completion. |
+| `0xe730d` | stage_turn_limit_outcome | high | investigation | STINIT mode paired with stage_turn_limit. Stage 1 stores 0 and describes 50-turn expiry as defeat; stage 2 stores 1 and explicitly describes 15-turn expiry as a forced-retreat clear. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -412,6 +415,10 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
+| `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
+| `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x276` | — | med | auto-shape | string-table (written by SC0130) |
 | `0x277` | — | med | auto-shape | string-table (written by SC0130) |
 | `0x278` | — | med | auto-shape | string-table (written by FIELD) |
@@ -2624,10 +2631,6 @@
 | `0x277a` | — | med | auto-shape | string-table (written by OBINIT) |
 | `0x2782` | — | med | auto-shape | string-table (written by OBINIT) |
 | `0x2783` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x27b9` | — | med | auto-shape | string-table (written by STINIT) |
-| `0x27ba` | — | med | auto-shape | string-table (written by STINIT) |
-| `0x27bb` | — | med | auto-shape | string-table (written by STINIT) |
-| `0x27bc` | — | med | auto-shape | string-table (written by STINIT) |
 | `0x27be` | — | med | auto-shape | string-table (written by STINIT2) |
 | `0x27bf` | — | med | auto-shape | string-table (written by STINIT2) |
 | `0x27c0` | — | med | auto-shape | string-table (written by STINIT2) |

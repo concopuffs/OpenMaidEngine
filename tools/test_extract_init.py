@@ -66,6 +66,35 @@ def test_static_negative_write() -> None:
           "INIT subtraction writes preserve negative values")
 
 
+def test_real_mixed_table() -> None:
+    script = sys4load.load(extract_init.resolve("STINIT"))
+    check(extract_init.detect_mode(script) == "mixed",
+          "STINIT auto-detects as a mixed selector table")
+    records, meta = extract_init.extract_mixed(script)
+    check(len(records) == 74, "STINIT extracts all 74 sparse stage records")
+    check(records[0]["id"] == 1 and records[-1]["id"] == 170,
+          "STINIT preserves sparse runtime stage ids")
+    check(meta["selector_global"] == "0x4dfbc",
+          "STINIT records are keyed by scjump_progress_a")
+    check(meta["array_layouts"]["0xe74b5"] == {
+        "length": 350, "stride": 7, "rows": 50,
+    }, "STINIT preamble recovers a consumer-confirmed row buffer")
+    stage1 = records[0]
+    check(list(stage1["string_fields"].values()) == [
+        "オークの撃破", "", "自軍拠点の制圧", "５０ターン経過",
+    ], "STINIT stage 1 preserves all four condition strings")
+    check(stage1["fields"]["0xe7302"] == 12
+          and stage1["fields"]["0xe730c"] == 50
+          and stage1["fields"]["0xe730d"] == 0,
+          "STINIT stage 1 preserves BGM and turn-limit scalars")
+    check(stage1["array_fields"]["0xe7305/3"] == -2,
+          "STINIT fixed-buffer cells preserve negative values")
+    check(stage1["footer_arrays"]["0xe7889/3"]["values"] == [1, 1, 1],
+          "STINIT length-prefixed footer arrays retain their destination")
+    check(sum(len(record.get("footer_arrays", {})) for record in records) == 1396,
+          "STINIT accounts for every footer-array copy")
+
+
 def test_real_message_tables() -> None:
     scripts = paths.scripts()
     expected = {
@@ -143,6 +172,7 @@ def test_field_semantics() -> None:
 if __name__ == "__main__":
     test_real_name_tables()
     test_static_negative_write()
+    test_real_mixed_table()
     test_real_message_tables()
     test_message_join()
     test_field_semantics()

@@ -41,6 +41,35 @@ def main() -> int:
     assert rows["0x30/3/0"]["stride"] == 3
     assert rows["0x30/3/0"]["semantic_name"] == "test_record.zero"
     assert rows["0x30/3/2"]["column"] == 2
+
+    mixed_fixture = {
+        "table": "MIXED",
+        "mode": "mixed",
+        "array_layouts": {"0x100": {"length": 9, "stride": 3, "rows": 3}},
+        "field_semantics": {"0x40": "condition", "0x50": "scalar"},
+        "records": [
+            {
+                "id": 11,
+                "string_fields": {"0x40": "Win"},
+                "fields": {"0x50": 20},
+                "array_fields": {"0x100/4": 7},
+                "footer_arrays": {
+                    "0x100/6": {"footer_off": "0x200", "values": [1, 2, 3]},
+                },
+            },
+        ],
+    }
+    mixed = {row["key"]: row for row in profile.profile_columns(mixed_fixture)}
+    assert mixed["0x40"]["kind"] == "string-field"
+    assert mixed["0x40"]["semantic_name"] == "condition"
+    assert mixed["0x50"]["kind"] == "scalar-field"
+    assert mixed["0x100/4"]["kind"] == "array-cell"
+    assert mixed["0x100/4"]["stride"] == 3 and mixed["0x100/4"]["column"] == 1
+    assert mixed["0x100/6"]["kind"] == "footer-array"
+    assert mixed["0x100/6"]["examples"][0]["footer_off"] == "0x200"
+    assert mixed["0x100/6"]["common"][0]["value"] == "[1, 2, 3]"
+    assert mixed["0x40"]["examples"][0]["name"] == "Win"
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

@@ -37,8 +37,8 @@ def load_table(name: str) -> dict:
     if not path.exists():
         raise SystemExit(f"missing extracted table: {path}")
     data = json.loads(path.read_text(encoding="utf8"))
-    if data.get("mode") not in {"name", "numeric"}:
-        raise SystemExit(f"{name}: field profiling requires name/numeric mode")
+    if data.get("mode") not in {"name", "numeric", "mixed"}:
+        raise SystemExit(f"{name}: field profiling requires name/numeric/mixed mode")
     return data
 
 
@@ -54,49 +54,87 @@ def profile_columns(data: dict) -> list[dict]:
     values: dict[str, list] = collections.defaultdict(list)
     examples: dict[str, list[dict]] = collections.defaultdict(list)
     identities: dict[str, dict] = {}
+
+    def record_name(record: dict) -> str:
+        if record.get("name"):
+            return record["name"]
+        return next(
+            (text for text in record.get("string_fields", {}).values() if text),
+            f"record {record['id']}",
+        )
+
+    def add(key: str, identity: dict, value, record: dict, **extra) -> None:
+        identities[key] = identity
+        values[key].append(value)
+        if len(examples[key]) < 5:
+            example = {
+                "id": record["id"],
+                "name": record_name(record),
+                "value": value,
+                **extra,
+            }
+            if message := record.get("message"):
+                example["message_description"] = message.get("description", "")
+            examples[key].append(example)
+
     for record in records:
         for address, value in record.get("fields", {}).items():
             base = int(address, 16)
             key = f"0x{base:x}"
-            identities[key] = {
-                "key": key, "kind": "parallel-array", "base": key,
+            add(key, {
+                "key": key,
+                "kind": "scalar-field" if data.get("mode") == "mixed" else "parallel-array",
+                "base": key,
                 "stride": None, "column": None,
                 "semantic_name": field_semantics.get(key),
-            }
-            values[key].append(value)
-            if len(examples[key]) < 5:
-                example = {
-                    "id": record["id"],
-                    "name": record.get("name", ""),
-                    "value": value,
-                }
-                if message := record.get("message"):
-                    example["message_description"] = message.get("description", "")
-                examples[key].append(example)
+            }, value, record)
+        for address, value in record.get("string_fields", {}).items():
+            base = int(address, 16)
+            key = f"0x{base:x}"
+            add(key, {
+                "key": key, "kind": "string-field", "base": key,
+                "stride": None, "column": None,
+                "semantic_name": field_semantics.get(key),
+            }, value, record)
         for key, value in record.get("record_fields", {}).items():
             base_text, stride_text, column_text = key.split("/")
             base = int(base_text, 16)
             stride = int(stride_text)
             column = int(column_text)
             normalized_key = f"0x{base:x}/{stride}/{column}"
-            identities[normalized_key] = {
+            add(normalized_key, {
                 "key": normalized_key,
                 "kind": "record-column",
                 "base": f"0x{base:x}",
                 "stride": stride,
                 "column": column,
                 "semantic_name": field_semantics.get(normalized_key),
-            }
-            values[normalized_key].append(value)
-            if len(examples[normalized_key]) < 5:
-                example = {
-                    "id": record["id"],
-                    "name": record.get("name", ""),
-                    "value": value,
-                }
-                if message := record.get("message"):
-                    example["message_description"] = message.get("description", "")
-                examples[normalized_key].append(example)
+            }, value, record)
+        for kind, field_name in (
+            ("array-cell", "array_fields"),
+            ("footer-array", "footer_arrays"),
+        ):
+            for key, raw_value in record.get(field_name, {}).items():
+                parts = key.split("/")
+                base = int(parts[0], 16)
+                index = int(parts[1]) if len(parts) == 2 else None
+                layout = data.get("array_layouts", {}).get(f"0x{base:x}", {})
+                stride = layout.get("stride")
+                column = index % stride if index is not None and stride else None
+                value = raw_value.get("values", []) if kind == "footer-array" else raw_value
+                extra = (
+                    {"footer_off": raw_value.get("footer_off")}
+                    if kind == "footer-array" else {}
+                )
+                add(key, {
+                    "key": key,
+                    "kind": kind,
+                    "base": f"0x{base:x}",
+                    "index": index,
+                    "stride": stride,
+                    "column": column,
+                    "semantic_name": field_semantics.get(key),
+                }, value, record, **extra)
 
     rows = []
     for key, vals in values.items():
@@ -283,6 +321,10 @@ def main() -> int:
         "field_column_count": len(rows),
         "parallel_array_count": sum(row["kind"] == "parallel-array" for row in rows),
         "record_column_count": sum(row["kind"] == "record-column" for row in rows),
+        "scalar_field_count": sum(row["kind"] == "scalar-field" for row in rows),
+        "string_field_count": sum(row["kind"] == "string-field" for row in rows),
+        "array_cell_count": sum(row["kind"] == "array-cell" for row in rows),
+        "footer_array_count": sum(row["kind"] == "footer-array" for row in rows),
         "message_profile": messages,
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0

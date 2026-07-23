@@ -1601,3 +1601,73 @@ usage = "SCJUMP switch input (168 comparison reads) — progression counter/posi
 source = "inference"
 confidence = "med"
 depends_on = []
+
+[[global]]
+address = "0x27b9"
+name = "stage_victory_condition_1"
+category = "string-table"
+type = "string"
+value_domain = "first player-facing victory-condition line for the loaded stage"
+usage = "STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27ba"
+name = "stage_victory_condition_2"
+category = "string-table"
+type = "string"
+value_domain = "optional second player-facing victory-condition line; empty when unused"
+usage = "STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27bb"
+name = "stage_defeat_condition_1"
+category = "string-table"
+type = "string"
+value_domain = "first player-facing defeat-condition line for the loaded stage"
+usage = "STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27bc"
+name = "stage_defeat_condition_2"
+category = "string-table"
+type = "string"
+value_domain = "optional second player-facing defeat-condition line; empty when unused"
+usage = "STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7302"
+name = "stage_bgm_id"
+category = "data-table"
+type = "int"
+value_domain = "{0,11..18}; 0 disables stage BGM"
+usage = "STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe730c"
+name = "stage_turn_limit"
+category = "data-table"
+type = "int"
+value_domain = "{0,10,15,30,50,60,70,75,80,100}; 0 means no limit"
+usage = "STINIT's per-stage turn limit. DRAWCHP presents the value in the stage information, while FIELD compares the current turn against it when checking stage completion."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe730d"
+name = "stage_turn_limit_outcome"
+category = "data-table"
+type = "int"
+value_domain = "{0,1}; 0 defeat on expiry, 1 forced-retreat clear on expiry"
+usage = "STINIT mode paired with stage_turn_limit. Stage 1 stores 0 and describes 50-turn expiry as defeat; stage 2 stores 1 and explicitly describes 15-turn expiry as a forced-retreat clear."
+source = "investigation"
+confidence = "high"

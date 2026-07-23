@@ -239,6 +239,29 @@ fallbacks are deliberately limited to the still-unresolved voice reactions and S
 three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into runtime table
 `0x4e693/300`).
 
+### STINIT mixed stage records (2026-07-22)
+
+STINIT is not a name table. Its preamble allocates 29 fixed global work buffers, then 74 sparse branches
+compare `scjump_progress_a` with stage ids 1 through 170. Each selected branch populates the same current-
+stage buffer with four strings, six scalar globals, sparse cells inside the fixed buffers, and
+length-prefixed arrays copied from the script footer. `extract_init.py` now detects this shape as `mixed`,
+evaluates preamble length arithmetic, attaches writes to their containing buffer, and preserves the branch
+offset and footer offset as provenance. The extraction accounts for all 296 string writes and all 1,396
+`copy-local-array` operations. Six buffers also inherit exact strides from independent
+`lookup-array-2d` consumers.
+
+`init_table_profile.py STINIT --build` profiles the four string slots, six scalars, 932 distinct buffer
+cell destinations, and 37 footer-array destinations across the 74 records. The record label falls back to
+the first nonempty victory-condition string, making consumer/value correlations readable without inventing
+a stage-name field.
+
+The strongest consumer-backed meanings are curated in `globals.toml`: `0x27b9..0x27bc` are the two
+victory and two defeat-condition lines rendered by AIM/FIELD; `0xe7302` is passed by FIELD to `play-bgm`;
+`0xe730c` is the turn limit displayed by DRAWCHP and checked by FIELD; and `0xe730d` selects defeat versus
+forced-retreat clear when that limit expires. The remaining stage scalars and buffer families stay raw until
+their FIELD/SETEN/SETOBJ/DRAWMAP consumers support stable names. In particular, repeated asset-like values
+inside `0xe7311` are not promoted merely because they resolve through SYS4INI.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -283,11 +306,12 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT and the confirmed EBINIT row layouts now
-   have machine-readable meanings. Next isolate EBINIT's voice-slot roles from their battle/map selection
-   branches and SALLY's action/event slots from their routed scenes; investigate the unread enum and boss-class
-   sign only when consumer or native evidence appears. Preserve explicit item → skill and
-   unit → attack/skill/equipment/drop joins. Do not infer meaning from column position alone.
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
+   STINIT's mixed stage records now have machine-readable investigation surfaces. Next trace STINIT's
+   highest-coverage object/enemy/map buffers through FIELD, SETOBJ, SETEN, and DRAWMAP; isolate EBINIT's
+   remaining voice/action slots only when their routed consumers make them distinguishable. Investigate
+   unread enums and signed classes only when consumer or native evidence appears. Preserve explicit joins
+   and do not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each
