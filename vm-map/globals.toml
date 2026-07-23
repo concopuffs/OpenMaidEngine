@@ -1603,6 +1603,26 @@ confidence = "med"
 depends_on = []
 
 [[global]]
+address = "0x26f1"
+name = "object_type_names"
+category = "string-table"
+type = "string[100]"
+value_domain = "OBINIT object definition names for ids 1..46"
+usage = "OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2755"
+name = "object_type_descriptions"
+category = "string-table"
+type = "string[100]"
+value_domain = "optional OBINIT player-facing object behavior/effect descriptions for ids 1..46"
+usage = "OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x27b9"
 name = "stage_victory_condition_1"
 category = "string-table"

@@ -5,7 +5,7 @@
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
-           (SKINIT skills, ITINIT items, EBINIT units)
+           (SKINIT skills, ITINIT items, EBINIT units, OBINIT object definitions)
   numeric— column table with NO names: mov/copy-to-global into parallel int arrays, keyed
            by an incrementing index column. (CGINIT gallery)
   footer — copy-local-array (op 0x64) bulk-loads length-prefixed arrays from the file
@@ -394,6 +394,19 @@ def extract_name(scr):
                      "desc_array_bases": {k: f"0x{v:x}" for k, v in sorted(desc_bases.items())}}
 
 
+@cache
+def object_type_definitions() -> dict[int, dict]:
+    """Load OBINIT's authoritative names and descriptions keyed by object type id."""
+    records, _ = extract_name(sys4load.load(resolve("OBINIT")))
+    return {
+        record["id"]: {
+            "name": record["name"],
+            **({"description": record["desc"]} if record.get("desc") else {}),
+        }
+        for record in records
+    }
+
+
 def _int_writes(scr):
     """Ordered (addr, value_arg) for global-int mov / copy-to-global."""
     out = []
@@ -557,8 +570,12 @@ def attach_semantic_fields(records: list[dict], semantics: dict[str, str]) -> No
             record.pop("semantic_fields", None)
 
 
-def attach_stage_object_placements(records: list[dict]) -> None:
+def attach_stage_object_placements(
+    records: list[dict], definitions: dict[int, dict] | None = None
+) -> None:
     """Assemble STINIT's parallel object buffers into modder-facing slot records."""
+    if definitions is None:
+        definitions = object_type_definitions()
     known_fields = {
         "type_id": "0xe7389",
         "tile_x": "0xe7325",
@@ -574,8 +591,15 @@ def attach_stage_object_placements(records: list[dict]) -> None:
             type_key = f"{known_fields['type_id']}/{slot}"
             if type_key not in fields:
                 continue
-            obj = {"slot": slot}
+            type_id = fields[type_key]
+            obj = {"slot": slot, "type_id": type_id}
+            if definition := definitions.get(type_id):
+                obj["type_name"] = definition["name"]
+                if description := definition.get("description"):
+                    obj["type_description"] = description
             for semantic_name, base in known_fields.items():
+                if semantic_name == "type_id":
+                    continue
                 if (key := f"{base}/{slot}") in fields:
                     obj[semantic_name] = fields[key]
             required = [
@@ -599,7 +623,6 @@ def attach_stage_object_placements(records: list[dict]) -> None:
                 for base in ("0xe73bb", "0xe73ed")
                 if (key := f"{base}/{slot}") in fields
             }
-            type_id = obj["type_id"]
             if type_id in (1, 2, 3, 4) and "0xe73bb" in payload:
                 obj["initial_faction_id"] = payload.pop("0xe73bb")
             elif type_id in (6, 36):
@@ -614,6 +637,8 @@ def attach_stage_object_placements(records: list[dict]) -> None:
                     obj["item_quantity"] = payload.pop("0xe73ed")
             elif type_id == 28 and "0xe73bb" in payload:
                 obj["card_generation_list_id"] = payload.pop("0xe73bb")
+            elif 18 <= type_id <= 25 and "0xe73bb" in payload:
+                obj["non_triggering_faction_id"] = payload.pop("0xe73bb")
             unknown = payload
             if unknown:
                 obj["unknown_fields"] = unknown
@@ -747,7 +772,9 @@ def write_data_index(data_dir: Path) -> None:
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
-        "and `enemy_spawns`; unresolved type-specific/mode parameters remain in `unknown_fields`.",
+        "and `enemy_spawns`. Its object type ids join to OBINIT's authoritative names and",
+        "available descriptions; consumer-proven tagged payload variants receive semantic names while",
+        "unresolved type-specific/mode parameters remain in `unknown_fields`.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -798,6 +825,7 @@ def main() -> int:
     semantics = field_semantics(recs, meta.get("array_layouts"))
     attach_semantic_fields(recs, semantics)
     if mode == "mixed" and name == "STINIT":
+        meta["object_definition_table"] = "OBINIT"
         attach_stage_object_placements(recs)
         attach_stage_enemy_spawns(recs)
     out = {"table": name, "source": scr.path.name, "magic": scr.magic, "mode": mode,

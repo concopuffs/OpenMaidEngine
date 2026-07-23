@@ -29,6 +29,7 @@ def test_real_name_tables() -> None:
         "SKINIT.BIN": (300, 131),
         "ITINIT.BIN": (1000, 287),
         "EBINIT.BIN": (1000, 277),
+        "OBINIT.BIN": (100, 46),
     }
     scripts = paths.scripts()
     for name, (span, count) in expected.items():
@@ -54,6 +55,14 @@ def test_real_name_tables() -> None:
           "ITINIT item 101 stores HP recovery in row-major column zero")
     check(by_id[108]["record_fields"]["0x906f9/30/8"] == -5,
           "ITINIT item 108 preserves its paralysis-removal delta")
+
+    objects, _ = extract_init.extract_name(sys4load.load(scripts["OBINIT.BIN"]))
+    object_by_id = {record["id"]: record for record in objects}
+    check(object_by_id[17]["name"] == "針"
+          and object_by_id[17]["desc"] == "ＨＰ-2",
+          "OBINIT object 17 preserves its name and effect description")
+    check(object_by_id[28]["name"] == "カード取得",
+          "OBINIT object ids provide authoritative STINIT type labels")
 
 
 def test_static_negative_write() -> None:
@@ -110,6 +119,8 @@ def test_real_mixed_table() -> None:
     check(first_object == {
         "slot": 1,
         "type_id": 1,
+        "type_name": "拠点",
+        "type_description": "▲命中・回避・防御",
         "tile_x": 13,
         "tile_y": 1,
         "difficulty_mask": 7,
@@ -132,6 +143,8 @@ def test_real_mixed_table() -> None:
     )
     check(stage1_slot8["card_generation_list_id"] == 1,
           "STINIT card objects expose their generation-list id")
+    check(stage1_slot8["type_name"] == "カード取得",
+          "STINIT object placements join OBINIT type names")
     stage1_slot9 = next(
         obj for obj in records[0]["object_placements"] if obj["slot"] == 9
     )
@@ -146,7 +159,20 @@ def test_real_mixed_table() -> None:
     all_objects = [
         obj for record in records for obj in record["object_placements"]
     ]
-    check(sum("unknown_fields" in obj for obj in all_objects) == 185,
+    check(sum("non_triggering_faction_id" in obj for obj in all_objects) == 104,
+          "STINIT hazard/barrier payloads expose their FIELD-proven faction gate")
+    check({
+        obj["non_triggering_faction_id"]
+        for obj in all_objects
+        if "non_triggering_faction_id" in obj
+    } == {1, 2, 3}, "STINIT faction gates retain all observed faction ids")
+    spike = next(
+        obj for obj in all_objects
+        if obj["type_id"] == 17 and "unknown_fields" in obj
+    )
+    check(spike["unknown_fields"] == {"0xe73bb": 2},
+          "STINIT spike payload remains raw because FIELD excludes type 17 from the gate")
+    check(sum("unknown_fields" in obj for obj in all_objects) == 81,
           "STINIT preserves unresolved tagged object payloads as raw evidence")
     extract_init.attach_stage_enemy_spawns(records)
     first_spawn = records[0]["enemy_spawns"][0]

@@ -50,7 +50,7 @@ Large, table-like scripts — prime candidates for data extraction:
   `RTINIT` (67 KB), `CCINIT` (41 KB), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
   `BTANINIT` (105 KB — battle animations)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
-  `LAINIT`, `MAINIT`, `OBINIT`, `SPINIT`, `TRINIT`, `VIINIT`
+  `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
 
 **Extracted-table correction and semantic pilot (2026-07-22).** Name-mode INIT tables use sparse,
 one-based runtime ids over fixed reserved array spans, not a new record whenever the string destination
@@ -73,8 +73,10 @@ six scalars, cells in 29 preallocated buffers, and all 1,396 length-prefixed foo
 stage field meanings and the evidence workflow live in `docs/name-resolution.md`. The first semantic join
 now assembles the confirmed type/X/Y/difficulty and story-prerequisite buffers into 2,312 object placements
 across 66 stages. It also exposes 604 reinforcement schedules and consumer-proven tagged payload variants
-for initial factions, teleport destinations, treasure item/count pairs, and card-generation lists; 185
-other type-specific payload cells remain raw. A second join assembles all 1,378 populated enemy slots
+for initial factions, teleport destinations, treasure item/count pairs, card-generation lists, and 104
+hazard/barrier non-triggering faction gates. Every placement joins its type name and, where populated, its
+effect description from OBINIT's 46 definitions; 81 type-specific payload cells on types 11, 17, 26, and
+27 remain raw. A second join assembles all 1,378 populated enemy slots
 across the same 66 stages, including unit/faction, placement, difficulty/story gates, level rules, weighted
 alternatives, difficulty-specific movement/battle routine sets, and 485 first-clear-only replay gates.
 

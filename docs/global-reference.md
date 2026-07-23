@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5030 globals (185 curated, 4845 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5030 globals (187 curated, 4843 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -153,8 +153,6 @@
 | `0x26a4` | — | low | auto-shape | array |
 | `0x26b5` | — | low | auto-shape | array |
 | `0x26d3` | — | low | auto-shape | array |
-| `0x26f1` | — | low | auto-shape | array |
-| `0x2755` | — | low | auto-shape | array |
 | `0x27bd` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
@@ -425,6 +423,8 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
+| `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
 | `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |

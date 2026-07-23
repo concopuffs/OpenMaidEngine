@@ -280,10 +280,21 @@ variants:
 - types 6 and 36: teleport `destination_tile_x` / `destination_tile_y`;
 - types 7 and 8: treasure `item_id` / `item_quantity`, passed to ADDITEM;
 - type 28: `card_generation_list_id`, passed to CDINIT.
+- types 18--25: `non_triggering_faction_id` in the first cell when populated. FIELD suppresses the
+  hazard/barrier interaction when the entering unit's faction equals this value.
 
 This accounts for 220 initial-owner values, 229 teleport destinations, 626 treasure pairs, and 246 card
-list ids. Another 185 placements across object types 11, 17--21, 25--27 retain one raw payload cell because
-their type-specific meaning is not yet separable from the consumer behavior.
+list ids. The faction-gate branch resolves another 104 cells on populated types 18--21 and 25. Type 17
+(`針`, spikes) is explicitly outside FIELD's faction comparison, so its 16 populated values remain raw
+rather than borrowing the neighboring hazard meaning. In total, 81 placements across object types 11,
+17, 26, and 27 still retain one raw payload cell because their type-specific meaning is not yet separable
+from the consumer behavior.
+
+OBINIT is the authoritative object-definition table: 46 one-based records provide the type names, and 34
+provide short player-facing effect descriptions used by the field object-information path. The STINIT join now
+adds `type_name` to every placement and `type_description` when populated while retaining `type_id`;
+top-level `object_definition_table: "OBINIT"` records the join provenance. This is intentionally separate
+from payload decoding: a known display label does not by itself establish the meaning of a tagged cell.
 
 The enemy pass follows the separate 30-cell family through FIELD, SETEN, ADDEN, MVRTN, and BTRTN. Slot
 zero is reserved for ADDEN's synthesized special-unit path; the stage table populates slots 1 through 29.
@@ -301,9 +312,10 @@ set and the spawn's cell equals 2. The joined view exposes all 485 populated cas
 Generated INIT records now retain their raw `fields`/`record_fields`/buffer keys and additionally expose a
 flat `semantic_fields` projection joined through the top-level `field_semantics` map. For STINIT, the four
 confirmed parallel buffers plus both prerequisite tables are also assembled into 2,312
-`object_placements` across 66 stages. Each placement contains its slot, type, tile coordinates, difficulty
-mask, populated positive/negative story prerequisites, optional reinforcement schedule, and the decoded
-type-tagged payload variants above. The remaining 185 undecoded payload cells stay attached under
+`object_placements` across 66 stages. Each placement contains its slot, numeric type plus OBINIT
+name/available description, tile coordinates, difficulty mask, populated positive/negative story
+prerequisites, optional reinforcement schedule, and the decoded type-tagged payload variants above. The
+remaining 81 undecoded payload cells stay attached under
 `unknown_fields`, so this convenience view loses no evidence or invents names.
 The same records now contain 1,378 joined `enemy_spawns` across 66 stages, with unit/faction, direct or
 object-linked placement data when present, difficulty and story gates, level rules, random-selection
@@ -357,8 +369,9 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
 1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
    STINIT's mixed stage records now have machine-readable investigation surfaces, including joined object
    placements and enemy spawns. STINIT's universal object schedule, four consumer-proven tagged payload
-   variants, and first-clear enemy gate are decoded; next trace the 185 remaining raw object payloads only
-   where their type-specific runtime branches distinguish them. Isolate EBINIT's remaining voice/action
+   families, faction-gated hazards/barriers, OBINIT definition join, and first-clear enemy gate are decoded;
+   next trace the 81 remaining raw object payloads on types 11, 17, 26, and 27 only where their
+   type-specific runtime branches distinguish them. Isolate EBINIT's remaining voice/action
    slots under the same rule. Preserve explicit joins and do not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
