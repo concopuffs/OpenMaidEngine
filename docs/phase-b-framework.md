@@ -724,9 +724,12 @@ SKINIT contributes skill category/order/icon/handler, encoded range, element, st
 proc chance, and battle animation. EBINIT now contributes unit order/icon, sex and provisional species,
 elements, attacks/equipment/skills, level/cost/base/growth data, canonical variants, CP/CA/CB/CS/cut-in and
 voice assets, XP/drops, capture and compendium flags, summoning economy, essence yield, and level scaling.
-Its linked-table shapes are 18 SKINIT and 84 EBINIT populated columns. Next work should resolve the remaining
-condition/stat columns and EBINIT's AI, route/evolution, and sparse-flag tables; STINIT's bespoke parser
-remains a separate extraction task.
+Its linked-table shapes are 18 SKINIT and 84 EBINIT populated columns. The next EB tranche identifies roster
+state flags, per-action unlock requirements, SCJUMP event ids, normal/brainwashed unit variants, and SALLY's
+per-unit bonus item. Combat tracing also names the shared column-8 item/skill modifier as critical chance.
+The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed meaning within boss classes;
+enemy AI appears to live outside the static EBINIT schema. STINIT's bespoke parser remains a separate
+extraction task.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

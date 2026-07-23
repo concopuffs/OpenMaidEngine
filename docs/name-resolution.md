@@ -200,6 +200,21 @@ medium-confidence: every nonzero row is a boss, hazard, or special encounter and
 such, but the positive/negative class distinction remains unknown. AI and the remaining sparse flags stay
 unnamed until comparable consumer evidence exists.
 
+The roster/event follow-up resolves five more EBINIT tables through SALLY's complete action path. A
+four-cell persistent-state block records recruitment/removal outcomes for seven heroines; a four-column
+requirement table gates actions against the shared flag bank; and an eight-column event table feeds
+`scjump_decision_out` before SCJUMP resolves the next script. A two-column unit-id table selects normal and
+explicitly named brainwashed variants, while the final item-id field is passed to USEITEM under SALLY's
+literal “sex magic bonus” message. This is roster and event routing data rather than enemy AI. The adjacent
+`0x7843e` enum remains unnamed because no non-EBINIT script references it, directly or through a detected
+table operation.
+
+The same consumer trace closes the last unnamed item/skill combat-stat column. CALCBTPARAM adds stat column
+7 (luck) and column 8 into a clamped percentage; CALCDMG compares it with `random-modulo 100` immediately
+after the hit check and selects the critical-result state on success. Column 8 is therefore critical chance
+for both `item_stat_modifiers` and `skill_combat_stat_deltas`; the skill descriptions and matching item
+columns also confirm evasion, magic defense, and speed.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
