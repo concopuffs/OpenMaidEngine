@@ -130,11 +130,22 @@ def test_message_join() -> None:
           "INIT/MES join uses the shared runtime id")
 
 
+def test_field_semantics() -> None:
+    scripts = paths.scripts()
+    items, _ = extract_init.extract_name(sys4load.load(scripts["ITINIT.BIN"]))
+    semantics = extract_init.field_semantics(items)
+    check(semantics["0x8c879"] == "item_sort_key",
+          "parallel INIT fields expose canonical semantic names")
+    check(semantics["0x9f541/14/8"] == "item_stat_modifiers.critical_chance",
+          "row-table columns expose canonical semantic names")
+
+
 if __name__ == "__main__":
     test_real_name_tables()
     test_static_negative_write()
     test_real_message_tables()
     test_message_join()
+    test_field_semantics()
     if FAILS:
         raise SystemExit(f"{len(FAILS)} failed checks")
     print("all extract_init checks passed")

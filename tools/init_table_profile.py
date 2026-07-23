@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def value_key(value) -> str:
 
 def profile_columns(data: dict) -> list[dict]:
     records = data["records"]
+    field_semantics = data.get("field_semantics", {})
     values: dict[str, list] = collections.defaultdict(list)
     examples: dict[str, list[dict]] = collections.defaultdict(list)
     identities: dict[str, dict] = {}
@@ -59,14 +61,18 @@ def profile_columns(data: dict) -> list[dict]:
             identities[key] = {
                 "key": key, "kind": "parallel-array", "base": key,
                 "stride": None, "column": None,
+                "semantic_name": field_semantics.get(key),
             }
             values[key].append(value)
             if len(examples[key]) < 5:
-                examples[key].append({
+                example = {
                     "id": record["id"],
                     "name": record.get("name", ""),
                     "value": value,
-                })
+                }
+                if message := record.get("message"):
+                    example["message_description"] = message.get("description", "")
+                examples[key].append(example)
         for key, value in record.get("record_fields", {}).items():
             base_text, stride_text, column_text = key.split("/")
             base = int(base_text, 16)
@@ -79,14 +85,18 @@ def profile_columns(data: dict) -> list[dict]:
                 "base": f"0x{base:x}",
                 "stride": stride,
                 "column": column,
+                "semantic_name": field_semantics.get(normalized_key),
             }
             values[normalized_key].append(value)
             if len(examples[normalized_key]) < 5:
-                examples[normalized_key].append({
+                example = {
                     "id": record["id"],
                     "name": record.get("name", ""),
                     "value": value,
-                })
+                }
+                if message := record.get("message"):
+                    example["message_description"] = message.get("description", "")
+                examples[normalized_key].append(example)
 
     rows = []
     for key, vals in values.items():
@@ -129,6 +139,48 @@ def profile_messages(data: dict) -> dict:
             for record in with_message[:5]
         ],
     }
+
+
+def find_message_matches(data: dict, pattern: str) -> list[dict]:
+    """Return records whose name/title/description matches a regular expression."""
+    regex = re.compile(pattern, re.IGNORECASE)
+    return [
+        record
+        for record in data["records"]
+        if regex.search("\n".join([
+            record.get("name", ""),
+            record.get("message", {}).get("title", ""),
+            record.get("message", {}).get("description", ""),
+        ]))
+    ]
+
+
+def render_message_matches(data: dict, pattern: str) -> str:
+    """Render message hits beside every populated INIT field for correlation."""
+    matches = find_message_matches(data, pattern)
+    escaped_pattern = pattern.replace("`", "\\`")
+    lines = [
+        f"# {data['table']} message matches",
+        "",
+        f"- query: `{escaped_pattern}`",
+        f"- matches: {len(matches)}",
+        "",
+        "| id | name | player-facing description | populated fields |",
+        "|---:|---|---|---|",
+    ]
+    for record in matches:
+        fields = {**record.get("fields", {}), **record.get("record_fields", {})}
+        rendered_fields = ", ".join(
+            f"`{data.get('field_semantics', {}).get(key, key)}` (`{key}`)={value}"
+            for key, value in sorted(fields.items())
+        )
+        name = record.get("name", "").replace("|", "\\|")
+        description = record.get("message", {}).get("description", "").replace("|", "\\|")
+        lines.append(
+            f"| {record['id']} | {name} | {description} | {rendered_fields} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def add_direct_references(rows: list[dict], source_name: str) -> None:
@@ -185,8 +237,8 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- messages with furigana spans: {message_profile['furigana_records']}",
         f"- rows shown: {len(shown)} (ranked by record coverage, then consumer references)",
         "",
-        "| field | populated | distinct | range | direct refs | readers | common values | examples |",
-        "|---|---:|---:|---|---:|---|---|---|",
+        "| field | meaning | populated | distinct | range | direct refs | readers | common values | examples |",
+        "|---|---|---:|---:|---|---:|---|---|---|",
     ]
     for row in shown:
         value_range = "—" if row["min"] is None else f"{row['min']}..{row['max']}"
@@ -198,7 +250,8 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             for entry in row["examples"][:3]
         ).replace("|", "\\|")
         lines.append(
-            f"| `{row['key']}` | {row['population']}/{data['record_count']} "
+            f"| `{row['key']}` | {row.get('semantic_name') or '—'} | "
+            f"{row['population']}/{data['record_count']} "
             f"({row['coverage']:.0%}) | {row['distinct_values']} | {value_range} | "
             f"{row['references']} | {readers} | {common} | {examples} |"
         )
@@ -211,6 +264,11 @@ def main() -> int:
     parser.add_argument("table", help="extracted table name, e.g. ITINIT")
     parser.add_argument("--build", action="store_true", help="write JSON and Markdown profiles")
     parser.add_argument("--limit", type=int, default=40, help="Markdown/console row limit")
+    parser.add_argument(
+        "--message-query",
+        metavar="REGEX",
+        help="show matching names/player-facing messages beside all populated fields",
+    )
     args = parser.parse_args()
 
     name = args.table.upper().removesuffix(".JSON").removesuffix(".BIN")
@@ -231,6 +289,8 @@ def main() -> int:
         )),
     }
     markdown = render_markdown(data, rows, args.limit)
+    if args.message_query:
+        print(render_message_matches(data, args.message_query))
     print(markdown)
     if args.build:
         stem = paths.BUILD / "data" / f"{name}-field-profile"

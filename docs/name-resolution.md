@@ -215,6 +215,20 @@ after the hit check and selects the critical-result state on success. Column 8 i
 for both `item_stat_modifiers` and `skill_combat_stat_deltas`; the skill descriptions and matching item
 columns also confirm evasion, magic defense, and speed.
 
+ITMES and SKMES are now joined back to their INIT records by a reusable id-dispatch extractor: all 287 item
+ids and all 131 skill ids match exactly. `init_table_profile.py --message-query REGEX` puts the complete
+player-facing description beside every populated field, which confirms the item/skill condition, resource,
+range, combat-stat, and restriction mappings without relying on column position. The same CHMENU trace
+identifies SKINIT `0xa70b2` as `skill_change_catalog_eligible`, distinguishes persistent
+`skill_acquired_flags` from broader `skill_info_revealed_flags`, and the explicit ITMES “female-only” record
+raises `item_sex_restriction_mask` to high confidence.
+
+Confirmed row-column meanings are no longer prose-only. The relevant `globals.toml` entries carry a
+machine-readable `columns` map; `globals_build.py` preserves it in `build/globals.json`, and
+`extract_init.py` emits a top-level `field_semantics` mapping while retaining raw address/stride/column keys
+as provenance. Generated profiles therefore render names such as
+`item_stat_modifiers.critical_chance` and `skill_status_levels.paralysis` directly.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -223,7 +237,7 @@ The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover
 
 - **`vm-map/globals.toml`** — the only hand-edited source. One `[[global]]` per known address:
   `name`, `category` (`story-flag`/`index-pointer`/`data-table`/`string-table`/`ui-toggle`/
-  `choice-output`/`counter`/`unknown`), `type`, `value_domain`, `usage`, and provenance
+  `choice-output`/`counter`/`unknown`), `type`, optional row-table `columns`, `value_domain`, `usage`, and provenance
   (`source`/`confidence`/`depends_on`).
 - **`tools/globals_build.py --build`** merges curated entries *over* the auto map →
   `build/globals.json` (machine) + `docs/global-reference.md` (generated human view). `--lint`
@@ -259,14 +273,13 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** Resolve ITINIT/SKINIT's remaining stat and condition
-   columns, then work through EBINIT's AI, route/evolution, and remaining sparse-flag tables by consumer
-   strength. Preserve explicit item → skill and unit → attack/skill/equipment/drop joins. Do not infer
-   meaning from column position alone.
-2. **Fold in the `*MES` message-table writers** (`ITMES`, `SKMES`, `VIMES`, …) and any other
-   `set-string`/`copy-to-global` writers not covered by the `*INIT` set — pure static win,
-   extends the string/data labels. (Also: most name-table bases are *read* rarely — reads
-   likely go through `*MES`/an indirection; tracing that would connect names to their readers.)
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT's populated row columns now have
+   machine-readable meanings; extend the same structured `columns` metadata through the confirmed EBINIT
+   tables, then investigate its unread enum and boss-class sign only when consumer evidence appears.
+   Preserve explicit item → skill and unit → attack/skill/equipment/drop joins. Do not infer meaning from
+   column position alone.
+2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
+   and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context (e.g. RECOVER's 30-wide tables ↔ a
    status/recovery system). Static, medium effort.

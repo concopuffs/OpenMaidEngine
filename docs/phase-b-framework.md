@@ -736,6 +736,15 @@ The dispatch keys also establish `current_item_id` and `current_skill_id` as hig
 slots. This makes message/field correlation the next evidence source for the remaining sparse item and skill
 columns.
 
+The follow-up correlation pass makes that evidence directly queryable with
+`init_table_profile.py --message-query REGEX` and moves confirmed item/skill row-column meanings into
+structured `globals.toml` metadata. Extracted JSON and profiles now resolve raw keys to names such as
+`item_stat_modifiers.critical_chance` while preserving the original address key. The message audit confirms
+all populated condition columns and the female-only item mask. CHMENU also resolves the last anonymous
+SKINIT parallel field as the skill-change catalog inclusion flag and separates acquired-skill state from
+skill-information visibility. The remaining item/skill work is refinement rather than an unnamed populated
+schema.
+
 The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed meaning within boss classes;
 enemy AI appears to live outside the static EBINIT schema. STINIT's bespoke parser remains a separate
 extraction task.

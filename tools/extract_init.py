@@ -280,6 +280,40 @@ def join_messages(records: list[dict], message_scr) -> dict:
     }
 
 
+@cache
+def _global_registry() -> dict:
+    path = paths.BUILD / "globals.json"
+    try:
+        return json.loads(path.read_text(encoding="utf8")).get("globals", {})
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def field_semantics(records: list[dict]) -> dict[str, str]:
+    """Map raw extracted field keys to canonical semantic names when available."""
+    keys = {
+        key
+        for record in records
+        for key in (*record.get("fields", {}), *record.get("record_fields", {}))
+    }
+    registry = _global_registry()
+    semantics = {}
+    for key in sorted(keys, key=lambda value: tuple(
+            int(part, 0) for part in value.split("/")
+    )):
+        parts = key.split("/")
+        entry = registry.get(f"0x{int(parts[0], 16):x}", {})
+        name = entry.get("name")
+        if not name:
+            continue
+        if len(parts) == 3:
+            column = parts[2]
+            column_name = entry.get("columns", {}).get(column, f"column_{column}")
+            name = f"{name}.{column_name}"
+        semantics[key] = name
+    return semantics
+
+
 def write_data_index(data_dir: Path) -> None:
     """Regenerate the disposable build/data index from current table JSONs."""
     tables = []
@@ -323,6 +357,8 @@ def write_data_index(data_dir: Path) -> None:
         "Where a matching `*MES` dispatcher exists, `message` preserves its player-facing",
         "title, description, furigana, and bytecode dispatch offset separately from the",
         "short description stored by the INIT script.",
+        "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
+        "names from `vm-map/globals.toml`; raw keys remain intact as bytecode provenance.",
         "",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence. `STINIT` still requires a bespoke mixed numeric/string parser.",
@@ -350,9 +386,11 @@ def main() -> int:
         )
 
     cols = sorted({c for r in recs for c in r.get("fields", {})}, key=lambda h: int(h, 16))
+    semantics = field_semantics(recs)
     out = {"table": name, "source": scr.path.name, "magic": scr.magic, "mode": mode,
            "record_count": len(recs), **meta,
-           "field_columns": cols if mode != "footer" else None, "records": recs}
+           "field_columns": cols if mode != "footer" else None,
+           "field_semantics": semantics, "records": recs}
     outpath = paths.BUILD / "data" / f"{outname}.json"
     outpath.parent.mkdir(parents=True, exist_ok=True)
     outpath.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")

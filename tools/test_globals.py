@@ -22,10 +22,13 @@ def test_load_and_lint():
 
 def test_lint_catches_bad_vocab():
     bad = {0x1: {"_addr": 0x1, "name": "x", "category": "bogus",
-                 "source": "auto-shape", "confidence": "high"}}
+                 "source": "auto-shape", "confidence": "high",
+                 "columns": {"not-an-index": "x", "-1": ""}}}
     errors, _ = G.lint(bad, {0x1})
     check(any("category" in e for e in errors), "lint flags bad category")
     check(any("confidence" in e for e in errors), "lint flags auto-shape claiming high confidence")
+    check(any("column index" in e for e in errors), "lint flags nonnumeric column indices")
+    check(any("negative column" in e for e in errors), "lint flags negative column indices")
 
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
@@ -34,6 +37,8 @@ def test_merge_precedence():
     check(merged[0xa57]["name"] == "lily_form_a", "curated 0xa57 name wins over auto label")
     check(merged[0xa57]["category"] == "story-flag", "curated 0xa57 category overrides auto string-table")
     check(merged[0xa57]["provenance"] == "curated", "0xa57 marked curated")
+    check(merged[0x9f541]["columns"]["8"] == "critical_chance",
+          "curated row-table column semantics survive the merge")
     # an address only in the auto map falls through as provenance=auto
     auto_only = next((a for a in auto.get("globals", {})
                       if int(a, 16) not in curated and auto["globals"][a].get("label")), None)

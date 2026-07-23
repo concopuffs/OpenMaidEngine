@@ -49,6 +49,20 @@ def lint(entries: dict[int, dict], all_addrs: set[int]) -> tuple[list[str], list
             errors.append(f"{tag}: bad confidence {conf!r}")
         if src == "auto-shape" and conf == "high":
             errors.append(f"{tag}: auto-shape source may not claim high confidence")
+        columns = e.get("columns", {})
+        if not isinstance(columns, dict):
+            errors.append(f"{tag}: columns must be a table")
+        else:
+            for column, name in columns.items():
+                try:
+                    column_index = int(column)
+                except (TypeError, ValueError):
+                    errors.append(f"{tag}: bad column index {column!r}")
+                    continue
+                if column_index < 0:
+                    errors.append(f"{tag}: negative column index {column_index}")
+                if not isinstance(name, str) or not name:
+                    errors.append(f"{tag}: column {column_index} has no semantic name")
         for dep in e.get("depends_on", []):
             if _parse_addr(dep) not in all_addrs:
                 errors.append(f"{tag}: depends_on missing address {dep}")
@@ -96,6 +110,10 @@ def merge(curated: dict[int, dict], auto: dict) -> dict[int, dict]:
                      "source": e.get("source", "inference"), "confidence": e.get("confidence", "low"),
                      "depends_on": [f"0x{_parse_addr(d):x}" for d in e.get("depends_on", [])],
                      "provenance": "curated"}
+        if e.get("columns"):
+            out[addr]["columns"] = {
+                str(column): name for column, name in e["columns"].items()
+            }
     return out
 
 
@@ -121,6 +139,14 @@ def emit_reference_md(merged: dict[int, dict]) -> str:
             e = merged[addr]
             name = e["name"] or "—"
             usage = (e["usage"] or "").replace("|", "\\|").replace("\n", " ")
+            if columns := e.get("columns"):
+                mapping = ", ".join(
+                    f"{column}={column_name}"
+                    for column, column_name in sorted(
+                        columns.items(), key=lambda item: int(item[0])
+                    )
+                )
+                usage += f" Columns: {mapping}."
             L.append(f"| `{e['address']}` | {name} | {e['confidence']} | {e['source']} | {usage} |")
         L.append("")
     return "\n".join(L) + "\n"
