@@ -1034,6 +1034,106 @@ def test_gallery_definitions() -> None:
     )
 
 
+def test_alchemy_recipes() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["ALINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "ALINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_alchemy_recipes(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 107
+        and meta["record_span"] == 1000
+        and meta["populated_id_range"] == [1, 467],
+        "ALINIT extracts 107 sparse recipes from its reserved 1,000 ids",
+    )
+    check(
+        meta["static_write_count"] == 914
+        and meta["classified_static_write_count"] == 914
+        and len(meta["record_field_columns"]) == 10,
+        "ALINIT classifies every scalar and populated row-table write",
+    )
+    check(
+        meta["output_item_join_count"] == 107
+        and meta["ingredient_reference_count"] == 286
+        and meta["joined_ingredient_reference_count"] == 286,
+        "ALINIT resolves every output and ingredient reference through ITINIT",
+    )
+    check(
+        by_id[1]["output_item_id"] == 2
+        and by_id[1]["output_item_name"] == "白銀の鍵"
+        and by_id[1]["minimum_alchemy_level"] == 2
+        and by_id[1]["point_cost"] == 30
+        and by_id[1]["required_story_flag_ids"] == [1902]
+        and by_id[1]["forbidden_story_flag_ids"] == [1903],
+        "ALINIT recipe 1 exposes its output, gating, and point cost",
+    )
+    check(
+        [
+            (ingredient["slot"], ingredient["item_id"], ingredient["quantity"])
+            for ingredient in by_id[1]["ingredients"]
+        ] == [(1, 608, 1), (2, 625, 1)]
+        and by_id[14]["output_item_name"] == "シルバーコイン"
+        and [
+            (ingredient["slot"], ingredient["item_id"], ingredient["quantity"])
+            for ingredient in by_id[14]["ingredients"]
+        ] == [(0, 91, 5)],
+        "ALINIT preserves sparse ingredient slots and their paired quantities",
+    )
+
+    semantics = extract_init.field_semantics(records)
+    check(
+        semantics == {
+            "0x156214": "alchemy_recipe_output_item_ids",
+            "0x1565fc": "alchemy_recipe_minimum_levels",
+            "0x1569e4/2/0": (
+                "alchemy_recipe_required_story_flags.required_flag_1"
+            ),
+            "0x1571b4/2/0": (
+                "alchemy_recipe_forbidden_story_flags.forbidden_flag_1"
+            ),
+            "0x157d6c": "alchemy_recipe_point_costs",
+            "0x158154/4/0": (
+                "alchemy_recipe_ingredient_item_ids.ingredient_1"
+            ),
+            "0x158154/4/1": (
+                "alchemy_recipe_ingredient_item_ids.ingredient_2"
+            ),
+            "0x158154/4/2": (
+                "alchemy_recipe_ingredient_item_ids.ingredient_3"
+            ),
+            "0x158154/4/3": (
+                "alchemy_recipe_ingredient_item_ids.ingredient_4"
+            ),
+            "0x1590f4/4/0": (
+                "alchemy_recipe_ingredient_quantities.ingredient_1"
+            ),
+            "0x1590f4/4/1": (
+                "alchemy_recipe_ingredient_quantities.ingredient_2"
+            ),
+            "0x1590f4/4/2": (
+                "alchemy_recipe_ingredient_quantities.ingredient_3"
+            ),
+            "0x1590f4/4/3": (
+                "alchemy_recipe_ingredient_quantities.ingredient_4"
+            ),
+        },
+        "ALINIT raw arrays join to their canonical semantic names",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[1]["semantic_fields"][
+            "alchemy_recipe_required_story_flags.required_flag_1"
+        ] == 1902
+        and by_id[14]["semantic_fields"][
+            "alchemy_recipe_ingredient_quantities.ingredient_1"
+        ] == 5,
+        "ALINIT retains raw cells beside one semantic recipe view",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1244,6 +1344,7 @@ if __name__ == "__main__":
     test_message_join()
     test_character_names()
     test_gallery_definitions()
+    test_alchemy_recipes()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5046 globals (298 curated, 4748 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5048 globals (307 curated, 4741 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -19,6 +19,9 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x671b` | shared_spendable_points | high | investigation | Shared spendable point balance used by the alchemy, study, evolution, and summoning systems. ALCHEMY requires and deducts each recipe's alchemy_recipe_point_costs value; STAGECLEAR awards points to this balance and caps it at 999. The exact player-facing Japanese resource label remains unresolved. |
+| `0x671d` | alchemy_level | high | investigation | Current alchemy level. ALCHEMY hides recipes whose alchemy_recipe_minimum_levels value exceeds this level and raises it, up to 6, when alchemy_level_progress reaches the current threshold. |
+| `0x6720` | alchemy_level_progress | high | investigation | Progress toward the next alchemy level. Each successful ALCHEMY synthesis increments it; reaching the current threshold raises alchemy_level and resets this counter. |
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
@@ -216,6 +219,13 @@
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
 | `0x1561f6` | magic_action_information_handler_script_ids | high | investigation | MAINIT handler column indexed by current_magic_action_id. MAGIC and STUDY call the selected packed script id; every shipped action routes to MAMES, whose text dispatcher has authored descriptions for ids 1..9 only. |
+| `0x156214` | alchemy_recipe_output_item_ids | high | investigation | Output item id indexed by sparse alchemy recipe id. ALCHEMY scans recipe ids 0..999, treats a nonzero cell as a populated recipe, and adds one copy of this item after a successful synthesis. |
+| `0x1565fc` | alchemy_recipe_minimum_levels | high | investigation | Minimum alchemy level indexed by recipe id. ALCHEMY exposes a populated recipe only when this value is less than or equal to alchemy_level. |
+| `0x1569e4` | alchemy_recipe_required_story_flags | high | investigation | Two positive story prerequisites per recipe. ALCHEMY subtracts one from every populated id and hides the recipe unless the corresponding story_event_flags cell equals 1; shipped ALINIT data populates only the first column. Columns: 0=required_flag_1, 1=required_flag_2. |
+| `0x1571b4` | alchemy_recipe_forbidden_story_flags | high | investigation | Two negative story prerequisites per recipe. ALCHEMY subtracts one from every populated id and hides the recipe when the corresponding story_event_flags cell equals 1; shipped ALINIT data populates only the first column. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2. |
+| `0x157d6c` | alchemy_recipe_point_costs | high | investigation | Spendable point cost indexed by recipe id. ALCHEMY checks recipe availability against its point-capacity condition, then requires and deducts this value from shared_spendable_points on synthesis. |
+| `0x158154` | alchemy_recipe_ingredient_item_ids | high | investigation | Up to four ingredient item ids per recipe. ALCHEMY checks total inventory for each populated slot and removes the paired alchemy_recipe_ingredient_quantities amount during synthesis. Columns: 0=ingredient_1, 1=ingredient_2, 2=ingredient_3, 3=ingredient_4. |
+| `0x1590f4` | alchemy_recipe_ingredient_quantities | high | investigation | Required ingredient quantities paired cell-for-cell with alchemy_recipe_ingredient_item_ids. ALCHEMY requires and consumes this many copies of each populated ingredient. Columns: 0=ingredient_1, 1=ingredient_2, 2=ingredient_3, 3=ingredient_4. |
 | `0x15a097` | information_message_handler_script_ids | high | investigation | INFOMES's 32-row, four-column handler registry. INIT2 populates row zero with CIMES (0x334a), EIMES (0x334b), and VIMES (0x334c); INFOMES scans rows in order for the current tab, calls nonzero handlers, and stops after information_message_handled is set. Columns: 0=character_handler, 1=enemy_handler, 2=glossary_handler, 3=reserved_handler. |
 | `0x15a118` | character_profile_unit_ids | high | investigation | CIINIT's profile-to-unit join. INFOCH uses the selected unit id for reveal state, map sprite, short unit descriptions, species, and sex while CIMES remains keyed by the enclosing profile id. |
 | `0x15a17c` | character_profile_portrait_asset_ids | high | investigation | Optional CIINIT portrait resource indexed by character profile id. INFOCH draws it when nonzero and otherwise falls back to the backing unit's map-sprite asset. |
@@ -388,9 +398,6 @@
 | `0x15619c` | — | low | auto-shape | array |
 | `0x1561ba` | — | low | auto-shape | array |
 | `0x1561d8` | — | low | auto-shape | array |
-| `0x156214` | — | low | auto-shape | array |
-| `0x1565fc` | — | low | auto-shape | array |
-| `0x157d6c` | — | low | auto-shape | array |
 | `0x15a501` | — | low | auto-shape | array |
 | `0x15a5c9` | — | low | auto-shape | array |
 | `0x15a691` | — | low | auto-shape | array |
@@ -431,7 +438,6 @@
 | `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
 | `0x3275` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']. |
-| `0x671b` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [999]; writers=['ALCHEMY.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x671e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']. |
 | `0x6722` | — | med | auto-shape | TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']. |
 | `0x6724` | — | med | auto-shape | TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
@@ -5082,10 +5088,6 @@
 | `0x155d8a` | — | med | auto-shape | record-table[stride 10] |
 | `0x155e9b` | — | med | auto-shape | record-table[stride 14] |
 | `0x156015` | — | med | auto-shape | record-table[stride 10] |
-| `0x1569e4` | — | med | auto-shape | record-table[stride 2] |
-| `0x1571b4` | — | med | auto-shape | record-table[stride 2] |
-| `0x158154` | — | med | auto-shape | record-table[stride 4] |
-| `0x1590f4` | — | med | auto-shape | record-table[stride 4] |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
 

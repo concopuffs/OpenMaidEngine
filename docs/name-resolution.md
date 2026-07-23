@@ -669,17 +669,19 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, RTINIT, and MAINIT now have
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, RTINIT, MAINIT, ILINIT, CGINIT, and ALINIT now have
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
    banks are structurally decoded with every populated movement-parameter cell classified and all 1,043
-   shipped movement steps joined to provider behavior. With RTINIT's used-provider surface closed and
-   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, resume other reader-proven 2D tables;
+   shipped movement steps joined to provider behavior. ILINIT/RECOVER closes the condition ABI, CGINIT
+   closes the gallery registry, and ALINIT closes the 107-recipe alchemy registry with complete ITINIT
+   joins. With RTINIT's used-provider surface closed and ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and
+   INFOMES/MES classified, audit the malformed AFINIT/CTINIT outputs next;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
-2. **Label 2D record tables by their readers** — cross-reference which scripts read each
-   `rec[sN]` table and infer purpose from context (e.g. RECOVER's 30-wide tables ↔ a
-   status/recovery system). Static, medium effort.
+2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
+   `rec[sN]` table and infer purpose from context, preserving reserved rows and sparse cells. RECOVER's
+   30-wide status tables and ALINIT's paired recipe tables are completed examples. Static, medium effort.
 3. **Classify other `set-string`/`copy-to-global` writers** not covered by the completed INIT/MES
    set when their data flow reaches a current implementation need.
 4. **Name *which stat* each field is (Frida).** The one step needing live tools: change a

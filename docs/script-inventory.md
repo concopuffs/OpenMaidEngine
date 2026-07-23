@@ -102,6 +102,12 @@ another ownership artifact. Its 3,941 writes actually define 851 sparse gallery-
 ordinal behind that thumbnail. CGMODE supplies the grouping and ordering evidence and consumes every
 record; the dedicated extraction joins all asset ids to filenames while retaining the raw arrays.
 
+ALINIT's generic numeric parse likewise collapsed 914 writes into 18 malformed records and 853
+address-derived fields. ALCHEMY proves that they are 107 sparse recipe ids in a reserved 1,000-row
+layout, backed by output item, minimum level, required/forbidden story flags, point cost, and four paired
+ingredient-id/quantity slots. The dedicated extraction classifies every write, joins all 107 output
+items and 286 ingredient references to ITINIT, and retains the seven raw table coordinates.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

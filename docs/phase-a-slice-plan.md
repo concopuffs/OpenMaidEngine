@@ -2878,7 +2878,27 @@ registry names those arrays plus CGMODE's ten-cell configured sheet-resource vec
 the complete write accounting, sparse id range, four atlases, optional previews, representative image
 joins, and raw-to-semantic field projection.
 
-**Next:** profile the remaining generic/footer INIT outputs by evidence density. MPINIT is structurally
-regular but still semantically shallow; the smaller CTINIT/CVINIT/AFINIT families may offer faster
-reader-proven joins. Rank them by malformed field count and direct-consumer coverage before choosing the
-next dedicated schema.
+## Data-semantics sidebar: ALINIT alchemy recipe registry (2026-07-23)
+
+ALINIT's former generic output—18 records and 853 address-derived fields—was another ownership error.
+Its 914 writes form seven parallel structures indexed by sparse recipe id: three 1,000-cell arrays for
+output item, minimum alchemy level, and point cost; two `1000 × 2` required/forbidden story-flag tables;
+and two `1000 × 4` ingredient-item/quantity tables. There are 107 populated recipe ids from 1 through
+467. The dedicated extractor classifies every write and exposes only the thirteen actually populated
+columns.
+
+ALCHEMY establishes the complete consumer contract. A nonzero output item marks a populated recipe.
+Availability requires the current alchemy level, required and forbidden story flags, a point-capacity
+condition, and sufficient quantities for each of four possible ingredient slots. Synthesis consumes
+the paired ingredient quantities, adds one output item, deducts the recipe cost from the shared
+spendable-point balance, and advances alchemy-level progress. All 107 output ids and all 286 ingredient
+references resolve through ITINIT.
+
+The generated records retain the raw addresses, add output and ingredient names plus a compact nested
+ingredient view, and project all seven table bases through `vm-map/globals.toml`. The same semantic map
+now names the shared spendable-point balance, alchemy level, and alchemy-level progress. Regressions
+protect the full write accounting, sparse layout, item joins, story gates, paired ingredient cells, and
+raw-to-semantic projection.
+
+**Next:** audit the remaining small malformed INIT outputs, especially AFINIT and CTINIT, before
+spending a larger slice on structurally regular but semantically shallow MPINIT.

@@ -2161,14 +2161,36 @@ depends_on = ["0x6718", "0x673c"]
 
 [[global]]
 address = "0x671b"
-name = ""
-category = "story-flag"
+name = "shared_spendable_points"
+category = "counter"
 type = "int"
-value_domain = "one of {999}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [999]; writers=['ALCHEMY.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..999"
+usage = "Shared spendable point balance used by the alchemy, study, evolution, and summoning systems. ALCHEMY requires and deducts each recipe's alchemy_recipe_point_costs value; STAGECLEAR awards points to this balance and caps it at 999. The exact player-facing Japanese resource label remains unresolved."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x157d6c"]
+
+[[global]]
+address = "0x671d"
+name = "alchemy_level"
+category = "counter"
+type = "int"
+value_domain = "0..6"
+usage = "Current alchemy level. ALCHEMY hides recipes whose alchemy_recipe_minimum_levels value exceeds this level and raises it, up to 6, when alchemy_level_progress reaches the current threshold."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1565fc", "0x6720"]
+
+[[global]]
+address = "0x6720"
+name = "alchemy_level_progress"
+category = "counter"
+type = "int"
+value_domain = "non-negative synthesis progress"
+usage = "Progress toward the next alchemy level. Each successful ALCHEMY synthesis increments it; reaching the current threshold raises alchemy_level and resets this counter."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x671d"]
 
 [[global]]
 address = "0x671e"
@@ -3246,3 +3268,83 @@ usage = "Five negative prerequisites per stage enemy. FIELD subtracts one from e
 source = "investigation"
 confidence = "high"
 depends_on = ["0x6d3"]
+
+[[global]]
+address = "0x156214"
+name = "alchemy_recipe_output_item_ids"
+category = "data-table"
+type = "int[1000]"
+value_domain = "ITINIT item ids; zero means no recipe"
+usage = "Output item id indexed by sparse alchemy recipe id. ALCHEMY scans recipe ids 0..999, treats a nonzero cell as a populated recipe, and adds one copy of this item after a successful synthesis."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1565fc"
+name = "alchemy_recipe_minimum_levels"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0..6"
+usage = "Minimum alchemy level indexed by recipe id. ALCHEMY exposes a populated recipe only when this value is less than or equal to alchemy_level."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x156214", "0x671d"]
+
+[[global]]
+address = "0x1569e4"
+name = "alchemy_recipe_required_story_flags"
+category = "data-table"
+type = "int[1000][2]"
+columns = { "0" = "required_flag_1", "1" = "required_flag_2" }
+value_domain = "one-based story_event_flags ids; zero means no requirement"
+usage = "Two positive story prerequisites per recipe. ALCHEMY subtracts one from every populated id and hides the recipe unless the corresponding story_event_flags cell equals 1; shipped ALINIT data populates only the first column."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3", "0x156214"]
+
+[[global]]
+address = "0x1571b4"
+name = "alchemy_recipe_forbidden_story_flags"
+category = "data-table"
+type = "int[1000][2]"
+columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2" }
+value_domain = "one-based story_event_flags ids; zero means no exclusion"
+usage = "Two negative story prerequisites per recipe. ALCHEMY subtracts one from every populated id and hides the recipe when the corresponding story_event_flags cell equals 1; shipped ALINIT data populates only the first column."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3", "0x156214"]
+
+[[global]]
+address = "0x157d6c"
+name = "alchemy_recipe_point_costs"
+category = "data-table"
+type = "int[1000]"
+value_domain = "5..100"
+usage = "Spendable point cost indexed by recipe id. ALCHEMY checks recipe availability against its point-capacity condition, then requires and deducts this value from shared_spendable_points on synthesis."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x156214", "0x671b"]
+
+[[global]]
+address = "0x158154"
+name = "alchemy_recipe_ingredient_item_ids"
+category = "data-table"
+type = "int[1000][4]"
+columns = { "0" = "ingredient_1", "1" = "ingredient_2", "2" = "ingredient_3", "3" = "ingredient_4" }
+value_domain = "ITINIT item ids; zero means unused slot"
+usage = "Up to four ingredient item ids per recipe. ALCHEMY checks total inventory for each populated slot and removes the paired alchemy_recipe_ingredient_quantities amount during synthesis."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x156214", "0x1590f4"]
+
+[[global]]
+address = "0x1590f4"
+name = "alchemy_recipe_ingredient_quantities"
+category = "data-table"
+type = "int[1000][4]"
+columns = { "0" = "ingredient_1", "1" = "ingredient_2", "2" = "ingredient_3", "3" = "ingredient_4" }
+value_domain = "positive item count; shipped values are 1, 2, 3, or 5"
+usage = "Required ingredient quantities paired cell-for-cell with alchemy_recipe_ingredient_item_ids. ALCHEMY requires and consumes this many copies of each populated ingredient."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x158154"]

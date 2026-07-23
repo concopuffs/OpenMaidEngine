@@ -588,6 +588,17 @@ GALLERY_VARIANT_ORDINAL_ARRAY_BASE = 0x64C11
 GALLERY_THUMBNAIL_SHEET_CONFIG_BASE = 0x66381
 GALLERY_THUMBNAIL_SHEET_CONFIG_SPAN = 10
 
+ALCHEMY_RECIPE_OUTPUT_ITEM_ARRAY_BASE = 0x156214
+ALCHEMY_RECIPE_MINIMUM_LEVEL_ARRAY_BASE = 0x1565FC
+ALCHEMY_RECIPE_REQUIRED_FLAGS_BASE = 0x1569E4
+ALCHEMY_RECIPE_FORBIDDEN_FLAGS_BASE = 0x1571B4
+ALCHEMY_RECIPE_POINT_COST_ARRAY_BASE = 0x157D6C
+ALCHEMY_RECIPE_INGREDIENT_ITEM_IDS_BASE = 0x158154
+ALCHEMY_RECIPE_INGREDIENT_QUANTITIES_BASE = 0x1590F4
+ALCHEMY_RECIPE_RECORD_SPAN = 1000
+ALCHEMY_RECIPE_STORY_FLAG_STRIDE = 2
+ALCHEMY_RECIPE_INGREDIENT_STRIDE = 4
+
 RECOVER_CURRENT_ENTITY = 0x152616
 RECOVER_EFFECTIVE_STATS = 0x4E11B
 RECOVER_CURRENT_RESOURCES = 0x4E085
@@ -2043,6 +2054,209 @@ def extract_gallery_definitions(scr):
     }
 
 
+def extract_alchemy_recipes(scr):
+    """Extract ALINIT's sparse alchemy recipe registry."""
+    scalar_arrays = {
+        ALCHEMY_RECIPE_OUTPUT_ITEM_ARRAY_BASE: "output_item_id",
+        ALCHEMY_RECIPE_MINIMUM_LEVEL_ARRAY_BASE: "minimum_alchemy_level",
+        ALCHEMY_RECIPE_POINT_COST_ARRAY_BASE: "point_cost",
+    }
+    row_tables = {
+        ALCHEMY_RECIPE_REQUIRED_FLAGS_BASE: (
+            ALCHEMY_RECIPE_STORY_FLAG_STRIDE,
+            "required_story_flag_id",
+        ),
+        ALCHEMY_RECIPE_FORBIDDEN_FLAGS_BASE: (
+            ALCHEMY_RECIPE_STORY_FLAG_STRIDE,
+            "forbidden_story_flag_id",
+        ),
+        ALCHEMY_RECIPE_INGREDIENT_ITEM_IDS_BASE: (
+            ALCHEMY_RECIPE_INGREDIENT_STRIDE,
+            "ingredient_item_id",
+        ),
+        ALCHEMY_RECIPE_INGREDIENT_QUANTITIES_BASE: (
+            ALCHEMY_RECIPE_INGREDIENT_STRIDE,
+            "ingredient_quantity",
+        ),
+    }
+    records_by_id: dict[int, dict] = {}
+    static_write_count = 0
+    classified_write_count = 0
+
+    def record_for(record_id: int) -> dict:
+        if not (1 <= record_id < ALCHEMY_RECIPE_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: recipe id {record_id} outside reserved span"
+            )
+        return records_by_id.setdefault(record_id, {
+            "id": record_id,
+            "fields": {},
+            "record_fields": {},
+        })
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            if sys4load.display_label(ins.opcode) != "exit":
+                raise ValueError(
+                    f"{scr.path.name}: unclassified instruction at 0x{ins.offset:x}"
+                )
+            continue
+        static_write_count += 1
+        destination, value = write
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static recipe value at 0x{ins.offset:x}"
+            )
+
+        for base in scalar_arrays:
+            record_id = destination - base
+            if 1 <= record_id < ALCHEMY_RECIPE_RECORD_SPAN:
+                _store_unique(
+                    record_for(record_id)["fields"],
+                    f"0x{base:x}",
+                    value,
+                    record_id,
+                )
+                classified_write_count += 1
+                break
+        else:
+            for base, (stride, _) in row_tables.items():
+                relative = destination - base
+                if 0 <= relative < ALCHEMY_RECIPE_RECORD_SPAN * stride:
+                    record_id, column = divmod(relative, stride)
+                    record = record_for(record_id)
+                    _store_unique(
+                        record["record_fields"],
+                        f"0x{base:x}/{stride}/{column}",
+                        value,
+                        record_id,
+                    )
+                    classified_write_count += 1
+                    break
+            else:
+                raise ValueError(
+                    f"{scr.path.name}: unclassified recipe write "
+                    f"0x{destination:x} at 0x{ins.offset:x}"
+                )
+
+    item_records, _ = extract_name(sys4load.load(resolve("ITINIT")))
+    item_names = {record["id"]: record["name"] for record in item_records}
+    records = [records_by_id[record_id] for record_id in sorted(records_by_id)]
+    required_scalar_keys = {f"0x{base:x}" for base in scalar_arrays}
+    output_key = f"0x{ALCHEMY_RECIPE_OUTPUT_ITEM_ARRAY_BASE:x}"
+    level_key = f"0x{ALCHEMY_RECIPE_MINIMUM_LEVEL_ARRAY_BASE:x}"
+    cost_key = f"0x{ALCHEMY_RECIPE_POINT_COST_ARRAY_BASE:x}"
+    ingredient_reference_count = 0
+    joined_ingredient_reference_count = 0
+
+    for record in records:
+        if set(record["fields"]) != required_scalar_keys:
+            raise ValueError(
+                f"{scr.path.name}: recipe id {record['id']} has incomplete scalars"
+            )
+        output_item_id = record["fields"][output_key]
+        if output_item_id not in item_names:
+            raise ValueError(
+                f"{scr.path.name}: recipe id {record['id']} has unknown "
+                f"output item {output_item_id}"
+            )
+        record.update({
+            "output_item_id": output_item_id,
+            "output_item_name": item_names[output_item_id],
+            "minimum_alchemy_level": record["fields"][level_key],
+            "point_cost": record["fields"][cost_key],
+        })
+        for kind, base in (
+            ("required", ALCHEMY_RECIPE_REQUIRED_FLAGS_BASE),
+            ("forbidden", ALCHEMY_RECIPE_FORBIDDEN_FLAGS_BASE),
+        ):
+            values = [
+                record["record_fields"][f"0x{base:x}/2/{column}"]
+                for column in range(ALCHEMY_RECIPE_STORY_FLAG_STRIDE)
+                if f"0x{base:x}/2/{column}" in record["record_fields"]
+            ]
+            record[f"{kind}_story_flag_ids"] = values
+
+        ingredients = []
+        for slot in range(ALCHEMY_RECIPE_INGREDIENT_STRIDE):
+            item_key = (
+                f"0x{ALCHEMY_RECIPE_INGREDIENT_ITEM_IDS_BASE:x}/"
+                f"{ALCHEMY_RECIPE_INGREDIENT_STRIDE}/{slot}"
+            )
+            quantity_key = (
+                f"0x{ALCHEMY_RECIPE_INGREDIENT_QUANTITIES_BASE:x}/"
+                f"{ALCHEMY_RECIPE_INGREDIENT_STRIDE}/{slot}"
+            )
+            has_item = item_key in record["record_fields"]
+            has_quantity = quantity_key in record["record_fields"]
+            if has_item != has_quantity:
+                raise ValueError(
+                    f"{scr.path.name}: recipe id {record['id']} has an "
+                    f"unpaired ingredient slot {slot}"
+                )
+            if not has_item:
+                continue
+            ingredient_item_id = record["record_fields"][item_key]
+            if ingredient_item_id not in item_names:
+                raise ValueError(
+                    f"{scr.path.name}: recipe id {record['id']} has unknown "
+                    f"ingredient item {ingredient_item_id} in slot {slot}"
+                )
+            ingredient_reference_count += 1
+            ingredient = {
+                "slot": slot,
+                "item_id": ingredient_item_id,
+                "item_name": item_names[ingredient_item_id],
+                "quantity": record["record_fields"][quantity_key],
+            }
+            joined_ingredient_reference_count += 1
+            ingredients.append(ingredient)
+        record["ingredients"] = ingredients
+
+    record_columns = sorted(
+        {
+            key
+            for record in records
+            for key in record.get("record_fields", {})
+        },
+        key=lambda key: tuple(int(part, 0) for part in key.split("/")),
+    )
+    populated_ids = set(records_by_id)
+    return records, {
+        "record_span": ALCHEMY_RECIPE_RECORD_SPAN,
+        "populated_record_ids": sorted(populated_ids),
+        "populated_id_range": [min(populated_ids), max(populated_ids)],
+        "scalar_array_bases": {
+            role: f"0x{base:x}" for base, role in scalar_arrays.items()
+        },
+        "row_tables": {
+            role: {"base": f"0x{base:x}", "stride": stride}
+            for base, (stride, role) in row_tables.items()
+        },
+        "record_field_columns": record_columns,
+        "static_write_count": static_write_count,
+        "classified_static_write_count": classified_write_count,
+        "output_item_join_count": sum(
+            record["output_item_id"] in item_names for record in records
+        ),
+        "ingredient_reference_count": ingredient_reference_count,
+        "joined_ingredient_reference_count": joined_ingredient_reference_count,
+        "consumer_contract": {
+            "availability": (
+                "ALCHEMY lists a recipe only when its minimum level, required "
+                "and forbidden story flags, point-capacity threshold, and "
+                "owned ingredient quantities pass."
+            ),
+            "synthesis": (
+                "ALCHEMY removes each populated ingredient quantity, adds one "
+                "output item, deducts point_cost from the shared spendable "
+                "point pool, and advances alchemy-level progress."
+            ),
+        },
+    }
+
+
 @cache
 def gallery_thumbnail_sheet_assets() -> dict[int, int]:
     """Read CGMODE's enabled thumbnail-sheet assets from INIT2."""
@@ -2771,6 +2985,11 @@ def write_data_index(data_dir: Path) -> None:
         "atlases, its atlas slot and variant ordinal, and the optional 112-by-84 preview",
         "used by SAVE and SELSTAGE. Raw global-array provenance remains beside these joins.",
         "",
+        "ALINIT's dedicated alchemy schema exposes 107 sparse recipes in a reserved 1,000-row",
+        "layout. Output and ingredient item ids join to ITINIT names; minimum alchemy level,",
+        "point cost, required/forbidden story flags, and four fixed ingredient slots retain",
+        "their raw parallel-array and row-table coordinates.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -2848,6 +3067,8 @@ def main() -> int:
         extractor = extract_condition_definitions
     elif mode == "numeric" and name == "CGINIT":
         extractor = extract_gallery_definitions
+    elif mode == "numeric" and name == "ALINIT":
+        extractor = extract_alchemy_recipes
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]
