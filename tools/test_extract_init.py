@@ -970,6 +970,70 @@ def test_character_names() -> None:
     )
 
 
+def test_gallery_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["CGINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "CGINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_gallery_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 851
+        and meta["record_span"] == 2000
+        and meta["populated_id_range"] == [1, 855]
+        and meta["id_gaps_within_populated_range"] == [205, 585, 603, 604],
+        "CGINIT extracts 851 sparse gallery rows from its reserved 2,000 ids",
+    )
+    check(
+        meta["static_write_count"] == 3941
+        and meta["classified_static_write_count"] == 3941
+        and meta["preview_asset_count"] == 537,
+        "CGINIT classifies every integer write and all optional previews",
+    )
+    check(
+        [sheet["asset_name"] for sheet in meta["thumbnail_sheets"]]
+        == ["SO026A.AGF", "SO026B.AGF", "SO026C.AGF", "SO026D.AGF"]
+        and all(sheet["slot_count"] == 30 for sheet in meta["thumbnail_sheets"]),
+        "CGINIT joins the four configured 6x5 thumbnail atlases",
+    )
+    check(
+        by_id[1]["gallery_image_asset_id"] == 5407
+        and by_id[1]["gallery_image_asset_name"] == "EV001AA.AGF"
+        and by_id[1]["thumbnail_sheet_id"] == 1
+        and by_id[1]["thumbnail_slot_id"] == 1
+        and by_id[1]["variant_ordinal"] == 3,
+        "CGINIT row 1 joins its full image and thumbnail placement",
+    )
+    check(
+        by_id[4]["save_stage_preview_asset_id"] == 11266
+        and by_id[4]["save_stage_preview_asset_name"] == "EVM001BA.AGF"
+        and "save_stage_preview_asset_id" not in by_id[1],
+        "CGINIT preserves optional SAVE/SELSTAGE preview assets",
+    )
+
+    semantics = extract_init.field_semantics(records)
+    check(
+        semantics == {
+            "0x62cd1/2/0": "gallery_image_assets.gallery_image_asset_id",
+            "0x62cd1/2/1": "gallery_image_assets.save_stage_preview_asset_id",
+            "0x63c71": "gallery_thumbnail_sheet_ids",
+            "0x64441": "gallery_thumbnail_slot_ids",
+            "0x64c11": "gallery_variant_ordinals",
+        },
+        "CGINIT raw arrays join to their canonical semantic names",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[4]["semantic_fields"][
+            "gallery_image_assets.save_stage_preview_asset_id"
+        ] == 11266
+        and by_id[4]["semantic_fields"]["gallery_thumbnail_slot_ids"] == 1,
+        "CGINIT retains raw addresses beside one semantic field view",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1179,6 +1243,7 @@ if __name__ == "__main__":
     test_message_infrastructure()
     test_message_join()
     test_character_names()
+    test_gallery_definitions()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:

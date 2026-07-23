@@ -1410,6 +1410,62 @@ confidence = "high"
 depends_on = ["0x2e49"]
 
 [[global]]
+address = "0x62cd1"
+name = "gallery_image_assets"
+category = "data-table"
+type = "int[2000][2]"
+columns = { "0" = "gallery_image_asset_id", "1" = "save_stage_preview_asset_id" }
+value_domain = "packed asset resource ids; preview zero/unwritten means capture the current screen"
+usage = "CGINIT's sparse gallery asset rows. CGMODE tests and displays column 0 as the full-size gallery image. SAVE and SELSTAGE scan column 0 for the current image and, when column 1 is populated, load that 112x84 preview instead of capturing the current screen."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x63c71", "0x64441", "0x64c11"]
+
+[[global]]
+address = "0x63c71"
+name = "gallery_thumbnail_sheet_ids"
+category = "data-table"
+type = "int[2000]"
+value_domain = "one-based thumbnail-sheet id 1..4"
+usage = "CGINIT's gallery thumbnail-atlas selector. CGMODE subtracts one, remaps the configured sheet through gallery_thumbnail_sheet_asset_ids, and groups every populated gallery record under that sheet."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x66381", "0x64441"]
+
+[[global]]
+address = "0x64441"
+name = "gallery_thumbnail_slot_ids"
+category = "data-table"
+type = "int[2000]"
+value_domain = "one-based thumbnail-atlas slot 1..30"
+usage = "CGINIT's slot within the selected 6x5 thumbnail atlas. CGMODE subtracts one, draws that one of thirty 126x95 cells, and reports the unlocked/total variant counts associated with the slot."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x63c71", "0x64c11"]
+
+[[global]]
+address = "0x64c11"
+name = "gallery_variant_ordinals"
+category = "data-table"
+type = "int[2000]"
+value_domain = "one-based variant ordinal 1..23; zero/unwritten means no gallery record"
+usage = "CGINIT's ordering key for multiple full-size images behind one thumbnail slot. CGMODE subtracts one and stores the gallery record id at sheet[slot*100 + ordinal], then walks that ordered variant list in the image viewer."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62cd1", "0x63c71", "0x64441"]
+
+[[global]]
+address = "0x66381"
+name = "gallery_thumbnail_sheet_asset_ids"
+category = "data-table"
+type = "int[10]"
+value_domain = "packed thumbnail-atlas asset resource id; zero disables a sheet"
+usage = "CGMODE's configured thumbnail-sheet resources. INIT2 populates the first four cells with SO026A.AGF through SO026D.AGF and leaves the remaining six reserved; CGMODE compacts nonzero cells into its visible sheet list before applying gallery_thumbnail_sheet_ids."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x63c71"]
+
+[[global]]
 address = "0x52383"
 name = "entity_condition_levels"
 category = "data-table"

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5046 globals (293 curated, 4753 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5046 globals (298 curated, 4748 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -71,6 +71,11 @@
 | `0x5f0ed` | scene_decision_seen_flags | high | investigation | Persistent seen-state for progression decisions. Numbered scene scripts set the current scjump_decision_out cell after playback and synchronize it through the persistence opcode; INFOVO uses VIINIT's one-based prerequisites to unlock glossary topics. |
 | `0x624bf` | unit_voice_family_unit_ids | high | investigation | CNINIT's sparse unit-id keyed voice-family normalization map. Story, history, field, and battle voice paths map the current unit variant through this table before selecting the family-level voice-suppression state; 175 of 277 authored rows alias a variant to another representative unit id. |
 | `0x628a7` | unit_voice_suppression_flag_ids | high | investigation | Second stage of the shared voice-eligibility chain. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero. |
+| `0x62cd1` | gallery_image_assets | high | investigation | CGINIT's sparse gallery asset rows. CGMODE tests and displays column 0 as the full-size gallery image. SAVE and SELSTAGE scan column 0 for the current image and, when column 1 is populated, load that 112x84 preview instead of capturing the current screen. Columns: 0=gallery_image_asset_id, 1=save_stage_preview_asset_id. |
+| `0x63c71` | gallery_thumbnail_sheet_ids | high | investigation | CGINIT's gallery thumbnail-atlas selector. CGMODE subtracts one, remaps the configured sheet through gallery_thumbnail_sheet_asset_ids, and groups every populated gallery record under that sheet. |
+| `0x64441` | gallery_thumbnail_slot_ids | high | investigation | CGINIT's slot within the selected 6x5 thumbnail atlas. CGMODE subtracts one, draws that one of thirty 126x95 cells, and reports the unlocked/total variant counts associated with the slot. |
+| `0x64c11` | gallery_variant_ordinals | high | investigation | CGINIT's ordering key for multiple full-size images behind one thumbnail slot. CGMODE subtracts one and stores the gallery record id at sheet[slot*100 + ordinal], then walks that ordered variant list in the image viewer. |
+| `0x66381` | gallery_thumbnail_sheet_asset_ids | high | investigation | CGMODE's configured thumbnail-sheet resources. INIT2 populates the first four cells with SO026A.AGF through SO026D.AGF and leaves the remaining six reserved; CGMODE compacts nonzero cells into its visible sheet list before applying gallery_thumbnail_sheet_ids. |
 | `0x665e3` | modal_annotation_horizontal_cells | high | investigation | Per-annotation horizontal anchor input shared by MES and SBUNKI. Each renderer multiplies the cell by 21 pixels and offsets it by half the annotation's rendered width. |
 | `0x66647` | modal_annotation_row_offsets | high | investigation | Per-annotation vertical row offset shared by MES and SBUNKI. Renderers multiply it by 30 pixels; a negative value additionally shifts the annotation left by one 21-pixel cell. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
@@ -284,12 +289,8 @@
 | `0x624a3` | — | low | auto-shape | array |
 | `0x62c8f` | — | low | auto-shape | array |
 | `0x62cad` | — | low | auto-shape | array |
-| `0x63c71` | — | low | auto-shape | array |
-| `0x64441` | — | low | auto-shape | array |
-| `0x64c11` | — | low | auto-shape | array |
 | `0x653e1` | — | low | auto-shape | array |
 | `0x65bb1` | — | low | auto-shape | array |
-| `0x66381` | — | low | auto-shape | array |
 | `0x66421` | — | low | auto-shape | array |
 | `0x6642d` | — | low | auto-shape | array |
 | `0x66442` | — | low | auto-shape | array |
@@ -3727,7 +3728,6 @@
 | `0x62436` | — | low | auto-shape | index/counter? |
 | `0x62450` | — | low | auto-shape | index/counter? |
 | `0x62ccb` | — | low | auto-shape | index/counter? |
-| `0x62cd1` | — | med | auto-shape | record-table[stride 2] |
 | `0x62cd3` | — | low | auto-shape | cg-gallery-field? |
 | `0x62cd5` | — | low | auto-shape | cg-gallery-field? |
 | `0x62cd7` | — | low | auto-shape | cg-gallery-field? |

@@ -2855,3 +2855,30 @@ and the generated profile has collapsed from 242 pseudo-fields to the two true c
 
 **Next:** audit CGINIT's large numeric output. Determine whether its apparent 1,304-field surface is a
 legitimate gallery/resource matrix or another ownership artifact before assigning any new semantics.
+
+## Data-semantics sidebar: CGINIT gallery registry (2026-07-23)
+
+CGINIT's former 379-record/1,304-field numeric output was an ownership error. The script contains 3,941
+static writes forming 851 sparse gallery-image rows, ids 1..855 with four gaps, inside a reserved
+2,000-row layout. Every row has a full-size gallery image, a thumbnail sheet id, a thumbnail slot id,
+and a variant ordinal; 537 rows additionally carry the optional preview used by SAVE and SELSTAGE.
+The dedicated schema classifies every write and reduces the generated profile to these five real fields.
+
+CGMODE proves the presentation model. INIT2 configures four sheets with `SO026A.AGF` through
+`SO026D.AGF`; each resource is a 6-by-5 atlas of thirty 126-by-95 thumbnail cells. CGMODE compacts the
+enabled sheets, groups gallery records by their one-based sheet and slot, and orders the full-size images
+behind a slot by the one-based variant ordinal (1..23 in shipped data). It tests each primary image's
+unlock state, reports unlocked and total variants per thumbnail, and displays the selected full-size
+asset. SAVE and SELSTAGE independently scan the same primary image column and use the optional second
+asset when it is a 112-by-84 preview, otherwise falling back to a captured frame.
+
+The generated rows join all primary, preview, and sheet asset ids to SYS4INI-derived filenames while
+retaining the raw `0x62cd1/2/{0,1}`, `0x63c71`, `0x64441`, and `0x64c11` keys. The curated global
+registry names those arrays plus CGMODE's ten-cell configured sheet-resource vector. Regressions cover
+the complete write accounting, sparse id range, four atlases, optional previews, representative image
+joins, and raw-to-semantic field projection.
+
+**Next:** profile the remaining generic/footer INIT outputs by evidence density. MPINIT is structurally
+regular but still semantically shallow; the smaller CTINIT/CVINIT/AFINIT families may offer faster
+reader-proven joins. Rank them by malformed field count and direct-consumer coverage before choosing the
+next dedicated schema.

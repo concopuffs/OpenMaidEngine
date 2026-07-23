@@ -579,6 +579,15 @@ CONDITION_STAT_COLUMNS = (
 )
 CONDITION_RESOURCE_COLUMNS = ("hp", "sp", "fs")
 
+GALLERY_ASSET_TABLE_BASE = 0x62CD1
+GALLERY_RECORD_SPAN = 2000
+GALLERY_ASSET_STRIDE = 2
+GALLERY_THUMBNAIL_SHEET_ARRAY_BASE = 0x63C71
+GALLERY_THUMBNAIL_SLOT_ARRAY_BASE = 0x64441
+GALLERY_VARIANT_ORDINAL_ARRAY_BASE = 0x64C11
+GALLERY_THUMBNAIL_SHEET_CONFIG_BASE = 0x66381
+GALLERY_THUMBNAIL_SHEET_CONFIG_SPAN = 10
+
 RECOVER_CURRENT_ENTITY = 0x152616
 RECOVER_EFFECTIVE_STATS = 0x4E11B
 RECOVER_CURRENT_RESOURCES = 0x4E085
@@ -1842,6 +1851,220 @@ def extract_numeric(scr):
     return records, {"primary_index_base": f"0x{base:x}", "record_span": n}
 
 
+def extract_gallery_definitions(scr):
+    """Extract CGINIT's sparse gallery-image registry.
+
+    CGINIT owns one 2,000-by-2 asset table and three parallel 2,000-cell
+    classification arrays. CGMODE uses the latter as a thumbnail-sheet,
+    30-cell atlas slot, and per-slot variant ordinal; SAVE and SELSTAGE use
+    the optional second asset as a 112-by-84 preview of the first.
+    """
+    records_by_id: dict[int, dict] = {}
+    static_write_count = 0
+    classified_write_count = 0
+
+    def record_for(record_id: int) -> dict:
+        if not (1 <= record_id < GALLERY_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: gallery id {record_id} outside reserved span"
+            )
+        return records_by_id.setdefault(record_id, {
+            "id": record_id,
+            "fields": {},
+            "record_fields": {},
+        })
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            if sys4load.display_label(ins.opcode) != "exit":
+                raise ValueError(
+                    f"{scr.path.name}: unclassified instruction at 0x{ins.offset:x}"
+                )
+            continue
+        static_write_count += 1
+        destination, value = write
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static gallery value at 0x{ins.offset:x}"
+            )
+
+        relative = destination - GALLERY_ASSET_TABLE_BASE
+        if 0 <= relative < GALLERY_RECORD_SPAN * GALLERY_ASSET_STRIDE:
+            record_id, column = divmod(relative, GALLERY_ASSET_STRIDE)
+            record = record_for(record_id)
+            _store_unique(
+                record["record_fields"],
+                (
+                    f"0x{GALLERY_ASSET_TABLE_BASE:x}/"
+                    f"{GALLERY_ASSET_STRIDE}/{column}"
+                ),
+                value,
+                record_id,
+            )
+            classified_write_count += 1
+            continue
+
+        scalar_arrays = (
+            GALLERY_THUMBNAIL_SHEET_ARRAY_BASE,
+            GALLERY_THUMBNAIL_SLOT_ARRAY_BASE,
+            GALLERY_VARIANT_ORDINAL_ARRAY_BASE,
+        )
+        for base in scalar_arrays:
+            record_id = destination - base
+            if 1 <= record_id < GALLERY_RECORD_SPAN:
+                _store_unique(
+                    record_for(record_id)["fields"],
+                    f"0x{base:x}",
+                    value,
+                    record_id,
+                )
+                classified_write_count += 1
+                break
+        else:
+            raise ValueError(
+                f"{scr.path.name}: unclassified gallery write "
+                f"0x{destination:x} at 0x{ins.offset:x}"
+            )
+
+    names = callscript_names()
+    sheet_asset_ids = gallery_thumbnail_sheet_assets()
+    records = [records_by_id[record_id] for record_id in sorted(records_by_id)]
+    required_scalar_keys = {
+        f"0x{GALLERY_THUMBNAIL_SHEET_ARRAY_BASE:x}",
+        f"0x{GALLERY_THUMBNAIL_SLOT_ARRAY_BASE:x}",
+        f"0x{GALLERY_VARIANT_ORDINAL_ARRAY_BASE:x}",
+    }
+    primary_key = (
+        f"0x{GALLERY_ASSET_TABLE_BASE:x}/{GALLERY_ASSET_STRIDE}/0"
+    )
+    preview_key = (
+        f"0x{GALLERY_ASSET_TABLE_BASE:x}/{GALLERY_ASSET_STRIDE}/1"
+    )
+    for record in records:
+        if set(record["fields"]) != required_scalar_keys:
+            raise ValueError(
+                f"{scr.path.name}: gallery id {record['id']} has incomplete scalars"
+            )
+        if primary_key not in record["record_fields"]:
+            raise ValueError(
+                f"{scr.path.name}: gallery id {record['id']} has no image asset"
+            )
+        sheet_id = record["fields"][
+            f"0x{GALLERY_THUMBNAIL_SHEET_ARRAY_BASE:x}"
+        ]
+        slot_id = record["fields"][
+            f"0x{GALLERY_THUMBNAIL_SLOT_ARRAY_BASE:x}"
+        ]
+        variant_ordinal = record["fields"][
+            f"0x{GALLERY_VARIANT_ORDINAL_ARRAY_BASE:x}"
+        ]
+        if sheet_id not in sheet_asset_ids:
+            raise ValueError(
+                f"{scr.path.name}: gallery id {record['id']} has bad sheet {sheet_id}"
+            )
+        if not (1 <= slot_id <= 30 and variant_ordinal >= 1):
+            raise ValueError(
+                f"{scr.path.name}: gallery id {record['id']} has bad "
+                f"slot/variant {slot_id}/{variant_ordinal}"
+            )
+        image_asset_id = record["record_fields"][primary_key]
+        sheet_asset_id = sheet_asset_ids[sheet_id]
+        record.update({
+            "gallery_image_asset_id": image_asset_id,
+            "gallery_image_asset_name": names.get(image_asset_id, ""),
+            "thumbnail_sheet_id": sheet_id,
+            "thumbnail_sheet_asset_id": sheet_asset_id,
+            "thumbnail_sheet_asset_name": names.get(sheet_asset_id, ""),
+            "thumbnail_slot_id": slot_id,
+            "variant_ordinal": variant_ordinal,
+        })
+        if preview_asset_id := record["record_fields"].get(preview_key):
+            record["save_stage_preview_asset_id"] = preview_asset_id
+            record["save_stage_preview_asset_name"] = names.get(
+                preview_asset_id, ""
+            )
+
+    populated_ids = set(records_by_id)
+    populated_min = min(populated_ids)
+    populated_max = max(populated_ids)
+    sheet_definitions = []
+    for sheet_id, asset_id in sheet_asset_ids.items():
+        sheet_definitions.append({
+            "id": sheet_id,
+            "asset_id": asset_id,
+            "asset_name": names.get(asset_id, ""),
+            "atlas_columns": 6,
+            "atlas_rows": 5,
+            "slot_count": 30,
+        })
+    return records, {
+        "record_span": GALLERY_RECORD_SPAN,
+        "populated_id_range": [populated_min, populated_max],
+        "id_gaps_within_populated_range": [
+            record_id
+            for record_id in range(populated_min, populated_max + 1)
+            if record_id not in populated_ids
+        ],
+        "asset_table_base": f"0x{GALLERY_ASSET_TABLE_BASE:x}",
+        "asset_table_stride": GALLERY_ASSET_STRIDE,
+        "thumbnail_sheet_array_base": (
+            f"0x{GALLERY_THUMBNAIL_SHEET_ARRAY_BASE:x}"
+        ),
+        "thumbnail_slot_array_base": (
+            f"0x{GALLERY_THUMBNAIL_SLOT_ARRAY_BASE:x}"
+        ),
+        "variant_ordinal_array_base": (
+            f"0x{GALLERY_VARIANT_ORDINAL_ARRAY_BASE:x}"
+        ),
+        "record_field_columns": [primary_key, preview_key],
+        "static_write_count": static_write_count,
+        "classified_static_write_count": classified_write_count,
+        "preview_asset_count": sum(
+            preview_key in record["record_fields"] for record in records
+        ),
+        "thumbnail_sheets": sheet_definitions,
+        "thumbnail_sheet_configuration": {
+            "source": "INIT2.BIN",
+            "base": f"0x{GALLERY_THUMBNAIL_SHEET_CONFIG_BASE:x}",
+            "reserved_span": GALLERY_THUMBNAIL_SHEET_CONFIG_SPAN,
+        },
+        "consumer_contract": {
+            "gallery": (
+                "CGMODE groups records by thumbnail sheet and one of its "
+                "thirty atlas slots, orders variants by the one-based ordinal, "
+                "tests the primary image's unlock state, and displays it."
+            ),
+            "save_stage_preview": (
+                "SAVE and SELSTAGE match the current image against the primary "
+                "asset and use the optional second asset as a 112x84 preview."
+            ),
+        },
+    }
+
+
+@cache
+def gallery_thumbnail_sheet_assets() -> dict[int, int]:
+    """Read CGMODE's enabled thumbnail-sheet assets from INIT2."""
+    script = sys4load.load(resolve("INIT2"))
+    assets = {}
+    for ins in script.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        index = destination - GALLERY_THUMBNAIL_SHEET_CONFIG_BASE
+        if (
+            0 <= index < GALLERY_THUMBNAIL_SHEET_CONFIG_SPAN
+            and isinstance(value, int)
+            and value
+        ):
+            assets[index + 1] = value
+    if not assets:
+        raise ValueError("INIT2.BIN: no configured CGMODE thumbnail sheets")
+    return assets
+
+
 @cache
 def callscript_names() -> dict[int, str]:
     """Load the generated packed script-resource id join."""
@@ -2543,6 +2766,11 @@ def write_data_index(data_dir: Path) -> None:
         "Every row joins both its own EBINIT definition and the representative voice-family",
         "definition; deliberately empty names and variant aliases remain explicit.",
         "",
+        "CGINIT's dedicated gallery schema exposes 851 sparse ids in a reserved 2,000-row",
+        "layout. Each row joins its full-size image asset, one of four 30-cell thumbnail",
+        "atlases, its atlas slot and variant ordinal, and the optional 112-by-84 preview",
+        "used by SAVE and SELSTAGE. Raw global-array provenance remains beside these joins.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -2618,6 +2846,8 @@ def main() -> int:
         extractor = extract_magic_actions
     elif mode == "name" and name == "ILINIT":
         extractor = extract_condition_definitions
+    elif mode == "numeric" and name == "CGINIT":
+        extractor = extract_gallery_definitions
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]

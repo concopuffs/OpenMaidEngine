@@ -95,6 +95,13 @@ All 135 packed resource ids resolve to numbered SC scripts. The generated view p
 decision ids and joins every one of SCJUMP's 847 live decision ids; 844 final chapter tags agree, while
 three legacy/stale mismatches remain explicit.
 
+CGINIT's generic numeric parse formerly reported 379 records and 1,304 address-derived fields; that was
+another ownership artifact. Its 3,941 writes actually define 851 sparse gallery-image ids in a reserved
+2,000-row layout: a full-size image asset, an optional 112-by-84 SAVE/SELSTAGE preview, one of four
+`SO026A`--`SO026D` thumbnail sheets, one of the sheet's thirty atlas cells, and a one-based variant
+ordinal behind that thumbnail. CGMODE supplies the grouping and ordering evidence and consumes every
+record; the dedicated extraction joins all asset ids to filenames while retaining the raw arrays.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join
