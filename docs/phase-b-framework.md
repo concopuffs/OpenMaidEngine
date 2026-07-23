@@ -755,8 +755,9 @@ forbidden story prerequisites. Generated records now carry a joined `semantic_fi
 2,312 object placements across 66 stages. FIELD resolves the universal reinforcement interval/limit and
 type-tagged initial-faction, teleport, treasure, card-list, and non-triggering-faction payloads. OBINIT
 supplies authoritative names for all 46 object types and descriptions for 34. Its state-row mode and
-FIELD/DRAWOBJ initialization path resolve 78 initial object states on types 11, 17, and 26; only three
-type-27 payload cells remain raw. The separate 30-cell enemy family is also decoded:
+FIELD/DRAWOBJ initialization path resolve 78 initial object states on types 11, 17, and 26. FIELD's
+dedicated special-spawn path proves the last three populated type-27 tagged writes are ignored by the
+engine; they remain preserved as provenance. The separate 30-cell enemy family is also decoded:
 FIELD/SETEN/ADDEN establish unit/faction, direct or object-linked placement, difficulty/story gates, level
 floor/cap/scaling, weighted selection, and three difficulty-specific movement/battle routine-set ids. The
 generated view assembles all 1,378 populated enemy slots across 66 stages, including 485 enemies suppressed
@@ -770,8 +771,7 @@ Once the natural spine and first gameplay loop are trustworthy, broaden in indep
 - Unit statistics, equipment, inventory, skills, magic, heroine forms, and progression.
 - Combat resolution presentation, enemy turns/AI services, and win/loss transitions.
 - A full chapter of ADV and the scene types encountered between gameplay segments.
-- The three remaining STINIT tagged payloads on object type 27, plus other data schemas when
-  their runtime consumers make them necessary.
+- Other data schemas when their runtime consumers make them necessary.
 
 The high-level Phase B direction remains canonical in `docs/remake-architecture-and-roadmap.md`; this file
 only provides the execution framework.

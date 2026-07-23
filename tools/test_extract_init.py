@@ -186,10 +186,17 @@ def test_real_mixed_table() -> None:
     check(spike["initial_object_state_id"] == 2
           and "non_triggering_faction_id" not in spike,
           "STINIT spikes expose state without inventing the excluded faction gate")
+    ignored_objects = [
+        obj for obj in all_objects if "ignored_payload_fields" in obj
+    ]
+    check(len(ignored_objects) == 3
+          and {obj["type_id"] for obj in ignored_objects} == {27}
+          and {tuple(obj["ignored_payload_fields"].items()) for obj in ignored_objects}
+          == {(("0xe73bb", 2),)},
+          "STINIT preserves explicitly written but engine-ignored type-27 payloads")
     unknown_objects = [obj for obj in all_objects if "unknown_fields" in obj]
-    check(len(unknown_objects) == 3
-          and {obj["type_id"] for obj in unknown_objects} == {27},
-          "STINIT preserves unresolved tagged object payloads as raw evidence")
+    check(not unknown_objects,
+          "STINIT has no unresolved populated tagged object payloads")
     extract_init.attach_stage_enemy_spawns(records)
     first_spawn = records[0]["enemy_spawns"][0]
     check(first_spawn == {

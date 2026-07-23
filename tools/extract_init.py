@@ -646,6 +646,12 @@ def attach_stage_object_placements(
                   and definition["uses_runtime_state_sprite_row"]
                   and "0xe73bb" in payload):
                 obj["initial_object_state_id"] = payload.pop("0xe73bb")
+            elif type_id == 27 and payload:
+                # FIELD's dedicated otherworld-gate branch consumes the common
+                # schedule and coordinates, then calls ADDEN's hard-coded slot-0
+                # special-unit path. It never reads either tagged payload cell.
+                obj["ignored_payload_fields"] = payload
+                payload = {}
             unknown = payload
             if unknown:
                 obj["unknown_fields"] = unknown
@@ -781,7 +787,8 @@ def write_data_index(data_dir: Path) -> None:
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
         "and `enemy_spawns`. Its object type ids join to OBINIT's authoritative names and",
         "available descriptions; consumer-proven tagged payload variants receive semantic names while",
-        "unresolved type-specific/mode parameters remain in `unknown_fields`.",
+        "engine-dead tagged writes remain in `ignored_payload_fields` and unresolved",
+        "type-specific/mode parameters remain in `unknown_fields`.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",

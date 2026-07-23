@@ -296,7 +296,17 @@ runtime state by the object's sprite height to select its vertical source row. T
 (type 26, `出撃の旗`). All deployment-flag values are 2, and all 63 enemies linked to those flags are also
 faction 2, consistent with OBINIT's `敵の増援地点` description; because the spawn branch accepts type 26
 without comparing those values, the field remains the directly proven object state rather than a guessed
-faction id. Only three type-27 (`異界の門`) first-payload cells remain raw.
+faction id.
+
+The final three populated tagged cells are understood as engine-dead authoring data rather than a hidden
+type-27 (`異界の門`) parameter. STINIT explicitly writes `2` to the first payload cell for object slot 22
+in stages 52--54. Type 27 has no OBINIT state-row mode, so FIELD's fresh-stage initializer does not copy
+that value to runtime state; the generic interaction dispatch also has no type-27 branch. Its dedicated
+turn path reads only the object's active flag, type, reinforcement interval/limit, and coordinates, then
+forces ADDEN enemy slot 0. ADDEN hardcodes EBINIT unit 465 (`漂着した異界の姫/BOSS`) into runtime entity
+slot 49; on success FIELD changes to BGM 10 and reports `異界の姫が漂着した！`. Neither `0xe73bb` nor
+`0xe73ed` participates. The join therefore preserves the three explicit writes under
+`ignored_payload_fields` instead of inventing a semantic name or leaving them unresolved.
 
 OBINIT is the authoritative object-definition table: 46 one-based records provide the type names, and 34
 provide short player-facing effect descriptions used by the field object-information path. The STINIT join
@@ -323,8 +333,9 @@ confirmed parallel buffers plus both prerequisite tables are also assembled into
 `object_placements` across 66 stages. Each placement contains its slot, numeric type plus OBINIT
 name/available description, tile coordinates, difficulty mask, populated positive/negative story
 prerequisites, optional reinforcement schedule, and the decoded type-tagged payload variants above. The
-remaining three undecoded type-27 payload cells stay attached under
-`unknown_fields`, so this convenience view loses no evidence or invents names.
+three engine-dead type-27 payload writes stay attached under `ignored_payload_fields`; there are no
+remaining populated object payloads under `unknown_fields`, so this convenience view loses no evidence or
+invents names.
 The same records now contain 1,378 joined `enemy_spawns` across 66 stages, with unit/faction, direct or
 object-linked placement data when present, difficulty and story gates, level rules, random-selection
 weight, movement/battle routine rows, and `first_clear_only` replay gating. Raw footer metadata stays in
@@ -378,8 +389,8 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    STINIT's mixed stage records now have machine-readable investigation surfaces, including joined object
    placements and enemy spawns. STINIT's universal object schedule, consumer-proven tagged payload
    families, faction-gated hazards/barriers, initialized object states, OBINIT definition join, and
-   first-clear enemy gate are decoded; next trace the three remaining raw type-27 payloads only where its
-   special-spawn path distinguishes them. Isolate EBINIT's remaining voice/action
+   first-clear enemy gate are decoded, and its last three populated tagged cells are proven ignored by the
+   type-27 special-spawn path. Isolate EBINIT's remaining voice/action
    slots under the same rule. Preserve explicit joins and do not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
