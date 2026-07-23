@@ -745,8 +745,12 @@ SKINIT parallel field as the skill-change catalog inclusion flag and separates a
 skill-information visibility. The remaining item/skill work is refinement rather than an unnamed populated
 schema.
 
-The remaining EBINIT unknowns are two isolated sparse writes into a runtime table and the signed refinement
-within boss classes; enemy AI appears to live outside the static EBINIT schema. The former seven-value
+The remaining EBINIT unknowns are two isolated sparse writes into a runtime table; enemy AI appears to live
+outside the static EBINIT schema. The signed boss class is now behaviorally separated: all nonzero values
+receive boss protections and targeting treatment, positive values alone count as required targets under
+FIELD's defeat-boss clear rule, negative values are boss-treated adds/decoys/hazards that do not block
+victory, and either sign of class 4 selects final-boss music and tactical-map presentation. Classes 1--3
+otherwise remain authoring categories rather than distinct runtime branches. The former seven-value
 `0x7843e` unknown is now a medium-confidence authoring-only `unit_power_tier`: it tracks unit cost, yield,
 caps, stats, and form/story strength but has no shipped script or native-index consumer. SALLY's four unlock
 requirements and eight event ids are fully joined to their contract, brainwash, reserved, form-dependent

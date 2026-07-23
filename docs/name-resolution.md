@@ -195,10 +195,19 @@ figures, CS status illustrations, CIC/CIN battle cut-ins, and a 30-slot OGG voic
 base experience, eight item-drop ids, and their paired percentage rolls; INFOEN independently renders the
 same drop-item ids. Third, explicit menu messages and state updates identify capture eligibility, enemy-info
 listing, summon unlock indices/knowledge thresholds/point costs, essence yield, automatic enemy level
-scaling, and the large-battle-sprite layout flag. The signed `unit_boss_class` is intentionally only
-medium-confidence: every nonzero row is a boss, hazard, or special encounter and all consumers treat it as
-such, but the positive/negative class distinction remains unknown. AI and the remaining sparse flags stay
-unnamed until comparable consumer evidence exists.
+scaling, and the large-battle-sprite layout flag. The signed `unit_boss_class` remains medium-confidence as
+an authoring vocabulary, but its runtime split is now concrete. Every nonzero value receives the shared
+boss damage adjustment, condition immunity, targeting exclusions, and boss battle treatment. FIELD's
+`stage_clear_rule == -2` path scans only living enemy units whose class is positive, so a positive class is
+a required defeat-boss target while the matching negative class is a boss-treated add, decoy, or hazard
+that does not delay victory. STINIT confirms the distinction in the same encounters: Bridget is positive
+while Octavia and the boss orc are negative in stage 11; Deirdre is positive while her four shadows and
+Laumakar are negative in stages 92/98; Tiamat is positive while the EX-8 boss roster is negative in stage
+167; and the final heart is positive class 4 while its three organs are negative class 4. Absolute classes
+1, 2, and 3 group named story characters, monster/special bosses, and demon-lord-class bosses respectively,
+but the shipped scripts do not branch differently among those three values. Either sign of class 4 alone
+selects the final-boss BGM and FIELD's special tactical-map presentation. AI and the remaining sparse flags
+stay unnamed until comparable consumer evidence exists.
 
 The roster/event follow-up resolves five more EBINIT tables through SALLY's complete action path. A
 four-cell persistent-state block records recruitment/removal outcomes for seven heroines; a four-column
