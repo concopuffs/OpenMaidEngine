@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5023 globals (144 curated, 4879 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5023 globals (145 curated, 4878 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -353,6 +353,8 @@
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
+| `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
+| `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
 | `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
 
@@ -394,7 +396,6 @@
 | `0x665d6` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']. |
 | `0x665d7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']. |
 | `0x66714` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']. |
-| `0xa6e59` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 2, 3, 4, 11, 21, 22, 23]; writers=['CALCDMG.BIN', 'CHMENU.BIN', 'FORT.BIN', 'INFOIT.BIN']. |
 | `0xab8e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 10, 15, 20, 25, 30, 35, 40]; writers=['CALCCC.BIN', 'CCINIT.BIN']. |
 | `0xaba5c` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xaba5e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
@@ -4986,7 +4987,6 @@
 | `0x7843e` | — | med | auto-shape | unit-field |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
-| `0x8c877` | — | low | auto-shape | index/counter? |
 | `0xa70b2` | — | low | auto-shape | skill-field? |
 | `0xaac76` | — | low | auto-shape | index/counter? |
 | `0xaacf0` | — | med | auto-shape | record-table[stride 5] |

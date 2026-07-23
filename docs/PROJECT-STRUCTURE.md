@@ -43,7 +43,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── test_globals.py, test_opcodes.py    unit tests for the globals / opcode tooling
     │   ├── vm0.py                              headless Python VM (Phase A0); `--test` = RECOVER unit test
     │   ├── extract_phase2.py                   batch: disasm + text + data extraction
-    │   ├── extract_init.py, global_map.py …    *INIT parsers, global-var map builder
+    │   ├── extract_init.py, extract_message_table.py, global_map.py …
+    │   │                                       *INIT / ID-dispatched message parsers,
+    │   │                                       global-var map builder
     │   ├── validate_opcode_table*.py           decode-coverage validators
     │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
     │   └── probe_*.py                          format reverse-engineering probes (historical)

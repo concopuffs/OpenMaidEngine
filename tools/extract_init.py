@@ -26,6 +26,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import paths
+import extract_message_table
 import sys4load
 
 SET_STRING = 0x192
@@ -36,6 +37,11 @@ COPY_LOCAL_ARRAY = 0x64
 T_GLOBAL_INT = 3
 T_GLOBAL_STRING = 5
 T_IMM = 0
+
+MESSAGE_TABLES = {
+    "ITINIT": "ITMES",
+    "SKINIT": "SKMES",
+}
 
 
 def resolve(name: str) -> Path:
@@ -252,6 +258,28 @@ def extract_footer(scr):
     return records, {}
 
 
+def join_messages(records: list[dict], message_scr) -> dict:
+    """Join a message-dispatch script to INIT records by runtime id."""
+    messages, message_meta = extract_message_table.extract_messages(message_scr)
+    by_id = {message["id"]: message for message in messages}
+    joined = 0
+    for record in records:
+        if message := by_id.get(record["id"]):
+            record["message"] = {
+                key: value for key, value in message.items() if key != "id"
+            }
+            joined += 1
+    init_ids = {record["id"] for record in records}
+    message_ids = set(by_id)
+    return {
+        "source": message_scr.path.name,
+        **message_meta,
+        "joined_count": joined,
+        "init_ids_without_message": sorted(init_ids - message_ids),
+        "message_ids_without_init": sorted(message_ids - init_ids),
+    }
+
+
 def write_data_index(data_dir: Path) -> None:
     """Regenerate the disposable build/data index from current table JSONs."""
     tables = []
@@ -272,15 +300,18 @@ def write_data_index(data_dir: Path) -> None:
         "bases remain available in every record; confirmed field meanings live in",
         "`vm-map/globals.toml` and the generated `docs/global-reference.md`.",
         "",
-        "| file | mode | records | array fields | record columns |",
-        "|---|---|---:|---:|---:|",
+        "| file | mode | records | messages | array fields | record columns |",
+        "|---|---|---:|---:|---:|---:|",
     ]
     for filename, data in tables:
         columns = len(data.get("field_columns") or [])
         record_columns = len(data.get("record_field_columns") or [])
+        message_count = data.get("message_table", {}).get(
+            "joined_count", data.get("message_count", 0)
+        )
         lines.append(
             f"| `{filename}` | {data['mode']} | {data['record_count']} | "
-            f"{columns} | {record_columns} |"
+            f"{message_count} | {columns} | {record_columns} |"
         )
     lines += [
         "",
@@ -289,6 +320,9 @@ def write_data_index(data_dir: Path) -> None:
         "by the runtime lookup base used by `lookup-array`, not merely the first written cell.",
         "Linked row-major fields are stored separately in `record_fields`, keyed as",
         "`base/stride/column` from corpus-observed `lookup-array-2d` consumers.",
+        "Where a matching `*MES` dispatcher exists, `message` preserves its player-facing",
+        "title, description, furigana, and bytecode dispatch offset separately from the",
+        "short description stored by the INIT script.",
         "",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence. `STINIT` still requires a bespoke mixed numeric/string parser.",
@@ -309,6 +343,11 @@ def main() -> int:
     mode = mode_arg or detect_mode(scr)
     extractor = {"name": extract_name, "numeric": extract_numeric, "footer": extract_footer}[mode]
     recs, meta = extractor(scr)
+    if mode == "name" and name in MESSAGE_TABLES:
+        message_name = MESSAGE_TABLES[name]
+        meta["message_table"] = join_messages(
+            recs, sys4load.load(extract_message_table.resolve(message_name))
+        )
 
     cols = sorted({c for r in recs for c in r.get("fields", {})}, key=lambda h: int(h, 16))
     out = {"table": name, "source": scr.path.name, "magic": scr.magic, "mode": mode,

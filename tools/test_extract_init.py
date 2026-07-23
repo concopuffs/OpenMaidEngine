@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import extract_init
+import extract_message_table
 import paths
 import sys4load
 
@@ -65,9 +66,75 @@ def test_static_negative_write() -> None:
           "INIT subtraction writes preserve negative values")
 
 
+def test_real_message_tables() -> None:
+    scripts = paths.scripts()
+    expected = {
+        "ITMES.BIN": (0x8C877, 287),
+        "SKMES.BIN": (0xA6E59, 131),
+    }
+    for name, (selector, count) in expected.items():
+        records, meta = extract_message_table.extract_messages(
+            sys4load.load(scripts[name])
+        )
+        check(meta["selector_global"] == f"0x{selector:x}",
+              f"{name}: discovers selector global 0x{selector:x}")
+        check(len(records) == count, f"{name}: extracts {count} messages")
+        check(len(records) == meta["dispatch_guard_count"],
+              f"{name}: every dispatch guard yields a message")
+        check(len({record['id'] for record in records}) == len(records),
+              f"{name}: message ids are unique")
+
+    item_messages, _ = extract_message_table.extract_messages(
+        sys4load.load(scripts["ITMES.BIN"])
+    )
+    items = {record["id"]: record for record in item_messages}
+    check(items[1]["title"] == "【重要：銅の鍵】　　　　　LEVEL-E",
+          "ITMES item 1 keeps its display title")
+    check(items[1]["description"] == "　銅の扉を開閉することが可能",
+          "ITMES item 1 keeps its player-facing behavior")
+    check("濃緑色" in items[32]["title"],
+          "ITMES reconstructs furigana surface text inside a title")
+    check(items[32]["furigana"][0]["reading"] == "のうりょくしょく",
+          "ITMES preserves furigana readings")
+
+    skill_messages, _ = extract_message_table.extract_messages(
+        sys4load.load(scripts["SKMES.BIN"])
+    )
+    skills = {record["id"]: record for record in skill_messages}
+    check(skills[1]["title"] == "【移動スキル：飛行】",
+          "SKMES skill 1 keeps its display title")
+    check(skills[1]["description"] == "　床のない地形を移動可能になる",
+          "SKMES skill 1 keeps its player-facing behavior")
+
+
+def test_message_join() -> None:
+    scripts = paths.scripts()
+    expected = {
+        "IT": (287, "　銅の扉を開閉することが可能"),
+        "SK": (131, "　床のない地形を移動可能になる"),
+    }
+    joined = {}
+    for prefix, (count, _) in expected.items():
+        records, _ = extract_init.extract_name(
+            sys4load.load(scripts[f"{prefix}INIT.BIN"])
+        )
+        meta = extract_init.join_messages(
+            records, sys4load.load(scripts[f"{prefix}MES.BIN"])
+        )
+        check(meta["joined_count"] == count,
+              f"{prefix}INIT joins all {count} {prefix}MES messages")
+        check(not meta["init_ids_without_message"] and not meta["message_ids_without_init"],
+              f"{prefix}INIT and {prefix}MES ids match exactly")
+        joined[prefix] = {record["id"]: record for record in records}
+    check(joined["IT"][1]["message"]["description"] == expected["IT"][1],
+          "INIT/MES join uses the shared runtime id")
+
+
 if __name__ == "__main__":
     test_real_name_tables()
     test_static_negative_write()
+    test_real_message_tables()
+    test_message_join()
     if FAILS:
         raise SystemExit(f"{len(FAILS)} failed checks")
     print("all extract_init checks passed")

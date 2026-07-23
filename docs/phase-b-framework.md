@@ -727,6 +727,15 @@ voice assets, XP/drops, capture and compendium flags, summoning economy, essence
 Its linked-table shapes are 18 SKINIT and 84 EBINIT populated columns. The next EB tranche identifies roster
 state flags, per-action unlock requirements, SCJUMP event ids, normal/brainwashed unit variants, and SALLY's
 per-unit bonus item. Combat tracing also names the shared column-8 item/skill modifier as critical chance.
+
+The message-table tranche adds a reusable extractor for global-id dispatch chains and joins player-facing
+ITMES/SKMES text back to INIT records. All 287 item ids and all 131 skill ids match exactly in both
+directions. Each joined message retains its rendered title, richer description, furigana annotations, and
+dispatch offset independently of INIT's shorter effect label; generated profiles report complete coverage.
+The dispatch keys also establish `current_item_id` and `current_skill_id` as high-confidence shared index
+slots. This makes message/field correlation the next evidence source for the remaining sparse item and skill
+columns.
+
 The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed meaning within boss classes;
 enemy AI appears to live outside the static EBINIT schema. STINIT's bespoke parser remains a separate
 extraction task.

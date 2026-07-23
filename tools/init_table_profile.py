@@ -108,6 +108,29 @@ def profile_columns(data: dict) -> list[dict]:
     return rows
 
 
+def profile_messages(data: dict) -> dict:
+    """Summarize the joined player-facing message evidence."""
+    records = data["records"]
+    with_message = [record for record in records if "message" in record]
+    with_furigana = [
+        record for record in with_message if record["message"].get("furigana")
+    ]
+    return {
+        "population": len(with_message),
+        "coverage": len(with_message) / len(records) if records else 0.0,
+        "furigana_records": len(with_furigana),
+        "examples": [
+            {
+                "id": record["id"],
+                "name": record.get("name", ""),
+                "title": record["message"]["title"],
+                "description": record["message"]["description"],
+            }
+            for record in with_message[:5]
+        ],
+    }
+
+
 def add_direct_references(rows: list[dict], source_name: str) -> None:
     by_base: dict[int, list[dict]] = collections.defaultdict(list)
     for row in rows:
@@ -148,6 +171,7 @@ def add_direct_references(rows: list[dict], source_name: str) -> None:
 def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
     ranked = sorted(rows, key=lambda row: (-row["population"], -row["references"], row["key"]))
     shown = ranked[:limit]
+    message_profile = profile_messages(data)
     lines = [
         f"# {data['table']} field profile",
         "",
@@ -156,6 +180,9 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         "",
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
+        f"- player-facing messages: {message_profile['population']}/{data['record_count']} "
+        f"({message_profile['coverage']:.0%})",
+        f"- messages with furigana spans: {message_profile['furigana_records']}",
         f"- rows shown: {len(shown)} (ranked by record coverage, then consumer references)",
         "",
         "| field | populated | distinct | range | direct refs | readers | common values | examples |",
@@ -189,6 +216,7 @@ def main() -> int:
     name = args.table.upper().removesuffix(".JSON").removesuffix(".BIN")
     data = load_table(name)
     rows = profile_columns(data)
+    messages = profile_messages(data)
     add_direct_references(rows, data["source"])
     output = {
         "table": data["table"],
@@ -197,6 +225,7 @@ def main() -> int:
         "field_column_count": len(rows),
         "parallel_array_count": sum(row["kind"] == "parallel-array" for row in rows),
         "record_column_count": sum(row["kind"] == "record-column" for row in rows),
+        "message_profile": messages,
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

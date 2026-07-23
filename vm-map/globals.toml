@@ -7,6 +7,16 @@
 note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
 
 [[global]]
+address = "0x8c877"
+name = "current_item_id"
+category = "index-pointer"
+type = "int"
+value_domain = "ITINIT item id; 0 means none"
+usage = "Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x8c879"
 name = "item_sort_key"
 category = "data-table"
@@ -193,6 +203,16 @@ category = "data-table"
 type = "int[1000]"
 value_domain = "50 in the shipped table"
 usage = "Sparse ITINIT consumable field. Item 106, Blood Price Healing Hand, describes essence recovery 50 and stores 50 here; USEITEM follows the dedicated essence-recovery path and scales the value before updating the selected unit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xa6e59"
+name = "current_skill_id"
+category = "index-pointer"
+type = "int"
+value_domain = "SKINIT skill id; 0 means none"
+usage = "Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description."
 source = "investigation"
 confidence = "high"
 
@@ -1363,17 +1383,6 @@ category = "story-flag"
 type = "int"
 value_domain = "?"
 usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
-
-[[global]]
-address = "0xa6e59"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "one of {1, 2, 3, 4, 11, 21, 22, 23}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 2, 3, 4, 11, 21, 22, 23]; writers=['CALCDMG.BIN', 'CHMENU.BIN', 'FORT.BIN', 'INFOIT.BIN']."
 source = "auto-shape"
 confidence = "med"
 depends_on = []
