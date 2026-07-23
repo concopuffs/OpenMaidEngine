@@ -445,7 +445,9 @@ empty reserved banks. Structural and consumer-proven meanings live in `vm-map/gl
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
 The provider-specific join now covers
-RTN_M001/003/004/005/006/007/008/010/011/012/013/014/015/017/051/052: 1,027 movement steps, 974 semantically
+all nineteen used providers,
+RTN_M001/002/003/004/005/006/007/008/009/010/011/012/013/014/015/017/051/052/061:
+all 1,043 movement steps, 974 semantically
 consumed populated parameters, thirteen explicit zero defaults, and three authored-but-unread
 parameter cells. RTN_M005/011/012 read banks 2/3 as
 `destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
@@ -509,6 +511,17 @@ movement-unreachable tiles, and randomly chooses among the lowest-positive-score
 destination the reachable tile farthest from the nearby threat set rather than merely farthest from one
 enemy.
 
+RTN_M002 is the parameterless randomized-roaming provider. It builds the actor's movement-limited
+reachability grid, applies SETMVWORK, retains tiles with positive filtered route scores whose movement
+cost fits current FS, randomizes their order, and accepts the first destination for which SETROUTE
+constructs a path. Success advances progress and returns ordinary movement state 1.
+
+RTN_M009 is the parameterless treasure seeker. It considers active unopened OBINIT type-7 chests only
+when the actor has SKINIT skill 22 (`開錠`, Unlock), while type-8 treasure has no skill gate. A target
+also requires one of the actor's two carried-item slots to be empty or already hold the object's item
+id. M009 selects the nearest eligible object, then uses the same filtered reachability/cost pipeline to
+approach a reachable tile nearest it; success advances progress and returns movement state 1.
+
 RTN_M003 is a parameterless normal-attack routing provider. It requires the normal-attack bit, builds
 the actor's movement-limited MVSEEK grid, and runs SETMVWORK so active foreign-faction entity tiles
 remain eligible only when the normal attack's element has positive effectiveness. It then requires the
@@ -536,6 +549,13 @@ lowest current HP and randomizes among those ties. After choosing the target, it
 actual ATSEEK range band, randomizes among the effective normal attack/equipped skills enabled at that
 band, stores the target and action, and returns immediate-battle state 2 without movement.
 
+RTN_M061 is the parameterless immediate-healing provider. CALCSCOPE places usable category-7 healing
+skills in a separate range-band mask. M061 keeps active same-faction entities inside ATSEEK whose band
+enables healing, retains only allies tied at the lowest current-HP percentage, and randomizes among
+those ties. It then compares the chosen ally's current HP plus each range-enabled equipped spell's
+recovery against max HP, stores the selected ally and healing skill, advances progress, and returns
+support-action state 3 without movement. FIELD handles that state through its dedicated healing path.
+
 MVSEEK's mode contract is also now explicit. Mode 0 replaces the input coordinate with the current
 entity tile and seeds the origin with movement+1, producing the movement-limited reachability grid.
 Modes 1/2 retain the caller coordinate and seed it with 9999, producing a broad target-distance grid;
@@ -547,17 +567,19 @@ by M006/007/015.
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
 mapping, target-selection rules, zero/unwritten behavior, and authored fields proven unread by their
 provider. All 977 populated movement-parameter cells are now accounted for: 974 semantic inputs and
-three explicit residue cells. The three used providers still without schemas (M002/009/061) have no
-populated parameter cells, so their remaining work is behavior decoding rather than column semantics.
+three explicit residue cells. All nineteen providers used by the shipped table now have behavior
+schemas; the three additionally dispatchable but unused providers remain outside the generated join.
 The supporting runtime joins are now curated too:
 `entity_runtime_flags`,
 `entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
-current HP/SP/FS, `stage_object_runtime_flags`, `movement_search_mode`,
+current HP/SP/FS, `entity_skill_flags`, the paired carried-item id/count slots,
+`stage_object_runtime_flags`, `movement_search_mode`,
 `offensive_action_scope_masks`, `pathfinding_remaining_route_steps`,
 `pathfinding_filtered_route_scores`, `pathfinding_movement_costs`, and the per-entity patrol waypoint
 index. The faction-specific terrain masks used by M013 are curated as
 `tile_faction_traversal_masks`. M051's shared action-selection ABI also names `acting_entity_index`,
-`target_entity_index`, `attack_range_distance_grid`, the offensive range/mask/element tables,
+`target_entity_index`, `action_range_distance_grid`, the shared usable-action range bounds, the
+offensive and healing range masks, the offensive element tables,
 `attack_element_effectiveness_percent`, equipped active-skill slots, and the per-entity selected action.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
@@ -608,10 +630,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
-   banks are structurally decoded with every populated movement-parameter cell classified and 1,027 of
-   1,043 movement steps joined to provider behavior. Next close the tiny behavior-only RTN_M002/009/061
-   tail; never assign one universal meaning to a parameter bank whose meaning varies by provider
-   selector.
+   banks are structurally decoded with every populated movement-parameter cell classified and all 1,043
+   shipped movement steps joined to provider behavior. With RTINIT's used-provider surface closed,
+   resume the remaining `*MES` writers and other reader-proven 2D tables; never assign one universal
+   meaning to a parameter bank whose meaning varies by provider selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

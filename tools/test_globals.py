@@ -28,6 +28,14 @@ def test_load_and_lint():
     check(entries[0x4e021]["name"] == "entity_runtime_flags"
           and entries[0x522ed]["name"] == "entity_faction_ids",
           "entity activity and faction arrays are curated")
+    check(entries[0x4e693]["name"] == "entity_skill_flags",
+          "per-entity skill flags are curated")
+    check(entries[0x53e13]["name"] == "entity_carried_item_ids"
+          and entries[0x53e77]["name"] == "entity_carried_item_counts",
+          "per-entity carried-item slots are curated")
+    check(entries[0xeff77]["name"] == "routine_execution_state"
+          and entries[0xeff77]["value_domain"] == "0..3",
+          "movement routine result states are curated")
     check(entries[0x56b20]["name"] == "entity_patrol_waypoint_indices",
           "RTN_M011 waypoint state is curated")
     check(entries[0xaba96]["name"] == "pathfinding_remaining_route_steps"
@@ -36,9 +44,10 @@ def test_load_and_lint():
     check(entries[0xbf6fe]["name"] == "pathfinding_filtered_route_scores"
           and entries[0xcc9f4]["name"] == "offensive_action_scope_masks",
           "movement target filtering and offensive scope are curated")
-    check(entries[0xb8d86]["name"] == "attack_range_distance_grid"
-          and entries[0xcc9f3]["name"] == "offensive_action_max_range",
-          "attack-range search state is curated")
+    check(entries[0xb8d86]["name"] == "action_range_distance_grid"
+          and entries[0xcc9f2]["name"] == "usable_action_min_range"
+          and entries[0xcc9f3]["name"] == "usable_action_max_range",
+          "action-range search state is curated")
     check(entries[0x66713]["name"] == "acting_entity_index"
           and entries[0x66714]["name"] == "target_entity_index"
           and entries[0x52289]["name"] == "entity_selected_action_ids",
@@ -47,6 +56,8 @@ def test_load_and_lint():
           and entries[0xab5ba]["name"]
           == "attack_element_effectiveness_percent",
           "AI action-element eligibility state is curated")
+    check(entries[0xcc9fe]["name"] == "healing_action_scope_masks",
+          "AI healing-action eligibility state is curated")
     check(entries[0x20543]["name"] == "tile_faction_traversal_masks",
           "faction-specific tile traversal masks are curated")
     check(entries[0xaba64]["name"] == "stage_object_runtime_flags",

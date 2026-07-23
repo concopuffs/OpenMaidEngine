@@ -109,6 +109,21 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "produce movement result state 1 without selecting a destination"
         ),
     },
+    2: {
+        "behavior": "roam_to_random_reachable_tile",
+        "parameter_fields": {},
+        "target_selection": (
+            "build the acting entity's movement-limited reach grid, apply "
+            "SETMVWORK filtering, and retain map tiles with a positive "
+            "filtered route score whose movement cost is no greater than "
+            "current FS; randomize the candidate order and use the first tile "
+            "for which SETROUTE produces a route"
+        ),
+        "completion": (
+            "advance the current step's progress counter and produce movement "
+            "result state 1 after routing to a randomized reachable tile"
+        ),
+    },
     3: {
         "behavior": "route_toward_reachable_normal_attack_target",
         "parameter_fields": {},
@@ -226,6 +241,21 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
         "completion": (
             "produce a movement result when a reachable foreign-controlled "
             "Magic Pillar exists"
+        ),
+    },
+    9: {
+        "behavior": "approach_collectible_treasure",
+        "parameter_fields": {},
+        "target_selection": (
+            "select the nearest active unopened OBINIT type-7 chest when the "
+            "acting entity has skill 22 (Unlock), or type-8 treasure without "
+            "that skill gate; require at least one of the entity's two carried-"
+            "item slots to be empty or already contain the object's item id, "
+            "then approach a reachable tile nearest the selected object"
+        ),
+        "completion": (
+            "advance the current step's progress counter and produce movement "
+            "result state 1 after routing toward collectible treasure"
         ),
     },
     10: {
@@ -430,6 +460,28 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "advance the current step's progress counter and produce immediate-"
             "battle result state 2 when a target/action pair is selected; no "
             "movement route is produced"
+        ),
+    },
+    61: {
+        "behavior": "select_lowest_hp_ally_and_healing_skill",
+        "parameter_fields": {},
+        "target_selection": (
+            "require at least one range-enabled healing skill, scan active "
+            "same-faction entities inside the ATSEEK range grid, retain only "
+            "targets tied at the lowest current-HP percentage whose range band "
+            "enables a healing action, and choose randomly among those ties"
+        ),
+        "action_selection": (
+            "among equipped healing skills enabled at the chosen target's "
+            "range, compare current HP plus each skill's HP recovery against "
+            "max HP, maximizing the projected result while it remains below "
+            "max and minimizing it after reaching or exceeding max; store the "
+            "chosen target entity and healing skill id"
+        ),
+        "completion": (
+            "advance the current step's progress counter and produce immediate-"
+            "support result state 3 when a target/healing-skill pair is "
+            "selected; no movement route is produced"
         ),
     },
 }

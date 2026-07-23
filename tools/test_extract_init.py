@@ -371,8 +371,8 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 16
-          and meta["decoded_movement_step_count"] == 1027
+    check(meta["decoded_movement_provider_count"] == 19
+          and meta["decoded_movement_step_count"] == 1043
           and meta["decoded_movement_parameter_count"] == 974
           and meta["decoded_movement_defaulted_parameter_count"] == 13
           and meta["ignored_movement_parameter_count"] == 3,
@@ -510,11 +510,29 @@ def test_real_routine_banks() -> None:
           == "select_lowest_hp_effective_attack_target_and_action"
           and "movement_parameter_1" not in provider_52,
           "RTINIT joins RTN_M052's low-HP attack-selection behavior")
-    undecoded_movement = by_id[2]["movement_steps"][1]
-    check(undecoded_movement["movement_provider_selector"] == 2
-          and "provider_behavior" not in undecoded_movement
-          and "destination_tile_x" not in undecoded_movement,
-          "RTINIT does not leak provider-specific meanings onto undecoded selectors")
+    provider_2 = by_id[2]["movement_steps"][1]
+    check(provider_2["movement_provider_selector"] == 2
+          and provider_2["provider_behavior"]
+          == "roam_to_random_reachable_tile"
+          and "movement_parameter_1" not in provider_2,
+          "RTINIT joins RTN_M002's randomized roaming behavior")
+    provider_9 = by_id[98]["movement_steps"][1]
+    check(provider_9["movement_provider_selector"] == 9
+          and provider_9["provider_behavior"]
+          == "approach_collectible_treasure"
+          and "movement_parameter_1" not in provider_9,
+          "RTINIT joins RTN_M009's collectible-treasure behavior")
+    provider_61 = by_id[33]["movement_steps"][0]
+    check(provider_61["movement_provider_selector"] == 61
+          and provider_61["provider_behavior"]
+          == "select_lowest_hp_ally_and_healing_skill"
+          and "movement_parameter_1" not in provider_61,
+          "RTINIT joins RTN_M061's immediate healing behavior")
+    check(all(
+        "provider_behavior" in step
+        for record in records
+        for step in record.get("movement_steps", [])
+    ), "RTINIT joins behavior semantics onto every shipped movement step")
     check(
         meta["movement_provider_parameter_schemas"]["11"]["parameter_fields"]
         == {
