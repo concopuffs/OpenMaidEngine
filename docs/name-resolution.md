@@ -255,12 +255,30 @@ cell destinations, and 37 footer-array destinations across the 74 records. The r
 the first nonempty victory-condition string, making consumer/value correlations readable without inventing
 a stage-name field.
 
-The strongest consumer-backed meanings are curated in `globals.toml`: `0x27b9..0x27bc` are the two
-victory and two defeat-condition lines rendered by AIM/FIELD; `0xe7302` is passed by FIELD to `play-bgm`;
-`0xe730c` is the turn limit displayed by DRAWCHP and checked by FIELD; and `0xe730d` selects defeat versus
-forced-retreat clear when that limit expires. The remaining stage scalars and buffer families stay raw until
-their FIELD/SETEN/SETOBJ/DRAWMAP consumers support stable names. In particular, repeated asset-like values
-inside `0xe7311` are not promoted merely because they resolve through SYS4INI.
+The strongest header meanings are curated in `globals.toml`: `0x27b9..0x27bc` are the two victory and two
+defeat-condition lines rendered by AIM/FIELD; `0xe7302` is passed by FIELD to `play-bgm`; `0xe730c` is the
+turn limit displayed by DRAWCHP and checked by FIELD; and `0xe730d` selects defeat versus forced-retreat
+clear when that limit expires. STAGECLEAR establishes `0xe7303` as the target/par turn count and scales
+`0xe7304`'s persistent reward increment by performance against that target. FIELD establishes `0xe730b` as
+the gate that disables its already-cleared-stage retreat/replay conversion.
+
+The first map/object pass resolves seven more buffer families. FIELD loads `0xe7311[1..19]` into tiled
+surface slots and DRAWMAP selects those surfaces through terrain metadata, proving it is the current stage's
+map-texture override list: positive values are SYS4INI resource ids, zero disables a slot, and -1 selects
+the shared fallback. DRAWOBJ converts `0xe7325` and `0xe7357` to map-space coordinates, while
+SETOBJ/DRAWOBJ/FIELD use `0xe7389` to index shared object definitions. They are object tile X, tile Y, and
+type id. SETOBJ tests the `{3,4,7}` masks in `0xe7483` against GAMESTART's three-way `difficulty_index`,
+then applies seven required and five forbidden one-based ids from `0xe74b5`/`0xe7613` against the shared
+`story_event_flags` bank.
+
+Generated INIT records now retain their raw `fields`/`record_fields`/buffer keys and additionally expose a
+flat `semantic_fields` projection joined through the top-level `field_semantics` map. For STINIT, the four
+confirmed parallel buffers plus both prerequisite tables are also assembled into 2,312
+`object_placements` across 66 stages. Each placement contains its slot, type, tile coordinates, difficulty
+mask, and populated positive/negative story prerequisites. The four still-unresolved object-parameter
+buffers remain attached under `unknown_fields`, so this convenience view loses no evidence or invents names.
+The next structural batch is the separate 30-slot enemy-spawn schema and its difficulty-dependent footer
+arrays.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -307,11 +325,11 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
 1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
-   STINIT's mixed stage records now have machine-readable investigation surfaces. Next trace STINIT's
-   highest-coverage object/enemy/map buffers through FIELD, SETOBJ, SETEN, and DRAWMAP; isolate EBINIT's
-   remaining voice/action slots only when their routed consumers make them distinguishable. Investigate
-   unread enums and signed classes only when consumer or native evidence appears. Preserve explicit joins
-   and do not infer meaning from column position alone.
+   STINIT's mixed stage records now have machine-readable investigation surfaces. Next assemble STINIT's
+   30-slot enemy-spawn schema through FIELD/SETEN/ADDEN, including its three-difficulty footer arrays; trace
+   the four remaining specialized object parameters only when their type-specific branches distinguish
+   them. Isolate EBINIT's remaining voice/action slots under the same rule. Preserve explicit joins and do
+   not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

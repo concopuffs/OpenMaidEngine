@@ -54,6 +54,16 @@ def resolve(name: str) -> Path:
     raise SystemExit(f"not found: {name}.BIN")
 
 
+def normalize_outname(value: str) -> str:
+    """Accept a generated-file stem, not a path; tolerate one `.json` suffix."""
+    if not value or Path(value).name != value or "/" in value or "\\" in value:
+        raise ValueError("OUTNAME must be a file stem, not a path")
+    outname = value.removesuffix(".json")
+    if not outname or outname in {".", ".."}:
+        raise ValueError("OUTNAME must be a nonempty file stem")
+    return outname
+
+
 def _val(arg):
     """Render an operand as an int (immediate) or a {type,value} ref."""
     t, v = arg
@@ -470,7 +480,9 @@ def _global_registry() -> dict:
         return {}
 
 
-def field_semantics(records: list[dict]) -> dict[str, str]:
+def field_semantics(
+    records: list[dict], array_layouts: dict[str, dict] | None = None
+) -> dict[str, str]:
     """Map raw extracted field keys to canonical semantic names when available."""
     keys = {
         key
@@ -494,13 +506,91 @@ def field_semantics(records: list[dict]) -> dict[str, str]:
         if not name:
             continue
         if len(parts) == 2:
-            name = f"{name}.index_{parts[1]}"
+            index = int(parts[1])
+            layout = (array_layouts or {}).get(f"0x{int(parts[0], 16):x}", {})
+            if stride := layout.get("stride"):
+                row, column = divmod(index, stride)
+                column_name = entry.get("columns", {}).get(
+                    str(column), f"column_{column}"
+                )
+                name = f"{name}.row_{row}.{column_name}"
+            else:
+                index_name = entry.get("columns", {}).get(str(index), f"index_{index}")
+                name = f"{name}.{index_name}"
         elif len(parts) == 3:
             column = parts[2]
             column_name = entry.get("columns", {}).get(column, f"column_{column}")
             name = f"{name}.{column_name}"
         semantics[key] = name
     return semantics
+
+
+def attach_semantic_fields(records: list[dict], semantics: dict[str, str]) -> None:
+    """Add a generated name-keyed view while retaining raw address provenance."""
+    containers = (
+        "string_fields", "fields", "array_fields", "footer_arrays", "record_fields"
+    )
+    for record in records:
+        semantic_fields = {}
+        for container in containers:
+            for key, value in record.get(container, {}).items():
+                if semantic_name := semantics.get(key):
+                    if semantic_name in semantic_fields:
+                        raise ValueError(
+                            f"record {record['id']}: duplicate semantic field {semantic_name}"
+                        )
+                    semantic_fields[semantic_name] = value
+        if semantic_fields:
+            record["semantic_fields"] = semantic_fields
+        else:
+            record.pop("semantic_fields", None)
+
+
+def attach_stage_object_placements(records: list[dict]) -> None:
+    """Assemble STINIT's parallel object buffers into modder-facing slot records."""
+    known_fields = {
+        "type_id": "0xe7389",
+        "tile_x": "0xe7325",
+        "tile_y": "0xe7357",
+        "difficulty_mask": "0xe7483",
+    }
+    unknown_bases = ("0xe73bb", "0xe73ed", "0xe741f", "0xe7451")
+    for record in records:
+        fields = record.get("array_fields", {})
+        objects = []
+        for slot in range(1, 50):
+            type_key = f"{known_fields['type_id']}/{slot}"
+            if type_key not in fields:
+                continue
+            obj = {"slot": slot}
+            for semantic_name, base in known_fields.items():
+                if (key := f"{base}/{slot}") in fields:
+                    obj[semantic_name] = fields[key]
+            required = [
+                fields[key]
+                for column in range(7)
+                if (key := f"0xe74b5/{slot * 7 + column}") in fields
+                and fields[key] > 0
+            ]
+            forbidden = [
+                fields[key]
+                for column in range(5)
+                if (key := f"0xe7613/{slot * 5 + column}") in fields
+                and fields[key] > 0
+            ]
+            if required:
+                obj["required_story_flags"] = required
+            if forbidden:
+                obj["forbidden_story_flags"] = forbidden
+            unknown = {
+                base: fields[f"{base}/{slot}"]
+                for base in unknown_bases
+                if f"{base}/{slot}" in fields
+            }
+            if unknown:
+                obj["unknown_fields"] = unknown
+            objects.append(obj)
+        record["object_placements"] = objects
 
 
 def write_data_index(data_dir: Path) -> None:
@@ -549,10 +639,13 @@ def write_data_index(data_dir: Path) -> None:
         "title, description, furigana, and bytecode dispatch offset separately from the",
         "short description stored by the INIT script.",
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
-        "names from `vm-map/globals.toml`; raw keys remain intact as bytecode provenance.",
+        "names from `vm-map/globals.toml`; each record's generated `semantic_fields` is the joined",
+        "name-keyed convenience view. Raw keys remain intact as bytecode provenance.",
         "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
+        "STINIT additionally joins the confirmed parallel object buffers into per-slot",
+        "`object_placements`; unresolved type-specific parameters remain in `unknown_fields`.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -579,7 +672,10 @@ def main() -> int:
     if not argv:
         raise SystemExit(__doc__)
     name = argv[0].upper().removesuffix(".BIN")
-    outname = argv[1] if len(argv) > 1 else name
+    try:
+        outname = normalize_outname(argv[1]) if len(argv) > 1 else name
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     scr = sys4load.load(resolve(name))
 
     mode = mode_arg or detect_mode(scr)
@@ -597,7 +693,10 @@ def main() -> int:
         )
 
     cols = sorted({c for r in recs for c in r.get("fields", {})}, key=lambda h: int(h, 16))
-    semantics = field_semantics(recs)
+    semantics = field_semantics(recs, meta.get("array_layouts"))
+    attach_semantic_fields(recs, semantics)
+    if mode == "mixed" and name == "STINIT":
+        attach_stage_object_placements(recs)
     out = {"table": name, "source": scr.path.name, "magic": scr.magic, "mode": mode,
            "record_count": len(recs), **meta,
            "field_columns": cols if mode != "footer" else None,

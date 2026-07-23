@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5026 globals (155 curated, 4871 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5030 globals (167 curated, 4863 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -26,6 +26,7 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x6d3` | story_event_flags | high | investigation | Shared one-based story/event flag bank. Progression, recruitment, item, and stage logic read or write individual cells; STINIT object prerequisite ids are decremented by one before SETOBJ tests this array. |
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
@@ -102,8 +103,18 @@
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
+| `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
+| `0xe7304` | stage_clear_performance_bonus | med | investigation | Base stage-clear reward increment. STAGECLEAR multiplies it by the turn-performance percentage derived from stage_target_clear_turns, divides by 100, and adds the result to the capped persistent reward counter at 0x6719. The counter's player-facing resource name remains unresolved. |
+| `0xe730b` | stage_replay_rules_disabled | high | investigation | FIELD's already-cleared-stage override gate. For a cleared stage with value 0, FIELD replaces the mission with an all-party retreat objective and a stage_target_clear_turns forced-retreat limit; value 1 suppresses that replay conversion and related revisit handling. |
 | `0xe730c` | stage_turn_limit | high | investigation | STINIT's per-stage turn limit. DRAWCHP presents the value in the stage information, while FIELD compares the current turn against it when checking stage completion. |
 | `0xe730d` | stage_turn_limit_outcome | high | investigation | STINIT mode paired with stage_turn_limit. Stage 1 stores 0 and describes 50-turn expiry as defeat; stage 2 stores 1 and explicitly describes 15-turn expiry as a forced-retreat clear. |
+| `0xe7311` | stage_map_texture_asset_overrides | high | investigation | Twenty current-stage map texture slots. FIELD loads positive resource ids into tiled surface slots 0x52+index, skips zero, and substitutes the shared per-index fallback for -1; DRAWMAP selects and draws those surfaces through the terrain-to-texture-slot map. |
+| `0xe7325` | stage_object_tile_x | high | investigation | X coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_y for object interaction and occupancy. |
+| `0xe7357` | stage_object_tile_y | high | investigation | Y coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_x for object interaction and occupancy. |
+| `0xe7389` | stage_object_type_id | high | investigation | Object-definition id for each current-stage object slot. SETOBJ decides whether the slot exists, while DRAWOBJ and FIELD use the id to select shared object graphics, dimensions, animation, collision, and behavior metadata. |
+| `0xe7483` | stage_object_difficulty_mask | high | investigation | Per-object difficulty inclusion mask. SETOBJ uses check-bit with difficulty_index and rejects the object slot when the selected difficulty bit is absent. |
+| `0xe74b5` | stage_object_required_story_flags | high | investigation | Seven positive prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
+| `0xe7613` | stage_object_forbidden_story_flags | high | investigation | Five negative prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -116,7 +127,6 @@
 | `0x4f1` | — | low | auto-shape | array |
 | `0x5c3` | — | low | auto-shape | array |
 | `0x69e` | — | low | auto-shape | array |
-| `0x6d3` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
 | `0x7db` | — | low | auto-shape | array |
@@ -250,15 +260,10 @@
 | `0xe7172` | — | low | auto-shape | array |
 | `0xe7305` | — | low | auto-shape | array |
 | `0xe730e` | — | low | auto-shape | array |
-| `0xe7311` | — | low | auto-shape | array |
-| `0xe7325` | — | low | auto-shape | array |
-| `0xe7357` | — | low | auto-shape | array |
-| `0xe7389` | — | low | auto-shape | array |
 | `0xe73bb` | — | low | auto-shape | array |
 | `0xe73ed` | — | low | auto-shape | array |
 | `0xe741f` | — | low | auto-shape | array |
 | `0xe7451` | — | low | auto-shape | array |
-| `0xe7483` | — | low | auto-shape | array |
 | `0xe770d` | — | low | auto-shape | array |
 | `0xe773f` | — | low | auto-shape | array |
 | `0xe775d` | — | low | auto-shape | array |
@@ -356,6 +361,7 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x32f1` | difficulty_index | high | investigation | GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask. |
 | `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
@@ -5013,8 +5019,6 @@
 | `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
 | `0xe6fe2` | — | med | auto-shape | record-table[stride 3] |
 | `0xe71d6` | — | med | auto-shape | record-table[stride 3] |
-| `0xe74b5` | — | med | auto-shape | record-table[stride 7] |
-| `0xe7613` | — | med | auto-shape | record-table[stride 5] |
 | `0xe7889` | — | med | auto-shape | record-table[stride 3] |
 | `0xe78e3` | — | med | auto-shape | record-table[stride 3] |
 | `0xe793d` | — | med | auto-shape | record-table[stride 7] |

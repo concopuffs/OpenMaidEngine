@@ -1671,3 +1671,128 @@ value_domain = "{0,1}; 0 defeat on expiry, 1 forced-retreat clear on expiry"
 usage = "STINIT mode paired with stage_turn_limit. Stage 1 stores 0 and describes 50-turn expiry as defeat; stage 2 stores 1 and explicitly describes 15-turn expiry as a forced-retreat clear."
 source = "investigation"
 confidence = "high"
+
+[[global]]
+address = "0x32f1"
+name = "difficulty_index"
+category = "index-pointer"
+type = "int"
+value_domain = "{0,1,2}"
+usage = "GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6d3"
+name = "story_event_flags"
+category = "data-table"
+type = "int[]"
+value_domain = "mostly {0,1}"
+usage = "Shared one-based story/event flag bank. Progression, recruitment, item, and stage logic read or write individual cells; STINIT object prerequisite ids are decremented by one before SETOBJ tests this array."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7303"
+name = "stage_target_clear_turns"
+category = "data-table"
+type = "int"
+value_domain = "0..50; 0 disables turn-performance scaling"
+usage = "STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7304"
+name = "stage_clear_performance_bonus"
+category = "data-table"
+type = "int"
+value_domain = "0..20"
+usage = "Base stage-clear reward increment. STAGECLEAR multiplies it by the turn-performance percentage derived from stage_target_clear_turns, divides by 100, and adds the result to the capped persistent reward counter at 0x6719. The counter's player-facing resource name remains unresolved."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0xe730b"
+name = "stage_replay_rules_disabled"
+category = "data-table"
+type = "int"
+value_domain = "{0,1}; 1 preserves the original mission rules after clear"
+usage = "FIELD's already-cleared-stage override gate. For a cleared stage with value 0, FIELD replaces the mission with an all-party retreat objective and a stage_target_clear_turns forced-retreat limit; value 1 suppresses that replay conversion and related revisit handling."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7311"
+name = "stage_map_texture_asset_overrides"
+category = "data-table"
+type = "int[20]"
+value_domain = "SYS4INI resource id when positive, 0 disables the slot, -1 selects the shared fallback asset"
+usage = "Twenty current-stage map texture slots. FIELD loads positive resource ids into tiled surface slots 0x52+index, skips zero, and substitutes the shared per-index fallback for -1; DRAWMAP selects and draws those surfaces through the terrain-to-texture-slot map."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7325"
+name = "stage_object_tile_x"
+category = "data-table"
+type = "int[50]"
+value_domain = "map tile X coordinate, 1..25 in the shipped stages"
+usage = "X coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_y for object interaction and occupancy."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7357"
+name = "stage_object_tile_y"
+category = "data-table"
+type = "int[50]"
+value_domain = "map tile Y coordinate, 1..800 in the shipped stages"
+usage = "Y coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_x for object interaction and occupancy."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7389"
+name = "stage_object_type_id"
+category = "data-table"
+type = "int[50]"
+value_domain = "object definition id 1..46"
+usage = "Object-definition id for each current-stage object slot. SETOBJ decides whether the slot exists, while DRAWOBJ and FIELD use the id to select shared object graphics, dimensions, animation, collision, and behavior metadata."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7483"
+name = "stage_object_difficulty_mask"
+category = "data-table"
+type = "int[50]"
+value_domain = "{3,4,7}; bit 0/1/2 enables the object on the corresponding difficulty"
+usage = "Per-object difficulty inclusion mask. SETOBJ uses check-bit with difficulty_index and rejects the object slot when the selected difficulty bit is absent."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x32f1"]
+
+[[global]]
+address = "0xe74b5"
+name = "stage_object_required_story_flags"
+category = "data-table"
+type = "int[50][7]"
+columns = { "0" = "required_flag_1", "1" = "required_flag_2", "2" = "required_flag_3", "3" = "required_flag_4", "4" = "required_flag_5", "5" = "required_flag_6", "6" = "required_flag_7" }
+value_domain = "one-based story_event_flags ids; zero means no requirement"
+usage = "Seven positive prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object unless the corresponding story_event_flags cell equals 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]
+
+[[global]]
+address = "0xe7613"
+name = "stage_object_forbidden_story_flags"
+category = "data-table"
+type = "int[50][5]"
+columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2", "2" = "forbidden_flag_3", "3" = "forbidden_flag_4", "4" = "forbidden_flag_5" }
+value_domain = "one-based story_event_flags ids; zero means no exclusion"
+usage = "Five negative prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object when the corresponding story_event_flags cell equals 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]

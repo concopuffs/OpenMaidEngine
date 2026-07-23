@@ -66,6 +66,18 @@ def test_static_negative_write() -> None:
           "INIT subtraction writes preserve negative values")
 
 
+def test_output_name_validation() -> None:
+    check(extract_init.normalize_outname("ITINIT.json") == "ITINIT",
+          "INIT output names tolerate one JSON suffix")
+    try:
+        extract_init.normalize_outname("build/data/ITINIT.json")
+    except ValueError:
+        rejected = True
+    else:
+        rejected = False
+    check(rejected, "INIT output names reject nested paths")
+
+
 def test_real_mixed_table() -> None:
     script = sys4load.load(extract_init.resolve("STINIT"))
     check(extract_init.detect_mode(script) == "mixed",
@@ -93,6 +105,21 @@ def test_real_mixed_table() -> None:
           "STINIT length-prefixed footer arrays retain their destination")
     check(sum(len(record.get("footer_arrays", {})) for record in records) == 1396,
           "STINIT accounts for every footer-array copy")
+    extract_init.attach_stage_object_placements(records)
+    first_object = records[0]["object_placements"][0]
+    check(first_object == {
+        "slot": 1,
+        "type_id": 1,
+        "tile_x": 13,
+        "tile_y": 1,
+        "difficulty_mask": 7,
+        "unknown_fields": {"0xe73bb": 1},
+    }, "STINIT joins confirmed object buffers into one placement record")
+    stage2_slot3 = next(
+        obj for obj in records[1]["object_placements"] if obj["slot"] == 3
+    )
+    check(stage2_slot3["required_story_flags"] == [902],
+          "STINIT object placements join positive story prerequisites")
 
 
 def test_real_message_tables() -> None:
@@ -167,11 +194,29 @@ def test_field_semantics() -> None:
           "parallel INIT fields expose canonical semantic names")
     check(semantics["0x9f541/14/8"] == "item_stat_modifiers.critical_chance",
           "row-table columns expose canonical semantic names")
+    extract_init.attach_semantic_fields(items, semantics)
+    check(items[0]["semantic_fields"]["item_sort_key"] == 10,
+          "records expose a joined semantic field view")
+
+    stages, meta = extract_init.extract_mixed(
+        sys4load.load(extract_init.resolve("STINIT"))
+    )
+    stage_semantics = extract_init.field_semantics(
+        stages, meta["array_layouts"]
+    )
+    check(stage_semantics["0xe7325/1"] == "stage_object_tile_x.index_1",
+          "mixed buffer cells expose canonical semantic names")
+    check(
+        stage_semantics["0xe74b5/21"]
+        == "stage_object_required_story_flags.row_3.required_flag_1",
+        "mixed row buffers expose row and column semantics",
+    )
 
 
 if __name__ == "__main__":
     test_real_name_tables()
     test_static_negative_write()
+    test_output_name_validation()
     test_real_mixed_table()
     test_real_message_tables()
     test_message_join()
