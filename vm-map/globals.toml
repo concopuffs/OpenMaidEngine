@@ -850,7 +850,7 @@ name = "movement_routine_parameter_1"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 2. RTN_M004..015 providers consume the current row/step value; its exact meaning is tagged by movement_routine_provider_selectors and remains provider-specific."
+usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005 and RTN_M011 use it as destination_tile_x; other consuming providers remain provider-specific."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -861,7 +861,7 @@ name = "movement_routine_parameter_2"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 3. RTN_M005/007/010/011/012 consume it as a provider-specific parameter."
+usage = "RTINIT movement bank 3. RTN_M005 and RTN_M011 use it as destination_tile_y; RTN_M007/010/012 meanings remain provider-specific."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -872,7 +872,7 @@ name = "movement_routine_parameter_3"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 4. RTN_M011 consumes it as a provider-specific parameter."
+usage = "RTINIT movement bank 4. RTN_M011 uses it as a one-based waypoint_ordinal, executing only the step whose ordinal matches the entity's current zero-based waypoint index."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -883,7 +883,7 @@ name = "movement_routine_parameter_4"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "{1,2}"
-usage = "RTINIT movement bank 5. RTN_M011 consumes it as a provider-specific parameter."
+usage = "RTINIT movement bank 5. RTN_M011 uses a nonzero value as path_cost_limit_override; zero or an unwritten cell falls back to the entity's current FS."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -1153,6 +1153,52 @@ confidence = "high"
 depends_on = ["0xeff75", "0xeff76"]
 
 [[global]]
+address = "0x4e11b"
+name = "entity_effective_stats"
+category = "data-table"
+type = "int[50][14]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power", "10" = "movement", "11" = "max_hp", "12" = "max_sp", "13" = "max_fs" }
+value_domain = "calculated runtime stat values"
+usage = "Per-runtime-entity effective fourteen-stat row after CALCREVISE applies base data, equipment, skills, and conditions. Combat/UI consumers use columns 0..10 directly; columns 11..13 are the maxima paired with entity_current_resources HP/SP/FS."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e085"]
+
+[[global]]
+address = "0x4e085"
+name = "entity_current_resources"
+category = "data-table"
+type = "int[50][3]"
+columns = { "0" = "current_hp", "1" = "current_sp", "2" = "current_fs" }
+value_domain = "nonnegative current HP/SP/FS values"
+usage = "Per-runtime-entity current resources. DRAWCHP/DRAWENP render columns 0..2 against max-stat columns 11..13, skill/item resource deltas modify the same three columns, and movement search compares path cost with current_fs."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e11b"]
+
+[[global]]
+address = "0x5231f"
+name = "entity_tile_x"
+category = "data-table"
+type = "int[50]"
+value_domain = "current map X coordinate"
+usage = "Per-runtime-entity map X coordinate. FIELD movement and occupancy logic maintain it; movement providers pair it with entity_tile_y and compare or route from the current tile."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52351"]
+
+[[global]]
+address = "0x52351"
+name = "entity_tile_y"
+category = "data-table"
+type = "int[50]"
+value_domain = "current map Y cell key"
+usage = "Per-runtime-entity map Y coordinate paired with entity_tile_x. Values use the same stage map-space cell keys as STINIT object and enemy coordinates."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5231f"]
+
+[[global]]
 address = "0x53517"
 name = "entity_movement_routine_set_ids"
 category = "data-table"
@@ -1195,6 +1241,28 @@ usage = "Per-runtime-entity battle-step random rolls. FIELD and BTL fill every a
 source = "investigation"
 confidence = "high"
 depends_on = ["0x125ad8", "0xeff76"]
+
+[[global]]
+address = "0x56b20"
+name = "entity_patrol_waypoint_indices"
+category = "data-table"
+type = "int[50]"
+value_domain = "zero-based waypoint index; observed RTINIT waypoint ordinals imply 0..7"
+usage = "RTN_M011 compares each step's one-based waypoint_ordinal minus one with the current entity's value. Reaching the selected destination advances this value modulo the largest RTN_M011 waypoint ordinal in the routine set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1037f8", "0xeff78"]
+
+[[global]]
+address = "0xb240e"
+name = "pathfinding_movement_costs"
+category = "data-table"
+type = "int[][27]"
+value_domain = "nonnegative accumulated movement cost for reachable tiles"
+usage = "MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x] with stride 27. FIELD and RTN_M providers accept candidate destinations only when this cost is within the acting entity's current FS or a provider-specific override."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e085"]
 
 [[global]]
 address = "0x152616"

@@ -442,7 +442,24 @@ are reserved/empty. Only fourteen shipped battle steps are populated.
 keeps its raw `base/20/slot` fields and complete offset-tagged assignment history while adding joined
 `movement_steps`/`battle_steps` with provider script names. The bank layout explicitly includes all six
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
-parameter names deliberately remain until each RTN_M/RTN_B provider proves its tagged schema.
+parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
+
+The first provider-specific join covers RTN_M005 and RTN_M011, 252 movement steps and 685 populated
+parameters in total. Both providers read banks 2/3 as `destination_tile_x` / `destination_tile_y` and
+approach that exact map tile, incrementing the current step's progress counter after arrival. Their
+alternate completion test recognizes a type-6 stage object at the authored destination and also accepts
+the object's linked exit tile.
+
+RTN_M011 is the cyclic-waypoint form. Bank 4 is a one-based `waypoint_ordinal`; only the step whose
+ordinal minus one matches `entity_patrol_waypoint_indices[current_entity]` executes. Arrival advances
+that runtime index modulo the largest RTN_M011 ordinal in the selected routine set. Bank 5 is an optional
+`path_cost_limit_override`; zero or an unwritten cell falls back to the entity's current FS.
+`movement_steps` now carry these selector-scoped semantic fields beside the original
+`movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
+mapping and zero/unwritten behavior. No meaning is projected onto other providers. The supporting
+runtime joins are now curated too: `entity_tile_x`/`entity_tile_y`, the fourteen-column
+`entity_effective_stats`, current HP/SP/FS, `pathfinding_movement_costs`, and the per-entity patrol
+waypoint index.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -492,9 +509,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
-   banks are structurally decoded. Next decode provider-tagged RTINIT parameters by their RTN_M consumers,
-   starting with high-density providers 5 and 11; never assign one universal meaning to a parameter bank
-   whose meaning varies by provider selector.
+   banks are structurally decoded, and high-density providers 5 and 11 now expose destination/waypoint
+   semantics without changing their shared raw banks. Next continue through the remaining parameterized
+   RTN_M consumers by evidence density; never assign one universal meaning to a parameter bank whose
+   meaning varies by provider selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

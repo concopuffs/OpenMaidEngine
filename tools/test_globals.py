@@ -16,6 +16,19 @@ def test_load_and_lint():
     check(entries[0xa57]["category"] == "story-flag", "0xa57 is category story-flag")
     check(entries[0x3234]["category"] == "story-flag", "0x3234 is category story-flag")
     check({0xa57, 0xa58, 0xa59} <= set(entries), "Lily form flags A/B/C all present")
+    check(entries[0x4e085]["columns"] == {
+        "0": "current_hp", "1": "current_sp", "2": "current_fs"
+    }, "entity current-resource columns are curated")
+    check(entries[0x4e11b]["columns"]["10"] == "movement"
+          and entries[0x4e11b]["columns"]["13"] == "max_fs",
+          "entity effective-stat columns are curated")
+    check(entries[0x5231f]["name"] == "entity_tile_x"
+          and entries[0x52351]["name"] == "entity_tile_y",
+          "entity map-coordinate arrays are curated")
+    check(entries[0x56b20]["name"] == "entity_patrol_waypoint_indices",
+          "RTN_M011 waypoint state is curated")
+    check(entries[0xb240e]["name"] == "pathfinding_movement_costs",
+          "movement-cost work grid is curated")
     # lint clean against a permissive address universe (curated addrs are self-consistent)
     errors, warnings = G.lint(entries, set(entries))
     check(errors == [], f"globals.toml lints clean (errors={errors})")

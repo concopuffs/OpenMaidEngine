@@ -129,6 +129,9 @@ def main() -> int:
         "conflicting_overwrite_count": 1,
         "movement_step_count": 2,
         "battle_step_count": 1,
+        "decoded_movement_provider_count": 1,
+        "decoded_movement_step_count": 1,
+        "decoded_movement_parameter_count": 2,
         "movement_provider_scripts": {"1": "RTN_M001.BIN"},
         "battle_provider_scripts": {"1": "RTN_B001.BIN"},
         "used_movement_provider_selectors": [1],
@@ -157,6 +160,9 @@ def main() -> int:
     assert banked_summary["reserved_bank_count"] == 1
     assert banked_summary["movement_step_count"] == 2
     assert banked_summary["battle_provider_count"] == 1
+    assert banked_summary["decoded_movement_provider_count"] == 1
+    assert banked_summary["decoded_movement_step_count"] == 1
+    assert banked_summary["decoded_movement_parameter_count"] == 2
 
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1

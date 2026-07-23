@@ -371,6 +371,10 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
+    check(meta["decoded_movement_provider_count"] == 2
+          and meta["decoded_movement_step_count"] == 252
+          and meta["decoded_movement_parameter_count"] == 685,
+          "RTINIT reports selector-specific semantic coverage")
     check([
         layout["bank_index"]
         for layout in meta["bank_layouts"].values()
@@ -393,6 +397,35 @@ def test_real_routine_banks() -> None:
     check(by_id[173]["movement_steps"][0]["movement_parameter_1"] == 2
           and by_id[173]["movement_steps"][0]["movement_parameter_2"] == 158,
           "RTINIT final rows reflect source-ordered conflicting overwrites")
+    provider_5 = by_id[5]["movement_steps"][2]
+    check(provider_5["movement_provider_selector"] == 5
+          and provider_5["provider_behavior"] == "approach_destination_tile"
+          and provider_5["destination_tile_x"] == 24
+          and provider_5["destination_tile_y"] == 123
+          and provider_5["movement_parameter_1"] == 24
+          and provider_5["movement_parameter_2"] == 123,
+          "RTINIT joins RTN_M005 destination semantics without replacing raw banks")
+    provider_11 = by_id[87]["movement_steps"][2]
+    check(provider_11["movement_provider_selector"] == 11
+          and provider_11["provider_behavior"] == "cycle_destination_waypoints"
+          and provider_11["destination_tile_x"] == 3
+          and provider_11["destination_tile_y"] == 499
+          and provider_11["waypoint_ordinal"] == 1
+          and provider_11["path_cost_limit_override"] == 2,
+          "RTINIT joins all four RTN_M011 waypoint parameters")
+    check("provider_behavior" not in movement
+          and "destination_tile_x" not in movement,
+          "RTINIT does not leak provider-specific meanings onto undecoded selectors")
+    check(
+        meta["movement_provider_parameter_schemas"]["11"]["parameter_fields"]
+        == {
+            "movement_parameter_1": "destination_tile_x",
+            "movement_parameter_2": "destination_tile_y",
+            "movement_parameter_3": "waypoint_ordinal",
+            "movement_parameter_4": "path_cost_limit_override",
+        },
+        "RTINIT publishes the reusable RTN_M011 parameter schema",
+    )
     semantics = extract_init.field_semantics(records)
     check(
         semantics["0xeff78/20/0"]

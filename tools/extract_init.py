@@ -90,6 +90,43 @@ ROUTINE_BANK_ROLES = (
     "battle_forbidden_story_flag_id",
 )
 
+MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
+    5: {
+        "behavior": "approach_destination_tile",
+        "parameter_fields": {
+            "movement_parameter_1": "destination_tile_x",
+            "movement_parameter_2": "destination_tile_y",
+        },
+        "completion": (
+            "advance the current step's progress counter after reaching the "
+            "destination tile (or its linked type-6 stage-object exit tile)"
+        ),
+    },
+    11: {
+        "behavior": "cycle_destination_waypoints",
+        "parameter_fields": {
+            "movement_parameter_1": "destination_tile_x",
+            "movement_parameter_2": "destination_tile_y",
+            "movement_parameter_3": "waypoint_ordinal",
+            "movement_parameter_4": "path_cost_limit_override",
+        },
+        "parameter_notes": {
+            "waypoint_ordinal": (
+                "one-based; only the ordinal matching the entity's current "
+                "zero-based waypoint index executes"
+            ),
+            "path_cost_limit_override": (
+                "optional; zero/absent falls back to the entity's current FS"
+            ),
+        },
+        "completion": (
+            "advance the entity's waypoint index modulo the largest authored "
+            "waypoint ordinal after reaching the destination tile (or its "
+            "linked type-6 stage-object exit tile)"
+        ),
+    },
+}
+
 UNIT_STAT_COLUMNS = (
     "accuracy", "evasion", "physical_attack", "physical_defense",
     "magic_attack", "magic_defense", "speed", "luck", "critical_chance",
@@ -900,6 +937,21 @@ def _movement_provider_names(names: dict[int, str]) -> dict[int, str]:
     return providers
 
 
+def _join_movement_provider_semantics(step: dict) -> int:
+    """Add selector-specific RTN_M semantics while retaining every raw bank."""
+    selector = step.get("movement_provider_selector")
+    schema = MOVEMENT_PROVIDER_PARAMETER_SCHEMAS.get(selector)
+    if schema is None:
+        return 0
+    step["provider_behavior"] = schema["behavior"]
+    joined = 0
+    for raw_field, semantic_field in schema["parameter_fields"].items():
+        if raw_field in step:
+            step[semantic_field] = step[raw_field]
+            joined += 1
+    return joined
+
+
 def extract_banked(scr):
     """Extract RTINIT's sparse routine sets across twenty parallel step banks."""
     writes = _routine_bank_writes(scr)
@@ -915,6 +967,8 @@ def extract_banked(scr):
     records_by_id: dict[int, dict] = {}
     cell_assignments: dict[tuple[int, int, int], list[int]] = collections.defaultdict(list)
     bank_cells: dict[int, set[tuple[int, int]]] = collections.defaultdict(set)
+    decoded_movement_step_count = 0
+    decoded_movement_parameter_count = 0
 
     for offset, destination, value, bank_index, record_id, slot in writes:
         bank_base = ROUTINE_BANK_ROOT + bank_index * ROUTINE_BANK_SPAN
@@ -954,14 +1008,19 @@ def extract_banked(scr):
             }
             if movement:
                 selector = movement.get("movement_provider_selector")
-                movement_steps.append({
+                step = {
                     "slot": slot,
                     **movement,
                     **(
                         {"provider_script": movement_providers.get(selector, "")}
                         if selector is not None else {}
                     ),
-                })
+                }
+                joined_parameter_count = _join_movement_provider_semantics(step)
+                if selector in MOVEMENT_PROVIDER_PARAMETER_SCHEMAS:
+                    decoded_movement_step_count += 1
+                    decoded_movement_parameter_count += joined_parameter_count
+                movement_steps.append(step)
 
             battle = {
                 ROUTINE_BANK_ROLES[bank]: final_by_bank_slot[(bank, slot)]
@@ -1049,6 +1108,20 @@ def extract_banked(scr):
             str(selector): name
             for selector, name in sorted(movement_providers.items())
         },
+        "movement_provider_parameter_schemas": {
+            str(selector): {
+                "provider_script": movement_providers.get(selector, ""),
+                **schema,
+            }
+            for selector, schema in sorted(
+                MOVEMENT_PROVIDER_PARAMETER_SCHEMAS.items()
+            )
+        },
+        "decoded_movement_provider_count": len(
+            MOVEMENT_PROVIDER_PARAMETER_SCHEMAS
+        ),
+        "decoded_movement_step_count": decoded_movement_step_count,
+        "decoded_movement_parameter_count": decoded_movement_parameter_count,
         "battle_provider_scripts": {
             str(selector): name
             for selector, name in sorted(battle_providers.items())
