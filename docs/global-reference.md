@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5038 globals (245 curated, 4793 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5039 globals (252 curated, 4787 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -20,6 +20,8 @@
 |---|---|---|---|---|
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
+| `0xcc9f2` | offensive_action_min_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's minimum range and widens it for usable offensive skills. It is the lower bound used while populating offensive_action_scope_masks. |
+| `0xcc9f3` | offensive_action_max_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's maximum range and widens it for usable offensive skills. ATSEEK bounds its attack-range flood fill with this value; RTN_M051/052 use it as the upper scan bound. |
 | `0xe6c5d` | scjump_progress_d | med | inference | SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x152618` | scjump_progress_c | med | inference | Third SCJUMP switch input (530 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x152619` | battle_exchange_step | high | investigation | BTL's six-step alternating exchange counter. Dividing it by two selects the first, second, or third ordinary-attack/skill voice variant and related animation slots. |
@@ -42,6 +44,8 @@
 | `0x4e021` | entity_runtime_flags | high | investigation | Per-runtime-entity state flags. RTN_M007 requires bit 0 when selecting an injured ally, and MVSEEK mode 2 requires it before masking a foreign entity's occupied terrain cell. |
 | `0x4e085` | entity_current_resources | high | investigation | Per-runtime-entity current resources. DRAWCHP/DRAWENP render columns 0..2 against max-stat columns 11..13, skill/item resource deltas modify the same three columns, and movement search compares path cost with current_fs. Columns: 0=current_hp, 1=current_sp, 2=current_fs. |
 | `0x4e11b` | entity_effective_stats | high | investigation | Per-runtime-entity effective fourteen-stat row after CALCREVISE applies base data, equipment, skills, and conditions. Combat/UI consumers use columns 0..10 directly; columns 11..13 are the maxima paired with entity_current_resources HP/SP/FS. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x5212b` | entity_equipped_active_skill_ids | high | investigation | Four equipped active-skill slots per runtime entity. CALCSCOPE maps each usable offensive skill into an action bit and range band; RTN_M051 turns the selected nonzero action bit back into its skill id. |
+| `0x52289` | entity_selected_action_ids | high | investigation | Per-entity selected battle action. RTN_M051/052 write either zero for the normal attack or an id from entity_equipped_active_skill_ids, then return routine execution state 2 so FIELD enters battle. BTRTN may replace the value through a battle-provider decision. |
 | `0x522ed` | entity_faction_ids | high | investigation | Per-runtime-entity faction id. RTN_M007 restricts its injured-unit target to the acting entity's faction; MVSEEK mode 2 compares this value while masking active foreign-entity cells, and ordinary movement checks the acting faction's bit in tile passability masks. |
 | `0x5231f` | entity_tile_x | high | investigation | Per-runtime-entity map X coordinate. FIELD movement and occupancy logic maintain it; movement providers pair it with entity_tile_y and compare or route from the current tile. |
 | `0x52351` | entity_tile_y | high | investigation | Per-runtime-entity map Y coordinate paired with entity_tile_x. Values use the same stage map-space cell keys as STINIT object and enemy coordinates. |
@@ -126,12 +130,15 @@
 | `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
+| `0xab5ba` | attack_element_effectiveness_percent | high | investigation | AFINIT-authored element matchup table. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases. |
 | `0xab8c7` | class_change_rule_script_ids | high | investigation | CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json. |
 | `0xaba64` | stage_object_runtime_flags | high | investigation | Per-current-stage object flags. RTN_M010 and RTN_M015 require bit 1 before considering Healing Feathers or Magic Pillars as movement targets; FIELD and object rendering maintain the broader type-dependent bitfield. |
 | `0xaba96` | pathfinding_remaining_route_steps | high | investigation | MVSEEK's row-major reachability grid. Mode 0 searches from the current entity with movement+1 at the origin; modes 1/2 search from the caller-supplied coordinate with 9999 at the origin. Each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M006/007/015 use origin-minus-target values as route-step radii; RTN_M010 ranks Healing Feathers by the negated value. |
 | `0xb240e` | pathfinding_movement_costs | high | investigation | MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x] with stride 27. FIELD and RTN_M providers accept candidate destinations only when this cost is within the acting entity's current FS or a provider-specific override. |
+| `0xb8d86` | attack_range_distance_grid | high | investigation | ATSEEK's row-major attack-range flood-fill grid. It starts from the acting entity, expands through map-valid doubled-coordinate neighbors up to offensive_action_max_range, and stores 1 for the first range band, 2 for the next, and so on. RTN_M051/052 use the value at an enemy tile to select an offensive_action_scope_masks band. |
 | `0xbf6fe` | pathfinding_filtered_route_scores | high | investigation | SETMVWORK begins by copying pathfinding_remaining_route_steps, then filters occupied entity cells according to faction and the acting entity's usable offensive-action mask/effectiveness. RTN_M providers combine this target-proximity score with a movement-limited MVSEEK grid to select a reachable tile nearest an entity or stage object. |
 | `0xcc9f4` | offensive_action_scope_masks | high | investigation | CALCSCOPE clears ten encoded-range cells, sets bit 0 over the equipped/default attack's range, and sets bits 1..4 over each usable offensive skill's range. SETMVWORK uses the range-0 mask and paired attack elements when filtering target cells; RTN_M003/006/016/017/018 require its normal-attack bit. Columns: 0=range_0, 1=range_1, 2=range_2, 3=range_3, 4=range_4, 5=range_5, 6=range_6, 7=range_7, 8=range_8, 9=range_9. |
+| `0xcca08` | offensive_action_attack_elements | high | investigation | CALCSCOPE stores the normal attack element in action column 0 and each usable equipped skill's attack element in columns 1..4 for every applicable range band. SETMVWORK and RTN_M051/052 test these elements against attack_element_effectiveness_percent. |
 | `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
 | `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
@@ -231,7 +238,6 @@
 | `0x521f3` | — | low | auto-shape | array |
 | `0x52225` | — | low | auto-shape | array |
 | `0x52257` | — | low | auto-shape | array |
-| `0x52289` | — | low | auto-shape | array |
 | `0x522bb` | — | low | auto-shape | array |
 | `0x53ede` | — | low | auto-shape | array |
 | `0x55e3b` | — | low | auto-shape | array |
@@ -394,6 +400,8 @@
 |---|---|---|---|---|
 | `0x32f1` | difficulty_index | high | investigation | GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask. |
 | `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
+| `0x66713` | acting_entity_index | high | investigation | Entity whose movement or battle turn is being resolved. FIELD sets it before MVRTN; RTN_M providers use it for faction, position, resources, selected action, and routine progress. Together with target_entity_index it forms the attacker/target pair passed into battle. |
+| `0x66714` | target_entity_index | high | investigation | Selected target/opponent entity. RTN_M051/052 choose and write an active foreign-faction target; FIELD pairs it with acting_entity_index for movement presentation and battle setup. |
 | `0x66715` | current_unit_id | high | investigation | Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state. |
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
@@ -441,10 +449,8 @@
 | `0x665d3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [1, 2, 4, 8, 32, 64, 128, 65536]; writers=['ALCHEMY.BIN', 'BUNKI.BIN', 'DEBUGADV.BIN', 'EVOLVE.BIN']. |
 | `0x665d6` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']. |
 | `0x665d7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']. |
-| `0x66714` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']. |
 | `0xaba5c` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xaba5e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
-| `0xcc9f3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']. |
 | `0xccc21` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CHMENU.BIN']. |
 | `0xeff77` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 2, 3]; writers=['BTRTN.BIN', 'MVRTN.BIN', 'RTN_B001.BIN', 'RTN_B002.BIN']. |
 | `0x1560e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 2, 3, 4, 5, 6, 7]; writers=['MAGIC.BIN', 'SELACT.BIN', 'SUMMON.BIN']. |
@@ -3705,7 +3711,6 @@
 | `0x341ab` | — | med | auto-shape | record-table[stride 53] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
 | `0x4e693` | — | med | auto-shape | record-table[stride 300] |
-| `0x5212b` | — | med | auto-shape | record-table[stride 4] |
 | `0x52383` | — | med | auto-shape | record-table[stride 30] |
 | `0x5295f` | — | med | auto-shape | record-table[stride 30] |
 | `0x52f3b` | — | med | auto-shape | record-table[stride 30] |
@@ -5025,21 +5030,17 @@
 | `0x64cdd` | — | low | auto-shape | cg-gallery-field? |
 | `0x64cde` | — | med | auto-shape | cg-gallery-field |
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
-| `0x66713` | — | low | auto-shape | index/counter? |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0xaac76` | — | low | auto-shape | index/counter? |
 | `0xaacf0` | — | med | auto-shape | record-table[stride 5] |
 | `0xaad86` | — | med | auto-shape | record-table[stride 55] |
 | `0xab3f8` | — | med | auto-shape | record-table[stride 15] |
-| `0xab5ba` | — | med | auto-shape | record-table[stride 20] |
 | `0xab6fa` | — | med | auto-shape | record-table[stride 11] |
 | `0xab7d6` | — | med | auto-shape | record-table[stride 11] |
 | `0xab8b2` | — | med | auto-shape | record-table[stride 7] |
-| `0xb8d86` | — | med | auto-shape | record-table[stride 27] |
 | `0xc6077` | — | med | auto-shape | record-table[stride 27] |
 | `0xcc9f0` | — | low | auto-shape | index/counter? |
-| `0xcca08` | — | med | auto-shape | record-table[stride 5] |
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
 | `0xccc0b` | — | low | auto-shape | index/counter? |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |

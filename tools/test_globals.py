@@ -36,6 +36,17 @@ def test_load_and_lint():
     check(entries[0xbf6fe]["name"] == "pathfinding_filtered_route_scores"
           and entries[0xcc9f4]["name"] == "offensive_action_scope_masks",
           "movement target filtering and offensive scope are curated")
+    check(entries[0xb8d86]["name"] == "attack_range_distance_grid"
+          and entries[0xcc9f3]["name"] == "offensive_action_max_range",
+          "attack-range search state is curated")
+    check(entries[0x66713]["name"] == "acting_entity_index"
+          and entries[0x66714]["name"] == "target_entity_index"
+          and entries[0x52289]["name"] == "entity_selected_action_ids",
+          "AI actor, target, and selected action state are curated")
+    check(entries[0xcca08]["name"] == "offensive_action_attack_elements"
+          and entries[0xab5ba]["name"]
+          == "attack_element_effectiveness_percent",
+          "AI action-element eligibility state is curated")
     check(entries[0x20543]["name"] == "tile_faction_traversal_masks",
           "faction-specific tile traversal masks are curated")
     check(entries[0xaba64]["name"] == "stage_object_runtime_flags",

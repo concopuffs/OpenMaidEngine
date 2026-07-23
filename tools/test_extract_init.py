@@ -371,8 +371,8 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 12
-          and meta["decoded_movement_step_count"] == 632
+    check(meta["decoded_movement_provider_count"] == 14
+          and meta["decoded_movement_step_count"] == 858
           and meta["decoded_movement_parameter_count"] == 974
           and meta["decoded_movement_defaulted_parameter_count"] == 13
           and meta["ignored_movement_parameter_count"] == 3,
@@ -486,6 +486,18 @@ def test_real_routine_banks() -> None:
           and provider_14["provider_behavior"] == "retreat_from_nearby_enemies"
           and provider_14["maximum_threat_route_steps"] == 6,
           "RTINIT joins RTN_M014's threat-detection radius")
+    provider_3 = by_id[3]["movement_steps"][3]
+    check(provider_3["movement_provider_selector"] == 3
+          and provider_3["provider_behavior"]
+          == "route_toward_reachable_normal_attack_target"
+          and "movement_parameter_1" not in provider_3,
+          "RTINIT joins RTN_M003's parameterless attack-route behavior")
+    provider_51 = by_id[3]["movement_steps"][1]
+    check(provider_51["movement_provider_selector"] == 51
+          and provider_51["provider_behavior"]
+          == "select_effective_attack_target_and_action"
+          and "movement_parameter_1" not in provider_51,
+          "RTINIT joins RTN_M051's parameterless attack-selection behavior")
     undecoded_movement = by_id[2]["movement_steps"][1]
     check(undecoded_movement["movement_provider_selector"] == 2
           and "provider_behavior" not in undecoded_movement

@@ -109,6 +109,24 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "produce movement result state 1 without selecting a destination"
         ),
     },
+    3: {
+        "behavior": "route_toward_reachable_normal_attack_target",
+        "parameter_fields": {},
+        "target_selection": (
+            "require a usable normal attack, build the acting entity's "
+            "movement-limited reach grid, and retain active foreign-faction "
+            "entities whose occupied tile remains element-effective after "
+            "SETMVWORK filtering and costs no more than current FS; rank "
+            "candidates by descending remaining-route score with randomized "
+            "ties, then use the first candidate for which SETROUTE produces "
+            "a route"
+        ),
+        "completion": (
+            "advance the current step's progress counter and produce movement "
+            "result state 1 after routing toward a reachable normal-attack "
+            "target"
+        ),
+    },
     4: {
         "behavior": "approach_stage_object_slot",
         "parameter_fields": {
@@ -347,6 +365,30 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
         "completion": (
             "produce a movement result only when a foreign-controlled Magic "
             "Pillar exists within the configured route-step radius"
+        ),
+    },
+    51: {
+        "behavior": "select_effective_attack_target_and_action",
+        "parameter_fields": {},
+        "target_selection": (
+            "require a usable nonzero attack-range band, scan active foreign-"
+            "faction entities inside the ATSEEK range grid, and retain targets "
+            "for which at least one allowed normal-attack/equipped-skill "
+            "element has positive effectiveness against the target's defense "
+            "element; encountering a lower range band clears earlier "
+            "candidates, and the final target is randomized from the retained "
+            "list"
+        ),
+        "action_selection": (
+            "after choosing the target, collect the effective actions enabled "
+            "in the tracked closest range band (0 means normal attack; nonzero "
+            "values are equipped skill ids), choose randomly, and store both "
+            "the target entity and selected action"
+        ),
+        "completion": (
+            "advance the current step's progress counter and produce immediate-"
+            "battle result state 2 when a target/action pair is selected; no "
+            "movement route is produced"
         ),
     },
 }

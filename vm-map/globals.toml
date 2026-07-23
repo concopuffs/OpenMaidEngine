@@ -1287,6 +1287,17 @@ confidence = "high"
 depends_on = ["0x4e085"]
 
 [[global]]
+address = "0xb8d86"
+name = "attack_range_distance_grid"
+category = "data-table"
+type = "int[][27]"
+value_domain = "0 outside attack range; otherwise one-based encoded range band"
+usage = "ATSEEK's row-major attack-range flood-fill grid. It starts from the acting entity, expands through map-valid doubled-coordinate neighbors up to offensive_action_max_range, and stores 1 for the first range band, 2 for the next, and so on. RTN_M051/052 use the value at an enemy tile to select an offensive_action_scope_masks band."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5231f", "0x52351", "0xcc9f3", "0xcc9f4"]
+
+[[global]]
 address = "0x20543"
 name = "tile_faction_traversal_masks"
 category = "data-table"
@@ -1331,6 +1342,61 @@ confidence = "high"
 depends_on = ["0x4e021", "0x4e11b", "0x522ed", "0x5231f", "0x52351"]
 
 [[global]]
+address = "0x5212b"
+name = "entity_equipped_active_skill_ids"
+category = "data-table"
+type = "int[50][4]"
+value_domain = "0 for an empty slot; otherwise SKINIT skill id"
+usage = "Four equipped active-skill slots per runtime entity. CALCSCOPE maps each usable offensive skill into an action bit and range band; RTN_M051 turns the selected nonzero action bit back into its skill id."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xa6f86", "0xa71de", "0xa730a", "0xa7436"]
+
+[[global]]
+address = "0x52289"
+name = "entity_selected_action_ids"
+category = "data-table"
+type = "int[50]"
+value_domain = "0 for normal attack; otherwise selected skill id"
+usage = "Per-entity selected battle action. RTN_M051/052 write either zero for the normal attack or an id from entity_equipped_active_skill_ids, then return routine execution state 2 so FIELD enters battle. BTRTN may replace the value through a battle-provider decision."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5212b", "0x66713", "0x66714", "0xeff77"]
+
+[[global]]
+address = "0xcc9f2"
+name = "offensive_action_min_range"
+category = "counter"
+type = "int"
+value_domain = "encoded attack-range band 0..9"
+usage = "CALCSCOPE initializes this from the equipped/default attack's minimum range and widens it for usable offensive skills. It is the lower bound used while populating offensive_action_scope_masks."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8d431", "0xa71de"]
+
+[[global]]
+address = "0xcca08"
+name = "offensive_action_attack_elements"
+category = "data-table"
+type = "int[10][5]"
+value_domain = "attack element id indexed by encoded range and action bit"
+usage = "CALCSCOPE stores the normal attack element in action column 0 and each usable equipped skill's attack element in columns 1..4 for every applicable range band. SETMVWORK and RTN_M051/052 test these elements against attack_element_effectiveness_percent."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8dfe9", "0xa7436", "0xcc9f4"]
+
+[[global]]
+address = "0xab5ba"
+name = "attack_element_effectiveness_percent"
+category = "data-table"
+type = "int[20][20]"
+value_domain = "signed effectiveness percentage indexed by defense element then attack element"
+usage = "AFINIT-authored element matchup table. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x77c6e", "0x8e3d1", "0x8dfe9", "0xa7436"]
+
+[[global]]
 address = "0xcc9f4"
 name = "offensive_action_scope_masks"
 category = "data-table"
@@ -1340,7 +1406,7 @@ value_domain = "action-availability bitmask: bit 0 normal attack, bits 1..4 equi
 usage = "CALCSCOPE clears ten encoded-range cells, sets bit 0 over the equipped/default attack's range, and sets bits 1..4 over each usable offensive skill's range. SETMVWORK uses the range-0 mask and paired attack elements when filtering target cells; RTN_M003/006/016/017/018 require its normal-attack bit."
 source = "investigation"
 confidence = "high"
-depends_on = ["0x8d431", "0x8d819", "0xa71de", "0xa730a"]
+depends_on = ["0x8d431", "0x8d819", "0xa71de", "0xa730a", "0xcc9f2", "0xcc9f3", "0xcca08"]
 
 [[global]]
 address = "0x152616"
@@ -1994,15 +2060,26 @@ confidence = "med"
 depends_on = []
 
 [[global]]
-address = "0x66714"
-name = ""
-category = "story-flag"
+address = "0x66713"
+name = "acting_entity_index"
+category = "index-pointer"
 type = "int"
-value_domain = "?"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "runtime entity row index 0..49"
+usage = "Entity whose movement or battle turn is being resolved. FIELD sets it before MVRTN; RTN_M providers use it for faction, position, resources, selected action, and routine progress. Together with target_entity_index it forms the attacker/target pair passed into battle."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e021", "0x522ed", "0x5231f", "0x52351"]
+
+[[global]]
+address = "0x66714"
+name = "target_entity_index"
+category = "index-pointer"
+type = "int"
+value_domain = "runtime entity row index 0..49"
+usage = "Selected target/opponent entity. RTN_M051/052 choose and write an active foreign-faction target; FIELD pairs it with acting_entity_index for movement presentation and battle setup."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e021", "0x522ed", "0x5231f", "0x52351", "0xb8d86"]
 
 [[global]]
 address = "0xab8e7"
@@ -2081,14 +2158,14 @@ depends_on = []
 
 [[global]]
 address = "0xcc9f3"
-name = ""
-category = "story-flag"
+name = "offensive_action_max_range"
+category = "counter"
 type = "int"
-value_domain = "?"
-usage = "TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "encoded attack-range band 0..9"
+usage = "CALCSCOPE initializes this from the equipped/default attack's maximum range and widens it for usable offensive skills. ATSEEK bounds its attack-range flood fill with this value; RTN_M051/052 use it as the upper scan bound."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8d819", "0xa730a"]
 
 [[global]]
 address = "0xccc21"

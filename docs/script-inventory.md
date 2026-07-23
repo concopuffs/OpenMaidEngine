@@ -99,13 +99,15 @@ RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `100
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join
 provider selectors to script names, retain all 29 overwritten cells, and keep the six reserved empty
-banks visible. Selector-specific schemas now cover RTN_M001/004/005/006/007/008/010/011/012/013/014/015:
-progress-only steps, stage-object slots, coordinate destinations, enemy/ally and Magic Pillar searches,
-resource-threshold Healing Feather search, cyclic waypoints, faction-traversable terrain, and retreat
-from nearby enemies. The generated join covers 632 steps and accounts for all 977 authored movement
-parameters: 974 semantic inputs plus three M001/M008 cells proven unread by their providers. Thirteen
+banks visible. Selector-specific schemas now cover
+RTN_M001/003/004/005/006/007/008/010/011/012/013/014/015/051: progress-only steps, stage-object slots,
+coordinate destinations, enemy/ally and Magic Pillar searches, resource-threshold Healing Feather
+search, cyclic waypoints, faction-traversable terrain, retreat, reachable normal-attack routing, and
+immediate element-effective target/action selection. The generated join covers 858 steps and accounts
+for all 977 authored movement parameters: 974 semantic inputs plus three M001/M008 cells proven unread
+by their providers. Thirteen
 unwritten zero defaults are projected separately while the structurally named raw banks remain intact.
-The remaining seven used providers have no populated parameter cells and therefore need behavior
+The remaining five used providers have no populated parameter cells and therefore need behavior
 decoding, not additional column semantics.
 
 ### Message/string tables (`*MES`)

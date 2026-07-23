@@ -444,9 +444,10 @@ keeps its raw `base/20/slot` fields and complete offset-tagged assignment histor
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
-The provider-specific join now covers RTN_M001/004/005/006/007/008/010/011/012/013/014/015: 632
-movement steps, 974 semantically consumed populated parameters, thirteen explicit zero defaults, and
-three authored-but-unread parameter cells. RTN_M005/011/012 read banks 2/3 as
+The provider-specific join now covers
+RTN_M001/003/004/005/006/007/008/010/011/012/013/014/015/051: 858 movement steps, 974 semantically
+consumed populated parameters, thirteen explicit zero defaults, and three authored-but-unread
+parameter cells. RTN_M005/011/012 read banks 2/3 as
 `destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
 step's progress counter after arrival. Their alternate completion test recognizes a type-6 stage object
 at the authored destination and also accepts the object's linked exit tile. RTN_M012 is byte-for-byte
@@ -508,6 +509,22 @@ movement-unreachable tiles, and randomly chooses among the lowest-positive-score
 destination the reachable tile farthest from the nearby threat set rather than merely farthest from one
 enemy.
 
+RTN_M003 is a parameterless normal-attack routing provider. It requires the normal-attack bit, builds
+the actor's movement-limited MVSEEK grid, and runs SETMVWORK so active foreign-faction entity tiles
+remain eligible only when the normal attack's element has positive effectiveness. It then requires the
+target tile's movement cost to fit current FS, ranks candidates by descending remaining-route score
+with randomized ties, and accepts the first candidate for which SETROUTE constructs a path. Success
+advances progress and returns state 1, so FIELD performs movement rather than battle.
+
+RTN_M051 is a parameterless immediate-attack selector. ATSEEK supplies a one-based range band for each
+enemy tile; CALCSCOPE supplies the normal-attack/equipped-skill bits and their attack elements at each
+band. M051 keeps active foreign targets for which at least one allowed action has positive effectiveness
+against the target's equipped or unit defense element. Encountering a closer band clears the accumulated
+candidate list, after which a target is randomized from the retained entries. It then randomizes among
+the effective actions in the tracked closest band, writing zero for a normal attack or an equipped skill
+id. Success stores `target_entity_index` and `entity_selected_action_ids[acting_entity_index]`, advances
+progress, and returns state 2 so FIELD enters battle without producing a movement route.
+
 MVSEEK's mode contract is also now explicit. Mode 0 replaces the input coordinate with the current
 entity tile and seeds the origin with movement+1, producing the movement-limited reachability grid.
 Modes 1/2 retain the caller coordinate and seed it with 9999, producing a broad target-distance grid;
@@ -519,8 +536,8 @@ by M006/007/015.
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
 mapping, target-selection rules, zero/unwritten behavior, and authored fields proven unread by their
 provider. All 977 populated movement-parameter cells are now accounted for: 974 semantic inputs and
-three explicit residue cells. The seven used providers still without schemas
-(M002/003/009/017/051/052/061) have no populated parameter cells, so their remaining work is behavior
+three explicit residue cells. The five used providers still without schemas
+(M002/009/017/052/061) have no populated parameter cells, so their remaining work is behavior
 decoding rather than column semantics. The supporting runtime joins are now curated too:
 `entity_runtime_flags`,
 `entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
@@ -528,7 +545,9 @@ current HP/SP/FS, `stage_object_runtime_flags`, `movement_search_mode`,
 `offensive_action_scope_masks`, `pathfinding_remaining_route_steps`,
 `pathfinding_filtered_route_scores`, `pathfinding_movement_costs`, and the per-entity patrol waypoint
 index. The faction-specific terrain masks used by M013 are curated as
-`tile_faction_traversal_masks`.
+`tile_faction_traversal_masks`. M051's shared action-selection ABI also names `acting_entity_index`,
+`target_entity_index`, `attack_range_distance_grid`, the offensive range/mask/element tables,
+`attack_element_effectiveness_percent`, equipped active-skill slots, and the per-entity selected action.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -579,8 +598,8 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
    banks are structurally decoded with every populated movement-parameter cell classified. Next decode
-   the seven behavior-only RTN_M providers by evidence density, beginning with M003, M051, M017, and
-   M052; never assign one universal meaning to a parameter bank whose
+   the five remaining behavior-only RTN_M providers by evidence density, beginning with the closely
+   related M017 and M052; never assign one universal meaning to a parameter bank whose
    meaning varies by provider selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
