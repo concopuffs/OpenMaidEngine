@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5035 globals (210 curated, 4825 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5036 globals (212 curated, 4824 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -11,7 +11,7 @@
 | `0x699` | next_script_resource_id | high | investigation | SYSTEM4's computed child-script resource id. On the normal ADV path SYSTEM4 copies G[0x87a57][scjump_decision_out] here, substitutes raw id 0x22 (SC0000.BIN) when zero, executes call-script through this cell at offset 0x477, then clears it after the child returns. |
 | `0xa68` | — | med | auto-shape | TODO: confirm. Branch-read in 11 scenes / 12 scripts; compared against [0, 1]; writers=['SC0740.BIN', 'SC1580.BIN', 'SC1590.BIN']. |
 | `0x62ccc` | scjump_decision_out2 | low | inference | Adjacent to scjump_decision_out (0x62ccf) in the 0x62ccc-0x62ccf progression decision-output cluster; same 136-scene reach, written by CAMP/CLOSE/DEBUGADV. INFERENCE from adjacency — confirm meaning before relying on it. |
-| `0x62ccf` | scjump_decision_out | low | inference | One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode. |
+| `0x62ccf` | scjump_decision_out | high | investigation | SCJUMP's selected progression decision id. Its chapter/flag decision tree writes one of 847 distinct values across 1,755 sites; SYSTEM4, FIELD, SALLY, and TRAIN use it to index scjump_scene_script_resource_ids and dispatch the corresponding SCxxxx scene script. |
 
 ## counter
 
@@ -79,6 +79,8 @@
 | `0x837ee` | unit_drop_item_ids | high | investigation | Enemy drop table. Values cross-resolve to ITINIT items (for example treasure puttetto drops bronze/silver/gold coins and planet stones); BTL rolls and awards the rows, while INFOEN displays the possible drops. Columns: 0=drop_1_item_id, 1=drop_2_item_id, 2=drop_3_item_id, 3=drop_4_item_id, 4=drop_5_item_id, 5=drop_6_item_id, 6=drop_7_item_id, 7=drop_8_item_id. |
 | `0x8572e` | unit_drop_chance_percent | high | investigation | Per-slot drop chance paired with unit_drop_item_ids. BTL draws random-modulo 100 for each populated slot and awards the item when the result is below this value; only columns 0..4 are populated in shipped EBINIT. Columns: 0=drop_1_percent, 1=drop_2_percent, 2=drop_3_percent, 3=drop_4_percent, 4=drop_5_percent, 5=drop_6_percent, 6=drop_7_percent, 7=drop_8_percent. |
 | `0x8766e` | unit_large_battle_sprite | high | investigation | Presentation flag for 33 large demons, dragons, gods, and their variants. BTL and INFOEN use it to anchor the CB battle figure at the lower screen edge and omit the ordinary-unit framing treatment required by smaller sprites. |
+| `0x87a57` | scjump_scene_script_resource_ids | high | investigation | SCINIT's sparse decision-to-script registry. SYSTEM4, FIELD, SALLY, and TRAIN index it by scjump_decision_out, then either call the returned packed resource id or copy it to next_script_resource_id. SCINIT contains 1,209 final decision rows backed by 2,179 source assignments; all 135 distinct packed ids resolve to numbered SC scene scripts. |
+| `0x8a167` | scjump_authored_chapters | high | investigation | SCINIT's parallel authored chapter metadata for each scjump_scene_script_resource_ids entry. Source assignments form contiguous chapter 1..9 runs followed by an unassigned -1 run. Of the 847 decision ids currently emitted by SCJUMP, 844 final tags agree with SCJUMP's independently decoded chapter paths; three retained mismatches are legacy/stale metadata. No shipped script reads this array directly. |
 | `0x8c879` | item_sort_key | high | investigation | ITINIT field for all 287 populated item ids. CHMENU, IMPROVE, and INFOIT pass this array as the primary key to op 0x12f's stable index sort, establishing it as the catalog/display ordering key. The runtime lookup base is one cell before ITINIT's first write because item ids are one-based. |
 | `0x8cc61` | item_random_tier | high | investigation | ITINIT field for all 287 items. ADDRANDOMITEM and LOSTRANDOMITEM bucket eligible item ids by this value before choosing a random gain/loss; IMPROVE compares it with the current progression rank. This is the random-item availability/rarity tier, distinct from item_category. |
 | `0x8d049` | item_category | high | investigation | ITINIT field for all 287 items and ITMES's top-level behavior dispatch. Observed groups: 0 innate attacks, 1 key/story items, 2 consumables, 4 stat stones, 8 synthesis materials, 9 coins, 10..17 weapon families, 19 boots, 20 armor, 21 shields, 22 accessories, and 23 capture ropes. |
@@ -240,7 +242,6 @@
 | `0x665d8` | — | low | auto-shape | array |
 | `0x665e3` | — | low | auto-shape | array |
 | `0x66647` | — | low | auto-shape | array |
-| `0x87a57` | — | low | auto-shape | array |
 | `0x8fb41` | — | low | auto-shape | array |
 | `0xa5eb9` | — | low | auto-shape | array |
 | `0xaac78` | — | low | auto-shape | array |

@@ -39,7 +39,7 @@ choices are not pure story flags.
    failures). This is the oracle that covers native-gated paths.
 Run: `py -3.11 -X utf8 tools/scjump_decode.py --verify`.
 
-## The decision→scene boundary (resolved 2026-07-20)
+## The decision→scene boundary and SCINIT registry (resolved 2026-07-23)
 A FIELD snippet does `lookup-array(ptr, 0x5f0ed, 0x62ccf)` then `u00428010(ptr)`, which the spec
 guessed was the scene resolver. **Correction (resolved 2026-07-20, via Ghidra):** `u00428010` (op `0x1a2`)
 snapshots that selected global integer array cell into the shared `SAVE.DAT` profile table, keyed by its
@@ -49,6 +49,22 @@ dispatch**. The separate boundary is now located in `SYSTEM4.BIN`: on the normal
 resource-id table rooted at `G[0x87a57]` by `scjump_decision_out` (`G[0x62ccf]`), copies the selected raw
 SYS4INI id into `G[0x699]`, substitutes `0x22` (`SC0000.BIN`) when the result is zero, and executes
 `call-script G[0x699]` at SYSTEM4 offset `0x477`. The called scene returns to the still-live SYSTEM4 frame.
+FIELD, SALLY, and TRAIN consume the same table for their scene transitions.
+
+`SCINIT.BIN` is the writer and authoritative static join. Its 2,179 source assignments alternate between
+two equally indexed 10,000-cell arrays:
+
+- `G[0x87a57 + decision]` is the packed SYS4INI script resource id. Its 135 distinct shipped values all
+  resolve to numbered `SCxxxx.BIN` scripts through `build/callscript-names.json`.
+- `G[0x8a167 + decision]` is authored chapter metadata. Source assignments form contiguous runs for
+  chapters 1 through 9, followed by an unassigned `-1` run.
+
+Repeated assignments leave 1,209 final decision rows. `tools/extract_init.py SCINIT` preserves every
+source-ordered overwrite and emits the final registry to `build/data/SCINIT.json`, including resolved
+script names and the independent SCJUMP chapter join. SCJUMP currently emits 847 distinct decision ids;
+all have SCINIT rows, and 844 final authored chapter tags agree with the decoded control-flow chapter.
+The three mismatches (250, 1001, and 1005) remain explicit as legacy/stale metadata rather than being
+silently corrected. The primary resource-id column is the runtime dispatch authority.
 
 The captured initial New Game path sets decision zero in `GAMESTART.BIN`; SYSTEM4 consequently takes the
 `0x22` fallback and enters SC0000. Later decisions use the same mapping/call boundary. See
@@ -56,5 +72,5 @@ The captured initial New Game path sets decision zero in `GAMESTART.BIN`; SYSTEM
 
 ## See also
 - `vm-map/globals.toml` — the named globals SCJUMP switches on (chapter_mode, progress counters, flags).
-- `name-resolution.md §1` — call-script / native dispatch (the decision→scene boundary lives here too).
+- `name-resolution.md §1` — packed call-script ids and the SCINIT decision-to-script join.
 - `docs/superpowers/specs/2026-07-07-scjump-decision-decode-design.md` — the design.

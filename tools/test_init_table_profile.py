@@ -95,6 +95,31 @@ def main() -> int:
     assert rule_summary["class_change_slot_indices"] == {"0": 1, "1": 1}
     assert rule_summary["skill_award_count"] == 1
 
+    dispatch_fixture = {
+        "table": "DISPATCH",
+        "mode": "dispatch",
+        "assignment_count": 4,
+        "overwritten_record_count": 1,
+        "conflicting_chapter_record_count": 1,
+        "resolved_script_count": 2,
+        "scjump_joined_record_count": 2,
+        "scjump_chapter_match_count": 1,
+        "scjump_chapter_mismatches": [{"decision_id": 2}],
+        "records": [
+            {"id": 1, "name": "SC0000.BIN", "fields": {"0x100": 34, "0x200": 1}},
+            {"id": 2, "name": "SC0010.BIN", "fields": {"0x100": 286, "0x200": 2}},
+        ],
+    }
+    dispatch_rows = {
+        row["key"]: row for row in profile.profile_columns(dispatch_fixture)
+    }
+    assert dispatch_rows["0x100"]["kind"] == "dispatch-field"
+    dispatch_summary = profile.profile_dispatch(dispatch_fixture)
+    assert dispatch_summary["assignment_count"] == 4
+    assert dispatch_summary["overwritten_record_count"] == 1
+    assert dispatch_summary["scjump_chapter_match_count"] == 1
+    assert dispatch_summary["scjump_chapter_mismatch_count"] == 1
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

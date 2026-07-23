@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract a *INIT data table to JSON. Auto-detects the table's shape.
 
-*INIT scripts populate global arrays and work buffers with static game data. Five shapes seen:
+*INIT scripts populate global arrays and work buffers with static game data. Six shapes seen:
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
@@ -14,12 +14,14 @@
            footer arrays for one runtime record. (STINIT stages)
   rules  — conditional blocks select a unit promotion and add effects to shared output
            buffers. (CCINIT class changes)
+  dispatch—paired parallel arrays map a sparse decision id to a packed script resource id
+           and authored chapter metadata. (SCINIT scene dispatch)
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
 
-Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules]
+Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules|dispatch]
 """
 from __future__ import annotations
 import json
@@ -165,6 +167,27 @@ def _class_change_guards(scr) -> list[dict]:
     return guards
 
 
+def _paired_parallel_writes(scr) -> tuple[list[tuple], int] | None:
+    """Recognize alternating writes to two equally indexed parallel arrays."""
+    writes = []
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is not None and isinstance(write[1], int):
+            writes.append((ins.offset, *write))
+        elif sys4load.display_label(ins.opcode) != "exit":
+            return None
+    if len(writes) < 200 or len(writes) % 2:
+        return None
+    span = writes[1][1] - writes[0][1]
+    if span <= 0:
+        return None
+    for index in range(0, len(writes), 2):
+        primary, secondary = writes[index:index + 2]
+        if secondary[1] - primary[1] != span:
+            return None
+    return writes, span
+
+
 def detect_mode(scr):
     ops = [ins.opcode for ins in scr.instructions]
     has_str = any(ins.opcode == SET_STRING and ins.args and ins.args[0][0] == T_GLOBAL_STRING
@@ -181,6 +204,8 @@ def detect_mode(scr):
         return "mixed"
     if has_str:
         return "name"
+    if _paired_parallel_writes(scr):
+        return "dispatch"
     n_footer = ops.count(COPY_LOCAL_ARRAY)
     n_int = ops.count(MOV) + ops.count(COPY_TO_GLOBAL)
     return "footer" if n_footer >= max(4, n_int) else "numeric"
@@ -676,6 +701,128 @@ def extract_numeric(scr):
     return records, {"primary_index_base": f"0x{base:x}", "record_span": n}
 
 
+@cache
+def callscript_names() -> dict[int, str]:
+    """Load the generated packed script-resource id join."""
+    try:
+        data = json.loads(
+            (paths.BUILD / "callscript-names.json").read_text(encoding="utf8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {int(key): value for key, value in data.items()}
+
+
+@cache
+def scjump_decision_chapters() -> tuple[dict[int, set[int]], int]:
+    """Load SCJUMP's generated decision sites as independent correlation evidence."""
+    try:
+        data = json.loads(
+            (paths.BUILD / "scjump-decisions.json").read_text(encoding="utf8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return {}, 0
+    chapters: dict[int, set[int]] = {}
+    for decision in data.get("decisions", []):
+        chapter = decision.get("chapter")
+        if isinstance(chapter, int):
+            chapters.setdefault(decision["decision"], set()).add(chapter)
+    return chapters, len(data.get("decisions", []))
+
+
+def extract_dispatch(scr):
+    """Extract SCINIT's decision -> scene-script registry without losing overwrites."""
+    paired = _paired_parallel_writes(scr)
+    if paired is None:
+        return [], {}
+    writes, span = paired
+    primary_base = writes[0][1]
+    chapter_base = primary_base + span
+    names = callscript_names()
+    scjump_chapters, decision_site_count = scjump_decision_chapters()
+    records_by_id: dict[int, dict] = {}
+    assignment_count = 0
+
+    for index in range(0, len(writes), 2):
+        primary, chapter = writes[index:index + 2]
+        decision_id = primary[1] - primary_base
+        script_resource_id = primary[2]
+        assignment = {
+            "offset": f"0x{primary[0]:x}",
+            "script_resource_id": script_resource_id,
+            "script_name": names.get(script_resource_id, ""),
+            "authored_chapter": chapter[2],
+        }
+        record = records_by_id.setdefault(decision_id, {
+            "id": decision_id,
+            "assignments": [],
+        })
+        record["assignments"].append(assignment)
+        assignment_count += 1
+
+    chapter_match_count = 0
+    chapter_mismatches = []
+    resolved_script_count = 0
+    overwritten_record_count = 0
+    conflicting_chapter_record_count = 0
+    for decision_id, record in records_by_id.items():
+        assignments = record["assignments"]
+        final = assignments[-1]
+        script_resource_id = final["script_resource_id"]
+        authored_chapter = final["authored_chapter"]
+        record.update({
+            "name": final["script_name"],
+            "script_resource_id": script_resource_id,
+            "script_name": final["script_name"],
+            "authored_chapter": authored_chapter,
+            "assignment_count": len(assignments),
+            "fields": {
+                f"0x{primary_base:x}": script_resource_id,
+                f"0x{chapter_base:x}": authored_chapter,
+            },
+        })
+        if final["script_name"]:
+            resolved_script_count += 1
+        if len(assignments) > 1:
+            overwritten_record_count += 1
+        if len({assignment["authored_chapter"] for assignment in assignments}) > 1:
+            conflicting_chapter_record_count += 1
+        if decision_id in scjump_chapters:
+            expected = sorted(scjump_chapters[decision_id])
+            record["scjump_chapters"] = expected
+            matches = authored_chapter in scjump_chapters[decision_id]
+            record["authored_chapter_matches_scjump"] = matches
+            if matches:
+                chapter_match_count += 1
+            else:
+                chapter_mismatches.append({
+                    "decision_id": decision_id,
+                    "authored_chapter": authored_chapter,
+                    "scjump_chapters": expected,
+                })
+
+    records = [records_by_id[key] for key in sorted(records_by_id)]
+    return records, {
+        "selector_global": "0x62ccf",
+        "script_resource_array_base": f"0x{primary_base:x}",
+        "authored_chapter_array_base": f"0x{chapter_base:x}",
+        "reserved_array_span": span,
+        "assignment_count": assignment_count,
+        "overwritten_record_count": overwritten_record_count,
+        "conflicting_chapter_record_count": conflicting_chapter_record_count,
+        "resolved_script_count": resolved_script_count,
+        "scjump_decision_site_count": decision_site_count,
+        "scjump_distinct_decision_count": len(scjump_chapters),
+        "scjump_joined_record_count": sum(
+            record["id"] in scjump_chapters for record in records
+        ),
+        "scjump_chapter_match_count": chapter_match_count,
+        "scjump_chapter_mismatches": sorted(
+            chapter_mismatches, key=lambda row: row["decision_id"]
+        ),
+    }
+
+
 def extract_footer(scr):
     records = []
     for i, ins in enumerate(scr.instructions):
@@ -1020,6 +1167,11 @@ def write_data_index(data_dir: Path) -> None:
         "eligibility, titles, deployment-cost and named stat deltas, awarded SKINIT skills, and",
         "the persistent state slot set by each class change. Raw output addresses remain beside",
         "the joined EBINIT unit and SKINIT skill names.",
+        "",
+        "Dispatch-mode tables preserve SCINIT's complete source-ordered assignment history",
+        "while exposing the final sparse decision-id registry. Packed resource ids join to",
+        "SYS4INI script names, authored chapter tags correlate with SCJUMP's decoded decision",
+        "sites, and legacy/stale chapter mismatches remain explicit.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -1059,6 +1211,7 @@ def main() -> int:
         "footer": extract_footer,
         "mixed": extract_mixed,
         "rules": extract_class_change_rules,
+        "dispatch": extract_dispatch,
     }[mode]
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:

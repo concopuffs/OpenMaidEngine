@@ -801,6 +801,28 @@ confidence = "high"
 depends_on = ["0x62ccf"]
 
 [[global]]
+address = "0x87a57"
+name = "scjump_scene_script_resource_ids"
+category = "data-table"
+type = "int[10000]"
+value_domain = "packed SYS4INI script resource id; shipped SCINIT values resolve to SCxxxx.BIN"
+usage = "SCINIT's sparse decision-to-script registry. SYSTEM4, FIELD, SALLY, and TRAIN index it by scjump_decision_out, then either call the returned packed resource id or copy it to next_script_resource_id. SCINIT contains 1,209 final decision rows backed by 2,179 source assignments; all 135 distinct packed ids resolve to numbered SC scene scripts."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62ccf", "0x699", "0x8a167"]
+
+[[global]]
+address = "0x8a167"
+name = "scjump_authored_chapters"
+category = "data-table"
+type = "int[10000]"
+value_domain = "-1 or chapter 1..9"
+usage = "SCINIT's parallel authored chapter metadata for each scjump_scene_script_resource_ids entry. Source assignments form contiguous chapter 1..9 runs followed by an unassigned -1 run. Of the 847 decision ids currently emitted by SCJUMP, 844 final tags agree with SCJUMP's independently decoded chapter paths; three retained mismatches are legacy/stale metadata. No shipped script reads this array directly."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x87a57", "0x3234", "0x62ccf"]
+
+[[global]]
 address = "0x3234"
 name = "chapter_mode"
 category = "story-flag"
@@ -937,11 +959,11 @@ address = "0x62ccf"
 name = "scjump_decision_out"
 category = "choice-output"
 type = "int"
-value_domain = "?"
-usage = "One of SCJUMP's output/decision globals (progression state machine writes it). Related to chapter_mode."
-source = "inference"
-confidence = "low"
-depends_on = []
+value_domain = "0..1693 in shipped SCJUMP"
+usage = "SCJUMP's selected progression decision id. Its chapter/flag decision tree writes one of 847 distinct values across 1,755 sites; SYSTEM4, FIELD, SALLY, and TRAIN use it to index scjump_scene_script_resource_ids and dispatch the corresponding SCxxxx scene script."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x3234", "0x87a57"]
 
 [[global]]
 address = "0xeff75"

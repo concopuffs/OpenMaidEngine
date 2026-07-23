@@ -30,7 +30,7 @@ in the root: `SYS4INI.BIN` (272 KB) and `SYS4AB.BIN` (1.08 MB), for 51 root BINs
 - Numbered `SC0000`–`SC0880` (main chapters, largest files — up to 700 KB) and
   `SC1000`–`SC1690` (smaller; likely sub-events, endings, appendix content).
 - `SCJUMP.BIN` (778 KB) is almost certainly the master scene-dispatch/jump table.
-- `SCINIT.BIN` (88 KB) initializes scenario state.
+- `SCINIT.BIN` (88 KB) initializes the SCJUMP decision-to-scene-script registry and authored chapter tags.
 
 ---
 
@@ -88,6 +88,12 @@ through a 32-script provider list and applies the selected rule's title, deploym
 stat bonuses, skill awards, and persistent applied-state slot; EVOLVE directly queries the two untitled
 Lily form rules for movement preview. `extract_init.py` emits this as `rules` mode with raw guards and
 output addresses joined to EBINIT unit names, SKINIT skill names, and the curated class-change ABI.
+
+SCINIT is a sixth paired-dispatch shape. Its 2,179 alternating writes populate a sparse decision-indexed
+script-resource array at `0x87a57` and authored-chapter array at `0x8a167`, leaving 1,209 final rows.
+All 135 packed resource ids resolve to numbered SC scripts. The generated view preserves 710 overwritten
+decision ids and joins every one of SCJUMP's 847 live decision ids; 844 final chapter tags agree, while
+three legacy/stale mismatches remain explicit.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

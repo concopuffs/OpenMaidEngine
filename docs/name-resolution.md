@@ -59,15 +59,12 @@ on disk to read. Resolving it needs one of:
 **Status: ✅ SOLVED** (see the banner at the top of this section). It did belong with the
 engine/dispatch work — the Ghidra + MCP loop resolved it via the opcode-dispatch table.
 
-**Update (2026-07-07):** SCJUMP's *decision logic* is now decoded — `(chapter_mode, guards) →
-decision value` — see `docs/scjump-progression.md` and `tools/scjump_decode.py`. That confirmed
-SCJUMP is not the `call-script` registry (it produces a decision value, not a script id). Then the
-Ghidra + MCP loop **cracked `call-script` itself** (the SOLVED banner above): via the opcode-dispatch
-table it walked the handler → loader → resolver and found the id is a raw SYS4INI file index. What
-remains of the earlier `decision→scene` question is now narrow: scenes are `SCxxxx.BIN` records loaded
-through the *same* id-indexed loader, so the only open piece is where the SCJUMP decision *value*
-becomes a scene *id* (a caller of SCJUMP). The `u00428010` guess for that hop was disproven via Ghidra
-(it's a graphics command-buffer op; see `docs/engine-re.md`).
+**Updates (2026-07-07 through 2026-07-23):** SCJUMP's *decision logic* is decoded as
+`(chapter_mode, guards) → decision value`; `call-script` ids are raw SYS4INI file indices; and the
+remaining join is now closed. SCINIT writes `G[0x87a57 + decision] = packed SCxxxx resource id`, which
+SYSTEM4, FIELD, SALLY, and TRAIN consume. Its parallel `G[0x8a167 + decision]` column is authored
+chapter metadata. The `u00428010` guess for this hop was disproven via Ghidra: that operation persists
+a selected global cell and is unrelated to dispatch. See `docs/scjump-progression.md` for the full join.
 
 ---
 
@@ -404,6 +401,23 @@ the raw keys remain provenance. The shipped profile reports 69 titled rules, two
 working, and persistent globals are now named there as one coherent class-change ABI rather than as
 unrelated addresses.
 
+### SCINIT scene-dispatch registry (2026-07-23)
+
+SCINIT is a paired sparse registry, not the malformed 372-row numeric table produced by the generic
+numeric heuristic. Each source assignment writes a decision-indexed packed script resource id at
+`0x87a57` and an authored chapter tag at the parallel base `0x8a167`, exactly 10,000 cells later.
+All 135 distinct resource ids resolve through SYS4INI to `SCxxxx.BIN`. The source contains 2,179
+assignments and 1,209 final decision ids; 710 ids are assigned more than once, so extraction preserves
+the complete offset-tagged assignment history as well as final values.
+
+The chapter meaning is independently supported rather than inferred from the small integer domain:
+SCINIT's source order consists of contiguous 1-through-9 runs followed by a `-1` unassigned run, and
+844 of the 847 decision ids emitted by decoded SCJUMP end with the same chapter. The three mismatches
+are retained as legacy/stale authoring metadata. `extract_init.py` detects this sixth shape as
+`dispatch`; `build/data/SCINIT.json` is the single join from decision id to packed resource id,
+resolved script name, authored chapter, SCJUMP chapters, overwrite history, and raw column keys.
+`field_semantics`/`semantic_fields` resolves those raw keys through `vm-map/globals.toml`.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -448,12 +462,13 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, and CCINIT now have
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, and SCINIT now have
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
-   and effects. Inventory RTINIT and SCINIT next, starting with whichever has the clearest repeated
-   structural boundary and runtime consumers. Preserve explicit joins and do not infer meaning from
-   column position alone.
+   and effects. SCINIT closes the progression decision-to-scene join. Take RTINIT next as a separate
+   sparse multi-table family: its 3,336 writes span several 20,000-cell banks used by movement/battle
+   routines, so it needs layout segmentation before column naming. Preserve explicit joins and do not
+   infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

@@ -37,7 +37,7 @@ def load_table(name: str) -> dict:
     if not path.exists():
         raise SystemExit(f"missing extracted table: {path}")
     data = json.loads(path.read_text(encoding="utf8"))
-    if data.get("mode") not in {"name", "numeric", "mixed", "rules"}:
+    if data.get("mode") not in {"name", "numeric", "mixed", "rules", "dispatch"}:
         raise SystemExit(f"{name}: unsupported field-profiling mode {data.get('mode')!r}")
     return data
 
@@ -86,6 +86,7 @@ def profile_columns(data: dict) -> list[dict]:
                 "kind": (
                     "scalar-field" if data.get("mode") == "mixed"
                     else "rule-output" if data.get("mode") == "rules"
+                    else "dispatch-field" if data.get("mode") == "dispatch"
                     else "parallel-array"
                 ),
                 "base": key,
@@ -181,6 +182,25 @@ def profile_rules(data: dict) -> dict:
         ).items(), key=lambda item: int(item[0]))),
         "skill_award_count": sum(
             len(record.get("skill_awards", [])) for record in records
+        ),
+    }
+
+
+def profile_dispatch(data: dict) -> dict:
+    """Summarize SCINIT's final registry and preserved assignment history."""
+    if data.get("mode") != "dispatch":
+        return {}
+    return {
+        "assignment_count": data.get("assignment_count", 0),
+        "overwritten_record_count": data.get("overwritten_record_count", 0),
+        "conflicting_chapter_record_count": data.get(
+            "conflicting_chapter_record_count", 0
+        ),
+        "resolved_script_count": data.get("resolved_script_count", 0),
+        "scjump_joined_record_count": data.get("scjump_joined_record_count", 0),
+        "scjump_chapter_match_count": data.get("scjump_chapter_match_count", 0),
+        "scjump_chapter_mismatch_count": len(
+            data.get("scjump_chapter_mismatches", [])
         ),
     }
 
@@ -307,6 +327,21 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             f"- level-independent rules: {rule_profile['level_independent_rule_count']}",
             f"- awarded skills: {rule_profile['skill_award_count']}",
         ])
+    elif dispatch_profile := profile_dispatch(data):
+        lines.extend([
+            f"- source assignments: {dispatch_profile['assignment_count']}",
+            f"- overwritten decision ids: {dispatch_profile['overwritten_record_count']}",
+            f"- ids whose assignment history crosses chapter tags: "
+            f"{dispatch_profile['conflicting_chapter_record_count']}",
+            f"- packed script ids resolved: {dispatch_profile['resolved_script_count']}/"
+            f"{data['record_count']}",
+            f"- SCJUMP decisions joined: {dispatch_profile['scjump_joined_record_count']}",
+            f"- final authored chapters matching SCJUMP: "
+            f"{dispatch_profile['scjump_chapter_match_count']}/"
+            f"{dispatch_profile['scjump_joined_record_count']}",
+            f"- explicit chapter mismatches: "
+            f"{dispatch_profile['scjump_chapter_mismatch_count']}",
+        ])
     else:
         lines.extend([
             f"- player-facing messages: {message_profile['population']}/{data['record_count']} "
@@ -367,8 +402,10 @@ def main() -> int:
         "array_cell_count": sum(row["kind"] == "array-cell" for row in rows),
         "footer_array_count": sum(row["kind"] == "footer-array" for row in rows),
         "rule_output_count": sum(row["kind"] == "rule-output" for row in rows),
+        "dispatch_field_count": sum(row["kind"] == "dispatch-field" for row in rows),
         "message_profile": messages,
         "rule_profile": profile_rules(data),
+        "dispatch_profile": profile_dispatch(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

@@ -309,6 +309,46 @@ def test_real_class_change_rules() -> None:
           "CCINIT accounts for all 30 awarded skills")
 
 
+def test_real_scene_dispatch() -> None:
+    script = sys4load.load(extract_init.resolve("SCINIT"))
+    check(extract_init.detect_mode(script) == "dispatch",
+          "SCINIT auto-detects as paired scene dispatch arrays")
+    check(
+        extract_init.detect_mode(
+            sys4load.load(extract_init.resolve("RTINIT"))
+        ) == "numeric",
+        "RTINIT's multi-table writes do not false-positive as paired dispatch",
+    )
+    records, meta = extract_init.extract_dispatch(script)
+    by_id = {record["id"]: record for record in records}
+    check(len(records) == 1209 and meta["assignment_count"] == 2179,
+          "SCINIT preserves all assignments and 1,209 final decision rows")
+    check(meta["script_resource_array_base"] == "0x87a57"
+          and meta["authored_chapter_array_base"] == "0x8a167"
+          and meta["reserved_array_span"] == 10000,
+          "SCINIT exposes its paired 10,000-cell array layout")
+    check(by_id[0]["script_resource_id"] == 34
+          and by_id[0]["script_name"] == "SC0000.BIN"
+          and by_id[0]["authored_chapter"] == 1,
+          "SCINIT joins packed resource ids to scene names and chapter metadata")
+    check(by_id[1]["assignment_count"] == 3
+          and [entry["authored_chapter"] for entry in by_id[1]["assignments"]]
+          == [1, 5, 5],
+          "SCINIT retains source-ordered overwrites rather than only the final cell")
+    check(meta["resolved_script_count"] == 1209
+          and len({record["script_resource_id"] for record in records}) == 135,
+          "every final SCINIT row resolves to one of 135 numbered scene scripts")
+    check(meta["scjump_joined_record_count"] == 847
+          and meta["scjump_chapter_match_count"] == 844
+          and [row["decision_id"] for row in meta["scjump_chapter_mismatches"]]
+          == [250, 1001, 1005],
+          "SCINIT chapter tags cross-check against every live SCJUMP decision")
+    semantics = extract_init.field_semantics(records)
+    check(semantics["0x87a57"] == "scjump_scene_script_resource_ids"
+          and semantics["0x8a167"] == "scjump_authored_chapters",
+          "SCINIT's paired columns join to canonical semantic names")
+
+
 def test_real_message_tables() -> None:
     scripts = paths.scripts()
     expected = {
@@ -483,6 +523,7 @@ if __name__ == "__main__":
     test_output_name_validation()
     test_real_mixed_table()
     test_real_class_change_rules()
+    test_real_scene_dispatch()
     test_real_message_tables()
     test_message_join()
     test_field_semantics()
