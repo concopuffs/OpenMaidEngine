@@ -91,6 +91,27 @@ ROUTINE_BANK_ROLES = (
 )
 
 MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
+    4: {
+        "behavior": "approach_stage_object_slot",
+        "parameter_fields": {
+            "movement_parameter_1": "stage_object_slot_index",
+        },
+        "parameter_defaults": {
+            "movement_parameter_1": 0,
+        },
+        "parameter_notes": {
+            "stage_object_slot_index": (
+                "zero-based index into the current stage's object arrays; "
+                "shipped explicit values are 1 or 2, with three unwritten "
+                "cells using the zero/slot-0 default"
+            ),
+        },
+        "completion": (
+            "advance the current step's progress counter after reaching the "
+            "selected object's tile (or, for a type-6 stage object, its linked "
+            "exit tile)"
+        ),
+    },
     5: {
         "behavior": "approach_destination_tile",
         "parameter_fields": {
@@ -100,6 +121,29 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
         "completion": (
             "advance the current step's progress counter after reaching the "
             "destination tile (or its linked type-6 stage-object exit tile)"
+        ),
+    },
+    6: {
+        "behavior": "approach_nearest_enemy",
+        "parameter_fields": {
+            "movement_parameter_1": "maximum_target_route_steps",
+        },
+        "parameter_notes": {
+            "maximum_target_route_steps": (
+                "inclusive route-step radius from the acting entity after "
+                "SETMVWORK applies offensive-action eligibility; shipped "
+                "values are 1..7, 10, or 20"
+            ),
+        },
+        "target_selection": (
+            "nearest active entity of another faction within the route-step "
+            "radius; choose randomly among ties, then approach a reachable "
+            "tile nearest that enemy; execution also requires the normal-"
+            "attack bit in offensive_action_scope_masks[0]"
+        ),
+        "completion": (
+            "advance the current step's progress counter after producing a "
+            "valid movement destination toward the selected enemy"
         ),
     },
     7: {
@@ -195,6 +239,27 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
         "completion": (
             "advance the current step's progress counter after reaching the "
             "destination tile (or its linked type-6 stage-object exit tile)"
+        ),
+    },
+    15: {
+        "behavior": "approach_foreign_magic_pillar",
+        "parameter_fields": {
+            "movement_parameter_1": "maximum_target_route_steps",
+        },
+        "parameter_notes": {
+            "maximum_target_route_steps": (
+                "inclusive route-step radius; shipped values are 2..6"
+            ),
+        },
+        "target_selection": (
+            "nearest active stage object of OBINIT type 2, 3, or 4 (small, "
+            "medium, or large Magic Pillar) whose runtime state/faction differs "
+            "from the acting entity; require it to be within the route-step "
+            "radius, then approach a reachable tile nearest that object"
+        ),
+        "completion": (
+            "produce a movement result only when a foreign-controlled Magic "
+            "Pillar exists within the configured route-step radius"
         ),
     },
 }

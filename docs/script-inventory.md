@@ -99,10 +99,11 @@ RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `100
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join
 provider selectors to script names, retain all 29 overwritten cells, and keep the six reserved empty
-banks visible. Selector-specific parameter schemas now cover RTN_M005/012 coordinate destinations,
-RTN_M007 injured-ally search, RTN_M010 resource-threshold Healing Feather search, and RTN_M011 cyclic
-waypoints with an optional path-cost limit. The generated join covers 292 steps, 758 populated parameters,
-and seven explicit zero/HP defaults while retaining the structurally named raw banks for every provider.
+banks visible. Selector-specific parameter schemas now cover RTN_M004 stage-object slots,
+RTN_M005/012 coordinate destinations, RTN_M006 nearest-enemy search, RTN_M007 injured-ally search,
+RTN_M010 resource-threshold Healing Feather search, RTN_M011 cyclic waypoints, and RTN_M015
+foreign-controlled Magic Pillars. The generated join covers 508 steps, 971 populated parameters, and ten
+explicit defaults while retaining the structurally named raw banks for every provider.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

@@ -444,14 +444,25 @@ keeps its raw `base/20/slot` fields and complete offset-tagged assignment histor
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
-The provider-specific join now covers RTN_M005/007/010/011/012: 292 movement steps, 758 populated
-parameters, and seven explicit zero defaults. RTN_M005/011/012 read banks 2/3 as
+The provider-specific join now covers RTN_M004/005/006/007/010/011/012/015: 508 movement steps, 971
+populated parameters, and ten explicit zero defaults. RTN_M005/011/012 read banks 2/3 as
 `destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
 step's progress counter after arrival. Their alternate completion test recognizes a type-6 stage object
 at the authored destination and also accepts the object's linked exit tile. RTN_M012 is byte-for-byte
 equivalent to M005 except for its MVSEEK mode: mode 2 masks the doubled-coordinate terrain cell of every
 active foreign-faction entity before the flood fill, so the generated behavior distinguishes this
 foreign-entity-avoiding route from ordinary M005.
+
+RTN_M004's bank-2 value is a zero-based `stage_object_slot_index`. It approaches that current-stage
+object and uses the same exact-tile/type-6-linked-exit completion contract as the coordinate providers.
+Three of its 70 steps leave the cell unwritten and therefore receive an explicit semantic slot-0 default;
+the generic raw bank remains absent in those rows.
+
+RTN_M006 is the nearest-enemy form. Bank 2 is an inclusive `maximum_target_route_steps`, authored from
+1 through 7 plus 10 and 20. It requires the normal-attack bit at encoded range 0, selects the nearest
+active entity of another faction which remains eligible after SETMVWORK's offensive-action filtering,
+randomizes equal-distance ties, and approaches a reachable tile nearest that enemy. Producing a valid
+destination increments the step's progress counter.
 
 RTN_M011 is the cyclic-waypoint form. Bank 4 is a one-based `waypoint_ordinal`; only the step whose
 ordinal minus one matches `entity_patrol_waypoint_indices[current_entity]` executes. Arrival advances
@@ -471,13 +482,27 @@ zero/HP default without fabricating a raw assignment. Bank 3 is an inclusive
 provider chooses the nearest active OBINIT type 15 or 16 object (`治癒の羽`, full status recovery, or its
 single-use red variant) and approaches a reachable tile nearest it.
 
+RTN_M015 is the Magic Pillar form. It chooses the nearest active OBINIT type 2/3/4 object (small,
+medium, or large `魔力の柱`) whose runtime ownership state differs from the acting entity's faction.
+Bank 2 is an inclusive `maximum_target_route_steps`, authored from 2 through 6; the provider produces
+movement only when the chosen foreign-controlled pillar is within that radius.
+
+MVSEEK's mode contract is also now explicit. Mode 0 replaces the input coordinate with the current
+entity tile and seeds the origin with movement+1, producing the movement-limited reachability grid.
+Modes 1/2 retain the caller coordinate and seed it with 9999, producing a broad target-distance grid;
+mode 2 additionally applies the foreign-entity terrain mask described above. Every traversed edge
+decrements `pathfinding_remaining_route_steps`, so origin minus target is the route-step distance used
+by M006/007/015.
+
 `movement_steps` now carry these selector-scoped semantic fields beside the original
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
 mapping, target-selection rules, and zero/unwritten behavior. No meaning is projected onto other
 providers. The supporting runtime joins are now curated too: `entity_runtime_flags`,
 `entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
-current HP/SP/FS, `movement_search_mode`, `pathfinding_remaining_route_steps`,
-`pathfinding_movement_costs`, and the per-entity patrol waypoint index.
+current HP/SP/FS, `stage_object_runtime_flags`, `movement_search_mode`,
+`offensive_action_scope_masks`, `pathfinding_remaining_route_steps`,
+`pathfinding_filtered_route_scores`, `pathfinding_movement_costs`, and the per-entity patrol waypoint
+index.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 

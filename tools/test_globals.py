@@ -33,6 +33,11 @@ def test_load_and_lint():
     check(entries[0xaba96]["name"] == "pathfinding_remaining_route_steps"
           and entries[0xcc9f1]["name"] == "movement_search_mode",
           "movement-search reachability state is curated")
+    check(entries[0xbf6fe]["name"] == "pathfinding_filtered_route_scores"
+          and entries[0xcc9f4]["name"] == "offensive_action_scope_masks",
+          "movement target filtering and offensive scope are curated")
+    check(entries[0xaba64]["name"] == "stage_object_runtime_flags",
+          "stage-object targeting flags are curated")
     check(entries[0xb240e]["name"] == "pathfinding_movement_costs",
           "movement-cost work grid is curated")
     # lint clean against a permissive address universe (curated addrs are self-consistent)

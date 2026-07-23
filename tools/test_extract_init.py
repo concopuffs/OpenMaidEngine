@@ -371,10 +371,10 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 5
-          and meta["decoded_movement_step_count"] == 292
-          and meta["decoded_movement_parameter_count"] == 758
-          and meta["decoded_movement_defaulted_parameter_count"] == 7,
+    check(meta["decoded_movement_provider_count"] == 8
+          and meta["decoded_movement_step_count"] == 508
+          and meta["decoded_movement_parameter_count"] == 971
+          and meta["decoded_movement_defaulted_parameter_count"] == 10,
           "RTINIT reports selector-specific semantic coverage")
     check([
         layout["bank_index"]
@@ -434,6 +434,26 @@ def test_real_routine_banks() -> None:
           and provider_12["destination_tile_x"] == 11
           and provider_12["destination_tile_y"] == 68,
           "RTINIT joins RTN_M012's route-mode destination semantics")
+    provider_4 = by_id[5]["movement_steps"][0]
+    check(provider_4["movement_provider_selector"] == 4
+          and provider_4["provider_behavior"] == "approach_stage_object_slot"
+          and provider_4["stage_object_slot_index"] == 1,
+          "RTINIT joins RTN_M004's stage-object slot semantics")
+    provider_4_default = by_id[17]["movement_steps"][1]
+    check(provider_4_default["movement_provider_selector"] == 4
+          and provider_4_default["stage_object_slot_index"] == 0
+          and "movement_parameter_1" not in provider_4_default,
+          "RTINIT projects RTN_M004's implicit stage-object slot zero")
+    provider_6 = by_id[6]["movement_steps"][0]
+    check(provider_6["movement_provider_selector"] == 6
+          and provider_6["provider_behavior"] == "approach_nearest_enemy"
+          and provider_6["maximum_target_route_steps"] == 5,
+          "RTINIT joins RTN_M006's enemy-search radius")
+    provider_15 = by_id[2]["movement_steps"][0]
+    check(provider_15["movement_provider_selector"] == 15
+          and provider_15["provider_behavior"] == "approach_foreign_magic_pillar"
+          and provider_15["maximum_target_route_steps"] == 3,
+          "RTINIT joins RTN_M015's foreign Magic Pillar search radius")
     check("provider_behavior" not in movement
           and "destination_tile_x" not in movement,
           "RTINIT does not leak provider-specific meanings onto undecoded selectors")

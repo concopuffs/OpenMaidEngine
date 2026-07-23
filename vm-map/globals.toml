@@ -850,7 +850,7 @@ name = "movement_routine_parameter_1"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/012 use destination_tile_x, RTN_M007 uses maximum_target_route_steps, RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero), and RTN_M011 uses destination_tile_x."
+usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M004 uses a stage_object_slot_index; RTN_M005/011/012 use destination_tile_x; RTN_M006/007/015 use maximum_target_route_steps; and RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero)."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -1292,10 +1292,21 @@ name = "pathfinding_remaining_route_steps"
 category = "data-table"
 type = "int[][27]"
 value_domain = "0 for unreachable; positive remaining flood-fill steps"
-usage = "MVSEEK's row-major reachability grid. The origin receives movement+1 and each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M007 uses the difference from the origin value as its ally-search radius; RTN_M010 ranks Healing Feathers by the negated value to choose the nearest reachable object."
+usage = "MVSEEK's row-major reachability grid. Mode 0 searches from the current entity with movement+1 at the origin; modes 1/2 search from the caller-supplied coordinate with 9999 at the origin. Each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M006/007/015 use origin-minus-target values as route-step radii; RTN_M010 ranks Healing Feathers by the negated value."
 source = "investigation"
 confidence = "high"
 depends_on = ["0x4e11b", "0x5231f", "0x52351", "0xcc9f1"]
+
+[[global]]
+address = "0xbf6fe"
+name = "pathfinding_filtered_route_scores"
+category = "data-table"
+type = "int[][27]"
+value_domain = "0 for excluded/unreachable; positive remaining route score"
+usage = "SETMVWORK begins by copying pathfinding_remaining_route_steps, then filters occupied entity cells according to faction and the acting entity's usable offensive-action mask/effectiveness. RTN_M providers combine this target-proximity score with a movement-limited MVSEEK grid to select a reachable tile nearest an entity or stage object."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e021", "0x522ed", "0xaba96", "0xcc9f4"]
 
 [[global]]
 address = "0xcc9f1"
@@ -1303,10 +1314,22 @@ name = "movement_search_mode"
 category = "choice-output"
 type = "int"
 value_domain = "0..2"
-usage = "Transient MVSEEK mode. Zero keeps the caller-supplied origin and broad search allowance; nonzero modes replace them with the current entity tile and movement+1. Mode 2 additionally masks the doubled-coordinate terrain cells occupied by active entities of another faction before the flood fill. MVSEEK resets the mode to zero on exit."
+usage = "Transient MVSEEK mode. Zero replaces the caller-supplied origin with the current entity tile and uses movement+1 as the search allowance; nonzero modes retain the caller coordinate and use a broad allowance of 9999. Mode 2 additionally masks the doubled-coordinate terrain cells occupied by active entities of another faction before the flood fill. MVSEEK resets the mode to zero on exit."
 source = "investigation"
 confidence = "high"
 depends_on = ["0x4e021", "0x4e11b", "0x522ed", "0x5231f", "0x52351"]
+
+[[global]]
+address = "0xcc9f4"
+name = "offensive_action_scope_masks"
+category = "data-table"
+type = "int[10]"
+columns = { "0" = "range_0", "1" = "range_1", "2" = "range_2", "3" = "range_3", "4" = "range_4", "5" = "range_5", "6" = "range_6", "7" = "range_7", "8" = "range_8", "9" = "range_9" }
+value_domain = "action-availability bitmask: bit 0 normal attack, bits 1..4 equipped active skills"
+usage = "CALCSCOPE clears ten encoded-range cells, sets bit 0 over the equipped/default attack's range, and sets bits 1..4 over each usable offensive skill's range. SETMVWORK uses the range-0 mask and paired attack elements when filtering target cells; RTN_M003/006/016/017/018 require its normal-attack bit."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8d431", "0x8d819", "0xa71de", "0xa730a"]
 
 [[global]]
 address = "0x152616"
@@ -2213,9 +2236,20 @@ name = "stage_object_runtime_state"
 category = "data-table"
 type = "int[][50]"
 value_domain = "type-dependent small integer state; initial values observed 1..3"
-usage = "Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type."
+usage = "Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. RTN_M015 treats the state of Magic Pillar types 2..4 as their controlling faction and targets pillars whose value differs from the acting entity's faction."
 source = "investigation"
 confidence = "high"
+
+[[global]]
+address = "0xaba64"
+name = "stage_object_runtime_flags"
+category = "data-table"
+type = "int[50]"
+value_domain = "runtime stage-object bitfield; bit 1 marks a targetable active slot"
+usage = "Per-current-stage object flags. RTN_M010 and RTN_M015 require bit 1 before considering Healing Feathers or Magic Pillars as movement targets; FIELD and object rendering maintain the broader type-dependent bitfield."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe7389"]
 
 [[global]]
 address = "0x27b9"
