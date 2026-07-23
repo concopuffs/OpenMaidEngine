@@ -229,6 +229,16 @@ machine-readable `columns` map; `globals_build.py` preserves it in `build/global
 as provenance. Generated profiles therefore render names such as
 `item_stat_modifiers.critical_chance` and `skill_status_levels.paralysis` directly.
 
+The same structured metadata now covers the confirmed EBINIT layouts. The 14-column base-stat and growth
+records use the shared accuracy-through-max-FS vocabulary; starting skills, drop items/chances, normal versus
+brainwashed roster forms, battle portraits/cut-ins, and health-selected status art all expose named fields.
+Consumer control flow further divides the five CP sprite assets into normal/alternate compact and directional
+sheets plus the special compact sheet, and SHOWGROW proves voice column 24 is the level-up reaction. Of
+EBINIT's 110 populated profile fields, 72 now have specific semantic names. The remaining 35 named-table
+fallbacks are deliberately limited to the still-unresolved voice reactions and SALLY action/event slots;
+three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into runtime table
+`0x4e693/300`).
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -273,11 +283,11 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT's populated row columns now have
-   machine-readable meanings; extend the same structured `columns` metadata through the confirmed EBINIT
-   tables, then investigate its unread enum and boss-class sign only when consumer evidence appears.
-   Preserve explicit item → skill and unit → attack/skill/equipment/drop joins. Do not infer meaning from
-   column position alone.
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT and the confirmed EBINIT row layouts now
+   have machine-readable meanings. Next isolate EBINIT's voice-slot roles from their battle/map selection
+   branches and SALLY's action/event slots from their routed scenes; investigate the unread enum and boss-class
+   sign only when consumer or native evidence appears. Preserve explicit item → skill and
+   unit → attack/skill/equipment/drop joins. Do not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each
