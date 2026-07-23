@@ -752,11 +752,12 @@ footer-array copies. AIM/FIELD/DRAWCHP consumers establish the four condition sl
 and turn-limit outcome. Further passes establish target clear turns, performance reward, replay behavior,
 the 20-slot map-texture override list, object type/tile/difficulty fields, and seven required plus five
 forbidden story prerequisites. Generated records now carry a joined `semantic_fields` view and assemble
-2,312 object placements across 66 stages while retaining four unresolved type-specific parameters by raw
-address. The separate 30-cell enemy family is also decoded: FIELD/SETEN/ADDEN establish unit/faction,
+2,312 object placements across 66 stages. FIELD resolves the universal reinforcement interval/limit and
+type-tagged initial-faction, teleport, treasure, and card-list payloads; 185 payload cells on other object
+types remain raw. The separate 30-cell enemy family is also decoded: FIELD/SETEN/ADDEN establish unit/faction,
 direct or object-linked placement, difficulty/story gates, level floor/cap/scaling, weighted selection,
 and three difficulty-specific movement/battle routine-set ids. The generated view assembles all 1,378
-populated enemy slots across 66 stages; only one replay-linked spawn-mode field remains raw.
+populated enemy slots across 66 stages, including 485 enemies suppressed after the stage's first clear.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 
@@ -766,8 +767,8 @@ Once the natural spine and first gameplay loop are trustworthy, broaden in indep
 - Unit statistics, equipment, inventory, skills, magic, heroine forms, and progression.
 - Combat resolution presentation, enemy turns/AI services, and win/loss transitions.
 - A full chapter of ADV and the scene types encountered between gameplay segments.
-- Remaining STINIT specialized object-parameter semantics and the isolated spawn-mode gate, plus other data
-  schemas when their runtime consumers make them necessary.
+- Remaining STINIT tagged payloads on object types 11, 17--21, and 25--27, plus other data schemas when
+  their runtime consumers make them necessary.
 
 The high-level Phase B direction remains canonical in `docs/remake-architecture-and-roadmap.md`; this file
 only provides the execution framework.

@@ -269,7 +269,21 @@ the shared fallback. DRAWOBJ converts `0xe7325` and `0xe7357` to map-space coord
 SETOBJ/DRAWOBJ/FIELD use `0xe7389` to index shared object definitions. They are object tile X, tile Y, and
 type id. SETOBJ tests the `{3,4,7}` masks in `0xe7483` against GAMESTART's three-way `difficulty_index`,
 then applies seven required and five forbidden one-based ids from `0xe74b5`/`0xe7613` against the shared
-`story_event_flags` bank.
+`story_event_flags` bank. FIELD's turn loop establishes `0xe741f` and `0xe7451` as each object's
+reinforcement interval and spawn limit. Type 27 uses the same pair for a one-shot special spawn.
+
+The intervening `0xe73bb`/`0xe73ed` pair is deliberately not assigned one global name: FIELD dispatches it
+by `stage_object_type_id`, making it a tagged payload. The generated join decodes only consumer-proven
+variants:
+
+- types 1--4: `initial_faction_id` in the first cell;
+- types 6 and 36: teleport `destination_tile_x` / `destination_tile_y`;
+- types 7 and 8: treasure `item_id` / `item_quantity`, passed to ADDITEM;
+- type 28: `card_generation_list_id`, passed to CDINIT.
+
+This accounts for 220 initial-owner values, 229 teleport destinations, 626 treasure pairs, and 246 card
+list ids. Another 185 placements across object types 11, 17--21, 25--27 retain one raw payload cell because
+their type-specific meaning is not yet separable from the consumer behavior.
 
 The enemy pass follows the separate 30-cell family through FIELD, SETEN, ADDEN, MVRTN, and BTRTN. Slot
 zero is reserved for ADDEN's synthesized special-unit path; the stage table populates slots 1 through 29.
@@ -279,21 +293,22 @@ three-bit difficulty mask in `0xe77b7`, uses `0xe77f3` as a weighted-random alte
 the seven required plus five forbidden story flags in `0xe793d`/`0xe7a0f`. SETEN proves `0xe782f`,
 `0xe784d`, and `0xe786b` are the scenario level floor, cap, and party-level scaling divisor. Finally,
 the three-value footer rows in `0xe7889` and optional `0xe78e3` become difficulty-specific movement and
-battle routine-set ids selected by MVRTN/BTRTN.
+battle routine-set ids selected by MVRTN/BTRTN. The final `0xe77d5` gate is also resolved:
+STAGECLEAR writes `stage_clear_state[current_stage] = 1`, and FIELD suppresses a spawn when that state is
+set and the spawn's cell equals 2. The joined view exposes all 485 populated cases as
+`first_clear_only: true`.
 
 Generated INIT records now retain their raw `fields`/`record_fields`/buffer keys and additionally expose a
 flat `semantic_fields` projection joined through the top-level `field_semantics` map. For STINIT, the four
 confirmed parallel buffers plus both prerequisite tables are also assembled into 2,312
 `object_placements` across 66 stages. Each placement contains its slot, type, tile coordinates, difficulty
-mask, and populated positive/negative story prerequisites. The four still-unresolved object-parameter
-buffers remain attached under `unknown_fields`, so this convenience view loses no evidence or invents names.
+mask, populated positive/negative story prerequisites, optional reinforcement schedule, and the decoded
+type-tagged payload variants above. The remaining 185 undecoded payload cells stay attached under
+`unknown_fields`, so this convenience view loses no evidence or invents names.
 The same records now contain 1,378 joined `enemy_spawns` across 66 stages, with unit/faction, direct or
 object-linked placement data when present, difficulty and story gates, level rules, random-selection
-weight, and movement/battle routine rows. Raw footer metadata stays in `footer_arrays`, while its
-`semantic_fields` value is the copied row itself. The one remaining spawn-mode cell (`0xe77d5`, always 2
-when populated) stays under `unknown_fields`: FIELD ties it to already-cleared-stage state, but the precise
-player-facing nuance is not yet strong enough to name. The next STINIT batch is the four type-specific
-object parameters plus that isolated spawn-mode gate.
+weight, movement/battle routine rows, and `first_clear_only` replay gating. Raw footer metadata stays in
+`footer_arrays`, while its `semantic_fields` value is the copied row itself.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -341,10 +356,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
 
 1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
    STINIT's mixed stage records now have machine-readable investigation surfaces, including joined object
-   placements and enemy spawns. Next trace STINIT's four remaining specialized object parameters and its
-   isolated spawn-mode gate only where type-specific/runtime branches distinguish them. Isolate EBINIT's
-   remaining voice/action slots under the same rule. Preserve explicit joins and do not infer meaning from
-   column position alone.
+   placements and enemy spawns. STINIT's universal object schedule, four consumer-proven tagged payload
+   variants, and first-clear enemy gate are decoded; next trace the 185 remaining raw object payloads only
+   where their type-specific runtime branches distinguish them. Isolate EBINIT's remaining voice/action
+   slots under the same rule. Preserve explicit joins and do not infer meaning from column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

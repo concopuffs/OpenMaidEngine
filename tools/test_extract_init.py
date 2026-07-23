@@ -113,13 +113,41 @@ def test_real_mixed_table() -> None:
         "tile_x": 13,
         "tile_y": 1,
         "difficulty_mask": 7,
-        "unknown_fields": {"0xe73bb": 1},
+        "initial_faction_id": 1,
     }, "STINIT joins confirmed object buffers into one placement record")
+    stage1_slot6 = next(
+        obj for obj in records[0]["object_placements"] if obj["slot"] == 6
+    )
+    check(stage1_slot6["item_id"] == 222
+          and stage1_slot6["item_quantity"] == 1,
+          "STINIT object payloads decode by object type")
+    stage1_slot5 = next(
+        obj for obj in records[0]["object_placements"] if obj["slot"] == 5
+    )
+    check(stage1_slot5["reinforcement_interval_turns"] == 10
+          and stage1_slot5["reinforcement_spawn_limit"] == 3,
+          "STINIT object placements expose reinforcement schedules")
+    stage1_slot8 = next(
+        obj for obj in records[0]["object_placements"] if obj["slot"] == 8
+    )
+    check(stage1_slot8["card_generation_list_id"] == 1,
+          "STINIT card objects expose their generation-list id")
+    stage1_slot9 = next(
+        obj for obj in records[0]["object_placements"] if obj["slot"] == 9
+    )
+    check(stage1_slot9["destination_tile_x"] == 13
+          and stage1_slot9["destination_tile_y"] == 7,
+          "STINIT teleport payloads expose destination coordinates")
     stage2_slot3 = next(
         obj for obj in records[1]["object_placements"] if obj["slot"] == 3
     )
     check(stage2_slot3["required_story_flags"] == [902],
           "STINIT object placements join positive story prerequisites")
+    all_objects = [
+        obj for record in records for obj in record["object_placements"]
+    ]
+    check(sum("unknown_fields" in obj for obj in all_objects) == 185,
+          "STINIT preserves unresolved tagged object payloads as raw evidence")
     extract_init.attach_stage_enemy_spawns(records)
     first_spawn = records[0]["enemy_spawns"][0]
     check(first_spawn == {
@@ -133,7 +161,7 @@ def test_real_mixed_table() -> None:
         "object_slot": 2,
         "movement_routine_set_ids": [1, 1, 1],
         "forbidden_story_flags": [11],
-        "unknown_fields": {"0xe77d5": 2},
+        "first_clear_only": True,
     }, "STINIT joins confirmed enemy buffers into one spawn record")
     stage1_slot2 = records[0]["enemy_spawns"][1]
     check(stage1_slot2["random_selection_weight"] == 1
@@ -141,6 +169,11 @@ def test_real_mixed_table() -> None:
           "STINIT preserves weighted object-linked enemy alternatives")
     check(sum(len(record["enemy_spawns"]) for record in records) == 1378,
           "STINIT assembles every populated enemy spawn slot")
+    check(sum(
+        spawn.get("first_clear_only", False)
+        for record in records
+        for spawn in record["enemy_spawns"]
+    ) == 485, "STINIT exposes every first-clear-only enemy gate")
 
 
 def test_real_message_tables() -> None:

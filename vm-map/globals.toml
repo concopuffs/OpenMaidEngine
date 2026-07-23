@@ -1703,6 +1703,16 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x7684"
+name = "stage_clear_state"
+category = "data-table"
+type = "int[]"
+value_domain = "{0,1}; 1 means the stage has been cleared"
+usage = "Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0xe7303"
 name = "stage_target_clear_turns"
 category = "data-table"
@@ -1769,6 +1779,26 @@ category = "data-table"
 type = "int[50]"
 value_domain = "object definition id 1..46"
 usage = "Object-definition id for each current-stage object slot. SETOBJ decides whether the slot exists, while DRAWOBJ and FIELD use the id to select shared object graphics, dimensions, animation, collision, and behavior metadata."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe741f"
+name = "stage_object_reinforcement_interval_turns"
+category = "data-table"
+type = "int[50]"
+value_domain = "positive turn interval, 5..80 in the shipped stages; zero disables scheduled spawning"
+usage = "Per-object reinforcement schedule. FIELD compares the current turn and the object's runtime spawn count against this interval to calculate due weighted enemy spawns; object type 27 uses the same value as its one-shot trigger turn."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe7451"
+name = "stage_object_reinforcement_spawn_limit"
+category = "data-table"
+type = "int[50]"
+value_domain = "positive spawn limit, 1..20 in the shipped stages; zero disables scheduled spawning"
+usage = "Maximum number of scheduled units materialized through a stage object. FIELD stops the object's reinforcement path once its runtime spawn counter reaches this value; object type 27 stores one for its one-shot special spawn."
 source = "investigation"
 confidence = "high"
 
@@ -1859,6 +1889,17 @@ usage = "Per-spawn difficulty inclusion mask. FIELD uses check-bit with difficul
 source = "investigation"
 confidence = "high"
 depends_on = ["0x32f1"]
+
+[[global]]
+address = "0xe77d5"
+name = "stage_enemy_first_clear_only"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0,2}; 2 suppresses the spawn after the stage has been cleared"
+usage = "Per-spawn replay gate. FIELD rejects a populated enemy slot when this value is 2 and stage_clear_state for the current stage is 1; zero/default slots remain eligible on cleared-stage replays."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7684"]
 
 [[global]]
 address = "0xe77f3"

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5030 globals (181 curated, 4849 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5030 globals (185 curated, 4845 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -31,6 +31,7 @@
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
+| `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL and FIELD select mostly unresolved battle/map reaction slots, while SHOWGROW proves column 24 is the level-up reaction. Columns: 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
@@ -112,6 +113,8 @@
 | `0xe7325` | stage_object_tile_x | high | investigation | X coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_y for object interaction and occupancy. |
 | `0xe7357` | stage_object_tile_y | high | investigation | Y coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_x for object interaction and occupancy. |
 | `0xe7389` | stage_object_type_id | high | investigation | Object-definition id for each current-stage object slot. SETOBJ decides whether the slot exists, while DRAWOBJ and FIELD use the id to select shared object graphics, dimensions, animation, collision, and behavior metadata. |
+| `0xe741f` | stage_object_reinforcement_interval_turns | high | investigation | Per-object reinforcement schedule. FIELD compares the current turn and the object's runtime spawn count against this interval to calculate due weighted enemy spawns; object type 27 uses the same value as its one-shot trigger turn. |
+| `0xe7451` | stage_object_reinforcement_spawn_limit | high | investigation | Maximum number of scheduled units materialized through a stage object. FIELD stops the object's reinforcement path once its runtime spawn counter reaches this value; object type 27 stores one for its one-shot special spawn. |
 | `0xe7483` | stage_object_difficulty_mask | high | investigation | Per-object difficulty inclusion mask. SETOBJ uses check-bit with difficulty_index and rejects the object slot when the selected difficulty bit is absent. |
 | `0xe74b5` | stage_object_required_story_flags | high | investigation | Seven positive prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7613` | stage_object_forbidden_story_flags | high | investigation | Five negative prerequisites per stage object. SETOBJ subtracts one from every populated id and suppresses the object when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
@@ -120,6 +123,7 @@
 | `0xe777b` | stage_enemy_spawn_object_slot | high | investigation | Optional object-placement anchor for an enemy spawn. FIELD resolves nonzero entries through stage_object_type_id and uses the matching stage_object_tile_x/Y location; zero selects stage_enemy_spawn_tile_x/Y directly. |
 | `0xe7799` | stage_enemy_faction_id | high | investigation | Per-spawn faction/team selector. FIELD and ADDEN copy it into the runtime unit's faction field, use it to choose the entity-index band, and test the same value against map occupancy masks. |
 | `0xe77b7` | stage_enemy_difficulty_mask | high | investigation | Per-spawn difficulty inclusion mask. FIELD uses check-bit with difficulty_index and rejects a slot when the selected difficulty bit is absent. |
+| `0xe77d5` | stage_enemy_first_clear_only | high | investigation | Per-spawn replay gate. FIELD rejects a populated enemy slot when this value is 2 and stage_clear_state for the current stage is 1; zero/default slots remain eligible on cleared-stage replays. |
 | `0xe77f3` | stage_enemy_random_selection_weight | high | investigation | Weight for stage-enemy alternatives. FIELD groups eligible nonzero-weight slots by their stage_enemy_spawn_object_slot, sums the weights, makes a weighted random choice within each eligible group, and directly materializes zero-weight slots. |
 | `0xe7811` | stage_enemy_unit_id | high | investigation | Unit-definition id for each current-stage enemy slot. FIELD rejects zero slots, while FIELD and ADDEN pass populated ids to SETEN to copy the corresponding EBINIT definition into a runtime entity. |
 | `0xe782f` | stage_enemy_min_level | high | investigation | Scenario-specific minimum level for each stage enemy. After applying party-level auto-scaling, SETEN raises the runtime level to this floor before applying the maximum-level clamp. |
@@ -172,7 +176,6 @@
 | `0x6868` | — | low | auto-shape | array |
 | `0x6930` | — | low | auto-shape | array |
 | `0x6994` | — | low | auto-shape | array |
-| `0x7684` | — | low | auto-shape | array |
 | `0x7a6c` | — | low | auto-shape | array |
 | `0x204fb` | — | low | auto-shape | array |
 | `0x2052f` | — | low | auto-shape | array |
@@ -276,10 +279,7 @@
 | `0xe730e` | — | low | auto-shape | array |
 | `0xe73bb` | — | low | auto-shape | array |
 | `0xe73ed` | — | low | auto-shape | array |
-| `0xe741f` | — | low | auto-shape | array |
-| `0xe7451` | — | low | auto-shape | array |
 | `0xe770d` | — | low | auto-shape | array |
-| `0xe77d5` | — | low | auto-shape | array |
 | `0xe7e8d` | — | low | auto-shape | array |
 | `0xe8275` | — | low | auto-shape | array |
 | `0xebd0d` | — | low | auto-shape | array |

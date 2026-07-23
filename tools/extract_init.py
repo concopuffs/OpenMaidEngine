@@ -564,8 +564,9 @@ def attach_stage_object_placements(records: list[dict]) -> None:
         "tile_x": "0xe7325",
         "tile_y": "0xe7357",
         "difficulty_mask": "0xe7483",
+        "reinforcement_interval_turns": "0xe741f",
+        "reinforcement_spawn_limit": "0xe7451",
     }
-    unknown_bases = ("0xe73bb", "0xe73ed", "0xe741f", "0xe7451")
     for record in records:
         fields = record.get("array_fields", {})
         objects = []
@@ -593,11 +594,27 @@ def attach_stage_object_placements(records: list[dict]) -> None:
                 obj["required_story_flags"] = required
             if forbidden:
                 obj["forbidden_story_flags"] = forbidden
-            unknown = {
-                base: fields[f"{base}/{slot}"]
-                for base in unknown_bases
-                if f"{base}/{slot}" in fields
+            payload = {
+                base: fields[key]
+                for base in ("0xe73bb", "0xe73ed")
+                if (key := f"{base}/{slot}") in fields
             }
+            type_id = obj["type_id"]
+            if type_id in (1, 2, 3, 4) and "0xe73bb" in payload:
+                obj["initial_faction_id"] = payload.pop("0xe73bb")
+            elif type_id in (6, 36):
+                if "0xe73bb" in payload:
+                    obj["destination_tile_x"] = payload.pop("0xe73bb")
+                if "0xe73ed" in payload:
+                    obj["destination_tile_y"] = payload.pop("0xe73ed")
+            elif type_id in (7, 8):
+                if "0xe73bb" in payload:
+                    obj["item_id"] = payload.pop("0xe73bb")
+                if "0xe73ed" in payload:
+                    obj["item_quantity"] = payload.pop("0xe73ed")
+            elif type_id == 28 and "0xe73bb" in payload:
+                obj["card_generation_list_id"] = payload.pop("0xe73bb")
+            unknown = payload
             if unknown:
                 obj["unknown_fields"] = unknown
             objects.append(obj)
@@ -624,7 +641,6 @@ def attach_stage_enemy_spawns(records: list[dict]) -> None:
         "movement_routine_set_ids": ("0xe7889", 3),
         "battle_routine_set_ids": ("0xe78e3", 3),
     }
-    unknown_bases = ("0xe77d5",)
     for record in records:
         fields = record.get("array_fields", {})
         footer_arrays = record.get("footer_arrays", {})
@@ -665,11 +681,13 @@ def attach_stage_enemy_spawns(records: list[dict]) -> None:
                 spawn["required_story_flags"] = required
             if forbidden:
                 spawn["forbidden_story_flags"] = forbidden
-            unknown = {
-                base: fields[f"{base}/{slot}"]
-                for base in unknown_bases
-                if f"{base}/{slot}" in fields
-            }
+            unknown = {}
+            if (mode_key := f"0xe77d5/{slot}") in fields:
+                mode = fields[mode_key]
+                if mode == 2:
+                    spawn["first_clear_only"] = True
+                else:
+                    unknown["0xe77d5"] = mode
             if unknown:
                 spawn["unknown_fields"] = unknown
             spawns.append(spawn)
