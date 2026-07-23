@@ -315,6 +315,28 @@ def test_field_semantics() -> None:
     check(items[0]["semantic_fields"]["item_sort_key"] == 10,
           "records expose a joined semantic field view")
 
+    units, _ = extract_init.extract_name(sys4load.load(scripts["EBINIT.BIN"]))
+    unit_semantics = extract_init.field_semantics(units)
+    check(
+        unit_semantics["0x73236/4/0"]
+        == "unit_sally_action_unlock_requirements.contract",
+        "SALLY unlock columns expose their action semantics",
+    )
+    check(
+        unit_semantics["0x741d6/8/6"] == "unit_sally_event_ids.sacrifice",
+        "SALLY event columns expose their dispatched action semantics",
+    )
+    check(
+        unit_semantics["0x741d6/8/2"] == "unit_sally_event_ids.reserved_action",
+        "the unreachable SALLY action remains explicit rather than speculative",
+    )
+    extract_init.attach_semantic_fields(units, unit_semantics)
+    unit_by_id = {record["id"]: record for record in units}
+    check(
+        unit_by_id[5]["semantic_fields"]["unit_sally_event_ids.release"] == 1360,
+        "EBINIT records join SALLY release events by semantic field name",
+    )
+
     stages, meta = extract_init.extract_mixed(
         sys4load.load(extract_init.resolve("STINIT"))
     )

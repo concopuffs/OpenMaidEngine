@@ -495,8 +495,9 @@ address = "0x73236"
 name = "unit_sally_action_unlock_requirements"
 category = "data-table"
 type = "int[1000][4]"
+columns = { "0" = "contract", "1" = "brainwash", "2" = "reserved_action", "3" = "sex_magic" }
 value_domain = "-1 means unconditional, 0 means unavailable, positive values 1744..1915 are one-based indices into the flag bank at 0x6d3"
-usage = "Availability requirements for SALLY's first four per-unit actions. While constructing the action mask, SALLY keeps a positive entry only when flag_bank[value - 1] equals 1, keeps -1 as unconditional, and clears an action whose entry is zero. The table covers the seven principal recruitable heroines plus 29 summonable archetypes."
+usage = "Availability requirements for SALLY's contract, brainwash, reserved, and sex-magic action slots. The SO012 button atlas and selection dispatch prove that UI choices 1, 2, and 3 select columns 0, 1, and 3; column 2 has a switch case but is deliberately skipped by both drawing and input, so it is reserved/unreachable in the shipped UI. While constructing the action mask, SALLY keeps a positive entry only when flag_bank[value - 1] equals 1, keeps -1 as unconditional, and clears an action whose entry is zero. Deploy, sacrifice, and release use separate eligibility logic."
 source = "investigation"
 confidence = "high"
 
@@ -505,8 +506,9 @@ address = "0x741d6"
 name = "unit_sally_event_ids"
 category = "data-table"
 type = "int[1000][8]"
+columns = { "0" = "contract", "1" = "brainwash", "2" = "reserved_action", "3" = "sex_magic_lily_child", "4" = "sex_magic_lily_girl", "5" = "sex_magic_lily_adult", "6" = "sacrifice", "7" = "release" }
 value_domain = "SCJUMP event/decision ids 1200..1366; zero means no scripted event for that action"
-usage = "Eight-slot event table for SALLY's unit actions. A populated slot is copied to scjump_decision_out and translated through the SCJUMP resource table at 0x87a57 into next_script_resource_id, handing control to the corresponding scene. Principal heroines populate all eight actions; other eligible units populate the three form-dependent event slots. EXILE also tests slot 7 when deciding whether a unit can be released."
+usage = "SALLY event ids for contract, brainwash, the unreachable reserved action, Lily's child/girl/adult sex-magic forms, sacrifice, and release. The action switch selects columns 0, 1, 6, and 7 directly; sex magic selects the current Lily unit id plus one, yielding columns 3..5 for Lily unit ids 2..4. A populated reachable slot is copied to scjump_decision_out and translated through the SCJUMP resource table at 0x87a57 into next_script_resource_id. Column 2 is paired with the UI-skipped reserved action and its shipped ids 1300..1306 have no SCJUMP resource mapping. EXILE also tests column 7 when deciding whether a unit can be released."
 source = "investigation"
 confidence = "high"
 

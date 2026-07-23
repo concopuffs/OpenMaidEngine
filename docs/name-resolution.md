@@ -234,10 +234,14 @@ records use the shared accuracy-through-max-FS vocabulary; starting skills, drop
 brainwashed roster forms, battle portraits/cut-ins, and health-selected status art all expose named fields.
 Consumer control flow further divides the five CP sprite assets into normal/alternate compact and directional
 sheets plus the special compact sheet, and SHOWGROW proves voice column 24 is the level-up reaction. Of
-EBINIT's 110 populated profile fields, 72 now have specific semantic names. The remaining 35 named-table
-fallbacks are deliberately limited to the still-unresolved voice reactions and SALLY action/event slots;
-three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into runtime table
-`0x4e693/300`).
+EBINIT's 110 populated profile fields, 84 now have specific semantic names. SALLY's SO012 button atlas and
+action dispatch resolve all four unlock columns as contract, brainwash, a reserved/unreachable slot, and
+sex magic. The paired eight event columns are contract, brainwash, the same reserved slot, three
+form-dependent Lily sex-magic events, sacrifice, and release. The reserved slot has a switch arm but is
+deliberately skipped by both drawing and input; its event ids also lack SCJUMP mappings, so it is recorded
+as unreachable rather than assigned a speculative action. The remaining 23 named-table fallbacks are all
+voice reactions; three fields remain wholly anonymous (`0x7843e` and two suspicious sparse writes into
+runtime table `0x4e693/300`).
 
 ### STINIT mixed stage records (2026-07-23)
 

@@ -745,8 +745,10 @@ SKINIT parallel field as the skill-change catalog inclusion flag and separates a
 skill-information visibility. The remaining item/skill work is refinement rather than an unnamed populated
 schema.
 
-The remaining EBINIT unknowns are now the unread `0x7843e` enum and the signed meaning within boss classes;
-enemy AI appears to live outside the static EBINIT schema. STINIT's separate mixed parser is now complete:
+The remaining EBINIT unknowns are now the unread `0x7843e` enum, the signed meaning within boss classes,
+and most voice-bank reactions; enemy AI appears to live outside the static EBINIT schema. SALLY's four
+unlock requirements and eight event ids are fully joined to their contract, brainwash, reserved,
+form-dependent sex-magic, sacrifice, and release columns. STINIT's separate mixed parser is now complete:
 all 74 sparse stage ids retain their victory/defeat strings, six scalars, fixed-buffer cells, and 1,396
 footer-array copies. AIM/FIELD/DRAWCHP consumers establish the four condition slots, stage BGM, turn limit,
 and turn-limit outcome. Further passes establish target clear turns, performance reward, replay behavior,
