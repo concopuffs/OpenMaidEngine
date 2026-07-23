@@ -1134,6 +1134,144 @@ def test_alchemy_recipes() -> None:
     )
 
 
+def test_affinity_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["AFINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "name",
+        "AFINIT remains compatible with name-mode auto-detection",
+    )
+    records, meta = extract_init.extract_affinity_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 13
+        and meta["string_write_count"] == 27
+        and meta["footer_array_count"] == 54
+        and meta["classified_instruction_count"] == 82,
+        "AFINIT classifies every vocabulary, footer-array, and exit instruction",
+    )
+    check(
+        [entry["id"] for entry in meta["attack_element_names"]]
+        == [*range(1, 9), *range(11, 18)]
+        and [entry["id"] for entry in meta["defense_element_names"]]
+        == list(range(1, 13)),
+        "AFINIT preserves its sparse attack and defense element vocabularies",
+    )
+    check(
+        by_id[3]["name"] == "火炎"
+        and by_id[3]["attack_effectiveness"][3]["percent"] == -100
+        and by_id[3]["attack_effectiveness"][4]["percent"] == 150
+        and by_id[11]["attack_effectiveness"][1]["percent"] == 1
+        and by_id[11]["attack_effectiveness"][7]["percent"] == 200,
+        "AFINIT exposes signed elemental immunities, weaknesses, and resistances",
+    )
+
+    tuning = {
+        curve["curve_id"]: curve for curve in meta["item_tuning_curves"]
+    }
+    check(
+        len(tuning) == 19
+        and tuning[1]["level_bonuses"] == [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        and tuning[9]["level_bonuses"] == list(range(1, 11))
+        and tuning[18]["level_bonuses"] == list(range(3, 31, 3))
+        and tuning[18]["level_costs"]
+        == [10, 25, 45, 70, 100, 140, 190, 250, 320, 400]
+        and tuning[19]["level_bonuses"] == [0] * 10
+        and tuning[19]["level_costs"] == [0] * 10
+        and meta["usable_item_tuning_curve_ids"] == list(range(1, 19))
+        and meta["reserved_item_tuning_curve_ids"] == [19],
+        "AFINIT pairs all nineteen item-tuning bonus and point-cost curves",
+    )
+    check(
+        [
+            row["level_progress_thresholds"]
+            for row in meta["facility_level_thresholds"]
+        ] == [
+            [40, 80, 120, 160, 200, 300],
+            [20, 40, 60, 90, 120, 200],
+            [20, 50, 100, 150, 200, 400],
+        ],
+        "AFINIT exposes the tuning, alchemy, and magic progression rows",
+    )
+
+    semantics = extract_init.field_semantics(
+        records, meta["array_layouts"]
+    )
+    check(
+        len(semantics) == 14
+        and semantics["0x26a4"] == "defense_element_names"
+        and semantics["0xab5ba/0"]
+        == "attack_element_effectiveness_percent.row_0"
+        and semantics["0xab5ba/240"]
+        == "attack_element_effectiveness_percent.row_12",
+        "AFINIT raw vocabulary and matrix rows join to canonical semantics",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[3]["semantic_fields"]["defense_element_names"] == "火炎"
+        and by_id[3]["semantic_fields"][
+            "attack_element_effectiveness_percent.row_3"
+        ][3] == -100,
+        "AFINIT retains raw footer provenance beside signed semantic rows",
+    )
+
+
+def test_name_entry_palette() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["CTINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "name",
+        "CTINIT remains compatible with name-mode auto-detection",
+    )
+    records, meta = extract_init.extract_name_entry_palette(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 5
+        and meta["reserved_shape"] == [5, 70]
+        and meta["string_write_count"] == 273
+        and meta["classified_instruction_count"] == 274,
+        "CTINIT classifies all five reserved palette pages and every instruction",
+    )
+    check(
+        meta["row_names"]
+        == ["hiragana", "katakana", "latin", "numerals", "symbols"]
+        and meta["populated_cells_per_row"] == [56, 56, 52, 40, 69],
+        "CTINIT names each page and preserves its authored cell population",
+    )
+    check(
+        by_id[0]["characters"][0] == "あ"
+        and by_id[0]["characters"][17] is None
+        and by_id[1]["characters"][50] == "ァ"
+        and by_id[2]["characters"][0] == "Ａ"
+        and by_id[2]["characters"][30] == "ａ"
+        and by_id[3]["characters"][20] == "Ⅰ"
+        and by_id[3]["characters"][30] == "①"
+        and by_id[4]["characters"][68] == "ω"
+        and by_id[4]["characters"][69] is None,
+        "CTINIT retains representative characters and intentional empty slots",
+    )
+
+    semantics = extract_init.field_semantics(records)
+    check(
+        len(semantics) == 69
+        and semantics["0x43dd/70/0"]
+        == "name_entry_character_palette.column_0"
+        and semantics["0x43dd/70/68"]
+        == "name_entry_character_palette.column_68",
+        "CTINIT raw palette slots join to one canonical table name",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[0]["semantic_fields"][
+            "name_entry_character_palette.column_0"
+        ] == "あ"
+        and by_id[4]["semantic_fields"][
+            "name_entry_character_palette.column_68"
+        ] == "ω",
+        "CTINIT retains raw cells beside the semantic palette view",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1345,6 +1483,8 @@ if __name__ == "__main__":
     test_character_names()
     test_gallery_definitions()
     test_alchemy_recipes()
+    test_affinity_definitions()
+    test_name_entry_palette()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:

@@ -108,6 +108,13 @@ layout, backed by output item, minimum level, required/forbidden story flags, po
 ingredient-id/quantity slots. The dedicated extraction classifies every write, joins all 107 output
 items and 286 ingredient references to ITINIT, and retains the seven raw table coordinates.
 
+AFINIT is an affinity and progression initializer, not a name-record table. Its 27 strings form sparse
+attack- and defense-element vocabularies; its 54 footer copies form a signed `20 × 20` effectiveness
+matrix (thirteen by eighteen cells authored), eighteen usable item-tuning bonus/cost curves plus a
+reserved zero row, and equipment-tuning/alchemy/magic facility progression thresholds. CTINIT is
+INPUTNAME's separate `5 × 70` character palette: 273 authored hiragana, katakana, Latin, numeral, and
+symbol cells with all reserved gaps retained.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

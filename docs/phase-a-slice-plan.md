@@ -2900,5 +2900,31 @@ now names the shared spendable-point balance, alchemy level, and alchemy-level p
 protect the full write accounting, sparse layout, item joins, story gates, paired ingredient cells, and
 raw-to-semantic projection.
 
-**Next:** audit the remaining small malformed INIT outputs, especially AFINIT and CTINIT, before
-spending a larger slice on structurally regular but semantically shallow MPINIT.
+## Data-semantics sidebar: AFINIT affinity/tuning tables and CTINIT name palette (2026-07-23)
+
+AFINIT and CTINIT were not malformed record tables; both were vocabulary/table initializers that the
+generic name heuristic could not segment. AFINIT contains 27 Japanese element labels and 54
+length-prefixed integer rows. Its affinity section is a reserved `20 × 20` defense-by-attack matrix
+with thirteen authored defense rows and eighteen authored columns. The dedicated extractor converts
+the footer's unsigned representations back to signed values, preserving the `-100` immunity cases,
+and joins rows 1..12 to the physical/universal/elemental/divinity/demon/spirit/undead defense names.
+
+AFINIT's remaining rows are two paired `20 × 11` item-tuning tables and one `3 × 7` facility
+progression table. Curve ids 1..18 provide ten tuning-level stat bonuses and matching point costs;
+row 19 is explicitly zero/reserved and the eleventh column remains reserved. TUNE, IMPROVE, DRAWTIP,
+and CALCREVISE establish the bonus/cost contract. The three facility rows belong to equipment tuning,
+alchemy, and magic/research respectively, each with six thresholds leading to the level-6 cap. The
+registry now also names the equipment-tuning and magic facility level/progress counters.
+
+CTINIT is INPUTNAME's complete `5 × 70` character palette. Its rows are hiragana, katakana, full-width
+Latin letters, four numeral styles, and symbols; their populated counts are 56, 56, 52, 40, and 69,
+for 273 authored cells total. INPUTNAME uses cursor slots 70..74 to select a page, rejects an empty
+cell, and copies a selected character into its seven-character name buffer. The generated JSON keeps
+all 350 positions so layout gaps remain explicit rather than collapsing into a flat character list.
+
+Regressions account for every instruction in both scripts, signed affinity values, all tuning and
+facility curves, representative characters and gaps, and raw-to-semantic projection.
+
+**Next:** audit CVINIT. Its generic output is already small (37 writes, thirteen rows, ten apparent
+fields), so direct consumer tracing should quickly distinguish a valid sparse registry from the last
+remaining ownership artifact before moving to MPINIT.

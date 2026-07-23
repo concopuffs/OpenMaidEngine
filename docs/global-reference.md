@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5048 globals (307 curated, 4741 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5049 globals (316 curated, 4733 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -20,8 +20,12 @@
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x671b` | shared_spendable_points | high | investigation | Shared spendable point balance used by the alchemy, study, evolution, and summoning systems. ALCHEMY requires and deducts each recipe's alchemy_recipe_point_costs value; STAGECLEAR awards points to this balance and caps it at 999. The exact player-facing Japanese resource label remains unresolved. |
+| `0x671c` | item_tuning_facility_level | high | investigation | Current equipment-tuning facility level. IMPROVE indexes facility_level_progress_thresholds row 0 with this value and raises it, up to 6, as item_tuning_facility_progress accumulates. |
 | `0x671d` | alchemy_level | high | investigation | Current alchemy level. ALCHEMY hides recipes whose alchemy_recipe_minimum_levels value exceeds this level and raises it, up to 6, when alchemy_level_progress reaches the current threshold. |
+| `0x671e` | magic_facility_level | high | investigation | Current magic/research facility level. MAGIC and USEMAGIC index facility_level_progress_thresholds row 2 with this level; USEMAGIC raises it up to 6 when magic_facility_progress reaches the current threshold. |
+| `0x671f` | item_tuning_facility_progress | high | investigation | Progress toward the next equipment-tuning facility level. IMPROVE adds the selected item's tuning-level increases, applies row 0 of facility_level_progress_thresholds, and carries or clamps progress when the level rises. |
 | `0x6720` | alchemy_level_progress | high | investigation | Progress toward the next alchemy level. Each successful ALCHEMY synthesis increments it; reaching the current threshold raises alchemy_level and resets this counter. |
+| `0x6721` | magic_facility_progress | high | investigation | Progress toward the next magic/research facility level. USEMAGIC adds the selected action's progress award and applies row 2 of facility_level_progress_thresholds; MAGIC renders the same current/threshold pair. |
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
@@ -161,7 +165,10 @@
 | `0xaacf0` | condition_duration_turns_by_level | high | investigation | ILINIT's five-column duration row for each condition. ADDILLSUB indexes it by the resulting condition level minus one and stores the value in entity_condition_remaining_turns. Columns: 0=level_1_turns, 1=level_2_turns, 2=level_3_turns, 3=level_4_turns, 4=level_5_turns. |
 | `0xaad86` | condition_stat_deltas | high | investigation | ILINIT's five-level by eleven-stat matrix for each condition. CALCREVISE indexes (condition level - 1) * 11 + stat column and adds the result to entity_effective_stats columns 0..10. Shipped rows populate curse, confusion, paralysis, and exaltation. Columns: 0=level_1_accuracy, 1=level_1_evasion, 2=level_1_physical_attack, 3=level_1_physical_defense, 4=level_1_magic_attack, 5=level_1_magic_defense, 6=level_1_speed, 7=level_1_luck, 8=level_1_critical_chance, 9=level_1_capture_power, 10=level_1_movement, 11=level_2_accuracy, 12=level_2_evasion, 13=level_2_physical_attack, 14=level_2_physical_defense, 15=level_2_magic_attack, 16=level_2_magic_defense, 17=level_2_speed, 18=level_2_luck, 19=level_2_critical_chance, 20=level_2_capture_power, 21=level_2_movement, 22=level_3_accuracy, 23=level_3_evasion, 24=level_3_physical_attack, 25=level_3_physical_defense, 26=level_3_magic_attack, 27=level_3_magic_defense, 28=level_3_speed, 29=level_3_luck, 30=level_3_critical_chance, 31=level_3_capture_power, 32=level_3_movement, 33=level_4_accuracy, 34=level_4_evasion, 35=level_4_physical_attack, 36=level_4_physical_defense, 37=level_4_magic_attack, 38=level_4_magic_defense, 39=level_4_speed, 40=level_4_luck, 41=level_4_critical_chance, 42=level_4_capture_power, 43=level_4_movement, 44=level_5_accuracy, 45=level_5_evasion, 46=level_5_physical_attack, 47=level_5_physical_defense, 48=level_5_magic_attack, 49=level_5_magic_defense, 50=level_5_speed, 51=level_5_luck, 52=level_5_critical_chance, 53=level_5_capture_power, 54=level_5_movement. |
 | `0xab3f8` | condition_resource_deltas | high | investigation | ILINIT's five-level by three-resource matrix for each condition. FIELD applies the active row each turn; CALCDMG also consumes the HP/SP/FS drain condition rows during battle. Positive values restore/drain to the acting side as defined by the caller, while negative values are periodic damage or loss. Columns: 0=level_1_hp, 1=level_1_sp, 2=level_1_fs, 3=level_2_hp, 4=level_2_sp, 5=level_2_fs, 6=level_3_hp, 7=level_3_sp, 8=level_3_fs, 9=level_4_hp, 10=level_4_sp, 11=level_4_fs, 12=level_5_hp, 13=level_5_sp, 14=level_5_fs. |
-| `0xab5ba` | attack_element_effectiveness_percent | high | investigation | AFINIT-authored element matchup table. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases. |
+| `0xab5ba` | attack_element_effectiveness_percent | high | investigation | AFINIT-authored element matchup table with thirteen authored defense rows and eighteen authored cells per row inside the reserved 20-by-20 layout. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases. INFOAF displays eight attack columns for its selected defense rows. |
+| `0xab6fa` | item_tuning_stat_bonus_curves | high | investigation | Eighteen usable equipment-growth curves selected by item_tuning_curve_ids, plus an explicitly zeroed reserved row 19. TUNE and IMPROVE use the nonzero prefix as the available tuning-level range; CALCREVISE and DRAWTIP add the selected zero-based tuning level's bonus to the corresponding stat. Columns: 0=tuning_level_1, 1=tuning_level_2, 2=tuning_level_3, 3=tuning_level_4, 4=tuning_level_5, 5=tuning_level_6, 6=tuning_level_7, 7=tuning_level_8, 8=tuning_level_9, 9=tuning_level_10, 10=reserved. |
+| `0xab7d6` | item_tuning_point_cost_curves | high | investigation | Point-cost curves paired by curve id and tuning level with item_tuning_stat_bonus_curves. IMPROVE sums costs for newly selected levels, subtracts refunds for removed levels, checks the resulting total against the tuning-point balance, and deducts it on confirmation. Columns: 0=tuning_level_1, 1=tuning_level_2, 2=tuning_level_3, 3=tuning_level_4, 4=tuning_level_5, 5=tuning_level_6, 6=tuning_level_7, 7=tuning_level_8, 8=tuning_level_9, 9=tuning_level_10, 10=reserved. |
+| `0xab8b2` | facility_level_progress_thresholds | high | investigation | AFINIT's three facility-progression rows. IMPROVE uses row 0 for equipment tuning, ALCHEMY uses row 1, and MAGIC/USEMAGIC use row 2; each indexes the row by the current level and caps advancement at level 6. Columns: 0=level_0_to_1, 1=level_1_to_2, 2=level_2_to_3, 3=level_3_to_4, 4=level_4_to_5, 5=level_5_to_6, 6=level_6_cap. |
 | `0xab8c7` | class_change_rule_script_ids | high | investigation | CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json. |
 | `0xaba64` | stage_object_runtime_flags | high | investigation | Per-current-stage object flags. RTN_M010 and RTN_M015 require bit 1 before considering Healing Feathers or Magic Pillars as movement targets; FIELD and object rendering maintain the broader type-dependent bitfield. |
 | `0xaba96` | pathfinding_remaining_route_steps | high | investigation | MVSEEK's row-major reachability grid. Mode 0 searches from the current entity with movement+1 at the origin; modes 1/2 search from the caller-supplied coordinate with 9999 at the origin. Each traversed edge decrements the value, so a larger positive value is nearer to the origin. RTN_M006/007/015 use origin-minus-target values as route-step radii; RTN_M010 ranks Healing Feathers by the negated value. |
@@ -244,8 +251,6 @@
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
-| `0x2690` | — | low | auto-shape | array |
-| `0x26a4` | — | low | auto-shape | array |
 | `0x26b5` | — | low | auto-shape | array |
 | `0x26d3` | — | low | auto-shape | array |
 | `0x27bd` | — | low | auto-shape | array |
@@ -260,8 +265,6 @@
 | `0x3ad6` | — | low | auto-shape | array |
 | `0x4315` | — | low | auto-shape | array |
 | `0x4379` | — | low | auto-shape | array |
-| `0x671c` | — | low | auto-shape | array |
-| `0x671f` | — | low | auto-shape | array |
 | `0x6727` | — | low | auto-shape | array |
 | `0x6804` | — | low | auto-shape | array |
 | `0x6868` | — | low | auto-shape | array |
@@ -438,7 +441,6 @@
 | `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
 | `0x3275` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']. |
-| `0x671e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']. |
 | `0x6722` | — | med | auto-shape | TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']. |
 | `0x6724` | — | med | auto-shape | TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x7679` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 4, 8, 16, 256, 512, 1024]; writers=['FIELD.BIN']. |
@@ -475,6 +477,8 @@
 | `0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
 | `0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
 | `0x25fa` | condition_level_names | high | investigation | ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved. Columns: 0=level_1, 1=level_2, 2=level_3, 3=level_4, 4=level_5. |
+| `0x2690` | attack_element_names | high | investigation | AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 11=resistance_1, 12=resistance_2, 13=resistance_3, 14=resistance_4, 15=resistance_5, 16=resistance_6, 17=resistance_7. |
+| `0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
 | `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
@@ -482,6 +486,7 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x43dd` | name_entry_character_palette | high | investigation | INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer. |
 | `0x45b9` | magic_action_names | high | investigation | MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry. |
 | `0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
 | `0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
@@ -3228,7 +3233,6 @@
 | `0x43c8` | — | med | auto-shape | string-table (written by CDINIT2) |
 | `0x43c9` | — | med | auto-shape | string-table (written by CDINIT2) |
 | `0x43ca` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43dd` | — | med | auto-shape | string-table (written by CTINIT) |
 | `0x43de` | — | med | auto-shape | string-table (written by CTINIT) |
 | `0x43df` | — | med | auto-shape | string-table (written by CTINIT) |
 | `0x43e0` | — | med | auto-shape | string-table (written by CTINIT) |
@@ -5041,9 +5045,6 @@
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
-| `0xab6fa` | — | med | auto-shape | record-table[stride 11] |
-| `0xab7d6` | — | med | auto-shape | record-table[stride 11] |
-| `0xab8b2` | — | med | auto-shape | record-table[stride 7] |
 | `0xc6077` | — | med | auto-shape | record-table[stride 27] |
 | `0xcc9f0` | — | low | auto-shape | index/counter? |
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |

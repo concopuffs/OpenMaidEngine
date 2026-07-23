@@ -599,6 +599,33 @@ ALCHEMY_RECIPE_RECORD_SPAN = 1000
 ALCHEMY_RECIPE_STORY_FLAG_STRIDE = 2
 ALCHEMY_RECIPE_INGREDIENT_STRIDE = 4
 
+AFFINITY_ATTACK_ELEMENT_NAME_BASE = 0x2690
+AFFINITY_DEFENSE_ELEMENT_NAME_BASE = 0x26A4
+AFFINITY_ELEMENT_NAME_SPAN = 20
+AFFINITY_EFFECTIVENESS_BASE = 0xAB5BA
+AFFINITY_EFFECTIVENESS_STRIDE = 20
+AFFINITY_EFFECTIVENESS_ROW_COUNT = 13
+AFFINITY_EFFECTIVENESS_AUTHORED_COLUMNS = 18
+ITEM_TUNING_BONUS_CURVE_BASE = 0xAB6FA
+ITEM_TUNING_COST_CURVE_BASE = 0xAB7D6
+ITEM_TUNING_CURVE_STRIDE = 11
+ITEM_TUNING_CURVE_COUNT = 19
+ITEM_TUNING_AUTHORED_LEVELS = 10
+FACILITY_LEVEL_THRESHOLD_BASE = 0xAB8B2
+FACILITY_LEVEL_THRESHOLD_STRIDE = 7
+FACILITY_LEVEL_THRESHOLD_ROW_COUNT = 3
+FACILITY_LEVEL_THRESHOLD_AUTHORED_LEVELS = 6
+
+NAME_ENTRY_CHARACTER_PALETTE_BASE = 0x43DD
+NAME_ENTRY_CHARACTER_PALETTE_STRIDE = 70
+NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES = (
+    "hiragana",
+    "katakana",
+    "latin",
+    "numerals",
+    "symbols",
+)
+
 RECOVER_CURRENT_ENTITY = 0x152616
 RECOVER_EFFECTIVE_STATS = 0x4E11B
 RECOVER_CURRENT_RESOURCES = 0x4E085
@@ -2257,6 +2284,424 @@ def extract_alchemy_recipes(scr):
     }
 
 
+def extract_affinity_definitions(scr):
+    """Extract AFINIT's element, tuning-curve, and facility-threshold tables."""
+    attack_names = {}
+    defense_names = {}
+    effectiveness_rows = {}
+    tuning_bonus_rows = {}
+    tuning_cost_rows = {}
+    facility_threshold_rows = {}
+    string_write_count = 0
+    footer_array_count = 0
+    exit_count = 0
+
+    def signed_values(values):
+        return [
+            value - 0x100000000 if value >= 0x80000000 else value
+            for value in values
+        ]
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            destination = ins.args[0][1]
+            text = scr.strings.get(ins.args[1][1], (None,))[0]
+            for base, target in (
+                (AFFINITY_ATTACK_ELEMENT_NAME_BASE, attack_names),
+                (AFFINITY_DEFENSE_ELEMENT_NAME_BASE, defense_names),
+            ):
+                element_id = destination - base
+                if 0 <= element_id < AFFINITY_ELEMENT_NAME_SPAN:
+                    _store_unique(target, element_id, text, element_id)
+                    string_write_count += 1
+                    break
+            else:
+                raise ValueError(
+                    f"{scr.path.name}: unexpected string destination "
+                    f"0x{destination:x}"
+                )
+            continue
+
+        if (
+            ins.opcode == COPY_LOCAL_ARRAY
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_INT
+            and ins.args[1][0] == T_IMM
+        ):
+            destination = ins.args[0][1]
+            footer_off = ins.args[1][1]
+            values = read_footer_array(scr, footer_off)
+            if values is None:
+                raise ValueError(
+                    f"{scr.path.name}: invalid footer array 0x{footer_off:x}"
+                )
+            values = signed_values(values)
+            classified = False
+
+            relative = destination - AFFINITY_EFFECTIVENESS_BASE
+            if (
+                relative % AFFINITY_EFFECTIVENESS_STRIDE == 0
+                and 0 <= relative
+                < AFFINITY_EFFECTIVENESS_ROW_COUNT
+                * AFFINITY_EFFECTIVENESS_STRIDE
+            ):
+                row = relative // AFFINITY_EFFECTIVENESS_STRIDE
+                if len(values) != AFFINITY_EFFECTIVENESS_AUTHORED_COLUMNS:
+                    raise ValueError(
+                        f"{scr.path.name}: effectiveness row {row} has "
+                        f"{len(values)} values"
+                    )
+                _store_unique(
+                    effectiveness_rows, row, (footer_off, values), row
+                )
+                classified = True
+
+            if not classified:
+                for base, target in (
+                    (ITEM_TUNING_BONUS_CURVE_BASE, tuning_bonus_rows),
+                    (ITEM_TUNING_COST_CURVE_BASE, tuning_cost_rows),
+                ):
+                    relative = destination - base
+                    if (
+                        relative % ITEM_TUNING_CURVE_STRIDE == 0
+                        and ITEM_TUNING_CURVE_STRIDE
+                        <= relative
+                        <= ITEM_TUNING_CURVE_COUNT
+                        * ITEM_TUNING_CURVE_STRIDE
+                    ):
+                        curve_id = relative // ITEM_TUNING_CURVE_STRIDE
+                        if len(values) != ITEM_TUNING_AUTHORED_LEVELS:
+                            raise ValueError(
+                                f"{scr.path.name}: tuning curve {curve_id} has "
+                                f"{len(values)} values"
+                            )
+                        _store_unique(
+                            target, curve_id, (footer_off, values), curve_id
+                        )
+                        classified = True
+                        break
+
+            if not classified:
+                relative = destination - FACILITY_LEVEL_THRESHOLD_BASE
+                if (
+                    relative % FACILITY_LEVEL_THRESHOLD_STRIDE == 0
+                    and 0 <= relative
+                    < FACILITY_LEVEL_THRESHOLD_ROW_COUNT
+                    * FACILITY_LEVEL_THRESHOLD_STRIDE
+                ):
+                    row = relative // FACILITY_LEVEL_THRESHOLD_STRIDE
+                    if len(values) != FACILITY_LEVEL_THRESHOLD_AUTHORED_LEVELS:
+                        raise ValueError(
+                            f"{scr.path.name}: facility row {row} has "
+                            f"{len(values)} values"
+                        )
+                    _store_unique(
+                        facility_threshold_rows, row, (footer_off, values), row
+                    )
+                    classified = True
+
+            if not classified:
+                raise ValueError(
+                    f"{scr.path.name}: unexpected footer destination "
+                    f"0x{destination:x}"
+                )
+            footer_array_count += 1
+            continue
+
+        if sys4load.display_label(ins.opcode) == "exit":
+            exit_count += 1
+        else:
+            raise ValueError(
+                f"{scr.path.name}: unexpected opcode "
+                f"{sys4load.display_label(ins.opcode)} at 0x{ins.offset:x}"
+            )
+
+    expected_effectiveness_rows = set(range(AFFINITY_EFFECTIVENESS_ROW_COUNT))
+    expected_tuning_curves = set(range(1, ITEM_TUNING_CURVE_COUNT + 1))
+    expected_facility_rows = set(range(FACILITY_LEVEL_THRESHOLD_ROW_COUNT))
+    if set(effectiveness_rows) != expected_effectiveness_rows:
+        raise ValueError(f"{scr.path.name}: incomplete effectiveness matrix")
+    if (
+        set(tuning_bonus_rows) != expected_tuning_curves
+        or set(tuning_cost_rows) != expected_tuning_curves
+    ):
+        raise ValueError(f"{scr.path.name}: incomplete tuning curves")
+    if set(facility_threshold_rows) != expected_facility_rows:
+        raise ValueError(f"{scr.path.name}: incomplete facility thresholds")
+    if exit_count != 1:
+        raise ValueError(f"{scr.path.name}: expected one exit, got {exit_count}")
+
+    records = []
+    for defense_element_id in sorted(effectiveness_rows):
+        footer_off, values = effectiveness_rows[defense_element_id]
+        record = {
+            "id": defense_element_id,
+            "name": defense_names.get(defense_element_id, ""),
+            "defense_element_id": defense_element_id,
+            "footer_arrays": {
+                (
+                    f"0x{AFFINITY_EFFECTIVENESS_BASE:x}/"
+                    f"{defense_element_id * AFFINITY_EFFECTIVENESS_STRIDE}"
+                ): {
+                    "footer_off": f"0x{footer_off:x}",
+                    "values": values,
+                }
+            },
+            "attack_effectiveness": [
+                {
+                    "attack_element_id": attack_element_id,
+                    "attack_element_name": attack_names.get(
+                        attack_element_id, ""
+                    ),
+                    "percent": percent,
+                }
+                for attack_element_id, percent in enumerate(values)
+            ],
+        }
+        if record["name"]:
+            record["string_fields"] = {
+                f"0x{AFFINITY_DEFENSE_ELEMENT_NAME_BASE:x}": record["name"]
+            }
+        records.append(record)
+
+    tuning_curves = []
+    for curve_id in sorted(tuning_bonus_rows):
+        bonus_footer_off, bonuses = tuning_bonus_rows[curve_id]
+        cost_footer_off, costs = tuning_cost_rows[curve_id]
+        tuning_curves.append({
+            "curve_id": curve_id,
+            "level_bonuses": bonuses,
+            "level_costs": costs,
+            "bonus_raw_key": (
+                f"0x{ITEM_TUNING_BONUS_CURVE_BASE:x}/"
+                f"{curve_id * ITEM_TUNING_CURVE_STRIDE}"
+            ),
+            "bonus_footer_off": f"0x{bonus_footer_off:x}",
+            "cost_raw_key": (
+                f"0x{ITEM_TUNING_COST_CURVE_BASE:x}/"
+                f"{curve_id * ITEM_TUNING_CURVE_STRIDE}"
+            ),
+            "cost_footer_off": f"0x{cost_footer_off:x}",
+        })
+
+    facility_names = ("item_tuning", "alchemy", "magic")
+    facility_thresholds = []
+    for row in sorted(facility_threshold_rows):
+        footer_off, thresholds = facility_threshold_rows[row]
+        facility_thresholds.append({
+            "system_id": row,
+            "system": facility_names[row],
+            "level_progress_thresholds": thresholds,
+            "raw_key": (
+                f"0x{FACILITY_LEVEL_THRESHOLD_BASE:x}/"
+                f"{row * FACILITY_LEVEL_THRESHOLD_STRIDE}"
+            ),
+            "footer_off": f"0x{footer_off:x}",
+        })
+
+    return records, {
+        "schema": "affinity-and-progression-tables",
+        "attack_element_names": [
+            {"id": element_id, "name": name}
+            for element_id, name in sorted(attack_names.items())
+        ],
+        "defense_element_names": [
+            {"id": element_id, "name": name}
+            for element_id, name in sorted(defense_names.items())
+        ],
+        "effectiveness_matrix": {
+            "base": f"0x{AFFINITY_EFFECTIVENESS_BASE:x}",
+            "reserved_shape": [
+                AFFINITY_EFFECTIVENESS_STRIDE,
+                AFFINITY_EFFECTIVENESS_STRIDE,
+            ],
+            "authored_rows": AFFINITY_EFFECTIVENESS_ROW_COUNT,
+            "authored_columns": AFFINITY_EFFECTIVENESS_AUTHORED_COLUMNS,
+        },
+        "item_tuning_curves": tuning_curves,
+        "usable_item_tuning_curve_ids": [
+            curve["curve_id"]
+            for curve in tuning_curves
+            if any(curve["level_bonuses"])
+        ],
+        "reserved_item_tuning_curve_ids": [
+            curve["curve_id"]
+            for curve in tuning_curves
+            if not any(curve["level_bonuses"])
+            and not any(curve["level_costs"])
+        ],
+        "facility_level_thresholds": facility_thresholds,
+        "string_write_count": string_write_count,
+        "footer_array_count": footer_array_count,
+        "exit_count": exit_count,
+        "classified_instruction_count": (
+            string_write_count + footer_array_count + exit_count
+        ),
+        "array_layouts": {
+            f"0x{AFFINITY_EFFECTIVENESS_BASE:x}": {
+                "length": (
+                    AFFINITY_EFFECTIVENESS_STRIDE
+                    * AFFINITY_EFFECTIVENESS_STRIDE
+                ),
+                "stride": AFFINITY_EFFECTIVENESS_STRIDE,
+                "rows": AFFINITY_EFFECTIVENESS_STRIDE,
+            },
+            f"0x{ITEM_TUNING_BONUS_CURVE_BASE:x}": {
+                "length": (
+                    (ITEM_TUNING_CURVE_COUNT + 1)
+                    * ITEM_TUNING_CURVE_STRIDE
+                ),
+                "stride": ITEM_TUNING_CURVE_STRIDE,
+                "rows": ITEM_TUNING_CURVE_COUNT + 1,
+            },
+            f"0x{ITEM_TUNING_COST_CURVE_BASE:x}": {
+                "length": (
+                    (ITEM_TUNING_CURVE_COUNT + 1)
+                    * ITEM_TUNING_CURVE_STRIDE
+                ),
+                "stride": ITEM_TUNING_CURVE_STRIDE,
+                "rows": ITEM_TUNING_CURVE_COUNT + 1,
+            },
+            f"0x{FACILITY_LEVEL_THRESHOLD_BASE:x}": {
+                "length": (
+                    FACILITY_LEVEL_THRESHOLD_ROW_COUNT
+                    * FACILITY_LEVEL_THRESHOLD_STRIDE
+                ),
+                "stride": FACILITY_LEVEL_THRESHOLD_STRIDE,
+                "rows": FACILITY_LEVEL_THRESHOLD_ROW_COUNT,
+            },
+        },
+        "consumer_contract": {
+            "affinity": (
+                "CALCBTPARAM and AI providers index the effectiveness matrix "
+                "by defense element then attack element; INFOAF displays the "
+                "consumer-selected rows and the eight shipped attack elements."
+            ),
+            "item_tuning": (
+                "TUNE, IMPROVE, DRAWTIP, and CALCREVISE combine each ITINIT "
+                "curve id with a zero-based tuning level to obtain the stat "
+                "bonus and point cost."
+            ),
+            "facility_progression": (
+                "IMPROVE, ALCHEMY, and MAGIC/USEMAGIC index rows 0, 1, and 2 "
+                "respectively by current facility level."
+            ),
+        },
+    }
+
+
+def extract_name_entry_palette(scr):
+    """Extract CTINIT's five-page, 70-cell name-entry character palette."""
+    rows = [
+        [None] * NAME_ENTRY_CHARACTER_PALETTE_STRIDE
+        for _ in NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES
+    ]
+    string_write_count = 0
+    exit_count = 0
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            destination = ins.args[0][1]
+            relative = destination - NAME_ENTRY_CHARACTER_PALETTE_BASE
+            if not (
+                0 <= relative
+                < len(rows) * NAME_ENTRY_CHARACTER_PALETTE_STRIDE
+            ):
+                raise ValueError(
+                    f"{scr.path.name}: unexpected character destination "
+                    f"0x{destination:x}"
+                )
+            row, column = divmod(
+                relative, NAME_ENTRY_CHARACTER_PALETTE_STRIDE
+            )
+            if rows[row][column] is not None:
+                raise ValueError(
+                    f"{scr.path.name}: duplicate character cell {row}/{column}"
+                )
+            rows[row][column] = scr.strings.get(
+                ins.args[1][1], (None,)
+            )[0]
+            string_write_count += 1
+            continue
+
+        if sys4load.display_label(ins.opcode) == "exit":
+            exit_count += 1
+        else:
+            raise ValueError(
+                f"{scr.path.name}: unexpected opcode "
+                f"{sys4load.display_label(ins.opcode)} at 0x{ins.offset:x}"
+            )
+
+    if exit_count != 1:
+        raise ValueError(f"{scr.path.name}: expected one exit, got {exit_count}")
+
+    records = []
+    for row_id, (name, characters) in enumerate(zip(
+        NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES, rows
+    )):
+        populated = [
+            {"slot": slot, "character": character}
+            for slot, character in enumerate(characters)
+            if character is not None
+        ]
+        records.append({
+            "id": row_id,
+            "name": name,
+            "characters": characters,
+            "populated_characters": populated,
+            "string_fields": {
+                (
+                    f"0x{NAME_ENTRY_CHARACTER_PALETTE_BASE:x}/"
+                    f"{NAME_ENTRY_CHARACTER_PALETTE_STRIDE}/{entry['slot']}"
+                ): entry["character"]
+                for entry in populated
+            },
+        })
+
+    return records, {
+        "schema": "name-entry-character-palette",
+        "palette_base": f"0x{NAME_ENTRY_CHARACTER_PALETTE_BASE:x}",
+        "reserved_shape": [
+            len(NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES),
+            NAME_ENTRY_CHARACTER_PALETTE_STRIDE,
+        ],
+        "row_names": list(NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES),
+        "string_write_count": string_write_count,
+        "exit_count": exit_count,
+        "classified_instruction_count": string_write_count + exit_count,
+        "populated_cells_per_row": [
+            sum(character is not None for character in row) for row in rows
+        ],
+        "empty_slots_per_row": [
+            [
+                slot
+                for slot, character in enumerate(row)
+                if character is None
+            ]
+            for row in rows
+        ],
+        "consumer_contract": {
+            "script": "INPUTNAME.BIN",
+            "lookup": (
+                "INPUTNAME selects one of five palette pages, indexes its "
+                "70-cell row by cursor slot, rejects empty cells, and copies "
+                "a selected character into the seven-character name buffer."
+            ),
+            "page_selection": (
+                "Cursor slots 70..74 select palette rows 0..4."
+            ),
+        },
+    }
+
+
 @cache
 def gallery_thumbnail_sheet_assets() -> dict[int, int]:
     """Read CGMODE's enabled thumbnail-sheet assets from INIT2."""
@@ -2990,6 +3435,14 @@ def write_data_index(data_dir: Path) -> None:
         "point cost, required/forbidden story flags, and four fixed ingredient slots retain",
         "their raw parallel-array and row-table coordinates.",
         "",
+        "AFINIT's dedicated affinity/progression schema exposes its attack and defense",
+        "element vocabularies, signed effectiveness matrix, eighteen usable item-tuning",
+        "bonus/cost curves plus a reserved zero row, and three facility progression rows.",
+        "",
+        "CTINIT's dedicated name-entry schema exposes INPUTNAME's five 70-cell palette",
+        "pages (hiragana, katakana, Latin, numerals, and symbols), preserving all reserved",
+        "empty slots beside the 273 authored characters.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -3065,6 +3518,10 @@ def main() -> int:
         extractor = extract_magic_actions
     elif mode == "name" and name == "ILINIT":
         extractor = extract_condition_definitions
+    elif mode == "name" and name == "AFINIT":
+        extractor = extract_affinity_definitions
+    elif mode == "name" and name == "CTINIT":
+        extractor = extract_name_entry_palette
     elif mode == "numeric" and name == "CGINIT":
         extractor = extract_gallery_definitions
     elif mode == "numeric" and name == "ALINIT":

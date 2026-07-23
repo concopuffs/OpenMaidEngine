@@ -1798,10 +1798,10 @@ name = "attack_element_effectiveness_percent"
 category = "data-table"
 type = "int[20][20]"
 value_domain = "signed effectiveness percentage indexed by defense element then attack element"
-usage = "AFINIT-authored element matchup table. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases."
+usage = "AFINIT-authored element matchup table with thirteen authored defense rows and eighteen authored cells per row inside the reserved 20-by-20 layout. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases. INFOAF displays eight attack columns for its selected defense rows."
 source = "investigation"
 confidence = "high"
-depends_on = ["0x77c6e", "0x8e3d1", "0x8dfe9", "0xa7436"]
+depends_on = ["0x2690", "0x26a4", "0x77c6e", "0x8e3d1", "0x8dfe9", "0xa7436"]
 
 [[global]]
 address = "0xcc9f4"
@@ -2194,14 +2194,47 @@ depends_on = ["0x671d"]
 
 [[global]]
 address = "0x671e"
-name = ""
-category = "story-flag"
+name = "magic_facility_level"
+category = "counter"
 type = "int"
-value_domain = "one of {5, 6}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [5, 6]; writers=['USEMAGIC.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..6"
+usage = "Current magic/research facility level. MAGIC and USEMAGIC index facility_level_progress_thresholds row 2 with this level; USEMAGIC raises it up to 6 when magic_facility_progress reaches the current threshold."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xab8b2", "0x6721"]
+
+[[global]]
+address = "0x671c"
+name = "item_tuning_facility_level"
+category = "counter"
+type = "int"
+value_domain = "0..6"
+usage = "Current equipment-tuning facility level. IMPROVE indexes facility_level_progress_thresholds row 0 with this value and raises it, up to 6, as item_tuning_facility_progress accumulates."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xab8b2", "0x671f"]
+
+[[global]]
+address = "0x671f"
+name = "item_tuning_facility_progress"
+category = "counter"
+type = "int"
+value_domain = "non-negative tuning progress"
+usage = "Progress toward the next equipment-tuning facility level. IMPROVE adds the selected item's tuning-level increases, applies row 0 of facility_level_progress_thresholds, and carries or clamps progress when the level rises."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x671c", "0xab8b2"]
+
+[[global]]
+address = "0x6721"
+name = "magic_facility_progress"
+category = "counter"
+type = "int"
+value_domain = "non-negative magic/research progress"
+usage = "Progress toward the next magic/research facility level. USEMAGIC adds the selected action's progress award and applies row 2 of facility_level_progress_thresholds; MAGIC renders the same current/threshold pair."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x671e", "0xab8b2"]
 
 [[global]]
 address = "0x6722"
@@ -3348,3 +3381,73 @@ usage = "Required ingredient quantities paired cell-for-cell with alchemy_recipe
 source = "investigation"
 confidence = "high"
 depends_on = ["0x158154"]
+
+[[global]]
+address = "0x2690"
+name = "attack_element_names"
+category = "string-table"
+type = "string[20]"
+columns = { "1" = "physical", "2" = "universal", "3" = "fire", "4" = "ice", "5" = "lightning", "6" = "earth", "7" = "holy", "8" = "dark", "11" = "resistance_1", "12" = "resistance_2", "13" = "resistance_3", "14" = "resistance_4", "15" = "resistance_5", "16" = "resistance_6", "17" = "resistance_7" }
+value_domain = "Japanese element/attribute display strings; unused cells are empty"
+usage = "AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8dfe9", "0xa7436", "0xab5ba"]
+
+[[global]]
+address = "0x26a4"
+name = "defense_element_names"
+category = "string-table"
+type = "string[20]"
+columns = { "1" = "physical", "2" = "universal", "3" = "fire", "4" = "ice", "5" = "lightning", "6" = "earth", "7" = "holy", "8" = "dark", "9" = "divinity", "10" = "demon", "11" = "spirit", "12" = "undead" }
+value_domain = "Japanese defense-affinity display strings; unused cells are empty"
+usage = "AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x77c6e", "0x8e3d1", "0xab5ba"]
+
+[[global]]
+address = "0x43dd"
+name = "name_entry_character_palette"
+category = "string-table"
+type = "string[5][70]"
+value_domain = "one authored input character or empty reserved cell"
+usage = "INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab6fa"
+name = "item_tuning_stat_bonus_curves"
+category = "data-table"
+type = "int[20][11]"
+columns = { "0" = "tuning_level_1", "1" = "tuning_level_2", "2" = "tuning_level_3", "3" = "tuning_level_4", "4" = "tuning_level_5", "5" = "tuning_level_6", "6" = "tuning_level_7", "7" = "tuning_level_8", "8" = "tuning_level_9", "9" = "tuning_level_10", "10" = "reserved" }
+value_domain = "non-negative stat bonus; zero means that tuning level is unavailable"
+usage = "Eighteen usable equipment-growth curves selected by item_tuning_curve_ids, plus an explicitly zeroed reserved row 19. TUNE and IMPROVE use the nonzero prefix as the available tuning-level range; CALCREVISE and DRAWTIP add the selected zero-based tuning level's bonus to the corresponding stat."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xa2bf1"]
+
+[[global]]
+address = "0xab7d6"
+name = "item_tuning_point_cost_curves"
+category = "data-table"
+type = "int[20][11]"
+columns = { "0" = "tuning_level_1", "1" = "tuning_level_2", "2" = "tuning_level_3", "3" = "tuning_level_4", "4" = "tuning_level_5", "5" = "tuning_level_6", "6" = "tuning_level_7", "7" = "tuning_level_8", "8" = "tuning_level_9", "9" = "tuning_level_10", "10" = "reserved" }
+value_domain = "non-negative point cost; shipped nonzero values are 10..400"
+usage = "Point-cost curves paired by curve id and tuning level with item_tuning_stat_bonus_curves. IMPROVE sums costs for newly selected levels, subtracts refunds for removed levels, checks the resulting total against the tuning-point balance, and deducts it on confirmation."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xab6fa", "0xa2bf1"]
+
+[[global]]
+address = "0xab8b2"
+name = "facility_level_progress_thresholds"
+category = "data-table"
+type = "int[3][7]"
+columns = { "0" = "level_0_to_1", "1" = "level_1_to_2", "2" = "level_2_to_3", "3" = "level_3_to_4", "4" = "level_4_to_5", "5" = "level_5_to_6", "6" = "level_6_cap" }
+value_domain = "required progress; final cap column is zero/unwritten"
+usage = "AFINIT's three facility-progression rows. IMPROVE uses row 0 for equipment tuning, ALCHEMY uses row 1, and MAGIC/USEMAGIC use row 2; each indexes the row by the current level and caps advancement at level 6."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x671c", "0x671d", "0x671e", "0x671f", "0x6720", "0x6721"]
