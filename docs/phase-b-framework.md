@@ -788,14 +788,15 @@ resolved and the full overwrite history retained. RTINIT is now the seventh shap
 1000-by-20 banks produce 172 routine sets, 1,043 movement steps, and fourteen battle steps with RTN_M/RTN_B
 provider joins, activation/progress/story gates, six explicit reserved banks, and complete overwrite
 history. Provider-tagged decoding now covers movement providers 1, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13,
-14, 15, and 51: progress-only steps, stage-object slots, coordinate destinations (including M012's
+14, 15, 17, 51, and 52: progress-only steps, stage-object slots, coordinate destinations (including M012's
 foreign-entity route mask), enemy/ally and Magic Pillar searches, resource-gated Healing Feather
 selection, cyclic waypoints, faction-traversable terrain, retreat, normal-attack routing, and immediate
-element-effective target/action selection. This covers 858 steps and classifies every one of the 977
+element-effective target/action selection, including low-current-HP variants of both attack paths. This
+covers 1,027 steps and classifies every one of the 977
 authored movement-parameter cells: 974 are semantic inputs, while the three cells attached to M001/M008
 are retained as provider-unread residue; thirteen unwritten zero defaults are projected separately. The
-five remaining used providers (M002/009/017/052/061) are behavior-only in the shipped table. Decode the
-closely related M017/M052 pair next.
+three remaining used providers (M002/009/061) are behavior-only in the shipped table and account for
+only sixteen movement steps. Close that tiny tail next.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

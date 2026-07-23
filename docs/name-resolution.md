@@ -445,7 +445,7 @@ empty reserved banks. Structural and consumer-proven meanings live in `vm-map/gl
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
 The provider-specific join now covers
-RTN_M001/003/004/005/006/007/008/010/011/012/013/014/015/051: 858 movement steps, 974 semantically
+RTN_M001/003/004/005/006/007/008/010/011/012/013/014/015/017/051/052: 1,027 movement steps, 974 semantically
 consumed populated parameters, thirteen explicit zero defaults, and three authored-but-unread
 parameter cells. RTN_M005/011/012 read banks 2/3 as
 `destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
@@ -516,6 +516,11 @@ target tile's movement cost to fit current FS, ranks candidates by descending re
 with randomized ties, and accepts the first candidate for which SETROUTE constructs a path. Success
 advances progress and returns state 1, so FIELD performs movement rather than battle.
 
+RTN_M017 is the low-HP finisher variant of M003. It uses the same normal-attack, MVSEEK, SETMVWORK,
+current-FS, and SETROUTE eligibility pipeline, but orders the surviving foreign targets by ascending
+current HP instead of descending remaining-route score. It attempts routes in that order and returns
+movement state 1 for the first target that yields a path.
+
 RTN_M051 is a parameterless immediate-attack selector. ATSEEK supplies a one-based range band for each
 enemy tile; CALCSCOPE supplies the normal-attack/equipped-skill bits and their attack elements at each
 band. M051 keeps active foreign targets for which at least one allowed action has positive effectiveness
@@ -524,6 +529,12 @@ candidate list, after which a target is randomized from the retained entries. It
 the effective actions in the tracked closest band, writing zero for a normal attack or an equipped skill
 id. Success stores `target_entity_index` and `entity_selected_action_ids[acting_entity_index]`, advances
 progress, and returns state 2 so FIELD enters battle without producing a movement route.
+
+RTN_M052 is M051's low-HP immediate-attack variant. It applies the same active-foreign-target,
+range-mask, target-defense-element, and positive-effectiveness tests, but keeps only targets tied at the
+lowest current HP and randomizes among those ties. After choosing the target, it reloads that target's
+actual ATSEEK range band, randomizes among the effective normal attack/equipped skills enabled at that
+band, stores the target and action, and returns immediate-battle state 2 without movement.
 
 MVSEEK's mode contract is also now explicit. Mode 0 replaces the input coordinate with the current
 entity tile and seeds the origin with movement+1, producing the movement-limited reachability grid.
@@ -536,9 +547,9 @@ by M006/007/015.
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
 mapping, target-selection rules, zero/unwritten behavior, and authored fields proven unread by their
 provider. All 977 populated movement-parameter cells are now accounted for: 974 semantic inputs and
-three explicit residue cells. The five used providers still without schemas
-(M002/009/017/052/061) have no populated parameter cells, so their remaining work is behavior
-decoding rather than column semantics. The supporting runtime joins are now curated too:
+three explicit residue cells. The three used providers still without schemas (M002/009/061) have no
+populated parameter cells, so their remaining work is behavior decoding rather than column semantics.
+The supporting runtime joins are now curated too:
 `entity_runtime_flags`,
 `entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
 current HP/SP/FS, `stage_object_runtime_flags`, `movement_search_mode`,
@@ -597,10 +608,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
-   banks are structurally decoded with every populated movement-parameter cell classified. Next decode
-   the five remaining behavior-only RTN_M providers by evidence density, beginning with the closely
-   related M017 and M052; never assign one universal meaning to a parameter bank whose
-   meaning varies by provider selector.
+   banks are structurally decoded with every populated movement-parameter cell classified and 1,027 of
+   1,043 movement steps joined to provider behavior. Next close the tiny behavior-only RTN_M002/009/061
+   tail; never assign one universal meaning to a parameter bank whose meaning varies by provider
+   selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

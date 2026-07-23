@@ -371,8 +371,8 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 14
-          and meta["decoded_movement_step_count"] == 858
+    check(meta["decoded_movement_provider_count"] == 16
+          and meta["decoded_movement_step_count"] == 1027
           and meta["decoded_movement_parameter_count"] == 974
           and meta["decoded_movement_defaulted_parameter_count"] == 13
           and meta["ignored_movement_parameter_count"] == 3,
@@ -498,6 +498,18 @@ def test_real_routine_banks() -> None:
           == "select_effective_attack_target_and_action"
           and "movement_parameter_1" not in provider_51,
           "RTINIT joins RTN_M051's parameterless attack-selection behavior")
+    provider_17 = by_id[3]["movement_steps"][2]
+    check(provider_17["movement_provider_selector"] == 17
+          and provider_17["provider_behavior"]
+          == "route_toward_lowest_hp_reachable_normal_attack_target"
+          and "movement_parameter_1" not in provider_17,
+          "RTINIT joins RTN_M017's low-HP attack-route behavior")
+    provider_52 = by_id[3]["movement_steps"][0]
+    check(provider_52["movement_provider_selector"] == 52
+          and provider_52["provider_behavior"]
+          == "select_lowest_hp_effective_attack_target_and_action"
+          and "movement_parameter_1" not in provider_52,
+          "RTINIT joins RTN_M052's low-HP attack-selection behavior")
     undecoded_movement = by_id[2]["movement_steps"][1]
     check(undecoded_movement["movement_provider_selector"] == 2
           and "provider_behavior" not in undecoded_movement
