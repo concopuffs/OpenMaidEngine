@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5030 globals (187 curated, 4843 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5030 globals (189 curated, 4841 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -32,6 +32,7 @@
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
+| `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. Resolving the values through SYS4INI yields character OGG clips (for example Lily's row is LILA1381..1406); BTL and FIELD select mostly unresolved battle/map reaction slots, while SHOWGROW proves column 24 is the level-up reaction. Columns: 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
@@ -103,6 +104,7 @@
 | `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
+| `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
 | `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
 | `0xe7304` | stage_clear_performance_bonus | med | investigation | Base stage-clear reward increment. STAGECLEAR multiplies it by the turn-performance percentage derived from stage_target_clear_turns, divides by 100, and adds the result to the capped persistent reward counter at 0x6719. The counter's player-facing resource name remains unresolved. |
@@ -266,7 +268,6 @@
 | `0xe6cc2` | — | low | auto-shape | array |
 | `0xe6d26` | — | low | auto-shape | array |
 | `0xe6d8a` | — | low | auto-shape | array |
-| `0xe6dee` | — | low | auto-shape | array |
 | `0xe6e52` | — | low | auto-shape | array |
 | `0xe6eb6` | — | low | auto-shape | array |
 | `0xe6f1a` | — | low | auto-shape | array |
@@ -3664,7 +3665,6 @@
 | `0x6f70` | — | med | auto-shape | record-table[stride 14] |
 | `0x74e8` | — | med | auto-shape | record-table[stride 4] |
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
-| `0x141a4` | — | med | auto-shape | record-table[stride 50] |
 | `0x20543` | — | med | auto-shape | record-table[stride 27] |
 | `0x341ab` | — | med | auto-shape | record-table[stride 53] |
 | `0x4e085` | — | med | auto-shape | record-table[stride 3] |

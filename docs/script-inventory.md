@@ -75,8 +75,9 @@ now assembles the confirmed type/X/Y/difficulty and story-prerequisite buffers i
 across 66 stages. It also exposes 604 reinforcement schedules and consumer-proven tagged payload variants
 for initial factions, teleport destinations, treasure item/count pairs, card-generation lists, and 104
 hazard/barrier non-triggering faction gates. Every placement joins its type name and, where populated, its
-effect description from OBINIT's 46 definitions; 81 type-specific payload cells on types 11, 17, 26, and
-27 remain raw. A second join assembles all 1,378 populated enemy slots
+effect description from OBINIT's 46 definitions. OBINIT's state-row mode resolves another 78 initial
+object states on types 11, 17, and 26; only three type-27 payload cells remain raw. A second join assembles
+all 1,378 populated enemy slots
 across the same 66 stages, including unit/faction, placement, difficulty/story gates, level rules, weighted
 alternatives, difficulty-specific movement/battle routine sets, and 485 first-clear-only replay gates.
 

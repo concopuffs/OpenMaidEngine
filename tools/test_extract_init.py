@@ -166,13 +166,29 @@ def test_real_mixed_table() -> None:
         for obj in all_objects
         if "non_triggering_faction_id" in obj
     } == {1, 2, 3}, "STINIT faction gates retain all observed faction ids")
+    state_objects = [
+        obj for obj in all_objects if "initial_object_state_id" in obj
+    ]
+    check(len(state_objects) == 78,
+          "STINIT state-row metadata decodes every remaining initialized object state")
+    check({
+        obj["type_id"] for obj in state_objects
+    } == {11, 17, 26}, "STINIT state-row payloads remain scoped to proven object types")
+    deployment_flags = [
+        obj for obj in state_objects if obj["type_id"] == 26
+    ]
+    check(len(deployment_flags) == 61
+          and {obj["initial_object_state_id"] for obj in deployment_flags} == {2},
+          "STINIT deployment flags expose their initial object state")
     spike = next(
-        obj for obj in all_objects
-        if obj["type_id"] == 17 and "unknown_fields" in obj
+        obj for obj in state_objects if obj["type_id"] == 17
     )
-    check(spike["unknown_fields"] == {"0xe73bb": 2},
-          "STINIT spike payload remains raw because FIELD excludes type 17 from the gate")
-    check(sum("unknown_fields" in obj for obj in all_objects) == 81,
+    check(spike["initial_object_state_id"] == 2
+          and "non_triggering_faction_id" not in spike,
+          "STINIT spikes expose state without inventing the excluded faction gate")
+    unknown_objects = [obj for obj in all_objects if "unknown_fields" in obj]
+    check(len(unknown_objects) == 3
+          and {obj["type_id"] for obj in unknown_objects} == {27},
           "STINIT preserves unresolved tagged object payloads as raw evidence")
     extract_init.attach_stage_enemy_spawns(records)
     first_spawn = records[0]["enemy_spawns"][0]
@@ -195,6 +211,20 @@ def test_real_mixed_table() -> None:
           "STINIT preserves weighted object-linked enemy alternatives")
     check(sum(len(record["enemy_spawns"]) for record in records) == 1378,
           "STINIT assembles every populated enemy spawn slot")
+    linked_deployment_spawns = []
+    for record in records:
+        objects_by_slot = {
+            obj["slot"]: obj for obj in record["object_placements"]
+        }
+        linked_deployment_spawns.extend(
+            spawn
+            for spawn in record["enemy_spawns"]
+            if (object_slot := spawn.get("object_slot")) in objects_by_slot
+            and objects_by_slot[object_slot]["type_id"] == 26
+        )
+    check(len(linked_deployment_spawns) == 63
+          and {spawn["faction_id"] for spawn in linked_deployment_spawns} == {2},
+          "STINIT deployment flags correlate with all linked enemy-faction spawns")
     check(sum(
         spawn.get("first_clear_only", False)
         for record in records

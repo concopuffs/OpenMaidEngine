@@ -396,12 +396,15 @@ def extract_name(scr):
 
 @cache
 def object_type_definitions() -> dict[int, dict]:
-    """Load OBINIT's authoritative names and descriptions keyed by object type id."""
+    """Load OBINIT's authoritative display and state-row metadata by object type id."""
     records, _ = extract_name(sys4load.load(resolve("OBINIT")))
     return {
         record["id"]: {
             "name": record["name"],
             **({"description": record["desc"]} if record.get("desc") else {}),
+            "uses_runtime_state_sprite_row": (
+                record.get("fields", {}).get("0xe6dee") == 1
+            ),
         }
         for record in records
     }
@@ -639,6 +642,10 @@ def attach_stage_object_placements(
                 obj["card_generation_list_id"] = payload.pop("0xe73bb")
             elif 18 <= type_id <= 25 and "0xe73bb" in payload:
                 obj["non_triggering_faction_id"] = payload.pop("0xe73bb")
+            elif (definition
+                  and definition["uses_runtime_state_sprite_row"]
+                  and "0xe73bb" in payload):
+                obj["initial_object_state_id"] = payload.pop("0xe73bb")
             unknown = payload
             if unknown:
                 obj["unknown_fields"] = unknown
