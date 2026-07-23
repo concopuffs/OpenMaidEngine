@@ -91,6 +91,24 @@ ROUTINE_BANK_ROLES = (
 )
 
 MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
+    1: {
+        "behavior": "advance_step_progress",
+        "parameter_fields": {},
+        "ignored_parameter_fields": {
+            "movement_parameter_1": (
+                "authored once (routine set 173, slot 2, value 10), but "
+                "RTN_M001 never reads movement parameter bank 2"
+            ),
+            "movement_parameter_2": (
+                "authored once in the same step (value 711), but RTN_M001 "
+                "never reads movement parameter bank 3"
+            ),
+        },
+        "completion": (
+            "unconditionally advance the current step's progress counter and "
+            "produce movement result state 1 without selecting a destination"
+        ),
+    },
     4: {
         "behavior": "approach_stage_object_slot",
         "parameter_fields": {
@@ -172,6 +190,26 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
             "valid movement destination toward the selected ally"
         ),
     },
+    8: {
+        "behavior": "approach_nearest_foreign_magic_pillar",
+        "parameter_fields": {},
+        "ignored_parameter_fields": {
+            "movement_parameter_1": (
+                "authored once (routine set 112, slot 6, value 1), but "
+                "RTN_M008 never reads movement parameter bank 2"
+            ),
+        },
+        "target_selection": (
+            "nearest reachable active stage object of OBINIT type 2, 3, or 4 "
+            "(small, medium, or large Magic Pillar) whose runtime state/faction "
+            "differs from the acting entity; unlike RTN_M015, no configured "
+            "route-radius gate is applied"
+        ),
+        "completion": (
+            "produce a movement result when a reachable foreign-controlled "
+            "Magic Pillar exists"
+        ),
+    },
     10: {
         "behavior": "approach_healing_feather",
         "parameter_fields": {
@@ -239,6 +277,55 @@ MOVEMENT_PROVIDER_PARAMETER_SCHEMAS = {
         "completion": (
             "advance the current step's progress counter after reaching the "
             "destination tile (or its linked type-6 stage-object exit tile)"
+        ),
+    },
+    13: {
+        "behavior": "approach_faction_traversable_tile",
+        "parameter_fields": {
+            "movement_parameter_1": "target_faction_filter",
+        },
+        "parameter_defaults": {
+            "movement_parameter_1": 0,
+        },
+        "parameter_notes": {
+            "target_faction_filter": (
+                "zero means any faction other than the acting entity's faction; "
+                "a nonzero value selects exactly that faction id. Only one "
+                "shipped step explicitly writes value 1; three use default zero"
+            ),
+        },
+        "target_selection": (
+            "when the current tile is not traversable by the selected faction "
+            "set, choose the nearest reachable tile whose "
+            "tile_faction_traversal_masks value includes that set, then "
+            "approach it"
+        ),
+        "completion": (
+            "advance the current step's progress counter after producing a "
+            "valid movement destination into the selected faction's traversable "
+            "territory"
+        ),
+    },
+    14: {
+        "behavior": "retreat_from_nearby_enemies",
+        "parameter_fields": {
+            "movement_parameter_1": "maximum_threat_route_steps",
+        },
+        "parameter_notes": {
+            "maximum_threat_route_steps": (
+                "inclusive route-step radius used to collect active foreign-"
+                "faction threats; shipped values are 3 or 6"
+            ),
+        },
+        "target_selection": (
+            "sum route-proximity scores from every active foreign-faction "
+            "entity within the threat radius, exclude occupied tiles, and "
+            "choose a reachable tile with the lowest positive aggregate score "
+            "(farthest from the collected threats), randomizing ties"
+        ),
+        "completion": (
+            "advance the current step's progress counter after producing a "
+            "valid retreat destination"
         ),
     },
     15: {
@@ -1074,12 +1161,12 @@ def _movement_provider_names(names: dict[int, str]) -> dict[int, str]:
     return providers
 
 
-def _join_movement_provider_semantics(step: dict) -> tuple[int, int]:
+def _join_movement_provider_semantics(step: dict) -> tuple[int, int, int]:
     """Add selector-specific RTN_M semantics while retaining every raw bank."""
     selector = step.get("movement_provider_selector")
     schema = MOVEMENT_PROVIDER_PARAMETER_SCHEMAS.get(selector)
     if schema is None:
-        return 0, 0
+        return 0, 0, 0
     step["provider_behavior"] = schema["behavior"]
     joined = 0
     defaulted = 0
@@ -1091,7 +1178,14 @@ def _join_movement_provider_semantics(step: dict) -> tuple[int, int]:
         elif raw_field in defaults:
             step[semantic_field] = defaults[raw_field]
             defaulted += 1
-    return joined, defaulted
+    ignored_fields = {
+        raw_field: step[raw_field]
+        for raw_field in schema.get("ignored_parameter_fields", {})
+        if raw_field in step
+    }
+    if ignored_fields:
+        step["ignored_movement_parameters"] = ignored_fields
+    return joined, defaulted, len(ignored_fields)
 
 
 def extract_banked(scr):
@@ -1112,6 +1206,7 @@ def extract_banked(scr):
     decoded_movement_step_count = 0
     decoded_movement_parameter_count = 0
     decoded_movement_defaulted_parameter_count = 0
+    ignored_movement_parameter_count = 0
 
     for offset, destination, value, bank_index, record_id, slot in writes:
         bank_base = ROUTINE_BANK_ROOT + bank_index * ROUTINE_BANK_SPAN
@@ -1162,6 +1257,7 @@ def extract_banked(scr):
                 (
                     joined_parameter_count,
                     defaulted_parameter_count,
+                    ignored_parameter_count,
                 ) = _join_movement_provider_semantics(step)
                 if selector in MOVEMENT_PROVIDER_PARAMETER_SCHEMAS:
                     decoded_movement_step_count += 1
@@ -1169,6 +1265,7 @@ def extract_banked(scr):
                     decoded_movement_defaulted_parameter_count += (
                         defaulted_parameter_count
                     )
+                    ignored_movement_parameter_count += ignored_parameter_count
                 movement_steps.append(step)
 
             battle = {
@@ -1274,6 +1371,7 @@ def extract_banked(scr):
         "decoded_movement_defaulted_parameter_count": (
             decoded_movement_defaulted_parameter_count
         ),
+        "ignored_movement_parameter_count": ignored_movement_parameter_count,
         "battle_provider_scripts": {
             str(selector): name
             for selector, name in sorted(battle_providers.items())

@@ -787,12 +787,15 @@ the shared `semantic_fields` join. SCINIT is now the sixth shape: 2,179 paired a
 resolved and the full overwrite history retained. RTINIT is now the seventh shape: its twenty parallel
 1000-by-20 banks produce 172 routine sets, 1,043 movement steps, and fourteen battle steps with RTN_M/RTN_B
 provider joins, activation/progress/story gates, six explicit reserved banks, and complete overwrite
-history. Provider-tagged decoding now covers movement providers 4, 5, 6, 7, 10, 11, 12, and 15:
-stage-object slots, coordinate destinations (including M012's foreign-entity route mask), nearest-enemy
-and injured-ally searches, resource-gated Healing Feather selection, cyclic waypoints, and
-foreign-controlled Magic Pillars. This projects 971 populated parameters plus ten explicit defaults
-across 508 steps without assigning those meanings to other providers that share the same raw banks.
-Continue with the sparse parameter tail in RTN_M001/008/013/014.
+history. Provider-tagged decoding now covers movement providers 1, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14,
+and 15: progress-only steps, stage-object slots, coordinate destinations (including M012's
+foreign-entity route mask), enemy/ally and Magic Pillar searches, resource-gated Healing Feather
+selection, cyclic waypoints, faction-traversable terrain, and retreat from nearby enemies. This
+classifies every one of the 977 authored movement-parameter cells: 974 are semantic inputs across 632
+steps, while the three cells attached to M001/M008 are retained as provider-unread residue; thirteen
+unwritten zero defaults are projected separately. The seven remaining used providers
+(M002/003/009/017/051/052/061) are behavior-only in the shipped table. Decode those next by use density,
+starting with M003 and M051.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

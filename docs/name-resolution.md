@@ -444,8 +444,9 @@ keeps its raw `base/20/slot` fields and complete offset-tagged assignment histor
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
 parameter names remain as raw provenance while each RTN_M/RTN_B consumer proves its tagged schema.
 
-The provider-specific join now covers RTN_M004/005/006/007/010/011/012/015: 508 movement steps, 971
-populated parameters, and ten explicit zero defaults. RTN_M005/011/012 read banks 2/3 as
+The provider-specific join now covers RTN_M001/004/005/006/007/008/010/011/012/013/014/015: 632
+movement steps, 974 semantically consumed populated parameters, thirteen explicit zero defaults, and
+three authored-but-unread parameter cells. RTN_M005/011/012 read banks 2/3 as
 `destination_tile_x` / `destination_tile_y` and approach that exact map tile, incrementing the current
 step's progress counter after arrival. Their alternate completion test recognizes a type-6 stage object
 at the authored destination and also accepts the object's linked exit tile. RTN_M012 is byte-for-byte
@@ -487,6 +488,26 @@ medium, or large `魔力の柱`) whose runtime ownership state differs from the 
 Bank 2 is an inclusive `maximum_target_route_steps`, authored from 2 through 6; the provider produces
 movement only when the chosen foreign-controlled pillar is within that radius.
 
+RTN_M008 is the unrestricted-radius form of that Magic Pillar search: it chooses and approaches the
+nearest active foreign-controlled type-2/3/4 object without consulting a parameter bank. Its sole
+authored bank-2 value is therefore retained under `ignored_movement_parameters`, not presented as a
+behavior input. RTN_M001 likewise reads no parameter bank; it advances the current routine step's
+per-entity progress counter and sets the execution state. Its two authored cells are preserved as unread
+residue. These three cells are the complete authored-but-unread movement-parameter set.
+
+RTN_M013 approaches terrain permitted to a selected faction. Bank 2 is `target_faction_filter`: a
+nonzero value selects that faction's bit, while zero/unwritten means any faction except the actor's own.
+The provider requires the current tile not already to match that mask and selects the nearest reachable
+tile whose `tile_faction_traversal_masks` cell overlaps it. Three of its four steps use the explicit
+zero default.
+
+RTN_M014 retreats from nearby enemies. Bank 2 is an inclusive
+`maximum_threat_route_steps`, authored as 3 or 6. It collects active foreign-faction entities within
+that route radius, sums a proximity surface from all collected threats, removes occupied and
+movement-unreachable tiles, and randomly chooses among the lowest-positive-score tiles. This makes the
+destination the reachable tile farthest from the nearby threat set rather than merely farthest from one
+enemy.
+
 MVSEEK's mode contract is also now explicit. Mode 0 replaces the input coordinate with the current
 entity tile and seeds the origin with movement+1, producing the movement-limited reachability grid.
 Modes 1/2 retain the caller coordinate and seed it with 9999, producing a broad target-distance grid;
@@ -496,13 +517,18 @@ by M006/007/015.
 
 `movement_steps` now carry these selector-scoped semantic fields beside the original
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
-mapping, target-selection rules, and zero/unwritten behavior. No meaning is projected onto other
-providers. The supporting runtime joins are now curated too: `entity_runtime_flags`,
+mapping, target-selection rules, zero/unwritten behavior, and authored fields proven unread by their
+provider. All 977 populated movement-parameter cells are now accounted for: 974 semantic inputs and
+three explicit residue cells. The seven used providers still without schemas
+(M002/003/009/017/051/052/061) have no populated parameter cells, so their remaining work is behavior
+decoding rather than column semantics. The supporting runtime joins are now curated too:
+`entity_runtime_flags`,
 `entity_faction_ids`, `entity_tile_x`/`entity_tile_y`, the fourteen-column `entity_effective_stats`,
 current HP/SP/FS, `stage_object_runtime_flags`, `movement_search_mode`,
 `offensive_action_scope_masks`, `pathfinding_remaining_route_steps`,
 `pathfinding_filtered_route_scores`, `pathfinding_movement_costs`, and the per-entity patrol waypoint
-index.
+index. The faction-specific terrain masks used by M013 are curated as
+`tile_faction_traversal_masks`.
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
@@ -552,9 +578,9 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
-   banks are structurally decoded, and high-density providers 5 and 11 now expose destination/waypoint
-   semantics without changing their shared raw banks. Next continue through the remaining parameterized
-   RTN_M consumers by evidence density; never assign one universal meaning to a parameter bank whose
+   banks are structurally decoded with every populated movement-parameter cell classified. Next decode
+   the seven behavior-only RTN_M providers by evidence density, beginning with M003, M051, M017, and
+   M052; never assign one universal meaning to a parameter bank whose
    meaning varies by provider selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.

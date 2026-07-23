@@ -850,7 +850,7 @@ name = "movement_routine_parameter_1"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M004 uses a stage_object_slot_index; RTN_M005/011/012 use destination_tile_x; RTN_M006/007/015 use maximum_target_route_steps; and RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero)."
+usage = "RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M004 uses a stage_object_slot_index; RTN_M005/011/012 use destination_tile_x; RTN_M006/007/015 use maximum_target_route_steps; RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero); RTN_M013 uses target_faction_filter; and RTN_M014 uses maximum_threat_route_steps. The one RTN_M001 and one RTN_M008 authored cells are never read by those providers."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -861,7 +861,7 @@ name = "movement_routine_parameter_2"
 category = "data-table"
 type = "int[1000][20]"
 value_domain = "provider-specific integer"
-usage = "RTINIT movement bank 3. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/011/012 use destination_tile_y, RTN_M007 uses maximum_target_hp_percent, and RTN_M010 uses maximum_resource_percent."
+usage = "RTINIT movement bank 3. Its meaning is tagged by movement_routine_provider_selectors: RTN_M005/011/012 use destination_tile_y, RTN_M007 uses maximum_target_hp_percent, and RTN_M010 uses maximum_resource_percent. The lone RTN_M001-authored value is never read by that provider."
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeff78"]
@@ -1285,6 +1285,17 @@ usage = "MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x]
 source = "investigation"
 confidence = "high"
 depends_on = ["0x4e085"]
+
+[[global]]
+address = "0x20543"
+name = "tile_faction_traversal_masks"
+category = "data-table"
+type = "int[][27]"
+value_domain = "faction bitmask indexed by map tile"
+usage = "Row-major tile traversal permissions. Movement checks the acting entity's faction bit before enqueuing a tile in movement-limited MVSEEK searches. RTN_M013 builds either one selected faction bit or all bits except the actor's, requires the current tile not to match that set, and approaches the nearest reachable tile whose mask does."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x522ed", "0xaba96"]
 
 [[global]]
 address = "0xaba96"

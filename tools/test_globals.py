@@ -36,6 +36,8 @@ def test_load_and_lint():
     check(entries[0xbf6fe]["name"] == "pathfinding_filtered_route_scores"
           and entries[0xcc9f4]["name"] == "offensive_action_scope_masks",
           "movement target filtering and offensive scope are curated")
+    check(entries[0x20543]["name"] == "tile_faction_traversal_masks",
+          "faction-specific tile traversal masks are curated")
     check(entries[0xaba64]["name"] == "stage_object_runtime_flags",
           "stage-object targeting flags are curated")
     check(entries[0xb240e]["name"] == "pathfinding_movement_costs",

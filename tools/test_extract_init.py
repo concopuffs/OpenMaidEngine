@@ -371,10 +371,11 @@ def test_real_routine_banks() -> None:
           and len(meta["used_battle_provider_selectors"]) == 4
           and len(meta["record_field_columns"]) == 117,
           "RTINIT assembles every populated movement and battle step")
-    check(meta["decoded_movement_provider_count"] == 8
-          and meta["decoded_movement_step_count"] == 508
-          and meta["decoded_movement_parameter_count"] == 971
-          and meta["decoded_movement_defaulted_parameter_count"] == 10,
+    check(meta["decoded_movement_provider_count"] == 12
+          and meta["decoded_movement_step_count"] == 632
+          and meta["decoded_movement_parameter_count"] == 974
+          and meta["decoded_movement_defaulted_parameter_count"] == 13
+          and meta["ignored_movement_parameter_count"] == 3,
           "RTINIT reports selector-specific semantic coverage")
     check([
         layout["bank_index"]
@@ -454,8 +455,41 @@ def test_real_routine_banks() -> None:
           and provider_15["provider_behavior"] == "approach_foreign_magic_pillar"
           and provider_15["maximum_target_route_steps"] == 3,
           "RTINIT joins RTN_M015's foreign Magic Pillar search radius")
-    check("provider_behavior" not in movement
-          and "destination_tile_x" not in movement,
+    provider_1_residue = by_id[173]["movement_steps"][2]
+    check(provider_1_residue["movement_provider_selector"] == 1
+          and provider_1_residue["provider_behavior"] == "advance_step_progress"
+          and provider_1_residue["ignored_movement_parameters"] == {
+              "movement_parameter_1": 10,
+              "movement_parameter_2": 711,
+          },
+          "RTINIT marks RTN_M001's authored but unread parameter cells")
+    provider_8_residue = by_id[112]["movement_steps"][6]
+    check(provider_8_residue["movement_provider_selector"] == 8
+          and provider_8_residue["provider_behavior"]
+          == "approach_nearest_foreign_magic_pillar"
+          and provider_8_residue["ignored_movement_parameters"]
+          == {"movement_parameter_1": 1},
+          "RTINIT marks RTN_M008's authored but unread parameter cell")
+    provider_13 = by_id[104]["movement_steps"][3]
+    check(provider_13["movement_provider_selector"] == 13
+          and provider_13["provider_behavior"]
+          == "approach_faction_traversable_tile"
+          and provider_13["target_faction_filter"] == 1,
+          "RTINIT joins RTN_M013's explicit faction filter")
+    provider_13_default = by_id[23]["movement_steps"][1]
+    check(provider_13_default["movement_provider_selector"] == 13
+          and provider_13_default["target_faction_filter"] == 0
+          and "movement_parameter_1" not in provider_13_default,
+          "RTINIT projects RTN_M013's any-foreign-faction default")
+    provider_14 = by_id[130]["movement_steps"][5]
+    check(provider_14["movement_provider_selector"] == 14
+          and provider_14["provider_behavior"] == "retreat_from_nearby_enemies"
+          and provider_14["maximum_threat_route_steps"] == 6,
+          "RTINIT joins RTN_M014's threat-detection radius")
+    undecoded_movement = by_id[2]["movement_steps"][1]
+    check(undecoded_movement["movement_provider_selector"] == 2
+          and "provider_behavior" not in undecoded_movement
+          and "destination_tile_x" not in undecoded_movement,
           "RTINIT does not leak provider-specific meanings onto undecoded selectors")
     check(
         meta["movement_provider_parameter_schemas"]["11"]["parameter_fields"]
