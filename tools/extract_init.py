@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract a *INIT data table to JSON. Auto-detects the table's shape.
 
-*INIT scripts populate global arrays and work buffers with static game data. Four shapes seen:
+*INIT scripts populate global arrays and work buffers with static game data. Five shapes seen:
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
@@ -12,12 +12,14 @@
            footer into per-record global arrays. The data lives in the footer. (MPINIT maps)
   mixed  — a sparse selector dispatch writes strings, scalars, fixed-buffer cells, and
            footer arrays for one runtime record. (STINIT stages)
+  rules  — conditional blocks select a unit promotion and add effects to shared output
+           buffers. (CCINIT class changes)
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
 
-Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed]
+Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules]
 """
 from __future__ import annotations
 import json
@@ -40,6 +42,22 @@ T_GLOBAL_INT = 3
 T_GLOBAL_STRING = 5
 T_IMM = 0
 T_LOCAL_INT = 9
+
+CURRENT_UNIT_ID = 0x66715
+CURRENT_UNIT_LEVELS = 0x6930
+UNIT_CLASS_CHANGE_STATE = 0x573BB
+CLASS_CHANGE_TITLE_OUT = 0x26B4
+CLASS_CHANGE_LEVEL_OUT = 0xAB8E7
+CLASS_CHANGE_COST_OUT = 0xAB8E8
+CLASS_CHANGE_STATS_OUT = 0xAB8E9
+CLASS_CHANGE_SKILLS_OUT = 0xAB8F7
+CLASS_CHANGE_FLAGS_OUT = 0xAB8FB
+
+UNIT_STAT_COLUMNS = (
+    "accuracy", "evasion", "physical_attack", "physical_defense",
+    "magic_attack", "magic_defense", "speed", "luck", "critical_chance",
+    "capture_power", "movement", "max_hp", "max_sp", "max_fs",
+)
 
 MESSAGE_TABLES = {
     "ITINIT": "ITMES",
@@ -130,10 +148,35 @@ def _mixed_guards(scr):
     return [guard for guard in candidates if guard["selector"] == selector]
 
 
+def _class_change_guards(scr) -> list[dict]:
+    """Find CCINIT's source-ordered `current_unit_id == immediate` rule guards."""
+    guards = []
+    for index, ins in enumerate(scr.instructions):
+        if (sys4load.display_label(ins.opcode) == "eq"
+                and len(ins.args) >= 3
+                and ins.args[0][0] == T_LOCAL_INT
+                and ins.args[1] == (T_GLOBAL_INT, CURRENT_UNIT_ID)
+                and ins.args[2][0] == T_IMM):
+            guards.append({
+                "index": index,
+                "offset": ins.offset,
+                "unit_id": ins.args[2][1],
+            })
+    return guards
+
+
 def detect_mode(scr):
     ops = [ins.opcode for ins in scr.instructions]
     has_str = any(ins.opcode == SET_STRING and ins.args and ins.args[0][0] == T_GLOBAL_STRING
                   for ins in scr.instructions)
+    has_class_change_title = any(
+        ins.opcode == SET_STRING
+        and ins.args
+        and ins.args[0] == (T_GLOBAL_STRING, CLASS_CHANGE_TITLE_OUT)
+        for ins in scr.instructions
+    )
+    if has_class_change_title and len(_class_change_guards(scr)) >= 4:
+        return "rules"
     if has_str and len(_mixed_guards(scr)) >= 4:
         return "mixed"
     if has_str:
@@ -141,6 +184,157 @@ def detect_mode(scr):
     n_footer = ops.count(COPY_LOCAL_ARRAY)
     n_int = ops.count(MOV) + ops.count(COPY_TO_GLOBAL)
     return "footer" if n_footer >= max(4, n_int) else "numeric"
+
+
+@cache
+def unit_definition_names() -> dict[int, str]:
+    """Load EBINIT's authoritative unit names by definition id."""
+    records, _ = extract_name(sys4load.load(resolve("EBINIT")))
+    return {record["id"]: record["name"] for record in records}
+
+
+@cache
+def skill_definition_names() -> dict[int, str]:
+    """Load SKINIT's authoritative skill names by skill id."""
+    records, _ = extract_name(sys4load.load(resolve("SKINIT")))
+    return {record["id"]: record["name"] for record in records}
+
+
+def extract_class_change_rules(scr):
+    """Extract CCINIT's promotion predicates and accumulator effects.
+
+    CALCCC initializes the output block, invokes CCINIT, and applies the selected
+    title, cost delta, fourteen stat deltas, and up to three skills to the unit.
+    Each CCINIT block is therefore a rule rather than a row in a static table.
+    """
+    guards = _class_change_guards(scr)
+    if not guards:
+        return [], {}
+
+    unit_names = unit_definition_names()
+    skill_names = skill_definition_names()
+    records = []
+    instructions = scr.instructions
+    for rule_index, guard in enumerate(guards):
+        end = guards[rule_index + 1]["index"] if rule_index + 1 < len(guards) else len(instructions)
+        block = instructions[guard["index"]:end]
+        record = {
+            "id": rule_index + 1,
+            "guard_offset": f"0x{guard['offset']:x}",
+            "unit_id": guard["unit_id"],
+            "unit_name": unit_names.get(guard["unit_id"], ""),
+            "fields": {},
+            "string_fields": {},
+            "array_fields": {},
+        }
+
+        for ins in block:
+            label = sys4load.display_label(ins.opcode)
+            if (label == "lookup-array"
+                    and len(ins.args) >= 3
+                    and ins.args[1] == (T_GLOBAL_INT, CURRENT_UNIT_LEVELS)
+                    and ins.args[2] == (T_GLOBAL_INT, CURRENT_UNIT_ID)):
+                record["level_table"] = f"0x{CURRENT_UNIT_LEVELS:x}"
+            elif (label == "gre"
+                    and len(ins.args) >= 3
+                    and ins.args[1][0] == 12
+                    and ins.args[2][0] == T_IMM
+                    and "level_table" in record):
+                record["minimum_level"] = ins.args[2][1]
+            elif (label == "lookup-array-2d"
+                    and len(ins.args) >= 5
+                    and ins.args[1] == (T_GLOBAL_INT, UNIT_CLASS_CHANGE_STATE)
+                    and ins.args[2] == (T_GLOBAL_INT, CURRENT_UNIT_ID)
+                    and ins.args[3] == (T_IMM, 10)
+                    and ins.args[4][0] == T_IMM):
+                record["class_change_slot_index"] = ins.args[4][1]
+            elif (label == "ne"
+                    and len(ins.args) >= 3
+                    and ins.args[1] == (T_GLOBAL_INT, CURRENT_UNIT_ID)
+                    and ins.args[2][0] == T_GLOBAL_INT):
+                record["excluded_when_unit_equals_global"] = f"0x{ins.args[2][1]:x}"
+            elif (ins.opcode == SET_STRING
+                    and len(ins.args) >= 2
+                    and ins.args[0] == (T_GLOBAL_STRING, CLASS_CHANGE_TITLE_OUT)):
+                title = scr.strings.get(ins.args[1][1], ("",))[0]
+                record["title"] = title
+                record["name"] = title
+                record["string_fields"][f"0x{CLASS_CHANGE_TITLE_OUT:x}"] = title
+            elif (write := _static_global_write(ins)) is not None:
+                destination, value = write
+                if destination == CLASS_CHANGE_LEVEL_OUT:
+                    record["selected_level"] = value
+                    record["fields"][f"0x{destination:x}"] = value
+                elif CLASS_CHANGE_SKILLS_OUT <= destination < CLASS_CHANGE_SKILLS_OUT + 4:
+                    record["array_fields"][
+                        f"0x{CLASS_CHANGE_SKILLS_OUT:x}/{destination - CLASS_CHANGE_SKILLS_OUT}"
+                    ] = value
+                elif CLASS_CHANGE_FLAGS_OUT <= destination < CLASS_CHANGE_FLAGS_OUT + 10:
+                    record["array_fields"][
+                        f"0x{CLASS_CHANGE_FLAGS_OUT:x}/{destination - CLASS_CHANGE_FLAGS_OUT}"
+                    ] = value
+            elif (label == "add"
+                    and len(ins.args) >= 3
+                    and ins.args[0][0] == T_GLOBAL_INT
+                    and ins.args[0] == ins.args[1]
+                    and ins.args[2][0] == T_IMM):
+                destination = ins.args[0][1]
+                value = ins.args[2][1]
+                if destination == CLASS_CHANGE_COST_OUT:
+                    record["fields"][f"0x{destination:x}"] = value
+                elif CLASS_CHANGE_STATS_OUT <= destination < CLASS_CHANGE_STATS_OUT + 14:
+                    record["array_fields"][
+                        f"0x{CLASS_CHANGE_STATS_OUT:x}/{destination - CLASS_CHANGE_STATS_OUT}"
+                    ] = value
+
+        stat_bonuses = {
+            UNIT_STAT_COLUMNS[int(key.split("/")[1])]: value
+            for key, value in record["array_fields"].items()
+            if key.startswith(f"0x{CLASS_CHANGE_STATS_OUT:x}/")
+        }
+        if stat_bonuses:
+            record["stat_bonuses"] = stat_bonuses
+        record["deployment_cost_delta"] = record["fields"].get(
+            f"0x{CLASS_CHANGE_COST_OUT:x}", 0
+        )
+        skill_awards = []
+        for key, skill_id in record["array_fields"].items():
+            if not key.startswith(f"0x{CLASS_CHANGE_SKILLS_OUT:x}/") or skill_id <= 0:
+                continue
+            skill_awards.append({
+                "skill_slot": int(key.split("/")[1]) + 1,
+                "skill_id": skill_id,
+                "skill_name": skill_names.get(skill_id, ""),
+            })
+        if skill_awards:
+            record["skill_awards"] = skill_awards
+        record["state_flag_indices_set"] = [
+            int(key.split("/")[1])
+            for key, value in record["array_fields"].items()
+            if key.startswith(f"0x{CLASS_CHANGE_FLAGS_OUT:x}/") and value
+        ]
+        records.append(record)
+
+    array_columns = sorted({
+        key for record in records for key in record["array_fields"]
+    }, key=lambda key: tuple(int(part, 0) for part in key.split("/")))
+    string_columns = sorted({
+        key for record in records for key in record["string_fields"]
+    }, key=lambda key: int(key, 0))
+    return records, {
+        "rule_kind": "unit-class-change",
+        "selector_global": f"0x{CURRENT_UNIT_ID:x}",
+        "unit_level_table": f"0x{CURRENT_UNIT_LEVELS:x}",
+        "persistent_state_table": f"0x{UNIT_CLASS_CHANGE_STATE:x}",
+        "selection_policy": "highest selected_level among eligible unapplied rules",
+        "array_layouts": {
+            f"0x{CLASS_CHANGE_STATS_OUT:x}": {"length": 14},
+            f"0x{CLASS_CHANGE_SKILLS_OUT:x}": {"length": 4},
+            f"0x{CLASS_CHANGE_FLAGS_OUT:x}": {"length": 10},
+        },
+        "string_field_columns": string_columns,
+        "array_field_columns": array_columns,
+    }
 
 
 def _eval_static_arg(arg, locals_: dict[int, int]):
@@ -820,6 +1014,12 @@ def write_data_index(data_dir: Path) -> None:
         "available descriptions; consumer-proven tagged payload variants receive semantic names while",
         "engine-dead tagged writes remain in `ignored_payload_fields` and unresolved",
         "type-specific/mode parameters remain in `unknown_fields`.",
+        "",
+        "Rule-mode tables preserve source-order rule ids and bytecode guard offsets while",
+        "joining their predicates and shared-buffer effects. CCINIT exposes unit/level/applied-slot-index",
+        "eligibility, titles, deployment-cost and named stat deltas, awarded SKINIT skills, and",
+        "the persistent state slot set by each class change. Raw output addresses remain beside",
+        "the joined EBINIT unit and SKINIT skill names.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -858,6 +1058,7 @@ def main() -> int:
         "numeric": extract_numeric,
         "footer": extract_footer,
         "mixed": extract_mixed,
+        "rules": extract_class_change_rules,
     }[mode]
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:

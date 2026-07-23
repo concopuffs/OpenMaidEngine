@@ -70,6 +70,31 @@ def main() -> int:
     assert mixed["0x100/6"]["common"][0]["value"] == "[1, 2, 3]"
     assert mixed["0x40"]["examples"][0]["name"] == "Win"
 
+    rule_fixture = {
+        "table": "RULES",
+        "mode": "rules",
+        "records": [
+            {
+                "id": 1, "unit_id": 3, "title": "", "fields": {"0x10": -1},
+                "class_change_slot_index": 0, "skill_awards": [{"skill_id": 2}],
+            },
+            {
+                "id": 2, "unit_id": 5, "title": "Promoted",
+                "minimum_level": 50, "class_change_slot_index": 1,
+                "fields": {"0x10": 50},
+            },
+        ],
+    }
+    rule_rows = {row["key"]: row for row in profile.profile_columns(rule_fixture)}
+    assert rule_rows["0x10"]["kind"] == "rule-output"
+    rule_summary = profile.profile_rules(rule_fixture)
+    assert rule_summary["unit_count"] == 2
+    assert rule_summary["titled_rule_count"] == 1
+    assert rule_summary["level_independent_rule_count"] == 1
+    assert rule_summary["minimum_levels"] == {"50": 1}
+    assert rule_summary["class_change_slot_indices"] == {"0": 1, "1": 1}
+    assert rule_summary["skill_award_count"] == 1
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

@@ -37,8 +37,8 @@ def load_table(name: str) -> dict:
     if not path.exists():
         raise SystemExit(f"missing extracted table: {path}")
     data = json.loads(path.read_text(encoding="utf8"))
-    if data.get("mode") not in {"name", "numeric", "mixed"}:
-        raise SystemExit(f"{name}: field profiling requires name/numeric/mixed mode")
+    if data.get("mode") not in {"name", "numeric", "mixed", "rules"}:
+        raise SystemExit(f"{name}: unsupported field-profiling mode {data.get('mode')!r}")
     return data
 
 
@@ -83,7 +83,11 @@ def profile_columns(data: dict) -> list[dict]:
             key = f"0x{base:x}"
             add(key, {
                 "key": key,
-                "kind": "scalar-field" if data.get("mode") == "mixed" else "parallel-array",
+                "kind": (
+                    "scalar-field" if data.get("mode") == "mixed"
+                    else "rule-output" if data.get("mode") == "rules"
+                    else "parallel-array"
+                ),
                 "base": key,
                 "stride": None, "column": None,
                 "semantic_name": field_semantics.get(key),
@@ -154,6 +158,31 @@ def profile_columns(data: dict) -> list[dict]:
             "reference_ops": [],
         })
     return rows
+
+
+def profile_rules(data: dict) -> dict:
+    """Summarize predicates and joined effects for conditional rule programs."""
+    if data.get("mode") != "rules":
+        return {}
+    records = data["records"]
+    return {
+        "unit_count": len({record["unit_id"] for record in records}),
+        "titled_rule_count": sum(bool(record.get("title")) for record in records),
+        "level_independent_rule_count": sum(
+            "minimum_level" not in record for record in records
+        ),
+        "minimum_levels": dict(sorted(collections.Counter(
+            str(record["minimum_level"])
+            for record in records if "minimum_level" in record
+        ).items(), key=lambda item: int(item[0]))),
+        "class_change_slot_indices": dict(sorted(collections.Counter(
+            str(record["class_change_slot_index"])
+            for record in records if "class_change_slot_index" in record
+        ).items(), key=lambda item: int(item[0]))),
+        "skill_award_count": sum(
+            len(record.get("skill_awards", [])) for record in records
+        ),
+    }
 
 
 def profile_messages(data: dict) -> dict:
@@ -270,14 +299,26 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         "",
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
-        f"- player-facing messages: {message_profile['population']}/{data['record_count']} "
-        f"({message_profile['coverage']:.0%})",
-        f"- messages with furigana spans: {message_profile['furigana_records']}",
+    ]
+    if rule_profile := profile_rules(data):
+        lines.extend([
+            f"- covered units: {rule_profile['unit_count']}",
+            f"- titled rules: {rule_profile['titled_rule_count']}/{data['record_count']}",
+            f"- level-independent rules: {rule_profile['level_independent_rule_count']}",
+            f"- awarded skills: {rule_profile['skill_award_count']}",
+        ])
+    else:
+        lines.extend([
+            f"- player-facing messages: {message_profile['population']}/{data['record_count']} "
+            f"({message_profile['coverage']:.0%})",
+            f"- messages with furigana spans: {message_profile['furigana_records']}",
+        ])
+    lines.extend([
         f"- rows shown: {len(shown)} (ranked by record coverage, then consumer references)",
         "",
         "| field | meaning | populated | distinct | range | direct refs | readers | common values | examples |",
         "|---|---|---:|---:|---|---:|---|---|---|",
-    ]
+    ])
     for row in shown:
         value_range = "—" if row["min"] is None else f"{row['min']}..{row['max']}"
         readers = ", ".join(entry["script"].removesuffix(".BIN")
@@ -325,7 +366,9 @@ def main() -> int:
         "string_field_count": sum(row["kind"] == "string-field" for row in rows),
         "array_cell_count": sum(row["kind"] == "array-cell" for row in rows),
         "footer_array_count": sum(row["kind"] == "footer-array" for row in rows),
+        "rule_output_count": sum(row["kind"] == "rule-output" for row in rows),
         "message_profile": messages,
+        "rule_profile": profile_rules(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

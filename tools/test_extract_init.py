@@ -263,6 +263,52 @@ def test_real_mixed_table() -> None:
     ) == 485, "STINIT exposes every first-clear-only enemy gate")
 
 
+def test_real_class_change_rules() -> None:
+    script = sys4load.load(extract_init.resolve("CCINIT"))
+    check(extract_init.detect_mode(script) == "rules",
+          "CCINIT auto-detects as a conditional rule program")
+    records, meta = extract_init.extract_class_change_rules(script)
+    check(len(records) == 71, "CCINIT extracts all 71 class-change rules")
+    check(len({record["unit_id"] for record in records}) == 33,
+          "CCINIT rules cover 33 unit definitions")
+    check(meta["selector_global"] == "0x66715"
+          and meta["persistent_state_table"] == "0x573bb",
+          "CCINIT exposes its unit selector and persistent state table")
+    check(records[0]["unit_name"] == "リリィ：少女時代"
+          and records[0]["selected_level"] == -1
+          and records[0]["excluded_when_unit_equals_global"] == "0x32f0",
+          "CCINIT preserves Lily's level-independent form rule")
+    sylphine = records[2]
+    check(sylphine["unit_id"] == 5
+          and sylphine["minimum_level"] == 50
+          and sylphine["class_change_slot_index"] == 0
+          and sylphine["title"] == "聖王女",
+          "CCINIT decodes unit, level, slot, and awarded title")
+    check(sylphine["deployment_cost_delta"] == 2
+          and sylphine["stat_bonuses"]["physical_attack"] == 3,
+          "CCINIT decodes cost and named stat bonuses")
+    check(sylphine["skill_awards"] == [{
+        "skill_slot": 3, "skill_id": 202, "skill_name": "光燐衝撃",
+    }], "CCINIT joins awarded skill ids to SKINIT names")
+    semantics = extract_init.field_semantics(records, meta["array_layouts"])
+    check(semantics["0x26b4"] == "class_change_title_output"
+          and semantics["0xab8e9/2"] == "class_change_stat_bonuses.physical_attack"
+          and semantics["0xab8f7/2"] == "class_change_skill_awards.skill_slot_3",
+          "CCINIT raw outputs join to canonical global and column names")
+    extract_init.attach_semantic_fields(records, semantics)
+    check(sylphine["semantic_fields"]["class_change_title_output"] == "聖王女"
+          and sylphine["semantic_fields"][
+              "class_change_stat_bonuses.physical_attack"
+          ] == 3,
+          "CCINIT rules expose a single semantic field view")
+    check(all(
+        record["minimum_level"] == record["selected_level"]
+        for record in records[2:]
+    ), "CCINIT normal promotion thresholds match their selected levels")
+    check(sum(len(record.get("skill_awards", [])) for record in records) == 30,
+          "CCINIT accounts for all 30 awarded skills")
+
+
 def test_real_message_tables() -> None:
     scripts = paths.scripts()
     expected = {
@@ -436,6 +482,7 @@ if __name__ == "__main__":
     test_static_negative_write()
     test_output_name_validation()
     test_real_mixed_table()
+    test_real_class_change_rules()
     test_real_message_tables()
     test_message_join()
     test_field_semantics()

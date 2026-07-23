@@ -1040,6 +1040,99 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x26b4"
+name = "class_change_title_output"
+category = "string-table"
+type = "string"
+value_domain = "CCINIT-awarded Japanese title; empty for Lily form-transition rules"
+usage = "CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27e"
+name = "unit_class_titles"
+category = "string-table"
+type = "string[100]"
+value_domain = "CCINIT class title by playable-unit id"
+usage = "Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x57357"
+name = "unit_deployment_cost_adjustments"
+category = "data-table"
+type = "int[100]"
+value_domain = "signed cumulative class-change cost adjustment"
+usage = "Persistent per-unit delta added to unit_deployment_cost_base. CALCCC increments it by class_change_deployment_cost_delta, while SETCH, SETEN, ADDEXP, and deployment scripts include it when constructing or updating runtime command cost."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x573bb"
+name = "unit_class_change_state"
+category = "data-table"
+type = "int[100][10]"
+columns = { "0" = "promotion_slot_1", "1" = "promotion_slot_2", "2" = "promotion_slot_3", "3" = "promotion_slot_4", "4" = "promotion_slot_5", "5" = "promotion_slot_6", "6" = "promotion_slot_7", "7" = "promotion_slot_8", "8" = "promotion_slot_9", "9" = "promotion_slot_10" }
+value_domain = "0 unapplied, 1 applied"
+usage = "Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x66715"
+name = "current_unit_id"
+category = "index-pointer"
+type = "int"
+value_domain = "EBINIT unit definition id / playable-unit row id"
+usage = "Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6930"
+name = "unit_current_levels"
+category = "data-table"
+type = "int[100]"
+value_domain = "current playable-unit level"
+usage = "Persistent current level by playable-unit id. CCINIT compares current_unit_id's row with each promotion threshold; ADDEXP increments and reports the same value."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x69f8"
+name = "unit_current_stats"
+category = "data-table"
+type = "int[100][14]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power", "10" = "movement", "11" = "max_hp", "12" = "max_sp", "13" = "max_fs" }
+value_domain = "nonnegative current stat values"
+usage = "Persistent fourteen-stat row for each playable unit, using the same column order as unit_base_stats. CALCCC adds class_change_stat_bonuses to the current unit's row and clamps each result to the shared stat caps."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x74e8"
+name = "unit_skill_ids"
+category = "data-table"
+type = "int[100][4]"
+columns = { "0" = "skill_slot_1", "1" = "skill_slot_2", "2" = "skill_slot_3", "3" = "skill_slot_4" }
+value_domain = "SKINIT skill id; zero means empty"
+usage = "Persistent four-skill row for each playable unit. CALCCC copies positive class_change_skill_awards into the first three slots after a promotion; ADDEXP compares the before/after row to report learned or replaced skills."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab8c7"
+name = "class_change_rule_script_ids"
+category = "data-table"
+type = "int[32]"
+value_domain = "packed SYS4 script ids; zero means unused"
+usage = "CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x6be"
 name = ""
 category = "ui-toggle"
@@ -1525,14 +1618,56 @@ depends_on = []
 
 [[global]]
 address = "0xab8e7"
-name = ""
-category = "story-flag"
+name = "class_change_selected_level"
+category = "unknown"
 type = "int"
-value_domain = "one of {0, 10, 15, 20, 25, 30, 35, 40}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 10, 15, 20, 25, 30, 35, 40]; writers=['CALCCC.BIN', 'CCINIT.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "-1 Lily form transition, 0 no promotion, otherwise selected threshold 10..90"
+usage = "CALCCC clears this accumulator before invoking the class-change rule scripts. Each eligible CCINIT rule replaces it only when its threshold is higher than the current selection; nonzero then signals CALCCC and ADDEXP to apply and report the chosen promotion."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab8e8"
+name = "class_change_deployment_cost_delta"
+category = "unknown"
+type = "int"
+value_domain = "nonnegative deployment-cost increment"
+usage = "Shared class-change output initialized by CALCCC and incremented by the selected CCINIT rule. CALCCC adds it to unit_deployment_cost_adjustments and ADDEXP reports the signed cost change."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab8e9"
+name = "class_change_stat_bonuses"
+category = "unknown"
+type = "int[14]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power", "10" = "movement", "11" = "max_hp", "12" = "max_sp", "13" = "max_fs" }
+value_domain = "nonnegative promotion deltas"
+usage = "Fourteen-cell class-change accumulator using the unit stat column order. CALCCC zeroes it, CCINIT adds the selected rule's bonuses, and CALCCC adds the result to unit_current_stats with per-column caps. EVOLVE separately clears it and calls CCINIT to preview the next Lily form's movement bonus."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab8f7"
+name = "class_change_skill_awards"
+category = "unknown"
+type = "int[4]"
+columns = { "0" = "skill_slot_1", "1" = "skill_slot_2", "2" = "skill_slot_3", "3" = "skill_slot_4" }
+value_domain = "SKINIT skill id; zero means no award"
+usage = "Four-cell class-change skill output. CALCCC zeroes the buffer, CCINIT writes awarded skill ids, and CALCCC copies positive values from the first three cells into unit_skill_ids before ADDEXP reports the changes."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xab8fb"
+name = "class_change_state_work"
+category = "unknown"
+type = "int[10]"
+columns = { "0" = "promotion_slot_1", "1" = "promotion_slot_2", "2" = "promotion_slot_3", "3" = "promotion_slot_4", "4" = "promotion_slot_5", "5" = "promotion_slot_6", "6" = "promotion_slot_7", "7" = "promotion_slot_8", "8" = "promotion_slot_9", "9" = "promotion_slot_10" }
+value_domain = "0 unapplied, 1 applied"
+usage = "Ten-cell working copy of the current unit's unit_class_change_state row. CCINIT sets the slot belonging to an awarded rule; CALCCC manages the block copy between this buffer and persistent per-unit state."
+source = "investigation"
+confidence = "high"
 
 [[global]]
 address = "0xaba5c"

@@ -375,6 +375,35 @@ object-linked placement data when present, difficulty and story gates, level rul
 weight, movement/battle routine rows, and `first_clear_only` replay gating. Raw footer metadata stays in
 `footer_arrays`, while its `semantic_fields` value is the copied row itself.
 
+### CCINIT conditional class-change rules (2026-07-23)
+
+CCINIT is not a parallel INIT database. It is a source-ordered program of 71 conditional promotion rules
+covering 33 EBINIT unit ids. Each rule tests `current_unit_id`, normally requires the unit's current level
+to meet a threshold, and requires one of ten persistent class-change slots to be clear. The rule then
+selects a level/title, adds a deployment-cost delta and fourteen-column stat bonuses, optionally awards
+SKINIT skills, and sets the applied slot. Sixty-nine rules award named titles; the two empty-title,
+level-independent rules are Lily's girl/adult form adjustments and are also queried directly by EVOLVE
+when it previews the next form's movement.
+
+CALCCC establishes the surrounding protocol. It clears the selection, cost, stat, and skill outputs,
+copies the current unit's ten persistent state cells into a working buffer, then call-scripts up to 32
+providers from `class_change_rule_script_ids`. Eligible rules retain the highest selected level. CALCCC
+copies the successful title to `unit_class_titles`, adds the cost and stat outputs to persistent unit
+state with stat caps, installs positive skill awards into the first three skill slots, persists the
+updated applied-state row, and reveals the awarded skills. ADDEXP calls CALCCC after level growth and
+uses the same outputs to construct title, cost, and learned/replaced-skill notifications.
+
+`extract_init.py` detects this fifth shape as `rules` and writes `build/data/CCINIT.json`. Each source-order
+record keeps its bytecode guard offset and raw output keys alongside `unit_id`/EBINIT `unit_name`,
+`minimum_level`, zero-based `class_change_slot_index`, `title`, named `stat_bonuses`,
+`deployment_cost_delta`, joined one-based `skill_awards`, and `state_flag_indices_set`. The common
+`field_semantics`/`semantic_fields` join resolves the
+raw title, selected-level, cost, stat, skill, and state-work addresses through `vm-map/globals.toml`;
+the raw keys remain provenance. The shipped profile reports 69 titled rules, two level-independent rules,
+30 skill awards, three used promotion slots, and 19 populated output fields. The underlying input,
+working, and persistent globals are now named there as one coherent class-change ABI rather than as
+unrelated addresses.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -419,13 +448,12 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, the confirmed EBINIT row layouts, and
-   STINIT's mixed stage records now have machine-readable investigation surfaces, including joined object
-   placements and enemy spawns. STINIT's universal object schedule, consumer-proven tagged payload
-   families, faction-gated hazards/barriers, initialized object states, OBINIT definition join, and
-   first-clear enemy gate are decoded, and its last three populated tagged cells are proven ignored by the
-   type-27 special-spawn path. Isolate EBINIT's remaining voice/action
-   slots under the same rule. Preserve explicit joins and do not infer meaning from column position alone.
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, and CCINIT now have
+   machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
+   STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
+   and effects. Inventory RTINIT and SCINIT next, starting with whichever has the clearest repeated
+   structural boundary and runtime consumers. Preserve explicit joins and do not infer meaning from
+   column position alone.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

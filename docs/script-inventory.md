@@ -41,13 +41,13 @@ in the root: `SYS4INI.BIN` (272 KB) and `SYS4AB.BIN` (1.08 MB), for 51 root BINs
 disassembly target), `INITCONFIG`, `LOADCONFIG`, `CONFIG`, `TUNE`, `LOGO`, `OP`,
 `ED`, `TITLE`, `GAMESTART`, `GAMECLEAR`, `STAGECLEAR`
 
-### Data-table INIT scripts (likely static game data, not logic)
+### INIT data and rule scripts
 Large, table-like scripts — prime candidates for data extraction:
 - `STINIT` (579 KB) — stages/scenario tables
 - `EBINIT` (338 KB) — enemy battle data
 - `MPINIT` (330 KB) — maps
 - `SCINIT` (88 KB), `CGINIT` (79 KB — CG gallery), `ITINIT` (70 KB — items),
-  `RTINIT` (67 KB), `CCINIT` (41 KB), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
+  `RTINIT` (67 KB), `CCINIT` (41 KB — class-change rule program), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
   `BTANINIT` (105 KB — battle animations)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
@@ -81,6 +81,13 @@ as ignored authoring data after FIELD's dedicated spawn path proves it never rea
 assembles all 1,378 populated enemy slots
 across the same 66 stages, including unit/faction, placement, difficulty/story gates, level rules, weighted
 alternatives, difficulty-specific movement/battle routine sets, and 485 first-clear-only replay gates.
+
+CCINIT is the important exception to the static-table heuristic. Its 71 source-ordered branches are
+class-change rules over 33 EBINIT unit ids, not address-indexed database rows. CALCCC evaluates CCINIT
+through a 32-script provider list and applies the selected rule's title, deployment-cost delta, fourteen
+stat bonuses, skill awards, and persistent applied-state slot; EVOLVE directly queries the two untitled
+Lily form rules for movement preview. `extract_init.py` emits this as `rules` mode with raw guards and
+output addresses joined to EBINIT unit names, SKINIT skill names, and the curated class-change ABI.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

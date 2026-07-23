@@ -775,6 +775,16 @@ floor/cap/scaling, weighted selection, and three difficulty-specific movement/ba
 generated view assembles all 1,378 populated enemy slots across 66 stages, including 485 enemies suppressed
 after the stage's first clear.
 
+CCINIT is now the fifth extracted shape rather than a failed name-table parse. Its 71 conditional
+class-change rules cover 33 EBINIT units and expose unit/level/applied-slot predicates plus the selected
+title, deployment-cost delta, fourteen-stat bonuses, SKINIT skill awards, and state slot set. The shipped
+program contains 69 named promotions, 30 skill awards, and two level-independent empty-title Lily
+form-adjustment rules; EVOLVE directly queries those form effects while CALCCC/ADDEXP establish the normal
+promotion apply/report protocol. The input, working-output, and persistent destination globals are named
+as one class-change ABI in `vm-map/globals.toml`, and generated rules carry both raw address provenance and
+the shared `semantic_fields` join. The next data-semantics inventory target is RTINIT or SCINIT, chosen by
+which provides the clearer repeated boundary and consumer evidence.
+
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 
 - Remaining title/configuration/load/save branches.

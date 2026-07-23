@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5033 globals (197 curated, 4836 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5035 globals (210 curated, 4825 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -32,9 +32,14 @@
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
+| `0x6930` | unit_current_levels | high | investigation | Persistent current level by playable-unit id. CCINIT compares current_unit_id's row with each promotion threshold; ADDEXP increments and reports the same value. |
+| `0x69f8` | unit_current_stats | high | investigation | Persistent fourteen-stat row for each playable unit, using the same column order as unit_base_stats. CALCCC adds class_change_stat_bonuses to the current unit's row and clamps each result to the shared stat caps. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x74e8` | unit_skill_ids | high | investigation | Persistent four-skill row for each playable unit. CALCCC copies positive class_change_skill_awards into the first three slots after a promotion; ADDEXP compares the before/after row to report learned or replaced skills. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
+| `0x57357` | unit_deployment_cost_adjustments | high | investigation | Persistent per-unit delta added to unit_deployment_cost_base. CALCCC increments it by class_change_deployment_cost_delta, while SETCH, SETEN, ADDEXP, and deployment scripts include it when constructing or updating runtime command cost. |
+| `0x573bb` | unit_class_change_state | high | investigation | Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
 | `0x6e7fe` | unit_map_sprite_asset_ids | high | investigation | Five-context unit sprite-sheet table for 251 units. Even columns 0/2/4 are compact CP*AA-style presentations for normal, alternate-condition, and special-condition states; columns 1/3 are the matching normal/alternate full directional CP*AB sheets used by FIELD. INFOCH/INFOEN and DRAWENP reuse the compact representation. Columns: 0=normal_compact, 1=normal_directional, 2=alternate_compact, 3=alternate_directional, 4=special_compact. |
@@ -106,6 +111,7 @@
 | `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
+| `0xab8c7` | class_change_rule_script_ids | high | investigation | CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json. |
 | `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
 | `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
@@ -144,7 +150,6 @@
 | `0xd7` | — | low | auto-shape | array |
 | `0x1a4` | — | low | auto-shape | array |
 | `0x1a9` | — | low | auto-shape | array |
-| `0x27e` | — | low | auto-shape | array |
 | `0x2e2` | — | low | auto-shape | array |
 | `0x315` | — | low | auto-shape | array |
 | `0x41f` | — | low | auto-shape | array |
@@ -178,7 +183,6 @@
 | `0x6727` | — | low | auto-shape | array |
 | `0x6804` | — | low | auto-shape | array |
 | `0x6868` | — | low | auto-shape | array |
-| `0x6930` | — | low | auto-shape | array |
 | `0x6994` | — | low | auto-shape | array |
 | `0x7a6c` | — | low | auto-shape | array |
 | `0x204fb` | — | low | auto-shape | array |
@@ -206,7 +210,6 @@
 | `0x56b52` | — | low | auto-shape | array |
 | `0x56b85` | — | low | auto-shape | array |
 | `0x56f6d` | — | low | auto-shape | array |
-| `0x57357` | — | low | auto-shape | array |
 | `0x577a3` | — | low | auto-shape | array |
 | `0x5f0bb` | — | low | auto-shape | array |
 | `0x5f0ed` | — | low | auto-shape | array |
@@ -244,9 +247,6 @@
 | `0xaac96` | — | low | auto-shape | array |
 | `0xaacb4` | — | low | auto-shape | array |
 | `0xaacd2` | — | low | auto-shape | array |
-| `0xab8c7` | — | low | auto-shape | array |
-| `0xab8e9` | — | low | auto-shape | array |
-| `0xab8f7` | — | low | auto-shape | array |
 | `0xaba3b` | — | low | auto-shape | array |
 | `0xaba43` | — | low | auto-shape | array |
 | `0xaba4b` | — | low | auto-shape | array |
@@ -368,6 +368,7 @@
 |---|---|---|---|---|
 | `0x32f1` | difficulty_index | high | investigation | GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask. |
 | `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
+| `0x66715` | current_unit_id | high | investigation | Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state. |
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
 | `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
@@ -414,7 +415,6 @@
 | `0x665d6` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['MES.BIN', 'SBUNKI.BIN']. |
 | `0x665d7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [1, 3]; writers=['ADDSKILL.BIN', 'SBUNKI.BIN']. |
 | `0x66714` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against []; writers=['DEBUGBTL.BIN', 'FIELD.BIN', 'RTN_M051.BIN', 'RTN_M052.BIN']. |
-| `0xab8e7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 10, 15, 20, 25, 30, 35, 40]; writers=['CALCCC.BIN', 'CCINIT.BIN']. |
 | `0xaba5c` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']. |
 | `0xaba5e` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 5 scripts; compared against [2]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0xcc9f3` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 6 scripts; compared against []; writers=['CALCSCOPE.BIN']. |
@@ -428,6 +428,8 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
+| `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
 | `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
@@ -2543,7 +2545,6 @@
 | `0x26ae` | — | med | auto-shape | string-table (written by AFINIT) |
 | `0x26af` | — | med | auto-shape | string-table (written by AFINIT) |
 | `0x26b0` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26b4` | — | med | auto-shape | string-table (written by CCINIT) |
 | `0x26b6` | — | med | auto-shape | string-table (written by LAINIT) |
 | `0x26b7` | — | med | auto-shape | string-table (written by LAINIT) |
 | `0x26b8` | — | med | auto-shape | string-table (written by LAINIT) |
@@ -3651,6 +3652,11 @@
 | `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |
 | `0x204f4` | — | low | inference | Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes. |
 | `0x6249e` | — | low | inference | Graphics-subsystem state in the 0x624xx gfx-object range (set via `mov 0x6249e,<n>` alongside `mov 0x62450,<slot>`). Likely a draw/slot parameter, NOT a story flag. Branch-read in 78 scenes. |
+| `0xab8e7` | class_change_selected_level | high | investigation | CALCCC clears this accumulator before invoking the class-change rule scripts. Each eligible CCINIT rule replaces it only when its threshold is higher than the current selection; nonzero then signals CALCCC and ADDEXP to apply and report the chosen promotion. |
+| `0xab8e8` | class_change_deployment_cost_delta | high | investigation | Shared class-change output initialized by CALCCC and incremented by the selected CCINIT rule. CALCCC adds it to unit_deployment_cost_adjustments and ADDEXP reports the signed cost change. |
+| `0xab8e9` | class_change_stat_bonuses | high | investigation | Fourteen-cell class-change accumulator using the unit stat column order. CALCCC zeroes it, CCINIT adds the selected rule's bonuses, and CALCCC adds the result to unit_current_stats with per-column caps. EVOLVE separately clears it and calls CCINIT to preview the next Lily form's movement bonus. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0xab8f7` | class_change_skill_awards | high | investigation | Four-cell class-change skill output. CALCCC zeroes the buffer, CCINIT writes awarded skill ids, and CALCCC copies positive values from the first three cells into unit_skill_ids before ADDEXP reports the changes. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
+| `0xab8fb` | class_change_state_work | high | investigation | Ten-cell working copy of the current unit's unit_class_change_state row. CCINIT sets the slot belonging to an awarded rule; CALCCC manages the block copy between this buffer and persistent per-unit state. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x15261c` | battle_hit_result | high | investigation | CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path. |
 | `0x15261d` | battle_hp_delta | high | investigation | CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling. |
 | `0x84a` | — | high | auto-shape | unit-name-table |
@@ -3667,9 +3673,7 @@
 | `0x3239` | — | med | auto-shape | record-table[stride 3] |
 | `0x32f0` | — | med | auto-shape | current-entity-index? |
 | `0x3ebe` | — | med | auto-shape | record-table[stride 10] |
-| `0x69f8` | — | med | auto-shape | record-table[stride 14] |
 | `0x6f70` | — | med | auto-shape | record-table[stride 14] |
-| `0x74e8` | — | med | auto-shape | record-table[stride 4] |
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
 | `0x20543` | — | med | auto-shape | record-table[stride 27] |
 | `0x341ab` | — | med | auto-shape | record-table[stride 53] |
@@ -3692,7 +3696,6 @@
 | `0x53ef7` | — | med | auto-shape | record-table[stride 8] |
 | `0x56738` | — | med | auto-shape | record-table[stride 20] |
 | `0x57356` | — | med | auto-shape | current-entity-index? |
-| `0x573bb` | — | med | auto-shape | record-table[stride 10] |
 | `0x62436` | — | low | auto-shape | index/counter? |
 | `0x62450` | — | low | auto-shape | index/counter? |
 | `0x62ccb` | — | low | auto-shape | index/counter? |
@@ -5003,7 +5006,6 @@
 | `0x64cde` | — | med | auto-shape | cg-gallery-field |
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x66713` | — | low | auto-shape | index/counter? |
-| `0x66715` | — | med | auto-shape | current-entity-index? |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0xaac76` | — | low | auto-shape | index/counter? |
