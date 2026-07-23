@@ -493,9 +493,16 @@ UNIT_STAT_COLUMNS = (
 )
 
 MESSAGE_TABLES = {
+    "EBINIT": "EIMES",
     "ITINIT": "ITMES",
     "SKINIT": "SKMES",
+    "VIINIT": "VIMES",
 }
+
+VOCABULARY_NAME_ARRAY_BASE = 0x463B
+VOCABULARY_RECORD_TABLE_BASE = 0x15A2A9
+VOCABULARY_RECORD_STRIDE = 3
+VOCABULARY_RECORD_SPAN = 200
 
 
 def resolve(name: str) -> Path:
@@ -1101,6 +1108,70 @@ def extract_name(scr):
                      "record_span": record_span,
                      "record_field_columns": record_columns,
                      "desc_array_bases": {k: f"0x{v:x}" for k, v in sorted(desc_bases.items())}}
+
+
+def extract_vocabulary(scr):
+    """Extract VIINIT's sparse glossary names and pre-name row-table writes."""
+    records = []
+    by_id = {}
+    for ins in scr.instructions:
+        if (
+            ins.opcode != SET_STRING
+            or len(ins.args) < 2
+            or ins.args[0][0] != T_GLOBAL_STRING
+        ):
+            continue
+        record_id = ins.args[0][1] - VOCABULARY_NAME_ARRAY_BASE
+        if not (1 <= record_id < VOCABULARY_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: glossary name outside reserved id span: "
+                f"0x{ins.args[0][1]:x}"
+            )
+        text = scr.strings.get(ins.args[1][1], (None,))[0]
+        record = {
+            "id": record_id,
+            "name": text,
+            "fields": {},
+            "record_fields": {},
+        }
+        records.append(record)
+        by_id[record_id] = record
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        relative = destination - VOCABULARY_RECORD_TABLE_BASE
+        if not (0 <= relative < VOCABULARY_RECORD_SPAN * VOCABULARY_RECORD_STRIDE):
+            raise ValueError(
+                f"{scr.path.name}: unexpected integer write 0x{destination:x}"
+            )
+        record_id, column = divmod(relative, VOCABULARY_RECORD_STRIDE)
+        if record_id not in by_id:
+            raise ValueError(
+                f"{scr.path.name}: integer write for unnamed glossary id {record_id}"
+            )
+        _store_unique(
+            by_id[record_id]["record_fields"],
+            (
+                f"0x{VOCABULARY_RECORD_TABLE_BASE:x}/"
+                f"{VOCABULARY_RECORD_STRIDE}/{column}"
+            ),
+            value,
+            record_id,
+        )
+
+    record_columns = sorted({
+        key for record in records for key in record["record_fields"]
+    }, key=lambda key: tuple(int(part, 0) for part in key.split("/")))
+    return records, {
+        "name_array_base": f"0x{VOCABULARY_NAME_ARRAY_BASE:x}",
+        "name_write_base": f"0x{VOCABULARY_NAME_ARRAY_BASE + 1:x}",
+        "first_record_id": 1,
+        "record_span": VOCABULARY_RECORD_SPAN,
+        "record_field_columns": record_columns,
+    }
 
 
 @cache
@@ -1914,6 +1985,8 @@ def main() -> int:
         "dispatch": extract_dispatch,
         "banked": extract_banked,
     }[mode]
+    if mode == "name" and name == "VIINIT":
+        extractor = extract_vocabulary
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]

@@ -115,7 +115,13 @@ instantiated steps to join.
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill
 text), `CIMES` (15 KB), `MAMES`, `INFOMES`, `MES` — where most translatable text
-outside scenes lives.
+outside scenes lives. The generated message join covers ITMES's 287 item records, SKMES's 131 skill
+records, VIMES's complete 65-topic VIINIT glossary, and EIMES's 192 sparse EBINIT enemy-commentary
+records. ITMES/SKMES use fallthrough message bodies; VIMES/EIMES place all guards first and branch to
+later bodies. VIMES records retain title plus multiline description, while EIMES's untitled two-line
+records expose `summary` and `strategy`. CIMES has the same branch-target dispatcher shape and is the
+next unjoined message table; the smaller MAMES/INFOMES/MES scripts need separate structural
+classification.
 
 ### Battle system
 `BTL` (61 KB — main battle loop), `BTRTN`, `ROUND`, `AIM`, `ATSEEK`, `MVSEEK`,
@@ -141,7 +147,7 @@ outside scenes lives.
 
 ### Menus / UI / meta
 `MENU`, `CHMENU` (69 KB — character menu), `INFO`/`INFOAF`/`INFOCH`/`INFOEN`/
-`INFOIT`/`INFOVO` (info panels: characters, enemies, items, voices), `SAVE` (40 KB),
+`INFOIT`/`INFOVO` (info panels: characters, enemies, items, glossary/help topics), `SAVE` (40 KB),
 `HISTORY`, `HIDEWIN`, `CLOSE`, `INPUTNAME` (28 KB), `CGMODE` (24 KB — gallery),
 `MMODE` (music mode), `HMODE` (22 KB — scene replay)
 

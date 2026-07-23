@@ -32,6 +32,14 @@ import sys4load
 GLOBAL_OPERAND_TYPES = {3, 4, 5, 6, 8}
 
 
+def message_heading_body(message: dict) -> tuple[str, str]:
+    """Return presentation-neutral heading/body text for supported MES layouts."""
+    return (
+        message.get("title", message.get("summary", "")),
+        message.get("description", message.get("strategy", "")),
+    )
+
+
 def load_table(name: str) -> dict:
     path = paths.BUILD / "data" / f"{name}.json"
     if not path.exists():
@@ -76,7 +84,8 @@ def profile_columns(data: dict) -> list[dict]:
                 **extra,
             }
             if message := record.get("message"):
-                example["message_description"] = message.get("description", "")
+                _, body = message_heading_body(message)
+                example["message_description"] = body
             examples[key].append(example)
 
     for record in records:
@@ -264,24 +273,30 @@ def profile_messages(data: dict) -> dict:
     with_furigana = [
         record for record in with_message if record["message"].get("furigana")
     ]
+    examples = []
+    for record in with_message[:5]:
+        heading, body = message_heading_body(record["message"])
+        examples.append({
+            "id": record["id"],
+            "name": record.get("name", ""),
+            "title": heading,
+            "description": body,
+            "message_fields": {
+                key: record["message"][key]
+                for key in ("title", "description", "summary", "strategy")
+                if key in record["message"]
+            },
+        })
     return {
         "population": len(with_message),
         "coverage": len(with_message) / len(records) if records else 0.0,
         "furigana_records": len(with_furigana),
-        "examples": [
-            {
-                "id": record["id"],
-                "name": record.get("name", ""),
-                "title": record["message"]["title"],
-                "description": record["message"]["description"],
-            }
-            for record in with_message[:5]
-        ],
+        "examples": examples,
     }
 
 
 def find_message_matches(data: dict, pattern: str) -> list[dict]:
-    """Return records whose name/title/description matches a regular expression."""
+    """Return records whose name or supported message text matches a regex."""
     regex = re.compile(pattern, re.IGNORECASE)
     return [
         record
@@ -290,6 +305,8 @@ def find_message_matches(data: dict, pattern: str) -> list[dict]:
             record.get("name", ""),
             record.get("message", {}).get("title", ""),
             record.get("message", {}).get("description", ""),
+            record.get("message", {}).get("summary", ""),
+            record.get("message", {}).get("strategy", ""),
         ]))
     ]
 
@@ -314,7 +331,8 @@ def render_message_matches(data: dict, pattern: str) -> str:
             for key, value in sorted(fields.items())
         )
         name = record.get("name", "").replace("|", "\\|")
-        description = record.get("message", {}).get("description", "").replace("|", "\\|")
+        _, body = message_heading_body(record.get("message", {}))
+        description = body.replace("|", "\\|")
         lines.append(
             f"| {record['id']} | {name} | {description} | {rendered_fields} |"
         )

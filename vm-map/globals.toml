@@ -243,6 +243,73 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x463b"
+name = "glossary_topic_titles"
+category = "string-table"
+type = "string[200]"
+value_domain = "VIINIT player-facing glossary title indexed by topic id; 65 populated shipped ids"
+usage = "VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15a2a8", "0x15a2a9"]
+
+[[global]]
+address = "0x15a2a8"
+name = "current_glossary_topic_id"
+category = "index-pointer"
+type = "int"
+value_domain = "VIINIT glossary topic id in 1..199; shipped populated ids end at 120"
+usage = "INFOVO's selected glossary/help topic. It indexes the VIINIT title and presentation arrays, then VIMES compares it against all 65 shipped topic ids to dispatch the full player-facing explanation."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x463b", "0x15a2a9"]
+
+[[global]]
+address = "0x15a2a9"
+name = "glossary_topic_unlock_seen_decision_ids"
+category = "data-table"
+type = "int[200][3]"
+columns = { "0" = "unlock_seen_decision_1", "1" = "unlock_seen_decision_2", "2" = "unlock_seen_decision_3" }
+value_domain = "one-based scene decision id; zero means no prerequisite in that slot"
+usage = "VIINIT's three unlock prerequisites per glossary topic. INFOVO subtracts one from each positive value and exposes the topic when any referenced scene_decision_seen_flags cell is set; debug modes expose the same populated topics unconditionally."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5f0ed", "0x15a2a8"]
+
+[[global]]
+address = "0x5f0ed"
+name = "scene_decision_seen_flags"
+category = "data-table"
+type = "int[10000]"
+value_domain = "mostly {0,1}, indexed by SCJUMP decision id"
+usage = "Persistent seen-state for progression decisions. Numbered scene scripts set the current scjump_decision_out cell after playback and synchronize it through the persistence opcode; INFOVO uses VIINIT's one-based prerequisites to unlock glossary topics."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62ccf", "0x15a2a9"]
+
+[[global]]
+address = "0x56b85"
+name = "enemy_encyclopedia_revealed_flags"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0 hidden; nonzero encountered/revealed, indexed by EBINIT unit id"
+usage = "Persistent enemy-information reveal state. BTL marks both participating unit definitions as revealed and synchronizes their cells; INFOEN masks unrevealed unit names and details while still listing EBINIT rows enabled by unit_enemy_info_listed."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x712f6", "0x15a759"]
+
+[[global]]
+address = "0x15a759"
+name = "current_enemy_encyclopedia_unit_id"
+category = "index-pointer"
+type = "int"
+value_domain = "EBINIT unit definition id"
+usage = "INFOEN's selected enemy-encyclopedia unit id. It indexes EBINIT presentation and reveal arrays, seeds a temporary runtime entity for stat display, and EIMES compares it against 192 sparse unit ids to dispatch summary and strategy lines."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x56b85", "0x712f6"]
+
+[[global]]
 address = "0xa6e5a"
 name = "skill_sort_key"
 category = "data-table"

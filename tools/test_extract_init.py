@@ -88,6 +88,22 @@ def test_real_name_tables() -> None:
     check(object_by_id[28]["name"] == "カード取得",
           "OBINIT object ids provide authoritative STINIT type labels")
 
+    vocabulary, vocabulary_meta = extract_init.extract_vocabulary(
+        sys4load.load(scripts["VIINIT.BIN"])
+    )
+    vocabulary_by_id = {record["id"]: record for record in vocabulary}
+    check(
+        vocabulary_meta["record_span"] == 200
+        and len(vocabulary) == 65
+        and vocabulary[-1]["id"] == 120,
+        "VIINIT extracts 65 sparse glossary topics from its 200-row table",
+    )
+    check(
+        vocabulary_by_id[1]["name"] == "【迷宮】占有率"
+        and vocabulary_by_id[1]["record_fields"]["0x15a2a9/3/0"] == 201,
+        "VIINIT associates pre-name unlock writes with the correct topic",
+    )
+
 
 def test_static_negative_write() -> None:
     class Instruction:
@@ -561,10 +577,12 @@ def test_real_routine_banks() -> None:
 def test_real_message_tables() -> None:
     scripts = paths.scripts()
     expected = {
-        "ITMES.BIN": (0x8C877, 287),
-        "SKMES.BIN": (0xA6E59, 131),
+        "ITMES.BIN": (0x8C877, 287, "fallthrough"),
+        "SKMES.BIN": (0xA6E59, 131, "fallthrough"),
+        "VIMES.BIN": (0x15A2A8, 65, "branch-target"),
+        "EIMES.BIN": (0x15A759, 192, "branch-target"),
     }
-    for name, (selector, count) in expected.items():
+    for name, (selector, count, dispatch_layout) in expected.items():
         records, meta = extract_message_table.extract_messages(
             sys4load.load(scripts[name])
         )
@@ -575,6 +593,8 @@ def test_real_message_tables() -> None:
               f"{name}: every dispatch guard yields a message")
         check(len({record['id'] for record in records}) == len(records),
               f"{name}: message ids are unique")
+        check(meta["dispatch_layout"] == dispatch_layout,
+              f"{name}: recognizes its {dispatch_layout} dispatch layout")
 
     item_messages, _ = extract_message_table.extract_messages(
         sys4load.load(scripts["ITMES.BIN"])
@@ -598,6 +618,27 @@ def test_real_message_tables() -> None:
     check(skills[1]["description"] == "　床のない地形を移動可能になる",
           "SKMES skill 1 keeps its player-facing behavior")
 
+    vocabulary_messages, vocabulary_meta = extract_message_table.extract_messages(
+        sys4load.load(scripts["VIMES.BIN"])
+    )
+    vocabulary = {record["id"]: record for record in vocabulary_messages}
+    check(vocabulary[1]["title"] == "『【迷宮】占有率』"
+          and "各勢力の占領度合" in vocabulary[1]["description"],
+          "VIMES follows branch targets and reconstructs glossary help text")
+    check(vocabulary_meta["message_layout"] == "title-description",
+          "VIMES retains the title/description message layout")
+
+    enemy_messages, enemy_meta = extract_message_table.extract_messages(
+        sys4load.load(scripts["EIMES.BIN"])
+    )
+    enemies = {record["id"]: record for record in enemy_messages}
+    check(enemies[101]["summary"] == "高い能力を秘めた隣国の姫騎士"
+          and enemies[101]["strategy"] == "初遭遇時にはまず勝てない",
+          "EIMES exposes its two lines as enemy summary and strategy")
+    check(enemy_meta["message_layout"] == "enemy-commentary"
+          and "title" not in enemies[101],
+          "EIMES does not mislabel its first commentary line as a title")
+
 
 def test_message_join() -> None:
     scripts = paths.scripts()
@@ -620,6 +661,35 @@ def test_message_join() -> None:
         joined[prefix] = {record["id"]: record for record in records}
     check(joined["IT"][1]["message"]["description"] == expected["IT"][1],
           "INIT/MES join uses the shared runtime id")
+
+    vocabulary, _ = extract_init.extract_vocabulary(
+        sys4load.load(scripts["VIINIT.BIN"])
+    )
+    vocabulary_meta = extract_init.join_messages(
+        vocabulary, sys4load.load(scripts["VIMES.BIN"])
+    )
+    check(
+        vocabulary_meta["joined_count"] == 65
+        and not vocabulary_meta["init_ids_without_message"]
+        and not vocabulary_meta["message_ids_without_init"],
+        "VIINIT and VIMES form a complete 65-topic runtime-id join",
+    )
+
+    units, _ = extract_init.extract_name(sys4load.load(scripts["EBINIT.BIN"]))
+    enemy_meta = extract_init.join_messages(
+        units, sys4load.load(scripts["EIMES.BIN"])
+    )
+    unit_by_id = {record["id"]: record for record in units}
+    check(
+        enemy_meta["joined_count"] == 192
+        and len(enemy_meta["init_ids_without_message"]) == 85
+        and not enemy_meta["message_ids_without_init"],
+        "EIMES joins 192 sparse enemy-commentary rows to EBINIT",
+    )
+    check(
+        unit_by_id[101]["message"]["strategy"] == "初遭遇時にはまず勝てない",
+        "EBINIT records expose EIMES strategy text by unit id",
+    )
 
 
 def test_field_semantics() -> None:

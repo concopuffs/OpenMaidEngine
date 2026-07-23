@@ -728,13 +728,21 @@ Its linked-table shapes are 18 SKINIT and 82 EBINIT populated columns. The next 
 state flags, per-action unlock requirements, SCJUMP event ids, normal/brainwashed unit variants, and SALLY's
 per-unit bonus item. Combat tracing also names the shared column-8 item/skill modifier as critical chance.
 
-The message-table tranche adds a reusable extractor for global-id dispatch chains and joins player-facing
-ITMES/SKMES text back to INIT records. All 287 item ids and all 131 skill ids match exactly in both
-directions. Each joined message retains its rendered title, richer description, furigana annotations, and
-dispatch offset independently of INIT's shorter effect label; generated profiles report complete coverage.
-The dispatch keys also establish `current_item_id` and `current_skill_id` as high-confidence shared index
-slots. This makes message/field correlation the next evidence source for the remaining sparse item and skill
-columns.
+The message-table tranche adds a reusable extractor for both shipped global-id control-flow layouts and
+joins player-facing ITMES/SKMES/VIMES/EIMES text back to INIT records. All 287 item ids, 131 skill ids,
+and 65 glossary topic ids match exactly in both directions; all 192 sparse EIMES ids resolve to EBINIT
+unit definitions. Joined records retain dispatch and message-body offsets, rendered text, and furigana.
+Title-bearing tables expose title/description, while EIMES preserves its untitled lines as enemy summary
+and strategy. The dispatch keys establish `current_item_id`, `current_skill_id`,
+`current_glossary_topic_id`, and `current_enemy_encyclopedia_unit_id` as high-confidence shared index
+slots.
+
+VIINIT is now extracted as a sparse 200-by-3 glossary definition table: 65 populated names, one required
+one-based seen-scene decision for every topic, and a second alternative prerequisite for thirteen topics.
+INFOVO evaluates those prerequisites against persistent scene-decision seen flags before listing a topic.
+INFOEN likewise gates EBINIT's enabled enemy-information rows through persistent encounter/reveal flags.
+The generated VIINIT profile reports 65/65 VIMES coverage, while EBINIT reports 192/277 EIMES coverage;
+the remaining EBINIT rows are valid player/unused unit definitions rather than missing EIMES records.
 
 The follow-up correlation pass makes that evidence directly queryable with
 `init_table_profile.py --message-query REGEX` and moves confirmed item/skill row-column meanings into

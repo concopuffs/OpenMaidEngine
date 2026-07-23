@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5039 globals (256 curated, 4783 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5041 globals (262 curated, 4779 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -59,8 +59,10 @@
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
 | `0x56738` | entity_battle_routine_random_rolls | high | investigation | Per-runtime-entity battle-step random rolls. FIELD and BTL fill every active entity's twenty cells with random-modulo-100; BTRTN executes a step when the matching roll is below battle_routine_activation_percents. |
 | `0x56b20` | entity_patrol_waypoint_indices | high | investigation | RTN_M011 compares each step's one-based waypoint_ordinal minus one with the current entity's value. Reaching the selected destination advances this value modulo the largest RTN_M011 waypoint ordinal in the routine set. |
+| `0x56b85` | enemy_encyclopedia_revealed_flags | high | investigation | Persistent enemy-information reveal state. BTL marks both participating unit definitions as revealed and synchronizes their cells; INFOEN masks unrevealed unit names and details while still listing EBINIT rows enabled by unit_enemy_info_listed. |
 | `0x57357` | unit_deployment_cost_adjustments | high | investigation | Persistent per-unit delta added to unit_deployment_cost_base. CALCCC increments it by class_change_deployment_cost_delta, while SETCH, SETEN, ADDEXP, and deployment scripts include it when constructing or updating runtime command cost. |
 | `0x573bb` | unit_class_change_state | high | investigation | Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
+| `0x5f0ed` | scene_decision_seen_flags | high | investigation | Persistent seen-state for progression decisions. Numbered scene scripts set the current scjump_decision_out cell after playback and synchronize it through the persistence opcode; INFOVO uses VIINIT's one-based prerequisites to unlock glossary topics. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
 | `0x6dc46` | unit_status_art_asset_ids | high | investigation | Three-variant status/menu illustration table for 25 principal characters. The ids resolve to 456x420 CS character art; DRAWCHP selects column 0 above 50% HP, column 1 at 26..50%, and column 2 at 25% or below, then loads the art into the status-panel texture slot. Columns: 0=healthy, 1=wounded, 2=critical. |
 | `0x6e7fe` | unit_map_sprite_asset_ids | high | investigation | Five-context unit sprite-sheet table for 251 units. Even columns 0/2/4 are compact CP*AA-style presentations for normal, alternate-condition, and special-condition states; columns 1/3 are the matching normal/alternate full directional CP*AB sheets used by FIELD. INFOCH/INFOEN and DRAWENP reuse the compact representation. Columns: 0=normal_compact, 1=normal_directional, 2=alternate_compact, 3=alternate_directional, 4=special_compact. |
@@ -191,6 +193,7 @@
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
+| `0x15a2a9` | glossary_topic_unlock_seen_decision_ids | high | investigation | VIINIT's three unlock prerequisites per glossary topic. INFOVO subtracts one from each positive value and exposes the topic when any referenced scene_decision_seen_flags cell is set; debug modes expose the same populated topics unconditionally. Columns: 0=unlock_seen_decision_1, 1=unlock_seen_decision_2, 2=unlock_seen_decision_3. |
 | `0x5` | — | low | auto-shape | array |
 | `0xd2` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -223,7 +226,6 @@
 | `0x4315` | — | low | auto-shape | array |
 | `0x4379` | — | low | auto-shape | array |
 | `0x45d7` | — | low | auto-shape | array |
-| `0x463b` | — | low | auto-shape | array |
 | `0x671c` | — | low | auto-shape | array |
 | `0x671f` | — | low | auto-shape | array |
 | `0x6727` | — | low | auto-shape | array |
@@ -248,11 +250,9 @@
 | `0x55e3b` | — | low | auto-shape | array |
 | `0x56223` | — | low | auto-shape | array |
 | `0x56b52` | — | low | auto-shape | array |
-| `0x56b85` | — | low | auto-shape | array |
 | `0x56f6d` | — | low | auto-shape | array |
 | `0x577a3` | — | low | auto-shape | array |
 | `0x5f0bb` | — | low | auto-shape | array |
-| `0x5f0ed` | — | low | auto-shape | array |
 | `0x617fe` | — | low | auto-shape | array |
 | `0x61be6` | — | low | auto-shape | array |
 | `0x61c4a` | — | low | auto-shape | array |
@@ -304,16 +304,6 @@
 | `0xe6ae0` | — | low | auto-shape | array |
 | `0xe6c2a` | — | low | auto-shape | array |
 | `0xe6c48` | — | low | auto-shape | array |
-| `0xe6c5e` | — | low | auto-shape | array |
-| `0xe6cc2` | — | low | auto-shape | array |
-| `0xe6d26` | — | low | auto-shape | array |
-| `0xe6d8a` | — | low | auto-shape | array |
-| `0xe6e52` | — | low | auto-shape | array |
-| `0xe6eb6` | — | low | auto-shape | array |
-| `0xe6f1a` | — | low | auto-shape | array |
-| `0xe6f7e` | — | low | auto-shape | array |
-| `0xe710e` | — | low | auto-shape | array |
-| `0xe7172` | — | low | auto-shape | array |
 | `0xe7305` | — | low | auto-shape | array |
 | `0xe730e` | — | low | auto-shape | array |
 | `0xe73bb` | — | low | auto-shape | array |
@@ -415,6 +405,8 @@
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
 | `0x15261b` | battle_target_side_index | high | investigation | Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices. |
+| `0x15a2a8` | current_glossary_topic_id | high | investigation | INFOVO's selected glossary/help topic. It indexes the VIINIT title and presentation arrays, then VIMES compares it against all 65 shipped topic ids to dispatch the full player-facing explanation. |
+| `0x15a759` | current_enemy_encyclopedia_unit_id | high | investigation | INFOEN's selected enemy-encyclopedia unit id. It indexes EBINIT presentation and reveal arrays, seeds a temporary runtime entity for stat display, and EIMES compares it against 192 sparse unit ids to dispatch summary and strategy lines. |
 
 ## story-flag
 
@@ -472,6 +464,7 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
 | `0x276` | — | med | auto-shape | string-table (written by SC0130) |
 | `0x277` | — | med | auto-shape | string-table (written by SC0130) |
 | `0x278` | — | med | auto-shape | string-table (written by FIELD) |
@@ -5046,7 +5039,17 @@
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |
 | `0xccc93` | — | med | auto-shape | record-table[stride 53] |
 | `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
+| `0xe6c5e` | — | med | auto-shape | obinit-field |
+| `0xe6cc2` | — | med | auto-shape | obinit-field |
+| `0xe6d26` | — | med | auto-shape | obinit-field |
+| `0xe6d8a` | — | med | auto-shape | obinit-field |
+| `0xe6e52` | — | low | auto-shape | obinit-field? |
+| `0xe6eb6` | — | med | auto-shape | obinit-field |
+| `0xe6f1a` | — | low | auto-shape | obinit-field? |
+| `0xe6f7e` | — | low | auto-shape | obinit-field? |
 | `0xe6fe2` | — | med | auto-shape | record-table[stride 3] |
+| `0xe710e` | — | low | auto-shape | obinit-field? |
+| `0xe7172` | — | low | auto-shape | obinit-field? |
 | `0xe71d6` | — | med | auto-shape | record-table[stride 3] |
 | `0xe865d` | — | med | auto-shape | record-table[stride 7] |
 | `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
@@ -5078,7 +5081,6 @@
 | `0x158154` | — | med | auto-shape | record-table[stride 4] |
 | `0x1590f4` | — | med | auto-shape | record-table[stride 4] |
 | `0x15a097` | — | med | auto-shape | record-table[stride 4] |
-| `0x15a2a9` | — | med | auto-shape | record-table[stride 3] |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
 

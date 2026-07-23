@@ -58,6 +58,17 @@ def test_load_and_lint():
           "AI action-element eligibility state is curated")
     check(entries[0xcc9fe]["name"] == "healing_action_scope_masks",
           "AI healing-action eligibility state is curated")
+    check(entries[0x15a2a8]["name"] == "current_glossary_topic_id"
+          and entries[0x15a2a9]["name"]
+          == "glossary_topic_unlock_seen_decision_ids"
+          and entries[0x463b]["name"] == "glossary_topic_titles",
+          "VIINIT/VIMES glossary state is curated")
+    check(entries[0x15a759]["name"] == "current_enemy_encyclopedia_unit_id"
+          and entries[0x56b85]["name"]
+          == "enemy_encyclopedia_revealed_flags",
+          "EBINIT/EIMES enemy-encyclopedia state is curated")
+    check(entries[0x5f0ed]["name"] == "scene_decision_seen_flags",
+          "glossary prerequisite seen-state is curated")
     check(entries[0x20543]["name"] == "tile_faction_traversal_masks",
           "faction-specific tile traversal masks are curated")
     check(entries[0xaba64]["name"] == "stage_object_runtime_flags",

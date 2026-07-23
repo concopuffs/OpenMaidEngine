@@ -221,13 +221,27 @@ after the hit check and selects the critical-result state on success. Column 8 i
 for both `item_stat_modifiers` and `skill_combat_stat_deltas`; the skill descriptions and matching item
 columns also confirm evasion, magic defense, and speed.
 
-ITMES and SKMES are now joined back to their INIT records by a reusable id-dispatch extractor: all 287 item
-ids and all 131 skill ids match exactly. `init_table_profile.py --message-query REGEX` puts the complete
-player-facing description beside every populated field, which confirms the item/skill condition, resource,
-range, combat-stat, and restriction mappings without relying on column position. The same CHMENU trace
-identifies SKINIT `0xa70b2` as `skill_change_catalog_eligible`, distinguishes persistent
-`skill_acquired_flags` from broader `skill_info_revealed_flags`, and the explicit ITMES “female-only” record
-raises `item_sex_restriction_mask` to high confidence.
+ITMES, SKMES, VIMES, and EIMES are now joined back to their INIT records by a reusable id-dispatch
+extractor. It recognizes both the ITMES/SKMES fallthrough layout and the VIMES/EIMES layout whose compact
+guard block branches forward to separately stored message bodies. All 287 item ids, 131 skill ids, and 65
+glossary-topic ids match their INIT definitions exactly; all 192 sparse EIMES ids resolve to EBINIT unit
+definitions. `init_table_profile.py --message-query REGEX` puts the complete player-facing text beside
+every populated field, which confirms item/skill condition, resource, range, combat-stat, and restriction
+mappings without relying on column position. The same CHMENU trace identifies SKINIT `0xa70b2` as
+`skill_change_catalog_eligible`, distinguishes persistent `skill_acquired_flags` from broader
+`skill_info_revealed_flags`, and the explicit ITMES “female-only” record raises
+`item_sex_restriction_mask` to high confidence.
+
+VIINIT is a sparse 200-row glossary schema with 65 populated topic ids. Its global-string array supplies
+the list title, while a three-column row table supplies up to three one-based scene-decision prerequisites;
+the shipped data populates the first column for every topic and the second for thirteen topics. INFOVO
+subtracts one from each positive prerequisite and exposes a topic when any referenced
+`scene_decision_seen_flags` cell is set. VIMES supplies the full title/description body for every one of
+those 65 ids. EIMES instead supplies two untitled lines—`summary` and `strategy`—for 192 EBINIT unit ids.
+INFOEN lists the 183 definitions whose `unit_enemy_info_listed` field is set, masks details until the
+corresponding `enemy_encyclopedia_revealed_flags` cell is set, and uses the selected EBINIT id as EIMES's
+dispatch key. Nine authored EIMES boss variants are valid definitions but are not enabled in that shipped
+list.
 
 Confirmed row-column meanings are no longer prose-only. The relevant `globals.toml` entries carry a
 machine-readable `columns` map; `globals_build.py` preserves it in `build/globals.json`, and
@@ -631,11 +645,12 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
    banks are structurally decoded with every populated movement-parameter cell classified and all 1,043
-   shipped movement steps joined to provider behavior. With RTINIT's used-provider surface closed,
-   resume the remaining `*MES` writers and other reader-proven 2D tables; never assign one universal
-   meaning to a parameter bank whose meaning varies by provider selector.
-2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
-   and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
+   shipped movement steps joined to provider behavior. With RTINIT's used-provider surface closed and
+   ITMES/SKMES/VIMES/EIMES joined, resume the remaining `*MES` writers and other reader-proven 2D tables;
+   never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
+2. **Extend message-table joins beyond the completed ITMES/SKMES/VIMES/EIMES set**, starting with
+   CIMES's matching branch-target shape, then classify the smaller non-ID-dispatch message scripts and
+   other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context (e.g. RECOVER's 30-wide tables ↔ a
    status/recovery system). Static, medium effort.

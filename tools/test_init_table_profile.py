@@ -178,6 +178,28 @@ def main() -> int:
     rendered = profile.render_message_matches(fixture, "First")
     assert "| 1 | one | First |" in rendered
     assert "`test_record.zero` (`0x30/3/0`)=9" in rendered
+
+    enemy_fixture = {
+        "table": "ENEMY",
+        "records": [
+            {
+                "id": 101,
+                "name": "boss",
+                "message": {
+                    "summary": "Powerful knight",
+                    "strategy": "Avoid the first encounter",
+                },
+            }
+        ],
+    }
+    enemy_messages = profile.profile_messages(enemy_fixture)
+    assert enemy_messages["examples"][0]["title"] == "Powerful knight"
+    assert enemy_messages["examples"][0]["description"] == "Avoid the first encounter"
+    assert enemy_messages["examples"][0]["message_fields"] == {
+        "summary": "Powerful knight",
+        "strategy": "Avoid the first encounter",
+    }
+    assert profile.find_message_matches(enemy_fixture, "first encounter")
     print("all init_table_profile checks passed")
     return 0
 
