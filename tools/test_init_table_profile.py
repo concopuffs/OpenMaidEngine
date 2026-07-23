@@ -15,9 +15,11 @@ def main() -> int:
         "field_semantics": {
             "0x10": "test_parallel",
             "0x30/3/0": "test_record.zero",
+            "0x40/5/4": "test_names.level_5",
         },
         "records": [
             {"id": 1, "name": "one", "fields": {"0x10": 2, "0x20": 0},
+             "string_fields": {"0x40/5/4": "One5"},
              "record_fields": {"0x30/3/0": 9},
              "message": {"title": "One", "description": "First",
                          "furigana": [{"line": 0, "text": "One", "reading": "one"}]}},
@@ -41,6 +43,10 @@ def main() -> int:
     assert rows["0x30/3/0"]["stride"] == 3
     assert rows["0x30/3/0"]["semantic_name"] == "test_record.zero"
     assert rows["0x30/3/2"]["column"] == 2
+    assert rows["0x40/5/4"]["kind"] == "string-record-column"
+    assert rows["0x40/5/4"]["stride"] == 5
+    assert rows["0x40/5/4"]["column"] == 4
+    assert rows["0x40/5/4"]["semantic_name"] == "test_names.level_5"
 
     mixed_fixture = {
         "table": "MIXED",

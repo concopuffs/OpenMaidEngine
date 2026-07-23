@@ -2806,3 +2806,32 @@ line and optional annotation buffers. Their stable globals are curated in `vm-ma
 structural regressions protect the registry initialization, indirect dispatch, buffer reads, and cleanup.
 
 **Next:** return to reader-proven 2D tables, beginning with RECOVER's 30-wide status/recovery structures.
+
+## Data-semantics sidebar: ILINIT condition matrix and RECOVER ABI (2026-07-23)
+
+ILINIT is now a dedicated thirteen-record condition-definition schema inside the engine's reserved
+30-condition by five-level layout. The generated JSON preserves every one of its 228 integer writes and
+61 authored level-name strings, while adding a nested level view over duration, eleven-stat deltas, and
+HP/SP/FS deltas. Condition ids 1..11, 13, and 14 are defined; id 12 and ids 15..29 remain explicit reserved
+slots. Scalar metadata now identifies the effectiveness element, boss-immunity override, RECOVER policy,
+and display icon for each condition. All raw address/stride/column keys remain beside their canonical
+semantic joins.
+
+The runtime side is one coherent four-table ABI. `entity_condition_levels[50][30]` holds current levels,
+`entity_condition_baseline_levels[50][30]` is the equipment/passive minimum, and
+`entity_condition_remaining_turns[50][30]` uses -1 for permanent/baseline, zero for inactive, and positive
+turns for expiring effects. RECOVER first copies max HP/SP/FS from effective-stat columns 11..13 to the
+three current resources. It then scans all 30 condition ids; for the six ILINIT-policy conditions
+(charm, confusion, paralysis, poison, water-flow, and fear), it restores the current level to the passive
+baseline and writes -1 when that baseline remains or zero when fully cleared. The extractor validates
+those table bases, strides, loop bounds, and post-recovery CALCREVISE/DRAWCHP calls before publishing the
+join.
+
+Validation covers every ILINIT write, representative stat/resource matrices, the complete reserved id
+space, level-aware semantic projection, the resource restore mapping, and the four-table reset protocol.
+The global registry and generated reference now carry the condition id columns and all definition/runtime
+table meanings.
+
+**Next:** profile CNINIT as the next unresolved high-density name-mode table. Its current generic output
+has 32 records but 242 address-derived fields, making it the clearest candidate for another dedicated
+schema driven by reader-proven row/column ownership.

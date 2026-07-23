@@ -1365,6 +1365,156 @@ confidence = "high"
 depends_on = ["0x5231f"]
 
 [[global]]
+address = "0x25fa"
+name = "condition_level_names"
+category = "string-table"
+type = "string[30][5]"
+columns = { "0" = "level_1", "1" = "level_2", "2" = "level_3", "3" = "level_4", "4" = "level_5" }
+value_domain = "ILINIT-authored display strings for condition ids 1..11, 13, and 14"
+usage = "ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383"]
+
+[[global]]
+address = "0x52383"
+name = "entity_condition_levels"
+category = "data-table"
+type = "int[50][30]"
+columns = { "1" = "instant_death", "2" = "hp_drain", "3" = "sp_drain", "4" = "fs_drain", "5" = "curse", "6" = "charm", "7" = "confusion", "8" = "paralysis", "9" = "poison", "10" = "water_flow", "11" = "fear", "12" = "reserved", "13" = "regeneration", "14" = "exaltation" }
+value_domain = "condition level 0..5; zero means inactive"
+usage = "Per-runtime-entity current condition levels. ADDILLSUB applies signed level deltas, clamps the minimum to entity_condition_baseline_levels and the maximum to 5, and assigns condition duration. CALCREVISE, FIELD, combat, and UI consumers index the same ILINIT-defined 30-column condition id space."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52f3b", "0x5295f", "0xaacf0"]
+
+[[global]]
+address = "0x5295f"
+name = "entity_condition_remaining_turns"
+category = "data-table"
+type = "int[50][30]"
+columns = { "1" = "instant_death", "2" = "hp_drain", "3" = "sp_drain", "4" = "fs_drain", "5" = "curse", "6" = "charm", "7" = "confusion", "8" = "paralysis", "9" = "poison", "10" = "water_flow", "11" = "fear", "12" = "reserved", "13" = "regeneration", "14" = "exaltation" }
+value_domain = "-1 permanent/baseline, 0 inactive, positive remaining turns"
+usage = "Per-runtime-entity duration counters paired with entity_condition_levels. FIELD decrements positive counters and removes the condition when a counter reaches zero; DRAWENP displays negative values as infinity. RECOVER writes -1 when a recoverable condition retains an equipment/passive baseline and zero when it clears completely."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383", "0x52f3b"]
+
+[[global]]
+address = "0x52f3b"
+name = "entity_condition_baseline_levels"
+category = "data-table"
+type = "int[50][30]"
+columns = { "1" = "instant_death", "2" = "hp_drain", "3" = "sp_drain", "4" = "fs_drain", "5" = "curse", "6" = "charm", "7" = "confusion", "8" = "paralysis", "9" = "poison", "10" = "water_flow", "11" = "fear", "12" = "reserved", "13" = "regeneration", "14" = "exaltation" }
+value_domain = "equipment/passive condition level 0..5"
+usage = "Per-runtime-entity minimum condition levels supplied by equipment and passive effects. SETCH/SETEN populate the row from item_equipped_status_levels, ADDILLSUB cannot reduce current levels below it, CALCREVISE separates transient current levels from this baseline, and RECOVER restores eligible conditions to it."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383", "0x97c29"]
+
+[[global]]
+address = "0xaac76"
+name = "current_condition_id"
+category = "index-pointer"
+type = "int"
+value_domain = "condition id 1..14 in shipped scripts"
+usage = "Shared condition selector consumed by CALCILL, ADDILL, ADDILLSUB, DISARM, FIELD, and related condition handlers. It indexes the 30-column runtime condition rows and ILINIT definition arrays."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383"]
+
+[[global]]
+address = "0xaac77"
+name = "current_condition_delta_levels"
+category = "counter"
+type = "int"
+value_domain = "signed condition-level adjustment, commonly -5..5"
+usage = "Shared signed level delta passed to ADDILL/ADDILLSUB for current_condition_id. Positive values apply or strengthen a condition; negative values weaken/remove it subject to the equipment/passive baseline floor."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xaac76", "0x52383", "0x52f3b"]
+
+[[global]]
+address = "0xaac78"
+name = "condition_effectiveness_element_ids"
+category = "data-table"
+type = "int[30]"
+value_domain = "element id 11..17 for shipped condition definitions"
+usage = "ILINIT condition metadata. CALCILL uses the selected condition's value as the element-table column for its application-chance effectiveness calculation."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xaac76"]
+
+[[global]]
+address = "0xaac96"
+name = "condition_can_affect_bosses"
+category = "data-table"
+type = "int[30]"
+value_domain = "boolean; nonzero for HP/SP/FS drain, regeneration, and exaltation"
+usage = "ILINIT policy vector. CALCILL rejects a condition against a boss-class target when this cell is zero; nonzero cells bypass that boss immunity gate."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xaac76"]
+
+[[global]]
+address = "0xaacb4"
+name = "condition_cleared_by_recover"
+category = "data-table"
+type = "int[30]"
+value_domain = "boolean; shipped nonzero ids are 6..11"
+usage = "ILINIT recovery-policy vector. RECOVER and DISARM use it to identify charm, confusion, paralysis, poison, water-flow, and fear as removable conditions; RECOVER resets each eligible current level to its equipment/passive baseline."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383", "0x52f3b", "0x5295f"]
+
+[[global]]
+address = "0xaacd2"
+name = "condition_icon_ids"
+category = "data-table"
+type = "int[30]"
+value_domain = "condition icon id 1..10; zero means no icon"
+usage = "ILINIT display metadata. DRAWENP and FIELD use these ids to deduplicate active-condition indicators and select the corresponding status-icon atlas entry."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383"]
+
+[[global]]
+address = "0xaacf0"
+name = "condition_duration_turns_by_level"
+category = "data-table"
+type = "int[30][5]"
+columns = { "0" = "level_1_turns", "1" = "level_2_turns", "2" = "level_3_turns", "3" = "level_4_turns", "4" = "level_5_turns" }
+value_domain = "-1 permanent or a positive turn count"
+usage = "ILINIT's five-column duration row for each condition. ADDILLSUB indexes it by the resulting condition level minus one and stores the value in entity_condition_remaining_turns."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5295f", "0x52383"]
+
+[[global]]
+address = "0xaad86"
+name = "condition_stat_deltas"
+category = "data-table"
+type = "int[30][55]"
+columns = { "0" = "level_1_accuracy", "1" = "level_1_evasion", "2" = "level_1_physical_attack", "3" = "level_1_physical_defense", "4" = "level_1_magic_attack", "5" = "level_1_magic_defense", "6" = "level_1_speed", "7" = "level_1_luck", "8" = "level_1_critical_chance", "9" = "level_1_capture_power", "10" = "level_1_movement", "11" = "level_2_accuracy", "12" = "level_2_evasion", "13" = "level_2_physical_attack", "14" = "level_2_physical_defense", "15" = "level_2_magic_attack", "16" = "level_2_magic_defense", "17" = "level_2_speed", "18" = "level_2_luck", "19" = "level_2_critical_chance", "20" = "level_2_capture_power", "21" = "level_2_movement", "22" = "level_3_accuracy", "23" = "level_3_evasion", "24" = "level_3_physical_attack", "25" = "level_3_physical_defense", "26" = "level_3_magic_attack", "27" = "level_3_magic_defense", "28" = "level_3_speed", "29" = "level_3_luck", "30" = "level_3_critical_chance", "31" = "level_3_capture_power", "32" = "level_3_movement", "33" = "level_4_accuracy", "34" = "level_4_evasion", "35" = "level_4_physical_attack", "36" = "level_4_physical_defense", "37" = "level_4_magic_attack", "38" = "level_4_magic_defense", "39" = "level_4_speed", "40" = "level_4_luck", "41" = "level_4_critical_chance", "42" = "level_4_capture_power", "43" = "level_4_movement", "44" = "level_5_accuracy", "45" = "level_5_evasion", "46" = "level_5_physical_attack", "47" = "level_5_physical_defense", "48" = "level_5_magic_attack", "49" = "level_5_magic_defense", "50" = "level_5_speed", "51" = "level_5_luck", "52" = "level_5_critical_chance", "53" = "level_5_capture_power", "54" = "level_5_movement" }
+value_domain = "signed additive deltas"
+usage = "ILINIT's five-level by eleven-stat matrix for each condition. CALCREVISE indexes (condition level - 1) * 11 + stat column and adds the result to entity_effective_stats columns 0..10. Shipped rows populate curse, confusion, paralysis, and exaltation."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383", "0x4e11b"]
+
+[[global]]
+address = "0xab3f8"
+name = "condition_resource_deltas"
+category = "data-table"
+type = "int[30][15]"
+columns = { "0" = "level_1_hp", "1" = "level_1_sp", "2" = "level_1_fs", "3" = "level_2_hp", "4" = "level_2_sp", "5" = "level_2_fs", "6" = "level_3_hp", "7" = "level_3_sp", "8" = "level_3_fs", "9" = "level_4_hp", "10" = "level_4_sp", "11" = "level_4_fs", "12" = "level_5_hp", "13" = "level_5_sp", "14" = "level_5_fs" }
+value_domain = "signed per-turn HP/SP/FS deltas"
+usage = "ILINIT's five-level by three-resource matrix for each condition. FIELD applies the active row each turn; CALCDMG also consumes the HP/SP/FS drain condition rows during battle. Positive values restore/drain to the acting side as defined by the caller, while negative values are periodic damage or loss."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x52383", "0x4e085"]
+
+[[global]]
 address = "0x53e13"
 name = "entity_carried_item_ids"
 category = "data-table"

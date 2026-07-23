@@ -911,6 +911,97 @@ def test_message_join() -> None:
     )
 
 
+def test_condition_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["ILINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "name",
+        "ILINIT remains compatible with name-mode auto-detection",
+    )
+    records, meta = extract_init.extract_condition_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        list(by_id) == [*range(1, 12), 13, 14],
+        "ILINIT extracts all thirteen authored condition ids",
+    )
+    check(
+        meta["record_span"] == 30
+        and meta["level_count"] == 5
+        and meta["reserved_condition_ids"] == [12, *range(15, 30)],
+        "ILINIT exposes its complete 30-by-5 reserved layout",
+    )
+    check(
+        meta["static_write_count"] == 228
+        and meta["classified_static_write_count"] == 228,
+        "ILINIT classifies every static integer write",
+    )
+    check(
+        by_id[1]["name"] == "即死"
+        and by_id[2]["name"] == "ＨＰ吸"
+        and by_id[14]["condition"] == "exaltation",
+        "condition records preserve authored names and canonical ids",
+    )
+    check(
+        by_id[2]["string_fields"]["0x25fa/5/0"] == "ＨＰ吸1"
+        and by_id[2]["string_fields"]["0x25fa/5/4"] == "ＨＰ吸5",
+        "condition level names retain raw base/stride/column provenance",
+    )
+    check(
+        [level["duration_turns"] for level in by_id[6]["levels"]]
+        == [2, 3, 4, 5, 6]
+        and by_id[6]["fields"]["0xaacb4"] == 1
+        and by_id[6]["fields"]["0xaacd2"] == 10,
+        "charm exposes level durations, RECOVER policy, and icon id",
+    )
+    check(
+        by_id[5]["levels"][4]["stat_deltas"]["accuracy"] == -25
+        and by_id[14]["levels"][4]["stat_deltas"]["physical_attack"] == 10
+        and by_id[14]["levels"][4]["stat_deltas"]["physical_defense"] == -10,
+        "curse and exaltation expose their five-level stat matrices",
+    )
+    check(
+        by_id[9]["levels"][4]["resource_deltas"]["hp"] == -5
+        and by_id[13]["levels"][4]["resource_deltas"]["hp"] == 5,
+        "poison and regeneration expose opposing periodic HP deltas",
+    )
+
+    recovery = meta["recovery_protocol"]
+    check(
+        recovery["resource_restore"]["source_columns"]
+        == ["max_hp", "max_sp", "max_fs"]
+        and recovery["resource_restore"]["destination_columns"]
+        == ["current_hp", "current_sp", "current_fs"],
+        "RECOVER joins max-stat columns to current HP/SP/FS",
+    )
+    check(
+        recovery["condition_reset"]["current_level_table"] == "0x52383"
+        and recovery["condition_reset"]["baseline_level_table"] == "0x52f3b"
+        and recovery["condition_reset"]["remaining_turns_table"] == "0x5295f"
+        and recovery["condition_reset"]["recovery_policy_table"] == "0xaacb4",
+        "RECOVER publishes the four-table condition reset protocol",
+    )
+
+    semantics = extract_init.field_semantics(records)
+    check(
+        semantics["0xaacf0/5/4"]
+        == "condition_duration_turns_by_level.level_5_turns"
+        and semantics["0x25fa/5/4"] == "condition_level_names.level_5"
+        and semantics["0xaad86/55/46"]
+        == "condition_stat_deltas.level_5_physical_attack"
+        and semantics["0xab3f8/15/12"]
+        == "condition_resource_deltas.level_5_hp",
+        "ILINIT raw cells join to level-aware condition semantics",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[6]["semantic_fields"]["condition_cleared_by_recover"] == 1
+        and by_id[14]["semantic_fields"][
+            "condition_stat_deltas.level_5_physical_attack"
+        ] == 10,
+        "condition definitions retain raw addresses beside the semantic view",
+    )
+
+
 def test_field_semantics() -> None:
     scripts = paths.scripts()
     items, _ = extract_init.extract_name(sys4load.load(scripts["ITINIT.BIN"]))
@@ -1028,6 +1119,7 @@ if __name__ == "__main__":
     test_real_message_tables()
     test_message_infrastructure()
     test_message_join()
+    test_condition_definitions()
     test_field_semantics()
     if FAILS:
         raise SystemExit(f"{len(FAILS)} failed checks")

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5045 globals (277 curated, 4768 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5046 globals (290 curated, 4756 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -23,6 +23,7 @@
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
 | `0x665e2` | modal_annotation_count | high | investigation | Number of populated modal_annotation_texts entries. MES and SBUNKI iterate this many annotations and clear it on dismissal; no direct shipped producer was found. |
+| `0xaac77` | current_condition_delta_levels | high | investigation | Shared signed level delta passed to ADDILL/ADDILLSUB for current_condition_id. Positive values apply or strengthen a condition; negative values weaken/remove it subject to the equipment/passive baseline floor. |
 | `0xcc9f2` | usable_action_min_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's minimum range and widens it for usable offensive and healing skills. It is the lower bound shared by the offensive and healing action-scope tables. |
 | `0xcc9f3` | usable_action_max_range | high | investigation | CALCSCOPE initializes this from the equipped/default attack's maximum range and widens it for usable offensive and healing skills. ATSEEK bounds its action-range flood fill with this value; RTN_M051/052 and RTN_M061 use it as their upper scan bound. |
 | `0xe6c5d` | scjump_progress_d | med | inference | SCJUMP switch input (168 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
@@ -53,6 +54,9 @@
 | `0x522ed` | entity_faction_ids | high | investigation | Per-runtime-entity faction id. RTN_M007 restricts its injured-unit target to the acting entity's faction; MVSEEK mode 2 compares this value while masking active foreign-entity cells, and ordinary movement checks the acting faction's bit in tile passability masks. |
 | `0x5231f` | entity_tile_x | high | investigation | Per-runtime-entity map X coordinate. FIELD movement and occupancy logic maintain it; movement providers pair it with entity_tile_y and compare or route from the current tile. |
 | `0x52351` | entity_tile_y | high | investigation | Per-runtime-entity map Y coordinate paired with entity_tile_x. Values use the same stage map-space cell keys as STINIT object and enemy coordinates. |
+| `0x52383` | entity_condition_levels | high | investigation | Per-runtime-entity current condition levels. ADDILLSUB applies signed level deltas, clamps the minimum to entity_condition_baseline_levels and the maximum to 5, and assigns condition duration. CALCREVISE, FIELD, combat, and UI consumers index the same ILINIT-defined 30-column condition id space. Columns: 1=instant_death, 2=hp_drain, 3=sp_drain, 4=fs_drain, 5=curse, 6=charm, 7=confusion, 8=paralysis, 9=poison, 10=water_flow, 11=fear, 12=reserved, 13=regeneration, 14=exaltation. |
+| `0x5295f` | entity_condition_remaining_turns | high | investigation | Per-runtime-entity duration counters paired with entity_condition_levels. FIELD decrements positive counters and removes the condition when a counter reaches zero; DRAWENP displays negative values as infinity. RECOVER writes -1 when a recoverable condition retains an equipment/passive baseline and zero when it clears completely. Columns: 1=instant_death, 2=hp_drain, 3=sp_drain, 4=fs_drain, 5=curse, 6=charm, 7=confusion, 8=paralysis, 9=poison, 10=water_flow, 11=fear, 12=reserved, 13=regeneration, 14=exaltation. |
+| `0x52f3b` | entity_condition_baseline_levels | high | investigation | Per-runtime-entity minimum condition levels supplied by equipment and passive effects. SETCH/SETEN populate the row from item_equipped_status_levels, ADDILLSUB cannot reduce current levels below it, CALCREVISE separates transient current levels from this baseline, and RECOVER restores eligible conditions to it. Columns: 1=instant_death, 2=hp_drain, 3=sp_drain, 4=fs_drain, 5=curse, 6=charm, 7=confusion, 8=paralysis, 9=poison, 10=water_flow, 11=fear, 12=reserved, 13=regeneration, 14=exaltation. |
 | `0x53517` | entity_movement_routine_set_ids | high | investigation | Per-runtime-entity movement routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; MVRTN selects the current difficulty column and stores it in current_routine_set_id. |
 | `0x535ad` | entity_battle_routine_set_ids | high | investigation | Per-runtime-entity battle routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; BTRTN selects the current difficulty column and stores it in current_routine_set_id. |
 | `0x53643` | entity_movement_routine_progress | high | investigation | Per-runtime-entity movement-routine progress counters. FIELD clears all fifty rows, movement providers increment the current step, and MVRTN compares it with movement_routine_minimum_progress_counts before enabling a step. |
@@ -140,6 +144,13 @@
 | `0xaa8f2` | skill_proc_chance_percent | high | investigation | Probability for 14 passive skills. CALCDMG compares random-modulo 100 against this value; examples include Re-action 20, Double Action 100, Counter 10, and Resurrection 50. |
 | `0xaaa1e` | skill_battle_animation_id | high | investigation | Populated for 101 combat skills. BTL and CALCDMG place this value in the battle-animation selector before calling BTANINIT; most skills reuse their own id, while related skills deliberately share an animation and passive reactions use ids 801..808. |
 | `0xaab4a` | skill_handler_script_id | high | investigation | SKINIT field for all 131 skills. CHMENU and INFOIT look it up and pass it directly to call-script; packed id 0x31ca resolves to SKMES.BIN, the shared per-skill text/behavior dispatcher. |
+| `0xaac78` | condition_effectiveness_element_ids | high | investigation | ILINIT condition metadata. CALCILL uses the selected condition's value as the element-table column for its application-chance effectiveness calculation. |
+| `0xaac96` | condition_can_affect_bosses | high | investigation | ILINIT policy vector. CALCILL rejects a condition against a boss-class target when this cell is zero; nonzero cells bypass that boss immunity gate. |
+| `0xaacb4` | condition_cleared_by_recover | high | investigation | ILINIT recovery-policy vector. RECOVER and DISARM use it to identify charm, confusion, paralysis, poison, water-flow, and fear as removable conditions; RECOVER resets each eligible current level to its equipment/passive baseline. |
+| `0xaacd2` | condition_icon_ids | high | investigation | ILINIT display metadata. DRAWENP and FIELD use these ids to deduplicate active-condition indicators and select the corresponding status-icon atlas entry. |
+| `0xaacf0` | condition_duration_turns_by_level | high | investigation | ILINIT's five-column duration row for each condition. ADDILLSUB indexes it by the resulting condition level minus one and stores the value in entity_condition_remaining_turns. Columns: 0=level_1_turns, 1=level_2_turns, 2=level_3_turns, 3=level_4_turns, 4=level_5_turns. |
+| `0xaad86` | condition_stat_deltas | high | investigation | ILINIT's five-level by eleven-stat matrix for each condition. CALCREVISE indexes (condition level - 1) * 11 + stat column and adds the result to entity_effective_stats columns 0..10. Shipped rows populate curse, confusion, paralysis, and exaltation. Columns: 0=level_1_accuracy, 1=level_1_evasion, 2=level_1_physical_attack, 3=level_1_physical_defense, 4=level_1_magic_attack, 5=level_1_magic_defense, 6=level_1_speed, 7=level_1_luck, 8=level_1_critical_chance, 9=level_1_capture_power, 10=level_1_movement, 11=level_2_accuracy, 12=level_2_evasion, 13=level_2_physical_attack, 14=level_2_physical_defense, 15=level_2_magic_attack, 16=level_2_magic_defense, 17=level_2_speed, 18=level_2_luck, 19=level_2_critical_chance, 20=level_2_capture_power, 21=level_2_movement, 22=level_3_accuracy, 23=level_3_evasion, 24=level_3_physical_attack, 25=level_3_physical_defense, 26=level_3_magic_attack, 27=level_3_magic_defense, 28=level_3_speed, 29=level_3_luck, 30=level_3_critical_chance, 31=level_3_capture_power, 32=level_3_movement, 33=level_4_accuracy, 34=level_4_evasion, 35=level_4_physical_attack, 36=level_4_physical_defense, 37=level_4_magic_attack, 38=level_4_magic_defense, 39=level_4_speed, 40=level_4_luck, 41=level_4_critical_chance, 42=level_4_capture_power, 43=level_4_movement, 44=level_5_accuracy, 45=level_5_evasion, 46=level_5_physical_attack, 47=level_5_physical_defense, 48=level_5_magic_attack, 49=level_5_magic_defense, 50=level_5_speed, 51=level_5_luck, 52=level_5_critical_chance, 53=level_5_capture_power, 54=level_5_movement. |
+| `0xab3f8` | condition_resource_deltas | high | investigation | ILINIT's five-level by three-resource matrix for each condition. FIELD applies the active row each turn; CALCDMG also consumes the HP/SP/FS drain condition rows during battle. Positive values restore/drain to the acting side as defined by the caller, while negative values are periodic damage or loss. Columns: 0=level_1_hp, 1=level_1_sp, 2=level_1_fs, 3=level_2_hp, 4=level_2_sp, 5=level_2_fs, 6=level_3_hp, 7=level_3_sp, 8=level_3_fs, 9=level_4_hp, 10=level_4_sp, 11=level_4_fs, 12=level_5_hp, 13=level_5_sp, 14=level_5_fs. |
 | `0xab5ba` | attack_element_effectiveness_percent | high | investigation | AFINIT-authored element matchup table. Positive values make an action eligible in SETMVWORK and RTN_M051/052; CALCBTPARAM multiplies battle parameters by the selected percentage and handles negative values as special/immunity cases. |
 | `0xab8c7` | class_change_rule_script_ids | high | investigation | CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json. |
 | `0xaba64` | stage_object_runtime_flags | high | investigation | Per-current-stage object flags. RTN_M010 and RTN_M015 require bit 1 before considering Healing Feathers or Magic Pillars as movement targets; FIELD and object rendering maintain the broader type-dependent bitfield. |
@@ -287,10 +298,6 @@
 | `0x665d8` | — | low | auto-shape | array |
 | `0x8fb41` | — | low | auto-shape | array |
 | `0xa5eb9` | — | low | auto-shape | array |
-| `0xaac78` | — | low | auto-shape | array |
-| `0xaac96` | — | low | auto-shape | array |
-| `0xaacb4` | — | low | auto-shape | array |
-| `0xaacd2` | — | low | auto-shape | array |
 | `0xaba3b` | — | low | auto-shape | array |
 | `0xaba43` | — | low | auto-shape | array |
 | `0xaba4b` | — | low | auto-shape | array |
@@ -399,6 +406,7 @@
 | `0x66715` | current_unit_id | high | investigation | Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state. |
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
+| `0xaac76` | current_condition_id | high | investigation | Shared condition selector consumed by CALCILL, ADDILL, ADDILLSUB, DISARM, FIELD, and related condition handlers. It indexes the 30-column runtime condition rows and ILINIT definition arrays. |
 | `0xeff75` | current_routine_set_id | high | investigation | Shared RTINIT row selector. MVRTN loads the current entity's difficulty-selected movement routine set; BTRTN loads its battle routine set. Both then iterate routine_step_index across the selected twenty-slot row. |
 | `0xeff76` | routine_step_index | high | investigation | Shared RTINIT step selector. MVRTN and BTRTN iterate it from zero through nineteen and use it as the column index in every routine bank and matching per-entity runtime row. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
@@ -459,6 +467,7 @@
 | `0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
 | `0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
 | `0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
+| `0x25fa` | condition_level_names | high | investigation | ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved. Columns: 0=level_1, 1=level_2, 2=level_3, 3=level_4, 4=level_5. |
 | `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
@@ -3702,7 +3711,6 @@
 | `0x1fba` | — | high | auto-shape | item-desc-table |
 | `0x23a2` | — | high | auto-shape | skill-name-table |
 | `0x24ce` | — | high | auto-shape | skill-desc-table |
-| `0x25fa` | — | med | auto-shape | record-table[stride 5] |
 | `0x2ba5` | — | med | auto-shape | record-table[stride 6] |
 | `0x3239` | — | med | auto-shape | record-table[stride 3] |
 | `0x32f0` | — | med | auto-shape | current-entity-index? |
@@ -3711,9 +3719,6 @@
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
 | `0x341ab` | — | med | auto-shape | record-table[stride 53] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
-| `0x52383` | — | med | auto-shape | record-table[stride 30] |
-| `0x5295f` | — | med | auto-shape | record-table[stride 30] |
-| `0x52f3b` | — | med | auto-shape | record-table[stride 30] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |
 | `0x53edd` | — | low | auto-shape | index/counter? |
 | `0x53ef5` | — | low | auto-shape | index/counter? |
@@ -5030,10 +5035,6 @@
 | `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
-| `0xaac76` | — | low | auto-shape | index/counter? |
-| `0xaacf0` | — | med | auto-shape | record-table[stride 5] |
-| `0xaad86` | — | med | auto-shape | record-table[stride 55] |
-| `0xab3f8` | — | med | auto-shape | record-table[stride 15] |
 | `0xab6fa` | — | med | auto-shape | record-table[stride 11] |
 | `0xab7d6` | — | med | auto-shape | record-table[stride 11] |
 | `0xab8b2` | — | med | auto-shape | record-table[stride 7] |

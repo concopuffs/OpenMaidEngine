@@ -107,11 +107,22 @@ def profile_columns(data: dict) -> list[dict]:
                 "semantic_name": field_semantics.get(key),
             }, value, record)
         for address, value in record.get("string_fields", {}).items():
-            base = int(address, 16)
-            key = f"0x{base:x}"
+            parts = address.split("/")
+            base = int(parts[0], 16)
+            if len(parts) == 1:
+                stride = column = None
+                key = f"0x{base:x}"
+                kind = "string-field"
+            elif len(parts) == 3:
+                stride = int(parts[1])
+                column = int(parts[2])
+                key = f"0x{base:x}/{stride}/{column}"
+                kind = "string-record-column"
+            else:
+                raise ValueError(f"bad string-field key: {address}")
             add(key, {
-                "key": key, "kind": "string-field", "base": key,
-                "stride": None, "column": None,
+                "key": key, "kind": kind, "base": f"0x{base:x}",
+                "stride": stride, "column": column,
                 "semantic_name": field_semantics.get(key),
             }, value, record)
         for key, value in record.get("record_fields", {}).items():

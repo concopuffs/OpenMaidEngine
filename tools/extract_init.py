@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract a *INIT data table to JSON. Auto-detects the table's shape.
 
-*INIT scripts populate global arrays and work buffers with static game data. Seven shapes seen:
+*INIT scripts populate global arrays and work buffers with static game data. Eight shapes seen:
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
@@ -18,6 +18,9 @@
            and authored chapter metadata. (SCINIT scene dispatch)
   banked —twenty parallel 1000-by-20 banks define sparse movement and battle routine
            step records, including provider joins and source overwrites. (RTINIT routines)
+
+ILINIT is a special name-mode matrix: 30 reserved condition ids by five authored
+levels, joined to the runtime condition-state ABI and RECOVER policy.
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
@@ -528,6 +531,57 @@ VOCABULARY_NAME_ARRAY_BASE = 0x463B
 VOCABULARY_RECORD_TABLE_BASE = 0x15A2A9
 VOCABULARY_RECORD_STRIDE = 3
 VOCABULARY_RECORD_SPAN = 200
+
+CONDITION_RECORD_SPAN = 30
+CONDITION_LEVEL_COUNT = 5
+CONDITION_LEVEL_NAME_BASE = 0x25FA
+CONDITION_COLUMNS = {
+    1: "instant_death",
+    2: "hp_drain",
+    3: "sp_drain",
+    4: "fs_drain",
+    5: "curse",
+    6: "charm",
+    7: "confusion",
+    8: "paralysis",
+    9: "poison",
+    10: "water_flow",
+    11: "fear",
+    12: "reserved",
+    13: "regeneration",
+    14: "exaltation",
+}
+CONDITION_SCALAR_ARRAYS = {
+    0xAAC78: "effectiveness_element_id",
+    0xAAC96: "can_affect_bosses",
+    0xAACB4: "cleared_by_recover",
+    0xAACD2: "icon_id",
+}
+CONDITION_DURATION_BASE = 0xAACF0
+CONDITION_STAT_DELTA_BASE = 0xAAD86
+CONDITION_RESOURCE_DELTA_BASE = 0xAB3F8
+CONDITION_STAT_COLUMNS = (
+    "accuracy",
+    "evasion",
+    "physical_attack",
+    "physical_defense",
+    "magic_attack",
+    "magic_defense",
+    "speed",
+    "luck",
+    "critical_chance",
+    "capture_power",
+    "movement",
+)
+CONDITION_RESOURCE_COLUMNS = ("hp", "sp", "fs")
+
+RECOVER_CURRENT_ENTITY = 0x152616
+RECOVER_EFFECTIVE_STATS = 0x4E11B
+RECOVER_CURRENT_RESOURCES = 0x4E085
+RECOVER_CURRENT_LEVELS = 0x52383
+RECOVER_REMAINING_TURNS = 0x5295F
+RECOVER_BASELINE_LEVELS = 0x52F3B
+RECOVER_POLICY = 0xAACB4
 
 
 def resolve(name: str) -> Path:
@@ -1196,6 +1250,280 @@ def extract_vocabulary(scr):
         "first_record_id": 1,
         "record_span": VOCABULARY_RECORD_SPAN,
         "record_field_columns": record_columns,
+    }
+
+
+def extract_recovery_protocol(scr) -> dict:
+    """Validate and describe RECOVER's resource/condition reset ABI."""
+    lookups_2d = {
+        (ins.args[1][1], ins.args[3][1])
+        for ins in scr.instructions
+        if (
+            sys4load.display_label(ins.opcode) == "lookup-array-2d"
+            and len(ins.args) >= 5
+            and ins.args[1][0] == T_GLOBAL_INT
+            and ins.args[3][0] == T_IMM
+        )
+    }
+    lookups_1d = {
+        ins.args[1][1]
+        for ins in scr.instructions
+        if (
+            sys4load.display_label(ins.opcode) == "lookup-array"
+            and len(ins.args) >= 3
+            and ins.args[1][0] == T_GLOBAL_INT
+        )
+    }
+    loop_bounds = {
+        ins.args[2][1]
+        for ins in scr.instructions
+        if (
+            sys4load.display_label(ins.opcode) == "lt"
+            and len(ins.args) >= 3
+            and ins.args[2][0] == T_IMM
+        )
+    }
+    calls = {
+        ins.args[0][1]
+        for ins in scr.instructions
+        if sys4load.display_label(ins.opcode) == "call-script" and ins.args
+    }
+    required_2d = {
+        (RECOVER_EFFECTIVE_STATS, 14),
+        (RECOVER_CURRENT_RESOURCES, 3),
+        (RECOVER_CURRENT_LEVELS, CONDITION_RECORD_SPAN),
+        (RECOVER_REMAINING_TURNS, CONDITION_RECORD_SPAN),
+        (RECOVER_BASELINE_LEVELS, CONDITION_RECORD_SPAN),
+    }
+    failures = []
+    if not required_2d <= lookups_2d:
+        failures.append(f"missing 2d lookups {sorted(required_2d - lookups_2d)}")
+    if RECOVER_POLICY not in lookups_1d:
+        failures.append("missing recovery-policy lookup")
+    if not {3, CONDITION_RECORD_SPAN} <= loop_bounds:
+        failures.append("missing resource or condition loop bound")
+    if not {0x329D, 0x2ADE} <= calls:
+        failures.append("missing CALCREVISE or DRAWCHP post-call")
+    if failures:
+        raise ValueError(f"{scr.path.name}: " + "; ".join(failures))
+
+    return {
+        "source": scr.path.name,
+        "current_entity_selector": f"0x{RECOVER_CURRENT_ENTITY:x}",
+        "resource_restore": {
+            "source_table": f"0x{RECOVER_EFFECTIVE_STATS:x}",
+            "source_columns": ["max_hp", "max_sp", "max_fs"],
+            "destination_table": f"0x{RECOVER_CURRENT_RESOURCES:x}",
+            "destination_columns": ["current_hp", "current_sp", "current_fs"],
+        },
+        "condition_reset": {
+            "column_count": CONDITION_RECORD_SPAN,
+            "current_level_table": f"0x{RECOVER_CURRENT_LEVELS:x}",
+            "baseline_level_table": f"0x{RECOVER_BASELINE_LEVELS:x}",
+            "remaining_turns_table": f"0x{RECOVER_REMAINING_TURNS:x}",
+            "recovery_policy_table": f"0x{RECOVER_POLICY:x}",
+            "policy": (
+                "For each active condition whose policy cell is nonzero, copy "
+                "the equipment/passive baseline into the current level and set "
+                "remaining turns to -1 when that baseline is nonzero, otherwise 0."
+            ),
+        },
+        "post_recovery_scripts": ["CALCREVISE.BIN", "DRAWCHP.BIN"],
+    }
+
+
+def _condition_family_name(level_names: dict[int, str]) -> str | None:
+    """Collapse authored `name1`..`name5` strings to their shared family."""
+    if not level_names:
+        return None
+    ordered = [level_names[level] for level in sorted(level_names)]
+    prefixes = [
+        text[:-1]
+        for level, text in sorted(level_names.items())
+        if text.endswith(str(level))
+    ]
+    if len(prefixes) == len(ordered) and len(set(prefixes)) == 1:
+        return prefixes[0]
+    return ordered[0]
+
+
+def extract_condition_definitions(scr):
+    """Extract ILINIT's sparse 30-condition, five-level definition matrix."""
+    level_names: dict[int, dict[int, str]] = collections.defaultdict(dict)
+    records_by_id: dict[int, dict] = {}
+    classified_writes = 0
+    static_write_count = 0
+
+    def record_for(condition_id: int) -> dict:
+        if not (1 <= condition_id < CONDITION_RECORD_SPAN):
+            raise ValueError(
+                f"{scr.path.name}: condition id outside reserved span: {condition_id}"
+            )
+        return records_by_id.setdefault(condition_id, {
+            "id": condition_id,
+            "condition": CONDITION_COLUMNS.get(condition_id, f"reserved_{condition_id}"),
+            "string_fields": {},
+            "fields": {},
+            "record_fields": {},
+        })
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            relative = ins.args[0][1] - CONDITION_LEVEL_NAME_BASE
+            condition_id, level_index = divmod(relative, CONDITION_LEVEL_COUNT)
+            if not (
+                1 <= condition_id < CONDITION_RECORD_SPAN
+                and 0 <= level_index < CONDITION_LEVEL_COUNT
+            ):
+                raise ValueError(
+                    f"{scr.path.name}: unexpected condition name destination "
+                    f"0x{ins.args[0][1]:x}"
+                )
+            text = scr.strings.get(ins.args[1][1], (None,))[0]
+            level_names[condition_id][level_index + 1] = text
+            _store_unique(
+                record_for(condition_id)["string_fields"],
+                (
+                    f"0x{CONDITION_LEVEL_NAME_BASE:x}/"
+                    f"{CONDITION_LEVEL_COUNT}/{level_index}"
+                ),
+                text,
+                condition_id,
+            )
+            continue
+
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        static_write_count += 1
+        destination, value = write
+        matched = False
+        for base in CONDITION_SCALAR_ARRAYS:
+            condition_id = destination - base
+            if 1 <= condition_id < CONDITION_RECORD_SPAN:
+                _store_unique(
+                    record_for(condition_id)["fields"],
+                    f"0x{base:x}",
+                    value,
+                    condition_id,
+                )
+                matched = True
+                break
+        if not matched:
+            layouts = (
+                (CONDITION_DURATION_BASE, CONDITION_LEVEL_COUNT),
+                (
+                    CONDITION_STAT_DELTA_BASE,
+                    CONDITION_LEVEL_COUNT * len(CONDITION_STAT_COLUMNS),
+                ),
+                (
+                    CONDITION_RESOURCE_DELTA_BASE,
+                    CONDITION_LEVEL_COUNT * len(CONDITION_RESOURCE_COLUMNS),
+                ),
+            )
+            for base, stride in layouts:
+                relative = destination - base
+                condition_id, column = divmod(relative, stride)
+                if 1 <= condition_id < CONDITION_RECORD_SPAN:
+                    _store_unique(
+                        record_for(condition_id)["record_fields"],
+                        f"0x{base:x}/{stride}/{column}",
+                        value,
+                        condition_id,
+                    )
+                    matched = True
+                    break
+        if not matched:
+            raise ValueError(
+                f"{scr.path.name}: unclassified static write 0x{destination:x}"
+            )
+        classified_writes += 1
+
+    records = []
+    for condition_id in sorted(records_by_id):
+        record = records_by_id[condition_id]
+        names = level_names.get(condition_id, {})
+        record["name"] = _condition_family_name(names)
+        record["level_names"] = [
+            names.get(level) for level in range(1, CONDITION_LEVEL_COUNT + 1)
+        ]
+        levels = []
+        for level in range(1, CONDITION_LEVEL_COUNT + 1):
+            level_record = {"level": level}
+            if level in names:
+                level_record["name"] = names[level]
+
+            duration_key = (
+                f"0x{CONDITION_DURATION_BASE:x}/{CONDITION_LEVEL_COUNT}/{level - 1}"
+            )
+            if duration_key in record["record_fields"]:
+                level_record["duration_turns"] = record["record_fields"][duration_key]
+
+            stat_deltas = {}
+            for stat_index, stat_name in enumerate(CONDITION_STAT_COLUMNS):
+                column = (level - 1) * len(CONDITION_STAT_COLUMNS) + stat_index
+                key = (
+                    f"0x{CONDITION_STAT_DELTA_BASE:x}/"
+                    f"{CONDITION_LEVEL_COUNT * len(CONDITION_STAT_COLUMNS)}/{column}"
+                )
+                if key in record["record_fields"]:
+                    stat_deltas[stat_name] = record["record_fields"][key]
+            if stat_deltas:
+                level_record["stat_deltas"] = stat_deltas
+
+            resource_deltas = {}
+            for resource_index, resource_name in enumerate(CONDITION_RESOURCE_COLUMNS):
+                column = (level - 1) * len(CONDITION_RESOURCE_COLUMNS) + resource_index
+                key = (
+                    f"0x{CONDITION_RESOURCE_DELTA_BASE:x}/"
+                    f"{CONDITION_LEVEL_COUNT * len(CONDITION_RESOURCE_COLUMNS)}/{column}"
+                )
+                if key in record["record_fields"]:
+                    resource_deltas[resource_name] = record["record_fields"][key]
+            if resource_deltas:
+                level_record["resource_deltas"] = resource_deltas
+
+            if len(level_record) > 1:
+                levels.append(level_record)
+        record["levels"] = levels
+        records.append(record)
+
+    defined_ids = [record["id"] for record in records]
+    record_columns = sorted(
+        {
+            key
+            for record in records
+            for key in record.get("record_fields", {})
+        },
+        key=lambda key: tuple(int(part, 0) for part in key.split("/")),
+    )
+    return records, {
+        "schema": "condition-definitions",
+        "record_span": CONDITION_RECORD_SPAN,
+        "level_count": CONDITION_LEVEL_COUNT,
+        "condition_columns": {
+            str(index): name for index, name in CONDITION_COLUMNS.items()
+        },
+        "defined_condition_ids": defined_ids,
+        "reserved_condition_ids": [
+            condition_id
+            for condition_id in range(1, CONDITION_RECORD_SPAN)
+            if condition_id not in defined_ids
+        ],
+        "level_name_table": {
+            "base": f"0x{CONDITION_LEVEL_NAME_BASE:x}",
+            "stride": CONDITION_LEVEL_COUNT,
+        },
+        "record_field_columns": record_columns,
+        "static_write_count": static_write_count,
+        "classified_static_write_count": classified_writes,
+        "recovery_protocol": extract_recovery_protocol(
+            sys4load.load(resolve("RECOVER"))
+        ),
     }
 
 
@@ -2094,6 +2422,12 @@ def write_data_index(data_dir: Path) -> None:
         "name-keyed convenience view. Complete footer copies expose their row values there while",
         "raw keys and footer metadata remain intact as bytecode provenance.",
         "",
+        "ILINIT's dedicated condition schema exposes thirteen authored condition ids in the",
+        "reserved 30-by-5 layout. Each record keeps its raw scalar and row-table cells while",
+        "joining level names, durations, eleven-stat deltas, three-resource deltas, boss/recovery",
+        "policies, and icon ids. Top-level `recovery_protocol` validates RECOVER.BIN and links",
+        "current levels, equipment/passive baselines, remaining turns, and full resource restore.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -2165,6 +2499,8 @@ def main() -> int:
         extractor = extract_character_profiles
     elif mode == "name" and name == "MAINIT":
         extractor = extract_magic_actions
+    elif mode == "name" and name == "ILINIT":
+        extractor = extract_condition_definitions
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]
