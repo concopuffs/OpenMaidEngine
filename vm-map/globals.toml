@@ -823,6 +823,160 @@ confidence = "high"
 depends_on = ["0x87a57", "0x3234", "0x62ccf"]
 
 [[global]]
+address = "0xeff78"
+name = "movement_routine_provider_selectors"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "RTN_M provider selector: 1..18, 51..53, or 61; 0 terminates a row"
+usage = "RTINIT movement bank 0. MVRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through its RTN_M001..018/051..053/061 provider table, and call-scripts the selected movement routine."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff75", "0xeff76"]
+
+[[global]]
+address = "0xf4d98"
+name = "movement_routine_activation_percents"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "10..100 percent"
+usage = "RTINIT movement bank 1. After all other step gates pass, MVRTN executes the provider only when random-modulo-100 is below this value."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78"]
+
+[[global]]
+address = "0xf9bb8"
+name = "movement_routine_parameter_1"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "provider-specific integer"
+usage = "RTINIT movement bank 2. RTN_M004..015 providers consume the current row/step value; its exact meaning is tagged by movement_routine_provider_selectors and remains provider-specific."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78"]
+
+[[global]]
+address = "0xfe9d8"
+name = "movement_routine_parameter_2"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "provider-specific integer"
+usage = "RTINIT movement bank 3. RTN_M005/007/010/011/012 consume it as a provider-specific parameter."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78"]
+
+[[global]]
+address = "0x1037f8"
+name = "movement_routine_parameter_3"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "provider-specific integer"
+usage = "RTINIT movement bank 4. RTN_M011 consumes it as a provider-specific parameter."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78"]
+
+[[global]]
+address = "0x108618"
+name = "movement_routine_parameter_4"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "{1,2}"
+usage = "RTINIT movement bank 5. RTN_M011 consumes it as a provider-specific parameter."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78"]
+
+[[global]]
+address = "0x112258"
+name = "movement_routine_minimum_progress_counts"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "positive step-progress threshold; shipped RTINIT writes 1"
+usage = "RTINIT movement bank 7. MVRTN requires the current entity's matching movement-step progress counter to reach this value; movement providers increment those counters as their steps execute."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78", "0x53643"]
+
+[[global]]
+address = "0x117078"
+name = "movement_routine_required_story_flag_ids"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "one-based story_event_flags id"
+usage = "RTINIT movement bank 8. MVRTN subtracts one and rejects the step when the referenced story flag is not set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78", "0x6d3"]
+
+[[global]]
+address = "0x11be98"
+name = "movement_routine_forbidden_story_flag_ids"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "one-based story_event_flags id"
+usage = "RTINIT movement bank 9. MVRTN subtracts one and rejects the step when the referenced story flag is set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff78", "0x6d3"]
+
+[[global]]
+address = "0x120cb8"
+name = "battle_routine_provider_selectors"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "RTN_B provider selector 1..4; 0 terminates a row"
+usage = "RTINIT battle bank 10. BTRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through RTN_B001..004, and call-scripts the selected battle routine."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff75", "0xeff76"]
+
+[[global]]
+address = "0x125ad8"
+name = "battle_routine_activation_percents"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "70 or 100 percent in shipped RTINIT"
+usage = "RTINIT battle bank 11. BTRTN executes a candidate step only when the current entity's matching random-modulo-100 battle-step roll is below this value."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x120cb8", "0x56738"]
+
+[[global]]
+address = "0x12a8f8"
+name = "battle_routine_parameter_1"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "provider-specific integer"
+usage = "RTINIT battle bank 12. RTN_B004 uses it to choose an entry from the prepared battle-action candidate table."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x120cb8"]
+
+[[global]]
+address = "0x147db8"
+name = "battle_routine_required_story_flag_ids"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "one-based story_event_flags id"
+usage = "RTINIT battle bank 18. BTRTN subtracts one and rejects the step when the referenced story flag is not set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x120cb8", "0x6d3"]
+
+[[global]]
+address = "0x14cbd8"
+name = "battle_routine_forbidden_story_flag_ids"
+category = "data-table"
+type = "int[1000][20]"
+value_domain = "one-based story_event_flags id"
+usage = "RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x120cb8", "0x6d3"]
+
+[[global]]
 address = "0x3234"
 name = "chapter_mode"
 category = "story-flag"
@@ -967,14 +1121,80 @@ depends_on = ["0x3234", "0x87a57"]
 
 [[global]]
 address = "0xeff75"
-name = "current_entity_index_hi"
+name = "current_routine_set_id"
 category = "index-pointer"
 type = "int"
-value_domain = "row index"
-usage = "High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector."
-source = "inference"
-confidence = "med"
-depends_on = []
+value_domain = "RTINIT row id 1..176"
+usage = "Shared RTINIT row selector. MVRTN loads the current entity's difficulty-selected movement routine set; BTRTN loads its battle routine set. Both then iterate routine_step_index across the selected twenty-slot row."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x53517", "0x535ad", "0xeff76"]
+
+[[global]]
+address = "0xeff76"
+name = "routine_step_index"
+category = "index-pointer"
+type = "int"
+value_domain = "0..19"
+usage = "Shared RTINIT step selector. MVRTN and BTRTN iterate it from zero through nineteen and use it as the column index in every routine bank and matching per-entity runtime row."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff75"]
+
+[[global]]
+address = "0xeff77"
+name = "routine_execution_state"
+category = "choice-output"
+type = "int"
+value_domain = "0..3"
+usage = "Shared movement/battle routine result state. MVRTN and BTRTN clear it before scanning steps; RTN_M/RTN_B providers set a nonzero result to stop the scan, and the dispatcher supplies state 1 when no provider produced another result. Exact distinctions between provider-written states 1..3 remain unresolved."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeff75", "0xeff76"]
+
+[[global]]
+address = "0x53517"
+name = "entity_movement_routine_set_ids"
+category = "data-table"
+type = "int[50][3]"
+value_domain = "RTINIT row id by difficulty"
+usage = "Per-runtime-entity movement routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; MVRTN selects the current difficulty column and stores it in current_routine_set_id."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe7889", "0xeff75"]
+
+[[global]]
+address = "0x535ad"
+name = "entity_battle_routine_set_ids"
+category = "data-table"
+type = "int[50][3]"
+value_domain = "RTINIT row id by difficulty"
+usage = "Per-runtime-entity battle routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; BTRTN selects the current difficulty column and stores it in current_routine_set_id."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe78e3", "0xeff75"]
+
+[[global]]
+address = "0x53643"
+name = "entity_movement_routine_progress"
+category = "data-table"
+type = "int[50][20]"
+value_domain = "nonnegative per-step counter"
+usage = "Per-runtime-entity movement-routine progress counters. FIELD clears all fifty rows, movement providers increment the current step, and MVRTN compares it with movement_routine_minimum_progress_counts before enabling a step."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x112258", "0xeff76"]
+
+[[global]]
+address = "0x56738"
+name = "entity_battle_routine_random_rolls"
+category = "data-table"
+type = "int[50][20]"
+value_domain = "0..99"
+usage = "Per-runtime-entity battle-step random rolls. FIELD and BTL fill every active entity's twenty cells with random-modulo-100; BTRTN executes a step when the matching roll is below battle_routine_activation_percents."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x125ad8", "0xeff76"]
 
 [[global]]
 address = "0x152616"

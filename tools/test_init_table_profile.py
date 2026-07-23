@@ -120,6 +120,44 @@ def main() -> int:
     assert dispatch_summary["scjump_chapter_match_count"] == 1
     assert dispatch_summary["scjump_chapter_mismatch_count"] == 1
 
+    banked_fixture = {
+        "table": "BANKED",
+        "mode": "banked",
+        "assignment_count": 6,
+        "populated_cell_count": 5,
+        "overwritten_cell_count": 1,
+        "conflicting_overwrite_count": 1,
+        "movement_step_count": 2,
+        "battle_step_count": 1,
+        "movement_provider_scripts": {"1": "RTN_M001.BIN"},
+        "battle_provider_scripts": {"1": "RTN_B001.BIN"},
+        "used_movement_provider_selectors": [1],
+        "used_battle_provider_selectors": [1],
+        "bank_layouts": {
+            "0x100": {"reserved_empty": False},
+            "0x200": {"reserved_empty": True},
+        },
+        "records": [
+            {
+                "id": 1,
+                "record_fields": {
+                    "0x100/20/0": 1,
+                    "0x100/20/1": 2,
+                },
+            },
+        ],
+    }
+    banked_rows = {
+        row["key"]: row for row in profile.profile_columns(banked_fixture)
+    }
+    assert banked_rows["0x100/20/0"]["kind"] == "record-column"
+    banked_summary = profile.profile_banked(banked_fixture)
+    assert banked_summary["assignment_count"] == 6
+    assert banked_summary["populated_bank_count"] == 1
+    assert banked_summary["reserved_bank_count"] == 1
+    assert banked_summary["movement_step_count"] == 2
+    assert banked_summary["battle_provider_count"] == 1
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

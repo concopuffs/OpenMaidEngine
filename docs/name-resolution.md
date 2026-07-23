@@ -418,6 +418,32 @@ are retained as legacy/stale authoring metadata. `extract_init.py` detects this 
 resolved script name, authored chapter, SCJUMP chapters, overwrite history, and raw column keys.
 `field_semantics`/`semantic_fields` resolves those raw keys through `vm-map/globals.toml`.
 
+### RTINIT movement/battle routine banks (2026-07-23)
+
+RTINIT is a banked sparse program registry, not the generic numeric extractor's former 14-record result.
+Its 3,336 static writes address twenty parallel banks separated by exactly 20,000 cells. Direct
+`lookup-array-2d` consumers establish that every bank is `int[1000][20]`: `current_routine_set_id`
+selects a one-based row and `routine_step_index` iterates slots 0 through 19. Rows 1..176 are populated
+except 150..153, yielding 172 routine sets and 3,307 final cells. Twenty-nine cells are written twice;
+eleven of those overwrites change the value, all retained in source order.
+
+Banks 0..9 form the movement family. MVRTN reads bank 0 as a provider selector, resolves it through
+RTN_M001..018/051..053/061, applies bank 1 as a random-modulo-100 activation percentage, gates the step
+on a per-entity progress count plus required/forbidden story flags in banks 7..9, and call-scripts the
+provider. Banks 2..5 are provider-tagged parameters and bank 6 is reserved/empty. This produces 1,043
+final movement steps.
+
+Banks 10..19 form the battle family. BTRTN dispatches selectors 1..4 to RTN_B001..004, compares each
+entity's pre-rolled 0..99 step value against bank 11's activation percentage, and applies the same
+required/forbidden story-flag convention in banks 18/19. Bank 12 is an RTN_B004 parameter; banks 13..17
+are reserved/empty. Only fourteen shipped battle steps are populated.
+
+`extract_init.py` detects this seventh shape as `banked` and writes `build/data/RTINIT.json`. Each record
+keeps its raw `base/20/slot` fields and complete offset-tagged assignment history while adding joined
+`movement_steps`/`battle_steps` with provider script names. The bank layout explicitly includes all six
+empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
+parameter names deliberately remain until each RTN_M/RTN_B provider proves its tagged schema.
+
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
 The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
@@ -462,13 +488,13 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, and SCINIT now have
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, and RTINIT now have
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
-   and effects. SCINIT closes the progression decision-to-scene join. Take RTINIT next as a separate
-   sparse multi-table family: its 3,336 writes span several 20,000-cell banks used by movement/battle
-   routines, so it needs layout segmentation before column naming. Preserve explicit joins and do not
-   infer meaning from column position alone.
+   and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
+   banks are structurally decoded. Next decode provider-tagged RTINIT parameters by their RTN_M consumers,
+   starting with high-density providers 5 and 11; never assign one universal meaning to a parameter bank
+   whose meaning varies by provider selector.
 2. **Extend message-table joins beyond the completed ITMES/SKMES pair** (`VIMES`, other id dispatchers, …)
    and fold in other `set-string`/`copy-to-global` writers not covered by the `*INIT` set.
 3. **Label 2D record tables by their readers** — cross-reference which scripts read each

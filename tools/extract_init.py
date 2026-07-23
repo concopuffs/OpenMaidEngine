@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract a *INIT data table to JSON. Auto-detects the table's shape.
 
-*INIT scripts populate global arrays and work buffers with static game data. Six shapes seen:
+*INIT scripts populate global arrays and work buffers with static game data. Seven shapes seen:
 
   name   — records keyed by a name string. Each record: set-string(name), static field writes,
            set-string(desc). Arrays indexed by record id in lockstep (+1/record).
@@ -16,14 +16,17 @@
            buffers. (CCINIT class changes)
   dispatch—paired parallel arrays map a sparse decision id to a packed script resource id
            and authored chapter metadata. (SCINIT scene dispatch)
+  banked —twenty parallel 1000-by-20 banks define sparse movement and battle routine
+           step records, including provider joins and source overwrites. (RTINIT routines)
 
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
 
-Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules|dispatch]
+Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules|dispatch|banked]
 """
 from __future__ import annotations
+import collections
 import json
 import sys
 from functools import cache
@@ -54,6 +57,38 @@ CLASS_CHANGE_COST_OUT = 0xAB8E8
 CLASS_CHANGE_STATS_OUT = 0xAB8E9
 CLASS_CHANGE_SKILLS_OUT = 0xAB8F7
 CLASS_CHANGE_FLAGS_OUT = 0xAB8FB
+
+ROUTINE_BANK_ROOT = 0xEFF78
+ROUTINE_BANK_SPAN = 20000
+ROUTINE_BANK_COUNT = 20
+ROUTINE_RECORD_STRIDE = 20
+ROUTINE_RECORD_SPAN = 1000
+ROUTINE_SET_ID = 0xEFF75
+ROUTINE_STEP_INDEX = 0xEFF76
+ROUTINE_EXECUTION_STATE = 0xEFF77
+
+ROUTINE_BANK_ROLES = (
+    "movement_provider_selector",
+    "movement_activation_percent",
+    "movement_parameter_1",
+    "movement_parameter_2",
+    "movement_parameter_3",
+    "movement_parameter_4",
+    "movement_reserved",
+    "movement_minimum_progress_count",
+    "movement_required_story_flag_id",
+    "movement_forbidden_story_flag_id",
+    "battle_provider_selector",
+    "battle_activation_percent",
+    "battle_parameter_1",
+    "battle_reserved_1",
+    "battle_reserved_2",
+    "battle_reserved_3",
+    "battle_reserved_4",
+    "battle_reserved_5",
+    "battle_required_story_flag_id",
+    "battle_forbidden_story_flag_id",
+)
 
 UNIT_STAT_COLUMNS = (
     "accuracy", "evasion", "physical_attack", "physical_defense",
@@ -188,6 +223,32 @@ def _paired_parallel_writes(scr) -> tuple[list[tuple], int] | None:
     return writes, span
 
 
+def _routine_bank_writes(scr) -> list[tuple] | None:
+    """Recognize RTINIT's twenty reserved 1000-by-20 routine-step banks."""
+    writes = []
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is not None and isinstance(write[1], int):
+            destination, value = write
+            relative = destination - ROUTINE_BANK_ROOT
+            if not (0 <= relative < ROUTINE_BANK_COUNT * ROUTINE_BANK_SPAN):
+                return None
+            bank_index, cell = divmod(relative, ROUTINE_BANK_SPAN)
+            record_id, slot = divmod(cell, ROUTINE_RECORD_STRIDE)
+            if not (
+                0 <= bank_index < ROUTINE_BANK_COUNT
+                and 0 <= record_id < ROUTINE_RECORD_SPAN
+                and 0 <= slot < ROUTINE_RECORD_STRIDE
+            ):
+                return None
+            writes.append((
+                ins.offset, destination, value, bank_index, record_id, slot
+            ))
+        elif sys4load.display_label(ins.opcode) != "exit":
+            return None
+    return writes if len(writes) >= 1000 else None
+
+
 def detect_mode(scr):
     ops = [ins.opcode for ins in scr.instructions]
     has_str = any(ins.opcode == SET_STRING and ins.args and ins.args[0][0] == T_GLOBAL_STRING
@@ -206,6 +267,8 @@ def detect_mode(scr):
         return "name"
     if _paired_parallel_writes(scr):
         return "dispatch"
+    if _routine_bank_writes(scr):
+        return "banked"
     n_footer = ops.count(COPY_LOCAL_ARRAY)
     n_int = ops.count(MOV) + ops.count(COPY_TO_GLOBAL)
     return "footer" if n_footer >= max(4, n_int) else "numeric"
@@ -823,6 +886,180 @@ def extract_dispatch(scr):
     }
 
 
+def _movement_provider_names(names: dict[int, str]) -> dict[int, str]:
+    providers = {
+        selector: names.get(0x32FB + selector, "")
+        for selector in range(1, 19)
+    }
+    providers.update({
+        51: names.get(0x330E, ""),
+        52: names.get(0x330F, ""),
+        53: names.get(0x3310, ""),
+        61: names.get(0x3311, ""),
+    })
+    return providers
+
+
+def extract_banked(scr):
+    """Extract RTINIT's sparse routine sets across twenty parallel step banks."""
+    writes = _routine_bank_writes(scr)
+    if writes is None:
+        return [], {}
+
+    names = callscript_names()
+    movement_providers = _movement_provider_names(names)
+    battle_providers = {
+        selector: names.get(0x32F6 + selector, "")
+        for selector in range(1, 5)
+    }
+    records_by_id: dict[int, dict] = {}
+    cell_assignments: dict[tuple[int, int, int], list[int]] = collections.defaultdict(list)
+    bank_cells: dict[int, set[tuple[int, int]]] = collections.defaultdict(set)
+
+    for offset, destination, value, bank_index, record_id, slot in writes:
+        bank_base = ROUTINE_BANK_ROOT + bank_index * ROUTINE_BANK_SPAN
+        key = f"0x{bank_base:x}/{ROUTINE_RECORD_STRIDE}/{slot}"
+        assignment = {
+            "offset": f"0x{offset:x}",
+            "bank_index": bank_index,
+            "bank_base": f"0x{bank_base:x}",
+            "role": ROUTINE_BANK_ROLES[bank_index],
+            "slot": slot,
+            "value": value,
+        }
+        record = records_by_id.setdefault(record_id, {
+            "id": record_id,
+            "assignments": [],
+            "record_fields": {},
+        })
+        record["assignments"].append(assignment)
+        record["record_fields"][key] = value
+        cell_assignments[(bank_index, record_id, slot)].append(value)
+        bank_cells[bank_index].add((record_id, slot))
+
+    for record in records_by_id.values():
+        final_by_bank_slot = {}
+        for assignment in record["assignments"]:
+            final_by_bank_slot[
+                (assignment["bank_index"], assignment["slot"])
+            ] = assignment["value"]
+
+        movement_steps = []
+        battle_steps = []
+        for slot in range(ROUTINE_RECORD_STRIDE):
+            movement = {
+                ROUTINE_BANK_ROLES[bank]: final_by_bank_slot[(bank, slot)]
+                for bank in range(10)
+                if (bank, slot) in final_by_bank_slot
+            }
+            if movement:
+                selector = movement.get("movement_provider_selector")
+                movement_steps.append({
+                    "slot": slot,
+                    **movement,
+                    **(
+                        {"provider_script": movement_providers.get(selector, "")}
+                        if selector is not None else {}
+                    ),
+                })
+
+            battle = {
+                ROUTINE_BANK_ROLES[bank]: final_by_bank_slot[(bank, slot)]
+                for bank in range(10, 20)
+                if (bank, slot) in final_by_bank_slot
+            }
+            if battle:
+                selector = battle.get("battle_provider_selector")
+                battle_steps.append({
+                    "slot": slot,
+                    **battle,
+                    **(
+                        {"provider_script": battle_providers.get(selector, "")}
+                        if selector is not None else {}
+                    ),
+                })
+        if movement_steps:
+            record["movement_steps"] = movement_steps
+        if battle_steps:
+            record["battle_steps"] = battle_steps
+
+    records = [records_by_id[key] for key in sorted(records_by_id)]
+    record_ids = set(records_by_id)
+    used_movement_providers = sorted({
+        step["movement_provider_selector"]
+        for record in records
+        for step in record.get("movement_steps", [])
+    })
+    used_battle_providers = sorted({
+        step["battle_provider_selector"]
+        for record in records
+        for step in record.get("battle_steps", [])
+    })
+    bank_layouts = {}
+    for bank_index, role in enumerate(ROUTINE_BANK_ROLES):
+        base = ROUTINE_BANK_ROOT + bank_index * ROUTINE_BANK_SPAN
+        cells = bank_cells.get(bank_index, set())
+        bank_layouts[f"0x{base:x}"] = {
+            "bank_index": bank_index,
+            "family": "movement" if bank_index < 10 else "battle",
+            "role": role,
+            "reserved_empty": not cells,
+            "populated_cell_count": len(cells),
+            "populated_record_count": len({record_id for record_id, _ in cells}),
+            "populated_slots": sorted({slot for _, slot in cells}),
+        }
+    record_columns = sorted(
+        {
+            key
+            for record in records
+            for key in record.get("record_fields", {})
+        },
+        key=lambda key: tuple(int(part, 0) for part in key.split("/")),
+    )
+    return records, {
+        "schema": "routine-step-banks",
+        "selector_global": f"0x{ROUTINE_SET_ID:x}",
+        "step_index_global": f"0x{ROUTINE_STEP_INDEX:x}",
+        "execution_state_global": f"0x{ROUTINE_EXECUTION_STATE:x}",
+        "bank_root_base": f"0x{ROUTINE_BANK_ROOT:x}",
+        "bank_span": ROUTINE_BANK_SPAN,
+        "bank_count": ROUTINE_BANK_COUNT,
+        "record_stride": ROUTINE_RECORD_STRIDE,
+        "reserved_record_span": ROUTINE_RECORD_SPAN,
+        "first_record_id": min(record_ids),
+        "last_record_id": max(record_ids),
+        "missing_record_ids": sorted(
+            set(range(min(record_ids), max(record_ids) + 1)) - record_ids
+        ),
+        "assignment_count": len(writes),
+        "populated_cell_count": len(cell_assignments),
+        "overwritten_cell_count": sum(
+            len(values) > 1 for values in cell_assignments.values()
+        ),
+        "conflicting_overwrite_count": sum(
+            len(set(values)) > 1 for values in cell_assignments.values()
+        ),
+        "movement_step_count": sum(
+            len(record.get("movement_steps", [])) for record in records
+        ),
+        "battle_step_count": sum(
+            len(record.get("battle_steps", [])) for record in records
+        ),
+        "movement_provider_scripts": {
+            str(selector): name
+            for selector, name in sorted(movement_providers.items())
+        },
+        "battle_provider_scripts": {
+            str(selector): name
+            for selector, name in sorted(battle_providers.items())
+        },
+        "used_movement_provider_selectors": used_movement_providers,
+        "used_battle_provider_selectors": used_battle_providers,
+        "bank_layouts": bank_layouts,
+        "record_field_columns": record_columns,
+    }
+
+
 def extract_footer(scr):
     records = []
     for i, ins in enumerate(scr.instructions):
@@ -1172,6 +1409,11 @@ def write_data_index(data_dir: Path) -> None:
         "while exposing the final sparse decision-id registry. Packed resource ids join to",
         "SYS4INI script names, authored chapter tags correlate with SCJUMP's decoded decision",
         "sites, and legacy/stale chapter mismatches remain explicit.",
+        "",
+        "Banked-mode tables preserve RTINIT's twenty parallel 1000-by-20 routine banks,",
+        "source-ordered overwrites, and final row/slot values. Joined movement and battle",
+        "steps resolve provider selectors to RTN_M/RTN_B scripts while provider-specific",
+        "parameter banks retain structural names until their individual consumers prove more.",
         "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
         "direct-consumer evidence.",
         "",
@@ -1212,6 +1454,7 @@ def main() -> int:
         "mixed": extract_mixed,
         "rules": extract_class_change_rules,
         "dispatch": extract_dispatch,
+        "banked": extract_banked,
     }[mode]
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
@@ -1236,7 +1479,11 @@ def main() -> int:
     outpath.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     write_data_index(outpath.parent)
     print(f"{name}: mode={mode}, {len(recs)} records"
-          + (f", {len(cols)} field-columns" if mode != 'footer' else "")
+          + (
+              f", {len(meta.get('record_field_columns', []))} record-columns"
+              if mode == "banked"
+              else f", {len(cols)} field-columns" if mode != "footer" else ""
+          )
           + f" -> build/data/{outname}.json")
     for r in recs[:4]:
         if mode == "footer":

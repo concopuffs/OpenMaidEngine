@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5036 globals (212 curated, 4824 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5037 globals (231 curated, 4806 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -37,7 +37,11 @@
 | `0x74e8` | unit_skill_ids | high | investigation | Persistent four-skill row for each playable unit. CALCCC copies positive class_change_skill_awards into the first three slots after a promotion; ADDEXP compares the before/after row to report learned or replaced skills. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. Other consumers interpret it by object type. |
+| `0x53517` | entity_movement_routine_set_ids | high | investigation | Per-runtime-entity movement routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; MVRTN selects the current difficulty column and stores it in current_routine_set_id. |
+| `0x535ad` | entity_battle_routine_set_ids | high | investigation | Per-runtime-entity battle routine set for easy/normal/hard. SETEN copies a stage-specific override or the EBINIT default into this row; BTRTN selects the current difficulty column and stores it in current_routine_set_id. |
+| `0x53643` | entity_movement_routine_progress | high | investigation | Per-runtime-entity movement-routine progress counters. FIELD clears all fifty rows, movement providers increment the current step, and MVRTN compares it with movement_routine_minimum_progress_counts before enabling a step. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
+| `0x56738` | entity_battle_routine_random_rolls | high | investigation | Per-runtime-entity battle-step random rolls. FIELD and BTL fill every active entity's twenty cells with random-modulo-100; BTRTN executes a step when the matching roll is below battle_routine_activation_percents. |
 | `0x57357` | unit_deployment_cost_adjustments | high | investigation | Persistent per-unit delta added to unit_deployment_cost_base. CALCCC increments it by class_change_deployment_cost_delta, while SETCH, SETEN, ADDEXP, and deployment scripts include it when constructing or updating runtime command cost. |
 | `0x573bb` | unit_class_change_state | high | investigation | Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
@@ -145,6 +149,20 @@
 | `0xe78e3` | stage_enemy_battle_routine_set_ids | high | investigation | Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
 | `0xe793d` | stage_enemy_required_story_flags | high | investigation | Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
+| `0xeff78` | movement_routine_provider_selectors | high | investigation | RTINIT movement bank 0. MVRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through its RTN_M001..018/051..053/061 provider table, and call-scripts the selected movement routine. |
+| `0xf4d98` | movement_routine_activation_percents | high | investigation | RTINIT movement bank 1. After all other step gates pass, MVRTN executes the provider only when random-modulo-100 is below this value. |
+| `0xf9bb8` | movement_routine_parameter_1 | high | investigation | RTINIT movement bank 2. RTN_M004..015 providers consume the current row/step value; its exact meaning is tagged by movement_routine_provider_selectors and remains provider-specific. |
+| `0xfe9d8` | movement_routine_parameter_2 | high | investigation | RTINIT movement bank 3. RTN_M005/007/010/011/012 consume it as a provider-specific parameter. |
+| `0x1037f8` | movement_routine_parameter_3 | high | investigation | RTINIT movement bank 4. RTN_M011 consumes it as a provider-specific parameter. |
+| `0x108618` | movement_routine_parameter_4 | high | investigation | RTINIT movement bank 5. RTN_M011 consumes it as a provider-specific parameter. |
+| `0x112258` | movement_routine_minimum_progress_counts | high | investigation | RTINIT movement bank 7. MVRTN requires the current entity's matching movement-step progress counter to reach this value; movement providers increment those counters as their steps execute. |
+| `0x117078` | movement_routine_required_story_flag_ids | high | investigation | RTINIT movement bank 8. MVRTN subtracts one and rejects the step when the referenced story flag is not set. |
+| `0x11be98` | movement_routine_forbidden_story_flag_ids | high | investigation | RTINIT movement bank 9. MVRTN subtracts one and rejects the step when the referenced story flag is set. |
+| `0x120cb8` | battle_routine_provider_selectors | high | investigation | RTINIT battle bank 10. BTRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through RTN_B001..004, and call-scripts the selected battle routine. |
+| `0x125ad8` | battle_routine_activation_percents | high | investigation | RTINIT battle bank 11. BTRTN executes a candidate step only when the current entity's matching random-modulo-100 battle-step roll is below this value. |
+| `0x12a8f8` | battle_routine_parameter_1 | high | investigation | RTINIT battle bank 12. RTN_B004 uses it to choose an entry from the prepared battle-action candidate table. |
+| `0x147db8` | battle_routine_required_story_flag_ids | high | investigation | RTINIT battle bank 18. BTRTN subtracts one and rejects the step when the referenced story flag is not set. |
+| `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
 | `0x5` | — | low | auto-shape | array |
@@ -372,7 +390,8 @@
 | `0x66715` | current_unit_id | high | investigation | Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state. |
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
-| `0xeff75` | current_entity_index_hi | med | inference | High-purity current-entity row index (purity 0.95 in the auto shape map); dominant 2D-table row selector. |
+| `0xeff75` | current_routine_set_id | high | investigation | Shared RTINIT row selector. MVRTN loads the current entity's difficulty-selected movement routine set; BTRTN loads its battle routine set. Both then iterate routine_step_index across the selected twenty-slot row. |
+| `0xeff76` | routine_step_index | high | investigation | Shared RTINIT step selector. MVRTN and BTRTN iterate it from zero through nineteen and use it as the column index in every routine bank and matching per-entity runtime row. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
@@ -3686,16 +3705,12 @@
 | `0x52383` | — | med | auto-shape | record-table[stride 30] |
 | `0x5295f` | — | med | auto-shape | record-table[stride 30] |
 | `0x52f3b` | — | med | auto-shape | record-table[stride 30] |
-| `0x53517` | — | med | auto-shape | record-table[stride 3] |
-| `0x535ad` | — | med | auto-shape | record-table[stride 3] |
-| `0x53643` | — | med | auto-shape | record-table[stride 20] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |
 | `0x53e13` | — | med | auto-shape | record-table[stride 2] |
 | `0x53e77` | — | med | auto-shape | record-table[stride 2] |
 | `0x53edd` | — | low | auto-shape | index/counter? |
 | `0x53ef5` | — | low | auto-shape | index/counter? |
 | `0x53ef7` | — | med | auto-shape | record-table[stride 8] |
-| `0x56738` | — | med | auto-shape | record-table[stride 20] |
 | `0x57356` | — | med | auto-shape | current-entity-index? |
 | `0x62436` | — | low | auto-shape | index/counter? |
 | `0x62450` | — | low | auto-shape | index/counter? |
@@ -5035,20 +5050,6 @@
 | `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
 | `0xee035` | — | med | auto-shape | record-table[stride 3] |
 | `0xeefd5` | — | med | auto-shape | record-table[stride 3] |
-| `0xeff78` | — | med | auto-shape | record-table[stride 20] |
-| `0xf4d98` | — | med | auto-shape | record-table[stride 20] |
-| `0xf9bb8` | — | med | auto-shape | record-table[stride 20] |
-| `0xfe9d8` | — | med | auto-shape | record-table[stride 20] |
-| `0x1037f8` | — | med | auto-shape | record-table[stride 20] |
-| `0x108618` | — | med | auto-shape | record-table[stride 20] |
-| `0x112258` | — | med | auto-shape | record-table[stride 20] |
-| `0x117078` | — | med | auto-shape | record-table[stride 20] |
-| `0x11be98` | — | med | auto-shape | record-table[stride 20] |
-| `0x120cb8` | — | med | auto-shape | record-table[stride 20] |
-| `0x125ad8` | — | med | auto-shape | record-table[stride 20] |
-| `0x12a8f8` | — | med | auto-shape | record-table[stride 20] |
-| `0x147db8` | — | med | auto-shape | record-table[stride 20] |
-| `0x14cbd8` | — | med | auto-shape | record-table[stride 20] |
 | `0x1519f8` | — | med | auto-shape | current-entity-index? |
 | `0x151a5d` | — | med | auto-shape | record-table[stride 3] |
 | `0x151b89` | — | med | auto-shape | record-table[stride 3] |

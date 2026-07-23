@@ -47,7 +47,7 @@ Large, table-like scripts — prime candidates for data extraction:
 - `EBINIT` (338 KB) — enemy battle data
 - `MPINIT` (330 KB) — maps
 - `SCINIT` (88 KB), `CGINIT` (79 KB — CG gallery), `ITINIT` (70 KB — items),
-  `RTINIT` (67 KB), `CCINIT` (41 KB — class-change rule program), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
+  `RTINIT` (67 KB — movement/battle routine-step banks), `CCINIT` (41 KB — class-change rule program), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
   `BTANINIT` (105 KB — battle animations)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
@@ -94,6 +94,13 @@ script-resource array at `0x87a57` and authored-chapter array at `0x8a167`, leav
 All 135 packed resource ids resolve to numbered SC scripts. The generated view preserves 710 overwritten
 decision ids and joins every one of SCJUMP's 847 live decision ids; 844 final chapter tags agree, while
 three legacy/stale mismatches remain explicit.
+
+RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
+movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
+The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join
+provider selectors to script names, retain all 29 overwritten cells, and keep the six reserved empty
+banks visible. Provider-specific parameter banks remain structurally named until their tagged consumers
+prove more specific meanings.
 
 ### Message/string tables (`*MES`)
 `ITMES` (64 KB — item text), `VIMES` (43 KB), `EIMES` (37 KB), `SKMES` (31 KB — skill

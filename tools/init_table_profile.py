@@ -37,7 +37,9 @@ def load_table(name: str) -> dict:
     if not path.exists():
         raise SystemExit(f"missing extracted table: {path}")
     data = json.loads(path.read_text(encoding="utf8"))
-    if data.get("mode") not in {"name", "numeric", "mixed", "rules", "dispatch"}:
+    if data.get("mode") not in {
+        "name", "numeric", "mixed", "rules", "dispatch", "banked"
+    }:
         raise SystemExit(f"{name}: unsupported field-profiling mode {data.get('mode')!r}")
     return data
 
@@ -205,6 +207,41 @@ def profile_dispatch(data: dict) -> dict:
     }
 
 
+def profile_banked(data: dict) -> dict:
+    """Summarize RTINIT's routine banks, steps, and overwrite history."""
+    if data.get("mode") != "banked":
+        return {}
+    layouts = data.get("bank_layouts", {})
+    return {
+        "assignment_count": data.get("assignment_count", 0),
+        "populated_cell_count": data.get("populated_cell_count", 0),
+        "overwritten_cell_count": data.get("overwritten_cell_count", 0),
+        "conflicting_overwrite_count": data.get("conflicting_overwrite_count", 0),
+        "populated_bank_count": sum(
+            not layout.get("reserved_empty", False)
+            for layout in layouts.values()
+        ),
+        "reserved_bank_count": sum(
+            layout.get("reserved_empty", False)
+            for layout in layouts.values()
+        ),
+        "movement_step_count": data.get("movement_step_count", 0),
+        "battle_step_count": data.get("battle_step_count", 0),
+        "movement_provider_count": len(
+            data.get("used_movement_provider_selectors", [])
+        ),
+        "battle_provider_count": len(
+            data.get("used_battle_provider_selectors", [])
+        ),
+        "available_movement_provider_count": len(
+            data.get("movement_provider_scripts", {})
+        ),
+        "available_battle_provider_count": len(
+            data.get("battle_provider_scripts", {})
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -342,6 +379,23 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             f"- explicit chapter mismatches: "
             f"{dispatch_profile['scjump_chapter_mismatch_count']}",
         ])
+    elif banked_profile := profile_banked(data):
+        lines.extend([
+            f"- source assignments: {banked_profile['assignment_count']}",
+            f"- final populated cells: {banked_profile['populated_cell_count']}",
+            f"- overwritten cells: {banked_profile['overwritten_cell_count']} "
+            f"({banked_profile['conflicting_overwrite_count']} change value)",
+            f"- banks: {banked_profile['populated_bank_count']} populated, "
+            f"{banked_profile['reserved_bank_count']} reserved/empty",
+            f"- joined movement steps/used providers: "
+            f"{banked_profile['movement_step_count']}/"
+            f"{banked_profile['movement_provider_count']} "
+            f"({banked_profile['available_movement_provider_count']} dispatchable)",
+            f"- joined battle steps/used providers: "
+            f"{banked_profile['battle_step_count']}/"
+            f"{banked_profile['battle_provider_count']} "
+            f"({banked_profile['available_battle_provider_count']} dispatchable)",
+        ])
     else:
         lines.extend([
             f"- player-facing messages: {message_profile['population']}/{data['record_count']} "
@@ -406,6 +460,7 @@ def main() -> int:
         "message_profile": messages,
         "rule_profile": profile_rules(data),
         "dispatch_profile": profile_dispatch(data),
+        "banked_profile": profile_banked(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

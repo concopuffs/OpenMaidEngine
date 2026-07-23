@@ -784,8 +784,11 @@ promotion apply/report protocol. The input, working-output, and persistent desti
 as one class-change ABI in `vm-map/globals.toml`, and generated rules carry both raw address provenance and
 the shared `semantic_fields` join. SCINIT is now the sixth shape: 2,179 paired assignments produce a
 1,209-row SCJUMP decision-to-packed-scene registry plus authored chapter metadata, with all script ids
-resolved and the full overwrite history retained. The next data-semantics target is RTINIT, whose 3,336
-writes span several sparse 20,000-cell movement/battle routine banks and first need structural segmentation.
+resolved and the full overwrite history retained. RTINIT is now the seventh shape: its twenty parallel
+1000-by-20 banks produce 172 routine sets, 1,043 movement steps, and fourteen battle steps with RTN_M/RTN_B
+provider joins, activation/progress/story gates, six explicit reserved banks, and complete overwrite
+history. The next data-semantics slice is provider-tagged parameter decoding, beginning with high-density
+movement providers 5 and 11 rather than assigning one meaning to their shared raw parameter banks.
 
 Once the natural spine and first gameplay loop are trustworthy, broaden in independent tracks:
 

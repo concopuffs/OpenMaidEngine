@@ -313,12 +313,6 @@ def test_real_scene_dispatch() -> None:
     script = sys4load.load(extract_init.resolve("SCINIT"))
     check(extract_init.detect_mode(script) == "dispatch",
           "SCINIT auto-detects as paired scene dispatch arrays")
-    check(
-        extract_init.detect_mode(
-            sys4load.load(extract_init.resolve("RTINIT"))
-        ) == "numeric",
-        "RTINIT's multi-table writes do not false-positive as paired dispatch",
-    )
     records, meta = extract_init.extract_dispatch(script)
     by_id = {record["id"]: record for record in records}
     check(len(records) == 1209 and meta["assignment_count"] == 2179,
@@ -347,6 +341,66 @@ def test_real_scene_dispatch() -> None:
     check(semantics["0x87a57"] == "scjump_scene_script_resource_ids"
           and semantics["0x8a167"] == "scjump_authored_chapters",
           "SCINIT's paired columns join to canonical semantic names")
+
+
+def test_real_routine_banks() -> None:
+    script = sys4load.load(extract_init.resolve("RTINIT"))
+    check(extract_init.detect_mode(script) == "banked",
+          "RTINIT auto-detects as parallel routine-step banks")
+    records, meta = extract_init.extract_banked(script)
+    by_id = {record["id"]: record for record in records}
+    check(len(records) == 172
+          and meta["first_record_id"] == 1
+          and meta["last_record_id"] == 176
+          and meta["missing_record_ids"] == [150, 151, 152, 153],
+          "RTINIT preserves its sparse one-based routine-set ids")
+    check(meta["bank_root_base"] == "0xeff78"
+          and meta["bank_span"] == 20000
+          and meta["bank_count"] == 20
+          and meta["record_stride"] == 20
+          and meta["reserved_record_span"] == 1000,
+          "RTINIT exposes twenty parallel 1000-by-20 banks")
+    check(meta["assignment_count"] == 3336
+          and meta["populated_cell_count"] == 3307
+          and meta["overwritten_cell_count"] == 29
+          and meta["conflicting_overwrite_count"] == 11,
+          "RTINIT preserves source assignments and final overwrite accounting")
+    check(meta["movement_step_count"] == 1043
+          and meta["battle_step_count"] == 14
+          and len(meta["used_movement_provider_selectors"]) == 19
+          and len(meta["used_battle_provider_selectors"]) == 4
+          and len(meta["record_field_columns"]) == 117,
+          "RTINIT assembles every populated movement and battle step")
+    check([
+        layout["bank_index"]
+        for layout in meta["bank_layouts"].values()
+        if layout["reserved_empty"]
+    ] == [6, 13, 14, 15, 16, 17],
+          "RTINIT keeps all six reserved empty banks in its structural layout")
+    movement = by_id[1]["movement_steps"][0]
+    battle = by_id[1]["battle_steps"][0]
+    check(movement["movement_provider_selector"] == 1
+          and movement["movement_activation_percent"] == 100
+          and movement["provider_script"] == "RTN_M001.BIN",
+          "RTINIT joins movement selectors and activation percentages")
+    check(battle["battle_provider_selector"] == 1
+          and battle["battle_activation_percent"] == 100
+          and battle["provider_script"] == "RTN_B001.BIN",
+          "RTINIT joins battle selectors and activation percentages")
+    check(by_id[2]["battle_steps"][0]["battle_parameter_1"] == 219
+          and by_id[2]["battle_steps"][0]["provider_script"] == "RTN_B004.BIN",
+          "RTINIT retains provider-specific battle parameters")
+    check(by_id[173]["movement_steps"][0]["movement_parameter_1"] == 2
+          and by_id[173]["movement_steps"][0]["movement_parameter_2"] == 158,
+          "RTINIT final rows reflect source-ordered conflicting overwrites")
+    semantics = extract_init.field_semantics(records)
+    check(
+        semantics["0xeff78/20/0"]
+        == "movement_routine_provider_selectors.column_0"
+        and semantics["0x125ad8/20/0"]
+        == "battle_routine_activation_percents.column_0",
+        "RTINIT raw banks join to canonical structural field names",
+    )
 
 
 def test_real_message_tables() -> None:
@@ -524,6 +578,7 @@ if __name__ == "__main__":
     test_real_mixed_table()
     test_real_class_change_rules()
     test_real_scene_dispatch()
+    test_real_routine_banks()
     test_real_message_tables()
     test_message_join()
     test_field_semantics()
