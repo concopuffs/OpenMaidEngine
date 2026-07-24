@@ -136,6 +136,12 @@ proves the stat ABI, MVSEEK/FIELD prove five SKINIT traversal requirements, and 
 shared `MP000*.AGF` fallback assets to the stage texture slots. The dedicated view accounts for all
 98 instructions and preserves ids 0, 5, and 6 as meaningful implicit-default rows.
 
+SPINIT is HMODE's `8 × 15` H-scene gallery registry. Its 118 populated resource ids fill seven
+complete pages and thirteen cells of the final page; the final two slots remain zero. INIT2 provides
+the matching `SO027A.AGF` through `SO027H.AGF` thumbnail sheets, and all populated cells resolve to
+`SP*.BIN` resources. HMODE filters cells through opcode `0x19d` and indirectly call-scripts the
+selected available entry.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

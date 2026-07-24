@@ -3017,3 +3017,28 @@ population, all thirteen combat-stat cells, all five SKINIT skill joins, and all
 
 **Next:** audit SPINIT's 118 populated cells as the stride-15 HMODE resource matrix; the generic
 numeric view currently fragments its eight logical rows into individual address-derived records.
+
+## Data-semantics sidebar: SPINIT H-scene gallery (2026-07-23)
+
+SPINIT's 118 numeric writes are a single `8 × 15` row-major registry at `0x6638b`, not 118
+independent records. Each row is one HMODE gallery page and each column is one thumbnail slot. The
+first seven rows are full; the eighth authors slots 0..12 and leaves slots 13..14 as meaningful
+zero/default cells. The dedicated schema classifies all 119 instructions including `exit` and
+preserves both complete rows and authored raw-cell provenance.
+
+INIT2 supplies the parallel eight-page thumbnail-sheet registry at `0x66421`. All eight assets
+resolve through SYS4INI as `SO027A.AGF` through `SO027H.AGF`; visual conversion confirms each is a
+fifteen-thumbnail page matching SPINIT's row geometry. Every one of SPINIT's 118 nonzero values
+resolves to an `SP*.BIN` script resource.
+
+HMODE compacts the configured thumbnail sheets into its visible page list, iterates all fifteen
+SPINIT slots for each page, passes every populated resource through still-unnamed opcode `0x19d`,
+and marks rejected cells unavailable. Selecting an available thumbnail retrieves the same matrix
+cell and executes it with indirect `call-script`. This proves the page, slot, resource, and dispatch
+semantics without inventing a stronger name for opcode `0x19d`.
+
+Regressions protect the 8-by-15 geometry, 118/120 population, exact two-cell gap, all eight INIT2
+thumbnail joins, all 118 SYS4INI script joins, and complete instruction accounting.
+
+**Next:** audit TRINIT's 365-instruction ritual/action registry by its direct consumers; it is the
+next compact mixed string/numeric INIT surface.

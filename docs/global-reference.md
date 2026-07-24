@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5049 globals (333 curated, 4716 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5049 globals (335 curated, 4714 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -87,6 +87,8 @@
 | `0x64441` | gallery_thumbnail_slot_ids | high | investigation | CGINIT's slot within the selected 6x5 thumbnail atlas. CGMODE subtracts one, draws that one of thirty 126x95 cells, and reports the unlocked/total variant counts associated with the slot. |
 | `0x64c11` | gallery_variant_ordinals | high | investigation | CGINIT's ordering key for multiple full-size images behind one thumbnail slot. CGMODE subtracts one and stores the gallery record id at sheet[slot*100 + ordinal], then walks that ordered variant list in the image viewer. |
 | `0x66381` | gallery_thumbnail_sheet_asset_ids | high | investigation | CGMODE's configured thumbnail-sheet resources. INIT2 populates the first four cells with SO026A.AGF through SO026D.AGF and leaves the remaining six reserved; CGMODE compacts nonzero cells into its visible sheet list before applying gallery_thumbnail_sheet_ids. |
+| `0x6638b` | h_scene_gallery_script_ids | high | investigation | SPINIT's H-scene gallery registry. HMODE compacts the eight configured thumbnail pages, scans each page's fifteen script slots, filters populated resources through opcode 0x19d, and call-scripts the selected available entry. Columns: 0=slot_0, 1=slot_1, 2=slot_2, 3=slot_3, 4=slot_4, 5=slot_5, 6=slot_6, 7=slot_7, 8=slot_8, 9=slot_9, 10=slot_10, 11=slot_11, 12=slot_12, 13=slot_13, 14=slot_14. |
+| `0x66421` | h_scene_gallery_thumbnail_sheet_assets | high | investigation | INIT2's eight HMODE thumbnail-page assets. HMODE compacts nonzero configured pages and pairs each page index with the corresponding row of h_scene_gallery_script_ids. |
 | `0x665e3` | modal_annotation_horizontal_cells | high | investigation | Per-annotation horizontal anchor input shared by MES and SBUNKI. Each renderer multiplies the cell by 21 pixels and offsets it by half the annotation's rendered width. |
 | `0x66647` | modal_annotation_row_offsets | high | investigation | Per-annotation vertical row offset shared by MES and SBUNKI. Renderers multiply it by 30 pixels; a negative value additionally shifts the annotation left by one 21-pixel cell. |
 | `0x66716` | unit_voice_asset_ids | high | investigation | EBINIT per-unit voice bank for 116 voiced characters and variants. FIELD directly selects column 0 before WARPD, column 1 when an acting unit takes chest/treasure contents, and column 3 after occupying, losing, or sealing a stage objective. BTL selects the acting unit's columns 7..9 for ordinary attacks, 10 for an ordinary critical, odd columns 11/13/15 for skill uses, and even columns 12/14/16 for critical skills; the three variants follow its six-step exchange selector. If the target survives positive damage, BTL selects target columns 19/20/21 with 60/30/10 percent weights; column 22 belongs to a target reduced to zero HP, while actor column 23 is selected for a finishing blow. SHOWGROW selects column 24 after level gain. Populated columns 4..6 and 17..18 have no reachable selector in the shipped script corpus and are retained as explicit unused authoring slots; columns 17 and 18 duplicate columns 15 and 16 in all 116 populated rows. Columns: 0=warp, 1=treasure_capture, 3=objective_interaction, 4=unused_slot_4, 5=unused_slot_5, 6=unused_slot_6, 7=normal_attack_1, 8=normal_attack_2, 9=normal_attack_3, 10=critical_normal_attack, 11=skill_use_1, 12=critical_skill_1, 13=skill_use_2, 14=critical_skill_2, 15=skill_use_3, 16=critical_skill_3, 17=unused_slot_17, 18=unused_slot_18, 19=damage_reaction_1, 20=damage_reaction_2, 21=damage_reaction_3, 22=defeated, 23=finishing_blow, 24=level_up. |
@@ -314,7 +316,6 @@
 | `0x624a3` | — | low | auto-shape | array |
 | `0x653e1` | — | low | auto-shape | array |
 | `0x65bb1` | — | low | auto-shape | array |
-| `0x66421` | — | low | auto-shape | array |
 | `0x6642d` | — | low | auto-shape | array |
 | `0x66442` | — | low | auto-shape | array |
 | `0x6650a` | — | low | auto-shape | array |
@@ -5044,7 +5045,6 @@
 | `0x64cdc` | — | low | auto-shape | cg-gallery-field? |
 | `0x64cdd` | — | low | auto-shape | cg-gallery-field? |
 | `0x64cde` | — | med | auto-shape | cg-gallery-field |
-| `0x6638b` | — | med | auto-shape | record-table[stride 15] |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0xc6077` | — | med | auto-shape | record-table[stride 27] |

@@ -672,6 +672,11 @@ MAP_TEXTURE_SLOT_COUNT = 20
 TERRAIN_DEFINITION_SPAN = 30
 TERRAIN_SHIPPED_ID_MAX = 19
 
+H_SCENE_GALLERY_SCRIPT_BASE = 0x6638B
+H_SCENE_GALLERY_PAGE_COUNT = 8
+H_SCENE_GALLERY_SLOTS_PER_PAGE = 15
+H_SCENE_GALLERY_THUMBNAIL_BASE = 0x66421
+
 
 def resolve(name: str) -> Path:
     for cand in (paths.GAME_DIR / f"{name}.BIN", paths.DATA1 / f"{name}.BIN"):
@@ -3630,6 +3635,155 @@ def _terrain_definitions(max_terrain_id: int) -> list[dict]:
     ]
 
 
+def extract_h_scene_gallery(scr):
+    """Extract SPINIT's eight-page, fifteen-slot HMODE script registry."""
+    values: dict[tuple[int, int], int] = {}
+    classified_offsets = set()
+    static_write_count = 0
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        static_write_count += 1
+        destination, value = write
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static H-gallery value "
+                f"at 0x{ins.offset:x}"
+            )
+        index = destination - H_SCENE_GALLERY_SCRIPT_BASE
+        capacity = (
+            H_SCENE_GALLERY_PAGE_COUNT
+            * H_SCENE_GALLERY_SLOTS_PER_PAGE
+        )
+        if not 0 <= index < capacity:
+            raise ValueError(
+                f"{scr.path.name}: H-gallery write 0x{destination:x} "
+                f"outside the {capacity}-cell registry"
+            )
+        page, slot = divmod(index, H_SCENE_GALLERY_SLOTS_PER_PAGE)
+        _store_unique(values, (page, slot), value, page)
+        classified_offsets.add(ins.offset)
+
+    exit_offsets = {
+        ins.offset
+        for ins in scr.instructions
+        if sys4load.display_label(ins.opcode) == "exit"
+    }
+    classified_offsets.update(exit_offsets)
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+    if len(exit_offsets) != 1:
+        raise ValueError(
+            f"{scr.path.name}: expected one exit, found {len(exit_offsets)}"
+        )
+
+    init_scr = sys4load.load(resolve("INIT2"))
+    thumbnail_assets = {}
+    for ins in init_scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        page = destination - H_SCENE_GALLERY_THUMBNAIL_BASE
+        if 0 <= page < H_SCENE_GALLERY_PAGE_COUNT:
+            _store_unique(thumbnail_assets, page, value, page)
+    expected_pages = set(range(H_SCENE_GALLERY_PAGE_COUNT))
+    if set(thumbnail_assets) != expected_pages:
+        raise ValueError(
+            f"INIT2.BIN: H-gallery thumbnail pages are "
+            f"{sorted(thumbnail_assets)}, expected "
+            f"0..{H_SCENE_GALLERY_PAGE_COUNT - 1}"
+        )
+
+    names = callscript_names()
+    table_key = f"0x{H_SCENE_GALLERY_SCRIPT_BASE:x}"
+    records = []
+    empty_cells = []
+    for page in range(H_SCENE_GALLERY_PAGE_COUNT):
+        script_ids = []
+        scenes = []
+        raw_fields = {}
+        for slot in range(H_SCENE_GALLERY_SLOTS_PER_PAGE):
+            script_id = values.get((page, slot), 0)
+            script_ids.append(script_id)
+            if not script_id:
+                empty_cells.append({"page": page, "slot": slot})
+                continue
+            script_name = names.get(script_id, "")
+            scenes.append({
+                "slot": slot,
+                "script_resource_id": script_id,
+                "script_name": script_name,
+            })
+            raw_fields[
+                f"{table_key}/{H_SCENE_GALLERY_SLOTS_PER_PAGE}/{slot}"
+            ] = script_id
+        thumbnail_asset_id = thumbnail_assets[page]
+        records.append({
+            "id": page,
+            "name": f"page_{page}",
+            "thumbnail_sheet_asset_id": thumbnail_asset_id,
+            "thumbnail_sheet_asset_name": names.get(
+                thumbnail_asset_id, ""
+            ),
+            "script_resource_ids": script_ids,
+            "scenes": scenes,
+            "record_fields": raw_fields,
+        })
+
+    return records, {
+        "schema": "h-scene-gallery-pages",
+        "page_count": H_SCENE_GALLERY_PAGE_COUNT,
+        "slots_per_page": H_SCENE_GALLERY_SLOTS_PER_PAGE,
+        "registry_capacity": (
+            H_SCENE_GALLERY_PAGE_COUNT
+            * H_SCENE_GALLERY_SLOTS_PER_PAGE
+        ),
+        "populated_scene_count": len(values),
+        "empty_cells": empty_cells,
+        "script_registry_base": table_key,
+        "thumbnail_sheet_array_base": (
+            f"0x{H_SCENE_GALLERY_THUMBNAIL_BASE:x}"
+        ),
+        "thumbnail_sheet_source": "INIT2.BIN",
+        "array_layouts": {
+            table_key: {"stride": H_SCENE_GALLERY_SLOTS_PER_PAGE},
+        },
+        "schema_field_semantics": {
+            table_key: "h_scene_gallery_script_ids",
+        },
+        "static_write_count": static_write_count,
+        "classified_static_write_count": len(values),
+        "classified_instruction_count": len(classified_offsets),
+        "resolved_scene_script_count": sum(
+            bool(scene["script_name"])
+            for record in records
+            for scene in record["scenes"]
+        ),
+        "resolved_thumbnail_sheet_count": sum(
+            bool(record["thumbnail_sheet_asset_name"])
+            for record in records
+        ),
+        "consumer_contract": {
+            "HMODE.BIN": (
+                "compact the eight configured INIT2 thumbnail pages, scan "
+                "their fifteen SPINIT script slots, filter each populated "
+                "resource through opcode 0x19d, and call-script the selected "
+                "available scene"
+            ),
+        },
+    }
+
+
 def _map_stage_definitions() -> list[dict]:
     """Read the STINIT2 records that own all four terrain-atlas bounds."""
     stage_scr = sys4load.load(resolve("STINIT2"))
@@ -4241,6 +4395,10 @@ def write_data_index(data_dir: Path) -> None:
         "effect descriptions, four parallel topology/rendering arrays, the ten-column",
         "combat-stat matrix, SKINIT traversal-skill joins, and shared texture fallbacks.",
         "",
+        "SPINIT's dedicated H-scene gallery schema exposes eight fifteen-slot pages,",
+        "joins every page to its INIT2 SO027 thumbnail sheet, resolves all 118 populated",
+        "scene resources, and retains the two implicit empty cells in the final page.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -4333,6 +4491,8 @@ def main() -> int:
         extractor = extract_voice_configuration
     elif mode == "name" and name == "LAINIT":
         extractor = extract_terrain_definitions
+    elif mode == "numeric" and name == "SPINIT":
+        extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":
         extractor = extract_map_terrain_atlas
     recs, meta = extractor(scr)

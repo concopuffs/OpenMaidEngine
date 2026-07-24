@@ -346,6 +346,25 @@ def profile_terrain_definitions(data: dict) -> dict:
     }
 
 
+def profile_h_scene_gallery(data: dict) -> dict:
+    """Summarize SPINIT's HMODE page/slot script registry."""
+    if data.get("schema") != "h-scene-gallery-pages":
+        return {}
+    return {
+        "page_count": data.get("page_count", 0),
+        "slots_per_page": data.get("slots_per_page", 0),
+        "registry_capacity": data.get("registry_capacity", 0),
+        "populated_scene_count": data.get("populated_scene_count", 0),
+        "empty_cells": data.get("empty_cells", []),
+        "resolved_scene_script_count": data.get(
+            "resolved_scene_script_count", 0
+        ),
+        "resolved_thumbnail_sheet_count": data.get(
+            "resolved_thumbnail_sheet_count", 0
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -473,7 +492,22 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if terrain_profile := profile_terrain_definitions(data):
+    if h_gallery_profile := profile_h_scene_gallery(data):
+        lines.extend([
+            f"- geometry: {h_gallery_profile['page_count']} pages × "
+            f"{h_gallery_profile['slots_per_page']} slots",
+            f"- populated scenes: "
+            f"{h_gallery_profile['populated_scene_count']}/"
+            f"{h_gallery_profile['registry_capacity']}",
+            f"- resolved scripts: "
+            f"{h_gallery_profile['resolved_scene_script_count']}/"
+            f"{h_gallery_profile['populated_scene_count']}",
+            f"- resolved thumbnail sheets: "
+            f"{h_gallery_profile['resolved_thumbnail_sheet_count']}/"
+            f"{h_gallery_profile['page_count']}",
+            f"- empty cells: {h_gallery_profile['empty_cells']}",
+        ])
+    elif terrain_profile := profile_terrain_definitions(data):
         lines.extend([
             f"- shipped terrain ids: "
             f"{terrain_profile['shipped_record_count']} inside a "
@@ -632,6 +666,7 @@ def main() -> int:
         "banked_profile": profile_banked(data),
         "map_atlas_profile": profile_map_atlas(data),
         "terrain_definition_profile": profile_terrain_definitions(data),
+        "h_scene_gallery_profile": profile_h_scene_gallery(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

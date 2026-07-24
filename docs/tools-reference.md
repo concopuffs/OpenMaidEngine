@@ -104,6 +104,11 @@ terrain arrays, the signed ten-column combat-stat matrix, and three implicit-def
 Required skill ids join to SKINIT names; shared texture-slot fallbacks join to SYS4INI AGF filenames.
 The profile summarizes those populations and the CALCBTPARAM/MVSEEK/FIELD/INFOAF/DRAWMAP contract.
 
+Numeric-mode SPINIT emits eight complete fifteen-slot HMODE gallery pages instead of 118 fragmented
+address records. It joins the page rows to INIT2's `SO027A.AGF` through `SO027H.AGF` thumbnail sheets,
+resolves every populated cell to its `SP*.BIN` resource, preserves the final two zero slots, and
+records HMODE's opcode-0x19d availability-filter plus indirect-call contract.
+
 Footer-mode MPINIT classifies all 1,472 copies as fifty-cell rows within one stride-53 terrain atlas.
 It derives grid Y from each destination, retains 127 implicit-zero gaps, and joins STINIT2's inclusive
 tile bounds after the consumer-proven two-times coordinate conversion. The output contains 66 named

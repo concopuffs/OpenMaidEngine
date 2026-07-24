@@ -3088,6 +3088,28 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x6638b"
+name = "h_scene_gallery_script_ids"
+category = "data-table"
+type = "int[8][15]"
+columns = { "0" = "slot_0", "1" = "slot_1", "2" = "slot_2", "3" = "slot_3", "4" = "slot_4", "5" = "slot_5", "6" = "slot_6", "7" = "slot_7", "8" = "slot_8", "9" = "slot_9", "10" = "slot_10", "11" = "slot_11", "12" = "slot_12", "13" = "slot_13", "14" = "slot_14" }
+value_domain = "SYS4INI SP*.BIN resource id; 118 populated cells and two trailing zero cells"
+usage = "SPINIT's H-scene gallery registry. HMODE compacts the eight configured thumbnail pages, scans each page's fifteen script slots, filters populated resources through opcode 0x19d, and call-scripts the selected available entry."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x66421"]
+
+[[global]]
+address = "0x66421"
+name = "h_scene_gallery_thumbnail_sheet_assets"
+category = "data-table"
+type = "int[8]"
+value_domain = "SYS4INI resources SO027A.AGF through SO027H.AGF"
+usage = "INIT2's eight HMODE thumbnail-page assets. HMODE compacts nonzero configured pages and pairs each page index with the corresponding row of h_scene_gallery_script_ids."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x26d3"
 name = "terrain_effect_descriptions"
 category = "string-table"

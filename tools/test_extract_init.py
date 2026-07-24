@@ -1523,6 +1523,55 @@ def test_terrain_definitions() -> None:
     )
 
 
+def test_h_scene_gallery() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["SPINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "SPINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_h_scene_gallery(script)
+    check(
+        len(records) == 8
+        and meta["page_count"] == 8
+        and meta["slots_per_page"] == 15
+        and meta["registry_capacity"] == 120,
+        "SPINIT exposes HMODE's eight-by-fifteen page geometry",
+    )
+    check(
+        meta["static_write_count"] == 118
+        and meta["classified_static_write_count"] == 118
+        and meta["classified_instruction_count"] == 119
+        and meta["empty_cells"]
+        == [{"page": 7, "slot": 13}, {"page": 7, "slot": 14}],
+        "SPINIT classifies every scene cell and the two implicit empty slots",
+    )
+    check(
+        records[0]["thumbnail_sheet_asset_name"] == "SO027A.AGF"
+        and records[7]["thumbnail_sheet_asset_name"] == "SO027H.AGF"
+        and meta["resolved_thumbnail_sheet_count"] == 8,
+        "SPINIT pages join to all eight INIT2 HMODE thumbnail sheets",
+    )
+    check(
+        records[0]["scenes"][0]
+        == {
+            "slot": 0,
+            "script_resource_id": 0x151E,
+            "script_name": "SP0800.BIN",
+        }
+        and records[2]["scenes"][3]["script_name"] == "SP1200.BIN"
+        and records[7]["scenes"][-1]["script_name"] == "SP0179.BIN"
+        and meta["resolved_scene_script_count"] == 118,
+        "SPINIT resolves every populated cell to its call-script resource",
+    )
+    check(
+        len(records[7]["script_resource_ids"]) == 15
+        and records[7]["script_resource_ids"][-2:] == [0, 0]
+        and len(records[7]["record_fields"]) == 13,
+        "SPINIT preserves complete rows beside authored raw-cell provenance",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1738,6 +1787,7 @@ if __name__ == "__main__":
     test_name_entry_palette()
     test_voice_configuration()
     test_terrain_definitions()
+    test_h_scene_gallery()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

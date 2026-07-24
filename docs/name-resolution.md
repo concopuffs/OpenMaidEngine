@@ -682,8 +682,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    doubled-coordinate terrain atlas and joins 66 STINIT2 stage definitions to 53 unique rectangles,
    while LAINIT closes all twenty shipped terrain definitions: names/effects, rendering/topology
    columns, ten combat-stat columns, traversal-skill requirements, and shared map-texture assets.
-   With RTINIT's used-provider surface closed and ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and
-   INFOMES/MES classified, audit SPINIT's stride-15 HMODE resource matrix next;
+   SPINIT closes HMODE's eight-by-fifteen thumbnail-page-to-scene registry, with all 118 scripts and
+   eight INIT2 sheets resolved. With RTINIT's used-provider surface closed and
+   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, audit TRINIT's compact
+   ritual/action registry next;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
 2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context, preserving reserved rows and sparse cells. RECOVER's

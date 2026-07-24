@@ -245,6 +245,28 @@ def main() -> int:
     assert "- shipped terrain ids: 20 inside a 30-row table" in rendered_terrain
     assert "- combat-stat cells: 13" in rendered_terrain
 
+    h_gallery_fixture = {
+        "table": "SP",
+        "mode": "numeric",
+        "schema": "h-scene-gallery-pages",
+        "record_count": 8,
+        "page_count": 8,
+        "slots_per_page": 15,
+        "registry_capacity": 120,
+        "populated_scene_count": 118,
+        "empty_cells": [{"page": 7, "slot": 13}, {"page": 7, "slot": 14}],
+        "resolved_scene_script_count": 118,
+        "resolved_thumbnail_sheet_count": 8,
+        "records": [],
+    }
+    h_gallery_summary = profile.profile_h_scene_gallery(h_gallery_fixture)
+    assert h_gallery_summary["page_count"] == 8
+    assert h_gallery_summary["populated_scene_count"] == 118
+    assert h_gallery_summary["resolved_thumbnail_sheet_count"] == 8
+    rendered_h_gallery = profile.render_markdown(h_gallery_fixture, [], 40)
+    assert "- geometry: 8 pages × 15 slots" in rendered_h_gallery
+    assert "- populated scenes: 118/120" in rendered_h_gallery
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3
