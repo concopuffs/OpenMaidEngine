@@ -222,6 +222,28 @@ scene-local numeric addressing mode.
    the earlier pointer in the native loop; no base/append name replacement occurs. Native extracts the
    selector with arithmetic `SAR 24`; the port rejects sign-bit selectors rather than guessing behavior for
    ids that would index before AGE's mount table.
+
+   **Append bootstrap/data sequence (static content verified 2026-07-24; native launch boundary open).**
+   Installed `APPEND01` contains 81 records, including 39 SYS4 scripts. Record zero is
+   `$1$AUTORUN.BIN` (`0x01000000`), a clean 43-instruction script. Its first 22 instructions call packed
+   records `0x01000001..0x01000016` in exact order: append fragments for EBINIT, CNINIT, ITINIT, SKINIT,
+   ILINIT, AFINIT, TRINIT, MAINIT, ALINIT, CDINIT2, MPINIT, LAINIT, OBINIT, STINIT2, RTINIT, CGINIT,
+   SPINIT, CTINIT, CVINIT, CIINIT, VIINIT, and SCINIT. It then marks append state and installs
+   `$1$CCINIT.BIN` at `0x01000017`, `$1$SCJUMP.BIN` at `0x01000018`, and the packed
+   READY/CLOSE/ROUND and message handlers through `0x01000029` into existing dispatch globals. The
+   called INIT fragments populate references to the append graphics and six append scenario scripts.
+
+   These INIT fragments are additive bytecode, not same-name catalog overlays. In particular,
+   `$1$EBINIT.BIN` (`0x01000001`) writes directly into the established EBINIT global arrays and adds
+   sparse unit-definition rows 81 and 900..905; `$1$CNINIT.BIN` adds their display names and voice-family
+   mappings. Mounting an AAI therefore only makes its packed records addressable. Executing its AUTORUN
+   is the separate operation that materializes append data and registers append control flow.
+
+   The base/loose script corpus contains no reference to packed id `0x01000000`. The shipped game must
+   therefore enter the append AUTORUN outside the visible base script call graph, but the exact native
+   launcher and its ordering relative to SYSTEM4/INIT2 have not yet been reversed. The current port can
+   resolve and execute append scripts when given their packed ids, but natural SYSTEM4 boot does not yet
+   launch mounted AUTORUNs. Do not treat VFS-B mount completion as append gameplay/bootstrap completion.
 3. **AGF decoder (VFS-C DONE).** `Age.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
    to a tightly packed, top-down width/height + RGBA8 surface. The MIT-licensed GARbro
    `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,

@@ -2172,6 +2172,16 @@ The callers pass their operands unchanged: `script_frame_load_resource@0x40e980`
 fetches operand 1 and immediately forwards it to that helper. Thus scene-local and raw-fallback are not
 native modes: ordinary resource operands are already universal packed SYS4INI/AAI ids.
 
+**Unresolved append execution boundary (2026-07-24).** Static inspection now separates catalog mount
+from append initialization. Installed selector 1 record zero is `$1$AUTORUN.BIN` at packed id
+`0x01000000`; it calls the 22 append INIT fragments at `0x01000001..0x01000016`, then installs append
+dispatch scripts/resources. No base or loose script contains a call to `0x01000000`, so append startup is
+owned outside the visible base-script graph. The native function that chooses and launches mounted
+AUTORUN records, and its exact ordering relative to SYSTEM4/INIT2, remain unnamed/unproven. A follow-up
+should trace script-frame creation for packed id `0x01000000` during cold boot, then rename/comment and
+save the responsible `/v2` function. Until then, “AAI mounted” must not be used as evidence that append
+INIT deltas ran.
+
 SC0010 supplies a clean corpus proof outside SC0000's base-zero coincidence. Its `set-texture 0x21` must
 open raw entry `0x21` (`SO013A.AGF`); adding SC0010's catalog position `0x11e` instead selects unrelated
 `COL0023.OGG`. Its `play-voice 0x120/0x121/0x122` operands directly select

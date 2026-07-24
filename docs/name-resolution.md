@@ -724,6 +724,16 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    known value in-game (take damage, gain XP), watch which global moves → definitive
    `field@X = "HP"`. Reserve for the fields that matter; this is the last mile.
 
+**Append semantic-coverage caveat (2026-07-24).** The current `paths.scripts()` corpus and
+`extract_init.py` resolution path include DATA1 plus loose root overrides, but not selector-keyed AAI
+records. Consequently generated `build/data/EBINIT.json` describes the base/loose EBINIT only. Installed
+`$1$AUTORUN.BIN` calls additive append INIT fragments; `$1$EBINIT.BIN` adds unit rows 81 and 900..905 to
+the same global schema, and `$1$CNINIT.BIN` supplies the companion names/voice families. A future append
+semantic pass should enumerate packed scripts from the runtime catalog, preserve `(pack selector, raw
+index)` provenance, extract each INIT fragment with the existing schemas, and merge base/append assignments
+only after the native AUTORUN ordering is proven. The AAI format and verified internal call sequence are
+canonical in `docs/asset-resolution-re.md`.
+
 Re-run `tools/global_map.py` after each increment; `sys4load` picks up the new labels
 automatically (it reads `build/global-var-map.json` at load).
 

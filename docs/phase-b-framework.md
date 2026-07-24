@@ -90,6 +90,14 @@ coverage is 100% for all 23 data initializers, CALCARR, and TUNE; the remaining 
 SYSTEM4-rooted path visible and interactive in Godot, then investigate only the gaps actually reached on
 that route instead of treating every static gap as a prerequisite.
 
+**Append boot caveat (2026-07-24).** The sequence and coverage above describe only the base/loose script
+graph. Mounted `APPEND01` has a separate `$1$AUTORUN.BIN` at packed id `0x01000000`; that script calls 22
+append INIT deltas and registers the append's class-change, SCJUMP, message, stage, and scenario resources.
+The base corpus never references that packed id, and natural port boot currently mounts the catalog without
+executing AUTORUN. Stage B2 is therefore not append-complete until native RE identifies the engine-owned
+launch boundary and the port reproduces its ordering. The verified append-internal sequence and remaining
+native question are canonical in `docs/asset-resolution-re.md` and `docs/engine-re.md`.
+
 **Godot root landing (2026-07-20).** The no-argument Godot/run-godot path now starts SYSTEM4 directly and
 does not apply the direct-SC0000 layout/surface bootstrap or the diagnostic `--boot` prefix. A windowed run
 reaches and renders TITLE using SYSTEM4-owned retained state. A real-script integration test drives TITLE's
@@ -316,6 +324,9 @@ The boot path must cover two existing categories:
 - System/session initialization currently approximated by `INITCONFIG`, `INIT2`, and `INIT`, including
   host-visible side effects that `CaptureHost` discards.
 - Game-data initialization represented by the `*INIT` family used by the headless boot/session tools.
+- Mounted append initialization: execute each native-selected packed AUTORUN at the proven boot boundary,
+  preserving base-versus-append order and provenance rather than treating same-suffix INIT fragments as
+  filename replacements.
 
 Completion evidence:
 
