@@ -37,6 +37,11 @@ public sealed class VirtualMachine
     private readonly List<string> _activeFrameNames = new();
     private readonly List<ExecFrame> _activeExecutionFrames = new();
     private ExecFrame? _saveResumeFrame;
+    private NativeNumberedSaveState? _loadedNumberedState;
+    private NativeNumberedSaveState? _retainedNativeNumberedState;
+    private int _restoreFrameIndex = -1;
+    private uint _accumulatedPlaySeconds;
+    private readonly long _sessionStartTimestamp;
     private ExecFrame? _debugActiveFrame;
     private long _debugActiveFrameId;
     private long _debugNextFrameId;
@@ -68,9 +73,12 @@ public sealed class VirtualMachine
     public long CallScriptDispatches { get; private set; }
 
     public Dictionary<int, long> Globals { get; } = new();
+    public Dictionary<int, long> GlobalFloats { get; } = new();
     /// <summary>Native/profile-owned values read by scripts but maintained outside script-visible writes.</summary>
     public Dictionary<int, long> ExternalGlobals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
+    public Dictionary<int, int> GlobalPointers { get; } = new();
+    public Dictionary<int, int> GlobalStringPointers { get; } = new();
     public GfxState Gfx { get; } = new();
     public InputBindings InputBindings { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
@@ -124,6 +132,7 @@ public sealed class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
         _nativeDatStore = nativeDatStore;
+        _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -291,6 +300,10 @@ public sealed class VirtualMachine
     }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
+    private int GlobalPointer(int index)
+        => GlobalPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
+    private int GlobalStringPointer(int index)
+        => GlobalStringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
     private long ReadGlobal(int k) => ExternalGlobals.TryGetValue(k, out var v) ? v : Gi(Globals, k);
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
     private static long PyDiv(long a, long b) { if (b == 0) return 0; long q = a / b, r = a % b; if (r != 0 && (r < 0) != (b < 0)) q--; return q; }
@@ -328,8 +341,9 @@ public sealed class VirtualMachine
     private long Read(Operand op) => op.Type switch
     {
         T_IMM => op.Value,
-        T_GINT or T_GFLOAT => ReadGlobal((int)op.Value),
-        T_GPTR => Gi(Globals, (int)Gi(Globals, (int)op.Value)),
+        T_GINT => ReadGlobal((int)op.Value),
+        T_GFLOAT => Gi(GlobalFloats, (int)op.Value),
+        T_GPTR => Gi(Globals, GlobalPointer((int)op.Value)),
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
         T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
         T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)op.Value)),
@@ -340,8 +354,9 @@ public sealed class VirtualMachine
     {
         switch (op.Type)
         {
-            case T_GINT: case T_GFLOAT: Globals[(int)op.Value] = val; break;
-            case T_GPTR: Globals[(int)Gi(Globals, (int)op.Value)] = val; break;
+            case T_GINT: Globals[(int)op.Value] = val; break;
+            case T_GFLOAT: GlobalFloats[(int)op.Value] = val; break;
+            case T_GPTR: Globals[GlobalPointer((int)op.Value)] = val; break;
             case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
             case T_LFLOAT: _cur.Locals.F[(int)op.Value] = val; break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)op.Value), val); break;
@@ -352,7 +367,7 @@ public sealed class VirtualMachine
     {
         T_STR => _cur.Script.GetString((int)op.Value),
         T_GSTR => Gs(GlobalStrings, (int)op.Value),
-        T_GSTRPTR => Gs(GlobalStrings, (int)Gi(Globals, (int)op.Value)),
+        T_GSTRPTR => Gs(GlobalStrings, GlobalStringPointer((int)op.Value)),
         T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
         T_LSTRPTR => ReadStringCell(Ga(_cur.Locals.SP, (int)op.Value)),
         _ => "",
@@ -363,7 +378,7 @@ public sealed class VirtualMachine
         switch (op.Type)
         {
             case T_GSTR: GlobalStrings[(int)op.Value] = val; break;
-            case T_GSTRPTR: GlobalStrings[(int)Gi(Globals, (int)op.Value)] = val; break;
+            case T_GSTRPTR: GlobalStrings[GlobalStringPointer((int)op.Value)] = val; break;
             case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
             case T_LSTRPTR: WriteStringCell(Ga(_cur.Locals.SP, (int)op.Value), val); break;
         }
@@ -465,7 +480,8 @@ public sealed class VirtualMachine
         T_LINT => VmAddress.LocalInteger((int)op.Value),
         T_LFLOAT => VmAddress.LocalFloat((int)op.Value),
         T_LSTR => VmAddress.LocalString((int)op.Value),
-        T_GPTR or T_GSTRPTR => VmAddress.Global((int)Gi(Globals, (int)op.Value)),
+        T_GPTR => VmAddress.Global(GlobalPointer((int)op.Value)),
+        T_GSTRPTR => VmAddress.Global(GlobalStringPointer((int)op.Value)),
         T_LPTR => Ga(_cur.Locals.P, (int)op.Value),
         T_LSTRPTR => Ga(_cur.Locals.SP, (int)op.Value),
         _ => VmAddress.Global((int)op.Value),
@@ -492,7 +508,8 @@ public sealed class VirtualMachine
         {
             case T_LPTR: _cur.Locals.P[(int)destination.Value] = address; return true;
             case T_LSTRPTR: _cur.Locals.SP[(int)destination.Value] = address; return true;
-            case T_GPTR: case T_GSTRPTR: Globals[(int)destination.Value] = address.Address; return true;
+            case T_GPTR: GlobalPointers[(int)destination.Value] = address.Address; return true;
+            case T_GSTRPTR: GlobalStringPointers[(int)destination.Value] = address.Address; return true;
             default: return false;
         }
     }
@@ -514,10 +531,13 @@ public sealed class VirtualMachine
         int address = checked((int)destination.Value + index);
         switch (destination.Type)
         {
-            case T_GINT: case T_GFLOAT: Globals[address] = value; break;
+            case T_GINT: Globals[address] = value; break;
+            case T_GFLOAT: GlobalFloats[address] = value; break;
             case T_LINT: _cur.Locals.I[address] = value; break;
             case T_LFLOAT: _cur.Locals.F[address] = value; break;
-            case T_GPTR: Globals[checked((int)Gi(Globals, (int)destination.Value) + index)] = value; break;
+            case T_GPTR:
+                Globals[checked(GlobalPointer((int)destination.Value) + index)] = value;
+                break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)destination.Value).Offset(index), value); break;
         }
     }
@@ -528,9 +548,10 @@ public sealed class VirtualMachine
         {
             T_LINT => Gi(_cur.Locals.I, checked((int)operand.Value + offset)),
             T_LFLOAT => Gi(_cur.Locals.F, checked((int)operand.Value + offset)),
-            T_GINT or T_GFLOAT => ReadGlobal(checked((int)operand.Value + offset)),
+            T_GINT => ReadGlobal(checked((int)operand.Value + offset)),
+            T_GFLOAT => Gi(GlobalFloats, checked((int)operand.Value + offset)),
             T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
-            T_GPTR => Gi(Globals, checked((int)Gi(Globals, (int)operand.Value) + offset)),
+            T_GPTR => Gi(Globals, checked(GlobalPointer((int)operand.Value) + offset)),
             _ => Gi(Globals, checked((int)operand.Value + offset)),
         };
     }
@@ -541,7 +562,8 @@ public sealed class VirtualMachine
             T_LINT => (VmAddressSpace.LocalInteger, checked((int)operand.Value + offset)),
             T_LFLOAT => (VmAddressSpace.LocalFloat, checked((int)operand.Value + offset)),
             T_LPTR => PointerIdentity(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
-            T_GPTR => (VmAddressSpace.Global, checked((int)Gi(Globals, (int)operand.Value) + offset)),
+            T_GPTR => (VmAddressSpace.Global,
+                       checked(GlobalPointer((int)operand.Value) + offset)),
             _ => (VmAddressSpace.Global, checked((int)operand.Value + offset)),
         };
 
@@ -554,6 +576,7 @@ public sealed class VirtualMachine
             : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private sealed class RootReloadRequestedException : Exception { }
+    private sealed class NumberedRestoreRequestedException : Exception { }
     private sealed class ProcessExitRequestedException : Exception { }
     private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
     private sealed record PreloadedScriptSlot(long ScriptId, ExecFrame Frame);
@@ -571,7 +594,32 @@ public sealed class VirtualMachine
         FrameCause cause = FrameCause.TopScene;
         while (true)
         {
-            var outcome = RunFrame(new ExecFrame(root, rootEntry), cause);
+            FrameOutcome outcome;
+            try
+            {
+                outcome = RunFrame(new ExecFrame(root, rootEntry), cause);
+            }
+            catch (NumberedRestoreRequestedException)
+            {
+                if (_loadedNumberedState == null) throw;
+                Script? callback = _provider?.GetByName("CALLBACK_LOAD.BIN");
+                if (callback != null)
+                {
+                    int callbackEntry = callback.IndexByOffset.TryGetValue(0, out int ci) ? ci : 0;
+                    FrameOutcome callbackOutcome = RunFrame(
+                        new ExecFrame(callback, callbackEntry), FrameCause.SaveRestore, callback.PackedId);
+                    if (callbackOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested)
+                    {
+                        outcome = callbackOutcome;
+                        break;
+                    }
+                }
+                root = ResolveSavedScript(_loadedNumberedState.Frames[0]);
+                rootEntry = FindRestoreRendezvous(root);
+                _restoreFrameIndex = 0;
+                cause = FrameCause.SaveRestore;
+                continue;
+            }
             if (outcome == FrameOutcome.RootReload)
             {
                 // Native 0x9 performs the scene reset before attempting the resource-0 load. Keep
@@ -666,6 +714,7 @@ public sealed class VirtualMachine
                 {
                     if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
                     Steps++;
+                    frame.Pc = pc;
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
                     int next = Step(frame.Script.Instructions[pc], pc);
                     _host.FrameYield();
@@ -727,6 +776,192 @@ public sealed class VirtualMachine
         }
     }
 
+    private NativeNumberedSaveState CaptureNumberedState()
+    {
+        const int himegariIntegerCount = 0x6241b;
+        const int himegariFloatCount = 1;
+        const int himegariStringCount = 0x315;
+        const int himegariPointerCount = 1;
+
+        ExecFrame[] active;
+        int cutoff;
+        lock (_debugControlLock)
+        {
+            active = _activeExecutionFrames.ToArray();
+            cutoff = _saveResumeFrame == null ? active.Length - 1 : Array.IndexOf(active, _saveResumeFrame);
+        }
+        if (cutoff < 0)
+            throw new InvalidDataException("No active script frame is available for a numbered save.");
+
+        var frames = new NativeSavedScriptFrame[cutoff + 1];
+        for (int i = 0; i <= cutoff; i++)
+        {
+            ExecFrame frame = active[i];
+            int[] returns = frame.CallStack
+                .Where(returnPc => (uint)returnPc < (uint)frame.Script.Instructions.Count)
+                .Select(returnPc =>
+                {
+                    int returnOffset = frame.Script.Instructions[returnPc].Offset;
+                    return FindTableIndex(frame.Script.LocalCallOffsets, returnOffset - 3);
+                })
+                .Where(index => index >= 0)
+                .ToArray();
+            int resumeIndex = CurrentReadMessageIndex(frame);
+            int callTargetIndex = i == cutoff || (uint)frame.Pc >= (uint)frame.Script.Instructions.Count
+                ? -1
+                : FindTableIndex(frame.Script.ScriptCallOffsets, frame.Script.Instructions[frame.Pc].Offset);
+            frames[i] = new NativeSavedScriptFrame(
+                i - 1, frame.Script.PackedId, returns, resumeIndex, callTargetIndex);
+        }
+
+        NativeNumberedSaveState basis = _retainedNativeNumberedState
+            ?? NativeNumberedSaveCodec.Empty(frames);
+        var gfx = NativeGfxPersistenceCodec.Capture(Gfx);
+        return basis with
+        {
+            Frames = frames,
+            IntegerGlobals = DenseValues(Globals, himegariIntegerCount),
+            FloatGlobals = DenseValues(GlobalFloats, himegariFloatCount),
+            StringGlobals = DenseStrings(GlobalStrings, himegariStringCount),
+            PointerGlobals = DensePointerValues(GlobalPointers, himegariPointerCount),
+            PointerStrings = DensePointerValues(GlobalStringPointers, himegariPointerCount),
+            LocalPointerScratch = new int[himegariPointerCount],
+            SurfaceRecords = gfx.SurfaceRecords,
+            GfxObjects = gfx.Objects,
+            RangeTransformFirst = gfx.RangeFirst,
+            RangeTransformCount = gfx.RangeCount,
+            RangeTransformRecord = gfx.RangeRecord,
+        };
+    }
+
+    private bool TryLoadNumberedState(int slot, bool restoreHistory)
+    {
+        if (_nativeDatStore == null) return false;
+        try
+        {
+            NativeNumberedSaveFile? file = _nativeDatStore.LoadNumberedFile(slot);
+            if (file == null) return false;
+            NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(file.Document.Payload);
+            ApplyNumberedState(state);
+            _retainedNativeNumberedState = state;
+            _accumulatedPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
+            if (restoreHistory)
+            {
+                if (file.HistoryTail.Length == 0) TextHistory.Clear();
+                else NativeTextHistoryCodec.DecodeInto(file.HistoryTail, TextHistory);
+                _loadedNumberedState = state;
+            }
+            else
+            {
+                _loadedNumberedState = null;
+                _restoreFrameIndex = -1;
+            }
+            return true;
+        }
+        catch (Exception error) when (
+            error is IOException or UnauthorizedAccessException or InvalidDataException
+            or ArgumentOutOfRangeException or OverflowException)
+        {
+            _loadedNumberedState = null;
+            _restoreFrameIndex = -1;
+            return false;
+        }
+    }
+
+    private void ApplyNumberedState(NativeNumberedSaveState state)
+    {
+        Globals.Clear();
+        for (int i = 0; i < state.IntegerGlobals.Count; i++)
+            if (state.IntegerGlobals[i] != 0) Globals[i] = state.IntegerGlobals[i];
+        GlobalFloats.Clear();
+        for (int i = 0; i < state.FloatGlobals.Count; i++)
+            if (state.FloatGlobals[i] != 0) GlobalFloats[i] = state.FloatGlobals[i];
+        GlobalStrings.Clear();
+        for (int i = 0; i < state.StringGlobals.Count; i++)
+            if (state.StringGlobals[i].Length != 0) GlobalStrings[i] = state.StringGlobals[i];
+        GlobalPointers.Clear();
+        for (int i = 0; i < state.PointerGlobals.Count; i++)
+            if (state.PointerGlobals[i] != 0) GlobalPointers[i] = state.PointerGlobals[i];
+        GlobalStringPointers.Clear();
+        for (int i = 0; i < state.PointerStrings.Count; i++)
+            if (state.PointerStrings[i] != 0) GlobalStringPointers[i] = state.PointerStrings[i];
+
+        GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
+        for (int slot = 0; slot < 1000; slot++) _host.ReleaseSurface(slot);
+        Gfx.RestorePersistenceSnapshot(gfxSnapshot);
+        foreach (var (slot, resourceId, colorKey, created) in gfxSnapshot.Surfaces)
+        {
+            if (!created) _host.SetTexture(resourceId, slot, colorKey);
+        }
+    }
+
+    private Script ResolveSavedScript(NativeSavedScriptFrame frame)
+    {
+        if (_s.PackedId == frame.ScriptId) return _s;
+        Script? script = _provider?.GetById(frame.ScriptId);
+        return script ?? throw new InvalidDataException(
+            $"Numbered save references unresolved script 0x{frame.ScriptId:x}.");
+    }
+
+    private static int FindRestoreRendezvous(Script script)
+    {
+        for (int i = 0; i < script.Instructions.Count; i++)
+            if (script.Instructions[i].Opcode == 0xae) return i;
+        throw new InvalidDataException(
+            $"Saved script {script.Name} has no opcode 0xae restore rendezvous.");
+    }
+
+    private static int ResolveTableOffset(
+        Script script, IReadOnlyList<int> table, int index, int fallback)
+    {
+        if ((uint)index >= (uint)table.Count) return fallback;
+        return script.IndexByOffset.TryGetValue(table[index], out int pc) ? pc : fallback;
+    }
+
+    private static int CurrentReadMessageIndex(ExecFrame frame)
+    {
+        for (int i = 0; i < frame.Script.ReadMessageOffsets.Count; i++)
+            if (frame.Script.ReadMessageOffsets[i] == frame.ReadMessageOffset) return i;
+        return -1;
+    }
+
+    private static int FindTableIndex(IReadOnlyList<int> table, int offset)
+    {
+        for (int i = 0; i < table.Count; i++)
+            if (table[i] == offset) return i;
+        return -1;
+    }
+
+    private static int[] DenseValues(IReadOnlyDictionary<int, long> source, int fixedCount)
+    {
+        var result = new int[fixedCount];
+        foreach ((int index, long value) in source)
+            if ((uint)index < (uint)result.Length) result[index] = unchecked((int)value);
+        return result;
+    }
+
+    private static int[] DensePointerValues(IReadOnlyDictionary<int, int> source, int fixedCount)
+    {
+        var result = new int[fixedCount];
+        foreach ((int index, int value) in source)
+            if ((uint)index < (uint)result.Length) result[index] = value;
+        return result;
+    }
+
+    private static string[] DenseStrings(IReadOnlyDictionary<int, string> source, int fixedCount)
+    {
+        var result = Enumerable.Repeat(string.Empty, fixedCount).ToArray();
+        foreach ((int index, string value) in source)
+            if ((uint)index < (uint)result.Length) result[index] = value;
+        return result;
+    }
+
+    private uint AccumulatedPlaySeconds()
+    {
+        double elapsedSeconds = System.Diagnostics.Stopwatch.GetElapsedTime(_sessionStartTimestamp).TotalSeconds;
+        return unchecked(_accumulatedPlaySeconds + (uint)Math.Min(uint.MaxValue, elapsedSeconds));
+    }
+
     private bool ServiceHotspotCallback()
     {
         int target;
@@ -741,6 +976,7 @@ public sealed class VirtualMachine
             {
                 if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
                 Steps++;
+                _cur.Pc = pc;
                 if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
                 int next = Step(_cur.Script.Instructions[pc], pc);
                 _host.FrameYield();
@@ -819,6 +1055,76 @@ public sealed class VirtualMachine
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
                 return pc + 1;
+            case "save-numbered-slot": // 0x19e
+            {
+                if (_nativeDatStore == null)
+                {
+                    Write(a[0], 1);
+                    return pc + 1;
+                }
+                try
+                {
+                    int slot = unchecked((int)Read(a[1]));
+                    NativeNumberedSaveState state = CaptureNumberedState();
+                    byte[] payload = NativeNumberedSaveCodec.Encode(state);
+                    byte[] history = NativeTextHistoryCodec.Encode(TextHistory);
+                    NativeSystemTime timestamp = NativeSystemTime.FromLocalDateTime(DateTime.Now);
+                    uint playSeconds = AccumulatedPlaySeconds();
+                    _nativeDatStore.SaveNumberedFile(slot, payload, history, timestamp, playSeconds);
+                    _sharedProfile.Save(_nativeDatStore, timestamp, playSeconds);
+                    Write(a[0], 0);
+                }
+                catch (Exception error) when (
+                    error is IOException or UnauthorizedAccessException or InvalidDataException
+                    or ArgumentOutOfRangeException or OverflowException)
+                {
+                    Write(a[0], 1);
+                }
+                return pc + 1;
+            }
+            case "load-numbered-slot-data-only": // 0x19f
+            {
+                if (!TryLoadNumberedState(unchecked((int)Read(a[1])), restoreHistory: false))
+                    Write(a[0], 1);
+                else
+                    Write(a[0], 0);
+                return pc + 1;
+            }
+            case "load-numbered-slot-and-resume": // 0x1a1
+            {
+                if (!TryLoadNumberedState(unchecked((int)Read(a[1])), restoreHistory: true))
+                {
+                    Write(a[0], 1);
+                    return pc + 1;
+                }
+                throw new NumberedRestoreRequestedException();
+            }
+            case "continue-save-load-stack-restore": // 0xae
+            {
+                if (_loadedNumberedState == null || _restoreFrameIndex < 0)
+                    return pc + 1;
+                NativeSavedScriptFrame saved = _loadedNumberedState.Frames[_restoreFrameIndex];
+                bool terminal = _restoreFrameIndex == _loadedNumberedState.Frames.Count - 1;
+                if (terminal)
+                {
+                    _loadedNumberedState = null;
+                    _restoreFrameIndex = -1;
+                    return ResolveTableOffset(_cur.Script, _cur.Script.ReadMessageOffsets, saved.ResumeIndex, pc + 1);
+                }
+
+                int parentIndex = _restoreFrameIndex;
+                NativeSavedScriptFrame childSaved = _loadedNumberedState.Frames[parentIndex + 1];
+                Script child = ResolveSavedScript(childSaved);
+                _restoreFrameIndex = parentIndex + 1;
+                FrameOutcome childOutcome = RunFrame(
+                    new ExecFrame(child, FindRestoreRendezvous(child)), FrameCause.SaveRestore,
+                    childSaved.ScriptId);
+                _restoreFrameIndex = parentIndex;
+                if (childOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested)
+                    return HALT;
+                return ResolveTableOffset(
+                    _cur.Script, _cur.Script.ScriptCallOffsets, saved.CallTargetIndex, pc) + 1;
+            }
             case "query-numbered-save-metadata": // 0x1a0
             {
                 if (_nativeDatStore == null)
@@ -1354,6 +1660,8 @@ public sealed class VirtualMachine
                 // each invocation an independent diagnostic activation.
                 loaded.Frame.CallStack.Clear();
                 loaded.Frame.EmitSeen.Clear();
+                loaded.Frame.Pc = loaded.Frame.Script.IndexByOffset.TryGetValue(0, out int loadedEntry)
+                    ? loadedEntry : 0;
                 var outcome = RunFrame(loaded.Frame, FrameCause.CallScript, loaded.ScriptId);
                 if (outcome == FrameOutcome.Halted) return HALT;
                 if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD;

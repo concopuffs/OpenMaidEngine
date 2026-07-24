@@ -12,5 +12,9 @@ public sealed class Script
     public IReadOnlyList<uint> BodyDwords { get; init; } = Array.Empty<uint>();
     /// <summary>T1 entries: code DWORD offsets of op-0x71 message boundaries.</summary>
     public IReadOnlyList<int> ReadMessageOffsets { get; init; } = Array.Empty<int>();
+    /// <summary>T2 entries: code DWORD offsets of resumable call-script sites.</summary>
+    public IReadOnlyList<int> ScriptCallOffsets { get; init; } = Array.Empty<int>();
+    /// <summary>T3 entries: code DWORD offsets used to reconstruct the intra-script call stack.</summary>
+    public IReadOnlyList<int> LocalCallOffsets { get; init; } = Array.Empty<int>();
     public string GetString(int offset) => Strings.TryGetValue(offset, out var s) ? s : "";
 }

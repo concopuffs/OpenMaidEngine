@@ -7,8 +7,8 @@ using Age.Engine.Persistence;
 namespace Age.Engine.Vm;
 
 /// <summary>
-/// A persistent global store carried across scenes. Every scene the game runs shares one flat global
-/// bank (the engine's model); running scenes in isolation with empty state is why our headless VM
+/// A persistent store carried across scenes. AGE keeps separate integer, float, string, and pointer
+/// banks; running scenes in isolation with empty state is why our headless VM
 /// diverges from the real game (the bg/sprite geometry drift, the state-gated EMPTY scenes, Lily's
 /// form-gated voices are all state divergence — see docs/phase-a-slice-plan.md A2b-Geometry).
 ///
@@ -20,7 +20,10 @@ namespace Age.Engine.Vm;
 public sealed class GameSession
 {
     public Dictionary<int, long> Globals { get; } = new();
+    public Dictionary<int, long> GlobalFloats { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
+    public Dictionary<int, int> GlobalPointers { get; } = new();
+    public Dictionary<int, int> GlobalStringPointers { get; } = new();
     /// <summary>AGE's selected profile-wide cells plus native shared SAVE.DAT/RT.DAT lifecycle.</summary>
     public SharedProfile SharedProfile { get; }
     /// <summary>Native shared/numbered save directory service used by persistence opcodes.</summary>
@@ -45,13 +48,19 @@ public sealed class GameSession
         var vm = new VirtualMachine(
             script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
+        foreach (var kv in GlobalPointers) vm.GlobalPointers[kv.Key] = kv.Value;
+        foreach (var kv in GlobalStringPointers) vm.GlobalStringPointers[kv.Key] = kv.Value;
 
         vm.Run();
 
-        // Globals are one flat space; last write wins — the engine's single global bank.
+        // Each native bank is shared by the session; last write wins within that bank.
         foreach (var kv in vm.Globals) Globals[kv.Key] = kv.Value;
+        foreach (var kv in vm.GlobalFloats) GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in vm.GlobalStrings) GlobalStrings[kv.Key] = kv.Value;
+        foreach (var kv in vm.GlobalPointers) GlobalPointers[kv.Key] = kv.Value;
+        foreach (var kv in vm.GlobalStringPointers) GlobalStringPointers[kv.Key] = kv.Value;
 
         return new SceneResult(vm.Emitted.ToList(), vm.HaltReason, vm.Steps);
     }

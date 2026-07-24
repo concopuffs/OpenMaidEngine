@@ -39,12 +39,12 @@ Verified across all 481 files.
 ```
 off   field  meaning                                    evidence
 0x00  magic  "SYS4422 " (0x53 59 53 34 34 32 32 20)     481/481 identical
-0x08  F0     scenario/script id or flags                98 distinct; 0x5 dominant (252×)
-0x0C  F1     = 1 always                                 481/481 == 1
-0x10  F2     = 1 (457×) or 2 (20×); 4 outliers          format/feature flag
-0x14  F3     0x06 (268×),0x04,0x01,0x05...              15 distinct — minor version?
-0x18  F4     = 1 always                                 481/481 == 1
-0x1C  F5     = 2 (319×) or 1 (144×); rarely 3/5         flag
+0x08  F0     local integer count
+0x0C  F1     local float count
+0x10  F2     local string count
+0x14  F3     local integer-pointer count
+0x18  F4     second pointer-family count (exact subtype unresolved)
+0x1C  F5     local string-pointer count
 0x20  F6     = 0x1C always                              481/481 == 0x1C  (header-size marker)
 0x24  F7     table-1 entry count                        see below
 0x28  F8     table-1 offset  == code-section length     ordering F8<=F10<=F12<=EOF
@@ -65,8 +65,8 @@ consistent with the SYS4/SYS5 family.
 ```
 body[0        .. F8)    CODE          bytecode instruction stream
 body[F8       .. F10)   TABLE-1  (F7 entries, 1 dword each)  -> read-message boundaries (op 0x71)
-body[F10      .. F12)   TABLE-2  (F9 entries, 1 dword each)  -> targets of type 0x03
-body[F12      .. EOF)   TABLE-3  (F11 entries, 1 dword each) -> targets of type 0x8F
+body[F10      .. F12)   TABLE-2  (F9 entries, 1 dword each)  -> call-script sites (op 0x03)
+body[F12      .. EOF)   TABLE-3  (F11 entries, 1 dword each) -> local-call sites (op 0x8F)
 ```
 
 Every table entry is exactly **1 dword** — a pointer (dword index into body).
@@ -81,16 +81,15 @@ tag identifying the pointed-to construct:
 | Table | count/off | Target dword tag | Hits | Meaning (inferred) |
 |---|---|---|---|---|
 | T1 | F7 / F8  | **0x71** | 26,445/26,445 | per-script read-message boundary index |
-| T2 | F9 / F10 | **0x03** | 3,018/3,018   | data/variable entries (operand at +2 large, e.g. addresses) |
-| T3 | F11 / F12| **0x8F** | 72,941/72,941 | instruction/line entries (largest table; operand at +2 huge) |
+| T2 | F9 / F10 | **0x03** | 3,018/3,018   | resumable call-script sites |
+| T3 | F11 / F12| **0x8F** | 72,941/72,941 | local-call sites used to reconstruct return stacks |
 
 100% type purity — not a single target had a different tag. Native
 `read_text_db_find_message_index@0x468f50` searches T1 for the code DWORD coordinate most recently
 snapshotted by op `0x71`; its zero-based entry index and F7 count are the message index/count stored in
 shared `RT.DAT`. Thus T1 is not a generic label table even though every entry is a control-structure
-site. T3 is the big one
-(~73k entries corpus-wide), consistent with it being a per-instruction or
-per-source-line index (a debug/line table). T1 ≈ labels, T2 ≈ a smaller symbol set.
+site. Numbered layout-3 frame serialization proves the remaining roles: saved d259 indexes T1,
+d260 indexes T2, and each intra-script return maps through T3 (restored as `T3[index]+3`).
 
 ## Instruction stream — PARTIAL
 
@@ -161,7 +160,6 @@ The header format is identical (same magic/layout) so tooling is copy-agnostic.
 - Opcode dispatch — confirm tagged-operand model, enumerate opcodes
 - Meaning of F0/F2/F3/F5 flag fields
 - Exact operand grammar per instruction (how many dwords each opcode consumes)
-- Semantics of T1/T2/T3 beyond "label/data/line" guesses
 
 ## Loader — DONE
 

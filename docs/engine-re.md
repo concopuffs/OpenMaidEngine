@@ -1801,8 +1801,44 @@ validates its distinct compatibility id, queries metadata without decoding paylo
 paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
 dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
 frame marker) are wired. Godot injects the store at `user://SAVE`. Full layout-3 global/frame/history/
-resource/retained-gfx serialization and the `0x19e`/`0x1a1`/`0xae` save-resume path remain the next layer;
-the existing `GameSession` JSON snapshot is unchanged.
+`NativeNumberedSaveCodec`, `NativeTextHistoryCodec`, and `NativeGfxPersistenceCodec` now own the complete
+layout-3 numbered body and appended history tail. The VM wires `0x19e`, data-only `0x19f`, full load
+`0x1a1`, and the active branch of `0xae`; the existing `GameSession` JSON snapshot remains a separate
+diagnostic/extended-mode surface.
+
+#### Layout-3 byte map and port correspondence (2026-07-24)
+
+The decoded layout-3 body begins with `cutoff` at `+0x00`; its fixed length is
+`0x5718 + cutoff*0x414`. The fixed prefix contains two saved engine/context words, ten state DWORDs,
+100 three-DWORD resource reload records, 1,000 20-byte surface reload records, then frames beginning at
+`+0x5304`. Each `0x414`-byte frame contains parent context, packed script id, up to 256 saved local-return
+indices, and two terminal control indices. The three SYS4 footer tables now have explicit runtime roles:
+
+- d259 indexes T1/F7-F8, the op-`0x71` read-message reset sites;
+- d260 indexes T2/F9-F10, resumable `call-script` sites (forced to `-1` on the cutoff frame);
+- each local return index addresses T3/F11-F12, whose stored target plus three is the live return offset.
+
+After the fixed bytes are six bank counts followed by the ordinary (de-protected) integer bank, float
+storage, a DWORD-sized CP932 string blob, the pointer-family banks, and retained graphics. Graphics begin
+with record size `0x2d4` and object count; every object is `{handle,0x2d4 raw record}`. The range-transform
+first/count and another `0x2d4` record follow. AGE overallocates this region
+(`0x2e1 + objectCount*0x2d8` DWORDs) relative to the records it writes; the codec preserves the native
+logical sizing and zeroes the unused allocation slack.
+
+The text-history tail is outside the S4SD container. Its 12-byte header is
+`{logicalBytes,logicalBytes,storedBytes}` followed by the same 4 KiB-ring LZSS/verbatim dialect. Logical
+history is entry count + 8-byte entries, record count + the first 11 DWORDs of each retained record, then
+a DWORD-counted CP932 string blob whose DWORDs are bitwise inverted. Installed `SAVE00.DAT` validates the
+whole boundary read-only: cutoff 1, six counts `[402459,1,789,1,1,1]`, 211 gfx objects, a 21-byte history
+tail, and exact consumption of the S4SD container before that tail.
+
+The port tracks the native global banks separately at runtime, captures the marked frame chain, serializes
+live surfaces and retained objects, and reloads host textures from the 20-byte surface records. Full load
+first replaces banks/history/gfx, unwinds the obsolete managed call chain, runs `CALLBACK_LOAD.BIN` when
+the mounted script provider resolves it, starts the saved root at its `0xae` rendezvous, recursively
+reconstructs child frames, resumes parents after their saved T2 call sites,
+and finally resumes the terminal frame at its T1 boundary. Successful `0x19e` also flushes shared
+`SAVE.DAT`/`RT.DAT`, matching `context_state_serialize`.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
@@ -1815,14 +1851,13 @@ loads `CALLBACK_LOAD.BIN` or the saved entry script, and resets the current cont
 
 On an active restore, the handler reads `set:SaveVersion1`/`set:SaveVersion2`, selects the matching saved
 frame layout, replaces the current frame PC with its saved resume or call target, and advances through the
-serialized contexts. At the saved terminal context it clears the restore flag and reinstates the saved
-context/return state. The corpus placement supports that control-flow role: 305 calls overwhelmingly follow
+serialized contexts. `script_frame_restore_saved_layout@0x40f2d0` loads each packed script and expands its
+T1/T2/T3 indices back into live PC/call/return offsets. At the saved terminal context the handler clears
+the restore flag and reinstates the saved context/return state. The corpus placement supports that control-flow role: 305 calls overwhelmingly follow
 coroutine-resume or call boundaries, including SC0000's main-loop resume sequence.
 
-The opcode remains an effectful port gap. It is a no-op during every currently reachable port execution,
-but its actual branch cannot be implemented until numbered saves serialize and restore the active
-`ExecFrame` chain. Counting an unconditional no-op as coverage would conceal that dependency, so it stays
-grouped with `0x1ad` rather than receiving a placeholder VM case.
+The port now implements both branches: an ordinary one-instruction no-op outside restoration, and the
+T1/T2/T3-driven managed-frame reconstruction described above while a full numbered load is active.
 
 ### ADV read-message Skip and shared `RT.DAT` history (2026-07-18)
 
@@ -1947,10 +1982,9 @@ finds typed metadata; op `0x1d4` finds the voice pair. `HISTORY.BIN` dispatches 
 
 History is independent of `RT.DAT`, but native full save fidelity does serialize the live backlog.
 `text_history_serialize@0x451d00` writes the index and packed records/strings after context/numbered-save
-serialization, and `text_history_deserialize@0x456130` restores them on the matching load path. This is a
-future numbered-save integration seam, not a reason to choose a shared-profile backend now: an in-memory
-History button can be complete first, while save/load restoration stays deferred with the wider storage
-architecture decision.
+serialization, and `text_history_deserialize@0x456130` restores them on the matching load path. The port's
+`NativeTextHistoryCodec` now implements that appended tail directly against the same live
+`AdvTextHistory` model; it remains independent of shared profile state and `RT.DAT`.
 
 History's display support consists of the ordinary presentation operations: primary/ruby font sizes
 (`0x75/0x197`), font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin

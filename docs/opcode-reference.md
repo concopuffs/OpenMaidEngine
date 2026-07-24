@@ -400,7 +400,9 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 ### 0xae `continue-save-load-stack-restore` (u00415130, argc 0)
 - **summary:** () - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with FUN_0040f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack.
+- **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with script_frame_restore_saved_layout@0x40f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack.
+
+Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary.
 
 ### 0xc8 `sleep` (sleep, argc 1)
 - **summary:** Pause the current script for <duration> milliseconds while retained presentation continues.
@@ -476,14 +478,14 @@ record-zero failure. Natural SYSTEM4 boot proves BTANINIT2 -> `$1$AUTORUN.BIN` -
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x19e_save_numbered_slot@0x4278b0 formats SAVE%2.2d.DAT, checks an existing header and prompts before replacing an incompatible file, opens CREATE_ALWAYS, reads set:SaveVersion2 then set:SaveVersion1, and calls context_state_serialize@0x40d320. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN.
 
-Uses `set:SaveVersion1` and `set:SaveVersion2` to choose the numbered payload layout. Status is 0 on success and 1 on refusal, open/create failure, or serializer failure. Numbered `.DAT` files do not use the shared profile's temp/backup replacement scheme.
+Uses `set:SaveVersion1` and `set:SaveVersion2` to choose the numbered payload layout. Status is 0 on success and 1 on refusal, open/create failure, or serializer failure. Numbered `.DAT` files do not use the shared profile's temp/backup replacement scheme. Port status (2026-07-24): layout 3 writes fixed state, six native banks, T1/T2/T3 frame records, surface/resource reload state, retained gfx records, the appended history tail, and then flushes shared SAVE.DAT/RT.DAT.
 
 ### 0x19f `load-numbered-slot-data-only` (load-numbered-slot-data-only, argc 2)
 - **summary:** (status_out)(slot) - decode `SAVE%02d.DAT` without restoring the active script-frame chain or text history.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x19f_load_numbered_slot_data_only@0x427a40 opens SAVE%2.2d.DAT and calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 0, 0), then decodes protected integer globals. Missing/open failure writes status 1; otherwise the decoder result is returned. Corpus count: 0.
 
-This is the data-only companion to full-resume opcode 0x1a1. It selects the configured SaveVersion layout and restores serialized state with both runtime/history restore flags clear. Himegari's shipped script corpus does not call it, but it belongs to the shared SYS4 persistence ABI.
+This is the data-only companion to full-resume opcode 0x1a1. It selects the configured SaveVersion layout and restores serialized state with both runtime/history restore flags clear. Himegari's shipped script corpus does not call it, but it belongs to the shared SYS4 persistence ABI. Port status (2026-07-24): implemented for layout 3 through the same bank/resource/gfx decoder without activating history or frame restoration.
 
 ### 0x1a0 `query-numbered-save-metadata` (query-numbered-save-metadata, argc 9)
 - **summary:** (status_out)(slot)(year)(month)(day)(hour)(minute)(second)(playtime_seconds) - validate a numbered `.DAT` header and return its timestamp and accumulated playtime.
@@ -497,7 +499,7 @@ Status 0 means valid metadata was written, 1 means the file could not be opened,
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a1_load_numbered_slot_and_resume@0x427d30 calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 1, 1), closes the file, and decodes protected integer globals. The loader activates the saved-frame state consumed by op_0xae. Corpus: one call in SAVE.BIN.
 
-The caller pre-seeds status to zero. A missing/open failure writes 1; success starts the asynchronous native stack-restoration rendezvous and does not overwrite that zero. This is the ordinary load-game path, unlike data-only opcode 0x19f.
+The caller pre-seeds status to zero. A missing/open failure writes 1; success starts the asynchronous native stack-restoration rendezvous and does not overwrite that zero. This is the ordinary load-game path, unlike data-only opcode 0x19f. Port status (2026-07-24): layout 3 restores banks, history, surfaces/resources, and retained gfx, unwinds the obsolete managed call chain, then reconstructs saved frames through opcode 0xae.
 
 ### 0x1a2 `store-shared-profile-int` (store-shared-profile-int, argc 1)
 - **summary:** 0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. Its native key is raw type byte `0x03` followed by eight lowercase ASCII hex digits for the lvalue's resolved global-bank index; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry.

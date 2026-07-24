@@ -176,8 +176,14 @@ internal class RecordingHost : IHost
 internal sealed class MapProvider : IScriptProvider
 {
     private readonly Dictionary<long, Script> _m;
-    public MapProvider(Dictionary<long, Script> m) => _m = m;
+    private readonly Dictionary<string, Script> _byName;
+    public MapProvider(Dictionary<long, Script> m, Dictionary<string, Script>? byName = null)
+    {
+        _m = m;
+        _byName = byName ?? new(StringComparer.OrdinalIgnoreCase);
+    }
     public Script? GetById(long id) => _m.TryGetValue(id, out var s) ? s : null;
+    public Script? GetByName(string name) => _byName.TryGetValue(name, out var s) ? s : null;
 }
 
 /// <summary>A controlled test double: every call-script id resolves to the same script (typically a

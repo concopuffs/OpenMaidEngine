@@ -3468,6 +3468,37 @@ numbered-load restoration rendezvous `0xae` remains effectful and unimplemented 
 the active branch of `0xae`; retain `0x19f` as the mapped but corpus-unused data-only load path. JSON
 inspection/export remains an additive extended-mode feature.
 
+### Persistence implementation step 5 — complete layout-3 numbered save/load (2026-07-24)
+
+The numbered body and resume path are now implemented as native binary compatibility mode.
+`NativeNumberedSaveCodec` reads/writes the `0x5718 + cutoff*0x414` fixed state, six separate native
+global banks, CP932 string blob, 100 resource records, 1,000 surface records, retained `0x2d4`-byte gfx
+objects, and range transform. `NativeTextHistoryCodec` owns the separate 12-byte-header LZSS history tail.
+The installed read-only `SAVE00.DAT` oracle decodes end to end: its container/body boundary, cutoff,
+`[402459,1,789,1,1,1]` banks, 211 retained objects, and 21-byte history tail all agree with the native
+serializer allocation and write order.
+
+SYS4 parsing now retains all three footer tables. T1 is the saved message/reset resume table, T2 is the
+saved call-script table, and T3 maps intra-script returns. `ExecFrame.Pc` is kept current at opcode
+boundaries so `0x19e` captures frames root-through-`0x1ad` cutoff accurately. Full `0x1a1` load restores
+the global banks, history, reloadable surfaces, retained objects, and playtime, then deliberately unwinds
+the obsolete C# recursion, executes `CALLBACK_LOAD.BIN` when available, and enters the restore rendezvous.
+The active `0xae` path rebuilds the saved nested frames and resumes the terminal frame through T1;
+inactive `0xae` stays a no-op. Corpus-unused `0x19f` shares the state decoder without
+activating frame/history restoration. Successful `0x19e` appends history and flushes shared SAVE.DAT/RT.DAT.
+
+The VM now carries integer, float, string, integer-pointer, and string-pointer banks separately across
+`GameSession`, correcting the prior flat-bank approximation while keeping compatibility fallbacks for
+older synthetic pointer tests. Focused coverage includes logical byte round-trips, CP932/LZSS history,
+container-tail preservation, native installed-save import, opcode save integration, retained gfx/surface
+restore, and a two-frame `0xae` reconstruction.
+
+Validation: all 383 engine tests pass, including the installed read-only layout-3 oracle; SC0000 is now
+129/129 distinct opcodes handled. Opcode sources were regenerated after recording the T1/T2/T3 and
+implementation status. The remaining 1.0 persistence work is
+gameplay validation through Himegari's real SAVE.BIN UI and any corrections that reveals; JSON inspection,
+namespaced mod data, and migrations remain extended-mode work.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

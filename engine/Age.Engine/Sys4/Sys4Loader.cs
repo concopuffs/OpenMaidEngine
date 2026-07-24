@@ -29,6 +29,8 @@ public static class Sys4Loader
             throw new InvalidDataException($"{name}: invalid T1 read-message table");
         int[] messageOffsets = dw.AsSpan(messageTableOffset, messageCount)
             .ToArray().Select(value => checked((int)value)).ToArray();
+        int[] scriptCallOffsets = ReadOffsetTable(dw, fields[9], fields[10], nbody, name, "T2 script-call");
+        int[] localCallOffsets = ReadOffsetTable(dw, fields[11], fields[12], nbody, name, "T3 local-call");
         return new Script
         {
             Name = name,
@@ -39,7 +41,18 @@ public static class Sys4Loader
             Strings = strings,
             BodyDwords = dw,
             ReadMessageOffsets = messageOffsets,
+            ScriptCallOffsets = scriptCallOffsets,
+            LocalCallOffsets = localCallOffsets,
         };
+    }
+
+    private static int[] ReadOffsetTable(
+        uint[] body, int count, int offset, int bodyLength, string name, string tableName)
+    {
+        if (count < 0 || offset < 0 || offset > bodyLength || count > bodyLength - offset)
+            throw new InvalidDataException($"{name}: invalid {tableName} table");
+        return body.AsSpan(offset, count).ToArray()
+            .Select(value => checked((int)value)).ToArray();
     }
 
     private static (List<Instruction>, Dictionary<int, int>, Dictionary<int, string>)

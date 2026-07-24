@@ -43,6 +43,8 @@ public sealed record NativeSaveIdentity(
     }
 }
 
+public sealed record NativeNumberedSaveFile(NativeSaveDocument Document, byte[] HistoryTail);
+
 public interface INativeDatStore
 {
     NativeSaveIdentity Identity { get; }
@@ -53,6 +55,15 @@ public interface INativeDatStore
     NativeSaveMetadata? QueryNumberedMetadata(int slot);
     NativeSaveDocument? LoadNumbered(int slot);
     void SaveNumbered(int slot, ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
+    NativeNumberedSaveFile? LoadNumberedFile(int slot)
+    {
+        NativeSaveDocument? document = LoadNumbered(slot);
+        return document == null ? null : new NativeNumberedSaveFile(document, []);
+    }
+    void SaveNumberedFile(
+        int slot, ReadOnlySpan<byte> payload, ReadOnlySpan<byte> historyTail,
+        NativeSystemTime timestamp, uint accumulatedPlaySeconds)
+        => SaveNumbered(slot, payload, timestamp, accumulatedPlaySeconds);
     int DeleteNumberedPair(int slot);
     int CopyNumberedPair(int sourceSlot, int destinationSlot);
     byte[]? LoadNumberedThumbnail(int slot);
@@ -160,6 +171,17 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         return File.Exists(path) ? LoadAndValidate(path, numbered: true) : null;
     }
 
+    public NativeNumberedSaveFile? LoadNumberedFile(int slot)
+    {
+        string path = Path.Combine(_root, NumberedFileName(slot));
+        if (!File.Exists(path)) return null;
+        byte[] source = File.ReadAllBytes(path);
+        NativeSaveDocument document = NativeSaveContainerCodec.Decode(source);
+        _identity.Validate(document.Metadata, numbered: true);
+        return new NativeNumberedSaveFile(
+            document, source.AsSpan(document.BytesConsumed).ToArray());
+    }
+
     public NativeSaveMetadata? QueryNumberedMetadata(int slot)
     {
         string path = Path.Combine(_root, NumberedFileName(slot));
@@ -182,6 +204,22 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
     {
         byte[] encoded = NativeSaveContainerCodec.Encode(
             payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds, numbered: true));
+        Directory.CreateDirectory(_root);
+        WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
+    }
+
+    public void SaveNumberedFile(
+        int slot,
+        ReadOnlySpan<byte> payload,
+        ReadOnlySpan<byte> historyTail,
+        NativeSystemTime timestamp,
+        uint accumulatedPlaySeconds)
+    {
+        byte[] container = NativeSaveContainerCodec.Encode(
+            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds, numbered: true));
+        byte[] encoded = new byte[checked(container.Length + historyTail.Length)];
+        container.CopyTo(encoded, 0);
+        historyTail.CopyTo(encoded.AsSpan(container.Length));
         Directory.CreateDirectory(_root);
         WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
     }

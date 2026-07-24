@@ -56,6 +56,13 @@ public sealed record GfxDiagnosticSnapshot(
     BlockingGfxObjectDiagnostic? BlockingRangeTransform,
     IReadOnlyList<BlockingGfxObjectDiagnostic> BlockingObjects);
 
+public sealed record GfxPersistenceSnapshot(
+    IReadOnlyList<(int Slot, long ResourceId, long ColorKey, bool Created)> Surfaces,
+    IReadOnlyList<(long Handle, GfxState.GfxObject Object)> Objects,
+    long RangeFirst,
+    long RangeCount,
+    GfxState.GfxObject RangeTransform);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
@@ -293,31 +300,7 @@ public sealed class GfxState
         {
             if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
             bool destinationIsNew = !_objects.ContainsKey(destinationHandle);
-            _objects[destinationHandle] = new GfxObject
-            {
-                V18 = s.V18, V24 = s.V24, V16c = s.V16c,
-                Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
-                Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
-                OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
-                ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
-                OneShotColorBlend = s.OneShotColorBlend,
-                SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
-                SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
-                ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
-                ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
-                ScaleCurrent = s.ScaleCurrent, ScaleTarget = s.ScaleTarget,
-                ScaleDelayMs = s.ScaleDelayMs, ScaleDurationMs = s.ScaleDurationMs, ScaleEnabled = s.ScaleEnabled,
-                TranslationCurrent = s.TranslationCurrent, TranslationTarget = s.TranslationTarget,
-                TranslationDelayMs = s.TranslationDelayMs, TranslationDurationMs = s.TranslationDurationMs,
-                TranslationEnabled = s.TranslationEnabled,
-                RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
-                RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
-                RotationChannelEnabled = s.RotationChannelEnabled,
-                OneShotAnimationControlFlags = s.OneShotAnimationControlFlags,
-                OneShotStartMs = s.OneShotStartMs,
-                RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
-                RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
-            };
+            _objects[destinationHandle] = CloneState(s);
             if (destinationIsNew) InsertOrderedHandle(destinationHandle);
             CurrentObject = destinationHandle;
             MarkRetainedMutation();
@@ -417,6 +400,79 @@ public sealed class GfxState
             MarkRetainedMutation();
         }
     }
+
+    public GfxPersistenceSnapshot CapturePersistenceSnapshot()
+    {
+        lock (_lock)
+        {
+            var surfaces = _surfaces
+                .Select(pair => (
+                    pair.Key, pair.Value.ResId, pair.Value.ColorKey,
+                    _createdSurfaces.Contains(pair.Key)))
+                .OrderBy(item => item.Key)
+                .ToArray();
+            var objects = _orderedObjectHandles
+                .Select(handle => (handle, CloneState(_objects[handle])))
+                .ToArray();
+            return new GfxPersistenceSnapshot(
+                surfaces, objects, _rangeTransformFirst, _rangeTransformCount,
+                CloneState(_rangeTransform));
+        }
+    }
+
+    public void RestorePersistenceSnapshot(GfxPersistenceSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (_lock)
+        {
+            _surfaces.Clear();
+            _createdSurfaces.Clear();
+            foreach (var (slot, resourceId, colorKey, created) in snapshot.Surfaces)
+            {
+                _surfaces[slot] = (resourceId, colorKey);
+                if (created) _createdSurfaces.Add(slot);
+            }
+            _objects.Clear();
+            _orderedObjectHandles.Clear();
+            foreach (var (handle, state) in snapshot.Objects)
+            {
+                _objects[handle] = CloneState(state);
+                _orderedObjectHandles.Add(handle);
+            }
+            _orderedObjectHandles.Sort();
+            _rangeTransformFirst = snapshot.RangeFirst;
+            _rangeTransformCount = snapshot.RangeCount;
+            _rangeTransform = CloneState(snapshot.RangeTransform);
+            MarkRetainedMutation();
+        }
+    }
+
+    private static GfxObject CloneState(GfxObject s)
+        => new()
+        {
+            V18 = s.V18, V24 = s.V24, V16c = s.V16c,
+            Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
+            Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
+            OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
+            ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
+            OneShotColorBlend = s.OneShotColorBlend,
+            SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
+            SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
+            ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
+            ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
+            ScaleCurrent = s.ScaleCurrent, ScaleTarget = s.ScaleTarget,
+            ScaleDelayMs = s.ScaleDelayMs, ScaleDurationMs = s.ScaleDurationMs, ScaleEnabled = s.ScaleEnabled,
+            TranslationCurrent = s.TranslationCurrent, TranslationTarget = s.TranslationTarget,
+            TranslationDelayMs = s.TranslationDelayMs, TranslationDurationMs = s.TranslationDurationMs,
+            TranslationEnabled = s.TranslationEnabled,
+            RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
+            RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
+            RotationChannelEnabled = s.RotationChannelEnabled,
+            OneShotAnimationControlFlags = s.OneShotAnimationControlFlags,
+            OneShotStartMs = s.OneShotStartMs,
+            RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
+            RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
+        };
 
     private readonly object _lock = new();
 

@@ -71,8 +71,8 @@ public sealed record AdvTextHistoryRenderBatch(
     AdvTextStyle Style);
 
 /// <summary>
-/// Engine-owned retained ADV backlog. It deliberately has no persistence behavior: native numbered-save
-/// restoration belongs to the future unified save architecture, while live HISTORY.BIN reads this model.
+/// Engine-owned retained ADV backlog. Native numbered saves serialize this same model; live HISTORY.BIN
+/// reads it directly, so restored history is immediately available to the script UI.
 /// </summary>
 public sealed class AdvTextHistory
 {
@@ -183,6 +183,35 @@ public sealed class AdvTextHistory
         _entries.Clear();
         _pendingGroupStarts.Clear();
         _navigationAnchorIndex = -1;
+    }
+
+    /// <summary>Replace retained history from AGE's numbered-save history tail.</summary>
+    public void RestorePersistenceSnapshot(
+        IReadOnlyList<AdvTextHistoryEntry> entries,
+        IReadOnlyList<AdvTextHistoryRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(records);
+        _records.Clear();
+        _records.AddRange(records);
+        _entries.Clear();
+        _entries.AddRange(entries);
+        _pendingGroupStarts.Clear();
+        _layouts.Clear();
+        foreach (AdvTextHistoryRecord record in records)
+        {
+            var layout = GetOrCreateLayout(record.Layout.Slot);
+            layout.Width = record.Layout.Width;
+            layout.Height = record.Layout.Height;
+            layout.OriginX = record.Layout.OriginX;
+            layout.OriginY = record.Layout.OriginY;
+            layout.CursorX = record.Layout.CursorX;
+            layout.CursorY = record.Layout.CursorY;
+            layout.Right = record.Layout.Right;
+            layout.Bottom = record.Layout.Bottom;
+        }
+        CurrentLayoutSlot = entries.Count > 0 ? entries[^1].LayoutSlot : 0;
+        _navigationAnchorIndex = entries.Count - 1;
     }
 
     /// <summary>

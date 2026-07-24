@@ -104,7 +104,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
     │                                       script provider, AGF/LZSS and Windows CUR decoders, and resource facade
     │   └── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
-    │                                       numbered DAT/STH pair + BMP codec, and profile-owned state
+    │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
+    │                                       and profile-owned state
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows dependency manifest,
     │                                       and bootstrap/build scripts (outputs stay under disposable build/)
