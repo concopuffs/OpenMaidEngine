@@ -259,7 +259,7 @@ event may compose intentionally. Mechanical overlap is valuable evidence, not a 
 Improve runtime diagnosis by attributing normal-API behavior to the responsible mod: registered hook
 points and callback order, named globals/state read or changed, event values before/after each callback,
 asset/script resolution, cancellation/control-flow overrides and exceptions. An optional development
-trace should make chains such as `base 50 -> difficulty mod 35 -> double-exp mod 70` explicit. Raw VM
+trace should make chains such as `base 50 -> level-gap mod 25 -> double-exp mod 50` explicit. Raw VM
 access remains less observable and should be marked advanced/opaque rather than falsely analyzed.
 
 Raw opcode hooks remain available as the expert escape hatch, but their filters should be declarative

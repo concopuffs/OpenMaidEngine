@@ -740,6 +740,57 @@ ordering remains unresolved. Whole-pack enumeration and ordered base/append assi
 until that engine-owned launch boundary is proven. The AAI format and verified internal call sequence are
 canonical in `docs/asset-resolution-re.md`; command usage is canonical in `docs/tools-reference.md`.
 
+### Battle experience pipeline (2026-07-24)
+
+BTL awards experience after every completed combat exchange, not only after a kill and not once per
+individual strike in a multi-hit animation. It first chooses the surviving faction-1 participant, reads
+the opposing runtime entity's EBINIT definition id through `entity_unit_definition_ids`, and loads that
+definition's `unit_experience_reward`. The level difference is:
+
+`opponent entity level - faction-1 entity level`
+
+BTL selects a percentage from one of two integer tables:
+
+| level difference | opponent survives | opponent defeated |
+|---:|---:|---:|
+| `>= 3` | 40% | 250% |
+| `2` | 30% | 200% |
+| `1` | 20% | 150% |
+| `0` | 10% | 100% |
+| `-1` | 10% | 75% |
+| `-2` | 10% | 40% |
+| `<= -3` | 10% | 20% |
+
+The award is `unit_experience_reward * percentage / 100` with integer truncation. BTL derives the
+opponent-survived branch from `battle_outcome_flags`: bit 0 means the target was defeated, bit 1 means
+the actor was defeated, and bit 2 means both survived. The surviving player-side participant receives
+the result through ADDEXP. ADDEXP rejects zero awards or units already at `unit_level_cap`, adds the
+award to persistent `unit_experience_progress`, and carries any remainder through successive 100-point
+level-up boundaries. Normally cleared configuration/debug bits `0x10`, `0x20`, and `0x40` respectively
+suppress, double, or multiply the award by ten; no shipped base or append script enables them during
+ordinary play.
+
+An omitted EBINIT reward write is not a general fragment-level declaration of zero: additive INIT
+fragments can intentionally leave an earlier value unchanged. For append unit 900
+`ヘタレアースマン`, however, the base EBINIT has no unit-900 row and no base or append writer targets
+its reward cell. The zero-initialized global therefore remains zero, so every level bracket awards
+zero. The append profile correctly leaves `unit_experience_reward` absent because that is the authored
+write provenance; the effective value is zero only after considering the complete writer history.
+
+Append stage 200 explains `キングプテテット`'s observed 6–10 experience per exchange without a
+special battle flag. Unit 901 (`キングプテテット本体/BOSS`) has base reward 50, while unit 905
+(`キングプテテット分身/BOSS`) has base reward 20. The stage places one body and two splits and clamps
+all three to levels 70..99. Consequently, a surviving body awards 20/15/10/5 at level differences
+`>=3`/`2`/`1`/`<=0`, while a surviving split awards 8/6/4/2. The commonly seen 10 can therefore be
+the body one level above the attacker, and 6 can be a split two levels above.
+
+FIELD computes `party_reference_level` as the integer average of every eligible party member when
+there are at most five, or the five highest levels otherwise. SETEN starts an enemy from
+`unit_starting_level`, raises scalable enemies toward that party reference using the stage/unit divisor,
+then applies the stage minimum and maximum clamps. Difficulty separately contributes -5/0/+5 stat-growth
+iterations to enemy stats; it does not alter the stored `entity_levels` value used by BTL and therefore
+does not directly select an experience percentage.
+
 Re-run `tools/global_map.py` after each increment; `sys4load` picks up the new labels
 automatically (it reads `build/global-var-map.json` at load).
 

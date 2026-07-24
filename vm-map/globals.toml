@@ -731,8 +731,8 @@ address = "0x83406"
 name = "unit_experience_reward"
 category = "data-table"
 type = "int[1000]"
-value_domain = "10..100 base experience"
-usage = "Base experience award for 164 enemy records. BTL scales this value by the victor/defeated level difference and difficulty mode, stores the result in the ADDEXP input channel, and invokes ADDEXP for the winning unit."
+value_domain = "0 implicit/no award; populated values 10..100"
+usage = "Per-opponent base experience progress. After each battle exchange, BTL awards a surviving faction-1 participant against the opposing unit definition. If the opponent survives, enemy-minus-player level differences >=3/2/1/<=0 select 40/30/20/10 percent. If the opponent is defeated, differences >=3/2/1/0/-1/-2/<=-3 select 250/200/150/100/75/40/20 percent. Integer division truncates. The result enters ADDEXP, whose normally cleared modifier bits can suppress, double, or multiply it by ten. A cell with no writer in the ordered INIT sequence remains zero; append unit 900 is such a cell and therefore awards zero at every bracket."
 source = "investigation"
 confidence = "high"
 
@@ -1363,6 +1363,28 @@ usage = "Per-runtime-entity state flags. RTN_M007 requires bit 0 when selecting 
 source = "investigation"
 confidence = "high"
 depends_on = ["0x522ed", "0x5231f", "0x52351"]
+
+[[global]]
+address = "0x4dfbd"
+name = "entity_unit_definition_ids"
+category = "data-table"
+type = "int[50]"
+value_domain = "EBINIT unit definition id"
+usage = "Definition id backing each runtime map entity. SETEN writes current_unit_id when materializing an enemy; BTL uses the opposing entity's value to read unit_experience_reward and drop tables, while ADDEXP uses the faction-1 participant's value to select persistent playable-unit state."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x66715", "0x83406"]
+
+[[global]]
+address = "0x4e053"
+name = "entity_levels"
+category = "data-table"
+type = "int[50]"
+value_domain = "runtime unit level 1..99"
+usage = "Displayed/runtime level for each map entity. SETEN begins enemies at unit_starting_level, applies party-reference auto-scaling and stage minimum/maximum clamps, and BTL subtracts the surviving faction-1 participant's level from the opponent's level to choose the experience multiplier bracket."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7a37e", "0xe782f", "0xe784d", "0x204f8"]
 
 [[global]]
 address = "0x4e085"
@@ -2142,6 +2164,17 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x6994"
+name = "unit_experience_progress"
+category = "data-table"
+type = "int[100]"
+value_domain = "0..99 progress toward the next level; 100 is the transient level-up boundary"
+usage = "Persistent experience progress by playable-unit id. ADDEXP adds the current award, animates the increase to 100, raises unit_current_levels, resets this cell to zero, and repeats while award remains and the unit is below unit_level_cap."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6930", "0x7a766", "0x83406"]
+
+[[global]]
 address = "0x69f8"
 name = "unit_current_stats"
 category = "data-table"
@@ -2888,28 +2921,6 @@ confidence = "med"
 depends_on = []
 
 [[global]]
-address = "0x152617"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['CLOSE.BIN', 'FIELD.BIN', 'INFOEN.BIN', 'READY.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
-
-[[global]]
-address = "0x152618"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "one of {1, 2, 4, 7}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 7]; writers=['FIELD.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
-
-[[global]]
 address = "0x1560e7"
 name = "current_magic_action_id"
 category = "index-pointer"
@@ -3011,14 +3022,14 @@ depends_on = []
 
 [[global]]
 address = "0x152618"
-name = "scjump_progress_c"
-category = "counter"
+name = "battle_outcome_flags"
+category = "unknown"
 type = "int"
-value_domain = "progress index"
-usage = "Third SCJUMP switch input (530 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage."
-source = "inference"
-confidence = "med"
-depends_on = []
+value_domain = "low bits: 1 = target defeated, 2 = actor defeated, 4 = both survived; combinations may accumulate during FIELD resolution"
+usage = "BTL derives the low three bits from the acting and target entities' post-exchange HP. Mask 4 selects the nonlethal experience table; otherwise BTL uses the defeat table. FIELD consumes and combines the result during post-battle flow, then passes it to SCJUMP, whose former progress-C comparisons are battle-outcome decisions."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e085", "0x66713", "0x66714"]
 
 [[global]]
 address = "0xe6c5d"
@@ -3161,6 +3172,17 @@ value_domain = "{0,1,2}"
 usage = "GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask."
 source = "investigation"
 confidence = "high"
+
+[[global]]
+address = "0x204f8"
+name = "party_reference_level"
+category = "counter"
+type = "int"
+value_domain = "integer mean of eligible party-unit levels"
+usage = "FIELD's enemy auto-level reference. It averages all eligible party units when at most five exist, otherwise the five highest-level units. SETEN raises scalable enemies above unit_starting_level by the positive gap divided by the selected auto-level divisor before applying stage level clamps. Difficulty separately adds -5/0/+5 stat-growth iterations and does not change this stored runtime level."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x673c", "0x67a0", "0x6930"]
 
 [[global]]
 address = "0x152617"

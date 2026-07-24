@@ -3348,3 +3348,32 @@ level/base-stat/growth fields, and its packed battle-sprite id.
 This closes the immediate “inspect an append unit semantically” need without asserting that the runtime
 has executed `$1$AUTORUN.BIN`. Ordered whole-pack merging and natural port bootstrap still depend on the
 unresolved native AUTORUN launch boundary documented in `docs/asset-resolution-re.md`.
+
+## Data-semantics sidebar: battle experience rewards (2026-07-24)
+
+BTL now proves the complete experience-award path. After each combat exchange it identifies a surviving
+faction-1 participant, reads the opposing runtime entity's EBINIT definition and base
+`unit_experience_reward`, and applies an enemy-minus-player runtime-level bracket. Surviving opponents use
+40/30/20/10 percent for differences `>=3`/`2`/`1`/`<=0`; defeated opponents use
+250/200/150/100/75/40/20 percent for `>=3`/`2`/`1`/`0`/`-1`/`-2`/`<=-3`. Integer division truncates.
+ADDEXP then advances the persistent 0..99 progress cell, carries excess through level-ups, and stops at
+the EBINIT level cap.
+
+The append examples close both motivating questions. Unit 900 `ヘタレアースマン` has no reward write,
+no base unit-900 definition, and no earlier writer for that cell, so its effective zero-initialized reward
+is zero. Unit 901 `キングプテテット本体/BOSS` writes 50 and unit 905
+`キングプテテット分身/BOSS` writes 20. Append stage 200 places one body and two splits with level
+clamps 70..99, producing nonlethal body awards 20/15/10/5 and split awards 8/6/4/2 across the four level
+brackets. The observed 6–10 per exchange is therefore ordinary table behavior, not a King-specific flag.
+
+FIELD and SETEN establish the level input: eligible party levels are averaged (top five when necessary),
+enemy definitions auto-scale upward from their starting level, and stage minimum/maximum clamps apply.
+Difficulty's -5/0/+5 adjustment affects stat-growth iterations separately and does not change the runtime
+level BTL compares. The global registry now names the runtime definition ids, runtime entity levels,
+party reference level, persistent experience progress, and BTL outcome flags; evidence regressions protect
+the formula constants, ADDEXP gates and modifiers, level construction, append rewards, and stage-200 spawn
+composition.
+
+**Next:** investigate the highest-use remaining auto-shaped row table, the stride-10 table at
+`G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
+TUNE).

@@ -57,6 +57,12 @@ def test_load_and_lint():
           and entries[0x66714]["name"] == "target_entity_index"
           and entries[0x52289]["name"] == "entity_selected_action_ids",
           "AI actor, target, and selected action state are curated")
+    check(entries[0x4dfbd]["name"] == "entity_unit_definition_ids"
+          and entries[0x4e053]["name"] == "entity_levels"
+          and entries[0x6994]["name"] == "unit_experience_progress"
+          and entries[0x204f8]["name"] == "party_reference_level"
+          and entries[0x152618]["name"] == "battle_outcome_flags",
+          "battle experience and outcome state are curated")
     check(entries[0xcca08]["name"] == "offensive_action_attack_elements"
           and entries[0xab5ba]["name"]
           == "attack_element_effectiveness_percent",
@@ -520,6 +526,94 @@ def test_unit_stat_growth_fractions_evidence():
     check(persistence_ok,
           "save/load, game-clear, and evolution preserve the complete fractional rows")
 
+def test_battle_experience_evidence():
+    loaded = {
+        name: {
+            instruction.offset: instruction
+            for instruction in sys4load.load(paths.scripts()[name]).instructions
+        }
+        for name in (
+            "BTL.BIN", "ADDEXP.BIN", "FIELD.BIN", "GAMESTART.BIN", "SETEN.BIN"
+        )
+    }
+    btl = loaded["BTL.BIN"]
+
+    check(
+        btl[0x3667].args[1] == (3, 0x4dfbd)
+        and btl[0x366e].args[1] == (3, 0x83406)
+        and btl[0x367a].args[1] == (3, 0x4e053)
+        and btl[0x3681].args[1] == (3, 0x4e053)
+        and btl[0x3688].label == "sub",
+        "BTL selects the opponent definition reward and computes the runtime level gap",
+    )
+    check(
+        btl[0x35ae].args[1] == (3, 0x4e085)
+        and btl[0x35cf].args[1] == (3, 0x4e085)
+        and btl[0x35c7].args == [(3, 0x152618), (0, 0)]
+        and btl[0x35e8].args == [(3, 0x152618), (0, 1)]
+        and btl[0x35f0].args == [(3, 0x152618), (0, 2)]
+        and btl[0x368f].args == [(9, 49), (3, 0x152618), (0, 4)],
+        "BTL derives defeated/survived outcome bits from both combatants' HP",
+    )
+
+    nonlethal = {
+        0x36ab: 40,
+        0x36c1: 30,
+        0x36d7: 20,
+        0x36df: 10,
+    }
+    defeated = {
+        0x36f5: 250,
+        0x370b: 200,
+        0x3721: 150,
+        0x3737: 100,
+        0x3754: 75,
+        0x3771: 40,
+        0x3779: 20,
+    }
+    check(
+        all(btl[offset].args == [(9, 7), (0, percent)]
+            for offset, percent in nonlethal.items())
+        and all(btl[offset].args == [(9, 7), (0, percent)]
+                for offset, percent in defeated.items())
+        and btl[0x377e].label == "mul"
+        and btl[0x3785].args[-1] == (0, 100)
+        and btl[0x3791].label == "call-script",
+        "BTL's nonlethal and defeat percentage tables feed integer-divided ADDEXP awards",
+    )
+
+    addexp = loaded["ADDEXP.BIN"]
+    check(
+        addexp[0x52].args == [(9, 1), (3, 0x62ccb)]
+        and addexp[0x57].args[-1] == (0, 0x10)
+        and addexp[0x6d].args[-1] == (0, 0x20)
+        and addexp[0x85].args[-1] == (0, 0x40)
+        and loaded["GAMESTART.BIN"][0xf07].args == [(3, 0x3302), (0, 4)]
+        and loaded["GAMESTART.BIN"][0xf0c].args == [(3, 0x3302), (0, 5)]
+        and loaded["GAMESTART.BIN"][0xf11].args == [(3, 0x3302), (0, 6)]
+        and addexp[0x9a].label == "gr"
+        and addexp[0x148].args[1] == (3, 0x6994)
+        and addexp[0x164].args[1] == (3, 0x6994)
+        and addexp[0x156].args[-1] == (0, 100),
+        "ADDEXP applies modifier bits, rejects zero, and advances the 0..99 progress cell",
+    )
+
+    field = loaded["FIELD.BIN"]
+    seten = loaded["SETEN.BIN"]
+    check(
+        field[0x5e8].args == [(3, 0x204f8), (0, 0)]
+        and field[0x63e].args[1] == (3, 0x6930)
+        and field[0x705].args[1] == (3, 0x6930)
+        and field[0x6b7].args[1] == (3, 0x204f8)
+        and field[0x70c].args[1] == (3, 0x204f8)
+        and field[0x6c6].args[-1] == (0, 5)
+        and field[0x71b].args[1] == (3, 0x204f8)
+        and seten[0x2be].args[1] == (3, 0x204f8)
+        and seten[0x2e1].args[1] == (3, 0x204f8)
+        and seten[0x2ef].args[1] == (3, 0x4e053),
+        "FIELD builds the party reference level and SETEN uses it for enemy runtime levels",
+    )
+
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
     auto = G.load_auto(paths.BUILD / "global-var-map.json")
@@ -586,6 +680,7 @@ if __name__ == "__main__":
     test_selected_movement_route_grid_evidence()
     test_battle_triggered_passive_skill_flags_evidence()
     test_unit_stat_growth_fractions_evidence()
+    test_battle_experience_evidence()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()

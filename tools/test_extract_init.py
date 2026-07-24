@@ -140,6 +140,32 @@ def test_append_ebinit_fragment() -> None:
         by_id[81]["semantic_fields"]["unit_battle_sprite_asset_id"] == 0x0100002D,
         "append unit 81 retains its selector-keyed battle sprite resource id",
     )
+    check(
+        "unit_experience_reward" not in by_id[900]["semantic_fields"]
+        and by_id[901]["semantic_fields"]["unit_experience_reward"] == 50
+        and by_id[905]["semantic_fields"]["unit_experience_reward"] == 20,
+        "append Earthman omits XP while both King Pterodactyl definitions set rewards",
+    )
+
+
+def test_append_king_pterodactyl_stage() -> None:
+    records, _ = extract_init.extract_mixed(
+        extract_init.load_packed_script(0x01000050)
+    )
+    extract_init.attach_stage_enemy_spawns(records)
+    stage = next(record for record in records if record["id"] == 200)
+    spawns = stage["enemy_spawns"]
+
+    check(
+        [spawn["unit_id"] for spawn in spawns]
+        == [901, 900, 900, 900, 900, 900, 905, 905],
+        "append stage 200 places the King body, five Earthmen, and two split bodies",
+    )
+    check(
+        [(spawn["min_level"], spawn["max_level"]) for spawn in spawns]
+        == [(70, 99)] + [(1, 50)] * 5 + [(70, 99)] * 2,
+        "append stage 200 keeps both King definitions in the level-70-to-99 bracket",
+    )
 
 
 def test_character_profiles() -> None:
@@ -2331,6 +2357,7 @@ def test_field_semantics() -> None:
 if __name__ == "__main__":
     test_real_name_tables()
     test_append_ebinit_fragment()
+    test_append_king_pterodactyl_stage()
     test_character_profiles()
     test_magic_actions()
     test_static_negative_write()
