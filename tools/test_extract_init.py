@@ -1810,6 +1810,169 @@ def test_card_definitions() -> None:
     )
 
 
+def test_battle_effect_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["BTANINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "BTANINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_battle_effect_definitions(
+        script
+    )
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 202
+        and meta["runtime_work_slot_count"] == 6
+        and meta["hit_pulse_capacity_per_slot"] == 3
+        and meta["zero_effect_id_is_empty"],
+        "BTANINIT exposes 202 sparse effect ids and the six-slot work ABI",
+    )
+    check(
+        meta["definition_write_count"] == 1917
+        and meta["classified_instruction_count"] == 4472,
+        "BTANINIT classifies every clear, branch, work write, and exit",
+    )
+    check(
+        meta["visual_mode_counts"]
+        == {
+            "green_colorkey_sprite_sheet": 1,
+            "movie": 186,
+            "opaque_sprite_sheet": 15,
+        }
+        and meta["sprite_sheet_effect_count"] == 16,
+        "BTANINIT separates movie and sprite-sheet effect paths",
+    )
+    check(
+        by_id[1]["visual_asset_name"] == "MVB001.AGF"
+        and by_id[1]["sound_asset_name"] == "A0124.WAV"
+        and by_id[1]["additive_blend"]
+        and by_id[1]["anchor"] == "slot_combatant"
+        and by_id[1]["width"] == 280
+        and by_id[1]["height"] == 352,
+        "BTANINIT effect 1 joins its movie, sound, blend, and geometry",
+    )
+    check(
+        by_id[24]["visual_asset_name"] == "AM994.AGF"
+        and by_id[24]["visual_mode"]
+        == "green_colorkey_sprite_sheet"
+        and by_id[24]["atlas"]
+        == {
+            "columns": 4,
+            "authored_rows": 4,
+            "frame_count": 16,
+            "duration_ms": 800,
+        }
+        and by_id[131]["visual_mode"] == "opaque_sprite_sheet"
+        and by_id[131]["atlas"]["frame_count"] == 28,
+        "BTANINIT preserves sprite-atlas geometry and duration",
+    )
+    check(
+        by_id[915]["hit_pulse_offsets_ms"] == [100]
+        and by_id[915]["record_fields"]["0x155baa/3/0"] == 100
+        and meta["hit_pulse_effect_count"] == 26,
+        "BTANINIT exposes BTL's hit-pulse timing rows",
+    )
+    check(
+        meta["resolved_visual_asset_count"] == 202
+        and meta["sound_effect_count"] == 199
+        and meta["resolved_sound_asset_count"] == 199,
+        "BTANINIT resolves every populated AGF and WAV resource",
+    )
+    check(
+        meta["referenced_effect_definition_count"] == 186
+        and meta["unreferenced_effect_definition_ids"]
+        == [
+            24, 806, 807, 901, 902, 903, 904, 905,
+            906, 907, 910, 995, 996, 997, 998, 999,
+        ],
+        "BTANINIT retains all sixteen unreferenced authored effects",
+    )
+
+
+def test_battle_animations() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["BTANINIT2.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "BTANINIT2 remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_battle_animations(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 122
+        and meta["reserved_record_count"] == 1000
+        and meta["effect_slots_per_record"] == 6,
+        "BTANINIT2 exposes 122 sparse rows in its reserved timeline registry",
+    )
+    check(
+        meta["static_write_count"] == 1017
+        and meta["classified_instruction_count"] == 1018
+        and meta["effect_reference_count"] == 573
+        and meta["distinct_effect_id_count"] == 186
+        and meta["resolved_effect_reference_count"] == 573,
+        "BTANINIT2 classifies every write and resolves every effect id",
+    )
+    check(
+        meta["effect_slot_populations"]
+        == {
+            "0": 114, "1": 114, "2": 113,
+            "3": 113, "4": 0, "5": 119,
+        }
+        and meta["delay_slot_populations"]
+        == {
+            "0": 0, "1": 0, "2": 111,
+            "3": 111, "4": 0, "5": 111,
+        },
+        "BTANINIT2 preserves its actor/target slot and delay geometry",
+    )
+    check(
+        by_id[1]["duration_ms"] == 670
+        and [
+            (slot["slot"], slot["effect_id"], slot["start_delay_ms"])
+            for slot in by_id[1]["effect_slots"]
+        ]
+        == [
+            (0, 958, 0),
+            (1, 958, 0),
+            (2, 1, 200),
+            (3, 1, 200),
+            (5, 921, 470),
+        ]
+        and by_id[1]["weapon_class_items"]
+        == [{"item_id": 901, "item_name": "素手"}],
+        "BTANINIT2 row 1 joins the unarmed attack timeline and item class",
+    )
+    check(
+        by_id[101]["skill_uses"]
+        == [{"skill_id": 101, "skill_name": "急所射撃"}]
+        and by_id[101]["effect_slots"][2]["effect"][
+            "visual_asset_name"
+        ] == "MVB101.AGF"
+        and meta["skill_reference_count"] == 101
+        and meta["skill_animation_count"] == 98,
+        "BTANINIT2 joins all SKINIT animation references",
+    )
+    check(
+        by_id[801]["skill_uses"]
+        == [{"skill_id": 33, "skill_name": "見切り"}]
+        and by_id[801]["duration_ms"] == 0
+        and by_id[809]["uses"] == ["defeat"]
+        and by_id[809]["effect_slots"][0]["effect"][
+            "visual_asset_name"
+        ] == "AM050.AGF"
+        and meta["complete_timeline_count"] == 111
+        and meta["auxiliary_timeline_count"] == 11,
+        "BTANINIT2 distinguishes full timelines and passive/defeat auxiliaries",
+    )
+    check(
+        meta["unjoined_authored_animation_ids"]
+        == [205, 221, 222, 224]
+        and by_id[205]["uses"] == ["unjoined_authored"],
+        "BTANINIT2 preserves four authored rows without shipped consumers",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -2029,6 +2192,8 @@ if __name__ == "__main__":
     test_training_actions()
     test_card_generation_lists()
     test_card_definitions()
+    test_battle_effect_definitions()
+    test_battle_animations()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

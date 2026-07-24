@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5054 globals (384 curated, 4670 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5054 globals (403 curated, 4651 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -272,6 +272,24 @@
 | `0x1525b2` | card_generation_card_ids | high | investigation | Card ids parallel to card_generation_weight_schedules. FIELD scans slots 0..99, filters each nonzero id through the CDINIT2 story-flag rows, and performs cumulative weighted random selection. CDINIT clears only the first 50 slots even though its largest authored list reaches slot 75. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
+| `0x15288e` | battle_animation_effect_ids | high | investigation | BTANINIT2's sparse battle-animation composition table. BTANINIT expands the selected row into six runtime effect work slots. BTL anchors requested effects in slots 0 and 1 to the actor and slots 2 through 5 to the target; shipped data never populates slot 4. Columns: 0=effect_slot_0, 1=effect_slot_1, 2=effect_slot_2, 3=effect_slot_3, 4=reserved_effect_slot_4, 5=effect_slot_5. |
+| `0x153ffe` | battle_animation_effect_start_delays_ms | high | investigation | Per-effect start delays paired with battle_animation_effect_ids. BTL passes each populated value to movie/sprite animation setup and adds it to the effect-local sound and hit-pulse offsets. Shipped data authors delays only for slots 2, 3, and 5. Columns: 0=effect_slot_0, 1=effect_slot_1, 2=effect_slot_2, 3=effect_slot_3, 4=reserved_effect_slot_4, 5=effect_slot_5. |
+| `0x15576e` | battle_animation_duration_ms | high | investigation | Overall timing boundary for one BTANINIT2 animation row. BTL uses it to schedule delayed battle voice and to begin the 500 ms HP interpolation after the main animation. The passive/defeat auxiliary rows 801..809 intentionally omit it. |
+| `0x155b56` | battle_effect_visual_asset_ids | high | investigation | BTANINIT clears and materializes the selected animation's six visual resources. BTL opens mode-0 values as nonblocking MPEG-in-AGF movies and mode-1/2 values as sprite sheets. All 202 effect definitions resolve through SYS4INI. |
+| `0x155b5c` | battle_effect_visual_mode_ids | high | investigation | BTANINIT visual playback mode per materialized effect slot. BTL routes zero through play-movie-to-surface, mode 1 through set-texture with green color key 0x00ff00, and mode 2 through set-texture with no color key. |
+| `0x155b62` | battle_effect_additive_blend_flags | high | investigation | When nonzero, BTL applies gfx-draw-color mode 1 (SRCALPHA/ONE additive glow) to the materialized battle-effect surface. The flag is populated on all 186 movie effects and the sole green-colorkey sprite-sheet effect. |
+| `0x155b68` | battle_effect_widths | high | investigation | Width of the destination surface BTL creates for each materialized battle effect. It also participates in centering the surface before applying battle_effect_offset_x_pixels. |
+| `0x155b6e` | battle_effect_heights | high | investigation | Height of the destination surface BTL creates for each materialized battle effect. It also participates in centering the surface before applying battle_effect_offset_y_pixels. |
+| `0x155b74` | battle_effect_atlas_column_counts | high | investigation | Sprite-sheet column count passed by BTL to animate-gfx-srcrect-target. The sixteen sprite-sheet definitions pair it with battle_effect_atlas_frame_counts and a finite duration. |
+| `0x155b7a` | battle_effect_atlas_row_counts | high | investigation | Authored sprite-sheet row count. It agrees with ceil(frame_count / column_count) for all sixteen sprite effects, but BTL never reads this array and instead passes the already-authored frame count and column count to animate-gfx-srcrect-target. |
+| `0x155b80` | battle_effect_atlas_frame_counts | high | investigation | Total sprite-sheet frame count passed by BTL to animate-gfx-srcrect-target. Shipped values equal atlas columns times authored rows. |
+| `0x155b86` | battle_effect_durations_ms | high | investigation | Per-effect playback duration. BTANINIT authors it for sixteen sprite-sheet effects; for movie effects BTL overwrites the slot with query-surface-stop-time-ms. BTL uses start delay plus this duration when extending the animation timeline. |
+| `0x155b8c` | battle_effect_combatant_anchor_flags | high | investigation | When nonzero, BTL anchors effect slots 0 and 1 to the actor-side combatant and slots 2 through 5 to the target-side combatant. Zero uses the battlefield center. |
+| `0x155b92` | battle_effect_offset_x_pixels | high | investigation | Horizontal offset added after BTL centers the effect surface on its selected combatant or the battlefield. |
+| `0x155b98` | battle_effect_offset_y_pixels | high | investigation | Vertical offset added after BTL centers the effect surface on its selected combatant or the battlefield. |
+| `0x155b9e` | battle_effect_sound_asset_ids | high | investigation | Optional WAV loaded by BTL for a materialized effect slot. BTL schedules playback at the animation row's effect start delay plus battle_effect_sound_delays_ms. All 199 populated ids resolve through SYS4INI. |
+| `0x155ba4` | battle_effect_sound_delays_ms | high | investigation | Effect-local sound delay added to battle_animation_effect_start_delays_ms before BTL schedules the loaded WAV channel. |
+| `0x155baa` | battle_effect_hit_pulse_offsets_ms | high | investigation | Up to three BTL hit-feedback pulse offsets per materialized effect slot. BTL adds the animation row's effect start delay, fires each pulse within a 100 ms window, and tracks it once per slot/column. Shipped BTANINIT populates only pulse_1, at 100 ms, on 26 effects. Columns: 0=pulse_1, 1=pulse_2, 2=pulse_3. |
 | `0x155bbc` | training_action_required_story_flag_ids | high | investigation | Up to three prerequisite story flags per TRINIT action. TRAIN subtracts one before indexing story_event_flags and rejects the action unless every populated flag equals one. Columns: 0=required_story_flag_id_1, 1=required_story_flag_id_2, 2=required_story_flag_id_3. |
 | `0x155bfb` | training_action_forbidden_story_flag_ids | high | investigation | Reserved three-slot exclusion table paired with training_action_required_story_flag_ids. TRAIN rejects an action when any populated flag equals one; shipped TRINIT leaves all 63 cells zero. Columns: 0=forbidden_story_flag_id_1, 1=forbidden_story_flag_id_2, 2=forbidden_story_flag_id_3. |
 | `0x155c3a` | training_action_minimum_unit_levels | high | investigation | Minimum familiar level for each TRINIT action. TRAIN compares the selected unit's level and rejects values below the populated threshold. |
@@ -400,21 +418,6 @@
 | `0x152885` | — | low | auto-shape | array |
 | `0x152887` | — | low | auto-shape | array |
 | `0x152889` | — | low | auto-shape | array |
-| `0x15576e` | — | low | auto-shape | array |
-| `0x155b56` | — | low | auto-shape | array |
-| `0x155b5c` | — | low | auto-shape | array |
-| `0x155b62` | — | low | auto-shape | array |
-| `0x155b68` | — | low | auto-shape | array |
-| `0x155b6e` | — | low | auto-shape | array |
-| `0x155b74` | — | low | auto-shape | array |
-| `0x155b7a` | — | low | auto-shape | array |
-| `0x155b80` | — | low | auto-shape | array |
-| `0x155b86` | — | low | auto-shape | array |
-| `0x155b8c` | — | low | auto-shape | array |
-| `0x155b92` | — | low | auto-shape | array |
-| `0x155b98` | — | low | auto-shape | array |
-| `0x155b9e` | — | low | auto-shape | array |
-| `0x155ba4` | — | low | auto-shape | array |
 | `0x1560e8` | — | low | auto-shape | array |
 | `0x156106` | — | low | auto-shape | array |
 | `0x156124` | — | low | auto-shape | array |
@@ -449,6 +452,7 @@
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
 | `0x15261b` | battle_target_side_index | high | investigation | Index of the target side in BTL's two-entry battle arrays. CALCDMG sets it to 1 - battle_actor_side_index; BTL applies battle_hp_delta to this side and uses its unit-definition row for damage and defeated voices. |
+| `0x15288c` | selected_battle_animation_id | high | investigation | CALCDMG selects a skill_battle_animation_id or an equipped item's item_weapon_class, and BTL also writes passive reaction ids 801..808 and hardcoded defeat id 809. BTANINIT uses this value to select one six-effect timeline. |
 | `0x1560e7` | current_magic_action_id | high | investigation | Shared selected magic/research/growth action id. MAGIC and STUDY index MAINIT's parallel columns with it, FIELD and USEMAGIC consume the selected action, and MAMES dispatches ids 1..9 to their untitled help descriptions. |
 | `0x15a095` | information_tab_index | high | investigation | Selected INFO screen tab. INFO dispatches the five tab scripts with it; INFOMES uses values 0..2 as the column of information_message_handler_script_ids for INFOCH, INFOEN, and INFOVO. |
 | `0x15a117` | current_character_profile_id | high | investigation | INFOCH's selected character-information row. It indexes CIINIT's name, unit, portrait, and placement arrays; CIMES compares the same id against all 24 profiles to dispatch the character biography. |
@@ -5090,10 +5094,6 @@
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |
-| `0x15288c` | — | med | auto-shape | current-entity-index? |
-| `0x15288e` | — | med | auto-shape | record-table[stride 6] |
-| `0x153ffe` | — | med | auto-shape | record-table[stride 6] |
-| `0x155baa` | — | med | auto-shape | record-table[stride 3] |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
 

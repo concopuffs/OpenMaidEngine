@@ -103,6 +103,16 @@ def test_load_and_lint():
           and entries[0x4dfbb]["name"]
           == "stage_card_spendable_point_bonus",
           "CDINIT2/FIELD card-effect state is curated")
+    check(entries[0x15288c]["name"] == "selected_battle_animation_id"
+          and entries[0x15288e]["columns"]["4"]
+          == "reserved_effect_slot_4"
+          and entries[0x153ffe]["name"]
+          == "battle_animation_effect_start_delays_ms"
+          and entries[0x15576e]["name"] == "battle_animation_duration_ms"
+          and entries[0x155b5c]["name"] == "battle_effect_visual_mode_ids"
+          and entries[0x155b7a]["name"] == "battle_effect_atlas_row_counts"
+          and entries[0x155baa]["columns"]["2"] == "pulse_3",
+          "BTANINIT/BTANINIT2 battle-animation state is curated")
     check(entries[0x15a095]["name"] == "information_tab_index"
           and entries[0x15a096]["name"] == "information_message_handled"
           and entries[0x15a097]["name"]

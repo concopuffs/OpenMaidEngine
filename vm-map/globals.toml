@@ -3967,6 +3967,218 @@ confidence = "high"
 depends_on = ["0x1519f8"]
 
 [[global]]
+address = "0x15288c"
+name = "selected_battle_animation_id"
+category = "index-pointer"
+type = "int"
+value_domain = "BTANINIT2 animation id 1..809; zero means no animation"
+usage = "CALCDMG selects a skill_battle_animation_id or an equipped item's item_weapon_class, and BTL also writes passive reaction ids 801..808 and hardcoded defeat id 809. BTANINIT uses this value to select one six-effect timeline."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xaaa1e", "0xa6689", "0x15288e"]
+
+[[global]]
+address = "0x15288e"
+name = "battle_animation_effect_ids"
+category = "data-table"
+type = "int[1000][6]"
+columns = { "0" = "effect_slot_0", "1" = "effect_slot_1", "2" = "effect_slot_2", "3" = "effect_slot_3", "4" = "reserved_effect_slot_4", "5" = "effect_slot_5" }
+value_domain = "BTANINIT effect ids 1..966; zero means no effect"
+usage = "BTANINIT2's sparse battle-animation composition table. BTANINIT expands the selected row into six runtime effect work slots. BTL anchors requested effects in slots 0 and 1 to the actor and slots 2 through 5 to the target; shipped data never populates slot 4."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15288c", "0x153ffe", "0x155b56"]
+
+[[global]]
+address = "0x153ffe"
+name = "battle_animation_effect_start_delays_ms"
+category = "data-table"
+type = "int[1000][6]"
+columns = { "0" = "effect_slot_0", "1" = "effect_slot_1", "2" = "effect_slot_2", "3" = "effect_slot_3", "4" = "reserved_effect_slot_4", "5" = "effect_slot_5" }
+value_domain = "non-negative milliseconds; zero means start immediately"
+usage = "Per-effect start delays paired with battle_animation_effect_ids. BTL passes each populated value to movie/sprite animation setup and adds it to the effect-local sound and hit-pulse offsets. Shipped data authors delays only for slots 2, 3, and 5."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15288e", "0x15576e"]
+
+[[global]]
+address = "0x15576e"
+name = "battle_animation_duration_ms"
+category = "data-table"
+type = "int[1000]"
+value_domain = "non-negative milliseconds; shipped complete timelines use 500..1700"
+usage = "Overall timing boundary for one BTANINIT2 animation row. BTL uses it to schedule delayed battle voice and to begin the 500 ms HP interpolation after the main animation. The passive/defeat auxiliary rows 801..809 intentionally omit it."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15288c", "0x15288e"]
+
+[[global]]
+address = "0x155b56"
+name = "battle_effect_visual_asset_ids"
+category = "data-table"
+type = "int[6]"
+value_domain = "SYS4INI MVB*.AGF or AM*.AGF resource id; zero means empty slot"
+usage = "BTANINIT clears and materializes the selected animation's six visual resources. BTL opens mode-0 values as nonblocking MPEG-in-AGF movies and mode-1/2 values as sprite sheets. All 202 effect definitions resolve through SYS4INI."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15288e", "0x155b5c"]
+
+[[global]]
+address = "0x155b5c"
+name = "battle_effect_visual_mode_ids"
+category = "data-table"
+type = "int[6]"
+value_domain = "0=movie, 1=green-colorkey sprite sheet, 2=opaque sprite sheet"
+usage = "BTANINIT visual playback mode per materialized effect slot. BTL routes zero through play-movie-to-surface, mode 1 through set-texture with green color key 0x00ff00, and mode 2 through set-texture with no color key."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b56", "0x155b74", "0x155b80", "0x155b86"]
+
+[[global]]
+address = "0x155b62"
+name = "battle_effect_additive_blend_flags"
+category = "data-table"
+type = "int[6]"
+value_domain = "{0,1}"
+usage = "When nonzero, BTL applies gfx-draw-color mode 1 (SRCALPHA/ONE additive glow) to the materialized battle-effect surface. The flag is populated on all 186 movie effects and the sole green-colorkey sprite-sheet effect."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b56"]
+
+[[global]]
+address = "0x155b68"
+name = "battle_effect_widths"
+category = "data-table"
+type = "int[6]"
+value_domain = "surface width in pixels; shipped values 208..600"
+usage = "Width of the destination surface BTL creates for each materialized battle effect. It also participates in centering the surface before applying battle_effect_offset_x_pixels."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b6e", "0x155b92"]
+
+[[global]]
+address = "0x155b6e"
+name = "battle_effect_heights"
+category = "data-table"
+type = "int[6]"
+value_domain = "surface height in pixels; shipped values 208..400"
+usage = "Height of the destination surface BTL creates for each materialized battle effect. It also participates in centering the surface before applying battle_effect_offset_y_pixels."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b68", "0x155b98"]
+
+[[global]]
+address = "0x155b74"
+name = "battle_effect_atlas_column_counts"
+category = "data-table"
+type = "int[6]"
+value_domain = "4..7; zero for movie effects"
+usage = "Sprite-sheet column count passed by BTL to animate-gfx-srcrect-target. The sixteen sprite-sheet definitions pair it with battle_effect_atlas_frame_counts and a finite duration."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b5c", "0x155b80", "0x155b86"]
+
+[[global]]
+address = "0x155b7a"
+name = "battle_effect_atlas_row_counts"
+category = "data-table"
+type = "int[6]"
+value_domain = "2..5; zero for movie effects"
+usage = "Authored sprite-sheet row count. It agrees with ceil(frame_count / column_count) for all sixteen sprite effects, but BTL never reads this array and instead passes the already-authored frame count and column count to animate-gfx-srcrect-target."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b74", "0x155b80"]
+
+[[global]]
+address = "0x155b80"
+name = "battle_effect_atlas_frame_counts"
+category = "data-table"
+type = "int[6]"
+value_domain = "10..28; zero for movie effects"
+usage = "Total sprite-sheet frame count passed by BTL to animate-gfx-srcrect-target. Shipped values equal atlas columns times authored rows."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b74", "0x155b7a", "0x155b86"]
+
+[[global]]
+address = "0x155b86"
+name = "battle_effect_durations_ms"
+category = "data-table"
+type = "int[6]"
+value_domain = "333..934 for authored sprite effects; movie duration is queried into the same work cell"
+usage = "Per-effect playback duration. BTANINIT authors it for sixteen sprite-sheet effects; for movie effects BTL overwrites the slot with query-surface-stop-time-ms. BTL uses start delay plus this duration when extending the animation timeline."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x153ffe", "0x155b5c"]
+
+[[global]]
+address = "0x155b8c"
+name = "battle_effect_combatant_anchor_flags"
+category = "data-table"
+type = "int[6]"
+value_domain = "{0,1}"
+usage = "When nonzero, BTL anchors effect slots 0 and 1 to the actor-side combatant and slots 2 through 5 to the target-side combatant. Zero uses the battlefield center."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b92", "0x155b98"]
+
+[[global]]
+address = "0x155b92"
+name = "battle_effect_offset_x_pixels"
+category = "data-table"
+type = "int[6]"
+value_domain = "0, 35, or 54 pixels"
+usage = "Horizontal offset added after BTL centers the effect surface on its selected combatant or the battlefield."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b68", "0x155b8c"]
+
+[[global]]
+address = "0x155b98"
+name = "battle_effect_offset_y_pixels"
+category = "data-table"
+type = "int[6]"
+value_domain = "0, 77, 80, or 100 pixels"
+usage = "Vertical offset added after BTL centers the effect surface on its selected combatant or the battlefield."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x155b6e", "0x155b8c"]
+
+[[global]]
+address = "0x155b9e"
+name = "battle_effect_sound_asset_ids"
+category = "data-table"
+type = "int[6]"
+value_domain = "SYS4INI WAV resource id; zero means no sound"
+usage = "Optional WAV loaded by BTL for a materialized effect slot. BTL schedules playback at the animation row's effect start delay plus battle_effect_sound_delays_ms. All 199 populated ids resolve through SYS4INI."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x153ffe", "0x155ba4"]
+
+[[global]]
+address = "0x155ba4"
+name = "battle_effect_sound_delays_ms"
+category = "data-table"
+type = "int[6]"
+value_domain = "0..600 milliseconds"
+usage = "Effect-local sound delay added to battle_animation_effect_start_delays_ms before BTL schedules the loaded WAV channel."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x153ffe", "0x155b9e"]
+
+[[global]]
+address = "0x155baa"
+name = "battle_effect_hit_pulse_offsets_ms"
+category = "data-table"
+type = "int[6][3]"
+columns = { "0" = "pulse_1", "1" = "pulse_2", "2" = "pulse_3" }
+value_domain = "positive effect-local milliseconds; zero means no pulse"
+usage = "Up to three BTL hit-feedback pulse offsets per materialized effect slot. BTL adds the animation row's effect start delay, fires each pulse within a 100 ms window, and tracks it once per slot/column. Shipped BTANINIT populates only pulse_1, at 100 ms, on 26 effects."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x153ffe"]
+
+[[global]]
 address = "0x4379"
 name = "card_definition_result_messages"
 category = "string-table"

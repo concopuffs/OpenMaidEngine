@@ -49,7 +49,8 @@ Large, table-like scripts — prime candidates for data extraction:
 - `SCINIT` (88 KB), `CGINIT` (79 KB — CG gallery), `ITINIT` (70 KB — items),
   `RTINIT` (67 KB — movement/battle routine-step banks), `CCINIT` (41 KB — class-change rule program),
   `SKINIT` (37 KB — skills), `CDINIT` (31 KB — weighted card-generation lists), `CDINIT2`
-  (card definitions and effects), `BTANINIT` (105 KB — battle animations)
+  (card definitions and effects), `BTANINIT` (105 KB — battle-effect definitions), `BTANINIT2`
+  (six-slot battle-animation timelines)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
 
@@ -160,6 +161,17 @@ six consumer-proven effect types: story event, item award, deferred stage-clear 
 resource recovery, trap, and random warp. All item, event, condition, and visual references resolve
 through ITINIT, SCINIT, ILINIT, and SYS4INI. FIELD reads two of the three authored required-story-flag
 columns; eighteen third-column values are preserved as engine-dead data.
+
+BTANINIT2 defines 122 sparse battle-animation ids in a reserved 1,000-row layout. Each row owns up
+to six BTANINIT effect ids, their start delays, and an overall duration. CALCDMG selects rows 1--21
+from ITINIT weapon classes or a skill's explicit animation id; 101 SKINIT references join to 98
+rows, passive reactions occupy 801--808, and BTL hardcodes defeat row 809.
+
+BTANINIT materializes the selected timeline into BTL's six-slot work record. Its 202 effect
+definitions resolve 186 movie visuals and sixteen sprite sheets, 199 optional WAV sounds, blend and
+anchor flags, surface geometry and offsets, sprite-atlas timing, sound delay, and hit-pulse timing.
+All populated visual/audio resources resolve through SYS4INI; sixteen authored effects are
+unreferenced by BTANINIT2.
 
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.

@@ -3147,3 +3147,49 @@ FIELD/STAGECLEAR consumer contract.
 **Next:** audit BTANINIT and BTANINIT2 together. Their current generic outputs fragment the
 battle-animation registry across address-derived fields, making the consumer-side row geometry the
 next data-structure target.
+
+## Data-semantics sidebar: BTANINIT/BTANINIT2 battle animations (2026-07-23)
+
+BTANINIT2 is three parallel reserved 1,000-row arrays, not 28 records with 387 unrelated fields.
+Its 1,017 writes define 122 sparse battle-animation ids: six effect slots at `0x15288e`, six paired
+start-delay slots at `0x153ffe`, and one total-duration cell at `0x15576e`. The dedicated extractor
+classifies all 1,018 instructions exactly and resolves all 573 populated effect references across
+186 distinct BTANINIT definitions.
+
+The shipped slot geometry is deliberate. Slots zero and one have 114 effect references each and
+are actor-side when an effect requests combatant anchoring; slots two and three have 113 each and
+are target-side; slot five has 119; slot four is never populated. Only slots two, three, and five
+carry authored start delays. One hundred eleven rows are complete attack timelines with a
+500--1,700 ms total duration. Eleven are auxiliary rows: two incomplete/unjoined authored attacks
+and passive/defeat rows 801--809, which are invoked for isolated overlays and intentionally omit the
+main duration.
+
+CALCDMG selects rows 1--21 from the equipped item's `item_weapon_class` for normal attacks or reads
+`skill_battle_animation_id` for skills. The join accounts for 101 populated skill references across
+98 animation rows, including passive reactions 801--808. BTL selects hardcoded row 809 for defeat.
+Four authored animation rows—205, 221, 222, and 224—have no shipped item, skill, or hardcoded
+consumer and remain explicit rather than being discarded.
+
+BTANINIT is the paired effect catalog and runtime materializer. It clears fourteen six-cell work
+arrays plus one `6 × 3` hit-pulse table, reads the selected BTANINIT2 row, and dispatches each slot's
+effect id through 203 cases: zero as the empty sentinel and 202 populated definitions. The dedicated
+extractor classifies all 4,472 instructions, including 1,917 definition writes. The catalog contains
+186 nonblocking MPEG-in-AGF movie effects, one green-colorkey sprite sheet, and fifteen opaque sprite
+sheets. All 202 visual resources resolve to `MVB*.AGF` or `AM*.AGF`; all 199 populated sound ids
+resolve to WAV files.
+
+BTL proves the complete materialized work ABI: playback mode, additive blend, destination width and
+height, actor/target or battlefield-center anchor, pixel offsets, sprite atlas columns/frame count
+and finite duration, delayed sound, and up to three hit-pulse offsets. Shipped data populates only
+the first hit-pulse column, always at 100 ms, on 26 effects. The sixteen authored sprite-atlas row
+counts agree with the explicit frame/column values, but BTL never reads them. Sixteen complete
+BTANINIT effect definitions are unreferenced by BTANINIT2 and remain preserved.
+
+Regressions protect both scripts' complete instruction accounting, reserved geometry, every
+effect/delay/duration population, all 573 definition joins, the SKINIT and ITINIT selections,
+passive/defeat rows, visual/audio resolution, movie/sprite behavior, hit-pulse timing, and the
+unreferenced authored surfaces.
+
+**Next:** audit STINIT2's remaining generic 321-row stage-definition surface. MPINIT already proves
+its tile-bound columns; the next pass should join the rest of its stage metadata to FIELD and the
+stage-selection/initialization consumers.

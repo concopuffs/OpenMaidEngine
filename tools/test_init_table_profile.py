@@ -350,6 +350,70 @@ def main() -> int:
     assert "- card definitions: 3/100 rows" in rendered_definitions
     assert "- engine-dead third required flags: 1" in rendered_definitions
 
+    effect_fixture = {
+        "table": "EFFECTS",
+        "mode": "numeric",
+        "schema": "battle-effect-definitions",
+        "record_count": 4,
+        "effect_definition_count": 4,
+        "runtime_work_slot_count": 6,
+        "visual_mode_counts": {"movie": 3, "opaque_sprite_sheet": 1},
+        "resolved_visual_asset_count": 4,
+        "sound_effect_count": 3,
+        "resolved_sound_asset_count": 3,
+        "sprite_sheet_effect_count": 1,
+        "hit_pulse_effect_count": 2,
+        "referenced_effect_definition_count": 3,
+        "unreferenced_effect_definition_ids": [999],
+        "engine_dead_atlas_row_count": 1,
+        "records": [{}, {}, {}, {}],
+    }
+    effect_summary = profile.profile_battle_effect_definitions(
+        effect_fixture
+    )
+    assert effect_summary["effect_definition_count"] == 4
+    assert effect_summary["visual_mode_counts"]["movie"] == 3
+    rendered_effects = profile.render_markdown(
+        effect_fixture, [], 40
+    )
+    assert "- effect definitions: 4 for 6 runtime slots" in rendered_effects
+    assert "- sound assets resolved: 3/3" in rendered_effects
+
+    animation_fixture = {
+        "table": "ANIMATIONS",
+        "mode": "numeric",
+        "schema": "battle-animation-timelines",
+        "record_count": 3,
+        "authored_record_count": 3,
+        "reserved_record_count": 1000,
+        "effect_reference_count": 12,
+        "distinct_effect_id_count": 8,
+        "resolved_effect_reference_count": 12,
+        "effect_slot_populations": {
+            "0": 2, "1": 2, "2": 2, "3": 2, "4": 0, "5": 4,
+        },
+        "delay_slot_populations": {
+            "0": 0, "1": 0, "2": 2, "3": 2, "4": 0, "5": 2,
+        },
+        "complete_timeline_count": 2,
+        "auxiliary_timeline_count": 1,
+        "skill_reference_count": 2,
+        "skill_animation_count": 2,
+        "weapon_class_animation_count": 21,
+        "unjoined_authored_animation_ids": [205],
+        "records": [{}, {}, {}],
+    }
+    animation_summary = profile.profile_battle_animations(
+        animation_fixture
+    )
+    assert animation_summary["authored_record_count"] == 3
+    assert animation_summary["auxiliary_timeline_count"] == 1
+    rendered_animations = profile.render_markdown(
+        animation_fixture, [], 40
+    )
+    assert "- battle animations: 3/1000 rows" in rendered_animations
+    assert "- full/auxiliary timelines: 2/1" in rendered_animations
+
     training_fixture = {
         "table": "TRAINING",
         "mode": "name",

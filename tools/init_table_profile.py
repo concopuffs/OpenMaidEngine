@@ -494,6 +494,90 @@ def profile_card_definitions(data: dict) -> dict:
     }
 
 
+def profile_battle_effect_definitions(data: dict) -> dict:
+    """Summarize BTANINIT's visual/audio/hit-pulse effect catalog."""
+    if data.get("schema") != "battle-effect-definitions":
+        return {}
+    return {
+        "effect_definition_count": data.get(
+            "effect_definition_count", 0
+        ),
+        "runtime_work_slot_count": data.get(
+            "runtime_work_slot_count", 0
+        ),
+        "visual_mode_counts": data.get("visual_mode_counts", {}),
+        "resolved_visual_asset_count": data.get(
+            "resolved_visual_asset_count", 0
+        ),
+        "sound_effect_count": data.get("sound_effect_count", 0),
+        "resolved_sound_asset_count": data.get(
+            "resolved_sound_asset_count", 0
+        ),
+        "sprite_sheet_effect_count": data.get(
+            "sprite_sheet_effect_count", 0
+        ),
+        "hit_pulse_effect_count": data.get(
+            "hit_pulse_effect_count", 0
+        ),
+        "referenced_effect_definition_count": data.get(
+            "referenced_effect_definition_count", 0
+        ),
+        "unreferenced_effect_definition_ids": data.get(
+            "unreferenced_effect_definition_ids", []
+        ),
+        "engine_dead_atlas_row_count": data.get(
+            "engine_dead_atlas_row_count", 0
+        ),
+    }
+
+
+def profile_battle_animations(data: dict) -> dict:
+    """Summarize BTANINIT2's sparse six-slot animation timelines."""
+    if data.get("schema") != "battle-animation-timelines":
+        return {}
+    return {
+        "authored_record_count": data.get(
+            "authored_record_count", 0
+        ),
+        "reserved_record_count": data.get(
+            "reserved_record_count", 0
+        ),
+        "effect_reference_count": data.get(
+            "effect_reference_count", 0
+        ),
+        "distinct_effect_id_count": data.get(
+            "distinct_effect_id_count", 0
+        ),
+        "resolved_effect_reference_count": data.get(
+            "resolved_effect_reference_count", 0
+        ),
+        "effect_slot_populations": data.get(
+            "effect_slot_populations", {}
+        ),
+        "delay_slot_populations": data.get(
+            "delay_slot_populations", {}
+        ),
+        "complete_timeline_count": data.get(
+            "complete_timeline_count", 0
+        ),
+        "auxiliary_timeline_count": data.get(
+            "auxiliary_timeline_count", 0
+        ),
+        "skill_reference_count": data.get(
+            "skill_reference_count", 0
+        ),
+        "skill_animation_count": data.get(
+            "skill_animation_count", 0
+        ),
+        "weapon_class_animation_count": data.get(
+            "weapon_class_animation_count", 0
+        ),
+        "unjoined_authored_animation_ids": data.get(
+            "unjoined_authored_animation_ids", []
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -621,7 +705,54 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if definition_profile := profile_card_definitions(data):
+    if effect_profile := profile_battle_effect_definitions(data):
+        lines.extend([
+            f"- effect definitions: "
+            f"{effect_profile['effect_definition_count']} for "
+            f"{effect_profile['runtime_work_slot_count']} runtime slots",
+            f"- visual modes: {effect_profile['visual_mode_counts']}",
+            f"- visual assets resolved: "
+            f"{effect_profile['resolved_visual_asset_count']}/"
+            f"{effect_profile['effect_definition_count']}",
+            f"- sound assets resolved: "
+            f"{effect_profile['resolved_sound_asset_count']}/"
+            f"{effect_profile['sound_effect_count']}",
+            f"- sprite-sheet/hit-pulse effects: "
+            f"{effect_profile['sprite_sheet_effect_count']}/"
+            f"{effect_profile['hit_pulse_effect_count']}",
+            f"- referenced definitions: "
+            f"{effect_profile['referenced_effect_definition_count']}/"
+            f"{effect_profile['effect_definition_count']}; unreferenced "
+            f"{effect_profile['unreferenced_effect_definition_ids']}",
+            f"- engine-dead authored atlas-row cells: "
+            f"{effect_profile['engine_dead_atlas_row_count']}",
+        ])
+    elif animation_profile := profile_battle_animations(data):
+        lines.extend([
+            f"- battle animations: "
+            f"{animation_profile['authored_record_count']}/"
+            f"{animation_profile['reserved_record_count']} rows",
+            f"- effect references: "
+            f"{animation_profile['effect_reference_count']} across "
+            f"{animation_profile['distinct_effect_id_count']} definitions "
+            f"({animation_profile['resolved_effect_reference_count']} "
+            f"resolved)",
+            f"- populated effect slots: "
+            f"{animation_profile['effect_slot_populations']}",
+            f"- populated delay slots: "
+            f"{animation_profile['delay_slot_populations']}",
+            f"- full/auxiliary timelines: "
+            f"{animation_profile['complete_timeline_count']}/"
+            f"{animation_profile['auxiliary_timeline_count']}",
+            f"- SKINIT joins: "
+            f"{animation_profile['skill_reference_count']} skills across "
+            f"{animation_profile['skill_animation_count']} animations",
+            f"- weapon-class rows: "
+            f"{animation_profile['weapon_class_animation_count']}",
+            f"- unjoined authored rows: "
+            f"{animation_profile['unjoined_authored_animation_ids']}",
+        ])
+    elif definition_profile := profile_card_definitions(data):
         lines.extend([
             f"- card definitions: {definition_profile['card_count']}/"
             f"{definition_profile['reserved_record_count']} rows",

@@ -42,6 +42,11 @@ CDINIT2 is a special name-mode registry: 81 cards occupy one contiguous
 100-row definition block with story gates, item/event/point rewards, ranged
 HP/SP/FS and spirit effects, conditions, warp behavior, and visual assets.
 
+BTANINIT2 is a special numeric-mode registry: 122 sparse battle animations
+occupy three reserved 1,000-row arrays for six effect ids, six start delays,
+and one total duration. BTANINIT dispatches 202 effect ids into BTL's six-slot
+visual/audio/hit-pulse work record.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -70,6 +75,7 @@ T_GLOBAL_INT = 3
 T_GLOBAL_STRING = 5
 T_IMM = 0
 T_LOCAL_INT = 9
+T_LOCAL_PTR = 12
 
 CURRENT_UNIT_ID = 0x66715
 CURRENT_UNIT_LEVELS = 0x6930
@@ -754,6 +760,53 @@ CARD_TYPE_NAMES = {
     6: "random_warp",
 }
 CARD_RESOURCE_COLUMNS = ("hp", "sp", "fs")
+
+BATTLE_ANIMATION_SELECTOR = 0x15288C
+BATTLE_ANIMATION_EFFECT_ID_BASE = 0x15288E
+BATTLE_ANIMATION_EFFECT_DELAY_BASE = 0x153FFE
+BATTLE_ANIMATION_DURATION_BASE = 0x15576E
+BATTLE_ANIMATION_CAPACITY = 1000
+BATTLE_ANIMATION_SLOT_COUNT = 6
+BATTLE_EFFECT_HIT_PULSE_COUNT = 3
+BATTLE_EFFECT_WORK_ARRAYS = {
+    "visual_asset_id": (0x155B56, 1),
+    "visual_mode_id": (0x155B5C, 1),
+    "additive_blend_flag": (0x155B62, 1),
+    "width": (0x155B68, 1),
+    "height": (0x155B6E, 1),
+    "atlas_column_count": (0x155B74, 1),
+    "atlas_row_count": (0x155B7A, 1),
+    "atlas_frame_count": (0x155B80, 1),
+    "duration_ms": (0x155B86, 1),
+    "combatant_anchor_flag": (0x155B8C, 1),
+    "offset_x": (0x155B92, 1),
+    "offset_y": (0x155B98, 1),
+    "sound_asset_id": (0x155B9E, 1),
+    "sound_delay_ms": (0x155BA4, 1),
+    "hit_pulse_offsets_ms": (0x155BAA, BATTLE_EFFECT_HIT_PULSE_COUNT),
+}
+BATTLE_EFFECT_VISUAL_MODES = {
+    0: "movie",
+    1: "green_colorkey_sprite_sheet",
+    2: "opaque_sprite_sheet",
+}
+BATTLE_EFFECT_SEMANTIC_NAMES = {
+    "visual_asset_id": "battle_effect_visual_asset_ids",
+    "visual_mode_id": "battle_effect_visual_mode_ids",
+    "additive_blend_flag": "battle_effect_additive_blend_flags",
+    "width": "battle_effect_widths",
+    "height": "battle_effect_heights",
+    "atlas_column_count": "battle_effect_atlas_column_counts",
+    "atlas_row_count": "battle_effect_atlas_row_counts",
+    "atlas_frame_count": "battle_effect_atlas_frame_counts",
+    "duration_ms": "battle_effect_durations_ms",
+    "combatant_anchor_flag": "battle_effect_combatant_anchor_flags",
+    "offset_x": "battle_effect_offset_x_pixels",
+    "offset_y": "battle_effect_offset_y_pixels",
+    "sound_asset_id": "battle_effect_sound_asset_ids",
+    "sound_delay_ms": "battle_effect_sound_delays_ms",
+    "hit_pulse_offsets_ms": "battle_effect_hit_pulse_offsets_ms",
+}
 
 
 def resolve(name: str) -> Path:
@@ -4664,6 +4717,682 @@ def extract_card_definitions(scr):
     }
 
 
+def extract_battle_effect_definitions(scr):
+    """Extract BTANINIT's effect-id dispatch into six-slot BTL work fields."""
+    instructions = scr.instructions
+    labels = [
+        sys4load.display_label(ins.opcode) for ins in instructions
+    ]
+    classified_offsets = set()
+
+    clear_layout = [
+        (base, (
+            BATTLE_ANIMATION_SLOT_COUNT * stride
+            if stride > 1 else BATTLE_ANIMATION_SLOT_COUNT
+        ))
+        for base, stride in BATTLE_EFFECT_WORK_ARRAYS.values()
+    ]
+    if len(clear_layout) != 15:
+        raise AssertionError("battle-effect work layout must have 15 arrays")
+    for index, (base, count) in enumerate(clear_layout):
+        ins = instructions[index]
+        expected_args = [
+            (T_GLOBAL_INT, base),
+            (T_IMM, count),
+        ]
+        if labels[index] != "copy-to-global" or ins.args != expected_args:
+            raise ValueError(
+                f"{scr.path.name}: unexpected work clear at "
+                f"0x{ins.offset:x}: {labels[index]} {ins.args!r}"
+            )
+        classified_offsets.add(ins.offset)
+
+    control_labels = (
+        "mov",
+        "jmp",
+        "add",
+        "lt",
+        "jcc",
+        "call",
+        "jmp",
+        "jmp",
+        "lookup-array-2d",
+        "mov",
+    )
+    control_start = len(clear_layout)
+    for relative, expected_label in enumerate(control_labels):
+        ins = instructions[control_start + relative]
+        if labels[control_start + relative] != expected_label:
+            raise ValueError(
+                f"{scr.path.name}: unexpected dispatch control at "
+                f"0x{ins.offset:x}: expected {expected_label}, got "
+                f"{labels[control_start + relative]}"
+            )
+        classified_offsets.add(ins.offset)
+
+    input_lookup = instructions[control_start + 8]
+    expected_lookup_args = [
+        (T_LOCAL_PTR, 0),
+        (T_GLOBAL_INT, BATTLE_ANIMATION_EFFECT_ID_BASE),
+        (T_GLOBAL_INT, BATTLE_ANIMATION_SELECTOR),
+        (T_IMM, BATTLE_ANIMATION_SLOT_COUNT),
+        (T_LOCAL_INT, 1),
+    ]
+    if input_lookup.args != expected_lookup_args:
+        raise ValueError(
+            f"{scr.path.name}: unexpected effect-id input lookup "
+            f"{input_lookup.args!r}"
+        )
+
+    cases = {}
+    cursor = control_start + len(control_labels)
+    while cursor < len(instructions) and labels[cursor] == "eq":
+        compare = instructions[cursor]
+        if (
+            len(compare.args) != 3
+            or compare.args[0] != (T_LOCAL_INT, 2)
+            or compare.args[1] != (T_LOCAL_INT, 0)
+            or compare.args[2][0] != T_IMM
+        ):
+            raise ValueError(
+                f"{scr.path.name}: malformed effect comparison at "
+                f"0x{compare.offset:x}"
+            )
+        effect_id = compare.args[2][1]
+        if effect_id in cases:
+            raise ValueError(
+                f"{scr.path.name}: duplicate effect id {effect_id}"
+            )
+        classified_offsets.add(compare.offset)
+        cursor += 1
+
+        branch = instructions[cursor]
+        if labels[cursor] != "jcc":
+            raise ValueError(
+                f"{scr.path.name}: missing branch after effect "
+                f"{effect_id}"
+            )
+        classified_offsets.add(branch.offset)
+        cursor += 1
+
+        values = {}
+        raw_fields = {}
+        raw_record_fields = {}
+        while labels[cursor] != "ret":
+            lookup = instructions[cursor]
+            if labels[cursor] not in {
+                "lookup-array", "lookup-array-2d"
+            }:
+                raise ValueError(
+                    f"{scr.path.name}: unexpected effect {effect_id} "
+                    f"instruction at 0x{lookup.offset:x}: "
+                    f"{labels[cursor]}"
+                )
+            cursor += 1
+            write = instructions[cursor]
+            if (
+                labels[cursor] != "mov"
+                or write.args[0] != (T_LOCAL_PTR, 0)
+                or write.args[1][0] != T_IMM
+            ):
+                raise ValueError(
+                    f"{scr.path.name}: malformed effect {effect_id} "
+                    f"write at 0x{write.offset:x}"
+                )
+
+            base = lookup.args[1][1]
+            field_name = next((
+                name
+                for name, (candidate_base, _) in (
+                    BATTLE_EFFECT_WORK_ARRAYS.items()
+                )
+                if candidate_base == base
+            ), None)
+            if field_name is None:
+                raise ValueError(
+                    f"{scr.path.name}: effect {effect_id} writes "
+                    f"unknown work base 0x{base:x}"
+                )
+            _, stride = BATTLE_EFFECT_WORK_ARRAYS[field_name]
+            if stride == 1:
+                if (
+                    labels[cursor - 1] != "lookup-array"
+                    or lookup.args != [
+                        (T_LOCAL_PTR, 0),
+                        (T_GLOBAL_INT, base),
+                        (T_LOCAL_INT, 1),
+                    ]
+                ):
+                    raise ValueError(
+                        f"{scr.path.name}: malformed {field_name} lookup "
+                        f"for effect {effect_id}"
+                    )
+                key = field_name
+                raw_fields[f"0x{base:x}"] = write.args[1][1]
+            else:
+                if (
+                    labels[cursor - 1] != "lookup-array-2d"
+                    or lookup.args[:4] != [
+                        (T_LOCAL_PTR, 0),
+                        (T_GLOBAL_INT, base),
+                        (T_LOCAL_INT, 1),
+                        (T_IMM, stride),
+                    ]
+                    or lookup.args[4][0] != T_IMM
+                ):
+                    raise ValueError(
+                        f"{scr.path.name}: malformed {field_name} lookup "
+                        f"for effect {effect_id}"
+                    )
+                column = lookup.args[4][1]
+                if not 0 <= column < stride:
+                    raise ValueError(
+                        f"{scr.path.name}: effect {effect_id} "
+                        f"{field_name} column {column} out of range"
+                    )
+                key = f"{field_name}.{column}"
+                raw_record_fields[
+                    f"0x{base:x}/{stride}/{column}"
+                ] = write.args[1][1]
+
+            _store_unique(
+                values, key, write.args[1][1], effect_id
+            )
+            classified_offsets.update((lookup.offset, write.offset))
+            cursor += 1
+
+        classified_offsets.add(instructions[cursor].offset)
+        cursor += 1
+        cases[effect_id] = {
+            "values": values,
+            "fields": raw_fields,
+            "record_fields": raw_record_fields,
+        }
+
+    expected_tail = (
+        "comment",
+        "instruction-marker-noop",
+        "ret",
+        "exit",
+    )
+    if tuple(labels[cursor:]) != expected_tail:
+        raise ValueError(
+            f"{scr.path.name}: unexpected dispatch tail "
+            f"{labels[cursor:]!r}"
+        )
+    classified_offsets.update(
+        ins.offset for ins in instructions[cursor:]
+    )
+    if len(classified_offsets) != len(instructions):
+        raise ValueError(
+            f"{scr.path.name}: classified {len(classified_offsets)}/"
+            f"{len(instructions)} instructions"
+        )
+    if cases.get(0, {}).get("values"):
+        raise ValueError(
+            f"{scr.path.name}: effect id zero must remain the empty sentinel"
+        )
+
+    asset_names = callscript_names()
+    animation_references = collections.defaultdict(set)
+    animation_scr = sys4load.load(resolve("BTANINIT2"))
+    for ins in animation_scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        index = destination - BATTLE_ANIMATION_EFFECT_ID_BASE
+        if not (
+            0 <= index
+            < BATTLE_ANIMATION_CAPACITY * BATTLE_ANIMATION_SLOT_COUNT
+        ):
+            continue
+        animation_id, _ = divmod(
+            index, BATTLE_ANIMATION_SLOT_COUNT
+        )
+        animation_references[value].add(animation_id)
+
+    records = []
+    for effect_id, case in sorted(cases.items()):
+        if effect_id == 0:
+            continue
+        values = case["values"]
+        visual_asset_id = values["visual_asset_id"]
+        visual_mode_id = values["visual_mode_id"]
+        atlas = {}
+        for field_name, output_name in (
+            ("atlas_column_count", "columns"),
+            ("atlas_row_count", "authored_rows"),
+            ("atlas_frame_count", "frame_count"),
+            ("duration_ms", "duration_ms"),
+        ):
+            if field_name in values:
+                atlas[output_name] = values[field_name]
+
+        sound_asset_id = values.get("sound_asset_id", 0)
+        hit_pulses = [
+            values.get(f"hit_pulse_offsets_ms.{column}", 0)
+            for column in range(BATTLE_EFFECT_HIT_PULSE_COUNT)
+        ]
+        record = {
+            "id": effect_id,
+            "visual_asset_id": visual_asset_id,
+            "visual_asset_name": asset_names.get(
+                visual_asset_id, ""
+            ),
+            "visual_mode_id": visual_mode_id,
+            "visual_mode": BATTLE_EFFECT_VISUAL_MODES.get(
+                visual_mode_id, ""
+            ),
+            "additive_blend": bool(
+                values.get("additive_blend_flag", 0)
+            ),
+            "width": values["width"],
+            "height": values["height"],
+            "anchor": (
+                "slot_combatant"
+                if values.get("combatant_anchor_flag", 0)
+                else "battlefield_center"
+            ),
+            "offset_x": values["offset_x"],
+            "offset_y": values["offset_y"],
+            "atlas": atlas,
+            "sound_asset_id": sound_asset_id,
+            "sound_asset_name": (
+                asset_names.get(sound_asset_id, "")
+                if sound_asset_id else ""
+            ),
+            "sound_delay_ms": values.get("sound_delay_ms", 0),
+            "hit_pulse_offsets_ms": [
+                value for value in hit_pulses if value
+            ],
+            "referenced_animation_ids": sorted(
+                animation_references.get(effect_id, ())
+            ),
+            "fields": case["fields"],
+            "record_fields": case["record_fields"],
+        }
+        records.append(record)
+
+    unreferenced = [
+        record["id"]
+        for record in records
+        if not record["referenced_animation_ids"]
+    ]
+    schema_field_semantics = {}
+    semantic_array_names = {}
+    for field_name, (base, stride) in (
+        BATTLE_EFFECT_WORK_ARRAYS.items()
+    ):
+        semantic_name = BATTLE_EFFECT_SEMANTIC_NAMES[field_name]
+        semantic_array_names[f"0x{base:x}"] = semantic_name
+        if stride == 1:
+            schema_field_semantics[f"0x{base:x}"] = semantic_name
+        else:
+            for column in range(stride):
+                schema_field_semantics[
+                    f"0x{base:x}/{stride}/{column}"
+                ] = f"{semantic_name}.pulse_{column + 1}"
+
+    return records, {
+        "schema": "battle-effect-definitions",
+        "effect_definition_count": len(records),
+        "zero_effect_id_is_empty": True,
+        "runtime_work_slot_count": BATTLE_ANIMATION_SLOT_COUNT,
+        "hit_pulse_capacity_per_slot": BATTLE_EFFECT_HIT_PULSE_COUNT,
+        "definition_write_count": sum(
+            len(record["fields"]) + len(record["record_fields"])
+            for record in records
+        ),
+        "classified_instruction_count": len(classified_offsets),
+        "visual_mode_counts": dict(sorted(collections.Counter(
+            record["visual_mode"] for record in records
+        ).items())),
+        "resolved_visual_asset_count": sum(
+            bool(record["visual_asset_name"]) for record in records
+        ),
+        "resolved_sound_asset_count": sum(
+            bool(record["sound_asset_name"]) for record in records
+        ),
+        "sound_effect_count": sum(
+            bool(record["sound_asset_id"]) for record in records
+        ),
+        "hit_pulse_effect_count": sum(
+            bool(record["hit_pulse_offsets_ms"]) for record in records
+        ),
+        "sprite_sheet_effect_count": sum(
+            bool(record["atlas"]) for record in records
+        ),
+        "engine_dead_atlas_row_count": sum(
+            "authored_rows" in record["atlas"] for record in records
+        ),
+        "referenced_effect_definition_count": (
+            len(records) - len(unreferenced)
+        ),
+        "unreferenced_effect_definition_ids": unreferenced,
+        "array_layouts": {
+            f"0x{base:x}": {"stride": stride}
+            for base, stride in BATTLE_EFFECT_WORK_ARRAYS.values()
+            if stride > 1
+        },
+        "schema_field_semantics": schema_field_semantics,
+        "semantic_array_names": semantic_array_names,
+        "consumer_contract": {
+            "BTANINIT2.BIN": (
+                "selects up to six effect ids and their start delays for "
+                "each sparse battle-animation row"
+            ),
+            "BTL.BIN": (
+                "draws a movie or sprite-sheet surface, applies optional "
+                "additive blending, anchors slots 0/1 to the actor and "
+                "slots 2..5 to the target when requested, schedules WAV "
+                "start, and consumes up to three hit-pulse offsets"
+            ),
+        },
+    }
+
+
+def extract_battle_animations(scr):
+    """Extract BTANINIT2's sparse 1000-row battle-animation timeline."""
+    cells = {
+        "effect_ids": {},
+        "effect_start_delays_ms": {},
+        "duration_ms": {},
+    }
+    classified_offsets = set()
+    static_write_count = 0
+    layouts = {
+        "effect_ids": (
+            BATTLE_ANIMATION_EFFECT_ID_BASE,
+            BATTLE_ANIMATION_SLOT_COUNT,
+        ),
+        "effect_start_delays_ms": (
+            BATTLE_ANIMATION_EFFECT_DELAY_BASE,
+            BATTLE_ANIMATION_SLOT_COUNT,
+        ),
+        "duration_ms": (BATTLE_ANIMATION_DURATION_BASE, 1),
+    }
+
+    for ins in scr.instructions:
+        if sys4load.display_label(ins.opcode) == "exit":
+            classified_offsets.add(ins.offset)
+            continue
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        static_write_count += 1
+        destination, value = write
+        for field_name, (base, stride) in layouts.items():
+            index = destination - base
+            if not (
+                0 <= index < BATTLE_ANIMATION_CAPACITY * stride
+            ):
+                continue
+            animation_id, column = divmod(index, stride)
+            if animation_id == 0:
+                raise ValueError(
+                    f"{scr.path.name}: writes reserved animation row zero "
+                    f"at 0x{ins.offset:x}"
+                )
+            _store_unique(
+                cells[field_name],
+                (animation_id, column),
+                value,
+                animation_id,
+            )
+            classified_offsets.add(ins.offset)
+            break
+        else:
+            raise ValueError(
+                f"{scr.path.name}: unclassified animation write "
+                f"0x{destination:x} at 0x{ins.offset:x}"
+            )
+
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+
+    effect_records, effect_meta = extract_battle_effect_definitions(
+        sys4load.load(resolve("BTANINIT"))
+    )
+    effects_by_id = {
+        record["id"]: record for record in effect_records
+    }
+
+    skill_records, _ = extract_name(
+        sys4load.load(resolve("SKINIT"))
+    )
+    skill_uses = collections.defaultdict(list)
+    for record in skill_records:
+        animation_id = record.get("fields", {}).get("0xaaa1e", 0)
+        if animation_id:
+            skill_uses[animation_id].append({
+                "skill_id": record["id"],
+                "skill_name": record["name"],
+            })
+
+    item_records, _ = extract_name(
+        sys4load.load(resolve("ITINIT"))
+    )
+    weapon_class_items = collections.defaultdict(list)
+    for record in item_records:
+        weapon_class = record.get("fields", {}).get("0xa6689", 0)
+        if weapon_class:
+            weapon_class_items[weapon_class].append({
+                "item_id": record["id"],
+                "item_name": record["name"],
+            })
+
+    animation_ids = sorted({
+        animation_id
+        for field_cells in cells.values()
+        for animation_id, _ in field_cells
+    })
+    records = []
+    resolved_effect_reference_count = 0
+    for animation_id in animation_ids:
+        raw_record_fields = {}
+        slots = []
+        for slot in range(BATTLE_ANIMATION_SLOT_COUNT):
+            effect_key = (animation_id, slot)
+            if effect_key not in cells["effect_ids"]:
+                continue
+            effect_id = cells["effect_ids"][effect_key]
+            delay_key = (animation_id, slot)
+            start_delay_ms = cells[
+                "effect_start_delays_ms"
+            ].get(delay_key, 0)
+            effect = effects_by_id.get(effect_id, {})
+            if effect:
+                resolved_effect_reference_count += 1
+            raw_record_fields[
+                f"0x{BATTLE_ANIMATION_EFFECT_ID_BASE:x}/"
+                f"{BATTLE_ANIMATION_SLOT_COUNT}/{slot}"
+            ] = effect_id
+            if delay_key in cells["effect_start_delays_ms"]:
+                raw_record_fields[
+                    f"0x{BATTLE_ANIMATION_EFFECT_DELAY_BASE:x}/"
+                    f"{BATTLE_ANIMATION_SLOT_COUNT}/{slot}"
+                ] = start_delay_ms
+            slots.append({
+                "slot": slot,
+                "anchor_side": (
+                    "actor" if slot < 2 else "target"
+                ),
+                "effect_id": effect_id,
+                "start_delay_ms": start_delay_ms,
+                "effect": {
+                    key: value
+                    for key, value in effect.items()
+                    if key not in {
+                        "fields",
+                        "record_fields",
+                        "referenced_animation_ids",
+                    }
+                },
+            })
+
+        duration_key = (animation_id, 0)
+        duration_ms = cells["duration_ms"].get(duration_key, 0)
+        raw_fields = {}
+        if duration_key in cells["duration_ms"]:
+            raw_fields[
+                f"0x{BATTLE_ANIMATION_DURATION_BASE:x}"
+            ] = duration_ms
+        uses = []
+        if 1 <= animation_id <= 21:
+            uses.append("normal_attack_weapon_class")
+        if skill_uses.get(animation_id):
+            uses.append("skill")
+        if animation_id == 809:
+            uses.append("defeat")
+        if not uses:
+            uses.append("unjoined_authored")
+        records.append({
+            "id": animation_id,
+            "duration_ms": duration_ms,
+            "effect_slots": slots,
+            "uses": uses,
+            "skill_uses": skill_uses.get(animation_id, []),
+            "weapon_class_items": weapon_class_items.get(
+                animation_id, []
+            ) if 1 <= animation_id <= 21 else [],
+            "fields": raw_fields,
+            "record_fields": raw_record_fields,
+        })
+
+    effect_reference_values = list(cells["effect_ids"].values())
+    delay_columns = collections.Counter(
+        column
+        for _, column in cells["effect_start_delays_ms"]
+    )
+    effect_columns = collections.Counter(
+        column for _, column in cells["effect_ids"]
+    )
+    unjoined_animation_ids = [
+        record["id"] for record in records
+        if record["uses"] == ["unjoined_authored"]
+    ]
+    return records, {
+        "schema": "battle-animation-timelines",
+        "reserved_record_count": BATTLE_ANIMATION_CAPACITY,
+        "authored_record_count": len(records),
+        "effect_slots_per_record": BATTLE_ANIMATION_SLOT_COUNT,
+        "effect_id_array_base": (
+            f"0x{BATTLE_ANIMATION_EFFECT_ID_BASE:x}"
+        ),
+        "effect_start_delay_array_base": (
+            f"0x{BATTLE_ANIMATION_EFFECT_DELAY_BASE:x}"
+        ),
+        "duration_array_base": (
+            f"0x{BATTLE_ANIMATION_DURATION_BASE:x}"
+        ),
+        "static_write_count": static_write_count,
+        "classified_instruction_count": len(classified_offsets),
+        "effect_reference_count": len(effect_reference_values),
+        "distinct_effect_id_count": len(set(effect_reference_values)),
+        "resolved_effect_reference_count": (
+            resolved_effect_reference_count
+        ),
+        "effect_slot_populations": {
+            str(column): effect_columns.get(column, 0)
+            for column in range(BATTLE_ANIMATION_SLOT_COUNT)
+        },
+        "delay_slot_populations": {
+            str(column): delay_columns.get(column, 0)
+            for column in range(BATTLE_ANIMATION_SLOT_COUNT)
+        },
+        "duration_cell_count": len(cells["duration_ms"]),
+        "complete_timeline_count": sum(
+            bool(record["duration_ms"]) for record in records
+        ),
+        "auxiliary_timeline_count": sum(
+            not record["duration_ms"] for record in records
+        ),
+        "skill_reference_count": sum(
+            len(record["skill_uses"]) for record in records
+        ),
+        "skill_animation_count": sum(
+            bool(record["skill_uses"]) for record in records
+        ),
+        "weapon_class_animation_count": 21,
+        "unjoined_authored_animation_ids": unjoined_animation_ids,
+        "effect_definition_count": effect_meta[
+            "effect_definition_count"
+        ],
+        "unreferenced_effect_definition_ids": effect_meta[
+            "unreferenced_effect_definition_ids"
+        ],
+        "array_layouts": {
+            f"0x{BATTLE_ANIMATION_EFFECT_ID_BASE:x}": {
+                "stride": BATTLE_ANIMATION_SLOT_COUNT
+            },
+            f"0x{BATTLE_ANIMATION_EFFECT_DELAY_BASE:x}": {
+                "stride": BATTLE_ANIMATION_SLOT_COUNT
+            },
+        },
+        "schema_field_semantics": {
+            **{
+                f"0x{BATTLE_ANIMATION_EFFECT_ID_BASE:x}/"
+                f"{BATTLE_ANIMATION_SLOT_COUNT}/{column}": (
+                    "battle_animation_effect_ids."
+                    f"effect_slot_{column}"
+                )
+                for column in range(BATTLE_ANIMATION_SLOT_COUNT)
+            },
+            **{
+                f"0x{BATTLE_ANIMATION_EFFECT_DELAY_BASE:x}/"
+                f"{BATTLE_ANIMATION_SLOT_COUNT}/{column}": (
+                    "battle_animation_effect_start_delays_ms."
+                    f"effect_slot_{column}"
+                )
+                for column in range(BATTLE_ANIMATION_SLOT_COUNT)
+            },
+            f"0x{BATTLE_ANIMATION_DURATION_BASE:x}": (
+                "battle_animation_duration_ms"
+            ),
+        },
+        "semantic_array_names": {
+            f"0x{BATTLE_ANIMATION_EFFECT_ID_BASE:x}": (
+                "battle_animation_effect_ids"
+            ),
+            f"0x{BATTLE_ANIMATION_EFFECT_DELAY_BASE:x}": (
+                "battle_animation_effect_start_delays_ms"
+            ),
+            f"0x{BATTLE_ANIMATION_DURATION_BASE:x}": (
+                "battle_animation_duration_ms"
+            ),
+        },
+        "consumer_contract": {
+            "CALCDMG.BIN": (
+                "selects a skill's animation id or the equipped item's "
+                "weapon-class id for an ordinary attack"
+            ),
+            "BTL.BIN": (
+                "calls BTANINIT for the selected row, starts each populated "
+                "effect at its six-slot delay, schedules audio and hit "
+                "pulses, and uses the row duration to stage voice and HP "
+                "interpolation; animation 809 is the hardcoded defeat row"
+            ),
+            "SKINIT.BIN": (
+                "provides 101 skill references across 98 distinct animation "
+                "rows, including passive reaction rows 801 through 808"
+            ),
+            "ITINIT.BIN": (
+                "provides the weapon-class ids that select normal-attack "
+                "animation rows 1 through 21"
+            ),
+        },
+    }
+
+
 def extract_card_generation_lists(scr):
     """Extract CDINIT's selector-dispatched weighted card candidate lists."""
     instructions = scr.instructions
@@ -5705,6 +6434,11 @@ def write_data_index(data_dir: Path) -> None:
         "six effect types, and raw array coordinates remain together; item, event, condition,",
         "and visual ids join through ITINIT, SCINIT, ILINIT, and SYS4INI resources.",
         "",
+        "BTANINIT2's dedicated battle-animation schema exposes 122 sparse timelines in",
+        "three reserved 1,000-row arrays: six effect ids, six start delays, and total",
+        "duration. BTANINIT's paired schema decodes 202 effect ids into BTL's six-slot",
+        "movie/sprite, blend, geometry, audio, and hit-pulse work record.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -5814,6 +6548,10 @@ def main() -> int:
         extractor = extract_card_definitions
     elif mode == "numeric" and name == "CDINIT":
         extractor = extract_card_generation_lists
+    elif mode == "numeric" and name == "BTANINIT":
+        extractor = extract_battle_effect_definitions
+    elif mode == "numeric" and name == "BTANINIT2":
+        extractor = extract_battle_animations
     elif mode == "numeric" and name == "SPINIT":
         extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":
