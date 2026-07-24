@@ -1683,86 +1683,24 @@ the analogous `$$RT.DAT` → `RT.DAT` / `RT.BAK` update for ReadTextDB. `shared_
 falls back from `SAVE.DAT` to `SAVE.BAK` and loads `RT.DAT` independently. Numbered `.DAT` writes do not
 use this backup transaction, but a successful numbered serialization flushes the shared profile too.
 
-After the common container decode, the shared logical payload is:
+The complete shared-payload byte structure, installed-file counts, and its separation from `RT.DAT` and
+numbered slot state are canonical in `sys4-format-notes.md` under "Native persistence files." The
+selected-cell address meanings are canonical in `vm-map/globals.toml`. Native writer/reader behavior
+establishes that the fixed integer/string maps are profile-wide services rather than whole-bank snapshots;
+their opaque catalog and extended sections are preserved by the port.
 
-1. a DWORD catalog/compatibility count followed by that many DWORDs;
-2. a DWORD integer-entry count, then fixed 16-byte entries `{typed_key[12], raw_value_u32}`;
-3. a DWORD string-entry count and a string-blob **DWORD count**, then concatenated
-   `typed_key\0value\0` pairs with DWORD padding;
-4. for shared save version at least 3.10, a 256-DWORD selector/count table, a DWORD extra-count, and that
-   many extra DWORDs;
-5. one explicit trailing zero DWORD plus eight historical allocation-slack DWORDs (nine reserved tail
-   DWORDs in decoded native Himegari files).
-
-The key prefix is binary, not the ASCII character suggested by shorthand such as `3%08x`:
-integer-cell ops `0x1a2`/`0x1a3` use raw byte `0x03` followed by eight lowercase ASCII hex digits;
-string-cell ops `0x1a9`/`0x1aa` use raw byte `0x05` plus the same address text. In both cases the
-hexadecimal portion is the VM lvalue's resolved global-bank index. Integer fixed-key bytes 10 and 11 are
-unused native stack padding and cannot be required to be zero when importing an original file. The string
-table is therefore not an incidental settings blob: it is the paired profile-wide selected-cell service
-for string globals, with insert-or-assign and empty-on-miss behavior.
-
-The installed native Himegari `SAVE.DAT` provides a direct compatibility oracle for this shape:
-version 3.10 decodes to 13,210 opaque catalog values, 24,070 integer cells, 605 string cells, selector
-entry 1 equal to 81, 83 extended values, and the nine-DWORD reserved tail. The port decoder imports that
-file exactly; catalog/extended/tail sections remain opaque and are preserved losslessly rather than
-reinterpreted as mod state.
-
-`SAVE.BIN` also proves why a numbered `.DAT`/`.STH` pair alone cannot reproduce a complete menu row.
-The numbered fixed header supplies only timestamp and accumulated playtime, and `.STH` supplies the
-112x84 screenshot. The remaining preview record is maintained through selected-cell ops in shared
-`SAVE.DAT`: three parallel 210-cell string banks hold chapter/title (`GStr[0x0+]`), location
-(`GStr[0xd2+]`), and protagonist name (`GStr[0x1a4+]`); eight 210-cell integer banks beginning at
-`GInt[0x5]`, `0xd7`, `0x1a9`, `0x27b`, `0x34d`, `0x41f`, `0x4f1`, and `0x5c3` hold portrait entity,
-level, training count, growth, personality, difficulty/mode badge, cleared-ending mask, and installed
-append mask respectively. Save and stage-select paths snapshot these cells with `0x1a2`/`0x1a9`;
-the menu restores them with `0x1a3`/`0x1aa`. For the NG+ history display, `SAVE.BIN` scans bits 0..14
-of the restored `GInt[0x4f1 + slot]` mask and draws one 17x17 ending badge for every set bit.
+`SAVE.BIN` provides the game-level consumer proof for the menu split: it reads timestamp/playtime from
+the numbered header, loads the `.STH` screenshot, restores the remaining row fields with selected-cell
+ops, and scans the restored cleared-ending mask to draw the NG+ badges. Save and stage-select paths
+snapshot the same preview cells before persistence.
 
 #### Common `.DAT` container
 
-Both shared and numbered `.DAT` payloads use the same native container. The fixed header is exactly
-`0x124` bytes:
-
-| Offset | Size | Field |
-|---:|---:|---|
-| `0x000` | 4 | little-endian magic `S3SD` or `S4SD` |
-| `0x004` | 4 | compatibility id |
-| `0x008` | `0x100` | NUL-terminated game id area |
-| `0x108` | `0x10` | Win32 `SYSTEMTIME` |
-| `0x118` | 4 | accumulated playtime seconds |
-| `0x11c` | 4 | `SaveVersion1` / logical state-layout version |
-| `0x120` | 4 | `SaveVersion2` / payload-codec subversion |
-
-The wrapper algorithm is shared, but Himegari's identities are domain-specific: shared `SAVE.DAT` and
-`RT.DAT` use compatibility id `0x4a343234`, while installed numbered `SAVE##.DAT` files use
-`0x42323234`. Both carry game id `姫狩りダンジョンマイスター` and versions 3.10.
-
 `save_container_read_and_validate_header@0x4306f0` is the metadata-only path used by `0x1a0`.
 The full writer/reader are `save_container_encode_and_write@0x42fac0` and
-`save_container_read_and_decode@0x42ff80`. Immediately after the header is this exact 20-byte codec frame:
-
-| Offset | Size | Field |
-|---:|---:|---|
-| `+0x00` | 4 | encoded DWORD count |
-| `+0x04` | 4 | MSB-first CRC-32 of encoded bytes |
-| `+0x08` | 4 | reflected CRC-32 of encoded bytes |
-| `+0x0c` | 4 | random rolling XOR seed |
-| `+0x10` | 4 | random odd multiplier (low 16 bits used) |
-
-The encoded byte length is `encoded_dword_count * 4`. Each source DWORD is XORed with the current seed;
-its high and low 16-bit halves are independently multiplied by the current odd multiplier and stored as two
-DWORD products. Per source DWORD the seed advances by `0x0b0b0b0b` and the multiplier by `0x0b02`.
-The inverse requires both products to divide exactly, providing another corruption check. The decoded logical
-payload itself starts with two more DWORDs: MSB-first and reflected CRC-32 values over all following logical
-bytes.
-
-For `SaveVersion2 < 2`, that checked logical buffer is transformed directly. For version 2 or later, the
-buffer is first passed through the native 4 KiB LZSS codec: a zero-filled 4096-byte ring starting at `0xfee`,
-groups of eight tokens under an LSB-first flag byte (`1=literal`), and two-byte matches containing a 12-bit
-offset plus a four-bit `length-3`. Incompressible data is stored verbatim. The transformed inner buffer begins
-with three DWORDs recording original byte length, consumed byte length, and stored byte length, followed by
-the compressed/verbatim bytes and native padding. The mapped helpers are `lzss_4k_compress@0x42ed30`,
+`save_container_read_and_decode@0x42ff80`. The canonical header, codec-frame, CRC, LZSS, and reversible
+DWORD-transform specification is in `sys4-format-notes.md`. The mapped helpers are
+`lzss_4k_compress@0x42ed30`,
 `lzss_4k_decompress@0x42f050`, `save_payload_expand_multiply_transform@0x42f400`,
 `save_payload_inverse_multiply_transform@0x42f4a0`, `crc32_msb_first@0x42f360`, and
 `crc32_reflected@0x42f300`.
@@ -1772,30 +1710,21 @@ the compressed/verbatim bytes and native padding. The mapped helpers are `lzss_4
 `context_state_serialize@0x40d320` chooses numbered logical layout 1, 2, or 3 from `SaveVersion1`;
 layout 1 retains legacy `SaveVersion2` sublayouts 10 and 20. Layouts 2 and 3 serialize script contexts
 `0..save_frame_boundary_index` inclusive (falling back to the current context), clear the terminal frame's
-return target, and append `text_history_serialize`. Their frame record is `0x414` bytes (`0x105` DWORDs);
-layout 2's frame-zero/fixed prefix is `0x8f8` bytes and layout 3's is `0x5718` bytes. Layout 3's larger
-prefix adds a 20,000-byte surface/resource state block and retained graphics-object state; each retained
-object record carries its handle plus the native `0xb5`-DWORD object record. The state also carries six
-global-bank counts, raw integer banks, packed strings/other banks, and resource registrations (100 in the
-modern layouts). The matching `save_data_deserialize_and_begin_restore@0x40fd10` reconstructs those banks,
-resources, retained state, history, and—when requested by `0x1a1`—the active frame chain consumed by `0xae`.
+return target, and append `text_history_serialize`. The matching
+`save_data_deserialize_and_begin_restore@0x40fd10` reconstructs the banks, resources, retained state,
+history, and—when requested by `0x1a1`—the active frame chain consumed by `0xae`.
 
-The thumbnail is a separate file, never part of that logical state. Both renderer paths prove `.STH` is an
-ordinary bottom-up 24-bit BMP under a nonstandard extension: `BM`, pixel offset `0x36`, a 40-byte info
-header, BGR pixels, and four-byte row padding. Installed Himegari thumbnails are 112x84 and 28,278 bytes.
-The native writer records `bfSize=28,264`—DIB header plus pixel bytes, omitting the 14-byte BMP file header
-even though that header and the `0x36` pixel offset are physically present. The handle-based path is
-`gfx_surface_write_bmp24_to_handle@0x434bf0`; backend 1 reads back supported D3D surface formats and passes
-them to `gfx_surface_write_bmp24_to_path@0x475420`. The load side uses the renderer image decoder. A
-compatibility implementation should therefore preserve the paired-file lifecycle and BMP payload rather than
-inventing a second save container.
+The complete Himegari layout-3 body, frame record, six-bank sequence, retained-gfx region, appended
+text-history tail, and `.STH` BMP format are canonical in `sys4-format-notes.md`. Native thumbnail
+helpers are `gfx_surface_write_bmp24_to_handle@0x434bf0` and
+`gfx_surface_write_bmp24_to_path@0x475420`; the load side uses the renderer image decoder.
 
 **1.0 implementation boundary:** reproduce these native binary domains and lifecycle first: shared
 `SAVE.DAT`/`SAVE.BAK`, `RT.DAT`/`RT.BAK`, numbered `.DAT`, and paired BMP `.STH`. Keep the ownership behind
 a profile/save service so extended mode can later add JSON inspection/export, namespaced mod state, migrations,
 or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
 
-**Port correspondence (2026-07-24, numbered pair/thumbnail layer implemented):**
+**Port correspondence (2026-07-24):**
 `Age.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
 SYSTEMTIME/playtime/version metadata, both CRC layers, version-2 compression wrapper, and exact reversible
 DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect already consumed by
@@ -1811,37 +1740,14 @@ global pointers. `RT.DAT` is now implemented as the separate S3RT layer describe
 validates its distinct compatibility id, queries metadata without decoding payloads, and performs exact
 paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
 dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
-frame marker) are wired. Godot injects the store at `user://SAVE`. Full layout-3 global/frame/history/
-`NativeNumberedSaveCodec`, `NativeTextHistoryCodec`, and `NativeGfxPersistenceCodec` now own the complete
-layout-3 numbered body and appended history tail. The VM wires `0x19e`, data-only `0x19f`, full load
+frame marker) are wired. Godot injects the store at `user://SAVE`.
+`NativeNumberedSaveCodec`, `NativeTextHistoryCodec`, and `NativeGfxPersistenceCodec` own the complete
+layout-3 numbered body, global/frame/gfx state, and appended history tail. The VM wires `0x19e`,
+data-only `0x19f`, full load
 `0x1a1`, and the active branch of `0xae`; the existing `GameSession` JSON snapshot remains a separate
 diagnostic/extended-mode surface.
 
-#### Layout-3 byte map and port correspondence (2026-07-24)
-
-The decoded layout-3 body begins with `cutoff` at `+0x00`; its fixed length is
-`0x5718 + cutoff*0x414`. The fixed prefix contains two saved engine/context words, ten state DWORDs,
-100 three-DWORD resource reload records, 1,000 20-byte surface reload records, then frames beginning at
-`+0x5304`. Each `0x414`-byte frame contains parent context, packed script id, up to 256 saved local-return
-indices, and two terminal control indices. The three SYS4 footer tables now have explicit runtime roles:
-
-- d259 indexes T1/F7-F8, the op-`0x71` read-message reset sites;
-- d260 indexes T2/F9-F10, resumable `call-script` sites (forced to `-1` on the cutoff frame);
-- each local return index addresses T3/F11-F12, whose stored target plus three is the live return offset.
-
-After the fixed bytes are six bank counts followed by the ordinary (de-protected) integer bank, float
-storage, a DWORD-sized CP932 string blob, the pointer-family banks, and retained graphics. Graphics begin
-with record size `0x2d4` and object count; every object is `{handle,0x2d4 raw record}`. The range-transform
-first/count and another `0x2d4` record follow. AGE overallocates this region
-(`0x2e1 + objectCount*0x2d8` DWORDs) relative to the records it writes; the codec preserves the native
-logical sizing and zeroes the unused allocation slack.
-
-The text-history tail is outside the S4SD container. Its 12-byte header is
-`{logicalBytes,logicalBytes,storedBytes}` followed by the same 4 KiB-ring LZSS/verbatim dialect. Logical
-history is entry count + 8-byte entries, record count + the first 11 DWORDs of each retained record, then
-a DWORD-counted CP932 string blob whose DWORDs are bitwise inverted. Installed `SAVE00.DAT` validates the
-whole boundary read-only: cutoff 1, six counts `[402459,1,789,1,1,1]`, 211 gfx objects, a 21-byte history
-tail, and exact consumption of the S4SD container before that tail.
+#### Layout-3 restore mechanics and port correspondence (2026-07-24)
 
 The port tracks the native global banks separately at runtime, captures the marked frame chain, serializes
 live surfaces and retained objects, and reloads host textures from the 20-byte surface records. Full load

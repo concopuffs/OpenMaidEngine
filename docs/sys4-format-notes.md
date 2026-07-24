@@ -1,8 +1,10 @@
-# SYS4 Script Format — Reverse-Engineering Notes (hex-first)
+# SYS4 Binary Format Notes (hex-first)
 
-Derived purely from byte-pattern analysis of the 481 DATA1 `.BIN` scripts, before
-any Ghidra work on `AGE.EXE`. Confidence levels flagged per finding. Probe scripts
-live in `tools/probe_*.py`.
+The script sections were derived initially from byte-pattern analysis of the 481 DATA1 `.BIN`
+files, before Ghidra work on `AGE.EXE`; their probe scripts live in `tools/probe_*.py`. The
+persistence sections combine native-code reconstruction, shipped-script consumers, installed
+read-only files, and port codec round trips. Confidence and remaining semantic limits are stated
+per format.
 
 > **UPDATE 2026-07-05 — opcode set solved via Kelebek1's table.** Everything below
 > under "Instruction stream — PARTIAL" is now resolved: code = instructions of
@@ -30,6 +32,287 @@ The same Himegari trailer also contains `USEAPPDATAFOLDER=1` and
 `SAVEPATH=Eushully\姫狩りダンジョンマイスター\SAVE`. AGE's native save-root resolver consumes those
 settings to select `%LOCALAPPDATA%` plus that relative path on modern Windows. Filename patterns remain
 native policy rather than trailer or script strings; see `engine-re.md` under "Save-root resolution."
+
+## Native persistence files — Himegari 3.10
+
+This section is the canonical binary-format specification for the persistence files used by Himegari.
+Native function provenance, opcode behavior, filesystem policy, and restore control flow remain in
+`engine-re.md`; game-global meanings remain sourced from `vm-map/globals.toml` and its generated
+`global-reference.md`.
+
+Unless noted otherwise, offsets are byte offsets, integers are little-endian DWORDs, and strings are
+NUL-terminated CP932. Himegari separates four physical domains:
+
+| File | Scope | Structural owner | Semantic owner |
+|---|---|---|---|
+| `SAVE.DAT` / `SAVE.BAK` | whole profile | AGE's typed selected-cell payload inside the common save container | scripts choose which integer/string global cells to persist |
+| `RT.DAT` / `RT.BAK` | whole profile | AGE's standalone `S3RT` ReadTextDB | script resource ids and T1 message boundaries identify the flags |
+| `SAVE%02d.DAT` | one numbered slot | AGE's common container, full VM-state layout, and appended text-history tail | scripts populate live state, choose the frame cutoff, and request a slot save |
+| `SAVE%02d.STH` | one numbered slot | AGE's BMP writer/reader | scripts choose the captured surface and slot |
+
+The menu-preview record is not read from `RT.DAT`. Its timestamp/playtime comes from the numbered
+`.DAT` header, its screenshot comes from `.STH`, and its title/location/name/stats/difficulty/ending
+history come from slot-indexed selected cells in shared `SAVE.DAT`. The numbered `.DAT` still contains
+the full restorable VM state; `SAVE.DAT` holds presentation-oriented copies so `SAVE.BIN` can list slots
+without decoding every numbered body.
+
+### Common `S3SD` / `S4SD` `.DAT` container — CONFIRMED
+
+Shared `SAVE.DAT` and numbered `SAVE%02d.DAT` use the same wrapper. `RT.DAT` does not: it has the
+standalone `S3RT` layout documented below. The fixed `.DAT` header is `0x124` bytes:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| `0x000` | 4 | ASCII magic `S3SD` or `S4SD` |
+| `0x004` | 4 | compatibility id |
+| `0x008` | `0x100` | NUL-terminated CP932 game id area |
+| `0x108` | `0x10` | Win32 `SYSTEMTIME`: eight little-endian WORDs |
+| `0x118` | 4 | accumulated playtime in seconds |
+| `0x11c` | 4 | signed `SaveVersion1`, selecting the logical state layout |
+| `0x120` | 4 | signed `SaveVersion2`, selecting the payload-codec subversion |
+
+Himegari uses game id `姫狩りダンジョンマイスター` and versions 3.10. Shared `SAVE.DAT` uses
+compatibility id `0x4a343234`; installed numbered files use the distinct id `0x42323234`.
+
+A `0x14`-byte codec frame begins at file offset `0x124`, and expanded data begins at `0x138`:
+
+| Frame offset | File offset | Size | Field |
+|---:|---:|---:|---|
+| `+0x00` | `0x124` | 4 | expanded-data DWORD count; always even |
+| `+0x04` | `0x128` | 4 | MSB-first CRC-32 of expanded bytes |
+| `+0x08` | `0x12c` | 4 | reflected CRC-32 of expanded bytes |
+| `+0x0c` | `0x130` | 4 | rolling XOR seed |
+| `+0x10` | `0x134` | 4 | nonzero odd multiplier; only the low 16 bits are valid |
+
+The logical payload is protected in this order:
+
+1. Prefix the payload with two DWORD CRCs over the payload: MSB-first CRC-32, then reflected CRC-32.
+2. For `SaveVersion2 >= 2`, optionally compress that checked buffer with the 4 KiB LZSS dialect and
+   wrap it as `{original_bytes, consumed_bytes, stored_bytes, stored_data, padding}`. The first two
+   lengths agree. If compression does not shrink the data, `stored_bytes == original_bytes` and the
+   bytes are verbatim.
+3. XOR each source DWORD with the current seed. Multiply its high and low 16-bit halves separately by
+   the current odd multiplier, emitting two DWORD products. Advance the seed by `0x0b0b0b0b` and the
+   16-bit multiplier by `0x0b02` for each source DWORD.
+4. Store CRCs of the expanded products in the outer codec frame.
+
+The inverse requires both products to divide exactly by the current multiplier and both quotients to
+fit 16 bits. This supplies an integrity check in addition to the two outer and two inner CRCs.
+
+The LZSS stream uses a zero-filled 4096-byte ring starting at `0xfee`. Each LSB-first flag byte controls
+eight tokens (`1=literal`); a match token stores a 12-bit ring offset and four-bit `length-3`, allowing
+lengths 3 through 18. The container's expanded-data count determines where it ends. Numbered files may
+append another domain after that boundary, so a reader must retain the consumed byte count rather than
+assuming the container occupies the entire physical file.
+
+### Shared `SAVE.DAT` logical payload — CONFIRMED
+
+After decoding the common container, the shared payload is sequential:
+
+| Order | Field |
+|---:|---|
+| 1 | `catalog_count:u32`, then `catalog_values[catalog_count]:u32` |
+| 2 | `integer_count:u32`, then `integer_entries[integer_count]`, 16 bytes each |
+| 3 | `string_count:u32`, `string_blob_dwords:u32`, then the DWORD-padded string blob |
+| 4 | for version 3.10 or later, `selector_counts[256]:u32` |
+| 5 | for version 3.10 or later, `extended_count:u32`, then `extended_values[extended_count]:u32` |
+| 6 | `reserved_tail[9]:u32` |
+
+An integer entry is:
+
+| Entry offset | Size | Field |
+|---:|---:|---|
+| `+0x00` | `0x0c` | typed key field |
+| `+0x0c` | 4 | raw integer value |
+
+The meaningful key bytes are `{type_tag, address_hex[8], NUL}`. Integer cells use raw type byte
+`0x03`; the address is eight ASCII hexadecimal digits naming the resolved VM global-bank index.
+Bytes 10 and 11 in the fixed integer key field are unused native stack residue and cannot be required
+to be zero when importing original data.
+
+The string blob repeats `{typed_key_cstring, value_cstring}` `string_count` times. String keys use raw
+type byte `0x05` plus the same eight-digit address and NUL; values are CP932. The stored blob length is
+a DWORD count. AGE rounds with `(unpadded_bytes / 4) + 1`, deliberately adding a whole zero DWORD when
+the last value already ends on a DWORD boundary.
+
+The nine-DWORD tail consists of one explicit terminator plus eight DWORDs produced by the native
+allocation formula. Catalog, selector, extended, and tail sections are structurally bounded but not
+fully assigned game-level meanings, so compatibility import/export preserves them rather than treating
+them as mod storage.
+
+The installed Himegari profile is a complete oracle: version 3.10 decodes to 13,210 catalog values,
+24,070 integer cells, 605 string cells, selector entry 1 equal to 81, 83 extended values, and nine tail
+DWORDs.
+
+The integer/string maps are AGE's generic selected-cell service, not copies of whole global banks.
+Himegari scripts assign their meanings through opcodes `0x1a2`/`0x1a3` and `0x1a9`/`0x1aa`. Known
+slot-preview banks include chapter/title, location, protagonist name, portrait entity, level, training
+count, growth, personality, difficulty, cleared-ending mask, and installed-append mask. Their canonical
+addresses and semantics are generated in `global-reference.md` from `vm-map/globals.toml`; the
+cleared-ending value is a 15-bit NG+/inheritance mask whose set bits select the displayed ending badges.
+
+### Shared `RT.DAT` (`S3RT`) — CONFIRMED
+
+`RT.DAT` is not wrapped, transformed, compressed, or checksummed like the `.DAT` save container. It is
+a standalone ReadTextDB with a `0x114`-byte header:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| `0x000` | 4 | ASCII magic `S3RT` |
+| `0x004` | 4 | compatibility id (`0x4a343234` for Himegari) |
+| `0x008` | `0x100` | NUL-terminated CP932 game id area |
+| `0x108` | 4 | major version (`1`) |
+| `0x10c` | 4 | minor version (`0`) |
+| `0x110` | 4 | script-record count |
+
+At `0x114` are all 12-byte script records:
+
+| Record offset | Size | Field |
+|---:|---:|---|
+| `+0x00` | 4 | raw packed SYS4/AAI script resource id |
+| `+0x04` | 4 | message count |
+| `+0x08` | 4 | serialized native heap pointer residue |
+
+After the complete record table, each record's `message_count` DWORD flags follows in record order.
+Zero means unread and nonzero means read. The third record word is process-local residue rather than a
+portable offset; AGE allocates and replaces it on load. Readers accept original nonzero values, while
+portable writers emit zero.
+
+Message indices are positions in that script's T1/F7 table, whose entries point to op-`0x71`
+read-message boundaries. Thus the file is profile-wide engine state derived from game scripts, not an
+arbitrary script-selected persistence table and not numbered-slot state.
+
+The installed Himegari file is exactly 76,752 bytes: 192 records plus 18,543 flag DWORDs consume it
+without trailing data. Base script `SC0000` has packed id `0x22` and 320 flags, exactly matching its
+T1 count.
+
+### Numbered `SAVE%02d.DAT`, logical layout 3 — CONFIRMED FOR HIMEGARI
+
+Himegari's numbered file begins with the common container using compatibility id `0x42323234`,
+`SaveVersion1=3`, and `SaveVersion2=10`. The header supplies the save-menu timestamp and accumulated
+playtime without decoding the body.
+
+The decoded layout-3 body begins:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| `0x000` | 4 | terminal saved-frame index, called `cutoff`; frame count is `cutoff + 1` |
+| `0x004` | 4 | saved frame-owner/context word |
+| `0x008` | 4 | engine-state word |
+| `0x00c` | `0x28` | ten engine/context state DWORDs |
+| `0x034` | `0x4b0` | 100 resource-reload records of three DWORDs |
+| `0x4e4` | `0x4e20` | 1,000 surface-reload records of 20 bytes |
+| `0x5304` | `(cutoff + 1) * 0x414` | saved script-frame records |
+| `0x5718 + cutoff * 0x414` | variable | global banks and retained graphics |
+
+Each `0x414`-byte frame is:
+
+| Frame offset | Size | Field |
+|---:|---:|---|
+| `+0x000` | 4 | parent context |
+| `+0x004` | 4 | packed script resource id |
+| `+0x008` | 4 | saved local-return count, at most 256 |
+| `+0x00c` | up to `0x400` | T3 local-return indices |
+| `+0x40c` | 4 | T1 resume/message-boundary index |
+| `+0x410` | 4 | T2 resumable call-script index; forced to `-1` on the cutoff frame |
+
+The T1/T2/T3 indices refer to the three footer tables in the saved SYS4 script. T1 restores the active
+message boundary, T2 restores the inter-script call site, and T3 entries restore local returns as
+`T3[index] + 3`.
+
+The variable section starts with six DWORD counts in this order:
+
+1. integer globals;
+2. raw float storage;
+3. string globals;
+4. integer-pointer globals;
+5. string-pointer globals;
+6. local pointer scratch.
+
+The integer and float arrays follow their counts. String count comes from bank count 3, but its storage
+begins with an additional `string_blob_dwords` followed by that many bytes of concatenated NUL-terminated
+CP932 strings and DWORD padding. The three pointer-family DWORD arrays follow.
+
+Retained graphics then uses:
+
+```text
+0x00  gfx_record_size:u32              # 0x2d4
++0x04  gfx_object_count:u32
++0x08  repeated { handle:u32, record[0x2d4] }
+...    range_first:u32
+...    range_count:i32
+...    range_transform_record[0x2d4]
+...    native allocation slack
+```
+
+The 1,000 surface records preserve resource reload state; mapped fields include resource id at `+0x00`,
+packed color key at `+0x04`, and presence at `+0x08`. A retained `0x2d4` record is structurally complete
+but not every internal graphics field is semantically named. The native allocation is larger than the
+records actually written (`0x2e1 + object_count * 0x2d8` DWORDs in the graphics sizing term), leaving
+zero/slack bytes after the meaningful range record.
+
+The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
+`[402459,1,789,1,1,1]`, and 211 retained graphics objects.
+
+#### Appended text-history tail
+
+The common container's expanded-data count ends before the numbered file ends. Layout 3 appends a
+separate text-history stream immediately at that consumed boundary:
+
+| Tail offset | Size | Field |
+|---:|---:|---|
+| `+0x00` | 4 | logical byte length |
+| `+0x04` | 4 | duplicate logical byte length |
+| `+0x08` | 4 | stored byte length |
+| `+0x0c` | variable | the same 4 KiB-ring LZSS stream, or verbatim bytes when lengths match |
+
+The decoded history data is:
+
+1. `entry_count:u32`, then `entry_count` pairs `{layout_slot:i32, first_record_index:i32}`;
+2. `record_count:u32`, then `record_count` records of 11 DWORDs;
+3. `string_blob_dwords:u32`, then a DWORD-aligned CP932 string blob whose DWORDs are bitwise inverted.
+
+Each 11-DWORD record stores layout slot, origin X/Y, width/height, primary value, auxiliary value,
+primary font size, text color, cursor Y, and flags. The string blob contains one NUL-terminated string
+per record. The installed save has a 21-byte physical history tail, and container plus tail consume the
+file exactly.
+
+### Numbered `SAVE%02d.STH` thumbnail — CONFIRMED
+
+The thumbnail is a separate ordinary BMP under a nonstandard extension:
+
+- `BM` file signature and `0x36` pixel offset;
+- 14-byte bitmap file header plus 40-byte `BITMAPINFOHEADER`;
+- uncompressed 24-bit BGR pixels;
+- bottom-up positive height;
+- rows padded to four-byte boundaries.
+
+Installed Himegari thumbnails are 112x84 and 28,278 physical bytes. The native writer stores
+`bfSize=28,264`, omitting the physically present 14-byte file header from that field while retaining the
+correct physical header and pixel offset. Compatibility writers reproduce this harmless historical quirk.
+
+Copy, move, and delete operations treat `.DAT` and `.STH` as a pair, but neither file contains the other.
+
+### Scope and remaining uncertainty
+
+The following are complete enough for compatible import/export:
+
+- the common S3SD/S4SD header, CRCs, optional LZSS wrapper, and DWORD transform;
+- Himegari's shared `SAVE.DAT` 3.10 section boundaries and typed selected cells;
+- `RT.DAT` 1.0 records and flag arrays;
+- Himegari's numbered layout-3 fixed state, global banks, frames, graphics region, and history tail;
+- `.STH` BMP encoding.
+
+The remaining uncertainty is deliberately narrower:
+
+- numbered layouts 1 and 2 are structurally identified but are not the implemented or installed
+  Himegari compatibility target;
+- the shared catalog/extended arrays and some selected cells are still opaque at the game-semantic level;
+- the `0x2d4` retained-graphics record is byte-bounded, but not every field is named.
+
+This distinction is important: AGE owns most numbered-save and ReadTextDB structure, while Himegari
+scripts primarily own the values in live VM globals, the save cutoff/invocation, and the semantic choice
+of selected `SAVE.DAT` cells.
 
 ## Header — CONFIRMED
 

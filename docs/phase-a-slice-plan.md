@@ -3529,6 +3529,23 @@ extended-mode work.
 Validation: all 386 engine tests pass, global/opcode lint reports zero errors/warnings, the Godot C#
 build has zero warnings, and the threaded headless run reports `SELFTEST OK`.
 
+### Persistence documentation closeout — canonical file-format specification (2026-07-24)
+
+`docs/sys4-format-notes.md` now contains the canonical byte-level persistence specification for
+Himegari 3.10. It separates structural ownership from game semantics and documents the common
+S3SD/S4SD container and transform, shared `SAVE.DAT` selected-cell payload, standalone `RT.DAT`
+ReadTextDB, numbered layout-3 fixed/dynamic state and appended History stream, and paired `.STH` BMP.
+Installed-file oracle counts and exact known limits are recorded alongside each layout.
+
+Overlapping byte-layout prose was removed from `docs/engine-re.md`; that reference now retains native
+function provenance, opcode behavior, save-root/lifecycle policy, and restoration mechanics while linking
+to the format specification. Game-global meanings remain sourced from `vm-map/globals.toml` and its
+generated reference. The spec explicitly leaves legacy numbered layouts 1/2, opaque shared sections,
+and unnamed retained-gfx fields outside the confirmed Himegari compatibility claim.
+
+This documentation-only closeout does not change runtime persistence. The next functional check remains
+continuing from the installed slot through the restored gameplay frame.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.
