@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build -->
 # Opcode Reference (generated)
 
-248 opcodes used by Himegari. Source of truth: `vm-map/opcodes.toml`.
+249 opcodes used by Himegari. Source of truth: `vm-map/opcodes.toml`.
 
 ## adv
 
@@ -467,6 +467,34 @@ record-zero failure. Natural SYSTEM4 boot proves BTANINIT2 -> `$1$AUTORUN.BIN` -
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
 
+### 0x19e `save-numbered-slot` (save-numbered-slot, argc 2)
+- **summary:** (status_out)(slot) - write the active native VM/session state to `SAVE%02d.DAT`. The file is truncated/replaced in place after any compatibility-overwrite prompt; successful serialization also flushes shared `SAVE.DAT`/`RT.DAT`.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19e_save_numbered_slot@0x4278b0 formats SAVE%2.2d.DAT, checks an existing header and prompts before replacing an incompatible file, opens CREATE_ALWAYS, reads set:SaveVersion2 then set:SaveVersion1, and calls context_state_serialize@0x40d320. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN.
+
+Uses `set:SaveVersion1` and `set:SaveVersion2` to choose the numbered payload layout. Status is 0 on success and 1 on refusal, open/create failure, or serializer failure. Numbered `.DAT` files do not use the shared profile's temp/backup replacement scheme.
+
+### 0x19f `load-numbered-slot-data-only` (load-numbered-slot-data-only, argc 2)
+- **summary:** (status_out)(slot) - decode `SAVE%02d.DAT` without restoring the active script-frame chain or text history.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19f_load_numbered_slot_data_only@0x427a40 opens SAVE%2.2d.DAT and calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 0, 0), then decodes protected integer globals. Missing/open failure writes status 1; otherwise the decoder result is returned. Corpus count: 0.
+
+This is the data-only companion to full-resume opcode 0x1a1. It selects the configured SaveVersion layout and restores serialized state with both runtime/history restore flags clear. Himegari's shipped script corpus does not call it, but it belongs to the shared SYS4 persistence ABI.
+
+### 0x1a0 `query-numbered-save-metadata` (query-numbered-save-metadata, argc 9)
+- **summary:** (status_out)(slot)(year)(month)(day)(hour)(minute)(second)(playtime_seconds) - validate a numbered `.DAT` header and return its timestamp and accumulated playtime.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a0_query_numbered_save_metadata@0x427ba0 calls save_container_read_and_validate_header@0x4306f0. It reads SYSTEMTIME WORDs at header +0x108/+0x10a/+0x10e/+0x110/+0x112/+0x114 and DWORD accumulated playtime at +0x118. Corpus: three calls in SAVE.BIN.
+
+Status 0 means valid metadata was written, 1 means the file could not be opened, and 2 means its native header was invalid or incompatible. Metadata comes from the fixed 0x124-byte S3SD/S4SD container header; no payload decode is needed.
+
+### 0x1a1 `load-numbered-slot-and-resume` (load-numbered-slot-and-resume, argc 2)
+- **summary:** (status_out)(slot) - fully load `SAVE%02d.DAT`, including saved script frames and text history, then resume through `CALLBACK_LOAD.BIN` and opcode 0xae.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a1_load_numbered_slot_and_resume@0x427d30 calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 1, 1), closes the file, and decodes protected integer globals. The loader activates the saved-frame state consumed by op_0xae. Corpus: one call in SAVE.BIN.
+
+The caller pre-seeds status to zero. A missing/open failure writes 1; success starts the asynchronous native stack-restoration rendezvous and does not overwrite that zero. This is the ordinary load-game path, unlike data-only opcode 0x19f.
+
 ### 0x1a2 `store-shared-profile-int` (store-shared-profile-int, argc 1)
 - **summary:** 0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. The key is `3%08x`, where the address is resolved through global/local pointer operands; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry.
 - **grounding:** source=investigation, confidence=high
@@ -477,9 +505,37 @@ Paired reader 0x1a3 restores the same cell, returning zero when the key is absen
 ### 0x1a3 `load-shared-profile-int` (load-shared-profile-int, argc 1)
 - **summary:** 0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same `3%08x` cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. DATA1 corpus: 73 calls in 12 scripts, 42 local-ptr and 31 global-int.
+- **evidence:** Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. Current override-aware corpus: 77 calls in 12 scripts.
 
 This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-20): deliberately unimplemented with 0x1a2 pending the unified shared-profile storage boundary.
+
+### 0x1a9 `store-shared-profile-string` (store-shared-profile-string, argc 1)
+- **summary:** (cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under key `5%08x`, replacing any earlier value.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a9_store_shared_profile_string@0x42d3e0 fetches operand 1's string, resolves the lvalue cell index, and calls shared_profile_store_string_by_typed_key@0x42d2b0 with type prefix 5. Corpus: 17 calls in GAMECLEAR, INPUTNAME, SAVE, and SELSTAGE.
+
+This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle.
+
+### 0x1aa `load-shared-profile-string` (load-shared-profile-string, argc 1)
+- **summary:** (cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using key `5%08x`; a missing key yields the native empty-string default.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1aa_load_shared_profile_string@0x42bd90 resolves operand 1's lvalue index, calls shared_profile_load_string_by_typed_key@0x419ca0 with type prefix 5, and writes the result back through the VM string lvalue. Corpus: seven calls in GAMESTART, INIT2, INPUTNAME, and SAVE.
+
+This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3.
+
+### 0x1ab `delete-numbered-save` (delete-numbered-save, argc 2)
+- **summary:** (status_out)(slot) - attempt to delete both `SAVE%02d.DAT` and its `SAVE%02d.STH` thumbnail.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ab_delete_numbered_save@0x427ed0 formats and calls DeleteFileA for the numbered .DAT and .STH paths with the layered status convention. Corpus: one call in SAVE.BIN.
+
+Both deletes are attempted. Status is 0 when both succeed, 1 when only the DAT delete fails, and 2 whenever the STH delete fails (taking precedence over a DAT failure).
+
+### 0x1ac `copy-numbered-save` (copy-numbered-save, argc 3)
+- **summary:** (status_out)(source_slot)(destination_slot) - copy both numbered `.DAT` state and `.STH` thumbnail, replacing destination files.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ac_copy_numbered_save@0x427fb0 formats source/destination SAVE%2.2d.DAT and SAVE%2.2d.STH paths and invokes CopyFileA with fail-if-exists false. Corpus: two calls in SAVE.BIN.
+
+Both copies are attempted with overwrite allowed. Status is 0 when both succeed, 1 when only the DAT copy fails, and 2 whenever the STH copy fails (taking precedence over a DAT failure).
 
 ### 0x1ad `mark-save-resume-frame` (mark-save-resume-frame, argc 0)
 - **summary:** Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself.
@@ -528,6 +584,20 @@ The handler uses an alpha step of 1 and timer interval=argument when argument <=
 - **evidence:** Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to the selected five-dword record at EngineCtx+0x55180 after enforcing style_index<11. Corpus: 74 sites in 24 scripts; DRAWCHP has eight registrations immediately before its stylized HUD-number draws.
 
 The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error.
+
+### 0x1ae `write-numbered-save-thumbnail` (write-numbered-save-thumbnail, argc 3)
+- **summary:** (status_out)(slot)(surface_slot) - encode the selected surface into the numbered save's separate `SAVE%02d.STH` thumbnail file.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ae_write_numbered_save_thumbnail@0x428100 creates SAVE%2.2d.STH with CREATE_ALWAYS and serializes operand 3's surface via the active renderer backend. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN.
+
+Status is 0 on success, 1 when the file cannot be created/opened, and 2 when surface encoding or writing fails. Renderer backend selects a handle-based or path-based native worker.
+
+### 0x1af `load-numbered-save-thumbnail` (load-numbered-save-thumbnail, argc 3)
+- **summary:** (status_out)(slot)(surface_slot) - decode the numbered save's separate `SAVE%02d.STH` thumbnail into a surface slot.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1af_load_numbered_save_thumbnail@0x428240 opens SAVE%2.2d.STH and passes it plus operand 3's surface slot to the active renderer decoder. Corpus: one call in SAVE.BIN.
+
+Status is 0 on success, 1 when the file cannot be opened, and 2 when image decoding fails. The thumbnail format is owned by the renderer codec and is not embedded in the numbered `.DAT` payload.
 
 ### 0x1f6 `clear-retained-gfx-objects` (clear-retained-gfx-objects, argc 0)
 - **summary:** Clear the complete retained gfx-object registry while preserving allocated surface resources. Subsequent object queries return absent until draw/geometry operations recreate records.
@@ -1239,18 +1309,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x19e `u0041C6E0` (u0041C6E0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1a0 `u0041C9B0` (u0041C9B0, argc 9)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1a1 `u0041CB40` (u0041CB40, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1a5 `set-font` (set-font, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -1258,30 +1316,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x1a7 `comment` (comment, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x1a9 `u00428090` (u00428090, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1aa `u00425920` (u00425920, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1ab `u0041CCA0` (u0041CCA0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1ac `u0041CD80` (u0041CD80, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1ae `u0041CED0` (u0041CED0, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1af `u004245C0` (u004245C0, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1b2 `u00425790` (u00425790, argc 1)
 - **summary:** —

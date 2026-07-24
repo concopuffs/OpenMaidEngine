@@ -3374,115 +3374,145 @@ observed_types = ["imm", "l-ptr"]
 
 [[opcode]]
 op = 0x19e
-label = "u0041C6E0"
+label = "save-numbered-slot"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041C6E0"
-category = "unknown"
-summary = ""
+name = "save-numbered-slot"
+category = "control"
+summary = "(status_out)(slot) - write the active native VM/session state to `SAVE%02d.DAT`. The file is truncated/replaced in place after any compatibility-overwrite prompt; successful serialization also flushes shared `SAVE.DAT`/`RT.DAT`."
+details = "Uses `set:SaveVersion1` and `set:SaveVersion2` to choose the numbered payload layout. Status is 0 on success and 1 on refusal, open/create failure, or serializer failure. Numbered `.DAT` files do not use the shared profile's temp/backup replacement scheme."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x19e_save_numbered_slot@0x4278b0 formats SAVE%2.2d.DAT, checks an existing header and prompts before replacing an incompatible file, opens CREATE_ALWAYS, reads set:SaveVersion2 then set:SaveVersion1, and calls context_state_serialize@0x40d320. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
+op = 0x19f
+label = "load-numbered-slot-data-only"
+argc = 2
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "load-numbered-slot-data-only"
+category = "control"
+summary = "(status_out)(slot) - decode `SAVE%02d.DAT` without restoring the active script-frame chain or text history."
+details = "This is the data-only companion to full-resume opcode 0x1a1. It selects the configured SaveVersion layout and restores serialized state with both runtime/history restore flags clear. Himegari's shipped script corpus does not call it, but it belongs to the shared SYS4 persistence ABI."
+noop_headless = false
+source = "investigation"
+confidence = "high"
+depends_on = []
+evidence = "Ghidra /v2: op_0x19f_load_numbered_slot_data_only@0x427a40 opens SAVE%2.2d.DAT and calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 0, 0), then decodes protected integer globals. Missing/open failure writes status 1; otherwise the decoder result is returned. Corpus count: 0."
+
+[[opcode.semantics.args]]
+i = 1
+role = "status output"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "numbered slot"
+observed_types = ["l-int"]
+
+[[opcode]]
 op = 0x1a0
-label = "u0041C9B0"
+label = "query-numbered-save-metadata"
 argc = 9
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041C9B0"
-category = "unknown"
-summary = ""
+name = "query-numbered-save-metadata"
+category = "control"
+summary = "(status_out)(slot)(year)(month)(day)(hour)(minute)(second)(playtime_seconds) - validate a numbered `.DAT` header and return its timestamp and accumulated playtime."
+details = "Status 0 means valid metadata was written, 1 means the file could not be opened, and 2 means its native header was invalid or incompatible. Metadata comes from the fixed 0x124-byte S3SD/S4SD container header; no payload decode is needed."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a0_query_numbered_save_metadata@0x427ba0 calls save_container_read_and_validate_header@0x4306f0. It reads SYSTEMTIME WORDs at header +0x108/+0x10a/+0x10e/+0x110/+0x112/+0x114 and DWORD accumulated playtime at +0x118. Corpus: three calls in SAVE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "year output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "month output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "day output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "hour output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "minute output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "second output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 9
-role = ""
+role = "accumulated playtime seconds output"
 observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1a1
-label = "u0041CB40"
+label = "load-numbered-slot-and-resume"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041CB40"
-category = "unknown"
-summary = ""
+name = "load-numbered-slot-and-resume"
+category = "control"
+summary = "(status_out)(slot) - fully load `SAVE%02d.DAT`, including saved script frames and text history, then resume through `CALLBACK_LOAD.BIN` and opcode 0xae."
+details = "The caller pre-seeds status to zero. A missing/open failure writes 1; success starts the asynchronous native stack-restoration rendezvous and does not overwrite that zero. This is the ordinary load-game path, unlike data-only opcode 0x19f."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a1_load_numbered_slot_and_resume@0x427d30 calls save_data_deserialize_and_begin_restore@0x40fd10(handle, SaveVersion1, SaveVersion2, 1, 1), closes the file, and decodes protected integer globals. The loader activates the saved-frame state consumed by op_0xae. Corpus: one call in SAVE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3522,7 +3552,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. DATA1 corpus: 73 calls in 12 scripts, 42 local-ptr and 31 global-int."
+evidence = "Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. Current override-aware corpus: 77 calls in 12 scripts."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3642,101 +3672,105 @@ evidence = "Ghidra /v2: op_0xaf_0x1a8_handler@0x416650 writes frame_instruction_
 
 [[opcode]]
 op = 0x1a9
-label = "u00428090"
+label = "store-shared-profile-string"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00428090"
-category = "unknown"
-summary = ""
+name = "store-shared-profile-string"
+category = "control"
+summary = "(cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under key `5%08x`, replacing any earlier value."
+details = "This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1a9_store_shared_profile_string@0x42d3e0 fetches operand 1's string, resolves the lvalue cell index, and calls shared_profile_store_string_by_typed_key@0x42d2b0 with type prefix 5. Corpus: 17 calls in GAMECLEAR, INPUTNAME, SAVE, and SELSTAGE."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "global string cell to snapshot"
 observed_types = ["g-str", "l-str-ptr"]
 
 [[opcode]]
 op = 0x1aa
-label = "u00425920"
+label = "load-shared-profile-string"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00425920"
-category = "unknown"
-summary = ""
+name = "load-shared-profile-string"
+category = "control"
+summary = "(cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using key `5%08x`; a missing key yields the native empty-string default."
+details = "This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1aa_load_shared_profile_string@0x42bd90 resolves operand 1's lvalue index, calls shared_profile_load_string_by_typed_key@0x419ca0 with type prefix 5, and writes the result back through the VM string lvalue. Corpus: seven calls in GAMESTART, INIT2, INPUTNAME, and SAVE."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "global string cell to restore"
 observed_types = ["g-str", "l-str-ptr"]
 
 [[opcode]]
 op = 0x1ab
-label = "u0041CCA0"
+label = "delete-numbered-save"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041CCA0"
-category = "unknown"
-summary = ""
+name = "delete-numbered-save"
+category = "control"
+summary = "(status_out)(slot) - attempt to delete both `SAVE%02d.DAT` and its `SAVE%02d.STH` thumbnail."
+details = "Both deletes are attempted. Status is 0 when both succeed, 1 when only the DAT delete fails, and 2 whenever the STH delete fails (taking precedence over a DAT failure)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ab_delete_numbered_save@0x427ed0 formats and calls DeleteFileA for the numbered .DAT and .STH paths with the layered status convention. Corpus: one call in SAVE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x1ac
-label = "u0041CD80"
+label = "copy-numbered-save"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041CD80"
-category = "unknown"
-summary = ""
+name = "copy-numbered-save"
+category = "control"
+summary = "(status_out)(source_slot)(destination_slot) - copy both numbered `.DAT` state and `.STH` thumbnail, replacing destination files."
+details = "Both copies are attempted with overwrite allowed. Status is 0 when both succeed, 1 when only the DAT copy fails, and 2 whenever the STH copy fails (taking precedence over a DAT failure)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ac_copy_numbered_save@0x427fb0 formats source/destination SAVE%2.2d.DAT and SAVE%2.2d.STH paths and invokes CopyFileA with fail-if-exists false. Corpus: two calls in SAVE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "source numbered slot"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "destination numbered slot"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3757,64 +3791,66 @@ evidence = "Ghidra /v2: op_0x1ad_mark_save_resume_frame@0x416b70 writes decoded 
 
 [[opcode]]
 op = 0x1ae
-label = "u0041CED0"
+label = "write-numbered-save-thumbnail"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041CED0"
-category = "unknown"
-summary = ""
+name = "write-numbered-save-thumbnail"
+category = "draw"
+summary = "(status_out)(slot)(surface_slot) - encode the selected surface into the numbered save's separate `SAVE%02d.STH` thumbnail file."
+details = "Status is 0 on success, 1 when the file cannot be created/opened, and 2 when surface encoding or writing fails. Renderer backend selects a handle-based or path-based native worker."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ae_write_numbered_save_thumbnail@0x428100 creates SAVE%2.2d.STH with CREATE_ALWAYS and serializes operand 3's surface via the active renderer backend. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "source surface slot"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1af
-label = "u004245C0"
+label = "load-numbered-save-thumbnail"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004245C0"
-category = "unknown"
-summary = ""
+name = "load-numbered-save-thumbnail"
+category = "draw"
+summary = "(status_out)(slot)(surface_slot) - decode the numbered save's separate `SAVE%02d.STH` thumbnail into a surface slot."
+details = "Status is 0 on success, 1 when the file cannot be opened, and 2 when image decoding fails. The thumbnail format is owned by the renderer codec and is not embedded in the numbered `.DAT` payload."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1af_load_numbered_save_thumbnail@0x428240 opens SAVE%2.2d.STH and passes it plus operand 3's surface slot to the active renderer decoder. Corpus: one call in SAVE.BIN."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "status output"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "numbered slot"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "destination surface slot"
 observed_types = ["l-int"]
 
 [[opcode]]

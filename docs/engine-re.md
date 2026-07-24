@@ -1601,6 +1601,127 @@ real implementation belongs in the future unified save architecture, where the V
 `ExecFrame` chain and remember which frame is the resume boundary. This is the same architectural deferral as
 the already-deferred profile/read-state work, not a reason to invent a seed or offset-specific shortcut.
 
+### Native persistence opcode family and file layouts (resolved 2026-07-24)
+
+The remaining `SAVE.BIN` family is now mapped. It separates three storage domains rather than exposing one
+generic save operation:
+
+| Opcode | Native operation |
+|---|---|
+| `0x19e(status,slot)` | write `SAVE%02d.DAT`; truncate/replace after any incompatible-save prompt |
+| `0x19f(status,slot)` | load numbered data only, with runtime-frame and history restoration disabled; unused by Himegari's shipped corpus |
+| `0x1a0(status,slot,...metadata)` | validate only the fixed header and return date/time plus accumulated playtime |
+| `0x1a1(status,slot)` | full numbered load, including active frames and history, then resume through `CALLBACK_LOAD`/`0xae` |
+| `0x1a9(cell)` / `0x1aa(cell)` | store/restore a selected string cell in shared `SAVE.DAT` |
+| `0x1ab(status,slot)` | delete the numbered `.DAT` and `.STH` pair |
+| `0x1ac(status,src,dst)` | copy the numbered `.DAT` and `.STH` pair, replacing destination files |
+| `0x1ad()` | select the highest frame included in a numbered save; no file I/O (documented above) |
+| `0x1ae(status,slot,surface)` | write `SAVE%02d.STH` from a surface |
+| `0x1af(status,slot,surface)` | load `SAVE%02d.STH` into a surface |
+
+Opcode `0x19d`, adjacent in number and used by CGMODE/ED/HMODE/MMODE, is not persistence: its handler is a
+resource/compatibility lookup. It is deliberately excluded rather than named from proximity. The actual
+persistence cluster has calls in `SAVE`, `SELSTAGE`, `GAMESTART`, `GAMECLEAR`, `INPUTNAME`, and INIT2.
+
+**Numbered operation status contracts.** Save/load open failure is `1`; metadata uses `0=valid`,
+`1=absent/open failure`, and `2=invalid/incompatible`. Delete/copy attempt both members of the pair and use
+`0=both succeeded`, `1=DAT failed but STH succeeded`, `2=STH failed` (the STH result takes precedence).
+Thumbnail I/O uses `0=success`, `1=open/create failure`, and `2=codec failure`. Full-load opcode `0x1a1`
+expects its caller to pre-seed status zero: on success it starts the resume sequence without rewriting that
+operand, while a missing file writes one.
+
+#### Shared `SAVE.DAT`
+
+`shared_profile_save@0x40c950` writes `$$SAVE.DAT`, replaces `SAVE.DAT`, and keeps `SAVE.BAK`; it performs
+the analogous `$$RT.DAT` → `RT.DAT` / `RT.BAK` update for ReadTextDB. `shared_profile_load@0x40ccd0`
+falls back from `SAVE.DAT` to `SAVE.BAK` and loads `RT.DAT` independently. Numbered `.DAT` writes do not
+use this backup transaction, but a successful numbered serialization flushes the shared profile too.
+
+After the common container decode, the shared logical payload is:
+
+1. a DWORD catalog/compatibility count followed by that many DWORDs;
+2. a DWORD integer-entry count, then fixed 16-byte entries `{ascii_key[12], raw_value_u32}`;
+3. a DWORD string-entry count and DWORD padded string-blob length, then concatenated
+   `ascii_key\0value\0` pairs with DWORD padding;
+4. for shared save version at least 3.10, a 256-DWORD selector/count table, a DWORD extra-count, and that
+   many extra DWORDs;
+5. a trailing zero DWORD.
+
+Integer-cell ops `0x1a2`/`0x1a3` use keys `3%08x`; string-cell ops `0x1a9`/`0x1aa` use `5%08x`. In both
+cases the hexadecimal portion is the VM lvalue's resolved global-bank index. The string table therefore
+is not an incidental settings blob: it is the paired profile-wide selected-cell service for string globals,
+with insert-or-assign and empty-on-miss behavior.
+
+#### Common `.DAT` container
+
+Both shared and numbered `.DAT` payloads use the same native container. The fixed header is exactly
+`0x124` bytes:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| `0x000` | 4 | little-endian magic `S3SD` or `S4SD` |
+| `0x004` | 4 | compatibility id |
+| `0x008` | `0x100` | NUL-terminated game id area |
+| `0x108` | `0x10` | Win32 `SYSTEMTIME` |
+| `0x118` | 4 | accumulated playtime seconds |
+| `0x11c` | 4 | `SaveVersion1` / logical state-layout version |
+| `0x120` | 4 | `SaveVersion2` / payload-codec subversion |
+
+`save_container_read_and_validate_header@0x4306f0` is the metadata-only path used by `0x1a0`.
+The full writer/reader are `save_container_encode_and_write@0x42fac0` and
+`save_container_read_and_decode@0x42ff80`. Immediately after the header is this exact 20-byte codec frame:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| `+0x00` | 4 | encoded DWORD count |
+| `+0x04` | 4 | MSB-first CRC-32 of encoded bytes |
+| `+0x08` | 4 | reflected CRC-32 of encoded bytes |
+| `+0x0c` | 4 | random rolling XOR seed |
+| `+0x10` | 4 | random odd multiplier (low 16 bits used) |
+
+The encoded byte length is `encoded_dword_count * 4`. Each source DWORD is XORed with the current seed;
+its high and low 16-bit halves are independently multiplied by the current odd multiplier and stored as two
+DWORD products. Per source DWORD the seed advances by `0x0b0b0b0b` and the multiplier by `0x0b02`.
+The inverse requires both products to divide exactly, providing another corruption check. The decoded logical
+payload itself starts with two more DWORDs: MSB-first and reflected CRC-32 values over all following logical
+bytes.
+
+For `SaveVersion2 < 2`, that checked logical buffer is transformed directly. For version 2 or later, the
+buffer is first passed through the native 4 KiB LZSS codec: a zero-filled 4096-byte ring starting at `0xfee`,
+groups of eight tokens under an LSB-first flag byte (`1=literal`), and two-byte matches containing a 12-bit
+offset plus a four-bit `length-3`. Incompressible data is stored verbatim. The transformed inner buffer begins
+with three DWORDs recording original byte length, consumed byte length, and stored byte length, followed by
+the compressed/verbatim bytes and native padding. The mapped helpers are `lzss_4k_compress@0x42ed30`,
+`lzss_4k_decompress@0x42f050`, `save_payload_expand_multiply_transform@0x42f400`,
+`save_payload_inverse_multiply_transform@0x42f4a0`, `crc32_msb_first@0x42f360`, and
+`crc32_reflected@0x42f300`.
+
+#### Numbered logical state and `.STH`
+
+`context_state_serialize@0x40d320` chooses numbered logical layout 1, 2, or 3 from `SaveVersion1`;
+layout 1 retains legacy `SaveVersion2` sublayouts 10 and 20. Layouts 2 and 3 serialize script contexts
+`0..save_frame_boundary_index` inclusive (falling back to the current context), clear the terminal frame's
+return target, and append `text_history_serialize`. Their frame record is `0x414` bytes (`0x105` DWORDs);
+layout 2's frame-zero/fixed prefix is `0x8f8` bytes and layout 3's is `0x5718` bytes. Layout 3's larger
+prefix adds a 20,000-byte surface/resource state block and retained graphics-object state; each retained
+object record carries its handle plus the native `0xb5`-DWORD object record. The state also carries six
+global-bank counts, raw integer banks, packed strings/other banks, and resource registrations (100 in the
+modern layouts). The matching `save_data_deserialize_and_begin_restore@0x40fd10` reconstructs those banks,
+resources, retained state, history, and—when requested by `0x1a1`—the active frame chain consumed by `0xae`.
+
+The thumbnail is a separate file, never part of that logical state. Both renderer paths prove `.STH` is an
+ordinary bottom-up 24-bit BMP under a nonstandard extension: `BM`, pixel offset `0x36`, a 40-byte info
+header, BGR pixels, and four-byte row padding. The handle-based path is
+`gfx_surface_write_bmp24_to_handle@0x434bf0`; backend 1 reads back supported D3D surface formats and passes
+them to `gfx_surface_write_bmp24_to_path@0x475420`. The load side uses the renderer image decoder. A
+compatibility implementation should therefore preserve the paired-file lifecycle and BMP payload rather than
+inventing a second save container.
+
+**1.0 implementation boundary:** reproduce these native binary domains and lifecycle first: shared
+`SAVE.DAT`/`SAVE.BAK`, `RT.DAT`/`RT.BAK`, numbered `.DAT`, and paired BMP `.STH`. Keep the ownership behind
+a profile/save service so extended mode can later add JSON inspection/export, namespaced mod state, migrations,
+or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
+
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
 Opcode `0xae` is the load-side rendezvous paired with serialized script-frame state. Its handler,

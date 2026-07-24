@@ -3329,6 +3329,32 @@ shared-profile registration.
 `G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
 TUNE).
 
+## Persistence native-format reconnaissance complete (2026-07-24)
+
+The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native
+opcode family is mapped: `0x19e` numbered save, unused data-only load `0x19f`, metadata query `0x1a0`,
+full load/resume `0x1a1`, shared string cells `0x1a9`/`0x1aa`, pair delete/copy
+`0x1ab`/`0x1ac`, resume-frame marker `0x1ad`, and thumbnail write/load `0x1ae`/`0x1af`.
+Adjacent `0x19d` is unrelated resource/compatibility logic and is not classified by proximity.
+
+The native persistence domains and their lifecycle are structurally complete enough for implementation:
+shared `SAVE.DAT` uses atomic temp/backup replacement and stores both typed integer and string selected-cell
+tables; `RT.DAT` remains the independent ReadTextDB file; numbered state uses `SAVE##.DAT` plus a separate
+BMP-formatted `SAVE##.STH`. The common `.DAT` codec has a fixed `0x124`-byte S3SD/S4SD header, a mapped
+20-byte length/dual-CRC/seed/multiplier frame, reversible per-DWORD expansion, and version-2 4 KiB LZSS.
+Numbered logical layouts 1/2/3, active-frame cutoff/restoration, history, global banks, resources, and the
+layout-3 retained surface/object state are now bounded in `docs/engine-re.md`.
+
+**Decision:** implement the native binary formats and paired-file behavior for the 1.0 compatibility pass.
+Keep them behind a profile/save service so JSON inspection/export, migrations, and mod-owned namespaced state
+can arrive later as extended-mode additions. This supersedes the earlier open choice between native storage
+and a port-owned replacement; it does not authorize folding profile-selected cells into the existing
+whole-bank JSON session snapshot.
+
+No runtime persistence code changed in this reconnaissance slice. The canonical opcode source and generated
+references now describe the native ABI; the corresponding `/v2` handlers and codec helpers are named,
+commented, and saved.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

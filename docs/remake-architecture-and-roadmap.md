@@ -461,6 +461,13 @@ the entry condition.
 - Side-tasks absorbed here: `STINIT` parser, remaining data schemas, save-file format (needed for a
   real playthrough — reversible struct work).
 
+**Persistence compatibility floor (decided 2026-07-24):** the 1.0 path uses AGE's native binary
+domains and lifecycle—shared `SAVE.DAT`/`SAVE.BAK`, `RT.DAT`/`RT.BAK`, numbered `SAVE##.DAT`, and
+paired BMP `.STH` thumbnails. Keep the codec behind a profile/save-service boundary. Human-readable
+JSON inspection/export, migrations, and namespaced mod state are additive extended-mode work, not a
+replacement for compatibility-mode import/export. The recovered native contract lives in
+`docs/engine-re.md`.
+
 ### Phase C — Externalize & modding foundation
 - Add **editable named data overlays** mapped explicitly onto the VM's `*INIT`-produced state; external
   files must not become an unsynchronized second source of truth.
