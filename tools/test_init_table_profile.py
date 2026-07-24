@@ -513,6 +513,14 @@ def main() -> int:
     rendered = profile.render_message_matches(fixture, "First")
     assert "| 1 | one | First |" in rendered
     assert "`test_record.zero` (`0x30/3/0`)=9" in rendered
+    assert [record["id"] for record in profile.find_record_matches(fixture, "0x1")] == [1]
+    assert [record["id"] for record in profile.find_record_matches(fixture, "three")] == [3]
+    assert [record["id"] for record in profile.find_record_matches(fixture, "sev.*")] == [7]
+    focused = profile.render_record_matches(fixture, "1")
+    assert "## 1 — one" in focused
+    assert "| `test_parallel` | 2 | `0x10` |" in focused
+    assert "| `test_record.zero` | 9 | `0x30/3/0` |" in focused
+    assert "- message.description: \"First\"" in focused
 
     enemy_fixture = {
         "table": "ENEMY",

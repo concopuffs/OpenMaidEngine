@@ -56,7 +56,9 @@ Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer ta
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
 
-Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME] [--mode name|numeric|footer|mixed|rules|dispatch|banked]
+Usage: py -3.11 -X utf8 tools/extract_init.py <TABLE> [OUTNAME]
+       [--mode name|numeric|footer|mixed|rules|dispatch|banked]
+       [--packed-id 0xPPxxxxxx]
 """
 from __future__ import annotations
 import collections
@@ -69,6 +71,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import paths
 import extract_message_table
+import parse_sys4ini
 import sys4load
 
 SET_STRING = 0x192
@@ -855,6 +858,58 @@ def resolve(name: str) -> Path:
     raise SystemExit(f"not found: {name}.BIN")
 
 
+def load_packed_script(packed_id: int) -> sys4load.Sys4Script:
+    """Load one selector-keyed AAI script by its native packed resource id."""
+    if not 0 <= packed_id <= 0xFFFFFFFF:
+        raise ValueError(f"packed id outside uint32: {packed_id}")
+    pack_id = (packed_id >> 24) & 0xFF
+    raw_index = packed_id & 0xFFFFFF
+    if not 0 < pack_id < 0x80:
+        raise ValueError(
+            f"packed append id must use selector 1..127, got 0x{packed_id:08x}"
+        )
+
+    selected = None
+    for catalog_path in sorted(paths.GAME_DIR.glob("*.AAI")):
+        header = catalog_path.read_bytes()[:0x10C]
+        if len(header) < 0x10C or header[:4] != b"S4AC":
+            continue
+        selector = int.from_bytes(header[0x108:0x10C], "little")
+        if selector == pack_id:
+            # Match the native later-catalog-wins mount behavior deterministically for tools.
+            selected = (catalog_path, parse_sys4ini.parse(catalog_path))
+    if selected is None:
+        raise FileNotFoundError(f"no mounted AAI catalog for selector {pack_id}")
+
+    catalog_path, catalog = selected
+    entry = next(
+        (item for item in catalog["files"] if item["raw_index"] == raw_index),
+        None,
+    )
+    if entry is None:
+        raise FileNotFoundError(
+            f"{catalog_path.name}: no real record at raw index 0x{raw_index:x}"
+        )
+    if not entry["name"].upper().endswith(".BIN"):
+        raise ValueError(
+            f"0x{packed_id:08x} is not a SYS4 script: {entry['name']}"
+        )
+    archive = paths.GAME_DIR / entry["archive"]
+    archive_size = archive.stat().st_size
+    if entry["offset"] + entry["size"] > archive_size:
+        raise ValueError(
+            f"{catalog_path.name}: {entry['name']} range exceeds {archive.name}"
+        )
+    with archive.open("rb") as stream:
+        stream.seek(entry["offset"])
+        payload = stream.read(entry["size"])
+    if len(payload) != entry["size"]:
+        raise ValueError(
+            f"{catalog_path.name}: short read for {entry['name']}"
+        )
+    return sys4load.load_bytes(payload, entry["name"])
+
+
 def normalize_outname(value: str) -> str:
     """Accept a generated-file stem, not a path; tolerate one `.json` suffix."""
     if not value or Path(value).name != value or "/" in value or "\\" in value:
@@ -1401,7 +1456,7 @@ def _resolve_parallel_record_overlaps(records):
         record["record_fields"] = retained
 
 
-def extract_name(scr):
+def extract_name(scr, layout_hint: dict | None = None):
     string_addrs = [
         ins.args[0][1]
         for ins in scr.instructions
@@ -1409,12 +1464,23 @@ def extract_name(scr):
     ]
     if not string_addrs:
         return [], {}
-    name_write_base = string_addrs[0]
-    # AGE's shipped entity ids are one-based.  Array lookups use the cell just
-    # before the first populated destination as their base, then add the id.
-    first_record_id = 1
-    name_base = name_write_base - first_record_id
-    record_span = _infer_record_span(string_addrs)
+    if layout_hint is None:
+        name_write_base = string_addrs[0]
+        # AGE's shipped entity ids are one-based. Array lookups use the cell just
+        # before the first populated destination as their base, then add the id.
+        first_record_id = 1
+        name_base = name_write_base - first_record_id
+        record_span = _infer_record_span(string_addrs)
+    else:
+        name_base = int(layout_hint["name_array_base"], 0)
+        name_write_base = int(layout_hint["name_write_base"], 0)
+        first_record_id = int(layout_hint["first_record_id"])
+        record_span = int(layout_hint["record_span"])
+        if not any(
+            name_write_base <= address < name_write_base + record_span
+            for address in string_addrs
+        ):
+            raise ValueError(f"{scr.path.name}: no name writes inside hinted layout")
     records, cur, desc_slot, desc_bases = [], None, 0, {}
     for ins in scr.instructions:
         if ins.opcode == SET_STRING and ins.args and ins.args[0][0] == T_GLOBAL_STRING:
@@ -1445,12 +1511,15 @@ def extract_name(scr):
         {key for record in records for key in record.get("record_fields", {})},
         key=lambda key: tuple(int(part, 0) for part in key.split("/")),
     )
-    return records, {"name_array_base": f"0x{name_base:x}",
-                     "name_write_base": f"0x{name_write_base:x}",
-                     "first_record_id": first_record_id,
-                     "record_span": record_span,
-                     "record_field_columns": record_columns,
-                     "desc_array_bases": {k: f"0x{v:x}" for k, v in sorted(desc_bases.items())}}
+    meta = {"name_array_base": f"0x{name_base:x}",
+            "name_write_base": f"0x{name_write_base:x}",
+            "first_record_id": first_record_id,
+            "record_span": record_span,
+            "record_field_columns": record_columns,
+            "desc_array_bases": {k: f"0x{v:x}" for k, v in sorted(desc_bases.items())}}
+    if layout_hint is not None:
+        meta["fragment_layout_source"] = layout_hint.get("source", "base table")
+    return records, meta
 
 
 def extract_vocabulary(scr):
@@ -6961,6 +7030,7 @@ def write_data_index(data_dir: Path) -> None:
 def main() -> int:
     argv = []
     mode_arg = None
+    packed_id = None
     index = 1
     while index < len(sys.argv):
         arg = sys.argv[index]
@@ -6968,6 +7038,12 @@ def main() -> int:
             if index + 1 >= len(sys.argv):
                 raise SystemExit("--mode requires a value")
             mode_arg = sys.argv[index + 1]
+            index += 2
+            continue
+        if arg == "--packed-id":
+            if index + 1 >= len(sys.argv):
+                raise SystemExit("--packed-id requires a value")
+            packed_id = int(sys.argv[index + 1], 0)
             index += 2
             continue
         if arg.startswith("--"):
@@ -6978,10 +7054,20 @@ def main() -> int:
         raise SystemExit(__doc__)
     name = argv[0].upper().removesuffix(".BIN")
     try:
-        outname = normalize_outname(argv[1]) if len(argv) > 1 else name
+        default_outname = (
+            f"APPEND{(packed_id >> 24) & 0xff:02d}-{name}"
+            if packed_id is not None else name
+        )
+        outname = normalize_outname(argv[1]) if len(argv) > 1 else default_outname
     except ValueError as error:
         raise SystemExit(str(error)) from error
-    scr = sys4load.load(resolve(name))
+    try:
+        scr = (
+            load_packed_script(packed_id)
+            if packed_id is not None else sys4load.load(resolve(name))
+        )
+    except (FileNotFoundError, ValueError) as error:
+        raise SystemExit(str(error)) from error
 
     if mode_arg is not None:
         mode = mode_arg
@@ -7042,8 +7128,13 @@ def main() -> int:
         extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":
         extractor = extract_map_terrain_atlas
-    recs, meta = extractor(scr)
-    if mode == "name" and name in MESSAGE_TABLES:
+    if packed_id is not None and name == "EBINIT":
+        _, layout_hint = extract_name(sys4load.load(resolve("EBINIT")))
+        layout_hint["source"] = "EBINIT.BIN"
+        recs, meta = extract_name(scr, layout_hint)
+    else:
+        recs, meta = extractor(scr)
+    if packed_id is None and mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]
         meta["message_table"] = join_messages(
             recs, sys4load.load(extract_message_table.resolve(message_name))
@@ -7063,6 +7154,8 @@ def main() -> int:
            "record_count": len(recs), **meta,
            "field_columns": cols if mode != "footer" else None,
            "field_semantics": semantics, "records": recs}
+    if packed_id is not None:
+        out["packed_id"] = f"0x{packed_id:08x}"
     outpath = paths.BUILD / "data" / f"{outname}.json"
     outpath.parent.mkdir(parents=True, exist_ok=True)
     outpath.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")

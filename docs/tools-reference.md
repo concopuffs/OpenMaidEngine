@@ -60,6 +60,30 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `test_extract_init.py`, `test_init_table_profile.py` | Regression checks for sparse one-based, mixed selector-dispatched, CCINIT rule, SCINIT dispatch, RTINIT banked, ILINIT condition-matrix, CNINIT unit-name/voice-family, CGINIT gallery, ALINIT alchemy-recipe, AFINIT affinity/progression, CTINIT name-entry-palette, CVINIT character-voice, TRINIT training-action, CDINIT card-generation, CDINIT2 card-effect, BTANINIT/BTANINIT2 battle-animation, STINIT2 stage-definition, and MPINIT terrain-atlas extraction; RECOVER ABI validation; MES reconstruction/joins; footer-array accounting and semantic projection; EBINIT/SKINIT/OBINIT definition joins; STINIT object/enemy joins and tagged-payload behavior; overwrite/provider joins; and field/message/rule/dispatch/banked/map/training/card/battle-animation/stage profiling. | run each directly | — |
 | `global_map.py` | Build the partial global-variable name map from static evidence. | `global_map.py` | corpus + `build/data/` → `build/global-var-map.{json,md}` |
 
+For selector-keyed append INIT fragments, pass the universal packed script id:
+
+```powershell
+py -3.11 -X utf8 tools/extract_init.py EBINIT --packed-id 0x01000001
+```
+
+The extractor finds the mounted AAI by the packed id's high-byte selector, bounds-checks and reads the
+indexed ALF payload, and parses it without materializing an extracted `.BIN`. Packed EBINIT fragments reuse
+the base EBINIT table geometry so their additive writes retain the same semantic field names. Output is
+kept separate as `build/data/APPEND<selector>-<TABLE>.json` and records `packed_id`,
+`source`, and `fragment_layout_source`; it is not an inferred base/append merge. Matching base MES data is
+not joined to a packed fragment.
+
+Use the profiler's focused record view to inspect a unit by integer id, exact name, or name regex:
+
+```powershell
+py -3.11 -X utf8 tools/init_table_profile.py APPEND01-EBINIT --record 81
+py -3.11 -X utf8 tools/init_table_profile.py APPEND01-EBINIT --record "紫色の珍獣/BOSS"
+```
+
+`--record ID_OR_NAME` prints the INIT description strings and a semantic-field/value/raw-provenance table;
+packed asset values are shown in both decimal and hexadecimal. It is mutually prioritized over
+`--message-query` for console rendering, while `--build` may still be used to write the complete profile.
+
 `extract_init.py` also has name-mode specializations for VIINIT's sparse 200-row glossary table,
 CNINIT's 277 EBINIT-keyed display-name/voice-family rows within parallel 1,000-cell arrays,
 CIINIT's 24 populated character-information profiles within four reserved 100-cell columns, MAINIT's

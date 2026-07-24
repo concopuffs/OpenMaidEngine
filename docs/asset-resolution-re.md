@@ -239,6 +239,12 @@ scene-local numeric addressing mode.
    mappings. Mounting an AAI therefore only makes its packed records addressable. Executing its AUTORUN
    is the separate operation that materializes append data and registers append control flow.
 
+   Tooling can inspect one packed INIT fragment without claiming that AUTORUN has executed:
+   `extract_init.py EBINIT --packed-id 0x01000001` resolves the selector/index through the AAI catalog,
+   reads the bounded ALF payload in memory, and applies the base EBINIT geometry to its additive writes.
+   The separate `APPEND01-EBINIT` result preserves packed provenance and can be queried by unit id or name
+   with `init_table_profile.py --record`; it is not an ordered merged runtime image.
+
    The base/loose script corpus contains no reference to packed id `0x01000000`. The shipped game must
    therefore enter the append AUTORUN outside the visible base script call graph, but the exact native
    launcher and its ordering relative to SYSTEM4/INIT2 have not yet been reversed. The current port can

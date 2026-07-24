@@ -219,9 +219,9 @@ def _decode_string(dwords, start, limit=4096):
     return text, ndwords
 
 
-def load(path) -> Sys4Script:
-    path = Path(path)
-    data = path.read_bytes()
+def load_bytes(data: bytes, name: str | Path = "<memory>.BIN") -> Sys4Script:
+    """Parse one SYS4 script payload already read from an archive or other byte source."""
+    path = Path(name)
     if len(data) < HEADER_SIZE:
         raise Sys4Error(f"{path.name}: too small ({len(data)} bytes)")
     if data[:4] != MAGIC_PREFIX:
@@ -237,6 +237,11 @@ def load(path) -> Sys4Script:
     _check_invariants(scr)
     decode_code(scr)
     return scr
+
+
+def load(path) -> Sys4Script:
+    path = Path(path)
+    return load_bytes(path.read_bytes(), path)
 
 
 def decode_code(scr: Sys4Script):

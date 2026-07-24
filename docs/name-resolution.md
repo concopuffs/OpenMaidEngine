@@ -724,15 +724,21 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    known value in-game (take damage, gain XP), watch which global moves → definitive
    `field@X = "HP"`. Reserve for the fields that matter; this is the last mile.
 
-**Append semantic-coverage caveat (2026-07-24).** The current `paths.scripts()` corpus and
-`extract_init.py` resolution path include DATA1 plus loose root overrides, but not selector-keyed AAI
-records. Consequently generated `build/data/EBINIT.json` describes the base/loose EBINIT only. Installed
-`$1$AUTORUN.BIN` calls additive append INIT fragments; `$1$EBINIT.BIN` adds unit rows 81 and 900..905 to
-the same global schema, and `$1$CNINIT.BIN` supplies the companion names/voice families. A future append
-semantic pass should enumerate packed scripts from the runtime catalog, preserve `(pack selector, raw
-index)` provenance, extract each INIT fragment with the existing schemas, and merge base/append assignments
-only after the native AUTORUN ordering is proven. The AAI format and verified internal call sequence are
-canonical in `docs/asset-resolution-re.md`.
+**Append semantic coverage (2026-07-24).** The ordinary `paths.scripts()` corpus still represents DATA1
+plus loose root overrides, so generated `build/data/EBINIT.json` remains the base/loose table. For focused
+inspection, `extract_init.py EBINIT --packed-id 0x01000001` now loads `$1$EBINIT.BIN` directly through its
+AAI/ALF catalog coordinates and writes the separate `build/data/APPEND01-EBINIT.json`. It applies the
+canonical base EBINIT geometry rather than re-inferring a misleading seven-row layout, preserves packed-id
+and fragment-layout provenance, and gives all additive rows the existing EBINIT semantic field names.
+`init_table_profile.py APPEND01-EBINIT --record ID_OR_NAME` renders one row as semantic
+field/value/raw-coordinate triples. Regression coverage fixes the seven row ids (81 and 900..905) and
+representative unit-81 level, stat, growth, and selector-keyed asset values.
+
+This is deliberately a fragment view, not a synthesized boot image. `$1$CNINIT.BIN` supplies companion
+display-name/voice-family writes, other INIT fragments may add related definitions, and native AUTORUN
+ordering remains unresolved. Whole-pack enumeration and ordered base/append assignment merging should wait
+until that engine-owned launch boundary is proven. The AAI format and verified internal call sequence are
+canonical in `docs/asset-resolution-re.md`; command usage is canonical in `docs/tools-reference.md`.
 
 Re-run `tools/global_map.py` after each increment; `sys4load` picks up the new labels
 automatically (it reads `build/global-var-map.json` at load).

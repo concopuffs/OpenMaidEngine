@@ -701,6 +701,92 @@ def render_message_matches(data: dict, pattern: str) -> str:
     return "\n".join(lines)
 
 
+def find_record_matches(data: dict, selector: str) -> list[dict]:
+    """Select a record by numeric id, exact name, or name regex."""
+    try:
+        record_id = int(selector, 0)
+    except ValueError:
+        folded = selector.casefold()
+        exact = [
+            record
+            for record in data["records"]
+            if record.get("name", "").casefold() == folded
+        ]
+        if exact:
+            return exact
+        regex = re.compile(selector, re.IGNORECASE)
+        return [
+            record
+            for record in data["records"]
+            if regex.search(record.get("name", ""))
+        ]
+    return [record for record in data["records"] if record.get("id") == record_id]
+
+
+def _render_record_value(value) -> str:
+    if isinstance(value, int) and value >= 0x10000:
+        rendered = f"{value} (`0x{value:08x}`)"
+    else:
+        rendered = json.dumps(value, ensure_ascii=False)
+    return rendered.replace("|", "\\|").replace("\n", "<br>")
+
+
+def render_record_matches(data: dict, selector: str) -> str:
+    """Render a compact semantic view of one or more selected INIT records."""
+    matches = find_record_matches(data, selector)
+    escaped_selector = selector.replace("`", "\\`")
+    lines = [
+        f"# {data['table']} record",
+        "",
+        f"- source: `{data.get('source', '(unspecified)')}`",
+    ]
+    if data.get("packed_id"):
+        lines.append(f"- packed resource: `{data['packed_id']}`")
+    lines.extend([
+        f"- selector: `{escaped_selector}`",
+        f"- matches: {len(matches)}",
+        "",
+    ])
+    semantics = data.get("field_semantics", {})
+    for record in matches:
+        name = record.get("name", "")
+        heading = f"## {record['id']}" + (f" — {name}" if name else "")
+        lines.extend([heading, ""])
+        for key in ("desc", "desc1", "desc2", "desc3"):
+            if key in record:
+                lines.append(f"- {key}: {_render_record_value(record[key])}")
+        for key, value in record.get("message", {}).items():
+            if key != "furigana":
+                lines.append(f"- message.{key}: {_render_record_value(value)}")
+        fields = {}
+        for collection_name in (
+            "fields",
+            "record_fields",
+            "string_fields",
+            "array_fields",
+            "footer_arrays",
+        ):
+            fields.update(record.get(collection_name, {}))
+        if fields:
+            lines.extend([
+                "",
+                "| semantic field | value | raw provenance |",
+                "|---|---:|---|",
+            ])
+            rows = sorted(
+                fields.items(),
+                key=lambda item: (semantics.get(item[0], item[0]), item[0]),
+            )
+            for raw_key, value in rows:
+                semantic_name = semantics.get(raw_key, "unresolved")
+                lines.append(
+                    f"| `{semantic_name}` | {_render_record_value(value)} | "
+                    f"`{raw_key}` |"
+                )
+        lines.append("")
+    return "\n".join(lines)
+
+
 def add_direct_references(rows: list[dict], source_name: str) -> None:
     by_base: dict[int, list[dict]] = collections.defaultdict(list)
     for row in rows:
@@ -1028,6 +1114,11 @@ def main() -> int:
         metavar="REGEX",
         help="show matching names/player-facing messages beside all populated fields",
     )
+    parser.add_argument(
+        "--record",
+        metavar="ID_OR_NAME",
+        help="show a focused semantic record by numeric id, exact name, or name regex",
+    )
     args = parser.parse_args()
 
     name = args.table.upper().removesuffix(".JSON").removesuffix(".BIN")
@@ -1068,9 +1159,12 @@ def main() -> int:
         )),
     }
     markdown = render_markdown(data, rows, args.limit)
-    if args.message_query:
+    if args.record:
+        print(render_record_matches(data, args.record))
+    elif args.message_query:
         print(render_message_matches(data, args.message_query))
-    print(markdown)
+    else:
+        print(markdown)
     if args.build:
         stem = paths.BUILD / "data" / f"{name}-field-profile"
         stem.with_suffix(".json").write_text(

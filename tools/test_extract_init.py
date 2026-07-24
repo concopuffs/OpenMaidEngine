@@ -105,6 +105,43 @@ def test_real_name_tables() -> None:
     )
 
 
+def test_append_ebinit_fragment() -> None:
+    script = extract_init.load_packed_script(0x01000001)
+    _, base_layout = extract_init.extract_name(
+        sys4load.load(extract_init.resolve("EBINIT"))
+    )
+    base_layout["source"] = "EBINIT.BIN"
+    records, meta = extract_init.extract_name(script, base_layout)
+    by_id = {record["id"]: record for record in records}
+    semantics = extract_init.field_semantics(records)
+    extract_init.attach_semantic_fields(records, semantics)
+
+    check(
+        script.path.name == "$1$EBINIT.BIN" and len(script.instructions) == 358,
+        "packed resource 0x01000001 loads the append EBINIT payload",
+    )
+    check(
+        set(by_id) == {81, 900, 901, 902, 903, 904, 905},
+        "append EBINIT exposes its seven sparse additive unit rows",
+    )
+    check(
+        meta["fragment_layout_source"] == "EBINIT.BIN"
+        and meta["name_array_base"] == "0x84a"
+        and meta["record_span"] == 1000,
+        "append EBINIT reuses the canonical base-table layout",
+    )
+    check(
+        by_id[81]["semantic_fields"]["unit_starting_level"] == 40
+        and by_id[81]["semantic_fields"]["unit_base_stats.physical_attack"] == 23
+        and by_id[81]["semantic_fields"]["unit_stat_growth_rates.speed"] == 63,
+        "append unit 81 exposes named level, base-stat, and growth fields",
+    )
+    check(
+        by_id[81]["semantic_fields"]["unit_battle_sprite_asset_id"] == 0x0100002D,
+        "append unit 81 retains its selector-keyed battle sprite resource id",
+    )
+
+
 def test_character_profiles() -> None:
     scripts = paths.scripts()
     records, meta = extract_init.extract_character_profiles(
@@ -2293,6 +2330,7 @@ def test_field_semantics() -> None:
 
 if __name__ == "__main__":
     test_real_name_tables()
+    test_append_ebinit_fragment()
     test_character_profiles()
     test_magic_actions()
     test_static_negative_write()

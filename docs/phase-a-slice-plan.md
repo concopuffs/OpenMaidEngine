@@ -3328,3 +3328,23 @@ shared-profile registration.
 **Next:** investigate the highest-use remaining auto-shaped row table, the stride-10 table at
 `G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
 TUNE).
+
+## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
+
+The static INIT surface now accepts a universal packed script id for focused append inspection.
+`extract_init.py EBINIT --packed-id 0x01000001` locates selector 1's AAI catalog, bounds-checks and reads
+`$1$EBINIT.BIN` from its ALF range, and parses the payload in memory. Because this script is an additive
+fragment, extraction imports the base EBINIT name-array base, first id, and 1,000-row span rather than
+misclassifying its sparse writes as an independent layout. The generated `APPEND01-EBINIT` artifact remains
+separate from base EBINIT and records both packed-resource and base-layout provenance.
+
+The fragment contains seven unit rows: 81 and 900..905. Their raw arrays and row-major cells project
+through the existing, fully named EBINIT schema; selector-keyed graphics remain full packed ids. A new
+`init_table_profile.py --record ID_OR_NAME` view prints a single unit's authored descriptions and
+semantic-field/value/raw-coordinate table, with large resource values also rendered in hexadecimal.
+Regressions cover packed loading, the complete sparse id set, inherited geometry, representative unit-81
+level/base-stat/growth fields, and its packed battle-sprite id.
+
+This closes the immediate “inspect an append unit semantically” need without asserting that the runtime
+has executed `$1$AUTORUN.BIN`. Ordered whole-pack merging and natural port bootstrap still depend on the
+unresolved native AUTORUN launch boundary documented in `docs/asset-resolution-re.md`.
