@@ -3267,3 +3267,34 @@ Evidence regressions protect the exact corpus xrefs and clear geometry, all seve
 readers, both SETROUTE flood-score copies, the INIT2 cardinal vectors, and every canonical name.
 
 **Next:** investigate the remaining unnamed stride-300 table at `G[0x15261f]`.
+
+## Data-semantics sidebar: battle triggered-passive matrix (2026-07-24)
+
+The former stride-300 auto table at `G[0x15261f]` is the reserved `2 × 300`
+`battle_triggered_passive_skill_flags` work matrix. Its first dimension is BTL's two battle sides,
+and its second dimension is the SKINIT skill id. The complete corpus surface is compact and exact:
+BTL and CALCDMG are its only readers/writers, with 37 two-dimensional lookups and three full
+600-cell clears.
+
+CALCDMG rebuilds the matrix for each exchange. A local eligibility surface first assigns the
+actor/target roles of shipped passive ids 28..50 (with Seal/id 44 absent from this activation path).
+The script then scans the four equipped skills on both battle entities, accepts category-4 passives,
+applies the configured `skill_proc_chance_percent`, and filters surviving cells through the concrete
+combat contract: species and boss slayers, anti-air/anti-sub movement skills, ordinary-versus-special
+attack categories, role-specific defensive/offensive passives, and mutually exclusive reactions.
+The result is an activation record for this exchange rather than the entity's persistent skill
+ownership; `entity_skill_flags` remains the latter source.
+
+BTL proves the output side. It indexes each participant's four equipped skills through the matrix
+to draw the triggered-passive icons, and repeats the dynamic join for actor- and target-side passive
+battle animations. Direct column tests then implement Roar, Counter, Reflect, Absorb, Pierce, Shield,
+Parry, and Revive behavior. The adjacent `G[0x15261e]` is now
+`battle_actor_hp_recovery`: CALCDMG adds Absorb's half-damage return and any level-scaled HP-absorption
+condition amount, while BTL adds the result to the actor's HP and renders the green recovery number.
+
+Evidence regressions protect the exact two-script/40-reference surface, all three `2 × 300` clears,
+the passive-id eligibility range, category gate and dynamic filters, BTL's three skill-indexed
+presentation consumers, and the actor-recovery producer/consumer pair.
+
+**Next:** investigate the highest-use remaining auto-shaped row table, the stride-14 table at
+`G[0x6f70]` (27 references across ADDEXP, EVOLVE, GAMECLEAR, GAMESTART, TRAIN, and UNITECH).

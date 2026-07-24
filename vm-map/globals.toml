@@ -2037,6 +2037,28 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x15261e"
+name = "battle_actor_hp_recovery"
+category = "unknown"
+type = "int"
+value_domain = "nonnegative HP restored to the acting side"
+usage = "CALCDMG's actor-side HP recovery output. Absorb (SKINIT skill 40) contributes half of positive battle_hp_delta with a minimum of one, and the target's HP-absorption condition can add its level-scaled amount capped at the damage dealt. BTL adds the result to the actor's current HP, renders the green recovery number, and clamps the resource through the ordinary post-battle path."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e085", "0x52383", "0x15261d"]
+
+[[global]]
+address = "0x15261f"
+name = "battle_triggered_passive_skill_flags"
+category = "data-table"
+type = "int[2][300]"
+value_domain = "{0,1}; rows are battle side, columns are SKINIT skill ids"
+usage = "Per-exchange passive-skill activation matrix. CALCDMG clears both 300-cell side rows, considers the four equipped skills on each battle entity, retains category-4 passives allowed for that actor/target role, rolls skill_proc_chance_percent, and applies species, boss, movement-skill, action-category, and mutual-exclusion filters. BTL consumes the surviving flags to draw triggered-passive icons, play each passive's battle animation, and execute Roar, Counter, Reflect, Absorb, Pierce, Shield, Parry, and Revive behavior."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e693", "0x5212b", "0xa6f86", "0xaa8f2", "0xaaa1e", "0x15261a", "0x15261b", "0x152877"]
+
+[[global]]
 address = "0x152877"
 name = "battle_entity_indices"
 category = "data-table"

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-4276 globals (428 curated, 3848 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+4277 globals (430 curated, 3847 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -288,6 +288,7 @@
 | `0x152421` | card_definition_visual_asset_ids | high | investigation | Card-result visual selected by FIELD before applying and presenting the effect. All 81 authored rows resolve to MVS*.AGF assets, with related card families sharing artwork. |
 | `0x152486` | card_generation_weight_schedules | high | investigation | CDINIT's selector-specific candidate weights, parallel to card_generation_card_ids. FIELD computes base_weight + floor(current_stage_turn / growth_interval_turns) * growth_weight, with a zero interval selecting the fixed base path. The shipped lists populate 11..75 one-based slots. Columns: 0=base_weight, 1=growth_interval_turns, 2=growth_weight. |
 | `0x1525b2` | card_generation_card_ids | high | investigation | Card ids parallel to card_generation_weight_schedules. FIELD scans slots 0..99, filters each nonzero id through the CDINIT2 story-flag rows, and performs cumulative weighted random selection. CDINIT clears only the first 50 slots even though its largest authored list reaches slot 75. |
+| `0x15261f` | battle_triggered_passive_skill_flags | high | investigation | Per-exchange passive-skill activation matrix. CALCDMG clears both 300-cell side rows, considers the four equipped skills on each battle entity, retains category-4 passives allowed for that actor/target role, rolls skill_proc_chance_percent, and applies species, boss, movement-skill, action-category, and mutual-exclusion filters. BTL consumes the surviving flags to draw triggered-passive icons, play each passive's battle animation, and execute Roar, Counter, Reflect, Absorb, Pierce, Shield, Parry, and Revive behavior. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
 | `0x15288e` | battle_animation_effect_ids | high | investigation | BTANINIT2's sparse battle-animation composition table. BTANINIT expands the selected row into six runtime effect work slots. BTL anchors requested effects in slots 0 and 1 to the actor and slots 2 through 5 to the target; shipped data never populates slot 4. Columns: 0=effect_slot_0, 1=effect_slot_1, 2=effect_slot_2, 3=effect_slot_3, 4=reserved_effect_slot_4, 5=effect_slot_5. |
@@ -3747,6 +3748,7 @@
 | `0xab8fb` | class_change_state_work | high | investigation | Ten-cell working copy of the current unit's unit_class_change_state row. CCINIT sets the slot belonging to an awarded rule; CALCCC manages the block copy between this buffer and persistent per-unit state. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x15261c` | battle_hit_result | high | investigation | CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path. |
 | `0x15261d` | battle_hp_delta | high | investigation | CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling. |
+| `0x15261e` | battle_actor_hp_recovery | high | investigation | CALCDMG's actor-side HP recovery output. Absorb (SKINIT skill 40) contributes half of positive battle_hp_delta with a minimum of one, and the target's HP-absorption condition can add its level-scaled amount capped at the damage dealt. BTL adds the result to the actor's current HP, renders the green recovery number, and clamps the resource through the ordinary post-battle path. |
 | `0x84a` | — | high | auto-shape | unit-name-table |
 | `0xc32` | — | high | auto-shape | unit-desc-table |
 | `0x101a` | — | high | auto-shape | unit-desc1-table |
@@ -3919,7 +3921,6 @@
 | `0x15235a` | — | low | auto-shape | cdinit2-field? |
 | `0x1523be` | — | low | auto-shape | cdinit2-field? |
 | `0x152422` | — | med | auto-shape | cdinit2-field |
-| `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |
 | `0x152894` | — | low | auto-shape | btaninit2-field? |

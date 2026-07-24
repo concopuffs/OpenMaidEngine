@@ -170,6 +170,11 @@ def test_load_and_lint():
           and entries[0xccc0a]["name"] == "map_target_tile_x"
           and entries[0xccc0b]["name"] == "map_target_tile_y",
           "selected movement route grid and coordinate helpers are curated")
+    check(entries[0x15261e]["name"] == "battle_actor_hp_recovery"
+          and entries[0x15261f]["name"]
+          == "battle_triggered_passive_skill_flags"
+          and entries[0x15261f]["type"] == "int[2][300]",
+          "battle recovery output and triggered-passive matrix are curated")
     # lint clean against a permissive address universe (curated addrs are self-consistent)
     errors, warnings = G.lint(entries, set(entries))
     check(errors == [], f"globals.toml lints clean (errors={errors})")
@@ -308,6 +313,110 @@ def test_selected_movement_route_grid_evidence():
         0xccbd4: [0, 1, 0, -1, 0],
     }, "INIT2 defines the no-move plus four-cardinal-neighbor vectors")
 
+def test_battle_triggered_passive_skill_flags_evidence():
+    target = 0x15261f
+    recovery = 0x15261e
+    refs = []
+    recovery_refs = []
+    loaded = {}
+    for name, path in paths.scripts().items():
+        if path.read_bytes()[:8] != b"SYS4422 ":
+            continue
+        script = sys4load.load(path)
+        loaded[name] = script
+        for index, instruction in enumerate(script.instructions):
+            if (3, target) in instruction.args:
+                refs.append((name, script, index, instruction))
+            if (3, recovery) in instruction.args:
+                recovery_refs.append((name, instruction))
+
+    check({name for name, _, _, _ in refs}
+          == {"BTL.BIN", "CALCDMG.BIN"}
+          and len(refs) == 40
+          and sum(instruction.opcode == 0x12c
+                  for _, _, _, instruction in refs) == 37
+          and sum(instruction.opcode == 0x6c
+                  for _, _, _, instruction in refs) == 3,
+          "triggered-passive matrix has exactly 37 lookups and three clears in BTL/CALCDMG")
+
+    clears_cover_both_rows = True
+    for _, script, index, instruction in refs:
+        if instruction.opcode != 0x6c:
+            continue
+        previous = script.instructions[index - 1]
+        clears_cover_both_rows &= (
+            previous.label == "mul"
+            and previous.args[1:] == [(0, 2), (0, 300)]
+            and instruction.args[1] == previous.args[0]
+        )
+    check(clears_cover_both_rows,
+          "every triggered-passive clear covers both reserved 300-skill side rows")
+
+    calcdmg = loaded["CALCDMG.BIN"].instructions
+    eligibility_columns = {
+        instruction.args[-1][1]
+        for index, instruction in enumerate(calcdmg[:-1])
+        if 0x1f1 <= instruction.offset <= 0x3b9
+        and instruction.opcode == 0x12c
+        and instruction.args[1] == (9, 0xf)
+        and instruction.args[3] == (0, 300)
+        and calcdmg[index + 1].label == "mov"
+        and calcdmg[index + 1].args[1] == (0, 1)
+    }
+    check(eligibility_columns == set(range(28, 51)) - {44},
+          "CALCDMG seeds the actor/target eligibility surface for shipped passive skill ids")
+
+    category_gate = [
+        instruction for instruction in calcdmg
+        if instruction.offset == 0x4d6
+    ]
+    dynamic_writes = {
+        instruction.offset
+        for instruction in calcdmg
+        if instruction.opcode == 0x12c
+        and instruction.args[1] == (3, target)
+        and instruction.args[3] == (0, 300)
+        and instruction.args[-1] == (9, 8)
+    }
+    check(len(category_gate) == 1
+          and category_gate[0].args == [
+              (12, 0), (3, 0xa6f86), (9, 8)
+          ]
+          and dynamic_writes == {
+              0x52e, 0x57c, 0x5d3, 0x612, 0x62a, 0x65b,
+              0x688, 0x6bd, 0x725, 0x799, 0x7b5, 0x7fb,
+              0x817, 0x85d,
+          },
+          "CALCDMG gates category-4 skills then filters the side/skill activation cells")
+
+    btl_dynamic_consumers = {
+        instruction.offset
+        for instruction in loaded["BTL.BIN"].instructions
+        if instruction.opcode == 0x12c
+        and instruction.args[1] == (3, target)
+        and instruction.args[3] == (0, 300)
+        and instruction.args[-1] == (9, 0x12)
+    }
+    check(btl_dynamic_consumers == {0x1b8c, 0x2270, 0x2319},
+          "BTL indexes triggered flags by equipped skill for icons and both-side animations")
+
+    check({name for name, _ in recovery_refs}
+          == {"BTL.BIN", "CALCDMG.BIN"}
+          and len(recovery_refs) == 20
+          and any(instruction.offset == 0xa3f
+                  and instruction.label == "div"
+                  and instruction.args == [
+                      (3, recovery), (3, 0x15261d), (0, 2)
+                  ]
+                  for name, instruction in recovery_refs
+                  if name == "CALCDMG.BIN")
+          and any(instruction.offset == 0x943
+                  and instruction.label == "add"
+                  and instruction.args[-1] == (3, recovery)
+                  for name, instruction in recovery_refs
+                  if name == "BTL.BIN"),
+          "CALCDMG computes actor recovery and BTL adds it to the acting entity's HP")
+
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
     auto = G.load_auto(paths.BUILD / "global-var-map.json")
@@ -372,6 +481,7 @@ if __name__ == "__main__":
     test_lint_catches_bad_vocab()
     test_adv_layer_surface_slot_evidence()
     test_selected_movement_route_grid_evidence()
+    test_battle_triggered_passive_skill_flags_evidence()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
