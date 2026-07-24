@@ -48,7 +48,7 @@ def load_table(name: str) -> dict:
         raise SystemExit(f"missing extracted table: {path}")
     data = json.loads(path.read_text(encoding="utf8"))
     if data.get("mode") not in {
-        "name", "numeric", "mixed", "rules", "dispatch", "banked"
+        "name", "numeric", "footer", "mixed", "rules", "dispatch", "banked"
     }:
         raise SystemExit(f"{name}: unsupported field-profiling mode {data.get('mode')!r}")
     return data
@@ -279,6 +279,38 @@ def profile_banked(data: dict) -> dict:
     }
 
 
+def profile_map_atlas(data: dict) -> dict:
+    """Summarize MPINIT's sparse terrain rows and STINIT2 rectangle join."""
+    if data.get("schema") != "stage-terrain-atlas":
+        return {}
+    shared = data.get("shared_atlas_rectangles", [])
+    return {
+        "row_stride": data.get("row_stride", 0),
+        "authored_column_count": data.get("authored_column_count", 0),
+        "tile_to_grid_scale": data.get("tile_to_grid_scale", 0),
+        "authored_row_count": data.get("authored_row_count", 0),
+        "implicit_zero_row_count": data.get("implicit_zero_row_count", 0),
+        "authored_grid_y_min": data.get("authored_grid_y_min", 0),
+        "authored_grid_y_max": data.get("authored_grid_y_max", 0),
+        "nonzero_cell_count": data.get("nonzero_cell_count", 0),
+        "stage_rectangle_nonzero_cell_count": data.get(
+            "stage_rectangle_nonzero_cell_count", 0
+        ),
+        "outside_stage_rectangle_nonzero_cell_count": data.get(
+            "outside_stage_rectangle_nonzero_cell_count", 0
+        ),
+        "terrain_ids_used": data.get("terrain_ids_used", []),
+        "stage_map_count": data.get("stage_map_count", 0),
+        "unique_atlas_rectangle_count": data.get(
+            "unique_atlas_rectangle_count", 0
+        ),
+        "shared_rectangle_count": len(shared),
+        "shared_stage_definition_count": sum(
+            len(row.get("stage_ids", [])) for row in shared
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -406,7 +438,27 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if rule_profile := profile_rules(data):
+    if map_profile := profile_map_atlas(data):
+        lines.extend([
+            f"- geometry: {map_profile['authored_column_count']} authored cells "
+            f"inside a {map_profile['row_stride']}-cell row pitch",
+            f"- coordinate scale: one tile = "
+            f"{map_profile['tile_to_grid_scale']} grid cells",
+            f"- authored rows: {map_profile['authored_row_count']} across grid Y "
+            f"{map_profile['authored_grid_y_min']}.."
+            f"{map_profile['authored_grid_y_max']} "
+            f"({map_profile['implicit_zero_row_count']} omitted zero rows)",
+            f"- nonzero cells: {map_profile['nonzero_cell_count']} "
+            f"({map_profile['stage_rectangle_nonzero_cell_count']} inside stage "
+            f"rectangles, "
+            f"{map_profile['outside_stage_rectangle_nonzero_cell_count']} border cells)",
+            f"- terrain ids: {map_profile['terrain_ids_used']}",
+            f"- stage joins: {map_profile['stage_map_count']} definitions over "
+            f"{map_profile['unique_atlas_rectangle_count']} unique rectangles",
+            f"- shared rectangles: {map_profile['shared_rectangle_count']} used by "
+            f"{map_profile['shared_stage_definition_count']} stage definitions",
+        ])
+    elif rule_profile := profile_rules(data):
         lines.extend([
             f"- covered units: {rule_profile['unit_count']}",
             f"- titled rules: {rule_profile['titled_rule_count']}/{data['record_count']}",
@@ -512,13 +564,18 @@ def main() -> int:
         "scalar_field_count": sum(row["kind"] == "scalar-field" for row in rows),
         "string_field_count": sum(row["kind"] == "string-field" for row in rows),
         "array_cell_count": sum(row["kind"] == "array-cell" for row in rows),
-        "footer_array_count": sum(row["kind"] == "footer-array" for row in rows),
+        "footer_array_count": (
+            data.get("footer_array_count", 0)
+            if data.get("schema") == "stage-terrain-atlas"
+            else sum(row["kind"] == "footer-array" for row in rows)
+        ),
         "rule_output_count": sum(row["kind"] == "rule-output" for row in rows),
         "dispatch_field_count": sum(row["kind"] == "dispatch-field" for row in rows),
         "message_profile": messages,
         "rule_profile": profile_rules(data),
         "dispatch_profile": profile_dispatch(data),
         "banked_profile": profile_banked(data),
+        "map_atlas_profile": profile_map_atlas(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

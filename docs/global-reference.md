@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5049 globals (319 curated, 4730 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5049 globals (329 curated, 4720 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -52,6 +52,7 @@
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. RTN_M015 treats the state of Magic Pillar types 2..4 as their controlling faction and targets pillars whose value differs from the acting entity's faction. |
 | `0x20543` | tile_faction_traversal_masks | high | investigation | Row-major tile traversal permissions. Movement checks the acting entity's faction bit before enqueuing a tile in movement-limited MVSEEK searches. RTN_M013 builds either one selected faction bit or all bits except the actor's, requires the current tile not to match that set, and approaches the nearest reachable tile whose mask does. |
+| `0x341ab` | current_stage_terrain_grid | high | investigation | Current stage's mutable terrain grid. FIELD clears all 2,000 rows and copies the selected stage_terrain_atlas rectangle; rendering, minimap, occupancy, battle, and movement scripts read it, while SETLAND/DELLAND alter cells and RESETLAND restores atlas values. |
 | `0x4e021` | entity_runtime_flags | high | investigation | Per-runtime-entity state flags. RTN_M007 requires bit 0 when selecting an injured ally, and MVSEEK mode 2 requires it before masking a foreign entity's occupied terrain cell. |
 | `0x4e085` | entity_current_resources | high | investigation | Per-runtime-entity current resources. DRAWCHP/DRAWENP render columns 0..2 against max-stat columns 11..13, skill/item resource deltas modify the same three columns, and movement search compares path cost with current_fs. Columns: 0=current_hp, 1=current_sp, 2=current_fs. |
 | `0x4e11b` | entity_effective_stats | high | investigation | Per-runtime-entity effective fourteen-stat row after CALCREVISE applies base data, equipment, skills, and conditions. Combat/UI consumers use columns 0..10 directly; columns 11..13 are the maxima paired with entity_current_resources HP/SP/FS. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
@@ -181,6 +182,10 @@
 | `0xcc9f4` | offensive_action_scope_masks | high | investigation | CALCSCOPE clears ten encoded-range cells, sets bit 0 over the equipped/default attack's range, and sets bits 1..4 over each usable offensive skill's range. SETMVWORK uses the range-0 mask and paired attack elements when filtering target cells; RTN_M003/006/016/017/018 require its normal-attack bit. Columns: 0=range_0, 1=range_1, 2=range_2, 3=range_3, 4=range_4, 5=range_5, 6=range_6, 7=range_7, 8=range_8, 9=range_9. |
 | `0xcc9fe` | healing_action_scope_masks | high | investigation | CALCSCOPE clears ten encoded-range cells and sets the equipped-slot bit for each usable category-7 healing skill over its applicable range. RTN_M061 uses the masks to restrict ally targets and to select the range-enabled healing skill. Columns: 0=range_0, 1=range_1, 2=range_2, 3=range_3, 4=range_4, 5=range_5, 6=range_6, 7=range_7, 8=range_8, 9=range_9. |
 | `0xcca08` | offensive_action_attack_elements | high | investigation | CALCSCOPE stores the normal attack element in action column 0 and each usable equipped skill's attack element in columns 1..4 for every applicable range band. SETMVWORK and RTN_M051/052 test these elements against attack_element_effectiveness_percent. |
+| `0xccc93` | stage_terrain_atlas | high | investigation | Immutable sparse half-tile terrain atlas loaded by MPINIT. Each footer copy writes fifty cells at row stride 53. FIELD doubles STINIT2's tile bounds and copies the selected rectangle into current_stage_terrain_grid; DRAWMINIMAP reads the atlas outside the active rectangle for border context, and RESETLAND restores changed cells from it. |
+| `0xe6aa4` | terrain_texture_slot_indices | high | investigation | LAINIT mapping from terrain id to the index in stage_map_texture_asset_overrides. DRAWMAP uses the selected slot to choose the current stage's tiled terrain surface. |
+| `0xe6ac2` | terrain_area_fill_flags | high | investigation | LAINIT terrain topology flag. DRAWMAP and CALCOCC use neighboring values to expand room-like regions across the alternating half-tile grid; DRAWMINIMAP uses the same distinction when joining adjacent revealed cells. |
+| `0xe6ae0` | terrain_layout_classes | high | investigation | LAINIT terrain class. Zero cells are rejected by map rendering, occupancy, and pathfinding; ordinary areas, passages, and hidden spaces take distinct DRAWMAP/CALCOCC/MVSEEK paths. Combined with terrain_area_fill_flags, it distinguishes hidden rooms from hidden passages. |
 | `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
 | `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
@@ -212,6 +217,10 @@
 | `0xe78e3` | stage_enemy_battle_routine_set_ids | high | investigation | Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
 | `0xe793d` | stage_enemy_required_story_flags | high | investigation | Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
+| `0xec4dd` | stage_map_min_tile_x | high | investigation | STINIT2's inclusive left map bound indexed by stage id. FIELD, DRAWMAP, DRAWMINIMAP, CALCOCC, and movement providers use it with stage_map_max_tile_x; terrain-grid accesses multiply the coordinate by two. |
+| `0xec8c5` | stage_map_max_tile_x | high | investigation | STINIT2's inclusive right map bound indexed by stage id. Consumers pair it with stage_map_min_tile_x for iteration, camera/minimap limits, random placement, and the doubled-coordinate terrain-atlas copy. |
+| `0xeccad` | stage_map_min_tile_y | high | investigation | STINIT2's inclusive top map bound indexed by stage id. FIELD and all map readers pair it with stage_map_max_tile_y and multiply it by two when addressing the half-tile terrain grid. |
+| `0xed095` | stage_map_max_tile_y | high | investigation | STINIT2's inclusive bottom map bound indexed by stage id. The maximum shipped value 800 explains MPINIT's final authored doubled grid row at Y 1600. |
 | `0xeff78` | movement_routine_provider_selectors | high | investigation | RTINIT movement bank 0. MVRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through its RTN_M001..018/051..053/061 provider table, and call-scripts the selected movement routine. |
 | `0xf4d98` | movement_routine_activation_percents | high | investigation | RTINIT movement bank 1. After all other step gates pass, MVRTN executes the provider only when random-modulo-100 is below this value. |
 | `0xf9bb8` | movement_routine_parameter_1 | high | investigation | RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M004 uses a stage_object_slot_index; RTN_M005/011/012 use destination_tile_x; RTN_M006/007/015 use maximum_target_route_steps; RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero); RTN_M013 uses target_faction_filter; and RTN_M014 uses maximum_threat_route_steps. The one RTN_M001 and one RTN_M008 authored cells are never read by those providers. |
@@ -254,7 +263,6 @@
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
-| `0x26b5` | — | low | auto-shape | array |
 | `0x26d3` | — | low | auto-shape | array |
 | `0x27bd` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
@@ -324,9 +332,6 @@
 | `0xccbf8` | — | low | auto-shape | array |
 | `0xccc11` | — | low | auto-shape | array |
 | `0xccc2f` | — | low | auto-shape | array |
-| `0xe6aa4` | — | low | auto-shape | array |
-| `0xe6ac2` | — | low | auto-shape | array |
-| `0xe6ae0` | — | low | auto-shape | array |
 | `0xe6c2a` | — | low | auto-shape | array |
 | `0xe6c48` | — | low | auto-shape | array |
 | `0xe7305` | — | low | auto-shape | array |
@@ -338,10 +343,6 @@
 | `0xe8275` | — | low | auto-shape | array |
 | `0xebd0d` | — | low | auto-shape | array |
 | `0xec0f5` | — | low | auto-shape | array |
-| `0xec4dd` | — | low | auto-shape | array |
-| `0xec8c5` | — | low | auto-shape | array |
-| `0xeccad` | — | low | auto-shape | array |
-| `0xed095` | — | low | auto-shape | array |
 | `0xed47d` | — | low | auto-shape | array |
 | `0xed865` | — | low | auto-shape | array |
 | `0xeebed` | — | low | auto-shape | array |
@@ -480,6 +481,7 @@
 | `0x2690` | attack_element_names | high | investigation | AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 11=resistance_1, 12=resistance_2, 13=resistance_3, 14=resistance_4, 15=resistance_5, 16=resistance_6, 17=resistance_7. |
 | `0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
 | `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
+| `0x26b5` | terrain_type_names | high | investigation | LAINIT's terrain vocabulary. MPINIT's atlas cells contain terrain ids 0..19; the named ids distinguish passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room variants. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
 | `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
@@ -3728,7 +3730,6 @@
 | `0x3ebe` | — | med | auto-shape | record-table[stride 10] |
 | `0x6f70` | — | med | auto-shape | record-table[stride 14] |
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
-| `0x341ab` | — | med | auto-shape | record-table[stride 53] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |
 | `0x53edd` | — | low | auto-shape | index/counter? |
@@ -5050,7 +5051,6 @@
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
 | `0xccc0b` | — | low | auto-shape | index/counter? |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |
-| `0xccc93` | — | med | auto-shape | record-table[stride 53] |
 | `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
 | `0xe6c5e` | — | med | auto-shape | obinit-field |
 | `0xe6cc2` | — | med | auto-shape | obinit-field |

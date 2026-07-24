@@ -1359,6 +1359,96 @@ def test_voice_configuration() -> None:
     )
 
 
+def test_map_terrain_atlas() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["MPINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "footer",
+        "MPINIT remains compatible with footer-mode auto-detection",
+    )
+    records, meta = extract_init.extract_map_terrain_atlas(script)
+    by_y = {record["grid_y"]: record for record in records}
+    check(
+        len(records) == 1472
+        and meta["footer_array_count"] == 1472
+        and meta["classified_instruction_count"] == 1473,
+        "MPINIT classifies every terrain-row footer copy and exit instruction",
+    )
+    check(
+        meta["atlas_base"] == "0xccc93"
+        and meta["row_stride"] == 53
+        and meta["first_authored_column"] == 1
+        and meta["authored_column_count"] == 50
+        and meta["tile_to_grid_scale"] == 2,
+        "MPINIT exposes its 53-cell row pitch and doubled tile coordinate system",
+    )
+    check(
+        meta["authored_grid_y_min"] == 2
+        and meta["authored_grid_y_max"] == 1600
+        and meta["implicit_zero_row_count"] == 127
+        and all(record["length"] == 50 for record in records),
+        "MPINIT preserves all authored rows and the omitted all-zero row gaps",
+    )
+    check(
+        by_y[2]["global_addr"] == "0xcccfe"
+        and by_y[1600]["global_addr"] == "0xe17d4"
+        and by_y[1199]["terrain_ids_used"] == [6]
+        and by_y[1199]["nonzero_cell_count"] == 25,
+        "MPINIT row coordinates recover directly from destination addresses",
+    )
+
+    definitions = {row["id"]: row for row in meta["terrain_definitions"]}
+    check(
+        definitions[1]["name"] == "通路"
+        and definitions[1]["layout_class_name"] == "passage"
+        and definitions[2]["name"] == "部屋"
+        and definitions[2]["area_fill_flag"] == 1
+        and definitions[3]["name"] == "隠し通路"
+        and definitions[3]["layout_class_name"] == "hidden"
+        and definitions[15]["name"] == "溶岩流"
+        and definitions[15]["texture_slot_index"] == 9,
+        "MPINIT terrain ids join to LAINIT names and layout/render classes",
+    )
+
+    stage_maps = {stage["id"]: stage for stage in meta["stage_maps"]}
+    stage1 = stage_maps[1]
+    check(
+        meta["stage_map_count"] == 66
+        and meta["unique_atlas_rectangle_count"] == 53
+        and stage1["name"] == "『庭園の地下空洞』"
+        and stage1["tile_bounds"]
+        == {"min_x": 9, "max_x": 17, "min_y": 1, "max_y": 8}
+        and stage1["grid_bounds"]
+        == {"min_x": 18, "max_x": 34, "min_y": 2, "max_y": 16},
+        "STINIT2 bounds join 66 stage definitions to their doubled atlas rectangles",
+    )
+    check(
+        stage1["grid_width"] == 17
+        and stage1["grid_height"] == 15
+        and stage1["terrain_ids_used"] == [1, 2, 4, 12]
+        and stage1["terrain_id_counts"]
+        == {"0": 212, "1": 12, "2": 13, "4": 2, "12": 16},
+        "stage joins expose complete terrain grids and value populations",
+    )
+    check(
+        any(
+            shared["stage_ids"] == [32, 33, 34]
+            for shared in meta["shared_atlas_rectangles"]
+        )
+        and any(
+            shared["stage_ids"] == [101, 104, 106, 107, 108]
+            for shared in meta["shared_atlas_rectangles"]
+        ),
+        "MPINIT preserves intentional atlas sharing across stage variants",
+    )
+    check(
+        meta["nonzero_cell_count"] == 17126
+        and meta["stage_rectangle_nonzero_cell_count"] == 17079
+        and meta["outside_stage_rectangle_nonzero_cell_count"] == 47,
+        "MPINIT accounts for stage terrain and the raw border-context cells",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1573,6 +1663,7 @@ if __name__ == "__main__":
     test_affinity_definitions()
     test_name_entry_palette()
     test_voice_configuration()
+    test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:

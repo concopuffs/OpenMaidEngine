@@ -25,6 +25,10 @@ levels, joined to the runtime condition-state ABI and RECOVER policy.
 CVINIT is a special numeric-mode registry: thirteen voice-configuration preview
 slots, twelve slot-to-unit joins, and the matching unit-to-setting inverse map.
 
+MPINIT is a special footer-mode terrain atlas: each footer copy owns the fifty
+authored cells of one 53-cell half-tile grid row. STINIT2's per-stage tile
+bounds select rectangles after multiplying both coordinates by two.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -643,6 +647,23 @@ RECOVER_CURRENT_LEVELS = 0x52383
 RECOVER_REMAINING_TURNS = 0x5295F
 RECOVER_BASELINE_LEVELS = 0x52F3B
 RECOVER_POLICY = 0xAACB4
+
+MAP_TERRAIN_ATLAS_BASE = 0xCCC93
+MAP_TERRAIN_CURRENT_BASE = 0x341AB
+MAP_GRID_ROW_STRIDE = 53
+MAP_GRID_FIRST_COLUMN = 1
+MAP_GRID_AUTHORED_COLUMNS = 50
+MAP_TILE_TO_GRID_SCALE = 2
+MAP_STAGE_MIN_X = 0xEC4DD
+MAP_STAGE_MAX_X = 0xEC8C5
+MAP_STAGE_MIN_Y = 0xECCAD
+MAP_STAGE_MAX_Y = 0xED095
+
+TERRAIN_NAME_BASE = 0x26B5
+TERRAIN_TEXTURE_SLOT_BASE = 0xE6AA4
+TERRAIN_AREA_FILL_BASE = 0xE6AC2
+TERRAIN_LAYOUT_CLASS_BASE = 0xE6AE0
+TERRAIN_DEFINITION_SPAN = 30
 
 
 def resolve(name: str) -> Path:
@@ -3291,6 +3312,312 @@ def extract_footer(scr):
     return records, {}
 
 
+def _terrain_definitions(max_terrain_id: int) -> list[dict]:
+    """Decode the LAINIT fields consumed by MPINIT's terrain ids."""
+    terrain_scr = sys4load.load(resolve("LAINIT"))
+    names: dict[int, str] = {}
+    arrays = {
+        "texture_slot_index": (TERRAIN_TEXTURE_SLOT_BASE, {}),
+        "area_fill_flag": (TERRAIN_AREA_FILL_BASE, {}),
+        "layout_class": (TERRAIN_LAYOUT_CLASS_BASE, {}),
+    }
+    for ins in terrain_scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            terrain_id = ins.args[0][1] - TERRAIN_NAME_BASE
+            if 0 <= terrain_id < TERRAIN_DEFINITION_SPAN:
+                names[terrain_id] = terrain_scr.strings[ins.args[1][1]][0]
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        destination, value = write
+        for _, (base, cells) in arrays.items():
+            terrain_id = destination - base
+            if 0 <= terrain_id < TERRAIN_DEFINITION_SPAN:
+                cells[terrain_id] = value
+
+    layout_class_names = {
+        0: "blocked_or_boundary",
+        1: "open_area",
+        2: "passage",
+        3: "hidden",
+    }
+    definitions = []
+    for terrain_id in range(max_terrain_id + 1):
+        texture_slot = arrays["texture_slot_index"][1].get(terrain_id, 0)
+        area_fill = arrays["area_fill_flag"][1].get(terrain_id, 0)
+        layout_class = arrays["layout_class"][1].get(terrain_id, 0)
+        definitions.append({
+            "id": terrain_id,
+            "name": names.get(terrain_id),
+            "texture_slot_index": texture_slot,
+            "area_fill_flag": area_fill,
+            "layout_class": layout_class,
+            "layout_class_name": layout_class_names.get(
+                layout_class, "unknown"
+            ),
+        })
+    return definitions
+
+
+def _map_stage_definitions() -> list[dict]:
+    """Read the STINIT2 records that own all four terrain-atlas bounds."""
+    stage_scr = sys4load.load(resolve("STINIT2"))
+    stage_records, _ = extract_name(stage_scr)
+    bounds = (
+        MAP_STAGE_MIN_X,
+        MAP_STAGE_MAX_X,
+        MAP_STAGE_MIN_Y,
+        MAP_STAGE_MAX_Y,
+    )
+    definitions = []
+    for record in stage_records:
+        fields = record.get("fields", {})
+        keys = [f"0x{address:x}" for address in bounds]
+        if not all(key in fields for key in keys):
+            continue
+        min_x, max_x, min_y, max_y = (fields[key] for key in keys)
+        definitions.append({
+            "id": record["id"],
+            "name": record.get("name", ""),
+            "tile_bounds": {
+                "min_x": min_x,
+                "max_x": max_x,
+                "min_y": min_y,
+                "max_y": max_y,
+            },
+            "grid_bounds": {
+                "min_x": min_x * MAP_TILE_TO_GRID_SCALE,
+                "max_x": max_x * MAP_TILE_TO_GRID_SCALE,
+                "min_y": min_y * MAP_TILE_TO_GRID_SCALE,
+                "max_y": max_y * MAP_TILE_TO_GRID_SCALE,
+            },
+        })
+    return definitions
+
+
+def extract_map_terrain_atlas(scr):
+    """Extract MPINIT's sparse 53-column, doubled-coordinate terrain atlas."""
+    rows = []
+    rows_by_y: dict[int, list[int]] = {}
+    classified_offsets = set()
+    for ins in scr.instructions:
+        if (
+            ins.opcode != COPY_LOCAL_ARRAY
+            or len(ins.args) < 2
+            or ins.args[0][0] != T_GLOBAL_INT
+        ):
+            continue
+        destination = ins.args[0][1]
+        footer_off = ins.args[1][1]
+        values = read_footer_array(scr, footer_off)
+        if values is None:
+            raise ValueError(
+                f"{scr.path.name}: invalid terrain row footer 0x{footer_off:x}"
+            )
+        delta = destination - MAP_TERRAIN_ATLAS_BASE
+        grid_y, grid_x = divmod(delta, MAP_GRID_ROW_STRIDE)
+        if grid_x != MAP_GRID_FIRST_COLUMN:
+            raise ValueError(
+                f"{scr.path.name}: terrain row at 0x{destination:x} starts "
+                f"in grid column {grid_x}, expected {MAP_GRID_FIRST_COLUMN}"
+            )
+        if len(values) != MAP_GRID_AUTHORED_COLUMNS:
+            raise ValueError(
+                f"{scr.path.name}: terrain row {grid_y} has {len(values)} "
+                f"cells, expected {MAP_GRID_AUTHORED_COLUMNS}"
+            )
+        if grid_y in rows_by_y:
+            raise ValueError(
+                f"{scr.path.name}: duplicate terrain row {grid_y}"
+            )
+        rows_by_y[grid_y] = values
+        classified_offsets.add(ins.offset)
+        rows.append({
+            "id": grid_y,
+            "grid_y": grid_y,
+            "grid_x": grid_x,
+            "global_addr": f"0x{destination:x}",
+            "footer_off": f"0x{footer_off:x}",
+            "length": len(values),
+            "values": values,
+            "nonzero_cell_count": sum(value != 0 for value in values),
+            "terrain_ids_used": sorted(set(values) - {0}),
+        })
+
+    exit_offsets = {
+        ins.offset
+        for ins in scr.instructions
+        if sys4load.display_label(ins.opcode) == "exit"
+    }
+    classified_offsets.update(exit_offsets)
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+    if not rows:
+        raise ValueError(f"{scr.path.name}: no terrain rows")
+
+    max_terrain_id = max(
+        value for values in rows_by_y.values() for value in values
+    )
+    terrain_definitions = _terrain_definitions(max_terrain_id)
+    terrain_names = {
+        definition["id"]: definition["name"]
+        for definition in terrain_definitions
+    }
+    stage_maps = []
+    rectangle_stage_ids: dict[
+        tuple[int, int, int, int], list[int]
+    ] = collections.defaultdict(list)
+    covered_nonzero_cells = set()
+    for stage in _map_stage_definitions():
+        bounds = stage["grid_bounds"]
+        min_x = bounds["min_x"]
+        max_x = bounds["max_x"]
+        min_y = bounds["min_y"]
+        max_y = bounds["max_y"]
+        rectangle = (min_x, max_x, min_y, max_y)
+        rectangle_stage_ids[rectangle].append(stage["id"])
+        terrain_rows = []
+        value_counts = collections.Counter()
+        for grid_y in range(min_y, max_y + 1):
+            atlas_row = rows_by_y.get(
+                grid_y, [0] * MAP_GRID_AUTHORED_COLUMNS
+            )
+            terrain_ids = atlas_row[min_x - 1:max_x]
+            terrain_rows.append({
+                "grid_y": grid_y,
+                "terrain_ids": terrain_ids,
+            })
+            value_counts.update(terrain_ids)
+            covered_nonzero_cells.update(
+                (grid_x, grid_y)
+                for grid_x, value in enumerate(terrain_ids, min_x)
+                if value != 0
+            )
+        used_ids = sorted(value for value in value_counts if value != 0)
+        stage_maps.append({
+            **stage,
+            "tile_width": (
+                stage["tile_bounds"]["max_x"]
+                - stage["tile_bounds"]["min_x"]
+                + 1
+            ),
+            "tile_height": (
+                stage["tile_bounds"]["max_y"]
+                - stage["tile_bounds"]["min_y"]
+                + 1
+            ),
+            "grid_width": max_x - min_x + 1,
+            "grid_height": max_y - min_y + 1,
+            "terrain_ids_used": used_ids,
+            "terrain_names_used": [
+                terrain_names.get(terrain_id) for terrain_id in used_ids
+            ],
+            "terrain_id_counts": {
+                str(terrain_id): count
+                for terrain_id, count in sorted(value_counts.items())
+            },
+            "terrain_rows": terrain_rows,
+        })
+
+    all_nonzero_cells = {
+        (grid_x, grid_y)
+        for grid_y, values in rows_by_y.items()
+        for grid_x, value in enumerate(values, MAP_GRID_FIRST_COLUMN)
+        if value != 0
+    }
+    missing_rows = sorted(
+        set(range(min(rows_by_y), max(rows_by_y) + 1)) - set(rows_by_y)
+    )
+    shared_rectangles = [
+        {
+            "grid_bounds": {
+                "min_x": rectangle[0],
+                "max_x": rectangle[1],
+                "min_y": rectangle[2],
+                "max_y": rectangle[3],
+            },
+            "stage_ids": stage_ids,
+        }
+        for rectangle, stage_ids in sorted(rectangle_stage_ids.items())
+        if len(stage_ids) > 1
+    ]
+    return rows, {
+        "schema": "stage-terrain-atlas",
+        "atlas_base": f"0x{MAP_TERRAIN_ATLAS_BASE:x}",
+        "current_stage_grid_base": f"0x{MAP_TERRAIN_CURRENT_BASE:x}",
+        "row_stride": MAP_GRID_ROW_STRIDE,
+        "first_authored_column": MAP_GRID_FIRST_COLUMN,
+        "authored_column_count": MAP_GRID_AUTHORED_COLUMNS,
+        "tile_to_grid_scale": MAP_TILE_TO_GRID_SCALE,
+        "authored_grid_y_min": min(rows_by_y),
+        "authored_grid_y_max": max(rows_by_y),
+        "authored_row_count": len(rows),
+        "implicit_zero_rows": missing_rows,
+        "implicit_zero_row_count": len(missing_rows),
+        "authored_cell_count": len(rows) * MAP_GRID_AUTHORED_COLUMNS,
+        "nonzero_cell_count": len(all_nonzero_cells),
+        "stage_rectangle_nonzero_cell_count": len(covered_nonzero_cells),
+        "outside_stage_rectangle_nonzero_cell_count": len(
+            all_nonzero_cells - covered_nonzero_cells
+        ),
+        "terrain_ids_used": sorted({
+            value
+            for values in rows_by_y.values()
+            for value in values
+        }),
+        "terrain_definitions": terrain_definitions,
+        "stage_metadata_source": "STINIT2.BIN",
+        "stage_bounds_arrays": {
+            "min_tile_x": f"0x{MAP_STAGE_MIN_X:x}",
+            "max_tile_x": f"0x{MAP_STAGE_MAX_X:x}",
+            "min_tile_y": f"0x{MAP_STAGE_MIN_Y:x}",
+            "max_tile_y": f"0x{MAP_STAGE_MAX_Y:x}",
+        },
+        "stage_map_count": len(stage_maps),
+        "unique_atlas_rectangle_count": len(rectangle_stage_ids),
+        "shared_atlas_rectangles": shared_rectangles,
+        "stage_maps": stage_maps,
+        "footer_array_count": len(rows),
+        "footer_array_columns": [f"0x{MAP_TERRAIN_ATLAS_BASE:x}"],
+        "array_layouts": {
+            f"0x{MAP_TERRAIN_ATLAS_BASE:x}": {
+                "stride": MAP_GRID_ROW_STRIDE,
+                "first_authored_column": MAP_GRID_FIRST_COLUMN,
+                "authored_columns": MAP_GRID_AUTHORED_COLUMNS,
+            }
+        },
+        "schema_field_semantics": {
+            f"0x{MAP_TERRAIN_ATLAS_BASE:x}": "stage_terrain_atlas",
+        },
+        "consumer_contract": {
+            "FIELD.BIN": (
+                "clear the 2000-by-53 current-stage grid, double the selected "
+                "STINIT2 tile bounds, and copy that atlas rectangle into it"
+            ),
+            "DRAWMINIMAP.BIN": (
+                "read the current-stage grid inside the selected bounds and "
+                "fall back to the immutable atlas outside them for border context"
+            ),
+            "RESETLAND.BIN": (
+                "restore a changed current-stage terrain cell from the atlas"
+            ),
+        },
+        "classified_instruction_count": len(classified_offsets),
+    }
+
+
 def join_messages(records: list[dict], message_scr) -> dict:
     """Join a message-dispatch script to INIT records by runtime id."""
     messages, message_meta = extract_message_table.extract_messages(message_scr)
@@ -3642,6 +3969,11 @@ def write_data_index(data_dir: Path) -> None:
         "clips, twelve slot-to-unit joins, and the matching unit-to-suppression-setting",
         "inverse map used by story, history, field, and battle voice filters.",
         "",
+        "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
+        "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
+        "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
+        "links the used terrain ids to LAINIT's names and rendering/layout classes.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -3727,6 +4059,8 @@ def main() -> int:
         extractor = extract_alchemy_recipes
     elif mode == "numeric" and name == "CVINIT":
         extractor = extract_voice_configuration
+    elif mode == "footer" and name == "MPINIT":
+        extractor = extract_map_terrain_atlas
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]
@@ -3735,7 +4069,10 @@ def main() -> int:
         )
 
     cols = sorted({c for r in recs for c in r.get("fields", {})}, key=lambda h: int(h, 16))
-    semantics = field_semantics(recs, meta.get("array_layouts"))
+    semantics = {
+        **meta.pop("schema_field_semantics", {}),
+        **field_semantics(recs, meta.get("array_layouts")),
+    }
     attach_semantic_fields(recs, semantics)
     if mode == "mixed" and name == "STINIT":
         meta["object_definition_table"] = "OBINIT"

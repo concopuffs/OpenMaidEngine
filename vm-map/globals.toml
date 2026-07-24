@@ -3078,6 +3078,115 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x26b5"
+name = "terrain_type_names"
+category = "string-table"
+type = "string[30]"
+value_domain = "LAINIT terrain labels for ids 1..4 and 7..19; ids 0, 5, and 6 are unnamed"
+usage = "LAINIT's terrain vocabulary. MPINIT's atlas cells contain terrain ids 0..19; the named ids distinguish passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room variants."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe6aa4"
+name = "terrain_texture_slot_indices"
+category = "data-table"
+type = "int[30]"
+value_domain = "stage map texture slot index 0..13"
+usage = "LAINIT mapping from terrain id to the index in stage_map_texture_asset_overrides. DRAWMAP uses the selected slot to choose the current stage's tiled terrain surface."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0xe7311"]
+
+[[global]]
+address = "0xe6ac2"
+name = "terrain_area_fill_flags"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0,1}; 1 marks room/area-style fill, 0 marks passage/boundary-style geometry"
+usage = "LAINIT terrain topology flag. DRAWMAP and CALCOCC use neighboring values to expand room-like regions across the alternating half-tile grid; DRAWMINIMAP uses the same distinction when joining adjacent revealed cells."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5"]
+
+[[global]]
+address = "0xe6ae0"
+name = "terrain_layout_classes"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0=blocked_or_boundary, 1=open_area, 2=passage, 3=hidden}"
+usage = "LAINIT terrain class. Zero cells are rejected by map rendering, occupancy, and pathfinding; ordinary areas, passages, and hidden spaces take distinct DRAWMAP/CALCOCC/MVSEEK paths. Combined with terrain_area_fill_flags, it distinguishes hidden rooms from hidden passages."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0xe6ac2"]
+
+[[global]]
+address = "0xccc93"
+name = "stage_terrain_atlas"
+category = "data-table"
+type = "int[][53]"
+value_domain = "terrain type id 0..19; MPINIT authors columns 1..50 of 1,472 nonzero rows through grid Y 1600"
+usage = "Immutable sparse half-tile terrain atlas loaded by MPINIT. Each footer copy writes fifty cells at row stride 53. FIELD doubles STINIT2's tile bounds and copies the selected rectangle into current_stage_terrain_grid; DRAWMINIMAP reads the atlas outside the active rectangle for border context, and RESETLAND restores changed cells from it."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0xec4dd", "0xec8c5", "0xeccad", "0xed095"]
+
+[[global]]
+address = "0x341ab"
+name = "current_stage_terrain_grid"
+category = "data-table"
+type = "int[2000][53]"
+value_domain = "mutable terrain type id 0..19 on the doubled-coordinate half-tile grid"
+usage = "Current stage's mutable terrain grid. FIELD clears all 2,000 rows and copies the selected stage_terrain_atlas rectangle; rendering, minimap, occupancy, battle, and movement scripts read it, while SETLAND/DELLAND alter cells and RESETLAND restores atlas values."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xccc93"]
+
+[[global]]
+address = "0xec4dd"
+name = "stage_map_min_tile_x"
+category = "data-table"
+type = "int[1000]"
+value_domain = "inclusive tile X minimum, 1..21 in shipped mapped stages"
+usage = "STINIT2's inclusive left map bound indexed by stage id. FIELD, DRAWMAP, DRAWMINIMAP, CALCOCC, and movement providers use it with stage_map_max_tile_x; terrain-grid accesses multiply the coordinate by two."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xccc93"]
+
+[[global]]
+address = "0xec8c5"
+name = "stage_map_max_tile_x"
+category = "data-table"
+type = "int[1000]"
+value_domain = "inclusive tile X maximum, 6..25 in shipped mapped stages"
+usage = "STINIT2's inclusive right map bound indexed by stage id. Consumers pair it with stage_map_min_tile_x for iteration, camera/minimap limits, random placement, and the doubled-coordinate terrain-atlas copy."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xec4dd"]
+
+[[global]]
+address = "0xeccad"
+name = "stage_map_min_tile_y"
+category = "data-table"
+type = "int[1000]"
+value_domain = "inclusive tile Y minimum, 1..776 in shipped mapped stages"
+usage = "STINIT2's inclusive top map bound indexed by stage id. FIELD and all map readers pair it with stage_map_max_tile_y and multiply it by two when addressing the half-tile terrain grid."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xccc93"]
+
+[[global]]
+address = "0xed095"
+name = "stage_map_max_tile_y"
+category = "data-table"
+type = "int[1000]"
+value_domain = "inclusive tile Y maximum, 7..800 in shipped mapped stages"
+usage = "STINIT2's inclusive bottom map bound indexed by stage id. The maximum shipped value 800 explains MPINIT's final authored doubled grid row at Y 1600."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeccad"]
+
+[[global]]
 address = "0xe7311"
 name = "stage_map_texture_asset_overrides"
 category = "data-table"

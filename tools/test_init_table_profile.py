@@ -174,6 +174,41 @@ def main() -> int:
     assert banked_summary["decoded_movement_defaulted_parameter_count"] == 1
     assert banked_summary["ignored_movement_parameter_count"] == 1
 
+    map_fixture = {
+        "table": "MAP",
+        "mode": "footer",
+        "schema": "stage-terrain-atlas",
+        "record_count": 1472,
+        "row_stride": 53,
+        "authored_column_count": 50,
+        "tile_to_grid_scale": 2,
+        "authored_row_count": 1472,
+        "implicit_zero_row_count": 127,
+        "authored_grid_y_min": 2,
+        "authored_grid_y_max": 1600,
+        "nonzero_cell_count": 17126,
+        "stage_rectangle_nonzero_cell_count": 17079,
+        "outside_stage_rectangle_nonzero_cell_count": 47,
+        "terrain_ids_used": [0, 1, 2, 3],
+        "stage_map_count": 66,
+        "unique_atlas_rectangle_count": 53,
+        "shared_atlas_rectangles": [
+            {"stage_ids": [32, 33, 34]},
+            {"stage_ids": [35, 36]},
+        ],
+        "records": [],
+    }
+    map_summary = profile.profile_map_atlas(map_fixture)
+    assert map_summary["row_stride"] == 53
+    assert map_summary["authored_row_count"] == 1472
+    assert map_summary["outside_stage_rectangle_nonzero_cell_count"] == 47
+    assert map_summary["stage_map_count"] == 66
+    assert map_summary["shared_rectangle_count"] == 2
+    assert map_summary["shared_stage_definition_count"] == 5
+    rendered_map = profile.render_markdown(map_fixture, [], 40)
+    assert "- geometry: 50 authored cells inside a 53-cell row pitch" in rendered_map
+    assert "- stage joins: 66 definitions over 53 unique rectangles" in rendered_map
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

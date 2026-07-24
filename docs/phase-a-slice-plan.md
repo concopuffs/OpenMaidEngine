@@ -2950,5 +2950,36 @@ appears, explaining CONFIG's unlock gate.
 Regressions protect complete instruction accounting, all asset and EBINIT joins, the system slot,
 all twelve round trips, speaker-seen addresses, and raw-to-semantic projection.
 
-**Next:** audit MPINIT's 1,472 structurally regular footer-array records by their direct map readers,
-grouping rows into consumer-proven families before naming any shallow address-only fields.
+## Data-semantics sidebar: MPINIT stage-terrain atlas (2026-07-23)
+
+MPINIT's 1,472 footer copies are not independent map records. Every destination is column 1 of one
+row in a single sparse table rooted at `0xccc93`: the row pitch is 53 cells, while each footer owns
+the fifty authored columns 1..50. Destination arithmetic recovers grid Y directly, from the first
+authored row at Y=2 through the last at Y=1600; 127 all-zero rows inside that range are omitted.
+All 1,473 instructions are now classified as terrain-row copies plus `exit`.
+
+FIELD proves the coordinate contract. STINIT2 supplies inclusive tile bounds in four 1,000-cell
+arrays; FIELD multiplies each bound by two, clears a reserved `2000 × 53` current-stage grid at
+`0x341ab`, and copies the selected rectangle from the immutable MPINIT atlas. DRAWMAP, CALCOCC,
+MVSEEK, battle, occupancy, and movement providers consume the mutable grid. DRAWMINIMAP reads the
+mutable grid inside the active rectangle but falls back to the source atlas outside it for border
+context, while RESETLAND restores changed cells from the atlas.
+
+The dedicated schema joins 66 named STINIT2 stage definitions to 53 unique atlas rectangles. Eight
+rectangles are intentionally shared by 21 stage variants, including the chapter-3 three-route map
+and repeated late-game arenas. The joined rectangles contain 17,079 of the atlas's 17,126 nonzero
+cells; the remaining 47 are preserved as border-context provenance rather than mislabeled as dead
+data. Every stage exposes tile/grid bounds, dimensions, terrain rows, and value populations.
+
+LAINIT supplies the terrain vocabulary and the three fields needed to interpret the atlas:
+terrain-to-texture-slot indices, room/area fill flags, and layout classes
+(`0=blocked/boundary`, `1=open area`, `2=passage`, `3=hidden`). MPINIT uses ids 0..19; all named
+ids join to passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room
+variants. The generated registry retains every raw row address/footer offset, the omitted-zero-row
+list, all stage slices, LAINIT joins, and the FIELD/DRAWMINIMAP/RESETLAND consumer contract.
+
+Regressions protect complete instruction accounting, row geometry, doubled coordinates, all 66
+stage joins, shared rectangles, terrain definitions, and the exact nonzero/border-cell totals.
+
+**Next:** finish LAINIT's remaining small terrain-definition surface by its FIELD/MVSEEK/DRAWMAP
+consumers; MPINIT already proves its name, texture-slot, area-fill, and layout-class columns.

@@ -121,6 +121,14 @@ after CNINIT's voice-family normalization. Slot 0 is the non-unit system voice; 
 Lily and eleven other named characters. CONFIG uses persisted per-unit speaker-seen flags to reveal those
 twelve rows, plays the corresponding preview clip, and writes the selected suppression setting.
 
+MPINIT is one sparse stage-terrain atlas rather than 1,472 independent map records. Each footer copy
+writes fifty authored cells starting at column 1 of a 53-cell row; destination arithmetic yields
+doubled-coordinate grid rows Y=2..1600 with 127 omitted all-zero rows. FIELD doubles STINIT2's inclusive
+tile bounds and copies the selected atlas rectangle into a mutable `2000 × 53` current-stage grid.
+The dedicated view joins 66 named stage definitions to 53 unique rectangles, preserves eight shared-map
+groups and 47 nonzero border-context cells, and resolves terrain ids through LAINIT's name, texture-slot,
+area-fill, and layout-class columns.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

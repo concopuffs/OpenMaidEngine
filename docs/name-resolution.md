@@ -669,7 +669,7 @@ are *not* story flags — the miner over-tags them; they are recategorized `unkn
 
 The v1 map labels *shapes and tables*; the next increments add *meaning*, cheapest first:
 
-1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, RTINIT, MAINIT, ILINIT, CGINIT, ALINIT, AFINIT, CTINIT, and CVINIT now have
+1. **Continue INIT semantics by evidence density.** ITINIT/SKINIT, EBINIT, STINIT, CCINIT, SCINIT, RTINIT, MAINIT, ILINIT, CGINIT, ALINIT, AFINIT, CTINIT, CVINIT, and MPINIT now have
    machine-readable investigation surfaces and semantic joins; EBINIT's populated schema is fully named,
    STINIT's joined object/enemy payloads are decoded, and CCINIT's 71 class-change rules expose predicates
    and effects. SCINIT closes the progression decision-to-scene join, and RTINIT's twenty movement/battle
@@ -678,8 +678,11 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    closes the gallery registry, ALINIT closes the 107-recipe alchemy registry with complete ITINIT
    joins, AFINIT closes the signed affinity/tuning/facility tables, CTINIT closes INPUTNAME's
    five-page character palette, and CVINIT closes CONFIG's thirteen preview clips plus the
-   bidirectional character-to-suppression-setting join. With RTINIT's used-provider surface closed and
-   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, audit MPINIT next;
+   bidirectional character-to-suppression-setting join. MPINIT closes the sparse 53-column
+   doubled-coordinate terrain atlas and joins 66 STINIT2 stage definitions to 53 unique rectangles,
+   with LAINIT terrain names/classes attached. With RTINIT's used-provider surface closed and
+   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, finish LAINIT's remaining
+   small terrain-definition columns next;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
 2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context, preserving reserved rows and sparse cells. RECOVER's
