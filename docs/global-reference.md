@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-4278 globals (435 curated, 3843 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+4278 globals (445 curated, 3833 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -51,6 +51,14 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x5` | save_slot_portrait_entity_indices | high | investigation | SAVE and SELSTAGE snapshot current_entity_index through op 0x1a2. SAVE.BIN restores the slot cell with op 0x1a3 and uses its form range when choosing the portrait atlas region. |
+| `0xd7` | save_slot_protagonist_levels | high | investigation | SAVE and SELSTAGE copy unit_current_levels[current_entity_index] into this shared SAVE.DAT-selected bank. SAVE.BIN restores and renders it as the row's LV value. |
+| `0x1a9` | save_slot_training_action_counts | high | investigation | SAVE and SELSTAGE snapshot training_action_total_execution_count into this shared SAVE.DAT-selected per-slot bank; copy/move/delete operations keep it aligned with the rest of the preview record. |
+| `0x27b` | save_slot_growth_values | high | investigation | SAVE and SELSTAGE snapshot familiar_training_progress through op 0x1a2. SAVE.BIN restores and renders it as the row's growth value. |
+| `0x34d` | save_slot_personality_values | high | investigation | SAVE and SELSTAGE snapshot familiar_alignment through op 0x1a2. SAVE.BIN restores and renders the signed value in the row's personality field. |
+| `0x41f` | save_slot_difficulty_indices | high | investigation | SAVE snapshots difficulty_index through op 0x1a2. SAVE.BIN restores the per-slot value and selects the corresponding 34x17 row badge from SO010. |
+| `0x4f1` | save_slot_cleared_ending_masks | high | investigation | SAVE snapshots the current cleared-ending inheritance mask through op 0x1a2. SAVE.BIN restores it from shared SAVE.DAT, scans bits 0..14, and draws one 17x17 badge for every achieved ending on that slot and subsequent inherited-loop saves. |
+| `0x5c3` | save_slot_append_install_masks | high | investigation | SAVE snapshots the current installed-append mask through op 0x1a2. SAVE.BIN compares each saved bit against the current mask and marks previews whose required append data is missing. |
 | `0x6d3` | story_event_flags | high | investigation | Shared one-based story/event flag bank. Progression, recruitment, item, and stage logic read or write individual cells; STINIT object prerequisite ids are decremented by one before SETOBJ tests this array. |
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x3239` | adv_layer_surface_slots | high | investigation | Shared ADV graphics-layer surface-slot registry. Scene setup initializes the three banks. The CG loader uses the primary slot for a fresh retained object, alternates between columns zero and one when replacing an already-bound layer, and uses column two for the transition/crossfade surface and cleanup. The corpus has 2,657 table-base accesses across 309 scripts. Columns: 0=primary_surface_slot, 1=alternate_surface_slot, 2=transition_surface_slot. |
@@ -346,15 +354,7 @@
 | `0x15a1e0` | character_profile_portrait_x_offsets | high | investigation | INFOCH adds the selected cell to the centered portrait x coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
 | `0x15a244` | character_profile_portrait_y_offsets | high | investigation | INFOCH adds the selected cell to the bottom-aligned portrait y coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
 | `0x15a2a9` | glossary_topic_unlock_seen_decision_ids | high | investigation | VIINIT's three unlock prerequisites per glossary topic. INFOVO subtracts one from each positive value and exposes the topic when any referenced scene_decision_seen_flags cell is set; debug modes expose the same populated topics unconditionally. Columns: 0=unlock_seen_decision_1, 1=unlock_seen_decision_2, 2=unlock_seen_decision_3. |
-| `0x5` | — | low | auto-shape | array |
-| `0xd2` | — | low | auto-shape | array |
-| `0xd7` | — | low | auto-shape | array |
-| `0x1a4` | — | low | auto-shape | array |
-| `0x1a9` | — | low | auto-shape | array |
 | `0x2e2` | — | low | auto-shape | array |
-| `0x41f` | — | low | auto-shape | array |
-| `0x4f1` | — | low | auto-shape | array |
-| `0x5c3` | — | low | auto-shape | array |
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
@@ -504,6 +504,8 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0xd2` | save_slot_location_names | high | investigation | SAVE and SELSTAGE snapshot the current location label into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa for the row's location field. |
+| `0x1a4` | save_slot_protagonist_names | high | investigation | SAVE and SELSTAGE snapshot the active familiar's display name into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa beside the portrait. |
 | `0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
 | `0x315` | unit_story_display_names | high | investigation | CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTORY draw the selected speaker's value, DEBUGADV uses it for its scripted speaker previews, and INPUTNAME rejects a player-entered familiar name that collides with any populated row. The table intentionally leaves Lily's form ids 2..4 empty. |
 | `0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
@@ -533,7 +535,6 @@
 | `0x278` | — | med | auto-shape | string-table (written by FIELD) |
 | `0x279` | — | med | auto-shape | string-table (written by INPUTNAME) |
 | `0x27a` | — | med | auto-shape | string-table (written by READY) |
-| `0x27b` | — | med | auto-shape | string-table (written by READY) |
 | `0x27c` | — | med | auto-shape | string-table (written by READY) |
 | `0x27d` | — | med | auto-shape | string-table (written by READY) |
 | `0x316` | — | med | auto-shape | string-table (written by CNINIT) |
@@ -589,7 +590,6 @@
 | `0x349` | — | med | auto-shape | string-table (written by CNINIT) |
 | `0x34b` | — | med | auto-shape | string-table (written by CNINIT) |
 | `0x34c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x34d` | — | med | auto-shape | string-table (written by CNINIT) |
 | `0x34e` | — | med | auto-shape | string-table (written by CNINIT) |
 | `0x34f` | — | med | auto-shape | string-table (written by CNINIT) |
 | `0x350` | — | med | auto-shape | string-table (written by CNINIT) |

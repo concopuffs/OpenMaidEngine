@@ -101,12 +101,26 @@ public class SaveUiIntegrationTests
             }
             store.SaveNumberedThumbnail(
                 0, NumberedThumbnailCodec.Encode(new(112, 84, pixels)));
+            var authoredProfile = new SharedProfile();
+            authoredProfile.StoreString(0x000, "序章 封印、そして");
+            authoredProfile.StoreString(0x0d2, "base part-time job");
+            authoredProfile.StoreString(0x1a4, "Lily");
+            authoredProfile.StoreInteger(0x0d7, 80);
+            authoredProfile.StoreInteger(0x27b, 98);
+            authoredProfile.StoreInteger(0x34d, 69);
+            authoredProfile.StoreInteger(0x41f, 0);
+            authoredProfile.StoreInteger(0x4f1, 0b1011);
+            authoredProfile.Save(
+                store, new NativeSystemTime(2026, 7, 5, 24, 13, 42, 17, 321), 7_445);
+            var loadedProfile = new SharedProfile();
+            Assert.True(loadedProfile.Load(store));
 
             var scripts = Sys4ScriptProvider.Load(Table);
             var host = new StopAtFirstMenuPollHost();
             var vm = new VirtualMachine(
                 scripts.RequireByName("SAVE.BIN"), Table, host,
                 new VmOptions(MaxSteps: 500_000), scripts,
+                sharedProfile: loadedProfile,
                 nativeDatStore: store);
 
             Assert.Throws<MenuReadyException>(() => vm.Run());
@@ -118,6 +132,15 @@ public class SaveUiIntegrationTests
             Assert.Contains(host.SurfaceStrings, item => item.Text == "07");
             Assert.Contains(host.SurfaceStrings, item => item.Text == "24");
             Assert.Contains(host.SurfaceStrings, item => item.Text == "13");
+            Assert.Contains(host.SurfaceStrings, item => item.Text == "序章 封印、そして");
+            Assert.Contains(host.SurfaceStrings, item => item.Text == "base part-time job");
+            Assert.Contains(host.SurfaceStrings, item => item.Text == "Lily");
+            var objects = vm.Gfx.SnapshotVisibleObjects().ToDictionary(item => item.Handle);
+            Assert.Equal((0, 96), (objects[0x13137].SrcX, objects[0x13138].SrcX));   // level 80
+            Assert.Equal((96, 108), (objects[0x13146].SrcX, objects[0x13147].SrcX)); // growth 98
+            Assert.Equal((108, 72), (objects[0x13155].SrcX, objects[0x13156].SrcX)); // personality 69
+            Assert.Equal(3, host.TextureDraws.Count(
+                item => item.Slot == 193 && item.Width == 17 && item.Height == 17));
         }
         finally
         {
@@ -191,11 +214,15 @@ public class SaveUiIntegrationTests
             [(0x2, Array.Empty<Operand>())], []), 0x00fefefd);
         var provider = new SaveUiProvider(nativeScripts, null, loadCallback);
         var host = new ClickFirstSlotHost();
+        var store = new DirectoryNativeDatStore(root, Identity);
+        var sharedProfile = new SharedProfile();
+        Assert.True(sharedProfile.Load(store));
         var vm = new VirtualMachine(
             nativeScripts.RequireByName("SAVE.BIN"), Table, host,
             new VmOptions(MaxSteps: 1_000_000), provider,
             new StopAtInstalledResumeSink(),
-            nativeDatStore: new DirectoryNativeDatStore(root, Identity));
+            sharedProfile: sharedProfile,
+            nativeDatStore: store);
         host.Vm = vm;
         vm.Globals[0x6241b] = 1;
         vm.Globals[0x696] = 0;

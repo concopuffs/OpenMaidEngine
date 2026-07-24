@@ -257,8 +257,11 @@ public partial class Main : Godot.Control
             new NativeSaveIdentity(
                 NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
                 SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
+        var sharedProfile = new SharedProfile();
+        if (!_selftest) sharedProfile.Load(nativeSaveStore);
         _vm = new VirtualMachine(script, table, _host,
             new VmOptions(MaxSteps: 20_000_000, IgnoreExitRequests: nativeDebugMenu), provider, sink,
+            sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore);
         if (scripts != null)
         {

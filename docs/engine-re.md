@@ -1708,6 +1708,17 @@ entry 1 equal to 81, 83 extended values, and the nine-DWORD reserved tail. The p
 file exactly; catalog/extended/tail sections remain opaque and are preserved losslessly rather than
 reinterpreted as mod state.
 
+`SAVE.BIN` also proves why a numbered `.DAT`/`.STH` pair alone cannot reproduce a complete menu row.
+The numbered fixed header supplies only timestamp and accumulated playtime, and `.STH` supplies the
+112x84 screenshot. The remaining preview record is maintained through selected-cell ops in shared
+`SAVE.DAT`: three parallel 210-cell string banks hold chapter/title (`GStr[0x0+]`), location
+(`GStr[0xd2+]`), and protagonist name (`GStr[0x1a4+]`); eight 210-cell integer banks beginning at
+`GInt[0x5]`, `0xd7`, `0x1a9`, `0x27b`, `0x34d`, `0x41f`, `0x4f1`, and `0x5c3` hold portrait entity,
+level, training count, growth, personality, difficulty/mode badge, cleared-ending mask, and installed
+append mask respectively. Save and stage-select paths snapshot these cells with `0x1a2`/`0x1a9`;
+the menu restores them with `0x1a3`/`0x1aa`. For the NG+ history display, `SAVE.BIN` scans bits 0..14
+of the restored `GInt[0x4f1 + slot]` mask and draws one 17x17 ending badge for every set bit.
+
 #### Common `.DAT` container
 
 Both shared and numbered `.DAT` payloads use the same native container. The fixed header is exactly

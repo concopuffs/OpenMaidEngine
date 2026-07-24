@@ -3510,15 +3510,24 @@ executes `0x1a1`, runs `CALLBACK_LOAD.BIN`, and reaches the saved script's activ
 A second, read-only compatibility gate points the same real-script path at the installed Himegari
 `SAVE00.DAT`. It decodes the complete native layout, resolves the installed save's first persisted script
 through the mounted SYS4 catalogs, and enters that frame with `FrameCause.SaveRestore`; the test stops at
-that boundary before gameplay continues and never writes to the original AppData tree. No codec, VM, or
-script-control correction was required by these gates.
+that boundary before gameplay continues and never writes to the original AppData tree.
 
-The Godot profile remains intentionally isolated at `user://SAVE`. For visual acceptance, a copied
-`SAVE00.DAT`/`.STH` pair can be placed there without exposing the original save directory to writes.
-JSON inspection/export, namespaced mod state, migrations, and richer import UX remain extended-mode work.
+The first visual acceptance run exposed an incomplete-fixture/lifecycle issue rather than a numbered
+codec error. A numbered pair carries the fixed timestamp/playtime header and screenshot, but `SAVE.BIN`
+loads its chapter, location, protagonist name, level, growth, personality, difficulty badge, 15-bit
+cleared-ending/NG+ mask, and append-install mask from slot-indexed selected cells in shared `SAVE.DAT`.
+Godot had injected the store without loading `SharedProfile`, so those `0x1a3`/`0x1aa` reads correctly
+returned zero/empty. Startup now loads shared `SAVE.DAT` and `RT.DAT` before constructing the gameplay VM
+(self-test remains isolated), and the real-script regression covers the three preview strings, numeric
+glyph values, and one 17x17 badge per set ending bit.
 
-Validation: all 386 engine tests pass, opcode lint reports zero errors/warnings, the Godot C# build has
-zero warnings, and the threaded headless run reports `SELFTEST OK`.
+The Godot profile remains intentionally isolated at `user://SAVE`. Visual compatibility therefore uses
+copied `SAVE00.DAT`/`.STH`, `SAVE.DAT`, and `RT.DAT` files without exposing the original save directory
+to writes. JSON inspection/export, namespaced mod state, migrations, and richer import UX remain
+extended-mode work.
+
+Validation: all 386 engine tests pass, global/opcode lint reports zero errors/warnings, the Godot C#
+build has zero warnings, and the threaded headless run reports `SELFTEST OK`.
 
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 

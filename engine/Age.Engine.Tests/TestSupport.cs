@@ -27,6 +27,8 @@ internal class RecordingHost : IHost
     public readonly List<SurfaceRectFill> SurfaceFills = new();
     public readonly List<SurfaceRectCopy> SurfaceCopies = new();
     public readonly List<(long First, long Count)> PresentedRanges = new();
+    public readonly List<(int Slot, int SourceX, int SourceY, int Width, int Height, int X, int Y)>
+        TextureDraws = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
     public readonly List<bool> WaitIndicatorEnabledChanges = new();
     public readonly List<int> PublishedAdvTextLayouts = new();
@@ -144,7 +146,8 @@ internal class RecordingHost : IHost
     public void SetTexture(long resId, int slot) => Textures.Add((resId, slot));
     public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);
     public void ReleaseSurfaceRange(int firstSlot, int count) => ReleasedSurfaceRanges.Add((firstSlot, count));
-    public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy) { }
+    public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
+        => TextureDraws.Add((slot, sx, sy, w, h, dx, dy));
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     public void PlayBgm(long id) { }
     public void PlayVoice(long id) => Voices.Add(id);

@@ -7,6 +7,116 @@
 note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
 
 [[global]]
+address = "0x0"
+name = "save_slot_chapter_titles"
+category = "string-table"
+type = "string[210]"
+value_domain = "per-slot chapter/title preview text; empty means no authored preview"
+usage = "SAVE and SELSTAGE snapshot the current chapter/title into this shared SAVE.DAT-selected string bank. SAVE.BIN restores the indexed cell with op 0x1aa and draws it at the top of each populated row; it is not stored in the numbered DAT header."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xd2"
+name = "save_slot_location_names"
+category = "string-table"
+type = "string[210]"
+value_domain = "per-slot player-facing location/stage name"
+usage = "SAVE and SELSTAGE snapshot the current location label into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa for the row's location field."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1a4"
+name = "save_slot_protagonist_names"
+category = "string-table"
+type = "string[210]"
+value_domain = "per-slot protagonist/familiar display name"
+usage = "SAVE and SELSTAGE snapshot the active familiar's display name into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa beside the portrait."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x5"
+name = "save_slot_portrait_entity_indices"
+category = "data-table"
+type = "int[210]"
+value_domain = "runtime entity/form index used to select the save-row portrait"
+usage = "SAVE and SELSTAGE snapshot current_entity_index through op 0x1a2. SAVE.BIN restores the slot cell with op 0x1a3 and uses its form range when choosing the portrait atlas region."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xd7"
+name = "save_slot_protagonist_levels"
+category = "data-table"
+type = "int[210]"
+value_domain = "nonnegative unit level"
+usage = "SAVE and SELSTAGE copy unit_current_levels[current_entity_index] into this shared SAVE.DAT-selected bank. SAVE.BIN restores and renders it as the row's LV value."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1a9"
+name = "save_slot_training_action_counts"
+category = "data-table"
+type = "int[210]"
+value_domain = "nonnegative accumulated training-action count"
+usage = "SAVE and SELSTAGE snapshot training_action_total_execution_count into this shared SAVE.DAT-selected per-slot bank; copy/move/delete operations keep it aligned with the rest of the preview record."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27b"
+name = "save_slot_growth_values"
+category = "data-table"
+type = "int[210]"
+value_domain = "familiar training progress"
+usage = "SAVE and SELSTAGE snapshot familiar_training_progress through op 0x1a2. SAVE.BIN restores and renders it as the row's growth value."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x34d"
+name = "save_slot_personality_values"
+category = "data-table"
+type = "int[210]"
+value_domain = "signed familiar alignment/personality value"
+usage = "SAVE and SELSTAGE snapshot familiar_alignment through op 0x1a2. SAVE.BIN restores and renders the signed value in the row's personality field."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x41f"
+name = "save_slot_difficulty_indices"
+category = "data-table"
+type = "int[210]"
+value_domain = "difficulty/mode badge index"
+usage = "SAVE snapshots difficulty_index through op 0x1a2. SAVE.BIN restores the per-slot value and selects the corresponding 34x17 row badge from SO010."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x4f1"
+name = "save_slot_cleared_ending_masks"
+category = "data-table"
+type = "int[210]"
+value_domain = "15-bit ending/NG+ inheritance mask; bit i draws ending badge i"
+usage = "SAVE snapshots the current cleared-ending inheritance mask through op 0x1a2. SAVE.BIN restores it from shared SAVE.DAT, scans bits 0..14, and draws one 17x17 badge for every achieved ending on that slot and subsequent inherited-loop saves."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x5c3"
+name = "save_slot_append_install_masks"
+category = "data-table"
+type = "int[210]"
+value_domain = "32-bit installed append-selector mask at save time"
+usage = "SAVE snapshots the current installed-append mask through op 0x1a2. SAVE.BIN compares each saved bit against the current mask and marks previews whose required append data is missing."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x8c877"
 name = "current_item_id"
 category = "index-pointer"
