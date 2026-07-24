@@ -3355,6 +3355,32 @@ No runtime persistence code changed in this reconnaissance slice. The canonical 
 references now describe the native ABI; the corresponding `/v2` handlers and codec helpers are named,
 commented, and saved.
 
+### Persistence implementation step 1 — native DAT codec and store boundary (2026-07-24)
+
+The reusable compatibility floor is now implemented without prematurely inventing either shared-profile or
+numbered-state payload objects. `NativeSaveContainerCodec` owns the exact `0x124` header and `0x14` codec
+frame, Shift-JIS game identity, SYSTEMTIME/playtime/version fields, inner and outer CRC pairs, rolling
+seed/odd-multiplier DWORD expansion, its exact-division inverse, and the SaveVersion2>=2 wrapper. The new
+`LzssEncoder` shares the existing native 4096-byte-ring dialect and uses the native equal-length verbatim
+fallback when compression is not beneficial.
+
+`INativeDatStore` is the payload-agnostic runtime seam. Its directory implementation performs shared
+`$$SAVE.DAT` → `SAVE.DAT` replacement with `SAVE.BAK` fallback and direct `SAVE##.DAT` reads/writes, while
+validating generation, compatibility id, game id, and the native layout-version exception. It does not
+serialize the VM's whole global bank, change `GameSession.ToJson`, wire persistence opcodes, or claim
+`RT.DAT`/`.STH` support.
+
+Seven focused tests cover independent standard CRC vectors, compressed and verbatim LZSS round trips,
+S3SD/S4SD header/frame offsets, deterministic transform products, both codec-version branches, corruption
+rejection after outer-CRC repair, layout-2 version compatibility, shared backup recovery, and direct numbered
+files. The full engine suite passes 359 tests. The opcode table count regression now distinguishes 248
+Himegari-observed opcodes from the mapped-but-unused shared ABI opcode `0x19f`.
+
+**Next persistence step:** implement the typed shared `SAVE.DAT` logical payload and profile-owned selected
+integer/string cell maps, then connect `0x1a2`/`0x1a3` and `0x1a9`/`0x1aa`. Add native `RT.DAT` and its
+read-message lifecycle after that shared ownership is live; numbered active-frame layouts remain the later,
+larger payload.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

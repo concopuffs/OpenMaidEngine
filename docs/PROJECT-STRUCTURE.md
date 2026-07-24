@@ -101,8 +101,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
-    │   └── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
+    │   ├── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
     │                                       script provider, AGF/LZSS and Windows CUR decoders, and resource facade
+    │   └── Age.Engine/Persistence/          native S3SD/S4SD container codec and profile/numbered DAT lifecycle seam
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows dependency manifest,
     │                                       and bootstrap/build scripts (outputs stay under disposable build/)

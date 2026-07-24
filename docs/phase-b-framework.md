@@ -361,7 +361,8 @@ In scope:
 Deferred to bounded follow-ups unless the happy path requires them:
 
 - Full configuration UI and every setting.
-- Load/save implementation and save-format reversal.
+- Full load/save opcode and logical-payload implementation. Native format reversal and the common DAT
+  codec/store foundation landed on 2026-07-24.
 - Extras, galleries, replay modes, and unrelated submenus.
 - Menu visual polish that does not obstruct correct selection or state production.
 

@@ -1722,6 +1722,16 @@ inventing a second save container.
 a profile/save service so extended mode can later add JSON inspection/export, namespaced mod state, migrations,
 or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
 
+**Port correspondence (2026-07-24, codec foundation implemented):**
+`Age.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
+SYSTEMTIME/playtime/version metadata, both CRC layers, version-2 compression wrapper, and exact reversible
+DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect already consumed by
+`LzssDecoder`, falling back to native verbatim storage when compression does not shrink. The
+`INativeDatStore` boundary and `DirectoryNativeDatStore` own shared `$$SAVE.DAT` → `SAVE.DAT` /
+`SAVE.BAK` replacement/fallback and direct numbered `SAVE##.DAT` writes. Payload schemas, `RT.DAT`,
+thumbnails, and opcode wiring remain deliberately above or after this layer; the existing `GameSession`
+JSON snapshot is unchanged.
+
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
 Opcode `0xae` is the load-side rendezvous paired with serialized script-frame state. Its handler,

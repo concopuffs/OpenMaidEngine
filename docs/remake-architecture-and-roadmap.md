@@ -466,7 +466,8 @@ domains and lifecycle—shared `SAVE.DAT`/`SAVE.BAK`, `RT.DAT`/`RT.BAK`, numbere
 paired BMP `.STH` thumbnails. Keep the codec behind a profile/save-service boundary. Human-readable
 JSON inspection/export, migrations, and namespaced mod state are additive extended-mode work, not a
 replacement for compatibility-mode import/export. The recovered native contract lives in
-`docs/engine-re.md`.
+`docs/engine-re.md`. The common container codec and payload-agnostic shared/numbered DAT store boundary
+landed on 2026-07-24; logical payload services and opcode wiring remain Phase B work.
 
 ### Phase C — Externalize & modding foundation
 - Add **editable named data overlays** mapped explicitly onto the VM's `*INIT`-produced state; external
