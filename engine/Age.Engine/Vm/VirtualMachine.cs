@@ -1,6 +1,7 @@
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 using System.Text;
 namespace Age.Engine.Vm;
 
@@ -25,6 +26,7 @@ public sealed class VirtualMachine
     private readonly VmOptions _o;
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
+    private readonly SharedProfile _sharedProfile;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
     private int _depth;
@@ -94,12 +96,13 @@ public sealed class VirtualMachine
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
-                          AdvTextHistory? textHistory = null)
+                          AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
+        _sharedProfile = sharedProfile ?? new SharedProfile();
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -429,6 +432,21 @@ public sealed class VirtualMachine
         _ => VmAddress.Global((int)op.Value),
     };
 
+    private bool TryResolveSharedProfileCell(Operand operand, bool isString, out int address)
+    {
+        bool acceptedType = isString
+            ? operand.Type is T_GSTR or T_GSTRPTR or T_LSTRPTR
+            : operand.Type is T_GINT or T_GPTR or T_LPTR;
+        VmAddress resolved = acceptedType ? BaseAddr(operand) : default;
+        if (!acceptedType || resolved.Space != VmAddressSpace.Global || resolved.Address < 0)
+        {
+            address = 0;
+            return false;
+        }
+        address = resolved.Address;
+        return true;
+    }
+
     private bool TryStoreAddress(Operand destination, VmAddress address)
     {
         switch (destination.Type)
@@ -756,6 +774,46 @@ public sealed class VirtualMachine
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
                 return pc + 1;
+            case "store-shared-profile-int": // 0x1a2
+            {
+                if (!TryResolveSharedProfileCell(a[0], isString: false, out int address))
+                {
+                    HaltReason ??= $"shared-profile-int-lvalue-type:{a[0].Type}";
+                    return HALT;
+                }
+                _sharedProfile.StoreInteger(address, Read(a[0]));
+                return pc + 1;
+            }
+            case "load-shared-profile-int": // 0x1a3
+            {
+                if (!TryResolveSharedProfileCell(a[0], isString: false, out int address))
+                {
+                    HaltReason ??= $"shared-profile-int-lvalue-type:{a[0].Type}";
+                    return HALT;
+                }
+                Write(a[0], _sharedProfile.LoadInteger(address));
+                return pc + 1;
+            }
+            case "store-shared-profile-string": // 0x1a9
+            {
+                if (!TryResolveSharedProfileCell(a[0], isString: true, out int address))
+                {
+                    HaltReason ??= $"shared-profile-string-lvalue-type:{a[0].Type}";
+                    return HALT;
+                }
+                _sharedProfile.StoreString(address, ReadStr(a[0]));
+                return pc + 1;
+            }
+            case "load-shared-profile-string": // 0x1aa
+            {
+                if (!TryResolveSharedProfileCell(a[0], isString: true, out int address))
+                {
+                    HaltReason ??= $"shared-profile-string-lvalue-type:{a[0].Type}";
+                    return HALT;
+                }
+                WriteStr(a[0], _sharedProfile.LoadString(address));
+                return pc + 1;
+            }
             case "strlen": // 0x2c5: raw strlen(native encoded bytes)
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])));
                 return pc + 1;

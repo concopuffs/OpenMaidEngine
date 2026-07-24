@@ -496,32 +496,32 @@ Status 0 means valid metadata was written, 1 means the file could not be opened,
 The caller pre-seeds status to zero. A missing/open failure writes 1; success starts the asynchronous native stack-restoration rendezvous and does not overwrite that zero. This is the ordinary load-game path, unlike data-only opcode 0x19f.
 
 ### 0x1a2 `store-shared-profile-int` (store-shared-profile-int, argc 1)
-- **summary:** 0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. The key is `3%08x`, where the address is resolved through global/local pointer operands; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry.
+- **summary:** 0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. Its native key is raw type byte `0x03` followed by eight lowercase ASCII hex digits for the lvalue's resolved global-bank index; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a2_store_shared_profile_int@0x42d360 reads operand 1 with vm_operand_fetch, resolves its cell index with vm_operand_lvalue (accepted types 3/6/0xc), formats `3%08x`, and calls hash_table_insert_or_assign with ECX=ctx+0x5190. shared_profile_payload_write@0x430a20 serializes each 12-byte key plus 32-bit value to SAVE.DAT. Corpus: 17,585 calls in 315 scripts; 17,539 use local-ptr after lookup-array and 46 use global-int.
 
-Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-20): deliberately unimplemented pending the unified shared-profile storage boundary; the former inert GfxState HashSet approximation was removed so coverage reports the gap.
+Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-24): implemented through profile-owned SharedProfile state shared across fresh scene VMs and the native shared-payload/store lifecycle; direct globals and resolved global local-pointers are covered.
 
 ### 0x1a3 `load-shared-profile-int` (load-shared-profile-int, argc 1)
-- **summary:** 0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same `3%08x` cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent.
+- **summary:** 0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same raw `0x03` plus eight-hex-digit cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves operand 1 with vm_operand_lvalue, calls shared_profile_int_lookup@0x4199d0 with the shared-profile object at ctx+0x4d7c, then vm_operand_write stores the result. The wrapper searches the table at object+0x414 = ctx+0x5190 and returns zero on a miss. Current override-aware corpus: 77 calls in 12 scripts.
 
-This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-20): deliberately unimplemented with 0x1a2 pending the unified shared-profile storage boundary.
+This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-24): implemented with 0x1a2 through the shared profile service and native payload codec.
 
 ### 0x1a9 `store-shared-profile-string` (store-shared-profile-string, argc 1)
-- **summary:** (cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under key `5%08x`, replacing any earlier value.
+- **summary:** (cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under a raw `0x05` type byte plus eight lowercase ASCII hex digits for the resolved global-bank index, replacing any earlier value.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a9_store_shared_profile_string@0x42d3e0 fetches operand 1's string, resolves the lvalue cell index, and calls shared_profile_store_string_by_typed_key@0x42d2b0 with type prefix 5. Corpus: 17 calls in GAMECLEAR, INPUTNAME, SAVE, and SELSTAGE.
 
-This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle.
+This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle. Port status (2026-07-24): implemented for direct global strings and resolved global string-pointers.
 
 ### 0x1aa `load-shared-profile-string` (load-shared-profile-string, argc 1)
-- **summary:** (cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using key `5%08x`; a missing key yields the native empty-string default.
+- **summary:** (cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using the raw `0x05` plus eight-hex-digit key; a missing key yields the native empty-string default.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1aa_load_shared_profile_string@0x42bd90 resolves operand 1's lvalue index, calls shared_profile_load_string_by_typed_key@0x419ca0 with type prefix 5, and writes the result back through the VM string lvalue. Corpus: seven calls in GAMESTART, INIT2, INPUTNAME, and SAVE.
 
-This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3.
+This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3. Port status (2026-07-24): implemented through the shared profile service and native payload codec.
 
 ### 0x1ab `delete-numbered-save` (delete-numbered-save, argc 2)
 - **summary:** (status_out)(slot) - attempt to delete both `SAVE%02d.DAT` and its `SAVE%02d.STH` thumbnail.

@@ -26,6 +26,11 @@ The Himegari trailer contains `SCREENX=800` and `SCREENY=600`; Kamidori's indepe
 initialization and the executable's `640x480` fallback are documented in `engine-re.md`;
 fullscreen/display-mode settings are a separate concern from these logical dimensions.
 
+The same Himegari trailer also contains `USEAPPDATAFOLDER=1` and
+`SAVEPATH=Eushully\姫狩りダンジョンマイスター\SAVE`. AGE's native save-root resolver consumes those
+settings to select `%LOCALAPPDATA%` plus that relative path on modern Windows. Filename patterns remain
+native policy rather than trailer or script strings; see `engine-re.md` under "Save-root resolution."
+
 ## Header — CONFIRMED
 
 Fixed 60-byte (0x3C) header: 8-byte magic + thirteen little-endian u32 fields.

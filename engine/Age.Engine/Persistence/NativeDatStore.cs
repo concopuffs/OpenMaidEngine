@@ -36,6 +36,7 @@ public sealed record NativeSaveIdentity(
 
 public interface INativeDatStore
 {
+    NativeSaveIdentity Identity { get; }
     NativeSaveDocument? LoadShared();
     void SaveShared(ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
     NativeSaveDocument? LoadNumbered(int slot);
@@ -55,6 +56,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
 
     private readonly string _root;
     private readonly NativeSaveIdentity _identity;
+    public NativeSaveIdentity Identity => _identity;
 
     public DirectoryNativeDatStore(string root, NativeSaveIdentity identity)
     {

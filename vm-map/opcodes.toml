@@ -3524,8 +3524,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "store-shared-profile-int"
 category = "control"
-summary = "0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. The key is `3%08x`, where the address is resolved through global/local pointer operands; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry."
-details = "Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-20): deliberately unimplemented pending the unified shared-profile storage boundary; the former inert GfxState HashSet approximation was removed so coverage reports the gap."
+summary = "0x1a2 (cell) — snapshot the selected global integer cell into AGE's shared SAVE.DAT profile table. Its native key is raw type byte `0x03` followed by eight lowercase ASCII hex digits for the lvalue's resolved global-bank index; the stored value is the cell's current raw 32-bit value. Insert-or-assign semantics replace an existing entry."
+details = "Paired reader 0x1a3 restores the same cell, returning zero when the key is absent. The table is embedded at ctx+0x5190, explicitly enumerated by shared_profile_payload_write into shared SAVE.DAT, and reconstructed by shared_profile_payload_read. It is not the retained gfx map, numbered SAVE##.DAT state, or RT.DAT ReadTextDB. Port status (2026-07-24): implemented through profile-owned SharedProfile state shared across fresh scene VMs and the native shared-payload/store lifecycle; direct globals and resolved global local-pointers are covered."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -3546,8 +3546,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "load-shared-profile-int"
 category = "control"
-summary = "0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same `3%08x` cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent."
-details = "This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-20): deliberately unimplemented with 0x1a2 pending the unified shared-profile storage boundary."
+summary = "0x1a3 (cell) — restore the selected global integer cell from AGE's shared SAVE.DAT profile table. It resolves the same raw `0x03` plus eight-hex-digit cell-address key as 0x1a2 and overwrites the operand with the stored raw 32-bit value, or zero when the key is absent."
+details = "This is the read half of the shared-profile integer service, not a string operation. LOADCONFIG.BIN restores configuration globals with it; GAMESTART/GAMECLEAR and array-pointer call sites restore other selected profile-wide values. Port status (2026-07-24): implemented with 0x1a2 through the shared profile service and native payload codec."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -3679,8 +3679,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "store-shared-profile-string"
 category = "control"
-summary = "(cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under key `5%08x`, replacing any earlier value."
-details = "This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle."
+summary = "(cell) - snapshot the selected global string cell into AGE's shared `SAVE.DAT` profile table under a raw `0x05` type byte plus eight lowercase ASCII hex digits for the resolved global-bank index, replacing any earlier value."
+details = "This is the string counterpart to integer-store opcode 0x1a2. The value is profile-wide rather than numbered-slot-local and is written by the shared profile lifecycle. Port status (2026-07-24): implemented for direct global strings and resolved global string-pointers."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -3701,8 +3701,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "load-shared-profile-string"
 category = "control"
-summary = "(cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using key `5%08x`; a missing key yields the native empty-string default."
-details = "This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3."
+summary = "(cell) - restore the selected global string cell from AGE's shared `SAVE.DAT` profile table using the raw `0x05` plus eight-hex-digit key; a missing key yields the native empty-string default."
+details = "This is the paired reader for opcode 0x1a9 and the string counterpart to integer-load opcode 0x1a3. Port status (2026-07-24): implemented through the shared profile service and native payload codec."
 noop_headless = false
 source = "investigation"
 confidence = "high"

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 
 namespace Age.Engine.Vm;
 
@@ -20,8 +21,13 @@ public sealed class GameSession
 {
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
+    /// <summary>AGE's selected profile-wide cells and native shared SAVE.DAT lifecycle.</summary>
+    public SharedProfile SharedProfile { get; }
     /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
     public AdvTextHistory TextHistory { get; } = new();
+
+    public GameSession(SharedProfile? sharedProfile = null)
+        => SharedProfile = sharedProfile ?? new SharedProfile();
 
     public void Seed(int addr, long value) => Globals[addr] = value;
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
@@ -31,7 +37,8 @@ public sealed class GameSession
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null)
     {
-        var vm = new VirtualMachine(script, table, host, options, provider, sink, TextHistory);
+        var vm = new VirtualMachine(
+            script, table, host, options, provider, sink, TextHistory, SharedProfile);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
 

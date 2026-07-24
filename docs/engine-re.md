@@ -198,14 +198,12 @@ and pinning the real handler plus its paired reader resolves the service:
   globals with consecutive loads; `SYSTEM4.BIN` stores its initialized-config flag; gameplay and ADV
   scripts store selected array cells rather than the whole VM global bank.
 
-**Port verdict: semantics solved, persistence implementation deferred.** The old unread `GfxState`
-`HashSet` and legacy VM handler have been removed, so both opcodes now appear as effectful gaps rather than
-false implementations. A faithful service needs a profile-owned `global-cell-index → raw-int32` map shared
-across VM/script lifetimes, with `0x1a2` upsert and `0x1a3` load-or-zero, then a deliberate persistence
-boundary. The current `GameSession` JSON serializes the entire global bank, which can accidentally preserve
-some values but cannot reproduce AGE's selected-cell restore/reset lifecycle. Do not add another ad-hoc JSON
-field until the unified shared `SAVE.DAT`/`RT.DAT`/numbered-save architecture chooses ownership and migration.
-This deferral is now explicit in opcode coverage; it is not a safe-noop claim.
+**Port verdict (implemented 2026-07-24):** `SharedProfile` now owns the selected
+`global-cell-index → raw-int32` map across VM/script lifetimes. Opcode `0x1a2` upserts and `0x1a3`
+loads-or-zero for direct globals and local pointers resolved into the global bank. The profile is shared by
+fresh scene VMs through `GameSession`, while `GameSession` JSON remains intentionally unchanged and does not
+silently alias this native profile domain. The paired string service and native `SAVE.DAT` payload/store
+lifecycle are implemented with it; see the persistence-family section below.
 
 The FIELD snippet `lookup(0x5f0ed, 0x62ccf); mov(ptr,1); lookup(...); 0x1a2(ptr)` therefore persists that
 selected global array cell to the shared profile. It does not resolve decision→scene; scene dispatch remains
@@ -1648,6 +1646,32 @@ Thumbnail I/O uses `0=success`, `1=open/create failure`, and `2=codec failure`. 
 expects its caller to pre-seed status zero: on success it starts the resume sequence without rewriting that
 operand, while a missing file writes one.
 
+#### Save-root resolution
+
+Save paths are native engine policy, not script-provided strings. Every numbered/shared handler first calls
+`save_root_resolve@0x40b880`, then formats one of the engine-owned names (`SAVE%2.2d.DAT`,
+`SAVE%2.2d.STH`, `SAVE.DAT`, `SAVE.BAK`, `RT.DAT`, and their `$$` temporary names) under that root.
+The script operands select the operation and numbered slot only.
+
+The resolver reads two per-game settings from the SYS4INI-backed settings registry:
+`set:UseAppDataFolder` and `set:SavePath`. When `UseAppDataFolder == 1`, the modern-Windows branch
+loads `SHGetFolderPathA` and requests `CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE` (`0x801c`); it then
+appends `SavePath`. Otherwise the configured `SavePath` is used directly. It probes
+`<root>\SAVE.DAT`; if that file does not exist, it walks the root and creates missing directory
+components before returning it.
+
+Himegari's SYS4INI trailer supplies:
+
+```text
+USEAPPDATAFOLDER=1
+SAVEPATH=Eushully\姫狩りダンジョンマイスター\SAVE
+```
+
+Thus its normal modern-Windows root is
+`%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE`. The complete filenames and backup
+lifecycle are fixed by AGE after that root has been selected; no persistence opcode accepts an arbitrary
+path or filename.
+
 #### Shared `SAVE.DAT`
 
 `shared_profile_save@0x40c950` writes `$$SAVE.DAT`, replaces `SAVE.DAT`, and keeps `SAVE.BAK`; it performs
@@ -1658,17 +1682,27 @@ use this backup transaction, but a successful numbered serialization flushes the
 After the common container decode, the shared logical payload is:
 
 1. a DWORD catalog/compatibility count followed by that many DWORDs;
-2. a DWORD integer-entry count, then fixed 16-byte entries `{ascii_key[12], raw_value_u32}`;
-3. a DWORD string-entry count and DWORD padded string-blob length, then concatenated
-   `ascii_key\0value\0` pairs with DWORD padding;
+2. a DWORD integer-entry count, then fixed 16-byte entries `{typed_key[12], raw_value_u32}`;
+3. a DWORD string-entry count and a string-blob **DWORD count**, then concatenated
+   `typed_key\0value\0` pairs with DWORD padding;
 4. for shared save version at least 3.10, a 256-DWORD selector/count table, a DWORD extra-count, and that
    many extra DWORDs;
-5. a trailing zero DWORD.
+5. one explicit trailing zero DWORD plus eight historical allocation-slack DWORDs (nine reserved tail
+   DWORDs in decoded native Himegari files).
 
-Integer-cell ops `0x1a2`/`0x1a3` use keys `3%08x`; string-cell ops `0x1a9`/`0x1aa` use `5%08x`. In both
-cases the hexadecimal portion is the VM lvalue's resolved global-bank index. The string table therefore
-is not an incidental settings blob: it is the paired profile-wide selected-cell service for string globals,
-with insert-or-assign and empty-on-miss behavior.
+The key prefix is binary, not the ASCII character suggested by shorthand such as `3%08x`:
+integer-cell ops `0x1a2`/`0x1a3` use raw byte `0x03` followed by eight lowercase ASCII hex digits;
+string-cell ops `0x1a9`/`0x1aa` use raw byte `0x05` plus the same address text. In both cases the
+hexadecimal portion is the VM lvalue's resolved global-bank index. Integer fixed-key bytes 10 and 11 are
+unused native stack padding and cannot be required to be zero when importing an original file. The string
+table is therefore not an incidental settings blob: it is the paired profile-wide selected-cell service
+for string globals, with insert-or-assign and empty-on-miss behavior.
+
+The installed native Himegari `SAVE.DAT` provides a direct compatibility oracle for this shape:
+version 3.10 decodes to 13,210 opaque catalog values, 24,070 integer cells, 605 string cells, selector
+entry 1 equal to 81, 83 extended values, and the nine-DWORD reserved tail. The port decoder imports that
+file exactly; catalog/extended/tail sections remain opaque and are preserved losslessly rather than
+reinterpreted as mod state.
 
 #### Common `.DAT` container
 
@@ -1740,15 +1774,20 @@ inventing a second save container.
 a profile/save service so extended mode can later add JSON inspection/export, namespaced mod state, migrations,
 or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
 
-**Port correspondence (2026-07-24, codec foundation implemented):**
+**Port correspondence (2026-07-24, shared payload and selected cells implemented):**
 `Age.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
 SYSTEMTIME/playtime/version metadata, both CRC layers, version-2 compression wrapper, and exact reversible
 DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect already consumed by
 `LzssDecoder`, falling back to native verbatim storage when compression does not shrink. The
 `INativeDatStore` boundary and `DirectoryNativeDatStore` own shared `$$SAVE.DAT` → `SAVE.DAT` /
-`SAVE.BAK` replacement/fallback and direct numbered `SAVE##.DAT` writes. Payload schemas, `RT.DAT`,
-thumbnails, and opcode wiring remain deliberately above or after this layer; the existing `GameSession`
-JSON snapshot is unchanged.
+`SAVE.BAK` replacement/fallback and direct numbered `SAVE##.DAT` writes.
+
+`SharedProfilePayloadCodec` owns the typed shared logical layout, including native CP932 strings and
+lossless opaque-section preservation. `SharedProfile` owns selected integer/string maps and explicit
+load/save lifecycle; `GameSession` injects it into every fresh VM. Opcodes `0x1a2`/`0x1a3` and
+`0x1a9`/`0x1aa` now implement native upsert and missing-value defaults for direct cells and resolved
+global pointers. `RT.DAT`, thumbnails, and numbered active-frame payloads remain later layers; the existing
+`GameSession` JSON snapshot is unchanged.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
@@ -2880,9 +2919,9 @@ These handlers and their newly understood workers are renamed/commented in Ghidr
 The exact source metadata lives in `vm-map/opcodes.toml`. The port now implements this cluster against the
 shared Godot frame clock, retained graphics state, movie decoder state, mutable RGBA surfaces, and delayed
 voice service. `0x207` copies colorkey-baked source pixels into immutable published snapshots so compositor
-reads cannot race VM-side mutations. The first complete player attack remains the manual acceptance test;
-the implementation deliberately leaves BTL's two `0x1a2` shared-profile writes deferred because they do
-not feed same-exchange combat state.
+reads cannot race VM-side mutations. The first complete player attack remains the manual acceptance test.
+BTL's two `0x1a2` shared-profile writes were initially deferred because they do not feed same-exchange
+combat state; the unified profile service now handles them through the ordinary opcode dispatch.
 
 ### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
 

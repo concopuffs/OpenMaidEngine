@@ -3381,6 +3381,30 @@ integer/string cell maps, then connect `0x1a2`/`0x1a3` and `0x1a9`/`0x1aa`. Add 
 read-message lifecycle after that shared ownership is live; numbered active-frame layouts remain the later,
 larger payload.
 
+### Persistence implementation step 2 — shared SAVE.DAT payload and selected cells (2026-07-24)
+
+The typed shared payload and profile ownership are now implemented. `SharedProfilePayloadCodec` reads and
+writes the catalog block, fixed integer entries, DWORD-counted CP932 string blob, version-3.10 selector and
+extra arrays, and native reserved tail. `SharedProfile` preserves the catalog/extended sections opaquely,
+owns selected raw-int32 and string maps, and explicitly loads/saves through `INativeDatStore`.
+`GameSession` shares that profile across fresh scene VMs without adding it to the existing whole-bank JSON
+diagnostic snapshot.
+
+The original AppData `SAVE.DAT` served as a read-only compatibility oracle and decodes completely:
+13,210 catalog values, 24,070 integer cells, 605 string cells, selector 1 = 81, 83 extended values, and
+nine reserved tail DWORDs. That check corrected three reconnaissance details before implementation: typed
+keys begin with raw bytes `0x03`/`0x05` rather than ASCII digits; the string length is a DWORD count; and
+the native writer's explicit terminator plus historical allocation slack leaves nine tail DWORDs.
+
+VM opcodes `0x1a2`/`0x1a3` and `0x1a9`/`0x1aa` now implement insert-or-assign plus native zero/empty
+miss defaults. Direct global cells and the shipped local-pointer-to-global idiom are covered, including
+fresh-VM continuity through `GameSession`. Five focused shared-profile tests plus the seven container/store
+tests cover binary shape, malformed input, native lifecycle, pointer lvalues, miss behavior, and JSON-domain
+separation.
+
+**Next persistence step:** add native `RT.DAT` and connect the already-mapped ReadTextDB queue/commit/query
+lifecycle. Numbered active-frame saves and `.STH` remain the later, larger payload slice.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.
