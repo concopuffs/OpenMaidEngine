@@ -129,6 +129,13 @@ The dedicated view joins 66 named stage definitions to 53 unique rectangles, pre
 groups and 47 nonzero border-context cells, and resolves terrain ids through LAINIT's name, texture-slot,
 area-fill, and layout-class columns.
 
+LAINIT defines the twenty shipped terrain ids inside a reserved thirty-row registry. Its sparse
+strings provide seventeen names and five effect summaries; its numeric surface provides
+texture-slot, area-fill, layout-class, required-skill, and ten-column combat-stat data. CALCBTPARAM
+proves the stat ABI, MVSEEK/FIELD prove five SKINIT traversal requirements, and FIELD joins ten
+shared `MP000*.AGF` fallback assets to the stage texture slots. The dedicated view accounts for all
+98 instructions and preserves ids 0, 5, and 6 as meaningful implicit-default rows.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

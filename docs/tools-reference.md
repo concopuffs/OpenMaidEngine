@@ -98,6 +98,12 @@ join to shipped OGG filenames, character slots join to EBINIT names, and the sch
 per-unit persisted speaker-seen cells that gate CONFIG row availability. Every raw coordinate remains
 beside the joined setting view.
 
+Name-mode LAINIT classifies all 98 instructions into twenty shipped terrain definitions inside a
+reserved thirty-row registry. It preserves seventeen names, five effect descriptions, four parallel
+terrain arrays, the signed ten-column combat-stat matrix, and three implicit-default terrain ids.
+Required skill ids join to SKINIT names; shared texture-slot fallbacks join to SYS4INI AGF filenames.
+The profile summarizes those populations and the CALCBTPARAM/MVSEEK/FIELD/INFOAF/DRAWMAP contract.
+
 Footer-mode MPINIT classifies all 1,472 copies as fifty-cell rows within one stride-53 terrain atlas.
 It derives grid Y from each destination, retains 127 implicit-zero gaps, and joins STINIT2's inclusive
 tile bounds after the consumer-proven two-times coordinate conversion. The output contains 66 named

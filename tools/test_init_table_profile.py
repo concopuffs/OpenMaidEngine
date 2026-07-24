@@ -209,6 +209,42 @@ def main() -> int:
     assert "- geometry: 50 authored cells inside a 53-cell row pitch" in rendered_map
     assert "- stage joins: 66 definitions over 53 unique rectangles" in rendered_map
 
+    terrain_fixture = {
+        "table": "LAND",
+        "mode": "name",
+        "schema": "terrain-definitions",
+        "record_count": 20,
+        "reserved_record_span": 30,
+        "authored_terrain_ids": list(range(17)),
+        "implicit_default_terrain_ids": [0, 5, 6],
+        "combat_stat_cell_count": 13,
+        "required_skill_count": 5,
+        "map_texture_slot_count": 20,
+        "default_texture_asset_count": 10,
+        "default_texture_asset_join_count": 10,
+        "records": [
+            {
+                "name": "通路" if index else None,
+                "effect_description": "▲命中" if index < 5 else None,
+                "required_skill_name": (
+                    ("飛行", "潜水", "探索", "耐熱")[index]
+                    if index < 4 else None
+                ),
+            }
+            for index in range(20)
+        ],
+    }
+    terrain_summary = profile.profile_terrain_definitions(terrain_fixture)
+    assert terrain_summary["reserved_record_span"] == 30
+    assert terrain_summary["shipped_record_count"] == 20
+    assert terrain_summary["authored_record_count"] == 17
+    assert terrain_summary["effect_description_count"] == 5
+    assert terrain_summary["combat_stat_cell_count"] == 13
+    assert terrain_summary["required_skill_names"] == ["探索", "潜水", "耐熱", "飛行"]
+    rendered_terrain = profile.render_markdown(terrain_fixture, [], 40)
+    assert "- shipped terrain ids: 20 inside a 30-row table" in rendered_terrain
+    assert "- combat-stat cells: 13" in rendered_terrain
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

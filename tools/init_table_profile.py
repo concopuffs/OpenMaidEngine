@@ -311,6 +311,41 @@ def profile_map_atlas(data: dict) -> dict:
     }
 
 
+def profile_terrain_definitions(data: dict) -> dict:
+    """Summarize LAINIT's terrain rows and shared texture-slot assets."""
+    if data.get("schema") != "terrain-definitions":
+        return {}
+    records = data.get("records", [])
+    return {
+        "reserved_record_span": data.get("reserved_record_span", 0),
+        "shipped_record_count": len(records),
+        "authored_record_count": len(data.get("authored_terrain_ids", [])),
+        "implicit_default_record_count": len(
+            data.get("implicit_default_terrain_ids", [])
+        ),
+        "named_record_count": sum(
+            bool(record.get("name")) for record in records
+        ),
+        "effect_description_count": sum(
+            bool(record.get("effect_description")) for record in records
+        ),
+        "combat_stat_cell_count": data.get("combat_stat_cell_count", 0),
+        "required_skill_count": data.get("required_skill_count", 0),
+        "required_skill_names": sorted({
+            record["required_skill_name"]
+            for record in records
+            if record.get("required_skill_name")
+        }),
+        "map_texture_slot_count": data.get("map_texture_slot_count", 0),
+        "default_texture_asset_count": data.get(
+            "default_texture_asset_count", 0
+        ),
+        "default_texture_asset_join_count": data.get(
+            "default_texture_asset_join_count", 0
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -438,7 +473,27 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if map_profile := profile_map_atlas(data):
+    if terrain_profile := profile_terrain_definitions(data):
+        lines.extend([
+            f"- shipped terrain ids: "
+            f"{terrain_profile['shipped_record_count']} inside a "
+            f"{terrain_profile['reserved_record_span']}-row table",
+            f"- authored/default rows: "
+            f"{terrain_profile['authored_record_count']}/"
+            f"{terrain_profile['implicit_default_record_count']}",
+            f"- named/effect rows: {terrain_profile['named_record_count']}/"
+            f"{terrain_profile['effect_description_count']}",
+            f"- combat-stat cells: "
+            f"{terrain_profile['combat_stat_cell_count']}",
+            f"- required traversal skills: "
+            f"{terrain_profile['required_skill_count']} "
+            f"{terrain_profile['required_skill_names']}",
+            f"- texture fallbacks: "
+            f"{terrain_profile['default_texture_asset_join_count']}/"
+            f"{terrain_profile['default_texture_asset_count']} assets resolved "
+            f"across {terrain_profile['map_texture_slot_count']} slots",
+        ])
+    elif map_profile := profile_map_atlas(data):
         lines.extend([
             f"- geometry: {map_profile['authored_column_count']} authored cells "
             f"inside a {map_profile['row_stride']}-cell row pitch",
@@ -576,6 +631,7 @@ def main() -> int:
         "dispatch_profile": profile_dispatch(data),
         "banked_profile": profile_banked(data),
         "map_atlas_profile": profile_map_atlas(data),
+        "terrain_definition_profile": profile_terrain_definitions(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

@@ -1449,6 +1449,80 @@ def test_map_terrain_atlas() -> None:
     )
 
 
+def test_terrain_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["LAINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "name",
+        "LAINIT remains compatible with name-mode auto-detection",
+    )
+    records, meta = extract_init.extract_terrain_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 20
+        and meta["reserved_record_span"] == 30
+        and meta["authored_terrain_ids"]
+        == [1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        and meta["implicit_default_terrain_ids"] == [0, 5, 6],
+        "LAINIT exposes the shipped terrain ids and reserved definition span",
+    )
+    check(
+        meta["string_write_count"] == 22
+        and meta["static_write_count"] == 75
+        and meta["classified_static_write_count"] == 75
+        and meta["classified_instruction_count"] == 98,
+        "LAINIT classifies every string, numeric, and exit instruction",
+    )
+    check(
+        by_id[1]["name"] == "通路"
+        and by_id[1]["texture_slot_index"] == 1
+        and by_id[1]["layout_class_name"] == "passage"
+        and by_id[2]["name"] == "部屋"
+        and by_id[2]["area_fill_flag"] == 1
+        and by_id[3]["name"] == "隠し通路"
+        and by_id[3]["layout_class_name"] == "hidden",
+        "LAINIT preserves terrain names, texture slots, fill flags, and classes",
+    )
+    check(
+        by_id[4]["effect_description"] == "▲命中・回避・防御"
+        and by_id[4]["combat_stat_deltas"]
+        == {
+            "accuracy": 5,
+            "evasion": 5,
+            "physical_defense": 1,
+            "magic_defense": 1,
+        }
+        and by_id[7]["combat_stat_deltas"]
+        == {"accuracy": -5, "evasion": -5, "speed": -3}
+        and by_id[10]["combat_stat_deltas"]
+        == {"accuracy": 10, "evasion": 10}
+        and meta["combat_stat_cell_count"] == 13,
+        "LAINIT effect text agrees with every populated combat-stat delta",
+    )
+    check(
+        by_id[3]["required_skill_id"] == 3
+        and by_id[3]["required_skill_name"] == "探索"
+        and by_id[7]["required_skill_name"] == "潜水"
+        and by_id[9]["required_skill_name"] == "飛行"
+        and by_id[15]["required_skill_name"] == "耐熱"
+        and meta["required_skill_count"] == 5,
+        "LAINIT traversal gates resolve through SKINIT skill definitions",
+    )
+    authored_slots = [
+        slot for slot in meta["texture_slots"] if slot["authored"]
+    ]
+    check(
+        len(authored_slots) == 10
+        and authored_slots[0]["id"] == 1
+        and authored_slots[0]["default_asset_name"] == "MP000A.AGF"
+        and authored_slots[-1]["id"] == 13
+        and authored_slots[-1]["default_asset_name"] == "MP000N.AGF"
+        and by_id[15]["default_texture_asset_name"] == "MP000I.AGF"
+        and meta["default_texture_asset_join_count"] == 10,
+        "LAINIT texture slots join every fallback asset to SYS4INI",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1663,6 +1737,7 @@ if __name__ == "__main__":
     test_affinity_definitions()
     test_name_entry_palette()
     test_voice_configuration()
+    test_terrain_definitions()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

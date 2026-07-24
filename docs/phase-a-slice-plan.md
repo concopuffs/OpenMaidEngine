@@ -2983,3 +2983,37 @@ stage joins, shared rectangles, terrain definitions, and the exact nonzero/borde
 
 **Next:** finish LAINIT's remaining small terrain-definition surface by its FIELD/MVSEEK/DRAWMAP
 consumers; MPINIT already proves its name, texture-slot, area-fill, and layout-class columns.
+
+## Data-semantics sidebar: LAINIT terrain definitions (2026-07-23)
+
+LAINIT is now a dedicated twenty-terrain definition registry inside a reserved thirty-row layout.
+Its 98 instructions divide exactly into seventeen terrain names, five player-facing effect
+descriptions, 75 numeric writes, and `exit`. Terrain ids 0, 5, and 6 are meaningful implicit-default
+rows used by MPINIT; the other shipped ids 1..19 are authored sparsely. The schema retains raw
+addresses while projecting all defaults explicitly.
+
+The remaining row-major table at `0xe6afe` is a `30 × 10` signed combat-stat matrix with the same
+column ABI as SKINIT's combat deltas: accuracy, evasion, physical attack/defense, magic
+attack/defense, speed, luck, critical chance, and capture power. CALCBTPARAM reads the acting unit's
+terrain from the doubled-coordinate current map and adds the selected row to its battle parameters.
+INFOAF displays the rows. All thirteen populated cells agree exactly with LAINIT's five summaries:
+the base raises accuracy/evasion/defenses, water and shallows lower accuracy/evasion/speed, the altar
+raises accuracy/evasion, and the hall raises evasion.
+
+The sparse array at `0xe6c2a` is a required traversal/reveal skill id. MVSEEK and FIELD reject
+ordinary terrain unless the moving unit owns the referenced SKINIT skill; the dedicated hidden
+terrain path enforces the same exploration requirement for hidden passages and rooms. All five
+requirements resolve: flight for the open shaft, diving for the underground lake, exploration for
+both hidden terrain types, and heat resistance for lava.
+
+The final array at `0xe6c48` is indexed by the twenty stage texture slots rather than terrain id.
+When STINIT's per-stage texture override is positive, FIELD loads it directly; zero disables the
+slot; `-1` selects LAINIT's shared fallback. All ten authored fallbacks resolve through SYS4INI to
+`MP000A/B/C/E/H/I/J/K/L/N.AGF`, and the terrain-to-slot table joins each terrain definition to the
+applicable default.
+
+Regressions protect all 98 instructions, the 20-of-30 row contract, every sparse string and numeric
+population, all thirteen combat-stat cells, all five SKINIT skill joins, and all ten texture assets.
+
+**Next:** audit SPINIT's 118 populated cells as the stride-15 HMODE resource matrix; the generic
+numeric view currently fragments its eight logical rows into individual address-derived records.

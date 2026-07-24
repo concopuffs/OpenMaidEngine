@@ -3088,6 +3088,17 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x26d3"
+name = "terrain_effect_descriptions"
+category = "string-table"
+type = "string[30]"
+value_domain = "five sparse signed summaries: accuracy/evasion/defense/speed increases or decreases"
+usage = "LAINIT's player-facing terrain effect summary indexed by terrain id. FIELD shows it beneath the selected tile's terrain name; each populated string exactly describes that row of terrain_combat_stat_deltas."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0xe6afe"]
+
+[[global]]
 address = "0xe6aa4"
 name = "terrain_texture_slot_indices"
 category = "data-table"
@@ -3119,6 +3130,40 @@ usage = "LAINIT terrain class. Zero cells are rejected by map rendering, occupan
 source = "investigation"
 confidence = "high"
 depends_on = ["0x26b5", "0xe6ac2"]
+
+[[global]]
+address = "0xe6afe"
+name = "terrain_combat_stat_deltas"
+category = "data-table"
+type = "int[30][10]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power" }
+value_domain = "signed combat parameter deltas; thirteen shipped cells range from -5 to 10"
+usage = "LAINIT terrain-effect matrix. CALCBTPARAM reads the acting unit's doubled-coordinate battle tile and adds columns 0..9 through the same combat-parameter channels used by SKINIT skill deltas. INFOAF displays the first eight columns for its terrain rows, and the five populated terrain_effect_descriptions exactly summarize the shipped nonzero cells."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0x26d3", "0x341ab"]
+
+[[global]]
+address = "0xe6c2a"
+name = "terrain_required_skill_ids"
+category = "data-table"
+type = "int[30]"
+value_domain = "{0=none, 1=flight, 2=diving, 3=exploration, 4=heat_resistance}"
+usage = "LAINIT traversal/reveal requirement indexed by terrain id. MVSEEK and FIELD reject ordinary terrain unless the moving unit owns the referenced SKINIT skill; hidden passages/rooms use the exploration skill through the dedicated hidden-terrain path. FIELD and INFOAF resolve populated ids to skill names for display."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x26b5", "0xe6ae0"]
+
+[[global]]
+address = "0xe6c48"
+name = "stage_map_texture_default_asset_ids"
+category = "data-table"
+type = "int[20]"
+value_domain = "ten sparse SYS4INI AGF resource ids 0x319c..0x31a5"
+usage = "Shared fallback map texture for each of twenty stage texture slots. FIELD loads a positive stage_map_texture_asset_overrides value directly, skips zero, and when the stage value is -1 loads this slot's MP000A/B/C/E/H/I/J/K/L/N.AGF default into surface 0x52+slot."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe6aa4", "0xe7311"]
 
 [[global]]
 address = "0xccc93"

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5049 globals (329 curated, 4720 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5049 globals (333 curated, 4716 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -186,6 +186,9 @@
 | `0xe6aa4` | terrain_texture_slot_indices | high | investigation | LAINIT mapping from terrain id to the index in stage_map_texture_asset_overrides. DRAWMAP uses the selected slot to choose the current stage's tiled terrain surface. |
 | `0xe6ac2` | terrain_area_fill_flags | high | investigation | LAINIT terrain topology flag. DRAWMAP and CALCOCC use neighboring values to expand room-like regions across the alternating half-tile grid; DRAWMINIMAP uses the same distinction when joining adjacent revealed cells. |
 | `0xe6ae0` | terrain_layout_classes | high | investigation | LAINIT terrain class. Zero cells are rejected by map rendering, occupancy, and pathfinding; ordinary areas, passages, and hidden spaces take distinct DRAWMAP/CALCOCC/MVSEEK paths. Combined with terrain_area_fill_flags, it distinguishes hidden rooms from hidden passages. |
+| `0xe6afe` | terrain_combat_stat_deltas | high | investigation | LAINIT terrain-effect matrix. CALCBTPARAM reads the acting unit's doubled-coordinate battle tile and adds columns 0..9 through the same combat-parameter channels used by SKINIT skill deltas. INFOAF displays the first eight columns for its terrain rows, and the five populated terrain_effect_descriptions exactly summarize the shipped nonzero cells. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power. |
+| `0xe6c2a` | terrain_required_skill_ids | high | investigation | LAINIT traversal/reveal requirement indexed by terrain id. MVSEEK and FIELD reject ordinary terrain unless the moving unit owns the referenced SKINIT skill; hidden passages/rooms use the exploration skill through the dedicated hidden-terrain path. FIELD and INFOAF resolve populated ids to skill names for display. |
+| `0xe6c48` | stage_map_texture_default_asset_ids | high | investigation | Shared fallback map texture for each of twenty stage texture slots. FIELD loads a positive stage_map_texture_asset_overrides value directly, skips zero, and when the stage value is -1 loads this slot's MP000A/B/C/E/H/I/J/K/L/N.AGF default into surface 0x52+slot. |
 | `0xe6dee` | object_sprite_state_row_mode | high | investigation | OBINIT metadata indexed by object type. FIELD copies the type-tagged initial payload into stage_object_runtime_state only for mode 1; DRAWOBJ likewise multiplies that runtime state by the object sprite height to select source Y only for mode 1. |
 | `0xe7302` | stage_bgm_id | high | investigation | STINIT's per-stage scalar loaded for all 74 records. FIELD passes the value directly to play-bgm when starting the stage. |
 | `0xe7303` | stage_target_clear_turns | high | investigation | STINIT's target/par turn count. STAGECLEAR divides elapsed turns by this value to derive a performance multiplier; when replaying an already-cleared ordinary stage, FIELD also uses it as the forced-retreat turn limit. |
@@ -263,7 +266,6 @@
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
-| `0x26d3` | — | low | auto-shape | array |
 | `0x27bd` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
@@ -332,8 +334,6 @@
 | `0xccbf8` | — | low | auto-shape | array |
 | `0xccc11` | — | low | auto-shape | array |
 | `0xccc2f` | — | low | auto-shape | array |
-| `0xe6c2a` | — | low | auto-shape | array |
-| `0xe6c48` | — | low | auto-shape | array |
 | `0xe7305` | — | low | auto-shape | array |
 | `0xe730e` | — | low | auto-shape | array |
 | `0xe73bb` | — | low | auto-shape | array |
@@ -482,6 +482,7 @@
 | `0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
 | `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
 | `0x26b5` | terrain_type_names | high | investigation | LAINIT's terrain vocabulary. MPINIT's atlas cells contain terrain ids 0..19; the named ids distinguish passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room variants. |
+| `0x26d3` | terrain_effect_descriptions | high | investigation | LAINIT's player-facing terrain effect summary indexed by terrain id. FIELD shows it beneath the selected tile's terrain name; each populated string exactly describes that row of terrain_combat_stat_deltas. |
 | `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
 | `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
 | `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
@@ -5051,7 +5052,6 @@
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
 | `0xccc0b` | — | low | auto-shape | index/counter? |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |
-| `0xe6afe` | — | med | auto-shape | record-table[stride 10] |
 | `0xe6c5e` | — | med | auto-shape | obinit-field |
 | `0xe6cc2` | — | med | auto-shape | obinit-field |
 | `0xe6d26` | — | med | auto-shape | obinit-field |

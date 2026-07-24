@@ -660,10 +660,17 @@ MAP_STAGE_MIN_Y = 0xECCAD
 MAP_STAGE_MAX_Y = 0xED095
 
 TERRAIN_NAME_BASE = 0x26B5
+TERRAIN_EFFECT_DESCRIPTION_BASE = 0x26D3
 TERRAIN_TEXTURE_SLOT_BASE = 0xE6AA4
 TERRAIN_AREA_FILL_BASE = 0xE6AC2
 TERRAIN_LAYOUT_CLASS_BASE = 0xE6AE0
+TERRAIN_COMBAT_STAT_BASE = 0xE6AFE
+TERRAIN_COMBAT_STAT_STRIDE = 10
+TERRAIN_REQUIRED_SKILL_BASE = 0xE6C2A
+MAP_TEXTURE_DEFAULT_ASSET_BASE = 0xE6C48
+MAP_TEXTURE_SLOT_COUNT = 20
 TERRAIN_DEFINITION_SPAN = 30
+TERRAIN_SHIPPED_ID_MAX = 19
 
 
 def resolve(name: str) -> Path:
@@ -3312,32 +3319,95 @@ def extract_footer(scr):
     return records, {}
 
 
-def _terrain_definitions(max_terrain_id: int) -> list[dict]:
-    """Decode the LAINIT fields consumed by MPINIT's terrain ids."""
-    terrain_scr = sys4load.load(resolve("LAINIT"))
+def extract_terrain_definitions(scr):
+    """Extract LAINIT's terrain definitions and shared texture-slot assets."""
     names: dict[int, str] = {}
-    arrays = {
+    effect_descriptions: dict[int, str] = {}
+    parallel_arrays = {
         "texture_slot_index": (TERRAIN_TEXTURE_SLOT_BASE, {}),
         "area_fill_flag": (TERRAIN_AREA_FILL_BASE, {}),
         "layout_class": (TERRAIN_LAYOUT_CLASS_BASE, {}),
+        "required_skill_id": (TERRAIN_REQUIRED_SKILL_BASE, {}),
     }
-    for ins in terrain_scr.instructions:
+    combat_stat_cells: dict[tuple[int, int], int] = {}
+    texture_default_assets: dict[int, int] = {}
+    classified_offsets = set()
+    string_write_count = 0
+    static_write_count = 0
+    for ins in scr.instructions:
         if (
             ins.opcode == SET_STRING
             and len(ins.args) >= 2
             and ins.args[0][0] == T_GLOBAL_STRING
         ):
-            terrain_id = ins.args[0][1] - TERRAIN_NAME_BASE
+            destination = ins.args[0][1]
+            value = scr.strings[ins.args[1][1]][0]
+            terrain_id = destination - TERRAIN_NAME_BASE
             if 0 <= terrain_id < TERRAIN_DEFINITION_SPAN:
-                names[terrain_id] = terrain_scr.strings[ins.args[1][1]][0]
+                _store_unique(names, terrain_id, value, terrain_id)
+            else:
+                terrain_id = destination - TERRAIN_EFFECT_DESCRIPTION_BASE
+                if not 0 <= terrain_id < TERRAIN_DEFINITION_SPAN:
+                    raise ValueError(
+                        f"{scr.path.name}: unclassified terrain string write "
+                        f"0x{destination:x} at 0x{ins.offset:x}"
+                    )
+                _store_unique(
+                    effect_descriptions, terrain_id, value, terrain_id
+                )
+            classified_offsets.add(ins.offset)
+            string_write_count += 1
+            continue
+
         write = _static_global_write(ins)
         if write is None:
             continue
+        static_write_count += 1
         destination, value = write
-        for _, (base, cells) in arrays.items():
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static terrain value "
+                f"at 0x{ins.offset:x}"
+            )
+
+        classified = False
+        for _, (base, cells) in parallel_arrays.items():
             terrain_id = destination - base
             if 0 <= terrain_id < TERRAIN_DEFINITION_SPAN:
-                cells[terrain_id] = value
+                _store_unique(cells, terrain_id, value, terrain_id)
+                classified = True
+                break
+        if not classified:
+            index = destination - TERRAIN_COMBAT_STAT_BASE
+            if 0 <= index < (
+                TERRAIN_DEFINITION_SPAN * TERRAIN_COMBAT_STAT_STRIDE
+            ):
+                terrain_id, column = divmod(
+                    index, TERRAIN_COMBAT_STAT_STRIDE
+                )
+                _store_unique(
+                    combat_stat_cells,
+                    (terrain_id, column),
+                    value,
+                    terrain_id,
+                )
+                classified = True
+        if not classified:
+            texture_slot = destination - MAP_TEXTURE_DEFAULT_ASSET_BASE
+            if 0 <= texture_slot < MAP_TEXTURE_SLOT_COUNT:
+                _store_unique(
+                    texture_default_assets,
+                    texture_slot,
+                    value,
+                    texture_slot,
+                )
+                classified = True
+        if not classified:
+            raise ValueError(
+                f"{scr.path.name}: unclassified terrain write "
+                f"0x{destination:x} at 0x{ins.offset:x}"
+            )
+        classified_offsets.add(ins.offset)
 
     layout_class_names = {
         0: "blocked_or_boundary",
@@ -3345,22 +3415,219 @@ def _terrain_definitions(max_terrain_id: int) -> list[dict]:
         2: "passage",
         3: "hidden",
     }
+    stat_columns = (
+        "accuracy",
+        "evasion",
+        "physical_attack",
+        "physical_defense",
+        "magic_attack",
+        "magic_defense",
+        "speed",
+        "luck",
+        "critical_chance",
+        "capture_power",
+    )
+    skill_records, _ = extract_name(sys4load.load(resolve("SKINIT")))
+    skill_names = {record["id"]: record["name"] for record in skill_records}
+    asset_names = callscript_names()
+
+    name_key = f"0x{TERRAIN_NAME_BASE:x}"
+    effect_key = f"0x{TERRAIN_EFFECT_DESCRIPTION_BASE:x}"
+    texture_key = f"0x{TERRAIN_TEXTURE_SLOT_BASE:x}"
+    fill_key = f"0x{TERRAIN_AREA_FILL_BASE:x}"
+    layout_key = f"0x{TERRAIN_LAYOUT_CLASS_BASE:x}"
+    stat_key = f"0x{TERRAIN_COMBAT_STAT_BASE:x}"
+    skill_key = f"0x{TERRAIN_REQUIRED_SKILL_BASE:x}"
     definitions = []
-    for terrain_id in range(max_terrain_id + 1):
-        texture_slot = arrays["texture_slot_index"][1].get(terrain_id, 0)
-        area_fill = arrays["area_fill_flag"][1].get(terrain_id, 0)
-        layout_class = arrays["layout_class"][1].get(terrain_id, 0)
-        definitions.append({
+    for terrain_id in range(TERRAIN_SHIPPED_ID_MAX + 1):
+        texture_slot = parallel_arrays[
+            "texture_slot_index"
+        ][1].get(terrain_id, 0)
+        area_fill = parallel_arrays["area_fill_flag"][1].get(terrain_id, 0)
+        layout_class = parallel_arrays["layout_class"][1].get(terrain_id, 0)
+        required_skill_id = parallel_arrays[
+            "required_skill_id"
+        ][1].get(terrain_id, 0)
+        record = {
             "id": terrain_id,
             "name": names.get(terrain_id),
+            "effect_description": effect_descriptions.get(terrain_id),
             "texture_slot_index": texture_slot,
             "area_fill_flag": area_fill,
             "layout_class": layout_class,
             "layout_class_name": layout_class_names.get(
                 layout_class, "unknown"
             ),
+            "required_skill_id": required_skill_id,
+            "required_skill_name": skill_names.get(required_skill_id),
+            "fields": {},
+            "string_fields": {},
+            "record_fields": {},
+        }
+        if terrain_id in names:
+            record["string_fields"][name_key] = names[terrain_id]
+        if terrain_id in effect_descriptions:
+            record["string_fields"][effect_key] = (
+                effect_descriptions[terrain_id]
+            )
+        for field_name, key in (
+            ("texture_slot_index", texture_key),
+            ("area_fill_flag", fill_key),
+            ("layout_class", layout_key),
+            ("required_skill_id", skill_key),
+        ):
+            cells = parallel_arrays[field_name][1]
+            if terrain_id in cells:
+                record["fields"][key] = cells[terrain_id]
+        combat_stat_deltas = {}
+        for column, column_name in enumerate(stat_columns):
+            cell = (terrain_id, column)
+            if cell not in combat_stat_cells:
+                continue
+            value = combat_stat_cells[cell]
+            combat_stat_deltas[column_name] = value
+            record["record_fields"][
+                f"{stat_key}/{TERRAIN_COMBAT_STAT_STRIDE}/{column}"
+            ] = value
+        record["combat_stat_deltas"] = combat_stat_deltas
+        if texture_slot in texture_default_assets:
+            default_asset_id = texture_default_assets[texture_slot]
+            record["default_texture_asset_id"] = default_asset_id
+            record["default_texture_asset_name"] = asset_names.get(
+                default_asset_id, ""
+            )
+        definitions.append(record)
+
+    texture_slots = []
+    default_asset_key = f"0x{MAP_TEXTURE_DEFAULT_ASSET_BASE:x}"
+    for texture_slot in range(MAP_TEXTURE_SLOT_COUNT):
+        asset_id = texture_default_assets.get(texture_slot, 0)
+        texture_slots.append({
+            "id": texture_slot,
+            "default_asset_id": asset_id,
+            "default_asset_name": asset_names.get(asset_id, ""),
+            "authored": texture_slot in texture_default_assets,
+            "raw_field": (
+                {default_asset_key: asset_id}
+                if texture_slot in texture_default_assets else {}
+            ),
         })
-    return definitions
+
+    exit_offsets = {
+        ins.offset
+        for ins in scr.instructions
+        if sys4load.display_label(ins.opcode) == "exit"
+    }
+    classified_offsets.update(exit_offsets)
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+    if len(exit_offsets) != 1:
+        raise ValueError(
+            f"{scr.path.name}: expected one exit, found {len(exit_offsets)}"
+        )
+
+    authored_terrain_ids = sorted(
+        set(names)
+        | set(effect_descriptions)
+        | {
+            terrain_id
+            for _, cells in parallel_arrays.values()
+            for terrain_id in cells
+        }
+        | {terrain_id for terrain_id, _ in combat_stat_cells}
+    )
+    return definitions, {
+        "schema": "terrain-definitions",
+        "reserved_record_span": TERRAIN_DEFINITION_SPAN,
+        "shipped_terrain_id_range": [
+            0,
+            TERRAIN_SHIPPED_ID_MAX,
+        ],
+        "authored_terrain_ids": authored_terrain_ids,
+        "implicit_default_terrain_ids": sorted(
+            set(range(TERRAIN_SHIPPED_ID_MAX + 1))
+            - set(authored_terrain_ids)
+        ),
+        "name_array_base": name_key,
+        "effect_description_array_base": effect_key,
+        "texture_slot_array_base": texture_key,
+        "area_fill_array_base": fill_key,
+        "layout_class_array_base": layout_key,
+        "combat_stat_table_base": stat_key,
+        "required_skill_array_base": skill_key,
+        "map_texture_default_asset_array_base": default_asset_key,
+        "map_texture_slot_count": MAP_TEXTURE_SLOT_COUNT,
+        "texture_slots": texture_slots,
+        "array_layouts": {
+            stat_key: {"stride": TERRAIN_COMBAT_STAT_STRIDE},
+        },
+        "schema_field_semantics": {
+            name_key: "terrain_type_names",
+            effect_key: "terrain_effect_descriptions",
+            texture_key: "terrain_texture_slot_indices",
+            fill_key: "terrain_area_fill_flags",
+            layout_key: "terrain_layout_classes",
+            stat_key: "terrain_combat_stat_deltas",
+            skill_key: "terrain_required_skill_ids",
+        },
+        "string_write_count": string_write_count,
+        "static_write_count": static_write_count,
+        "classified_static_write_count": len(classified_offsets - exit_offsets)
+        - string_write_count,
+        "combat_stat_cell_count": len(combat_stat_cells),
+        "required_skill_count": len(
+            parallel_arrays["required_skill_id"][1]
+        ),
+        "default_texture_asset_count": len(texture_default_assets),
+        "default_texture_asset_join_count": sum(
+            bool(asset_names.get(asset_id))
+            for asset_id in texture_default_assets.values()
+        ),
+        "classified_instruction_count": len(classified_offsets),
+        "consumer_contract": {
+            "DRAWMAP.BIN": (
+                "map each terrain id to a texture slot and render it with the "
+                "current stage override or the shared per-slot fallback asset"
+            ),
+            "CALCBTPARAM.BIN": (
+                "add the selected battle tile's ten-column terrain delta row "
+                "to accuracy, evasion, attack, defense, speed, luck, critical, "
+                "and capture parameters"
+            ),
+            "MVSEEK.BIN": (
+                "reject non-hidden terrain with a required skill unless the "
+                "moving unit owns that skill; hidden terrain uses the same "
+                "exploration requirement through its dedicated reveal path"
+            ),
+            "FIELD.BIN": (
+                "show the terrain name, effect description, and required-skill "
+                "name in tile information and enforce the same traversal gates"
+            ),
+            "INFOAF.BIN": (
+                "display all terrain combat-stat rows and resolve each "
+                "required skill id through SKINIT's skill-name table"
+            ),
+        },
+    }
+
+
+def _terrain_definitions(max_terrain_id: int) -> list[dict]:
+    """Decode LAINIT terrain rows consumed by MPINIT's terrain ids."""
+    terrain_scr = sys4load.load(resolve("LAINIT"))
+    definitions, _ = extract_terrain_definitions(terrain_scr)
+    return [
+        definition
+        for definition in definitions
+        if definition["id"] <= max_terrain_id
+    ]
 
 
 def _map_stage_definitions() -> list[dict]:
@@ -3969,6 +4236,11 @@ def write_data_index(data_dir: Path) -> None:
         "clips, twelve slot-to-unit joins, and the matching unit-to-suppression-setting",
         "inverse map used by story, history, field, and battle voice filters.",
         "",
+        "LAINIT's dedicated terrain-definition schema exposes all twenty shipped terrain",
+        "ids inside the reserved thirty-row table. It preserves the sparse names and",
+        "effect descriptions, four parallel topology/rendering arrays, the ten-column",
+        "combat-stat matrix, SKINIT traversal-skill joins, and shared texture fallbacks.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -4059,6 +4331,8 @@ def main() -> int:
         extractor = extract_alchemy_recipes
     elif mode == "numeric" and name == "CVINIT":
         extractor = extract_voice_configuration
+    elif mode == "name" and name == "LAINIT":
+        extractor = extract_terrain_definitions
     elif mode == "footer" and name == "MPINIT":
         extractor = extract_map_terrain_atlas
     recs, meta = extractor(scr)
