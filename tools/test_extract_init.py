@@ -1272,6 +1272,93 @@ def test_name_entry_palette() -> None:
     )
 
 
+def test_voice_configuration() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["CVINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "CVINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_voice_configuration(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 13
+        and meta["static_write_count"] == 37
+        and meta["classified_static_write_count"] == 37
+        and meta["classified_instruction_count"] == 38,
+        "CVINIT classifies every preview, forward-map, inverse-map, and exit instruction",
+    )
+    check(
+        [
+            record["preview_voice_asset_name"]
+            for record in records
+        ] == [
+            "EUA0065.OGG",
+            "LILA1424.OGG",
+            "SYL0675.OGG",
+            "SAS0328.OGG",
+            "VID0345.OGG",
+            "EST0562.OGG",
+            "NEL0192.OGG",
+            "TIO0209.OGG",
+            "COL0836.OGG",
+            "BRI0687.OGG",
+            "OKT0357.OGG",
+            "FEM0328.OGG",
+            "DEI0501.OGG",
+        ],
+        "CVINIT joins all thirteen preview clips to shipped OGG assets",
+    )
+    check(
+        [by_id[slot]["unit_id"] for slot in range(1, 13)]
+        == [2, 5, 6, 7, 12, 14, 13, 10, 8, 9, 15, 11]
+        and meta["unit_join_count"] == 12,
+        "CVINIT joins its twelve named configuration slots to EBINIT units",
+    )
+    check(
+        all(
+            by_id[slot]["array_fields"][
+                f"0x628a7/{by_id[slot]['unit_id']}"
+            ] == slot
+            for slot in range(1, 13)
+        )
+        and meta["round_trip_mapping_count"] == 12,
+        "CVINIT's slot-to-unit and unit-to-setting maps round-trip exactly",
+    )
+    check(
+        by_id[0]["slot_kind"] == "system"
+        and "unit_id" not in by_id[0]
+        and by_id[1]["speaker_seen_flag_address"] == "0x56225"
+        and by_id[12]["speaker_seen_flag_address"] == "0x5622e",
+        "CVINIT preserves the non-unit system slot and speaker-seen joins",
+    )
+
+    semantics = extract_init.field_semantics(
+        records, meta["array_layouts"]
+    )
+    check(
+        len(semantics) == 14
+        and semantics["0x62cad"] == "character_voice_preview_asset_ids"
+        and semantics["0x62c8f"] == "character_voice_setting_unit_ids"
+        and semantics["0x628a7/11"]
+        == "unit_voice_suppression_flag_ids.index_11",
+        "CVINIT raw arrays join to their canonical voice-setting semantics",
+    )
+    extract_init.attach_semantic_fields(records, semantics)
+    check(
+        by_id[12]["semantic_fields"][
+            "character_voice_preview_asset_ids"
+        ] == 11412
+        and by_id[12]["semantic_fields"][
+            "character_voice_setting_unit_ids"
+        ] == 11
+        and by_id[12]["semantic_fields"][
+            "unit_voice_suppression_flag_ids.index_11"
+        ] == 12,
+        "CVINIT retains raw coordinates beside its joined semantic view",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1485,6 +1572,7 @@ if __name__ == "__main__":
     test_alchemy_recipes()
     test_affinity_definitions()
     test_name_entry_palette()
+    test_voice_configuration()
     test_condition_definitions()
     test_field_semantics()
     if FAILS:

@@ -2925,6 +2925,30 @@ all 350 positions so layout gaps remain explicit rather than collapsing into a f
 Regressions account for every instruction in both scripts, signed affinity values, all tuning and
 facility curves, representative characters and gaps, and raw-to-semantic projection.
 
-**Next:** audit CVINIT. Its generic output is already small (37 writes, thirteen rows, ten apparent
-fields), so direct consumer tracing should quickly distinguish a valid sparse registry from the last
-remaining ownership artifact before moving to MPINIT.
+## Data-semantics sidebar: CVINIT character-voice configuration (2026-07-23)
+
+CVINIT's generic thirteen-row shape was close but incomplete: it grouped 35 of the script's 37 writes
+and presented a twelve-entry inverse map as eight unrelated address-derived fields. The dedicated
+schema accounts for all 38 instructions (37 static writes plus `exit`) as three coordinated arrays:
+thirteen CONFIG preview-voice assets at `0x62cad`, twelve setting-slot-to-EBINIT-unit ids at
+`0x62c8f + slot`, and twelve inverse unit-to-setting ids at `0x628a7 + unit`.
+
+CONFIG proves the presentation contract. Slot 0 is a non-unit system voice preview; slots 1..12 map
+to Lily, Sylphine, Sasune, Vidal, Estelle, Nelly, Tiofania, Colette, Bridget, Octavia, Fam, and
+Deirdre. CONFIG resolves those unit ids through the shared story-display-name table, reloads each
+unit's persisted speaker-seen flag to decide whether the row is available, plays the slot's preview
+OGG, and edits the matching cell in the thirteen-entry `character_voice_suppressed` settings array.
+All thirteen preview ids resolve to shipped audio assets.
+
+The inverse map closes the runtime voice-filter chain rather than duplicating the CONFIG row map.
+Story, history, field, and battle paths first normalize the active EBINIT unit through CNINIT's
+voice-family unit table, then map that representative unit through CVINIT's inverse table and test
+the selected suppression cell. The twelve forward and inverse entries round-trip exactly. Scene
+scripts independently set and persist the unit-keyed speaker-seen flags when each speaker first
+appears, explaining CONFIG's unlock gate.
+
+Regressions protect complete instruction accounting, all asset and EBINIT joins, the system slot,
+all twelve round trips, speaker-seen addresses, and raw-to-semantic projection.
+
+**Next:** audit MPINIT's 1,472 structurally regular footer-array records by their direct map readers,
+grouping rows into consumer-proven families before naming any shallow address-only fields.

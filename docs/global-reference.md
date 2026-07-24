@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5049 globals (316 curated, 4733 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5049 globals (319 curated, 4730 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -69,6 +69,7 @@
 | `0x53643` | entity_movement_routine_progress | high | investigation | Per-runtime-entity movement-routine progress counters. FIELD clears all fifty rows, movement providers increment the current step, and MVRTN compares it with movement_routine_minimum_progress_counts before enabling a step. |
 | `0x53e13` | entity_carried_item_ids | high | investigation | Two carried/drop-item slots per runtime entity. SETEN initializes slot 0 from the unit's starting equipment item, FIELD fills an empty or matching slot when treasure is collected, and RTN_M009 requires an empty slot or an item-id match before approaching a chest/treasure object. Columns: 0=slot_0, 1=slot_1. |
 | `0x53e77` | entity_carried_item_counts | high | investigation | Quantities for the two per-entity carried/drop-item slots. SETEN seeds a starting item with quantity one; FIELD adds treasure quantities to the matching slot and caps the result at 999. Columns: 0=slot_0, 1=slot_1. |
+| `0x56223` | unit_story_speaker_seen_flags | high | investigation | Scene scripts set and persist a unit's cell when drawing that speaker's name. CONFIG reloads the twelve CVINIT-mapped unit cells and enables each named character-voice control only after its speaker has been encountered. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
 | `0x56738` | entity_battle_routine_random_rolls | high | investigation | Per-runtime-entity battle-step random rolls. FIELD and BTL fill every active entity's twenty cells with random-modulo-100; BTRTN executes a step when the matching roll is below battle_routine_activation_percents. |
 | `0x56b20` | entity_patrol_waypoint_indices | high | investigation | RTN_M011 compares each step's one-based waypoint_ordinal minus one with the current entity's value. Reaching the selected destination advances this value modulo the largest RTN_M011 waypoint ordinal in the routine set. |
@@ -77,7 +78,9 @@
 | `0x573bb` | unit_class_change_state | high | investigation | Persistent ten-slot class-change state for each playable unit. CALCCC copies the current unit's row to class_change_state_work before invoking the rule scripts and persists the updated row; CCINIT requires the rule's slot to be zero so each promotion is applied once. Columns: 0=promotion_slot_1, 1=promotion_slot_2, 2=promotion_slot_3, 3=promotion_slot_4, 4=promotion_slot_5, 5=promotion_slot_6, 6=promotion_slot_7, 7=promotion_slot_8, 8=promotion_slot_9, 9=promotion_slot_10. |
 | `0x5f0ed` | scene_decision_seen_flags | high | investigation | Persistent seen-state for progression decisions. Numbered scene scripts set the current scjump_decision_out cell after playback and synchronize it through the persistence opcode; INFOVO uses VIINIT's one-based prerequisites to unlock glossary topics. |
 | `0x624bf` | unit_voice_family_unit_ids | high | investigation | CNINIT's sparse unit-id keyed voice-family normalization map. Story, history, field, and battle voice paths map the current unit variant through this table before selecting the family-level voice-suppression state; 175 of 277 authored rows alias a variant to another representative unit id. |
-| `0x628a7` | unit_voice_suppression_flag_ids | high | investigation | Second stage of the shared voice-eligibility chain. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero. |
+| `0x628a7` | unit_voice_suppression_flag_ids | high | investigation | CVINIT's unit-to-setting inverse map for the twelve named character voice controls. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero. |
+| `0x62c8f` | character_voice_setting_unit_ids | high | investigation | CVINIT's CONFIG-row join. CONFIG iterates setting slots 1..12, resolves each unit id through unit_story_display_names for its label, and tests the same unit's unit_story_speaker_seen_flags cell before exposing the row. CVINIT also writes the exact inverse mapping to unit_voice_suppression_flag_ids. Columns: 0=system_or_reserved, 1=lily, 2=sylphine, 3=sasune, 4=vidal, 5=estelle, 6=nelly, 7=tiofania, 8=colette, 9=bridget, 10=octavia, 11=fam, 12=deirdre. |
+| `0x62cad` | character_voice_preview_asset_ids | high | investigation | CVINIT's thirteen voice-setting preview clips. CONFIG indexes this array by setting slot and plays the selected clip; slot 0 is the non-unit system voice, while slots 1..12 join to character_voice_setting_unit_ids. Columns: 0=system_voice, 1=lily, 2=sylphine, 3=sasune, 4=vidal, 5=estelle, 6=nelly, 7=tiofania, 8=colette, 9=bridget, 10=octavia, 11=fam, 12=deirdre. |
 | `0x62cd1` | gallery_image_assets | high | investigation | CGINIT's sparse gallery asset rows. CGMODE tests and displays column 0 as the full-size gallery image. SAVE and SELSTAGE scan column 0 for the current image and, when column 1 is populated, load that 112x84 preview instead of capturing the current screen. Columns: 0=gallery_image_asset_id, 1=save_stage_preview_asset_id. |
 | `0x63c71` | gallery_thumbnail_sheet_ids | high | investigation | CGINIT's gallery thumbnail-atlas selector. CGMODE subtracts one, remaps the configured sheet through gallery_thumbnail_sheet_asset_ids, and groups every populated gallery record under that sheet. |
 | `0x64441` | gallery_thumbnail_slot_ids | high | investigation | CGINIT's slot within the selected 6x5 thumbnail atlas. CGMODE subtracts one, draws that one of thirty 126x95 cells, and reports the unlocked/total variant counts associated with the slot. |
@@ -285,7 +288,6 @@
 | `0x522bb` | — | low | auto-shape | array |
 | `0x53ede` | — | low | auto-shape | array |
 | `0x55e3b` | — | low | auto-shape | array |
-| `0x56223` | — | low | auto-shape | array |
 | `0x56b52` | — | low | auto-shape | array |
 | `0x56f6d` | — | low | auto-shape | array |
 | `0x577a3` | — | low | auto-shape | array |
@@ -300,8 +302,6 @@
 | `0x62469` | — | low | auto-shape | array |
 | `0x6247d` | — | low | auto-shape | array |
 | `0x624a3` | — | low | auto-shape | array |
-| `0x62c8f` | — | low | auto-shape | array |
-| `0x62cad` | — | low | auto-shape | array |
 | `0x653e1` | — | low | auto-shape | array |
 | `0x65bb1` | — | low | auto-shape | array |
 | `0x66421` | — | low | auto-shape | array |

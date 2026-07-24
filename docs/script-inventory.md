@@ -115,6 +115,12 @@ reserved zero row, and equipment-tuning/alchemy/magic facility progression thres
 INPUTNAME's separate `5 × 70` character palette: 273 authored hiragana, katakana, Latin, numeral, and
 symbol cells with all reserved gaps retained.
 
+CVINIT is CONFIG's character-voice control registry. Its 37 writes form thirteen preview-voice asset
+slots, a twelve-entry setting-slot-to-EBINIT-unit map, and the exact inverse unit-to-setting map used
+after CNINIT's voice-family normalization. Slot 0 is the non-unit system voice; slots 1..12 join to
+Lily and eleven other named characters. CONFIG uses persisted per-unit speaker-seen flags to reveal those
+twelve rows, plays the corresponding preview clip, and writes the selected suppression setting.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

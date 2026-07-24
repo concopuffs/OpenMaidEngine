@@ -22,6 +22,9 @@
 ILINIT is a special name-mode matrix: 30 reserved condition ids by five authored
 levels, joined to the runtime condition-state ABI and RECOVER policy.
 
+CVINIT is a special numeric-mode registry: thirteen voice-configuration preview
+slots, twelve slot-to-unit joins, and the matching unit-to-setting inverse map.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -625,6 +628,13 @@ NAME_ENTRY_CHARACTER_PALETTE_ROW_NAMES = (
     "numerals",
     "symbols",
 )
+
+VOICE_CONFIG_PREVIEW_ASSET_ARRAY_BASE = 0x62CAD
+VOICE_CONFIG_SLOT_UNIT_ARRAY_BASE = 0x62C8F
+VOICE_CONFIG_UNIT_SETTING_ARRAY_BASE = 0x628A7
+VOICE_CONFIG_SLOT_COUNT = 13
+VOICE_CONFIG_NAMED_SLOT_COUNT = 12
+VOICE_CONFIG_SPEAKER_SEEN_ARRAY_BASE = 0x56223
 
 RECOVER_CURRENT_ENTITY = 0x152616
 RECOVER_EFFECTIVE_STATS = 0x4E11B
@@ -2702,6 +2712,191 @@ def extract_name_entry_palette(scr):
     }
 
 
+def extract_voice_configuration(scr):
+    """Extract CVINIT's preview-voice and character-setting registry."""
+    preview_by_slot: dict[int, int] = {}
+    unit_by_slot: dict[int, int] = {}
+    setting_by_unit: dict[int, int] = {}
+    static_write_count = 0
+    classified_write_count = 0
+    exit_count = 0
+
+    for ins in scr.instructions:
+        write = _static_global_write(ins)
+        if write is None:
+            if sys4load.display_label(ins.opcode) == "exit":
+                exit_count += 1
+                continue
+            raise ValueError(
+                f"{scr.path.name}: unclassified instruction at 0x{ins.offset:x}"
+            )
+
+        static_write_count += 1
+        destination, value = write
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static voice-config value "
+                f"at 0x{ins.offset:x}"
+            )
+
+        preview_slot = destination - VOICE_CONFIG_PREVIEW_ASSET_ARRAY_BASE
+        if 0 <= preview_slot < VOICE_CONFIG_SLOT_COUNT:
+            _store_unique(preview_by_slot, preview_slot, value, preview_slot)
+            classified_write_count += 1
+            continue
+
+        unit_slot = destination - VOICE_CONFIG_SLOT_UNIT_ARRAY_BASE
+        if 1 <= unit_slot <= VOICE_CONFIG_NAMED_SLOT_COUNT:
+            _store_unique(unit_by_slot, unit_slot, value, unit_slot)
+            classified_write_count += 1
+            continue
+
+        unit_id = destination - VOICE_CONFIG_UNIT_SETTING_ARRAY_BASE
+        if (
+            0 <= unit_id < CHARACTER_NAME_RECORD_SPAN
+            and 1 <= value <= VOICE_CONFIG_NAMED_SLOT_COUNT
+        ):
+            _store_unique(setting_by_unit, unit_id, value, unit_id)
+            classified_write_count += 1
+            continue
+
+        raise ValueError(
+            f"{scr.path.name}: unclassified voice-config write "
+            f"0x{destination:x} at 0x{ins.offset:x}"
+        )
+
+    expected_preview_slots = set(range(VOICE_CONFIG_SLOT_COUNT))
+    expected_named_slots = set(range(1, VOICE_CONFIG_NAMED_SLOT_COUNT + 1))
+    if set(preview_by_slot) != expected_preview_slots:
+        raise ValueError(
+            f"{scr.path.name}: preview slots are "
+            f"{sorted(preview_by_slot)}, expected 0..{VOICE_CONFIG_SLOT_COUNT - 1}"
+        )
+    if set(unit_by_slot) != expected_named_slots:
+        raise ValueError(
+            f"{scr.path.name}: named slots are {sorted(unit_by_slot)}, "
+            f"expected 1..{VOICE_CONFIG_NAMED_SLOT_COUNT}"
+        )
+    if set(setting_by_unit.values()) != expected_named_slots:
+        raise ValueError(
+            f"{scr.path.name}: inverse setting ids are "
+            f"{sorted(setting_by_unit.values())}, expected "
+            f"1..{VOICE_CONFIG_NAMED_SLOT_COUNT}"
+        )
+    if len(setting_by_unit) != VOICE_CONFIG_NAMED_SLOT_COUNT:
+        raise ValueError(
+            f"{scr.path.name}: expected {VOICE_CONFIG_NAMED_SLOT_COUNT} "
+            f"unit-to-setting writes, found {len(setting_by_unit)}"
+        )
+    for slot, unit_id in unit_by_slot.items():
+        if setting_by_unit.get(unit_id) != slot:
+            raise ValueError(
+                f"{scr.path.name}: slot {slot} -> unit {unit_id} does not "
+                f"round-trip through the inverse map"
+            )
+    if exit_count != 1:
+        raise ValueError(
+            f"{scr.path.name}: expected one exit, found {exit_count}"
+        )
+
+    unit_records, _ = extract_name(sys4load.load(resolve("EBINIT")))
+    unit_names = {record["id"]: record["name"] for record in unit_records}
+    missing_unit_ids = sorted(set(unit_by_slot.values()) - set(unit_names))
+    if missing_unit_ids:
+        raise ValueError(
+            f"{scr.path.name}: unknown EBINIT unit ids {missing_unit_ids}"
+        )
+
+    asset_names = callscript_names()
+    preview_key = f"0x{VOICE_CONFIG_PREVIEW_ASSET_ARRAY_BASE:x}"
+    unit_key = f"0x{VOICE_CONFIG_SLOT_UNIT_ARRAY_BASE:x}"
+    inverse_base = f"0x{VOICE_CONFIG_UNIT_SETTING_ARRAY_BASE:x}"
+    records = []
+    for slot in range(VOICE_CONFIG_SLOT_COUNT):
+        preview_asset_id = preview_by_slot[slot]
+        record = {
+            "id": slot,
+            "name": (
+                "system_voice" if slot == 0 else unit_names[unit_by_slot[slot]]
+            ),
+            "slot_kind": "system" if slot == 0 else "character",
+            "preview_voice_asset_id": preview_asset_id,
+            "preview_voice_asset_name": asset_names.get(preview_asset_id, ""),
+            "fields": {preview_key: preview_asset_id},
+            "array_fields": {},
+        }
+        if slot:
+            unit_id = unit_by_slot[slot]
+            inverse_key = f"{inverse_base}/{unit_id}"
+            record["fields"][unit_key] = unit_id
+            record["array_fields"][inverse_key] = slot
+            record.update({
+                "unit_id": unit_id,
+                "unit_name": unit_names[unit_id],
+                "voice_suppression_setting_id": slot,
+                "speaker_seen_flag_address": (
+                    f"0x{VOICE_CONFIG_SPEAKER_SEEN_ARRAY_BASE + unit_id:x}"
+                ),
+            })
+        records.append(record)
+
+    return records, {
+        "schema": "character-voice-configuration",
+        "slot_count": VOICE_CONFIG_SLOT_COUNT,
+        "system_slot": 0,
+        "named_character_slots": list(
+            range(1, VOICE_CONFIG_NAMED_SLOT_COUNT + 1)
+        ),
+        "preview_asset_array_base": (
+            f"0x{VOICE_CONFIG_PREVIEW_ASSET_ARRAY_BASE:x}"
+        ),
+        "slot_unit_array_base": f"0x{VOICE_CONFIG_SLOT_UNIT_ARRAY_BASE:x}",
+        "unit_setting_array_base": (
+            f"0x{VOICE_CONFIG_UNIT_SETTING_ARRAY_BASE:x}"
+        ),
+        "speaker_seen_array_base": (
+            f"0x{VOICE_CONFIG_SPEAKER_SEEN_ARRAY_BASE:x}"
+        ),
+        "array_layouts": {
+            inverse_base: {"length": CHARACTER_NAME_RECORD_SPAN},
+        },
+        "array_field_columns": [
+            f"{inverse_base}/{unit_id}" for unit_id in sorted(setting_by_unit)
+        ],
+        "static_write_count": static_write_count,
+        "classified_static_write_count": classified_write_count,
+        "exit_count": exit_count,
+        "classified_instruction_count": classified_write_count + exit_count,
+        "preview_asset_join_count": sum(
+            bool(record["preview_voice_asset_name"]) for record in records
+        ),
+        "unit_join_count": len(unit_by_slot),
+        "round_trip_mapping_count": sum(
+            setting_by_unit[unit_id] == slot
+            for slot, unit_id in unit_by_slot.items()
+        ),
+        "consumer_contract": {
+            "script": "CONFIG.BIN",
+            "preview": (
+                "CONFIG indexes the thirteen preview assets by voice-setting "
+                "slot and plays the selected clip before changing that slot's "
+                "suppression flag."
+            ),
+            "character_rows": (
+                "CONFIG lists slots 1..12 by resolving their unit ids through "
+                "the shared unit display-name table. A persisted per-unit "
+                "speaker-seen flag controls whether each row is available."
+            ),
+            "runtime_voice_filter": (
+                "Story, history, field, and battle paths normalize a unit to "
+                "its voice family, map that representative unit through the "
+                "CVINIT inverse table, and test the selected one of thirteen "
+                "character_voice_suppressed settings."
+            ),
+        },
+    }
+
+
 @cache
 def gallery_thumbnail_sheet_assets() -> dict[int, int]:
     """Read CGMODE's enabled thumbnail-sheet assets from INIT2."""
@@ -3443,6 +3638,10 @@ def write_data_index(data_dir: Path) -> None:
         "pages (hiragana, katakana, Latin, numerals, and symbols), preserving all reserved",
         "empty slots beside the 273 authored characters.",
         "",
+        "CVINIT's dedicated character-voice schema exposes CONFIG's thirteen preview",
+        "clips, twelve slot-to-unit joins, and the matching unit-to-suppression-setting",
+        "inverse map used by story, history, field, and battle voice filters.",
+        "",
         "Mixed-mode tables preserve the sparse selector id, branch offset, condition strings,",
         "scalar fields, cells within preallocated buffers, and length-prefixed footer arrays.",
         "STINIT additionally joins confirmed parallel buffers into per-slot `object_placements`",
@@ -3526,6 +3725,8 @@ def main() -> int:
         extractor = extract_gallery_definitions
     elif mode == "numeric" and name == "ALINIT":
         extractor = extract_alchemy_recipes
+    elif mode == "numeric" and name == "CVINIT":
+        extractor = extract_voice_configuration
     recs, meta = extractor(scr)
     if mode == "name" and name in MESSAGE_TABLES:
         message_name = MESSAGE_TABLES[name]

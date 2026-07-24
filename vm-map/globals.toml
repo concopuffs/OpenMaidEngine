@@ -1403,11 +1403,46 @@ address = "0x628a7"
 name = "unit_voice_suppression_flag_ids"
 category = "data-table"
 type = "int[1000]"
-value_domain = "index into character_voice_suppressed"
-usage = "Second stage of the shared voice-eligibility chain. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero."
+value_domain = "0 for no mapped setting; 1..12 index character_voice_suppressed"
+usage = "CVINIT's unit-to-setting inverse map for the twelve named character voice controls. Story, history, field, and battle paths normalize the current unit through unit_voice_family_unit_ids, index this table by that representative unit id, and suppress voice playback when the selected character_voice_suppressed cell is nonzero."
 source = "investigation"
 confidence = "high"
-depends_on = ["0x2e49"]
+depends_on = ["0x2e49", "0x62c8f"]
+
+[[global]]
+address = "0x56223"
+name = "unit_story_speaker_seen_flags"
+category = "data-table"
+type = "int[1000]"
+value_domain = "per-EBINIT-unit {0,1}; 1 after that unit has appeared as a story speaker"
+usage = "Scene scripts set and persist a unit's cell when drawing that speaker's name. CONFIG reloads the twelve CVINIT-mapped unit cells and enables each named character-voice control only after its speaker has been encountered."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x315", "0x62c8f"]
+
+[[global]]
+address = "0x62c8f"
+name = "character_voice_setting_unit_ids"
+category = "data-table"
+type = "int[13]"
+columns = { "0" = "system_or_reserved", "1" = "lily", "2" = "sylphine", "3" = "sasune", "4" = "vidal", "5" = "estelle", "6" = "nelly", "7" = "tiofania", "8" = "colette", "9" = "bridget", "10" = "octavia", "11" = "fam", "12" = "deirdre" }
+value_domain = "slot 0 unwritten; slots 1..12 contain EBINIT unit ids"
+usage = "CVINIT's CONFIG-row join. CONFIG iterates setting slots 1..12, resolves each unit id through unit_story_display_names for its label, and tests the same unit's unit_story_speaker_seen_flags cell before exposing the row. CVINIT also writes the exact inverse mapping to unit_voice_suppression_flag_ids."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x315", "0x56223", "0x628a7"]
+
+[[global]]
+address = "0x62cad"
+name = "character_voice_preview_asset_ids"
+category = "data-table"
+type = "int[13]"
+columns = { "0" = "system_voice", "1" = "lily", "2" = "sylphine", "3" = "sasune", "4" = "vidal", "5" = "estelle", "6" = "nelly", "7" = "tiofania", "8" = "colette", "9" = "bridget", "10" = "octavia", "11" = "fam", "12" = "deirdre" }
+value_domain = "packed OGG asset resource id"
+usage = "CVINIT's thirteen voice-setting preview clips. CONFIG indexes this array by setting slot and plays the selected clip; slot 0 is the non-unit system voice, while slots 1..12 join to character_voice_setting_unit_ids."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x2e49", "0x62c8f"]
 
 [[global]]
 address = "0x62cd1"
