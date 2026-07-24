@@ -1818,6 +1818,61 @@ confidence = "high"
 depends_on = ["0x4e11b", "0x5231f", "0x52351", "0xcc9f1"]
 
 [[global]]
+address = "0xc6077"
+name = "selected_movement_route_steps"
+category = "data-table"
+type = "int[1000][27]"
+value_domain = "0 outside the selected route; positive remaining flood-fill score on route tiles"
+usage = "Selected movement-route work grid indexed as [tile_y][tile_x]. MVRTN, FIELD, and SETROUTE clear all 27,000 cells. SETROUTE starts at map_target_tile_x/y, copies pathfinding_remaining_route_steps into the route, and follows the cardinal neighbor whose score is one greater until it reaches the acting entity. FIELD uses the monotone values to draw directional route markers and drive movement; SELACT tests whether an action target follows movement; seventeen RTN_M providers reject candidate endpoints whose route cell is zero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x5231f", "0x52351", "0xaba96", "0xccbcf", "0xccbd4", "0xccc0a", "0xccc0b"]
+
+[[global]]
+address = "0xccbcf"
+name = "cardinal_tile_delta_x"
+category = "data-table"
+type = "int[5]"
+value_domain = "[0, 0, -1, 0, 1]"
+usage = "INIT2's shared no-move-plus-four-cardinal-neighbor X offsets. SETROUTE uses indices 1..4 while tracing a selected route toward the acting entity; MVSEEK, ATSEEK, FIELD, SALLY, and DRAWMAP use the same neighbor order."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xccbd4"]
+
+[[global]]
+address = "0xccbd4"
+name = "cardinal_tile_delta_y"
+category = "data-table"
+type = "int[5]"
+value_domain = "[0, 1, 0, -1, 0]"
+usage = "INIT2's Y offsets paired with cardinal_tile_delta_x. Indices 1..4 enumerate positive Y, negative X, negative Y, and positive X neighbors; index zero leaves the coordinate unchanged."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xccbcf"]
+
+[[global]]
+address = "0xccc0a"
+name = "map_target_tile_x"
+category = "index-pointer"
+type = "int"
+value_domain = "map tile X coordinate; shipped immediate assignments are 2..24"
+usage = "Shared map target/focus X coordinate. Seventeen RTN_M providers unpack candidate coordinates here before testing selected_movement_route_steps, FIELD and SETROUTE use it as the selected destination, and LOOK converts it to the centered world X coordinate when no enemy spawn slot is selected. Fifty-five scripts reference the paired target coordinates."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xc6077", "0xccc0b"]
+
+[[global]]
+address = "0xccc0b"
+name = "map_target_tile_y"
+category = "index-pointer"
+type = "int"
+value_domain = "map tile Y coordinate; shipped immediate assignments are 77..663"
+usage = "Shared map target/focus Y coordinate paired with map_target_tile_x. Movement providers unpack the low sixteen bits of candidate coordinates here; FIELD and SETROUTE select the route endpoint, while story scripts and LOOK use the same pair to center the battlefield camera on scripted map locations."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xc6077", "0xccc0a"]
+
+[[global]]
 address = "0xbf6fe"
 name = "pathfinding_filtered_route_scores"
 category = "data-table"

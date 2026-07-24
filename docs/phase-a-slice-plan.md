@@ -3243,3 +3243,27 @@ Registry tests protect all 24 initialized slot cells, use of all three columns i
 INIT2 handle constants, and the canonical global/column names.
 
 **Next:** rank the next unnamed row table by shipped-reader evidence.
+
+## Data-semantics sidebar: selected movement-route grid (2026-07-23)
+
+The highest-use remaining auto-shaped row table, `G[0xc6077]`, is now closed as
+`selected_movement_route_steps`. It is a reserved `1000 × 27` row-major map work grid. MVRTN,
+FIELD, and SETROUTE clear all 27,000 cells; the complete corpus has 51 two-dimensional lookups and
+five clears across 21 scripts.
+
+SETROUTE begins at `map_target_tile_x/y`, copies the matching
+`pathfinding_remaining_route_steps` score into the selected-route grid, and follows the cardinal
+neighbor whose score is one greater until it reaches the acting entity. This leaves a one-cell-wide
+monotone trail from destination back to origin. FIELD uses that trail to draw directional arrows and
+execute movement, SELACT tests whether an action target follows movement, and all seventeen providers
+RTN_M002..RTN_M018 reject candidate endpoints with a zero route cell.
+
+INIT2's paired five-cell arrays are now named `cardinal_tile_delta_x/y`: the exact values are
+`[0, 0, -1, 0, 1]` and `[0, 1, 0, -1, 0]`, preserving the no-move cell plus four-neighbor order.
+The target coordinate pair also drives LOOK's scripted battlefield-camera centering and is referenced
+by 55 scripts, so its names deliberately describe shared map targets rather than only AI destinations.
+
+Evidence regressions protect the exact corpus xrefs and clear geometry, all seventeen provider
+readers, both SETROUTE flood-score copies, the INIT2 cardinal vectors, and every canonical name.
+
+**Next:** investigate the remaining unnamed stride-300 table at `G[0x15261f]`.

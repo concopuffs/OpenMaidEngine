@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-4275 globals (423 curated, 3852 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+4276 globals (428 curated, 3848 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -195,9 +195,12 @@
 | `0xb240e` | pathfinding_movement_costs | high | investigation | MVSEEK's row-major movement-cost work grid, indexed as [tile_y][tile_x] with stride 27. FIELD and RTN_M providers accept candidate destinations only when this cost is within the acting entity's current FS or a provider-specific override. |
 | `0xb8d86` | action_range_distance_grid | high | investigation | ATSEEK's row-major action-range flood-fill grid. It starts from the acting entity, expands through map-valid doubled-coordinate neighbors up to usable_action_max_range, and stores 1 for the first range band, 2 for the next, and so on. RTN_M051/052 select offensive targets from it; RTN_M061 selects in-range healing targets. |
 | `0xbf6fe` | pathfinding_filtered_route_scores | high | investigation | SETMVWORK begins by copying pathfinding_remaining_route_steps, then filters occupied entity cells according to faction and the acting entity's usable offensive-action mask/effectiveness. RTN_M providers combine this target-proximity score with a movement-limited MVSEEK grid to select a reachable tile nearest an entity or stage object. |
+| `0xc6077` | selected_movement_route_steps | high | investigation | Selected movement-route work grid indexed as [tile_y][tile_x]. MVRTN, FIELD, and SETROUTE clear all 27,000 cells. SETROUTE starts at map_target_tile_x/y, copies pathfinding_remaining_route_steps into the route, and follows the cardinal neighbor whose score is one greater until it reaches the acting entity. FIELD uses the monotone values to draw directional route markers and drive movement; SELACT tests whether an action target follows movement; seventeen RTN_M providers reject candidate endpoints whose route cell is zero. |
 | `0xcc9f4` | offensive_action_scope_masks | high | investigation | CALCSCOPE clears ten encoded-range cells, sets bit 0 over the equipped/default attack's range, and sets bits 1..4 over each usable offensive skill's range. SETMVWORK uses the range-0 mask and paired attack elements when filtering target cells; RTN_M003/006/016/017/018 require its normal-attack bit. Columns: 0=range_0, 1=range_1, 2=range_2, 3=range_3, 4=range_4, 5=range_5, 6=range_6, 7=range_7, 8=range_8, 9=range_9. |
 | `0xcc9fe` | healing_action_scope_masks | high | investigation | CALCSCOPE clears ten encoded-range cells and sets the equipped-slot bit for each usable category-7 healing skill over its applicable range. RTN_M061 uses the masks to restrict ally targets and to select the range-enabled healing skill. Columns: 0=range_0, 1=range_1, 2=range_2, 3=range_3, 4=range_4, 5=range_5, 6=range_6, 7=range_7, 8=range_8, 9=range_9. |
 | `0xcca08` | offensive_action_attack_elements | high | investigation | CALCSCOPE stores the normal attack element in action column 0 and each usable equipped skill's attack element in columns 1..4 for every applicable range band. SETMVWORK and RTN_M051/052 test these elements against attack_element_effectiveness_percent. |
+| `0xccbcf` | cardinal_tile_delta_x | high | investigation | INIT2's shared no-move-plus-four-cardinal-neighbor X offsets. SETROUTE uses indices 1..4 while tracing a selected route toward the acting entity; MVSEEK, ATSEEK, FIELD, SALLY, and DRAWMAP use the same neighbor order. |
+| `0xccbd4` | cardinal_tile_delta_y | high | investigation | INIT2's Y offsets paired with cardinal_tile_delta_x. Indices 1..4 enumerate positive Y, negative X, negative Y, and positive X neighbors; index zero leaves the coordinate unchanged. |
 | `0xccc93` | stage_terrain_atlas | high | investigation | Immutable sparse half-tile terrain atlas loaded by MPINIT. Each footer copy writes fifty cells at row stride 53. FIELD doubles STINIT2's tile bounds and copies the selected rectangle into current_stage_terrain_grid; DRAWMINIMAP reads the atlas outside the active rectangle for border context, and RESETLAND restores changed cells from it. |
 | `0xe6aa4` | terrain_texture_slot_indices | high | investigation | LAINIT mapping from terrain id to the index in stage_map_texture_asset_overrides. DRAWMAP uses the selected slot to choose the current stage's tiled terrain surface. |
 | `0xe6ac2` | terrain_area_fill_flags | high | investigation | LAINIT terrain topology flag. DRAWMAP and CALCOCC use neighboring values to expand room-like regions across the alternating half-tile grid; DRAWMINIMAP uses the same distinction when joining adjacent revealed cells. |
@@ -405,8 +408,6 @@
 | `0xaba5f` | — | low | auto-shape | array |
 | `0xcca3a` | — | low | auto-shape | array |
 | `0xccb66` | — | low | auto-shape | array |
-| `0xccbcf` | — | low | auto-shape | array |
-| `0xccbd4` | — | low | auto-shape | array |
 | `0xccbd9` | — | low | auto-shape | array |
 | `0xccbf8` | — | low | auto-shape | array |
 | `0xccc11` | — | low | auto-shape | array |
@@ -445,6 +446,8 @@
 | `0x8c877` | current_item_id | high | investigation | Shared item-id argument/selection slot. Item menus and gameplay scripts write a chosen item id, use it to index ITINIT arrays, and dispatch through item_handler_script_id; ITMES compares it against all 287 item ids to select the matching player-facing title and description. |
 | `0xa6e59` | current_skill_id | high | investigation | Shared skill-id argument/selection slot. Skill menus and combat scripts write the chosen skill id and use it to index SKINIT arrays; SKMES compares it against all 131 skill ids to select the matching player-facing title and description. |
 | `0xaac76` | current_condition_id | high | investigation | Shared condition selector consumed by CALCILL, ADDILL, ADDILLSUB, DISARM, FIELD, and related condition handlers. It indexes the 30-column runtime condition rows and ILINIT definition arrays. |
+| `0xccc0a` | map_target_tile_x | high | investigation | Shared map target/focus X coordinate. Seventeen RTN_M providers unpack candidate coordinates here before testing selected_movement_route_steps, FIELD and SETROUTE use it as the selected destination, and LOOK converts it to the centered world X coordinate when no enemy spawn slot is selected. Fifty-five scripts reference the paired target coordinates. |
+| `0xccc0b` | map_target_tile_y | high | investigation | Shared map target/focus Y coordinate paired with map_target_tile_x. Movement providers unpack the low sixteen bits of candidate coordinates here; FIELD and SETROUTE select the route endpoint, while story scripts and LOOK use the same pair to center the battlefield camera on scripted map locations. |
 | `0xeff75` | current_routine_set_id | high | investigation | Shared RTINIT row selector. MVRTN loads the current entity's difficulty-selected movement routine set; BTRTN loads its battle routine set. Both then iterate routine_step_index across the selected twenty-slot row. |
 | `0xeff76` | routine_step_index | high | investigation | Shared RTINIT step selector. MVRTN and BTRTN iterate it from zero through nineteen and use it as the column index in every routine bank and matching per-entity runtime row. |
 | `0x1519f8` | current_card_id | high | investigation | FIELD's selected card-definition row. Card generation copies a surviving CDINIT card id here, uses it to test CDINIT2 story-flag gates, retains it through weighted selection, and indexes the chosen card's effects, graphics, name, and result text. |
@@ -3766,10 +3769,8 @@
 | `0x62ccb` | — | low | auto-shape | index/counter? |
 | `0x81c96` | — | med | auto-shape | record-table[stride 3] |
 | `0x8284e` | — | med | auto-shape | record-table[stride 3] |
-| `0xc6077` | — | med | auto-shape | record-table[stride 27] |
 | `0xcc9f0` | — | low | auto-shape | index/counter? |
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
-| `0xccc0b` | — | low | auto-shape | index/counter? |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |
 | `0xe6c5e` | — | med | auto-shape | obinit-field |
 | `0xe6cc2` | — | med | auto-shape | obinit-field |

@@ -606,6 +606,21 @@ mode 2 additionally applies the foreign-entity terrain mask described above. Eve
 decrements `pathfinding_remaining_route_steps`, so origin minus target is the route-step distance used
 by M006/007/015.
 
+The formerly unnamed `G[0xc6077]` stride-27 table closes the other half of that pathfinding ABI. It is
+the reserved `1000 × 27` `selected_movement_route_steps` grid, not another search surface. MVRTN,
+FIELD, and SETROUTE each clear all 27,000 cells. SETROUTE begins at `map_target_tile_x/y`, copies the
+matching `pathfinding_remaining_route_steps` value, then walks the four `cardinal_tile_delta_x/y`
+neighbors until it finds the cell whose score is one greater; it copies that score and repeats until
+reaching the acting entity. The result is a one-cell-wide monotone route from actor to destination.
+
+FIELD reads that trail both to draw direction-specific route markers and to drive movement along
+successive scores. SELACT checks whether an action target follows movement, while every provider from
+RTN_M002 through RTN_M018 tests its candidate endpoint for a nonzero selected-route cell. Across the
+corpus the grid has exactly 51 two-dimensional lookups and five clears in 21 scripts. INIT2 proves the
+shared cardinal vectors as `[0, 0, -1, 0, 1]` for X and `[0, 1, 0, -1, 0]` for Y. The target coordinate
+pair is broader than routing: 55 scripts also pass scripted map locations through it to LOOK, which
+centers the battlefield camera on the selected tile.
+
 `movement_steps` now carry these selector-scoped semantic fields beside the original
 `movement_parameter_1..4`, and top-level `movement_provider_parameter_schemas` records the reusable
 mapping, target-selection rules, zero/unwritten behavior, and authored fields proven unread by their
@@ -618,8 +633,9 @@ The supporting runtime joins are now curated too:
 current HP/SP/FS, `entity_skill_flags`, the paired carried-item id/count slots,
 `stage_object_runtime_flags`, `movement_search_mode`,
 `offensive_action_scope_masks`, `pathfinding_remaining_route_steps`,
-`pathfinding_filtered_route_scores`, `pathfinding_movement_costs`, and the per-entity patrol waypoint
-index. The faction-specific terrain masks used by M013 are curated as
+`selected_movement_route_steps`, `pathfinding_filtered_route_scores`, `pathfinding_movement_costs`,
+the map-target coordinate pair and cardinal neighbor vectors, and the per-entity patrol waypoint index.
+The faction-specific terrain masks used by M013 are curated as
 `tile_faction_traversal_masks`. M051's shared action-selection ABI also names `acting_entity_index`,
 `target_entity_index`, `action_range_distance_grid`, the shared usable-action range bounds, the
 offensive and healing range masks, the offensive element tables,

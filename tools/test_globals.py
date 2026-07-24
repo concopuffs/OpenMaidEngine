@@ -163,6 +163,13 @@ def test_load_and_lint():
           "stage-object targeting flags are curated")
     check(entries[0xb240e]["name"] == "pathfinding_movement_costs",
           "movement-cost work grid is curated")
+    check(entries[0xc6077]["name"] == "selected_movement_route_steps"
+          and entries[0xc6077]["type"] == "int[1000][27]"
+          and entries[0xccbcf]["name"] == "cardinal_tile_delta_x"
+          and entries[0xccbd4]["name"] == "cardinal_tile_delta_y"
+          and entries[0xccc0a]["name"] == "map_target_tile_x"
+          and entries[0xccc0b]["name"] == "map_target_tile_y",
+          "selected movement route grid and coordinate helpers are curated")
     # lint clean against a permissive address universe (curated addrs are self-consistent)
     errors, warnings = G.lint(entries, set(entries))
     check(errors == [], f"globals.toml lints clean (errors={errors})")
@@ -227,6 +234,80 @@ def test_adv_layer_surface_slot_evidence():
           == expected_handles,
           "INIT2 seeds the nine ADV retained-object handles")
 
+def test_selected_movement_route_grid_evidence():
+    target = 0xc6077
+    refs = []
+    clears = []
+    loaded = {}
+    for name, path in paths.scripts().items():
+        if path.read_bytes()[:8] != b"SYS4422 ":
+            continue
+        script = sys4load.load(path)
+        loaded[name] = script
+        for index, instruction in enumerate(script.instructions):
+            if not any(arg[1] == target for arg in instruction.args):
+                continue
+            refs.append((name, instruction))
+            if instruction.opcode == 0x6c:
+                clears.append((script, index, instruction))
+
+    check(len(refs) == 56
+          and sum(instruction.opcode == 0x12c for _, instruction in refs) == 51
+          and len(clears) == 5
+          and len({name for name, _ in refs}) == 21,
+          "selected route grid has the exact 51 lookups and five clears in 21 scripts")
+
+    clear_geometry_ok = True
+    for script, index, instruction in clears:
+        previous = script.instructions[index - 1]
+        clear_geometry_ok &= (
+            previous.label == "mul"
+            and previous.args[1:] == [(0, 1000), (0, 27)]
+            and instruction.args[1] == previous.args[0]
+        )
+    check(clear_geometry_ok,
+          "every selected route-grid clear covers the reserved 1000 by 27 cells")
+
+    providers = {
+        name for name, instruction in refs
+        if name.startswith("RTN_M") and instruction.opcode == 0x12c
+    }
+    check(providers == {f"RTN_M{provider:03d}.BIN" for provider in range(2, 19)},
+          "all seventeen RTN_M002..RTN_M018 providers test selected route endpoints")
+
+    setroute = loaded["SETROUTE.BIN"].instructions
+    copy_pairs = 0
+    for index in range(len(setroute) - 2):
+        first, second, third = setroute[index:index + 3]
+        if (first.opcode == 0x12c
+                and (3, 0xaba96) in first.args
+                and second.opcode == 0x12c
+                and (3, target) in second.args
+                and third.label == "mov"
+                and third.args == [(12, 1), (12, 0)]):
+            copy_pairs += 1
+    check(copy_pairs == 2,
+          "SETROUTE copies flood-fill scores into the destination and each traced route tile")
+
+    init2 = loaded["INIT2.BIN"]
+    footer_refs = {
+        instruction.args[0][1]: instruction.args[1][1]
+        for instruction in init2.instructions
+        if instruction.opcode == 0x64
+        and instruction.args[0] in {(3, 0xccbcf), (3, 0xccbd4)}
+    }
+    vectors = {}
+    for address, offset in footer_refs.items():
+        count = init2.dwords[offset]
+        vectors[address] = [
+            value if value < 0x80000000 else value - 0x100000000
+            for value in init2.dwords[offset + 1:offset + 1 + count]
+        ]
+    check(vectors == {
+        0xccbcf: [0, 0, -1, 0, 1],
+        0xccbd4: [0, 1, 0, -1, 0],
+    }, "INIT2 defines the no-move plus four-cardinal-neighbor vectors")
+
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
     auto = G.load_auto(paths.BUILD / "global-var-map.json")
@@ -290,6 +371,7 @@ if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
     test_adv_layer_surface_slot_evidence()
+    test_selected_movement_route_grid_evidence()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
