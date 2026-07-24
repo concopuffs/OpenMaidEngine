@@ -471,9 +471,11 @@ replacement for compatibility-mode import/export. The recovered native contract 
 their four native opcodes while opaque catalog/version sections round-trip unchanged. Native `RT.DAT`
 import/export and the packed-script/T1 ReadTextDB queue/commit/query lifecycle are also implemented,
 including `message:ReadTextSkip` ops `0x1ca`/`0x1cb` and state query `0x1cc`. Numbered active-frame state
-remains later Phase B work. The outer numbered layer is now live: metadata query, paired `.DAT`/`.STH`
-copy/delete, exact native BMP thumbnail I/O, and the active-frame boundary marker. Full layout-3 payload
-serialization/restoration is the next persistence slice.
+is now implemented in native layout 3: metadata query, paired `.DAT`/`.STH` lifecycle, exact native BMP
+thumbnail I/O, six global banks, retained surface/gfx state, history, and nested frame restoration through
+the `0xae` rendezvous. The real `SAVE.BIN` script is covered end to end for listing and loading, including
+a read-only installed-save compatibility gate. JSON inspection/export, namespaced mod data, and migrations
+remain additive extended-mode work rather than 1.0 compatibility requirements.
 
 ### Phase C — Externalize & modding foundation
 - Add **editable named data overlays** mapped explicitly onto the VM's `*INIT`-produced state; external

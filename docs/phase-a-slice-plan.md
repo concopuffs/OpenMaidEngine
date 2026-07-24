@@ -3499,6 +3499,27 @@ implementation status. The remaining 1.0 persistence work is
 gameplay validation through Himegari's real SAVE.BIN UI and any corrections that reveals; JSON inspection,
 namespaced mod data, and migrations remain extended-mode work.
 
+### Persistence implementation step 6 — real SAVE.BIN integration gate (2026-07-24)
+
+The native persistence path is now exercised through Himegari's actual `SAVE.BIN` bytecode rather than
+only synthetic opcode programs. A deterministic native pair proves the menu queries slot metadata,
+rasterizes its timestamp/playtime fields, and decodes the paired 112x84 `.STH` thumbnail into the menu
+surface. A scripted native mouse press/release on row zero then traverses the real load-mode control flow,
+executes `0x1a1`, runs `CALLBACK_LOAD.BIN`, and reaches the saved script's active `0xae` rendezvous.
+
+A second, read-only compatibility gate points the same real-script path at the installed Himegari
+`SAVE00.DAT`. It decodes the complete native layout, resolves the installed save's first persisted script
+through the mounted SYS4 catalogs, and enters that frame with `FrameCause.SaveRestore`; the test stops at
+that boundary before gameplay continues and never writes to the original AppData tree. No codec, VM, or
+script-control correction was required by these gates.
+
+The Godot profile remains intentionally isolated at `user://SAVE`. For visual acceptance, a copied
+`SAVE00.DAT`/`.STH` pair can be placed there without exposing the original save directory to writes.
+JSON inspection/export, namespaced mod state, migrations, and richer import UX remain extended-mode work.
+
+Validation: all 386 engine tests pass, opcode lint reports zero errors/warnings, the Godot C# build has
+zero warnings, and the threaded headless run reports `SELFTEST OK`.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.
