@@ -1786,8 +1786,8 @@ DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect alre
 lossless opaque-section preservation. `SharedProfile` owns selected integer/string maps and explicit
 load/save lifecycle; `GameSession` injects it into every fresh VM. Opcodes `0x1a2`/`0x1a3` and
 `0x1a9`/`0x1aa` now implement native upsert and missing-value defaults for direct cells and resolved
-global pointers. `RT.DAT`, thumbnails, and numbered active-frame payloads remain later layers; the existing
-`GameSession` JSON snapshot is unchanged.
+global pointers. `RT.DAT` is now implemented as the separate S3RT layer described below. Thumbnails and
+numbered active-frame payloads remain later layers; the existing `GameSession` JSON snapshot is unchanged.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
@@ -1844,11 +1844,26 @@ documented above. It is independent of the `RT.DAT` read-message database even t
 writer updates both files in one lifecycle.
 
 The `RT.DAT` header is `0x114` bytes: magic `0x54523353` (bytes `S3RT`), a compatibility id, a 256-byte
-game id, version pair `1,0`, and script-record count. It is followed by 12-byte script records containing
-`{script_id, message_count, pointer_placeholder}` and the corresponding `message_count` dword flag arrays.
-The loader validates the header compatibility fields, allocates fresh arrays, and rebuilds the in-memory
-hashtable. The port should own an equivalent profile-level model; matching the original raw pointer-bearing
-file layout is optional compatibility work, not a prerequisite for native runtime semantics.
+game id, version pair `1,0`, and script-record count. It is followed by all 12-byte script records containing
+`{script_id, message_count, serialized_flags_pointer}` and then, in the same record order, the corresponding
+`message_count` DWORD flag arrays. The native writer copies its live heap pointer into the third record word.
+The loader ignores that address, allocates a fresh array, overwrites the word, and rebuilds the in-memory
+hashtable; a portable structurally compatible writer can therefore emit zero without inventing an address.
+The installed 76,752-byte native file validates the formula exactly: 192 records and 18,543 flag DWORDs.
+Its SC0000 record (`script_id=0x22`) has 320 messages, exactly matching SC0000's F7/T1 count.
+
+**Port implementation (2026-07-24):** `ReadTextDatabaseCodec` imports and emits the exact S3RT header,
+record table, and ordered flag arrays, validates compatibility/game/version identity, accepts native nonzero
+pointer residue, and writes zero in that ignored field. `DirectoryNativeDatStore` owns
+`$$RT.DAT` → `RT.DAT` / `RT.BAK` replacement; load follows native behavior and reads `RT.DAT` directly
+rather than treating `RT.BAK` as a fallback. `SharedProfile.ReadText` owns records and the pending queue
+across fresh VMs, and shared-profile Save/Load updates SAVE.DAT and RT.DAT as separate native domains.
+
+Scripts now retain their packed resource id and decoded F7/T1 table. Opcode `0x71` commits pending tuples
+and snapshots its T1 coordinate; `0x6e`/`0x71`/`0x72` refresh read eligibility; wait completion queues
+`{script_id,message_index,message_count}`. Opcodes `0x1ca`/`0x1cb` share the profile-lifetime
+`message:ReadTextSkip` setting, while `0x1cc` reports the current message state. This implements native
+read-message behavior without scene-offset special cases and leaves JSON/export tooling as extended mode.
 
 The `/v2` Ghidra image now names/comments the lookup, queue, commit, mark, file read/write, and shared-profile
 save/load chain and corrects the relevant function prototypes; saved 2026-07-18.

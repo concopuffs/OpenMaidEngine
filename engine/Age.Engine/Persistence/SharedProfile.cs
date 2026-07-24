@@ -337,8 +337,8 @@ public static class SharedProfilePayloadCodec
 }
 
 /// <summary>
-/// Profile-lifetime selected cells plus the opaque native sections required to round-trip SAVE.DAT.
-/// VM opcodes mutate this object; explicit Load/Save calls own filesystem lifecycle.
+/// Profile-lifetime selected cells plus the opaque SAVE.DAT sections and independent RT.DAT read
+/// history. VM opcodes mutate this object; explicit Load/Save calls own both filesystem lifecycles.
 /// </summary>
 public sealed class SharedProfile
 {
@@ -351,6 +351,9 @@ public sealed class SharedProfile
 
     public IReadOnlyDictionary<int, uint> IntegerCells => _integerCells;
     public IReadOnlyDictionary<int, string> StringCells => _stringCells;
+    public ReadTextDatabase ReadText { get; } = new();
+    /// <summary>The engine setting manipulated by opcodes 0x1ca/0x1cb.</summary>
+    public bool ReadMessageSkipEnabled { get; set; }
 
     public void StoreInteger(int address, long value)
     {
@@ -384,12 +387,14 @@ public sealed class SharedProfile
         NativeSaveDocument? document = store.LoadShared();
         if (document is null)
         {
-            Clear();
-            return false;
+            ClearSharedPayload();
         }
-
-        Replace(SharedProfilePayloadCodec.Decode(document.Payload, document.Metadata));
-        return true;
+        else
+        {
+            Replace(SharedProfilePayloadCodec.Decode(document.Payload, document.Metadata));
+        }
+        bool readTextLoaded = ReadText.Load(store);
+        return document is not null || readTextLoaded;
     }
 
     public void Save(
@@ -401,6 +406,7 @@ public sealed class SharedProfile
         NativeSaveMetadata metadata = store.Identity.CreateMetadata(timestamp, accumulatedPlaySeconds);
         byte[] payload = SharedProfilePayloadCodec.Encode(Snapshot(), metadata);
         store.SaveShared(payload, timestamp, accumulatedPlaySeconds);
+        ReadText.Save(store);
     }
 
     public SharedProfilePayload Snapshot()
@@ -426,6 +432,13 @@ public sealed class SharedProfile
     }
 
     public void Clear()
+    {
+        ClearSharedPayload();
+        ReadText.Clear();
+        ReadMessageSkipEnabled = false;
+    }
+
+    private void ClearSharedPayload()
     {
         _catalogCompatibilityValues = Array.Empty<uint>();
         _integerCells.Clear();

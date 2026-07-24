@@ -53,6 +53,7 @@ public sealed class VirtualMachine
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
     private volatile bool _advSkipServiceEnabled;
+    private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
@@ -249,6 +250,24 @@ public sealed class VirtualMachine
     {
         bool active = _advSkipServiceEnabled && (InputBindings.PollActionMask() & 0x40) != 0;
         _host.SetPhysicalMessageSkipActive(active);
+    }
+
+    private int CurrentReadMessageIndex()
+    {
+        if (_cur.ReadMessageOffset < 0) return -1;
+        for (int i = 0; i < _cur.Script.ReadMessageOffsets.Count; i++)
+            if (_cur.Script.ReadMessageOffsets[i] == _cur.ReadMessageOffset) return i;
+        return -1;
+    }
+
+    private void RefreshAdvReadSkipState()
+    {
+        int messageIndex = CurrentReadMessageIndex();
+        _advReadSkipState = _sharedProfile.ReadMessageSkipEnabled
+                            && _sharedProfile.ReadText.IsMessageRead(
+                                _cur.Script.PackedId, messageIndex);
+        _messageSkipServiceActive = _messageSkipEnabled || _advReadSkipState;
+        _host.SetMessageSkipActive(_messageSkipServiceActive);
     }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
@@ -583,6 +602,7 @@ public sealed class VirtualMachine
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
         _advSkipServiceEnabled = false;
+        _advReadSkipState = false;
         _advTextStyle = AdvTextStyle.Default;
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
@@ -1212,6 +1232,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "show-text":
+                RefreshAdvReadSkipState();
                 foreach (var o in a)
                 {
                     if (o.Type != T_STR) continue;
@@ -1236,6 +1257,9 @@ public sealed class VirtualMachine
                 var layout = TextHistory.GetLayoutSnapshot(requestedSlot);
                 _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
                 _host.ClearRenderedAdvTextLayout(layout.Slot);
+                _cur.ReadMessageOffset = ins.Offset;
+                _sharedProfile.ReadText.CommitPending();
+                RefreshAdvReadSkipState();
                 return pc + 1;
             }
             case "set-adv-text-reset-cursor": // 0x79: configure cursor restored by a later 0x71
@@ -1275,6 +1299,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "wait-for-input":
+                RefreshAdvReadSkipState();
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
                 // The native ADV chrome is a coroutine: after an earlier 0x93 cancellation its shared
@@ -1293,6 +1318,9 @@ public sealed class VirtualMachine
                 _host.WaitForInput((int)Read(a[0]), ServiceHotspotCallback,
                     () => new AdvAutoWaitState(_autoMessageEnabled, _autoVoicePending,
                                                _autoMessageTime0Ms, _autoMessageTime1Ms));
+                _sharedProfile.ReadText.QueueMessage(
+                    _cur.Script.PackedId, CurrentReadMessageIndex(),
+                    _cur.Script.ReadMessageOffsets.Count);
                 return pc + 1;
             case "u0041BEB0":
             case "register-hotspot-callbacks": // 0x90: inclusive rect + enter/leave/activate local callbacks
@@ -1515,7 +1543,8 @@ public sealed class VirtualMachine
             case "u00414EC0":
             case "resume-adv-skip-service": // 0x19c: recompute active fast-forward on ADV entry
                 _advSkipServiceEnabled = true;
-                _messageSkipServiceActive = _messageSkipEnabled || _host.IsAdvReadSkipActive;
+                _messageSkipServiceActive =
+                    _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
                 _host.SetMessageSkipActive(_messageSkipServiceActive);
                 RefreshPhysicalMessageSkipState();
                 return pc + 1;
@@ -1525,7 +1554,16 @@ public sealed class VirtualMachine
                 Write(a[0], _messageSkipServiceActive || _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
             case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
             case "get-adv-service-state":   // compatibility with pre-recovery generated tables
-                Write(a[0], _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;
+                Write(a[0], _advReadSkipState || _host.IsAdvReadSkipActive ? 1 : 0); return pc + 1;
+            case "u0041B9B0":
+            case "set-read-message-skip": // 0x1ca: engine setting message:ReadTextSkip
+                _sharedProfile.ReadMessageSkipEnabled = Read(a[0]) != 0;
+                RefreshAdvReadSkipState();
+                return pc + 1;
+            case "u00414FD0":
+            case "get-read-message-skip": // 0x1cb
+                Write(a[0], _sharedProfile.ReadMessageSkipEnabled ? 1 : 0);
+                return pc + 1;
             case "u00414F60":
             case "get-auto-message": // 0x1b6: VM service state used by the ADV redraw callback
                 Write(a[0], _autoMessageEnabled ? 1 : 0); return pc + 1;

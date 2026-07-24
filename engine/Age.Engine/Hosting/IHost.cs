@@ -80,6 +80,8 @@ public interface IHost
     // persistent op-0x88 channel so releasing the key cannot turn off the user's Skip toggle.
     void SetPhysicalMessageSkipActive(bool active) { }
     bool IsMessageSkipActive => false;
+    // Optional diagnostic override. Native ReadTextDB state is VM/profile-owned; interactive hosts
+    // normally leave this false.
     bool IsAdvReadSkipActive => false;
     // Normal playback reaches op 0x21c and parks until a queued 0x223 transition completes. The
     // read/message-skip branch reaches op 0x20c and presents the completed endpoint immediately.

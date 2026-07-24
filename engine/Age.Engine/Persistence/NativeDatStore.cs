@@ -39,6 +39,8 @@ public interface INativeDatStore
     NativeSaveIdentity Identity { get; }
     NativeSaveDocument? LoadShared();
     void SaveShared(ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
+    ReadTextDatabaseSnapshot? LoadReadText();
+    void SaveReadText(ReadTextDatabaseSnapshot snapshot);
     NativeSaveDocument? LoadNumbered(int slot);
     void SaveNumbered(int slot, ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
 }
@@ -53,6 +55,9 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
     public const string SharedFileName = "SAVE.DAT";
     public const string SharedTemporaryFileName = "$$SAVE.DAT";
     public const string SharedBackupFileName = "SAVE.BAK";
+    public const string ReadTextFileName = "RT.DAT";
+    public const string ReadTextTemporaryFileName = "$$RT.DAT";
+    public const string ReadTextBackupFileName = "RT.BAK";
 
     private readonly string _root;
     private readonly NativeSaveIdentity _identity;
@@ -106,6 +111,29 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         string temporary = Path.Combine(_root, SharedTemporaryFileName);
         string primary = Path.Combine(_root, SharedFileName);
         string backup = Path.Combine(_root, SharedBackupFileName);
+        WriteThrough(temporary, encoded);
+        if (File.Exists(backup)) File.Delete(backup);
+        if (File.Exists(primary)) File.Move(primary, backup);
+        File.Move(temporary, primary);
+    }
+
+    public ReadTextDatabaseSnapshot? LoadReadText()
+    {
+        string path = Path.Combine(_root, ReadTextFileName);
+        return File.Exists(path)
+            ? ReadTextDatabaseCodec.Decode(File.ReadAllBytes(path), _identity)
+            : null;
+    }
+
+    public void SaveReadText(ReadTextDatabaseSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        byte[] encoded = ReadTextDatabaseCodec.Encode(snapshot, _identity);
+        Directory.CreateDirectory(_root);
+
+        string temporary = Path.Combine(_root, ReadTextTemporaryFileName);
+        string primary = Path.Combine(_root, ReadTextFileName);
+        string backup = Path.Combine(_root, ReadTextBackupFileName);
         WriteThrough(temporary, encoded);
         if (File.Exists(backup)) File.Delete(backup);
         if (File.Exists(primary)) File.Move(primary, backup);

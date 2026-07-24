@@ -3405,6 +3405,35 @@ separation.
 **Next persistence step:** add native `RT.DAT` and connect the already-mapped ReadTextDB queue/commit/query
 lifecycle. Numbered active-frame saves and `.STH` remain the later, larger payload slice.
 
+### Persistence implementation step 3 — native RT.DAT and ReadTextDB lifecycle (2026-07-24)
+
+The profile-wide read-message domain is now implemented without folding it into shared SAVE.DAT or the
+port's JSON session snapshot. `ReadTextDatabaseCodec` reads/writes the native `0x114`-byte S3RT header,
+12-byte `{script_id,message_count,serialized_pointer}` table, and ordered DWORD flag arrays. Installed
+native RT.DAT validation proves 192 records plus 18,543 flag DWORDs account for all 76,752 bytes; its
+SC0000 id `0x22` carries 320 messages, exactly matching that script's F7/T1 table. Native heap-pointer
+words are accepted on import and emitted as zero because AGE allocates and overwrites them on load.
+
+`DirectoryNativeDatStore` now performs the native `$$RT.DAT` → `RT.DAT` / `RT.BAK` replacement alongside
+the existing shared transaction. `SharedProfile` owns both ReadTextDB records and its pending queue, loads
+RT.DAT independently, and writes it after SAVE.DAT. Script parsing retains the packed SYS4/AAI id plus T1
+message-boundary offsets; the synthetic assembler emits the same table for behavioral tests.
+
+The VM implements the native seam: wait completion queues the current `{packed_script_id,T1_index,T1_count}`;
+the next op `0x71` commits it, and ops `0x6e`/`0x71`/`0x72` refresh previously-read eligibility.
+`0x1ca`/`0x1cb` now set/get the profile-lifetime `message:ReadTextSkip` setting and `0x1cc` exposes the
+current per-message state. Six focused tests cover exact bytes, malformed files, native pointer tolerance,
+the installed native oracle, queue/growth behavior, paired filesystem transactions, and fresh-VM opcode
+continuity.
+
+**Next persistence step:** implement numbered active-frame SAVE##.DAT layouts and paired BMP `.STH`
+thumbnail lifecycle. JSON inspection/export and mod-owned namespaced state remain extended-mode work.
+
+Validation: all 370 engine tests pass, including the installed read-only RT.DAT round-trip oracle;
+opcode generator tests/lint and the Godot C# build are clean. SC0000 is now 127/129 distinct opcodes
+handled (98.4%); its only remaining effectful gaps are numbered-save restore boundaries `0x1ad`×6 and
+`0xae`×1.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

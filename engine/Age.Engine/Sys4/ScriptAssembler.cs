@@ -28,13 +28,20 @@ public static class ScriptAssembler
     {
         int codeLen = 0;
         foreach (var ins in instrs) codeLen += 1 + 2 * ins.Args.Length;
+        var messageOffsets = new List<uint>();
+        int instructionOffset = 0;
+        foreach (var ins in instrs)
+        {
+            if (ins.Op == 0x71) messageOffsets.Add((uint)instructionOffset);
+            instructionOffset += 1 + 2 * ins.Args.Length;
+        }
 
         // Encode strings; record each string's starting dword offset (relative to body start).
         var strDwords = new List<uint>();
         var strOffset = new int[strings.Count];
         for (int i = 0; i < strings.Count; i++)
         {
-            strOffset[i] = codeLen + strDwords.Count;
+            strOffset[i] = codeLen + messageOffsets.Count + strDwords.Count;
             strDwords.AddRange(EncodeString(strings[i]));
         }
 
@@ -49,10 +56,14 @@ public static class ScriptAssembler
                 body.Add((uint)val);
             }
         }
+        body.AddRange(messageOffsets);
         body.AddRange(strDwords);
 
         var fields = new int[NumFields];
-        fields[8] = codeLen;                       // F8 = code end (strings begin here)
+        fields[7] = messageOffsets.Count;            // F7 = T1/read-message boundary count
+        fields[8] = codeLen;                       // F8 = code end / T1 table start
+        fields[10] = codeLen + messageOffsets.Count;
+        fields[12] = codeLen + messageOffsets.Count;
 
         var bytes = new byte[HeaderSize + body.Count * 4];
         Encoding.ASCII.GetBytes("SYS4422 ").CopyTo(bytes, 0);

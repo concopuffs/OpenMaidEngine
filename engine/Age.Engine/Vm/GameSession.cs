@@ -21,7 +21,7 @@ public sealed class GameSession
 {
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
-    /// <summary>AGE's selected profile-wide cells and native shared SAVE.DAT lifecycle.</summary>
+    /// <summary>AGE's selected profile-wide cells plus native shared SAVE.DAT/RT.DAT lifecycle.</summary>
     public SharedProfile SharedProfile { get; }
     /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
     public AdvTextHistory TextHistory { get; } = new();

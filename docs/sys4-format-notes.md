@@ -64,7 +64,7 @@ consistent with the SYS4/SYS5 family.
 
 ```
 body[0        .. F8)    CODE          bytecode instruction stream
-body[F8       .. F10)   TABLE-1  (F7 entries, 1 dword each)  -> targets of type 0x71
+body[F8       .. F10)   TABLE-1  (F7 entries, 1 dword each)  -> read-message boundaries (op 0x71)
 body[F10      .. F12)   TABLE-2  (F9 entries, 1 dword each)  -> targets of type 0x03
 body[F12      .. EOF)   TABLE-3  (F11 entries, 1 dword each) -> targets of type 0x8F
 ```
@@ -80,11 +80,15 @@ tag identifying the pointed-to construct:
 
 | Table | count/off | Target dword tag | Hits | Meaning (inferred) |
 |---|---|---|---|---|
-| T1 | F7 / F8  | **0x71** | 26,445/26,445 | labels / call targets (operand at +2 is small: mostly 1) |
+| T1 | F7 / F8  | **0x71** | 26,445/26,445 | per-script read-message boundary index |
 | T2 | F9 / F10 | **0x03** | 3,018/3,018   | data/variable entries (operand at +2 large, e.g. addresses) |
 | T3 | F11 / F12| **0x8F** | 72,941/72,941 | instruction/line entries (largest table; operand at +2 huge) |
 
-100% type purity — not a single target had a different tag. T3 is the big one
+100% type purity — not a single target had a different tag. Native
+`read_text_db_find_message_index@0x468f50` searches T1 for the code DWORD coordinate most recently
+snapshotted by op `0x71`; its zero-based entry index and F7 count are the message index/count stored in
+shared `RT.DAT`. Thus T1 is not a generic label table even though every entry is a control-structure
+site. T3 is the big one
 (~73k entries corpus-wide), consistent with it being a per-instruction or
 per-source-line index (a debug/line table). T1 ≈ labels, T2 ≈ a smaller symbol set.
 

@@ -7,7 +7,7 @@ public static class Sys4Loader
     public static Script Load(string path, OpcodeTable table)
         => Parse(File.ReadAllBytes(path), table, Path.GetFileName(path));
 
-    public static Script Parse(byte[] data, OpcodeTable table, string name = "")
+    public static Script Parse(byte[] data, OpcodeTable table, string name = "", uint packedId = 0)
     {
         if (data.Length < HeaderSize) throw new InvalidDataException($"{name}: too small");
         if (!(data[0] == (byte)'S' && data[1] == (byte)'Y' && data[2] == (byte)'S' && data[3] == (byte)'4'))
@@ -22,14 +22,23 @@ public static class Sys4Loader
 
         var header = new ScriptHeader(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
         var (instrs, idxByOff, strings) = DecodeCode(dw, fields, nbody, table);
+        int messageCount = fields[7];
+        int messageTableOffset = fields[8];
+        if (messageCount < 0 || messageTableOffset < 0
+            || messageTableOffset > nbody || messageCount > nbody - messageTableOffset)
+            throw new InvalidDataException($"{name}: invalid T1 read-message table");
+        int[] messageOffsets = dw.AsSpan(messageTableOffset, messageCount)
+            .ToArray().Select(value => checked((int)value)).ToArray();
         return new Script
         {
             Name = name,
+            PackedId = packedId,
             Header = header,
             Instructions = instrs,
             IndexByOffset = idxByOff,
             Strings = strings,
             BodyDwords = dw,
+            ReadMessageOffsets = messageOffsets,
         };
     }
 

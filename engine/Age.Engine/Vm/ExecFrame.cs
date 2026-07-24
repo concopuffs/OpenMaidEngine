@@ -10,6 +10,7 @@ internal sealed class ExecFrame
 
     public readonly Script Script;
     public int Pc;                                       // entry instruction index
+    public int ReadMessageOffset = -1;                   // latest op-0x71 code DWORD coordinate
     public readonly Frame Locals = new();
     public readonly List<int> CallStack = new();         // intra-script `call` (op 0x8f) returns
     public readonly Dictionary<int, int> EmitSeen = new();

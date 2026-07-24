@@ -17,10 +17,14 @@
 - **depended on by:** 0x79, 0x1c1
 - **evidence:** Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; the worker clears the selected layout and appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20.
 
+Port status (2026-07-24): commits the profile-owned ReadTextDB queue, records the current T1 coordinate, and refreshes per-message read-skip state in addition to the retained-layout reset.
+
 ### 0x72 `wait-for-input` (wait-for-input, argc 1)
 - **summary:** (layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN_00453120(text_manager, layout_slot, -1, &state), then sets the input-wait run-state flags. FUN_00453120 resolves layout slot 0 as current and consumes the indicator descriptor at layout+0x3c configured by op 0x73. SYSTEM4 layout 1 uses SO000's bat strip; the click that completes show-text is consumed before this opcode is reached. The handler also checks ctx+0x55104 (Auto enabled): when ctx+0x6dbe4 has no pending voice it arms the timer with message:AutoMessageTime1, substituting 100 ms for configuration value zero. adv_input_service_poll@0x411230 waits for an active voice to finish and then arms AutoMessageTime0, likewise with a 100-ms zero fallback. The same click/Auto completion path calls read_text_db_queue_message@0x469340 with the current script id, resolved per-script message index, and message count; an already-skipped wait queues it directly in op 0x72. Op 0x71 later commits the pending records.
+
+Port status (2026-07-24): after the blocking host releases this wait, the VM queues the current packed script id, T1 message index, and T1 count; the next 0x71 commits it. Already-read waits use the same queue path after immediate host release.
 
 ### 0x73 `configure-adv-wait-indicator` (configure-adv-wait-indicator, argc 10)
 - **summary:** (layout_slot)(dst_x)(dst_y)(surface_slot)(src_x)(src_y)(cell_w)(cell_h)(terminal_frame)(frame_period_ms) - configure the animated marker shown while the selected ADV layout waits for input.
@@ -547,6 +551,8 @@ Both copies are attempted with overwrite allowed. Status is 0 when both succeed,
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x20c, 0x20d, 0x21c, 0x223
 - **evidence:** Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). adv_refresh_read_skip_state@0x406cd0 and op 0x6e/0x71/0x72 maintain the field from message:ReadTextSkip plus read_text_db_find_message_index@0x468f50 and read_text_db_is_message_read@0x469930. The database is engine-owned shared RT.DAT state keyed by raw packed script resource id and per-script message index, not VM globals or slot-local SAVE##.DAT data. adv_interpreter_tick consumes the result in click/read-skip control; it is not op 0x223 surface-transition progress.
+
+Port status (2026-07-24): the VM refreshes this state from message:ReadTextSkip plus the current packed script id/T1 message index at 0x6e, 0x71, and 0x72. It is shared-profile read history, not a host-only flag.
 
 ### 0x21c `mark-frame-yield` (mark-frame-yield, argc 0)
 - **summary:** Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary.
@@ -1094,10 +1100,14 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ca_set_read_message_skip@0x41f880 calls the engine setting interface's setter for `message:ReadTextSkip` with operand 1. SC0000's x=750 Read-message-skip button toggles the value read by op 0x1cb.
 
+Port status (2026-07-24): implemented as profile-lifetime engine setting state. Changing it immediately refreshes the current T1 message against the shared RT.DAT-backed ReadTextDB.
+
 ### 0x1cb `get-read-message-skip` (u00414FD0, argc 1)
 - **summary:** (out) - read the engine setting `message:ReadTextSkip`.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine setting interface's getter for `message:ReadTextSkip` and writes the result to operand 1. The shared ADV redraw routine uses it for the active Read-message-skip icon.
+
+Port status (2026-07-24): implemented through the same profile-lifetime setting used by 0x1ca and the ADV ReadTextDB query path.
 
 ## marker
 

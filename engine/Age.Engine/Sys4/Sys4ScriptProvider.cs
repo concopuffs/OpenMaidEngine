@@ -51,5 +51,5 @@ public sealed class Sys4ScriptProvider : IScriptProvider
         => GetByName(name) ?? throw new FileNotFoundException($"script is not in SYS4INI: {name}", name);
 
     private Script Parse(AssetEntry entry)
-        => Sys4Loader.Parse(_store.ReadAll(entry), _table, entry.Name);
+        => Sys4Loader.Parse(_store.ReadAll(entry), _table, entry.Name, unchecked((uint)entry.PackedId));
 }
