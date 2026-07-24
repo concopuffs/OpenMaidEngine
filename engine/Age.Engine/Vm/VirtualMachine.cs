@@ -1060,6 +1060,45 @@ public sealed class VirtualMachine
                 if (outcome == FrameOutcome.ExitRequested) throw new ProcessExitRequestedException();
                 return pc + 1;                                      // Returned / RanOff: resume caller
             }
+            case "u00415FB0":
+            case "run-mounted-append-autoruns": // 0x143: selector slots 1..255, packed record zero
+            {
+                if (_provider == null) return pc + 1;
+
+                // Native first scans every mounted selector into its launch queue, then dispatches
+                // those packed scripts serially. Snapshot before running any child so script-side
+                // effects cannot change the current batch.
+                int[] selectors = _provider.MountedAppendSelectors
+                    .Where(selector => selector is > 0 and <= 0xff)
+                    .Distinct()
+                    .Order()
+                    .ToArray();
+                foreach (int selector in selectors)
+                {
+                    if (_depth >= _o.CallDepthCap)
+                    {
+                        HaltReason ??= "call-depth-exceeded";
+                        return HALT;
+                    }
+
+                    long id = (long)selector << 24;
+                    CallScriptDispatches++;
+                    var child = _provider.GetById(id);
+                    _sink.Emit(TraceEvent.CallScript(id, child?.Name));
+                    if (child == null)
+                    {
+                        HaltReason ??= $"append-autorun-unresolved:0x{id:x}";
+                        return HALT;
+                    }
+
+                    int entry = child.IndexByOffset.TryGetValue(0, out int childEntry) ? childEntry : 0;
+                    var outcome = RunFrame(new ExecFrame(child, entry), FrameCause.CallScript, id);
+                    if (outcome == FrameOutcome.Halted) return HALT;
+                    if (outcome == FrameOutcome.RootReload) return ROOT_RELOAD;
+                    if (outcome == FrameOutcome.ExitRequested) throw new ProcessExitRequestedException();
+                }
+                return pc + 1;
+            }
             case "u00417E80":
             case "preload-script-slot": // 0x06 (script_id, frame_slot), valid slots 0..39
             {

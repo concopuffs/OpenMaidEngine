@@ -82,21 +82,25 @@ letting script-owned setup/cleanup surround child scenes, rather than invent an 
 protocol. Full process-start observation remains useful for profile/default and retained host-state evidence,
 but is no longer needed to guess the script coordinator architecture.
 
-The current headless C# runner already follows this root naturally: one SYSTEM4 run entered INITCONFIG,
-INIT2 and all 23 of its data-initializer children, TUNE, INIT, and TITLE (28 nested script calls total), then
+The current headless C# runner already follows this root naturally: one SYSTEM4 run enters INITCONFIG,
+INIT2 and all 23 of its base data-initializer children, APPEND01's AUTORUN and 22 append initializer
+children, TUNE, INIT, and TITLE (51 nested script calls total), then
 remained in TITLE's input-poll loop because the diagnostic host supplies no user input. Direct opcode
 coverage is 100% for all 23 data initializers, CALCARR, and TUNE; the remaining direct coverage is SYSTEM4
-64/82, INIT2 9/12, TITLE 61/65, GAMESTART 43/47, and UNITECH 29/31. B0/B1 should therefore make the
+64/82, INIT2 10/12, TITLE 61/65, GAMESTART 43/47, and UNITECH 29/31. B0/B1 should therefore make the
 SYSTEM4-rooted path visible and interactive in Godot, then investigate only the gaps actually reached on
 that route instead of treating every static gap as a prerequisite.
 
-**Append boot caveat (2026-07-24).** The sequence and coverage above describe only the base/loose script
-graph. Mounted `APPEND01` has a separate `$1$AUTORUN.BIN` at packed id `0x01000000`; that script calls 22
-append INIT deltas and registers the append's class-change, SCJUMP, message, stage, and scenario resources.
-The base corpus never references that packed id, and natural port boot currently mounts the catalog without
-executing AUTORUN. Stage B2 is therefore not append-complete until native RE identifies the engine-owned
-launch boundary and the port reproduces its ordering. The verified append-internal sequence and remaining
-native question are canonical in `docs/asset-resolution-re.md` and `docs/engine-re.md`.
+**Append boot implemented (2026-07-24).** Mounted `APPEND01` has
+`$1$AUTORUN.BIN` at packed id `0x01000000`; that script calls 22 append INIT deltas and registers the
+append's class-change, SCJUMP, message, stage, and scenario resources. INIT2's sole op `0x143` site,
+after its 23 base initializer children and registry setup and before TUNE, scans mounted selectors in
+ascending order and serially executes each selector's record zero. The port now snapshots the mounted
+selectors through its script-provider seam, constructs each `selector << 24` id, and runs those scripts
+through normal nested VM frames. A natural SYSTEM4 regression proves the shipped order
+`BTANINIT2 -> $1$AUTORUN -> $1$EBINIT -> TUNE`; focused regressions cover multiple-selector ordering,
+deduplication, caller resumption, and missing record zero. The packed sequence is canonical in
+`docs/asset-resolution-re.md`; native queue/frame mechanics are canonical in `docs/engine-re.md`.
 
 **Godot root landing (2026-07-20).** The no-argument Godot/run-godot path now starts SYSTEM4 directly and
 does not apply the direct-SC0000 layout/surface bootstrap or the diagnostic `--boot` prefix. A windowed run
@@ -324,9 +328,10 @@ The boot path must cover two existing categories:
 - System/session initialization currently approximated by `INITCONFIG`, `INIT2`, and `INIT`, including
   host-visible side effects that `CaptureHost` discards.
 - Game-data initialization represented by the `*INIT` family used by the headless boot/session tools.
-- Mounted append initialization: execute each native-selected packed AUTORUN at the proven boot boundary,
-  preserving base-versus-append order and provenance rather than treating same-suffix INIT fragments as
-  filename replacements.
+- Mounted append initialization: implement op `0x143` at INIT2's natural bytecode position by enumerating
+  mounted selectors 1..255 in ascending order and executing packed record zero serially, preserving
+  base-versus-append order and provenance rather than treating same-suffix INIT fragments as filename
+  replacements.
 
 Completion evidence:
 

@@ -3345,9 +3345,12 @@ semantic-field/value/raw-coordinate table, with large resource values also rende
 Regressions cover packed loading, the complete sparse id set, inherited geometry, representative unit-81
 level/base-stat/growth fields, and its packed battle-sprite id.
 
-This closes the immediate “inspect an append unit semantically” need without asserting that the runtime
-has executed `$1$AUTORUN.BIN`. Ordered whole-pack merging and natural port bootstrap still depend on the
-unresolved native AUTORUN launch boundary documented in `docs/asset-resolution-re.md`.
+This closes the immediate “inspect an append unit semantically” need without asserting that the port
+runtime has executed `$1$AUTORUN.BIN`. Native RE subsequently proved INIT2 op `0x143` as the
+base-initializers → mounted record-zero scripts → TUNE boundary. The port now implements that natural
+bootstrap: SYSTEM4 regression-proves `$1$AUTORUN.BIN` and `$1$EBINIT.BIN` execute between BTANINIT2 and
+TUNE. Ordered whole-pack extraction/merged semantic projection remains separate tooling work; see
+`docs/asset-resolution-re.md` and `docs/engine-re.md`.
 
 ## Data-semantics sidebar: battle experience rewards (2026-07-24)
 

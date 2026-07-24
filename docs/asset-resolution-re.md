@@ -223,7 +223,7 @@ scene-local numeric addressing mode.
    selector with arithmetic `SAR 24`; the port rejects sign-bit selectors rather than guessing behavior for
    ids that would index before AGE's mount table.
 
-   **Append bootstrap/data sequence (static content verified 2026-07-24; native launch boundary open).**
+   **Append bootstrap/data sequence (launch boundary verified 2026-07-24).**
    Installed `APPEND01` contains 81 records, including 39 SYS4 scripts. Record zero is
    `$1$AUTORUN.BIN` (`0x01000000`), a clean 43-instruction script. Its first 22 instructions call packed
    records `0x01000001..0x01000016` in exact order: append fragments for EBINIT, CNINIT, ITINIT, SKINIT,
@@ -245,11 +245,16 @@ scene-local numeric addressing mode.
    The separate `APPEND01-EBINIT` result preserves packed provenance and can be queried by unit id or name
    with `init_table_profile.py --record`; it is not an ordered merged runtime image.
 
-   The base/loose script corpus contains no reference to packed id `0x01000000`. The shipped game must
-   therefore enter the append AUTORUN outside the visible base script call graph, but the exact native
-   launcher and its ordering relative to SYSTEM4/INIT2 have not yet been reversed. The current port can
-   resolve and execute append scripts when given their packed ids, but natural SYSTEM4 boot does not yet
-   launch mounted AUTORUNs. Do not treat VFS-B mount completion as append gameplay/bootstrap completion.
+   The base/loose script corpus contains no explicit reference to packed id `0x01000000` because INIT2
+   invokes native opcode `0x143` once at `0x17f`. Its handler scans mounted selectors 1..255 in ascending
+   order and queues `(selector << 24) | 0`, selecting record zero without a filename lookup. The engine
+   executes those queued scripts serially before resuming INIT2. This occurs after INIT2's 23 base
+   initializer calls and registry setup, and immediately before TUNE, proving base-then-append patch
+   order. The port now implements op `0x143` over the mounted-selector view exposed by
+   `Sys4ScriptProvider`, snapshots and sorts the selectors, constructs each packed record-zero id, and
+   executes the scripts serially through normal VM frames. Natural SYSTEM4 boot regression-proves
+   `BTANINIT2 -> $1$AUTORUN.BIN -> $1$EBINIT.BIN -> TUNE.BIN`; VFS mounting and append patch application
+   are therefore both active. Native queue/frame details are canonical in `docs/engine-re.md`.
 3. **AGF decoder (VFS-C DONE).** `Age.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
    to a tightly packed, top-down width/height + RGBA8 surface. The MIT-licensed GARbro
    `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,

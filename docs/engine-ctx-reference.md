@@ -6,9 +6,6 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 
 | offset | name | type | note |
 |---|---|---|---|
-| `0x40c` | `sys4ini_count` | `int` | SYS4INI record count |
-| `0x410` | `archive_name_table` | `void*` | archive-name table base (arc_id*0x100 indexes it) |
-| `0x414` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50 |
 | `0x814` | `input_action_count` | `int` | logical action count (0..31); op 0xfe sets it, op 0x100 scans actions below it and uses callback slot count itself when the polled mask is empty |
 | `0x898` | `joystick_physical_button_count` | `int` | WinMM JOYCAPS physical button count returned by op 0x106 |
 | `0x89c` | `joystick_button_map` | `int` | base of 32-entry logical button-slot to physical joystick-button table; op 0x107 writes it, slot N emits action N+4 |
@@ -17,7 +14,6 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x1428` | `keyboard_vk_action_map` | `int` | base of 256-entry Win32 virtual-key to logical action table consumed by keyboard polling |
 | `0x1828` | `dik_to_vk_table` | `int` | base of 256-entry DirectInput DIK scan-code to Win32 virtual-key translation used by op 0x10c |
 | `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
-| `0x3028` | `alt_pack_table` | `int` | call-script high-byte alternate pack table (unused by corpus) |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
 | `0x14d54` | `gfx_obj_ptr_table` | `void*` | per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c) |
@@ -88,8 +84,21 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x6dbf0` | `voice_bgm_duck_control_flags` | `uint` | transient mask replaced by op 0x1cf; bit 0 suppresses automatic voice-triggered BGM attenuation |
 | `0x6dbf4` | `message_skip_queued_voice_id` | `int` | latest voice resource deferred by op 0xc4 while run_state_flags message-skip bit is active |
 | `0x6dbf8` | `message_skip_queued_voice_arg` | `int` | second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero |
+| `0x6f89c` | `script_launch_queue` | `int` | embedded integer FIFO used for engine-level auxiliary/root script launches; data pointer and queue indices follow |
+| `0x6f8a0` | `script_launch_queue_data` | `void*` | dword storage for packed script ids or negative frame-resume ids |
+| `0x6f8a4` | `script_launch_queue_read_cursor` | `int` | next queued launch consumed by script_launch_queue_dispatch_next |
+| `0x6f8a8` | `script_launch_queue_write_cursor` | `int` | one-past-last queued launch; op 0x143 appends mounted selector record-zero ids here |
+| `0x6f8ac` | `script_launch_queue_capacity` | `int` | allocated dword capacity; initialized to 0x100 |
+| `0x6f8b0` | `script_launch_queue_growth` | `int` | capacity growth quantum; initialized to 0x100 |
+| `0x6f8b4` | `script_launch_queue_high_water` | `int` | highest consumed cursor retained across FIFO compaction |
+| `0x6f8b8` | `script_launch_dispatch_active` | `int` | suppresses immediate dispatch while op 0x143 batches mounted append record-zero ids and while a queued script is active |
 | `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
+| `0x9c658` | `sys4ini_count` | `int` | SYS4INI record count at embedded FileDB+0x40c |
+| `0x9c65c` | `archive_name_table` | `void*` | archive-name table base at embedded FileDB+0x410; arc_id*0x100 indexes it |
+| `0x9c660` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base at embedded FileDB+0x414; record = base + id*0x50 |
+| `0x9f274` | `mounted_aai_catalogs` | `void*` | base of 256-entry selector-keyed AAI catalog-pointer table inside the embedded FileDB; op 0x143 scans slots 1..255 from +0x9f278 |
+| `0x9f278` | `mounted_aai_catalog_selector_1` | `void*` | selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255 |
 | `0xa0cc0` | `screen_w` | `int` | screen width (640) |
 | `0xa0cc4` | `screen_h` | `int` | screen height (480) |
 | `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |

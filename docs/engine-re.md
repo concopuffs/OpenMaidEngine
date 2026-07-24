@@ -209,13 +209,16 @@ the dispatch table (op `0x03` → `ctx[0x26c93+3]` = **`FUN_0041bc90`**), then t
   magic, allocates per-frame code/local buffers from the header var-counts, reads the bytecode body,
   and pushes a script frame (**stride 0x1e = 30 dwords**, indexed by `ctx[0x14f45]`). Returns to the
   caller when the callee ends.
-- **`FUN_0044f390`** (resolver — the key): `record = [ctx+0x414] + id*0x50`. The record is exactly the
+- **`asset_open_indexed_entry@0x44f390`** (resolver — the key): its `this` is the embedded FileDB at
+  `EngineCtx+0x9c24c`, not EngineCtx itself. A base `record = [FileDB+0x414] + id*0x50`. The record is exactly the
   **SYS4INI 80-byte layout** `{name[64], arc_id@0x40, file_number@0x44, offset@0x48, size@0x4c}`
-  (count = `[ctx+0x40c]`, archive-name table = `[ctx+0x410]`). It tries a **loose override first**
+  (count = `[FileDB+0x40c]`, archive-name table = `[FileDB+0x410]`; absolute EngineCtx fields
+  `+0x9c658/+0x9c65c/+0x9c660`). It tries a **loose override first**
   (`CreateFileA` on `record.name` → the mod/patch hook point), else opens archive
-  `[record.arc_id*0x100 + ctx+0x410]`, `SetFilePointer` to `record.offset`, size = `record.size`.
-  High-byte-tagged ids (`id & 0xff000000`) select an alternate pack via `[ctx+0x3028]` — **unused by
-  the corpus** (0/297 ids carry a high byte).
+  `[record.arc_id*0x100 + FileDB+0x410]`, `SetFilePointer` to `record.offset`, size = `record.size`.
+  High-byte-tagged ids select `[FileDB+0x3028 + signed_selector*4]` and use the low 24 bits as the
+  selected AAI record. The base corpus has no explicit high-byte call-script operand; INIT2 op `0x143`
+  supplies mounted record-zero ids dynamically.
 
 **So `call-script <id>` = a direct RAW index into the SYS4INI global file table** — the same table
 `parse_sys4ini.py` reads, but indexed *without* skipping `@` placeholders (13208 records, 2
@@ -2172,15 +2175,36 @@ The callers pass their operands unchanged: `script_frame_load_resource@0x40e980`
 fetches operand 1 and immediately forwards it to that helper. Thus scene-local and raw-fallback are not
 native modes: ordinary resource operands are already universal packed SYS4INI/AAI ids.
 
-**Unresolved append execution boundary (2026-07-24).** Static inspection now separates catalog mount
-from append initialization. Installed selector 1 record zero is `$1$AUTORUN.BIN` at packed id
-`0x01000000`; it calls the 22 append INIT fragments at `0x01000001..0x01000016`, then installs append
-dispatch scripts/resources. No base or loose script contains a call to `0x01000000`, so append startup is
-owned outside the visible base-script graph. The native function that chooses and launches mounted
-AUTORUN records, and its exact ordering relative to SYSTEM4/INIT2, remain unnamed/unproven. A follow-up
-should trace script-frame creation for packed id `0x01000000` during cold boot, then rename/comment and
-save the responsible `/v2` function. Until then, “AAI mounted” must not be used as evidence that append
-INIT deltas ran.
+**Append execution boundary resolved (2026-07-24).** Append startup is exposed to bytecode through
+`op_0x143_run_mounted_append_autoruns@0x4172f0`, not through an explicit
+`call-script 0x01000000`. The handler scans the `FileDB+0x3028` mount-pointer table as
+`EngineCtx.mounted_aai_catalogs[1..255]` (`ctx+0x9f278` onward). For each non-null selector it enqueues
+`selector << 24`: the packed id for that catalog's record zero. It does not search for an AUTORUN
+basename. The selector loop batches all ids under `script_launch_dispatch_active`, advances the caller
+past the opcode, then dispatches the queue.
+
+`script_launch_queue_enqueue@0x40f820` appends to the embedded FIFO at `ctx+0x6f89c`.
+`script_launch_queue_dispatch_next@0x40f6e0` suspends the current frame, records return sentinel `-10`,
+and loads positive packed ids into reserved interpreter frame 37. When that script reaches
+`op_0x2_exit_or_return_frame@0x417940`, the sentinel path launches the next queued id if present;
+otherwise it restores the suspended caller. Mounted record-zero scripts therefore execute serially in
+ascending selector order.
+
+The sole corpus use is `INIT2@0x17f`. SYSTEM4 has already performed its UI, configuration, input-map,
+and preload setup before calling INIT2. INIT2 then calls its 23 base data initializers—EBINIT through
+SCINIT plus BTANINIT2—performs its base global/array registrations, executes op `0x143`, and calls
+TUNE only after the queued append scripts return. Installed selector 1 record zero is
+`$1$AUTORUN.BIN` (`0x01000000`), so the exact shipped order is base definitions, append deltas and
+registrations, then TUNE and the remainder of SYSTEM4 boot. Catalog mounting itself still occurs earlier,
+when the native SYS4INI/FileDB loader calls `asset_mount_append_catalogs`; mount only establishes
+addressability, while op `0x143` is the explicit patch-application boundary.
+
+The port implements the same observable boundary without reproducing the reserved native frame or sentinel.
+`IScriptProvider` exposes mounted selector identity; op `0x143` snapshots, deduplicates, and sorts it,
+constructs `selector << 24`, and executes each resolved record-zero script synchronously through the normal
+nested-frame path. That preserves batching, serial order, caller suspension, global-bank sharing, and
+whole-stack halt/reload propagation. Focused VM tests cover two selectors and failure resolution, while the
+natural SYSTEM4 integration path proves `BTANINIT2 -> $1$AUTORUN -> $1$EBINIT -> TUNE`.
 
 SC0010 supplies a clean corpus proof outside SC0000's base-zero coincidence. Its `set-texture 0x21` must
 open raw entry `0x21` (`SO013A.AGF`); adding SC0010's catalog position `0x11e` instead selects unrelated

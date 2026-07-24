@@ -735,10 +735,11 @@ field/value/raw-coordinate triples. Regression coverage fixes the seven row ids 
 representative unit-81 level, stat, growth, and selector-keyed asset values.
 
 This is deliberately a fragment view, not a synthesized boot image. `$1$CNINIT.BIN` supplies companion
-display-name/voice-family writes, other INIT fragments may add related definitions, and native AUTORUN
-ordering remains unresolved. Whole-pack enumeration and ordered base/append assignment merging should wait
-until that engine-owned launch boundary is proven. The AAI format and verified internal call sequence are
-canonical in `docs/asset-resolution-re.md`; command usage is canonical in `docs/tools-reference.md`.
+display-name/voice-family writes and other INIT fragments add related definitions. The launch order is now
+proven: INIT2 op `0x143` executes each mounted selector's record zero serially after base initialization
+and before TUNE. Whole-pack extraction still needs explicit ordered merge/provenance support before this
+focused fragment should be presented as a synthesized runtime image. The AAI format and verified sequence
+are canonical in `docs/asset-resolution-re.md`; command usage is canonical in `docs/tools-reference.md`.
 
 ### Battle experience pipeline (2026-07-24)
 

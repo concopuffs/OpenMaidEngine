@@ -25,6 +25,7 @@ public class Sys4ScriptProviderTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var provider = Sys4ScriptProvider.Load(table);
         var append = provider.Catalog.AppendPacks[1];
+        Assert.Equal(new[] { 1 }, provider.MountedAppendSelectors);
         var entry = append.Files.Single(e => e.Name == "$1$SC1260.BIN");
         long packedId = 0x01000000L | (uint)entry.RawIndex;
 

@@ -13,6 +13,7 @@ public sealed class Sys4ScriptProvider : IScriptProvider
 
     public Sys4AssetCatalog Catalog { get; }
     public IReadOnlyList<string> ScriptNames => Catalog.ScriptNames;
+    public IReadOnlyList<int> MountedAppendSelectors => Catalog.AppendPacks.Keys.ToArray();
 
     public Sys4ScriptProvider(OpcodeTable table, Sys4AssetCatalog catalog, IAssetStore store)
     { _table = table; Catalog = catalog; _store = store; }

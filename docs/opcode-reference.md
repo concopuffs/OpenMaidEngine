@@ -318,7 +318,7 @@ This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all
 ### 0x3 `call-script` (call-script, argc 1)
 - **summary:** load & call another SYS4 script by id; id = RAW index into the SYS4INI file table (asset-index). Pushes a script frame; returns to caller when the callee ends.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** native-RE (Ghidra): handler FUN_0041bc90 -> loader FUN_0040e980 -> resolver FUN_0044f390 indexes an 80-byte record table (base [ctx+0x414], count [ctx+0x40c]) at base+id*0x50 = the SYS4INI record layout {name[64],arc_id@0x40,file_number@0x44,offset@0x48,size@0x4c}. Confirmed statically: all 297 distinct corpus call-script ids resolve to a .BIN script with a semantically-exact name (0x1ab->ADDITEM, 0x2ae7->MES, 0x143->BUNKI, 0x329d->CALCREVISE), 0 out-of-range, 0 pack-branch. See docs/engine-re.md + name-resolution.md #1.
+- **evidence:** native-RE (Ghidra): handler FUN_0041bc90 -> loader script_frame_load_resource@0x40e980 -> resolver asset_open_indexed_entry@0x44f390 indexes an 80-byte record table (FileDB+0x414 base, FileDB+0x40c count) at base+id*0x50 = the SYS4INI record layout {name[64],arc_id@0x40,file_number@0x44,offset@0x48,size@0x4c}. The FileDB is embedded at EngineCtx+0x9c24c, making those EngineCtx+0x9c660/+0x9c658. Confirmed statically: all 297 distinct base-corpus call-script ids resolve to a .BIN script with a semantically-exact name (0x1ab->ADDITEM, 0x2ae7->MES, 0x143->BUNKI, 0x329d->CALCREVISE), 0 out-of-range. See docs/engine-re.md + name-resolution.md #1.
 
 op 0x03 (call-script, argc 1): `call-script <id>`. RESOLVED — the id is a direct RAW index into
 the SYS4INI global file table (the same table parse_sys4ini.py reads, but indexed WITHOUT skipping
@@ -329,11 +329,13 @@ Native mechanism (dispatch table `handler(op)=ctx[0x26c93+op]`, op 0x03 -> FUN_0
   2. FUN_0040e980 (loader): opens the resource by id, reads the 0x20-byte SYS4 header, checks magic,
      allocates per-frame code/local buffers from the header var-counts, reads the bytecode body,
      pushes a script frame (stride 0x1e = 30 dwords, indexed by ctx[0x14f45]).
-  3. FUN_0044f390 (resolver): record = [ctx+0x414] + id*0x50. Tries a LOOSE OVERRIDE first
-     (CreateFileA on record.name -> mod/patch hook point), else opens archive [record.arc_id*0x100 +
-     ctx+0x410], SetFilePointer to record.offset, size = record.size.
-     (High-byte-tagged ids `id & 0xff000000` select an alternate pack via [ctx+0x3028]; UNUSED by the
-     corpus -- 0/297 ids have a high byte.)
+  3. asset_open_indexed_entry@0x44f390 (resolver): its `this` is the embedded FileDB, not EngineCtx.
+     Base record = [FileDB+0x414] + id*0x50. It tries a LOOSE OVERRIDE first (CreateFileA on
+     record.name -> mod/patch hook point), else opens archive [record.arc_id*0x100 + FileDB+0x410],
+     SetFilePointer to record.offset, size = record.size.
+     High-byte-tagged ids select [FileDB+0x3028 + signed_selector*4] and index the chosen AAI by the
+     low 24 bits. The base corpus has 0/297 explicit high-byte call-script operands; INIT2 op 0x143
+     supplies mounted record-zero ids dynamically.
 Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see its entry.
 This also names the whole call graph statically (build/callscript-names.json).
 
@@ -439,6 +441,26 @@ Implemented as process-lifecycle state owned by the persistent VM: it begins at 
 - **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
 - **grounding:** source=investigation, confidence=med
 - **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Records the generic 9-dword instruction length; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
+
+### 0x143 `run-mounted-append-autoruns` (u00415FB0, argc 0)
+- **summary:** () - enqueue record zero from every mounted nonzero AAI selector in ascending selector order, then execute those packed scripts serially before resuming the caller.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x143_run_mounted_append_autoruns@0x4172f0 scans mounted_aai_catalogs[1..255] at EngineCtx+0x9f278, enqueues selector<<24 through script_launch_queue_enqueue@0x40f820 while dispatch is suppressed, advances the caller PC, then tail-dispatches through script_launch_queue_dispatch_next@0x40f6e0. Positive queue entries load in reserved frame 37 with return sentinel -10; op_0x2_exit_or_return_frame@0x417940 dispatches the next queued entry or restores the suspended caller. Corpus: the sole site is INIT2@0x17f, after its 23 base INIT children and global/array setup and immediately before TUNE.BIN.
+
+The opcode does not look up an AUTORUN filename. For each non-null mounted catalog pointer in selector
+slots 1 through 255, it constructs the packed id `selector << 24`, whose low 24-bit record index is zero.
+At Himegari cold boot the native catalog loader has already mounted APPEND01 in selector 1 before SYSTEM4
+starts. SYSTEM4 calls INIT2; INIT2 runs EBINIT through SCINIT plus BTANINIT2, completes its base registry
+setup, executes this opcode, and resumes at its following TUNE call only after every queued record-zero
+script returns. Installed selector 1 record zero is `$1$AUTORUN.BIN`, which applies the append INIT deltas
+and registrations. This is a serial base-then-append patch boundary, not a filename overlay.
+
+PORT = IMPLEMENTED. `IScriptProvider.MountedAppendSelectors` exposes mounted selector identity without
+coupling the VM to the SYS4 catalog type. The opcode snapshots, deduplicates, and sorts selectors, constructs
+each packed record-zero id, and runs the resolved script through the ordinary nested-frame machinery before
+resuming INIT2. Focused tests protect ordering, packed-id construction, caller suspension, and unresolved
+record-zero failure. Natural SYSTEM4 boot proves BTANINIT2 -> `$1$AUTORUN.BIN` -> `$1$EBINIT.BIN` -> TUNE.
+
 
 ### 0x199 `yield-adv-coroutine` (u00414D50, argc 0)
 - **summary:** Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow.
@@ -1194,10 +1216,6 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x142 `u0041FB10` (u0041FB10, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x143 `u00415FB0` (u00415FB0, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

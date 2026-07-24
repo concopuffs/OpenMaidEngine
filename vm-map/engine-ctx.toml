@@ -8,21 +8,6 @@ struct_name = "EngineCtx"
 size = 0xa1000
 
 [[field]]
-offset = 0x40c
-name = "sys4ini_count"
-type = "int"
-note = "SYS4INI record count"
-[[field]]
-offset = 0x410
-name = "archive_name_table"
-type = "void*"
-note = "archive-name table base (arc_id*0x100 indexes it)"
-[[field]]
-offset = 0x414
-name = "sys4ini_records"
-type = "void*"
-note = "SYS4INI 80-byte record base {name[64],arc_id,file_number,offset,size}; record = base + id*0x50"
-[[field]]
 offset = 0x814
 name = "input_action_count"
 type = "int"
@@ -62,11 +47,6 @@ offset = 0x1c34
 name = "mouse_wheel_delta"
 type = "int"
 note = "signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it"
-[[field]]
-offset = 0x3028
-name = "alt_pack_table"
-type = "int"
-note = "call-script high-byte alternate pack table (unused by corpus)"
 [[field]]
 offset = 0x14d54
 name = "gfx_obj_ptr_table"
@@ -418,6 +398,46 @@ name = "message_skip_queued_voice_arg"
 type = "int"
 note = "second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero"
 [[field]]
+offset = 0x6f89c
+name = "script_launch_queue"
+type = "int"
+note = "embedded integer FIFO used for engine-level auxiliary/root script launches; data pointer and queue indices follow"
+[[field]]
+offset = 0x6f8a0
+name = "script_launch_queue_data"
+type = "void*"
+note = "dword storage for packed script ids or negative frame-resume ids"
+[[field]]
+offset = 0x6f8a4
+name = "script_launch_queue_read_cursor"
+type = "int"
+note = "next queued launch consumed by script_launch_queue_dispatch_next"
+[[field]]
+offset = 0x6f8a8
+name = "script_launch_queue_write_cursor"
+type = "int"
+note = "one-past-last queued launch; op 0x143 appends mounted selector record-zero ids here"
+[[field]]
+offset = 0x6f8ac
+name = "script_launch_queue_capacity"
+type = "int"
+note = "allocated dword capacity; initialized to 0x100"
+[[field]]
+offset = 0x6f8b0
+name = "script_launch_queue_growth"
+type = "int"
+note = "capacity growth quantum; initialized to 0x100"
+[[field]]
+offset = 0x6f8b4
+name = "script_launch_queue_high_water"
+type = "int"
+note = "highest consumed cursor retained across FIFO compaction"
+[[field]]
+offset = 0x6f8b8
+name = "script_launch_dispatch_active"
+type = "int"
+note = "suppresses immediate dispatch while op 0x143 batches mounted append record-zero ids and while a queued script is active"
+[[field]]
 offset = 0x9928c
 name = "save_frame_boundary_index"
 type = "int"
@@ -427,6 +447,31 @@ offset = 0x9b24c
 name = "dispatch_table"
 type = "void*"
 note = "opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4)"
+[[field]]
+offset = 0x9c658
+name = "sys4ini_count"
+type = "int"
+note = "SYS4INI record count at embedded FileDB+0x40c"
+[[field]]
+offset = 0x9c65c
+name = "archive_name_table"
+type = "void*"
+note = "archive-name table base at embedded FileDB+0x410; arc_id*0x100 indexes it"
+[[field]]
+offset = 0x9c660
+name = "sys4ini_records"
+type = "void*"
+note = "SYS4INI 80-byte record base at embedded FileDB+0x414; record = base + id*0x50"
+[[field]]
+offset = 0x9f274
+name = "mounted_aai_catalogs"
+type = "void*"
+note = "base of 256-entry selector-keyed AAI catalog-pointer table inside the embedded FileDB; op 0x143 scans slots 1..255 from +0x9f278"
+[[field]]
+offset = 0x9f278
+name = "mounted_aai_catalog_selector_1"
+type = "void*"
+note = "selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255"
 [[field]]
 offset = 0xa0cc0
 name = "screen_w"

@@ -155,6 +155,16 @@ public class NaturalBootIntegrationTests
         Assert.Contains("UNITECH.BIN", sink.Entered);
         Assert.Contains("CALCARR.BIN", sink.Entered);
         Assert.Equal("SC0000.BIN", sink.Entered[^1]);
+        int baseBtanInit2 = sink.Entered.IndexOf("BTANINIT2.BIN");
+        int appendAutorun = sink.Entered.IndexOf("$1$AUTORUN.BIN");
+        int appendEbInit = sink.Entered.IndexOf("$1$EBINIT.BIN");
+        int tune = sink.Entered.IndexOf("TUNE.BIN");
+        Assert.Equal(new[] { 1 }, boot.Scripts.MountedAppendSelectors);
+        Assert.True(baseBtanInit2 >= 0 && baseBtanInit2 < appendAutorun
+            && appendAutorun < appendEbInit && appendEbInit < tune,
+            $"entered={string.Join(",", sink.Entered)}");
+        Assert.Equal(40, vm.Globals.GetValueOrDefault(0x7a37e + 81));       // append unit starting level
+        Assert.Equal(0x0100002d, vm.Globals.GetValueOrDefault(0x6fb86 + 81)); // packed battle sprite
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0));
         Assert.Equal(0x22, vm.Globals.GetValueOrDefault(0x699));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x6c1));
