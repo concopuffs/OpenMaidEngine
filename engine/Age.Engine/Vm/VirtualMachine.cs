@@ -40,6 +40,9 @@ public sealed class VirtualMachine
     private NativeNumberedSaveState? _loadedNumberedState;
     private NativeNumberedSaveState? _retainedNativeNumberedState;
     private int _restoreFrameIndex = -1;
+    private long _currentBgmTrackId;
+    private readonly long[] _loadedSoundEffectResourceIds =
+        new long[NativeNumberedSaveState.SoundEffectChannelCount];
     private uint _accumulatedPlaySeconds;
     private readonly long _sessionStartTimestamp;
     private ExecFrame? _debugActiveFrame;
@@ -819,6 +822,9 @@ public sealed class VirtualMachine
         var gfx = NativeGfxPersistenceCodec.Capture(Gfx);
         return basis with
         {
+            BgmTrackId = unchecked((int)_currentBgmTrackId),
+            SoundEffectResourceIds = _loadedSoundEffectResourceIds
+                .Select(id => unchecked((int)id)).ToArray(),
             Frames = frames,
             IntegerGlobals = DenseValues(Globals, himegariIntegerCount),
             FloatGlobals = DenseValues(GlobalFloats, himegariFloatCount),
@@ -870,21 +876,24 @@ public sealed class VirtualMachine
 
     private void ApplyNumberedState(NativeNumberedSaveState state)
     {
-        Globals.Clear();
-        for (int i = 0; i < state.IntegerGlobals.Count; i++)
-            if (state.IntegerGlobals[i] != 0) Globals[i] = state.IntegerGlobals[i];
-        GlobalFloats.Clear();
-        for (int i = 0; i < state.FloatGlobals.Count; i++)
-            if (state.FloatGlobals[i] != 0) GlobalFloats[i] = state.FloatGlobals[i];
-        GlobalStrings.Clear();
-        for (int i = 0; i < state.StringGlobals.Count; i++)
-            if (state.StringGlobals[i].Length != 0) GlobalStrings[i] = state.StringGlobals[i];
-        GlobalPointers.Clear();
-        for (int i = 0; i < state.PointerGlobals.Count; i++)
-            if (state.PointerGlobals[i] != 0) GlobalPointers[i] = state.PointerGlobals[i];
-        GlobalStringPointers.Clear();
-        for (int i = 0; i < state.PointerStrings.Count; i++)
-            if (state.PointerStrings[i] != 0) GlobalStringPointers[i] = state.PointerStrings[i];
+        ReplaceDensePrefix(
+            Globals, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceDensePrefix(
+            GlobalFloats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceDensePrefix(GlobalStrings, state.StringGlobals, value => value.Length != 0);
+        ReplaceDensePrefix(GlobalPointers, state.PointerGlobals, value => value != 0);
+        ReplaceDensePrefix(GlobalStringPointers, state.PointerStrings, value => value != 0);
+
+        _currentBgmTrackId = unchecked((uint)state.BgmTrackId);
+        if (_currentBgmTrackId == 0) _host.FadeBgm(0, 0);
+        else _host.PlayBgm(_currentBgmTrackId);
+        for (int channel = 0; channel < _loadedSoundEffectResourceIds.Length; channel++)
+        {
+            _host.ReleaseSoundEffect(channel);
+            long resourceId = unchecked((uint)state.SoundEffectResourceIds[channel]);
+            _loadedSoundEffectResourceIds[channel] = resourceId;
+            if (resourceId != 0) _host.LoadSoundEffect(resourceId, channel);
+        }
 
         GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
         for (int slot = 0; slot < 1000; slot++) _host.ReleaseSurface(slot);
@@ -893,6 +902,15 @@ public sealed class VirtualMachine
         {
             if (!created) _host.SetTexture(resourceId, slot, colorKey);
         }
+    }
+
+    private static void ReplaceDensePrefix<T>(
+        Dictionary<int, T> bank, IReadOnlyList<T> values, Func<T, bool> retain)
+    {
+        foreach (int key in bank.Keys.Where(key => (uint)key < (uint)values.Count).ToArray())
+            bank.Remove(key);
+        for (int i = 0; i < values.Count; i++)
+            if (retain(values[i])) bank[i] = values[i];
     }
 
     private Script ResolveSavedScript(NativeSavedScriptFrame frame)
@@ -2193,7 +2211,13 @@ public sealed class VirtualMachine
             case "release-transient-surfaces": // 0x23d: native fixed range [42,1000)
                 Gfx.ReleaseSurfaceRange(42, 1000 - 42);
                 _host.ReleaseSurfaceRange(42, 1000 - 42); return pc + 1;
-            case "play-bgm":   _host.PlayBgm(Read(a[0])); return pc + 1;
+            case "play-bgm":
+                _currentBgmTrackId = Read(a[0]);
+                _host.PlayBgm(_currentBgmTrackId);
+                return pc + 1;
+            case "get-current-bgm-track":
+                Write(a[0], _currentBgmTrackId);
+                return pc + 1;
             case "play-voice":
                 _autoVoicePending = true;
                 TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
@@ -2208,15 +2232,33 @@ public sealed class VirtualMachine
             case "schedule-voice-playback": // 0x2c0: replace the pending delayed combat voice request
                 _host.ScheduleVoicePlayback(Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
             case "play-sound-effect":   // 0xb4 / semantics: sfx-load
-                _host.LoadSoundEffect(Read(a[0]), (int)Read(a[1])); return pc + 1;
+            {
+                long resourceId = Read(a[0]);
+                int channel = (int)Read(a[1]);
+                if ((uint)channel < (uint)_loadedSoundEffectResourceIds.Length)
+                    _loadedSoundEffectResourceIds[channel] = resourceId;
+                _host.LoadSoundEffect(resourceId, channel);
+                return pc + 1;
+            }
             case "u0041D050":           // 0xb5 / semantics: sfx-start
                 _host.StartSoundEffect((int)Read(a[0])); return pc + 1;
             case "u0041D080":           // 0xb6 / semantics: sfx-release
-                _host.ReleaseSoundEffect((int)Read(a[0])); return pc + 1;
+            {
+                int channel = (int)Read(a[0]);
+                if ((uint)channel < (uint)_loadedSoundEffectResourceIds.Length)
+                    _loadedSoundEffectResourceIds[channel] = 0;
+                _host.ReleaseSoundEffect(channel);
+                return pc + 1;
+            }
             case "schedule-sfx-start":  // 0x2bf / native SetDelay(channel, start mode, delay ms)
                 _host.ScheduleSoundEffectStart((int)Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
             case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
-                _host.FadeBgm((int)Read(a[0]), Read(a[1])); return pc + 1;
+            {
+                int targetPercent = (int)Read(a[0]);
+                _host.FadeBgm(targetPercent, Read(a[1]));
+                if (targetPercent == 0) _currentBgmTrackId = 0;
+                return pc + 1;
+            }
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
                 return pc + 1;
             case "get-initial-root-run": // 0x130 (out)

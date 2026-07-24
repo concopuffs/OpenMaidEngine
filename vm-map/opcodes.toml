@@ -1716,7 +1716,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0xae
-label = "u00415130"
+label = "continue-save-load-stack-restore"
 argc = 0
 abi_source = "kelebek+decode-validated"
 
@@ -1724,7 +1724,7 @@ abi_source = "kelebek+decode-validated"
 name = "continue-save-load-stack-restore"
 category = "control"
 summary = "() - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op."
-details = "Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary."
+details = "Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary. The installed SAVE00 continuation gate proves SYSTEM4 -> FORT restoration reaches FORT's CHMENU gameplay poll; the synthetic gate asserts the child frame enters with SaveRestore rather than ordinary CallScript cause."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1901,23 +1901,23 @@ observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0xc0
-label = "u00415620"
+label = "get-current-bgm-track"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415620"
-category = "unknown"
-summary = ""
+name = "get-current-bgm-track"
+category = "audio"
+summary = "(track_out) - return the direct-name BGM track id retained by the music facade; the same value is restored from numbered saves."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2 op_0xc0_get_current_bgm_track@0x428440 writes EngineCtx.current_bgm_track_id (+0xa0b84) to operand 1. op 0xbf's bgm_play_track retains the selected direct-name id at the same music-facade field; layout-3 serialization copies it to payload +0x008 and restoration copies it back. Installed SAVE00 stores 0x18, matching FORT's BGM024."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "current BGM track id output"
 observed_types = ["l-int"]
 
 [[opcode]]

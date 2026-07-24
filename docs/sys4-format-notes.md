@@ -198,8 +198,8 @@ The decoded layout-3 body begins:
 |---:|---:|---|
 | `0x000` | 4 | terminal saved-frame index, called `cutoff`; frame count is `cutoff + 1` |
 | `0x004` | 4 | saved frame-owner/context word |
-| `0x008` | 4 | engine-state word |
-| `0x00c` | `0x28` | ten engine/context state DWORDs |
+| `0x008` | 4 | current direct-name BGM track id |
+| `0x00c` | `0x28` | ten packed SFX resource ids, one per retained channel |
 | `0x034` | `0x4b0` | 100 resource-reload records of three DWORDs |
 | `0x4e4` | `0x4e20` | 1,000 surface-reload records of 20 bytes |
 | `0x5304` | `(cutoff + 1) * 0x414` | saved script-frame records |
@@ -233,6 +233,13 @@ The integer and float arrays follow their counts. String count comes from bank c
 begins with an additional `string_blob_dwords` followed by that many bytes of concatenated NUL-terminated
 CP932 strings and DWORD padding. The three pointer-family DWORD arrays follow.
 
+These counts are serialized mutable-prefix lengths, not declarations that every typed runtime bank ends
+there. Native deserialization zeroes and replaces only each counted prefix. Initialization-authored
+definitions after the prefix remain live: in Himegari the saved integer prefix ends at `0x6241b`, before
+unit/stage definition tables such as `0x66716` and `0xe8275`, while the saved string prefix ends at
+`0x315`, exactly where `unit_story_display_names` begins. Clearing the whole runtime dictionary during
+import therefore destroys data that is intentionally absent from the numbered file.
+
 Retained graphics then uses:
 
 ```text
@@ -252,7 +259,8 @@ records actually written (`0x2e1 + object_count * 0x2d8` DWORDs in the graphics 
 zero/slack bytes after the meaningful range record.
 
 The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
-`[402459,1,789,1,1,1]`, and 211 retained graphics objects.
+`[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and
+`0x2aea` (channel 2), and 211 retained graphics objects.
 
 #### Appended text-history tail
 

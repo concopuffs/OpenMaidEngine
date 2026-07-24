@@ -3546,6 +3546,57 @@ and unnamed retained-gfx fields outside the confirmed Himegari compatibility cla
 This documentation-only closeout does not change runtime persistence. The next functional check remains
 continuing from the installed slot through the restored gameplay frame.
 
+### Persistence implementation step 7 — installed gameplay continuation correction (2026-07-24)
+
+Interactive loading of slot 000 reached `SYSTEM4.BIN` as a restore but then played `LOGO.BIN` and
+`OP.BIN` before returning to a broken TITLE state. The installed-save regression had stopped on frame
+entry, before executing the saved root's `0xae`, while the synthetic two-frame test accidentally made
+the same child call through its ordinary script path.
+
+The restore state and decoded frames were correct (`SYSTEM4.BIN` root plus terminal `FORT.BIN`). The
+actual integration error was the opcode registry: `0xae` had the implemented semantic case but retained
+placeholder label `u00415130`, and VM dispatch selects cases by label. It therefore behaved as an
+unhandled stub. The source label is now `continue-save-load-stack-restore` and generated opcode
+references were rebuilt.
+
+The synthetic regression now requires the child to enter with `FrameCause.SaveRestore` and rejects an
+ordinary `CallScript` entry. A new read-only installed-save continuation gate traverses the real
+`SAVE.BIN → CALLBACK_LOAD.BIN → SYSTEM4.BIN → FORT.BIN → CHMENU.BIN` path and stops at FORT's stable
+gameplay poll; the original AppData files remain untouched.
+
+Validation: all 387 engine tests pass, opcode lint reports zero errors/warnings, the Godot C# build has
+zero warnings, and the threaded headless run reports `SELFTEST OK`. The next acceptance action is a
+visual retry of slot 000 in the rebuilt port.
+
+### Persistence implementation step 8 — preserve initialized banks and restore retained audio (2026-07-24)
+
+The first successful FORT continuation exposed a second load-state boundary. CHMENU retained party-slot
+shells but lacked names/definition data, SELSTAGE listed no stages, unit-management was blank, and the
+TITLE BGM continued playing. Reaching FORT through the developer launcher populated the same consumers,
+localizing the issue to restoration rather than their rendering opcodes.
+
+Layout 3 stores mutable prefixes, not the complete initialized typed banks. The installed integer count
+is `0x6241b`, before unit/stage definitions including `0x66716` and `0xe8275`; the installed string count
+is `0x315`, exactly where `unit_story_display_names` begins. Native deserialization zeroes only the
+counted prefixes. The port instead cleared whole dictionaries, erasing the initialization-authored tail.
+Full load now removes and replaces only keys below each saved count, including saved zeroes, and preserves
+every initialized key at or above the boundary.
+
+Native RE also resolves the fixed audio words. Payload `+0x008` is the current direct-name BGM track;
+the installed value `0x18` matches FORT's skipped BGM024 instruction. The following ten DWORDs are packed
+SFX resource ids; the installed save retains SE015 and SE020 in channels 1 and 2. VM audio operations now
+track these values, numbered saves emit them, and full restoration replaces the BGM plus reloads retained
+SFX channels. Opcode `0xc0` is mapped as the current-BGM query. Ghidra `/v2` names/comments the BGM
+getter/setter/player and saved-SFX reload worker, includes the two new EngineCtx fields, and is saved.
+
+Regressions cover saved-zero replacement, preservation at integer/string prefix boundaries, BGM/SFX
+round trips, the `0xc0` query, and installed SAVE00 continuation with its matching append-install mask.
+Validation: all 387 engine tests pass, opcode and EngineCtx generation/lints are clean, the Godot C#
+build has zero warnings, and the threaded headless run reports `SELFTEST OK`. Manual slot-000 acceptance
+then confirmed that CHMENU, unit management, SELSTAGE, and FORT audio populate correctly. The remaining
+visible load-specific discrepancy is the reusable choice-box frame losing its top winged flourish after
+restoration; that is the next independent investigation slice.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

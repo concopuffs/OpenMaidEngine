@@ -16,6 +16,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
+| `0x144e0` | `sfx_channel_resource_ids` | `int` | base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id |
 | `0x14d54` | `gfx_obj_ptr_table` | `void*` | per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c) |
 | `0x14e08` | `gfx_default_object_slot` | `int` | op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero |
 | `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
@@ -99,6 +100,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x9c660` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base at embedded FileDB+0x414; record = base + id*0x50 |
 | `0x9f274` | `mounted_aai_catalogs` | `void*` | base of 256-entry selector-keyed AAI catalog-pointer table inside the embedded FileDB; op 0x143 scans slots 1..255 from +0x9f278 |
 | `0x9f278` | `mounted_aai_catalog_selector_1` | `void*` | selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255 |
+| `0xa0b84` | `current_bgm_track_id` | `int` | direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it |
 | `0xa0cc0` | `screen_w` | `int` | logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800) |
 | `0xa0cc4` | `screen_h` | `int` | logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600) |
 | `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |

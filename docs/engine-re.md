@@ -1751,11 +1751,29 @@ diagnostic/extended-mode surface.
 
 The port tracks the native global banks separately at runtime, captures the marked frame chain, serializes
 live surfaces and retained objects, and reloads host textures from the 20-byte surface records. Full load
-first replaces banks/history/gfx, unwinds the obsolete managed call chain, runs `CALLBACK_LOAD.BIN` when
+first replaces each serialized mutable bank prefix while preserving initialization-authored cells beyond
+its count, restores history/gfx and retained audio, unwinds the obsolete managed call chain, runs
+`CALLBACK_LOAD.BIN` when
 the mounted script provider resolves it, starts the saved root at its `0xae` rendezvous, recursively
 reconstructs child frames, resumes parents after their saved T2 call sites,
 and finally resumes the terminal frame at its T1 boundary. Successful `0x19e` also flushes shared
 `SAVE.DAT`/`RT.DAT`, matching `context_state_serialize`.
+
+The prefix boundary is observable in the installed file: integer count `0x6241b` stops before the
+initialization-authored unit/stage definition tables, and string count `0x315` stops exactly before
+`unit_story_display_names`. Native `save_data_deserialize_and_begin_restore@0x40fd10` zeroes only those
+counted regions; the port's former whole-dictionary clear erased the definitions needed by CHMENU,
+unit-management, and SELSTAGE after load.
+
+The fixed audio fields are also resolved. Payload `+0x008` is
+`EngineCtx.current_bgm_track_id` (`ctx+0xa0b84`), maintained by
+`bgm_play_track@0x464750` and queried by op `0xc0`; the installed FORT save contains `0x18`, matching
+FORT's BGM024 command immediately before its T1 resume boundary. Payload `+0x00c..+0x033` copies
+`EngineCtx.sfx_channel_resource_ids[10]` (`ctx+0x144e0`), and
+`sfx_reload_saved_channels@0x482640` reopens each positive packed id after deserialization. The port now
+tracks both lifecycles through `0xbf`/`0xc2` and `0xb4`/`0xb6`, serializes them, and restores the active
+track plus saved SFX resources. The new EngineCtx fields and function annotations are applied to the
+saved `/v2` image.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
@@ -1775,6 +1793,16 @@ coroutine-resume or call boundaries, including SC0000's main-loop resume sequenc
 
 The port now implements both branches: an ordinary one-instruction no-op outside restoration, and the
 T1/T2/T3-driven managed-frame reconstruction described above while a full numbered load is active.
+
+The first interactive installed-save continuation exposed a dispatch-label integration error rather than
+a native semantic error. Although `0xae` had this mapped semantic record and a VM case, its opcode-table
+label still used upstream placeholder `u00415130`; the VM switches on the label, so the active case was
+unreachable. The saved root entered `SYSTEM4.BIN` with restore state intact, but `0xae` fell through and
+SYSTEM4 ran its ordinary `LOGO.BIN → OP.BIN → INIT.BIN → TITLE.BIN` boot path. The source label is now
+`continue-save-load-stack-restore`. A real installed-save gate executes beyond the rendezvous and proves
+`SYSTEM4.BIN → FORT.BIN → CHMENU.BIN` restoration to the gameplay poll. The synthetic two-frame gate
+also asserts that its child enters with `FrameCause.SaveRestore`, preventing its ordinary call site from
+masking another inactive-branch regression.
 
 ### ADV read-message Skip and shared `RT.DAT` history (2026-07-18)
 

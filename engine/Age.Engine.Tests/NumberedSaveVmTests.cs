@@ -22,6 +22,9 @@ public class NumberedSaveVmTests
             var store = new DirectoryNativeDatStore(root, Identity);
             Script script = WithPackedId(ScriptAssembler.Assemble(Table, "SAVE_TEST.BIN",
             [
+                (0xbf, [new Operand(Immediate, 24)]),
+                (0xc0, [new Operand(GlobalInt, 0x21)]),
+                (0xb4, [new Operand(Immediate, 0x3321), new Operand(Immediate, 1)]),
                 (0x1ad, Array.Empty<Operand>()),
                 (0x19e, [new Operand(GlobalInt, 0x20), new Operand(Immediate, 2)]),
                 (0x2, Array.Empty<Operand>()),
@@ -40,10 +43,13 @@ public class NumberedSaveVmTests
             vm.Run();
 
             Assert.Equal(0, vm.Globals[0x20]);
+            Assert.Equal(24, vm.Globals[0x21]);
             NativeNumberedSaveFile file = store.LoadNumberedFile(2)!;
             NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(file.Document.Payload);
             Assert.Equal(0x6241b, state.IntegerGlobals.Count);
             Assert.Equal(456, state.IntegerGlobals[0x123]);
+            Assert.Equal(24, state.BgmTrackId);
+            Assert.Equal(0x3321, state.SoundEffectResourceIds[1]);
             Assert.Equal("姫狩り", state.StringGlobals[4]);
             Assert.Equal(0x77u, state.Frames.Single().ScriptId);
             Assert.Contains(state.GfxObjects, item => item.Handle == 100);
@@ -97,6 +103,12 @@ public class NumberedSaveVmTests
                 new NativeSavedScriptFrame(0, 0x89, Array.Empty<int>(), -1, -1),
             ]) with
             {
+                BgmTrackId = 24,
+                SoundEffectResourceIds =
+                [
+                    0, 0x3321, 0x2aea, 0, 0,
+                    0, 0, 0, 0, 0,
+                ],
                 IntegerGlobals = DenseIntBank(0x124, (0x123, 456)),
                 FloatGlobals = [BitConverter.SingleToInt32Bits(3.5f)],
                 StringGlobals = ["復帰"],
@@ -113,8 +125,10 @@ public class NumberedSaveVmTests
                 1, NativeNumberedSaveCodec.Encode(state), NativeTextHistoryCodec.Encode(history),
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 123);
             var liveHistory = new AdvTextHistory();
+            var trace = new RecordingTraceSink();
+            var host = new RecordingHost();
             var vm = new VirtualMachine(
-                loader, Table, new RecordingHost(), provider: new MapProvider(
+                loader, Table, host, provider: new MapProvider(
                     new()
                     {
                         [0x88] = resumed,
@@ -124,22 +138,42 @@ public class NumberedSaveVmTests
                     {
                         ["CALLBACK_LOAD.BIN"] = callback,
                     }),
-                textHistory: liveHistory, nativeDatStore: store);
+                sink: trace, textHistory: liveHistory, nativeDatStore: store);
+            vm.Globals[0x10] = 999;
             vm.Globals[0x123] = 999;
+            vm.Globals[0x124] = 777;
+            vm.GlobalStrings[0] = "stale";
+            vm.GlobalStrings[1] = "static-unit-name";
 
             vm.Run();
 
+            Assert.False(vm.Globals.ContainsKey(0x10));
             Assert.Equal(456, vm.Globals[0x123]);
+            Assert.Equal(777, vm.Globals[0x124]);
             Assert.Equal(456, vm.Globals[0x500]);
             Assert.Equal(456, vm.Globals[0x501]);
             Assert.Equal(1, vm.Globals[0x502]);
             Assert.Equal("復帰", vm.GlobalStrings[0]);
             Assert.Equal(0x123, vm.GlobalPointers[0]);
+            Assert.Equal("static-unit-name", vm.GlobalStrings[1]);
+            Assert.Equal([24L], host.BgmTracks);
+            Assert.Equal(
+                [(0x3321L, 1), (0x2aeaL, 2)],
+                host.SfxLoads);
+            Assert.Equal(Enumerable.Range(0, 10), host.SfxReleases);
             Assert.Equal("履歴復帰", liveHistory.Records.Single().Text);
             Assert.Equal(3, vm.Gfx.QuerySlot(100));
             RenderObject restoredObject = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
             Assert.Equal(0x1234, restoredObject.SurfaceResId);
             Assert.Equal((50, 60), (restoredObject.DstX, restoredObject.DstY));
+            Assert.Contains(trace.Events, item =>
+                item.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                && item.Name == "CHILD.BIN"
+                && item.Cause == Age.Engine.Diagnostics.FrameCause.SaveRestore);
+            Assert.DoesNotContain(trace.Events, item =>
+                item.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                && item.Name == "CHILD.BIN"
+                && item.Cause == Age.Engine.Diagnostics.FrameCause.CallScript);
             Assert.Equal("exit", vm.HaltReason);
         }
         finally

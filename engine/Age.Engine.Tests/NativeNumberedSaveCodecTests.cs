@@ -14,8 +14,8 @@ public class NativeNumberedSaveCodecTests
         NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(frames) with
         {
             SavedFrameOwner = 7,
-            EngineState = 9,
-            StateWords = Enumerable.Range(10, 10).ToArray(),
+            BgmTrackId = 9,
+            SoundEffectResourceIds = Enumerable.Range(10, 10).ToArray(),
             IntegerGlobals = new[] { 12, -3, 0x12345678 },
             FloatGlobals = new[] { BitConverter.SingleToInt32Bits(1.25f) },
             StringGlobals = new[] { "姫狩り", "", "save" },
@@ -38,8 +38,8 @@ public class NativeNumberedSaveCodecTests
         NativeNumberedSaveState decoded = NativeNumberedSaveCodec.Decode(encoded);
 
         Assert.Equal(state.SavedFrameOwner, decoded.SavedFrameOwner);
-        Assert.Equal(state.EngineState, decoded.EngineState);
-        Assert.Equal(state.StateWords, decoded.StateWords);
+        Assert.Equal(state.BgmTrackId, decoded.BgmTrackId);
+        Assert.Equal(state.SoundEffectResourceIds, decoded.SoundEffectResourceIds);
         Assert.Equal(state.Frames[0].ParentContext, decoded.Frames[0].ParentContext);
         Assert.Equal(state.Frames[0].ScriptId, decoded.Frames[0].ScriptId);
         Assert.Equal(state.Frames[0].ReturnIndices, decoded.Frames[0].ReturnIndices);

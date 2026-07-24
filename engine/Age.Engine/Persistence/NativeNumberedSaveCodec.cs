@@ -14,8 +14,8 @@ public sealed record NativeSavedGfxObject(long Handle, byte[] Record);
 
 public sealed record NativeNumberedSaveState(
     int SavedFrameOwner,
-    int EngineState,
-    IReadOnlyList<int> StateWords,
+    int BgmTrackId,
+    IReadOnlyList<int> SoundEffectResourceIds,
     byte[] ResourceRecords,
     byte[] SurfaceRecords,
     IReadOnlyList<NativeSavedScriptFrame> Frames,
@@ -30,7 +30,7 @@ public sealed record NativeNumberedSaveState(
     int RangeTransformCount,
     byte[] RangeTransformRecord)
 {
-    public const int StateWordCount = 10;
+    public const int SoundEffectChannelCount = 10;
     public const int ResourceRecordsSize = 300 * 4;
     public const int SurfaceRecordsSize = 20_000;
     public const int GfxRecordSize = 0x2d4;
@@ -65,8 +65,8 @@ public static class NativeNumberedSaveCodec
 
         WriteInt(payload, 0, cutoff);
         WriteInt(payload, 4, state.SavedFrameOwner);
-        WriteInt(payload, 8, state.EngineState);
-        WriteIntList(payload, 0x0c, state.StateWords);
+        WriteInt(payload, 8, state.BgmTrackId);
+        WriteIntList(payload, 0x0c, state.SoundEffectResourceIds);
         state.ResourceRecords.CopyTo(payload, 0x34);
         state.SurfaceRecords.CopyTo(payload, 0x4e4);
 
@@ -119,7 +119,8 @@ public static class NativeNumberedSaveCodec
         int fixedBytes = checked(0x5718 + cutoff * FrameSize);
         Require(payload, 0, fixedBytes, "numbered-save fixed state");
 
-        int[] stateWords = ReadInts(payload, 0x0c, NativeNumberedSaveState.StateWordCount);
+        int[] soundEffects = ReadInts(
+            payload, 0x0c, NativeNumberedSaveState.SoundEffectChannelCount);
         byte[] resources = payload.Slice(0x34, NativeNumberedSaveState.ResourceRecordsSize).ToArray();
         byte[] surfaces = payload.Slice(0x4e4, NativeNumberedSaveState.SurfaceRecordsSize).ToArray();
         var frames = new NativeSavedScriptFrame[cutoff + 1];
@@ -167,14 +168,14 @@ public static class NativeNumberedSaveCodec
         byte[] rangeRecord = payload.Slice(at + 8, gfxRecordSize).ToArray();
 
         return new NativeNumberedSaveState(
-            ReadInt(payload, 4), ReadInt(payload, 8), stateWords, resources, surfaces, frames,
+            ReadInt(payload, 4), ReadInt(payload, 8), soundEffects, resources, surfaces, frames,
             integers, floats, strings, pointers, pointerStrings, localPointerScratch, objects,
             rangeFirst, rangeCount, rangeRecord);
     }
 
     public static NativeNumberedSaveState Empty(IReadOnlyList<NativeSavedScriptFrame> frames)
         => new(
-            0, 0, new int[NativeNumberedSaveState.StateWordCount],
+            0, 0, new int[NativeNumberedSaveState.SoundEffectChannelCount],
             new byte[NativeNumberedSaveState.ResourceRecordsSize],
             new byte[NativeNumberedSaveState.SurfaceRecordsSize],
             frames, Array.Empty<int>(), Array.Empty<int>(), Array.Empty<string>(),
@@ -239,8 +240,8 @@ public static class NativeNumberedSaveCodec
     private static void ValidateState(NativeNumberedSaveState state)
     {
         if (state.Frames.Count == 0) throw new InvalidDataException("A numbered save requires at least one frame.");
-        if (state.StateWords.Count != NativeNumberedSaveState.StateWordCount)
-            throw new InvalidDataException("Numbered-save state word count must be 10.");
+        if (state.SoundEffectResourceIds.Count != NativeNumberedSaveState.SoundEffectChannelCount)
+            throw new InvalidDataException("Numbered-save sound-effect channel count must be 10.");
         if (state.ResourceRecords.Length != NativeNumberedSaveState.ResourceRecordsSize)
             throw new InvalidDataException("Numbered-save resource table must be 1,200 bytes.");
         if (state.SurfaceRecords.Length != NativeNumberedSaveState.SurfaceRecordsSize)

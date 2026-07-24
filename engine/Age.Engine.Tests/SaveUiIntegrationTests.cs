@@ -9,6 +9,8 @@ public class SaveUiIntegrationTests
 {
     private sealed class MenuReadyException : Exception;
     private sealed class InstalledResumeReachedException : Exception;
+    private sealed class InstalledGameplayPollReachedException : Exception;
+    private sealed class InstalledRootReloadReachedException(string message) : Exception(message);
 
     private sealed class StopAtFirstMenuPollHost : RecordingHost
     {
@@ -19,7 +21,7 @@ public class SaveUiIntegrationTests
         }
     }
 
-    private sealed class ClickFirstSlotHost : RecordingHost
+    private class ClickFirstSlotHost : RecordingHost
     {
         private long _now;
         private bool _pressed;
@@ -41,6 +43,53 @@ public class SaveUiIntegrationTests
             {
                 Vm.UpdateMouseButtonState(0x1, false);
                 _released = true;
+            }
+        }
+    }
+
+    private sealed class InstalledContinuationState(int expectedRestoreFrames)
+    {
+        public int RestoreFrameCount;
+        public bool TerminalRestoreEntered => RestoreFrameCount >= expectedRestoreFrames;
+        public readonly List<string> Frames = new();
+    }
+
+    private sealed class ContinueInstalledLoadHost(InstalledContinuationState state) : ClickFirstSlotHost
+    {
+        public override void WaitForInput(
+            int layoutSlot, Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        {
+            if (state.TerminalRestoreEntered) throw new InstalledGameplayPollReachedException();
+            base.WaitForInput(layoutSlot, serviceInputCallback, autoWaitState);
+        }
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            if (state.TerminalRestoreEntered) throw new InstalledGameplayPollReachedException();
+        }
+    }
+
+    private sealed class InstalledContinuationSink(InstalledContinuationState state) : ITraceSink
+    {
+        public bool TracingSteps => false;
+
+        public void Emit(in TraceEvent item)
+        {
+            if (item.Kind == TraceEventKind.FrameEnter)
+            {
+                state.Frames.Add($"+{item.Name}:{item.Cause}");
+                if (item.Cause == FrameCause.SaveRestore
+                    && !string.Equals(item.Name, "CALLBACK_LOAD.BIN",
+                        StringComparison.OrdinalIgnoreCase))
+                    state.RestoreFrameCount++;
+                if (item.Cause == FrameCause.RootReload)
+                    throw new InstalledRootReloadReachedException(
+                        string.Join(", ", state.Frames));
+            }
+            else if (item.Kind == TraceEventKind.FrameExit)
+            {
+                state.Frames.Add($"-{item.Name}:{item.Text}");
             }
         }
     }
@@ -224,10 +273,48 @@ public class SaveUiIntegrationTests
             sharedProfile: sharedProfile,
             nativeDatStore: store);
         host.Vm = vm;
+        vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
         vm.Globals[0x6241b] = 1;
         vm.Globals[0x696] = 0;
 
         Assert.Throws<InstalledResumeReachedException>(() => vm.Run());
+    }
+
+    [Fact]
+    public void InstalledSave00ContinuesToRestoredGameplayPollWhenPresent()
+    {
+        string root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Eushully", "姫狩りダンジョンマイスター", "SAVE");
+        if (!File.Exists(Path.Combine(root, "SAVE00.DAT"))) return;
+
+        var scripts = Sys4ScriptProvider.Load(Table);
+        var store = new DirectoryNativeDatStore(root, Identity);
+        NativeNumberedSaveState numbered = NativeNumberedSaveCodec.Decode(
+            store.LoadNumberedFile(0)!.Document.Payload);
+        var state = new InstalledContinuationState(numbered.Frames.Count);
+        var host = new ContinueInstalledLoadHost(state);
+        var sharedProfile = new SharedProfile();
+        Assert.True(sharedProfile.Load(store));
+        var vm = new VirtualMachine(
+            scripts.RequireByName("SAVE.BIN"), Table, host,
+            new VmOptions(MaxSteps: 1_000_000), scripts,
+            new InstalledContinuationSink(state),
+            sharedProfile: sharedProfile,
+            nativeDatStore: store);
+        host.Vm = vm;
+        vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
+        vm.Globals[0x6241b] = 1;
+        vm.Globals[0x696] = 0;
+
+        Exception? outcome = Record.Exception(() => vm.Run());
+        Assert.True(outcome is InstalledGameplayPollReachedException,
+            $"outcome={outcome?.GetType().Name ?? "<none>"}:{outcome?.Message}; " +
+            $"halt={vm.HaltReason}; steps={vm.Steps}; waits={host.Waits}; " +
+            $"movies={string.Join(",", host.ModalMovies.Select(item => item.Resource))}; " +
+            $"saved={string.Join(", ", numbered.Frames.Select((frame, index) =>
+                $"{index}:0x{frame.ScriptId:x}/resume={frame.ResumeIndex}/call={frame.CallTargetIndex}"))}; " +
+            $"frames={string.Join(", ", state.Frames)}");
     }
 
     private static Script WithPackedId(Script source, uint packedId)

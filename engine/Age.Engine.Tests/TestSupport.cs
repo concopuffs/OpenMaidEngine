@@ -41,6 +41,7 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxStarts = new();
     public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
     public readonly List<int> SfxReleases = new();
+    public readonly List<long> BgmTracks = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public System.Action? OnPlayMovie;
@@ -149,7 +150,7 @@ internal class RecordingHost : IHost
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
         => TextureDraws.Add((slot, sx, sy, w, h, dx, dy));
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
-    public void PlayBgm(long id) { }
+    public void PlayBgm(long id) => BgmTracks.Add(id);
     public void PlayVoice(long id) => Voices.Add(id);
     public void PlayVoice(long id, int playbackVariant)
     {

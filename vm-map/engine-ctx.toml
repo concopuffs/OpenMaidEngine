@@ -48,6 +48,11 @@ name = "mouse_wheel_delta"
 type = "int"
 note = "signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it"
 [[field]]
+offset = 0x144e0
+name = "sfx_channel_resource_ids"
+type = "int"
+note = "base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id"
+[[field]]
 offset = 0x14d54
 name = "gfx_obj_ptr_table"
 type = "void*"
@@ -472,6 +477,11 @@ offset = 0x9f278
 name = "mounted_aai_catalog_selector_1"
 type = "void*"
 note = "selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255"
+[[field]]
+offset = 0xa0b84
+name = "current_bgm_track_id"
+type = "int"
+note = "direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it"
 [[field]]
 offset = 0xa0cc0
 name = "screen_w"

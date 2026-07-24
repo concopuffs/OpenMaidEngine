@@ -167,6 +167,11 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for play-bgm 0x5 and BGM008 for play-bgm 0x8 (we initially mis-played BGM006/BGM009 via the disproven scene-section model). Direct-name proven by play-bgm 0x23 -> BGM035.OGG, a real standalone track (the BGM set skips 030-034). Ghidra /v2 op_0xbf_handler@0x420390 forwards the numeric track to the BGM facade rather than asset_open_indexed_entry. Diagnostic: `Age.Cli audio SC0000.BIN`.
 
+### 0xc0 `get-current-bgm-track` (get-current-bgm-track, argc 1)
+- **summary:** (track_out) - return the direct-name BGM track id retained by the music facade; the same value is restored from numbered saves.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2 op_0xc0_get_current_bgm_track@0x428440 writes EngineCtx.current_bgm_track_id (+0xa0b84) to operand 1. op 0xbf's bgm_play_track retains the selected direct-name id at the same music-facade field; layout-3 serialization copies it to payload +0x008 and restoration copies it back. Installed SAVE00 stores 0x18, matching FORT's BGM024.
+
 ### 0xc2 `fade-bgm` (u0041D2B0, argc 2)
 - **summary:** (target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Target 0 releases the current BGM source at completion.
 - **grounding:** source=investigation, confidence=high
@@ -397,12 +402,12 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries value_dispatch_lookup@0x419290, writes the matched or operand-2 default PC into the current frame, and clears the command type. Corpus pairs it with 0xa1/0xa2 in 12 generic switch sequences.
 
-### 0xae `continue-save-load-stack-restore` (u00415130, argc 0)
+### 0xae `continue-save-load-stack-restore` (continue-save-load-stack-restore, argc 0)
 - **summary:** () - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with script_frame_restore_saved_layout@0x40f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack.
 
-Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary.
+Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary. The installed SAVE00 continuation gate proves SYSTEM4 -> FORT restoration reaches FORT's CHMENU gameplay poll; the synthetic gate asserts the child frame enters with SaveRestore rather than ordinary CallScript cause.
 
 ### 0xc8 `sleep` (sleep, argc 1)
 - **summary:** Pause the current script for <duration> milliseconds while retained presentation continues.
@@ -1264,10 +1269,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xba `u0041D0B0` (u0041D0B0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xc0 `u00415620` (u00415620, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
