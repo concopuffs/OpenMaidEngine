@@ -1176,6 +1176,62 @@ confidence = "high"
 depends_on = ["0x6c1"]
 
 [[global]]
+address = "0x3239"
+name = "adv_layer_surface_slots"
+category = "data-table"
+type = "int[8][3]"
+columns = { "0" = "primary_surface_slot", "1" = "alternate_surface_slot", "2" = "transition_surface_slot" }
+value_domain = "eight rows initialized to primary slots 4..11, alternate slots 43..50, and transition slots 51..58"
+usage = "Shared ADV graphics-layer surface-slot registry. Scene setup initializes the three banks. The CG loader uses the primary slot for a fresh retained object, alternates between columns zero and one when replacing an already-bound layer, and uses column two for the transition/crossfade surface and cleanup. The corpus has 2,657 table-base accesses across 309 scripts."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62450", "0x62452", "0x62455"]
+
+[[global]]
+address = "0x62424"
+name = "adv_gfx_resource_id"
+category = "index-pointer"
+type = "int"
+value_domain = "SYS4INI file/resource id"
+usage = "Transient ADV graphics-load input. Scene scripts set this immediately before their common layer loader, which passes it to set-texture together with adv_gfx_surface_slot_work."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62452"]
+
+[[global]]
+address = "0x62450"
+name = "adv_gfx_layer_index"
+category = "index-pointer"
+type = "int"
+value_domain = "0..7"
+usage = "Current ADV graphics-layer row. All immediate assignments across the corpus are 0..7; common scene loaders use it to index adv_gfx_object_handles, per-layer geometry arrays, and adv_layer_surface_slots."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x3239", "0x62455"]
+
+[[global]]
+address = "0x62452"
+name = "adv_gfx_surface_slot_work"
+category = "index-pointer"
+type = "int"
+value_domain = "-1 for no retained-object binding, otherwise a graphics surface slot"
+usage = "Working surface slot for the current ADV layer. Opcode 0x215 writes the retained object's existing source slot or -1; the common loader falls back to adv_layer_surface_slots, then passes the selected slot through set-texture, size queries, draw binding, and release."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x3239", "0x62455"]
+
+[[global]]
+address = "0x62455"
+name = "adv_gfx_object_handles"
+category = "data-table"
+type = "int[20]"
+value_domain = "retained graphics-object handles; INIT2 populates the first nine cells"
+usage = "ADV retained-object handles indexed by adv_gfx_layer_index. INIT2 seeds handles 0xcb20, 0xcb2a, and 0xcb8e..0xcbc0 for the first nine cells; scene loaders query, bind, animate, and erase those objects while the eight-row surface-slot registry governs layers zero through seven."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62450", "0x62452"]
+
+[[global]]
 address = "0x2e49"
 name = "character_voice_suppressed"
 category = "data-table"

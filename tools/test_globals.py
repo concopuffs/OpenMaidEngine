@@ -4,6 +4,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import globals_build as G
+import sys4load
 
 FAILS = []
 def check(cond, msg):
@@ -128,6 +129,15 @@ def test_load_and_lint():
           and entries[0xedc4d]["name"]
           == "stage_authoring_difficulty_tiers",
           "STINIT2 numbering, minimap, points, and authoring tiers are curated")
+    check(entries[0x3239]["columns"] == {
+        "0": "primary_surface_slot",
+        "1": "alternate_surface_slot",
+        "2": "transition_surface_slot",
+    } and entries[0x62424]["name"] == "adv_gfx_resource_id"
+      and entries[0x62450]["name"] == "adv_gfx_layer_index"
+      and entries[0x62452]["name"] == "adv_gfx_surface_slot_work"
+      and entries[0x62455]["name"] == "adv_gfx_object_handles",
+      "ADV graphics layer slots and companion work globals are curated")
     check(entries[0xee035]["columns"]
           == {"0": "entry", "1": "clear", "2": "failure"}
           and entries[0xeebed]["name"] == "stage_extra_dungeon_flags"
@@ -166,6 +176,56 @@ def test_lint_catches_bad_vocab():
     check(any("confidence" in e for e in errors), "lint flags auto-shape claiming high confidence")
     check(any("column index" in e for e in errors), "lint flags nonnumeric column indices")
     check(any("negative column" in e for e in errors), "lint flags negative column indices")
+
+def test_adv_layer_surface_slot_evidence():
+    scene = sys4load.load(paths.scripts()["SC0000.BIN"])
+    expected = {
+        0x3239 + row * 3 + column: value + row
+        for row in range(8)
+        for column, value in enumerate((4, 43, 51))
+    }
+    initialized = {
+        instruction.args[0][1]: instruction.args[1][1]
+        for instruction in scene.instructions
+        if 0x125bd <= instruction.offset <= 0x12630
+        and len(instruction.args) == 2
+        and instruction.args[0][0] == 3
+        and instruction.args[0][1] in expected
+        and instruction.args[1][0] == 0
+    }
+    check(initialized == expected,
+          "SC0000 initializes all eight ADV layer surface-slot triplets")
+
+    table_lookups = [
+        instruction.args
+        for instruction in scene.instructions
+        if (3, 0x3239) in instruction.args
+        and (0, 3) in instruction.args
+    ]
+    static_columns = {
+        args[-1][1]
+        for args in table_lookups
+        if args[-1][0] == 0
+    }
+    check(static_columns == {0, 1, 2},
+          "SC0000's common graphics paths read all three surface-slot columns")
+
+    init2 = sys4load.load(paths.scripts()["INIT2.BIN"])
+    handle_writes = {
+        instruction.args[0][1]: instruction.args[1][1]
+        for instruction in init2.instructions
+        if len(instruction.args) == 2
+        and instruction.args[0][0] == 3
+        and 0x62455 <= instruction.args[0][1] <= 0x6245d
+        and instruction.args[1][0] == 0
+    }
+    expected_handles = [
+        0xcb20, 0xcb2a, 0xcb8e, 0xcb98, 0xcba2,
+        0xcbac, 0xcbb6, 0xcbc0, 0xcf08,
+    ]
+    check([handle_writes.get(0x62455 + index) for index in range(9)]
+          == expected_handles,
+          "INIT2 seeds the nine ADV retained-object handles")
 
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
@@ -229,6 +289,7 @@ def test_bootstrap_is_additive_and_idempotent():
 if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
+    test_adv_layer_surface_slot_evidence()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()

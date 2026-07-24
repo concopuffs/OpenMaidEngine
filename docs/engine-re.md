@@ -445,6 +445,26 @@ at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correc
 with several simultaneous distinct-slot objects would need the setup to run. Tracked as the scene-coroutine
 work, separate from this fix.
 
+#### ADV layer surface-slot registry (`G[0x3239]`, closed 2026-07-23)
+
+The former auto label `rec[s3]` is the eight-row `adv_layer_surface_slots` registry. Each scene's
+setup helper writes the same three banks: column zero `primary_surface_slot` = 4..11, column one
+`alternate_surface_slot` = 43..50, and column two `transition_surface_slot` = 51..58. The shape is
+pervasive rather than SC0000-specific: 309 scripts reference the base, with 2,657 table-base
+accesses; 143 scripts contain the initializer.
+
+The common CG loader proves the column roles. `adv_gfx_layer_index` (`G[0x62450]`, always assigned
+0..7) selects both this row and `adv_gfx_object_handles` (`G[0x62455]`). For a fresh retained object,
+the loader uses the primary slot. For an already-bound object, it compares the live slot returned
+by op `0x215` in `adv_gfx_surface_slot_work` (`G[0x62452]`) and chooses the other member of the
+primary/alternate pair before rebinding. Column two is released and reused by the transition path.
+The resource passed to `set-texture` is the transient `adv_gfx_resource_id` (`G[0x62424]`).
+
+INIT2 seeds the first nine cells of the 20-cell retained-object handle array with `0xcb20`,
+`0xcb2a`, `0xcb8e`..`0xcbc0`, and `0xcf08`. The eight-row layer table governs indices zero through
+seven; the ninth handle is a fixed extra object outside that row-indexed layer set. These names now
+live canonically in `vm-map/globals.toml`.
+
 **⇒ Scene-coroutine framework — INVESTIGATION COMPLETE (2026-07-09).** The mechanism behind the slot-0
 collapse is fully understood; the native finding and the implemented host-model disposition follow:
 

@@ -3222,3 +3222,24 @@ only through script operands, the array is now named `stage_authoring_difficulty
 confidence and explicitly classified as engine-dead authoring metadata.
 
 **Next:** continue consumer-led naming of the remaining two-dimensional tables; STINIT2 is closed.
+
+## Data-semantics sidebar: ADV layer surface-slot registry (2026-07-23)
+
+The highest-use unnamed row table, `G[0x3239]`, is now closed as
+`adv_layer_surface_slots`. Its eight rows contain three graphics surface banks:
+`primary_surface_slot` 4..11, `alternate_surface_slot` 43..50, and
+`transition_surface_slot` 51..58. The corpus contains 2,657 table-base accesses across 309 scripts,
+and 143 scene scripts repeat the same initializer.
+
+The shared CG loader proves the ABI. `adv_gfx_layer_index` selects a row and the corresponding
+`adv_gfx_object_handles` cell. A fresh object loads into the primary slot; an already-bound layer
+swaps between the primary and alternate slots; the third slot stages and cleans up transitions.
+`adv_gfx_surface_slot_work` carries the op-`0x215` query result or fallback slot, while
+`adv_gfx_resource_id` carries the transient SYS4INI resource id into `set-texture`. INIT2 seeds the
+first nine cells of the 20-cell retained-object handle array; the first eight participate in the
+row registry.
+
+Registry tests protect all 24 initialized slot cells, use of all three columns in SC0000, the nine
+INIT2 handle constants, and the canonical global/column names.
+
+**Next:** rank the next unnamed row table by shipped-reader evidence.

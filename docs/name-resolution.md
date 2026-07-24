@@ -692,7 +692,8 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    247 description strings formerly misread as records), six pre/post-clear text slots, progression and
    story gates, map/minimap geometry, rewards, and 174 resolved entry/clear/failure transitions. With
    RTINIT's used-provider surface closed, ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined, INFOMES/MES
-   classified, and STINIT2's engine-dead authoring tier retained at medium confidence, continue with
+   classified, STINIT2's engine-dead authoring tier retained at medium confidence, and the
+   309-script ADV primary/alternate/transition surface-slot registry named, continue with
    consumer-led tables that still have shipped readers;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
 2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
