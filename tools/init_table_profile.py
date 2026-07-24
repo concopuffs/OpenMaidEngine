@@ -469,6 +469,31 @@ def profile_card_generation_lists(data: dict) -> dict:
     }
 
 
+def profile_card_definitions(data: dict) -> dict:
+    """Summarize CDINIT2's card categories, effects, and joins."""
+    if data.get("schema") != "card-definitions":
+        return {}
+    records = data.get("records", [])
+    return {
+        "card_count": len(records),
+        "reserved_record_count": data.get("reserved_record_count", 0),
+        "type_counts": data.get("type_counts", {}),
+        "awarded_item_join_count": data.get(
+            "awarded_item_join_count", 0
+        ),
+        "event_dispatch_join_count": data.get(
+            "event_dispatch_join_count", 0
+        ),
+        "condition_join_count": data.get("condition_join_count", 0),
+        "visual_asset_join_count": data.get(
+            "visual_asset_join_count", 0
+        ),
+        "ignored_required_story_flag_count": data.get(
+            "ignored_required_story_flag_count", 0
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -596,7 +621,22 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if card_profile := profile_card_generation_lists(data):
+    if definition_profile := profile_card_definitions(data):
+        lines.extend([
+            f"- card definitions: {definition_profile['card_count']}/"
+            f"{definition_profile['reserved_record_count']} rows",
+            f"- types: {definition_profile['type_counts']}",
+            f"- joined effects: "
+            f"{definition_profile['awarded_item_join_count']} items, "
+            f"{definition_profile['event_dispatch_join_count']} events, "
+            f"{definition_profile['condition_join_count']} conditions",
+            f"- visual assets resolved: "
+            f"{definition_profile['visual_asset_join_count']}/"
+            f"{definition_profile['card_count']}",
+            f"- engine-dead third required flags: "
+            f"{definition_profile['ignored_required_story_flag_count']}",
+        ])
+    elif card_profile := profile_card_generation_lists(data):
         lines.extend([
             f"- card-generation lists: {card_profile['list_count']}",
             f"- weighted entries: {card_profile['entry_count']} across "
@@ -817,6 +857,7 @@ def main() -> int:
         "h_scene_gallery_profile": profile_h_scene_gallery(data),
         "training_action_profile": profile_training_actions(data),
         "card_generation_profile": profile_card_generation_lists(data),
+        "card_definition_profile": profile_card_definitions(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

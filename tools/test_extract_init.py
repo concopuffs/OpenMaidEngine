@@ -1737,6 +1737,79 @@ def test_card_generation_lists() -> None:
     )
 
 
+def test_card_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["CDINIT2.BIN"])
+    records, meta = extract_init.extract_card_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 81
+        and meta["reserved_record_count"] == 100
+        and meta["numeric_block_start"] == "0x1519f9"
+        and meta["numeric_block_end_exclusive"] == "0x152485",
+        "CDINIT2 exposes 81 cards in one contiguous reserved 100-row block",
+    )
+    check(
+        meta["string_write_count"] == 162
+        and meta["static_write_count"] == 395
+        and meta["classified_instruction_count"] == 558,
+        "CDINIT2 classifies every name, result, numeric, and exit instruction",
+    )
+    check(
+        meta["type_counts"]
+        == {
+            "item_award": 24,
+            "random_warp": 1,
+            "resource_recovery": 6,
+            "stage_clear_point_bonus": 3,
+            "story_event": 40,
+            "trap": 7,
+        },
+        "CDINIT2 partitions every card into its FIELD behavior type",
+    )
+    check(
+        by_id[1]["effects"]["resource_recovery"]["hp"]
+        == {"minimum": 2, "maximum_exclusive": 5}
+        and by_id[4]["effects"]["spirit_recovery"]
+        == {"minimum": 2, "maximum_exclusive": 5}
+        and by_id[7]["effects"]["stage_clear_spendable_point_bonus"]
+        == 5,
+        "CDINIT2 exposes recovery ranges and stage-clear point bonuses",
+    )
+    check(
+        by_id[10]["effects"]["event_story_flag_id"] == 490
+        and by_id[10]["effects"]["event_script_name"] == "SC0490.BIN"
+        and by_id[58]["effects"]["awarded_item_name"]
+        == "ブロンズコイン",
+        "CDINIT2 resolves event and item rewards through SCINIT and ITINIT",
+    )
+    check(
+        by_id[52]["effects"]["condition"] == "paralysis"
+        and by_id[52]["effects"]["condition_level"] == 1
+        and by_id[55]["effects"]["resource_damage"]["sp"]
+        == {"minimum": 10, "maximum_exclusive": 10}
+        and by_id[57]["effects"]["random_warp"],
+        "CDINIT2 decodes trap conditions, fixed damage, and random warp",
+    )
+    check(
+        by_id[18]["eligibility"]["required_story_flag_ids"]
+        == [901, 863]
+        and by_id[18]["eligibility"][
+            "ignored_required_story_flag_ids"
+        ] == [51]
+        and meta["ignored_required_story_flag_count"] == 18,
+        "CDINIT2 separates FIELD's live gates from the engine-dead third flag",
+    )
+    check(
+        meta["awarded_item_join_count"] == 24
+        and meta["event_dispatch_join_count"] == 40
+        and meta["condition_join_count"] == 3
+        and meta["visual_asset_join_count"] == 81
+        and by_id[81]["visual_asset_name"] == "MVS107.AGF",
+        "CDINIT2 resolves every item, event, condition, and visual join",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1955,6 +2028,7 @@ if __name__ == "__main__":
     test_h_scene_gallery()
     test_training_actions()
     test_card_generation_lists()
+    test_card_definitions()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

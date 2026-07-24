@@ -38,6 +38,10 @@ generation lists populate a parallel card-id array and three-column weight
 schedule. FIELD filters the joined CDINIT2 definitions by story flags and uses
 the current stage turn to grow each candidate's weighted-selection share.
 
+CDINIT2 is a special name-mode registry: 81 cards occupy one contiguous
+100-row definition block with story gates, item/event/point rewards, ranged
+HP/SP/FS and spirit effects, conditions, warp behavior, and visual assets.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -717,9 +721,39 @@ CARD_GENERATION_WEIGHT_STRIDE = 3
 CARD_GENERATION_CARD_ID_BASE = 0x1525B2
 CARD_GENERATION_SCAN_CAPACITY = 100
 CARD_GENERATION_CLEAR_COUNT = 50
+CARD_DEFINITION_NAME_BASE = 0x4315
+CARD_DEFINITION_RESULT_BASE = 0x4379
 CARD_REQUIRED_STORY_FLAG_BASE = 0x151A5D
 CARD_FORBIDDEN_STORY_FLAG_BASE = 0x151B89
 CARD_STORY_FLAG_STRIDE = 3
+CARD_DEFINITION_COUNT = 81
+CARD_DEFINITION_CAPACITY = 100
+CARD_DEFINITION_ARRAYS = {
+    "type_id": (0x1519F9, 1),
+    "required_story_flag_ids": (0x151A5D, 3),
+    "forbidden_story_flag_ids": (0x151B89, 3),
+    "awarded_item_id": (0x151CB5, 1),
+    "event_story_flag_id": (0x151D19, 1),
+    "stage_clear_point_bonus": (0x151D7D, 1),
+    "minimum_resource_recovery": (0x151DE1, 3),
+    "maximum_resource_recovery": (0x151F0D, 3),
+    "minimum_spirit_recovery": (0x152039, 1),
+    "maximum_spirit_recovery": (0x15209D, 1),
+    "minimum_resource_damage": (0x152101, 3),
+    "maximum_resource_damage": (0x15222D, 3),
+    "condition_id": (0x152359, 1),
+    "condition_level": (0x1523BD, 1),
+    "visual_asset_id": (0x152421, 1),
+}
+CARD_TYPE_NAMES = {
+    1: "story_event",
+    2: "item_award",
+    3: "stage_clear_point_bonus",
+    4: "resource_recovery",
+    5: "trap",
+    6: "random_warp",
+}
+CARD_RESOURCE_COLUMNS = ("hp", "sp", "fs")
 
 
 def resolve(name: str) -> Path:
@@ -4238,6 +4272,398 @@ def extract_training_actions(scr):
     }
 
 
+def extract_card_definitions(scr):
+    """Extract CDINIT2's complete 81-card definition and effect registry."""
+    string_cells = {}
+    numeric_cells = {
+        field_name: {}
+        for field_name in CARD_DEFINITION_ARRAYS
+    }
+    classified_offsets = set()
+    string_write_count = 0
+    static_write_count = 0
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            destination = ins.args[0][1]
+            if (
+                CARD_DEFINITION_NAME_BASE
+                < destination
+                <= CARD_DEFINITION_NAME_BASE + CARD_DEFINITION_COUNT
+            ):
+                card_id = destination - CARD_DEFINITION_NAME_BASE
+                field_name = "name"
+            elif (
+                CARD_DEFINITION_RESULT_BASE
+                < destination
+                <= CARD_DEFINITION_RESULT_BASE + CARD_DEFINITION_COUNT
+            ):
+                card_id = destination - CARD_DEFINITION_RESULT_BASE
+                field_name = "result_message"
+            else:
+                raise ValueError(
+                    f"{scr.path.name}: unclassified string destination "
+                    f"0x{destination:x} at 0x{ins.offset:x}"
+                )
+            _store_unique(
+                string_cells,
+                (card_id, field_name),
+                scr.strings[ins.args[1][1]][0],
+                card_id,
+            )
+            classified_offsets.add(ins.offset)
+            string_write_count += 1
+            continue
+
+        write = _static_global_write(ins)
+        if write is not None:
+            static_write_count += 1
+            destination, value = write
+            if not isinstance(value, int):
+                raise ValueError(
+                    f"{scr.path.name}: non-static card value "
+                    f"at 0x{ins.offset:x}"
+                )
+            for field_name, (base, stride) in (
+                CARD_DEFINITION_ARRAYS.items()
+            ):
+                index = destination - base
+                if not (
+                    0 <= index < CARD_DEFINITION_CAPACITY * stride
+                ):
+                    continue
+                card_id, column = divmod(index, stride)
+                if not 1 <= card_id <= CARD_DEFINITION_COUNT:
+                    raise ValueError(
+                        f"{scr.path.name}: write to reserved card row "
+                        f"{card_id} at 0x{ins.offset:x}"
+                    )
+                _store_unique(
+                    numeric_cells[field_name],
+                    (card_id, column),
+                    value,
+                    card_id,
+                )
+                classified_offsets.add(ins.offset)
+                break
+            else:
+                raise ValueError(
+                    f"{scr.path.name}: unclassified numeric destination "
+                    f"0x{destination:x} at 0x{ins.offset:x}"
+                )
+            continue
+
+        if sys4load.display_label(ins.opcode) == "exit":
+            classified_offsets.add(ins.offset)
+
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+
+    item_records, _ = extract_name(sys4load.load(resolve("ITINIT")))
+    item_names = {
+        record["id"]: record["name"] for record in item_records
+    }
+    dispatch_records, _ = extract_dispatch(
+        sys4load.load(resolve("SCINIT"))
+    )
+    event_dispatch = {
+        record["id"]: record for record in dispatch_records
+    }
+    condition_records, _ = extract_condition_definitions(
+        sys4load.load(resolve("ILINIT"))
+    )
+    condition_names = {
+        record["id"]: record["condition"]
+        for record in condition_records
+    }
+    asset_names = callscript_names()
+
+    def values(field_name: str, card_id: int) -> list[int]:
+        _, stride = CARD_DEFINITION_ARRAYS[field_name]
+        return [
+            numeric_cells[field_name].get((card_id, column), 0)
+            for column in range(stride)
+        ]
+
+    def scalar(field_name: str, card_id: int) -> int:
+        return values(field_name, card_id)[0]
+
+    records = []
+    for card_id in range(1, CARD_DEFINITION_COUNT + 1):
+        raw_fields = {}
+        raw_record_fields = {}
+        for field_name, (base, stride) in (
+            CARD_DEFINITION_ARRAYS.items()
+        ):
+            for column in range(stride):
+                cell = (card_id, column)
+                if cell not in numeric_cells[field_name]:
+                    continue
+                value = numeric_cells[field_name][cell]
+                if stride == 1:
+                    raw_fields[f"0x{base:x}"] = value
+                else:
+                    raw_record_fields[
+                        f"0x{base:x}/{stride}/{column}"
+                    ] = value
+
+        required_flags = values(
+            "required_story_flag_ids", card_id
+        )
+        forbidden_flags = values(
+            "forbidden_story_flag_ids", card_id
+        )
+        eligibility = {
+            "required_story_flag_ids": [
+                value for value in required_flags[:2] if value
+            ],
+            "forbidden_story_flag_ids": [
+                value for value in forbidden_flags[:2] if value
+            ],
+        }
+        if required_flags[2]:
+            eligibility["ignored_required_story_flag_ids"] = [
+                required_flags[2]
+            ]
+
+        effects = {}
+        awarded_item_id = scalar("awarded_item_id", card_id)
+        if awarded_item_id:
+            effects.update({
+                "awarded_item_id": awarded_item_id,
+                "awarded_item_name": item_names.get(
+                    awarded_item_id, ""
+                ),
+            })
+        event_id = scalar("event_story_flag_id", card_id)
+        if event_id:
+            dispatch = event_dispatch.get(event_id, {})
+            effects.update({
+                "event_story_flag_id": event_id,
+                "event_script_resource_id": dispatch.get(
+                    "script_resource_id", 0
+                ),
+                "event_script_name": dispatch.get("script_name", ""),
+            })
+        point_bonus = scalar("stage_clear_point_bonus", card_id)
+        if point_bonus:
+            effects["stage_clear_spendable_point_bonus"] = point_bonus
+
+        for prefix, minimum_field, maximum_field in (
+            (
+                "resource_recovery",
+                "minimum_resource_recovery",
+                "maximum_resource_recovery",
+            ),
+            (
+                "resource_damage",
+                "minimum_resource_damage",
+                "maximum_resource_damage",
+            ),
+        ):
+            minimums = values(minimum_field, card_id)
+            maximums = values(maximum_field, card_id)
+            ranges = {
+                resource: {
+                    "minimum": minimums[column],
+                    "maximum_exclusive": maximums[column],
+                }
+                for column, resource in enumerate(
+                    CARD_RESOURCE_COLUMNS
+                )
+                if minimums[column] or maximums[column]
+            }
+            if ranges:
+                effects[prefix] = ranges
+
+        minimum_spirit = scalar(
+            "minimum_spirit_recovery", card_id
+        )
+        maximum_spirit = scalar(
+            "maximum_spirit_recovery", card_id
+        )
+        if minimum_spirit or maximum_spirit:
+            effects["spirit_recovery"] = {
+                "minimum": minimum_spirit,
+                "maximum_exclusive": maximum_spirit,
+            }
+        condition_id = scalar("condition_id", card_id)
+        if condition_id:
+            effects.update({
+                "condition_id": condition_id,
+                "condition": condition_names.get(condition_id, ""),
+                "condition_level": scalar(
+                    "condition_level", card_id
+                ),
+            })
+        type_id = scalar("type_id", card_id)
+        if type_id == 6:
+            effects["random_warp"] = True
+
+        visual_asset_id = scalar("visual_asset_id", card_id)
+        records.append({
+            "id": card_id,
+            "name": string_cells[(card_id, "name")],
+            "result_message": string_cells[
+                (card_id, "result_message")
+            ],
+            "type_id": type_id,
+            "type": CARD_TYPE_NAMES.get(type_id, ""),
+            "eligibility": eligibility,
+            "effects": effects,
+            "visual_asset_id": visual_asset_id,
+            "visual_asset_name": asset_names.get(visual_asset_id, ""),
+            "fields": raw_fields,
+            "record_fields": raw_record_fields,
+            "string_fields": {
+                f"0x{CARD_DEFINITION_NAME_BASE:x}": (
+                    string_cells[(card_id, "name")]
+                ),
+                f"0x{CARD_DEFINITION_RESULT_BASE:x}": (
+                    string_cells[(card_id, "result_message")]
+                ),
+            },
+        })
+
+    array_layouts = {
+        f"0x{base:x}": {"stride": stride}
+        for base, stride in CARD_DEFINITION_ARRAYS.values()
+        if stride > 1
+    }
+    schema_field_semantics = {
+        f"0x{CARD_DEFINITION_NAME_BASE:x}": "card_definition_names",
+        f"0x{CARD_DEFINITION_RESULT_BASE:x}": (
+            "card_definition_result_messages"
+        ),
+    }
+    semantic_names = {
+        "type_id": "card_definition_type_ids",
+        "required_story_flag_ids": (
+            "card_definition_required_story_flag_ids"
+        ),
+        "forbidden_story_flag_ids": (
+            "card_definition_forbidden_story_flag_ids"
+        ),
+        "awarded_item_id": "card_definition_awarded_item_ids",
+        "event_story_flag_id": (
+            "card_definition_event_story_flag_ids"
+        ),
+        "stage_clear_point_bonus": (
+            "card_definition_stage_clear_point_bonuses"
+        ),
+        "minimum_resource_recovery": (
+            "card_definition_minimum_resource_recovery"
+        ),
+        "maximum_resource_recovery": (
+            "card_definition_maximum_resource_recovery"
+        ),
+        "minimum_spirit_recovery": (
+            "card_definition_minimum_spirit_recovery"
+        ),
+        "maximum_spirit_recovery": (
+            "card_definition_maximum_spirit_recovery"
+        ),
+        "minimum_resource_damage": (
+            "card_definition_minimum_resource_damage"
+        ),
+        "maximum_resource_damage": (
+            "card_definition_maximum_resource_damage"
+        ),
+        "condition_id": "card_definition_condition_ids",
+        "condition_level": "card_definition_condition_levels",
+        "visual_asset_id": "card_definition_visual_asset_ids",
+    }
+    for field_name, (base, stride) in (
+        CARD_DEFINITION_ARRAYS.items()
+    ):
+        key = f"0x{base:x}"
+        if stride == 1:
+            schema_field_semantics[key] = semantic_names[field_name]
+            continue
+        columns = (
+            ("required_flag_1", "required_flag_2",
+             "engine_dead_required_flag_3")
+            if field_name == "required_story_flag_ids"
+            else
+            ("forbidden_flag_1", "forbidden_flag_2",
+             "reserved_forbidden_flag_3")
+            if field_name == "forbidden_story_flag_ids"
+            else CARD_RESOURCE_COLUMNS
+        )
+        for column, column_name in enumerate(columns):
+            schema_field_semantics[
+                f"{key}/{stride}/{column}"
+            ] = f"{semantic_names[field_name]}.{column_name}"
+
+    return records, {
+        "schema": "card-definitions",
+        "reserved_record_count": CARD_DEFINITION_CAPACITY,
+        "authored_record_count": CARD_DEFINITION_COUNT,
+        "numeric_block_start": "0x1519f9",
+        "numeric_block_end_exclusive": "0x152485",
+        "array_layouts": array_layouts,
+        "schema_field_semantics": schema_field_semantics,
+        "semantic_array_names": {
+            f"0x{base:x}": semantic_names[field_name]
+            for field_name, (base, _) in (
+                CARD_DEFINITION_ARRAYS.items()
+            )
+        },
+        "string_write_count": string_write_count,
+        "static_write_count": static_write_count,
+        "classified_instruction_count": len(classified_offsets),
+        "type_counts": dict(sorted(collections.Counter(
+            record["type"] for record in records
+        ).items())),
+        "awarded_item_join_count": sum(
+            bool(record["effects"].get("awarded_item_name"))
+            for record in records
+        ),
+        "event_dispatch_join_count": sum(
+            bool(record["effects"].get("event_script_name"))
+            for record in records
+        ),
+        "condition_join_count": sum(
+            bool(record["effects"].get("condition"))
+            for record in records
+        ),
+        "visual_asset_join_count": sum(
+            bool(record["visual_asset_name"]) for record in records
+        ),
+        "ignored_required_story_flag_count": sum(
+            bool(record["eligibility"].get(
+                "ignored_required_story_flag_ids"
+            ))
+            for record in records
+        ),
+        "consumer_contract": {
+            "FIELD.BIN": (
+                "filters required/forbidden story flags, applies randomized "
+                "HP/SP/FS recovery or damage, spirit recovery, item awards, "
+                "stage-clear spendable-point bonuses, conditions, event "
+                "dispatch, or random warp by card type, draws the visual "
+                "asset, and presents the name/result text"
+            ),
+            "STAGECLEAR.BIN": (
+                "adds FIELD's accumulated card point bonus to the ordinary "
+                "stage-clear award before increasing shared_spendable_points"
+            ),
+        },
+    }
+
+
 def extract_card_generation_lists(scr):
     """Extract CDINIT's selector-dispatched weighted card candidate lists."""
     instructions = scr.instructions
@@ -5274,6 +5700,11 @@ def write_data_index(data_dir: Path) -> None:
         "gates, and links the seven used selectors back to STINIT type-28 stage objects.",
         "FIELD's turn-scaled weight formula and 100-slot selection scan remain explicit.",
         "",
+        "CDINIT2's dedicated card-definition schema exposes all 81 cards in the reserved",
+        "100-row registry. Names, result messages, effective and engine-dead story gates,",
+        "six effect types, and raw array coordinates remain together; item, event, condition,",
+        "and visual ids join through ITINIT, SCINIT, ILINIT, and SYS4INI resources.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -5379,6 +5810,8 @@ def main() -> int:
         extractor = extract_terrain_definitions
     elif mode == "name" and name == "TRINIT":
         extractor = extract_training_actions
+    elif mode == "name" and name == "CDINIT2":
+        extractor = extract_card_definitions
     elif mode == "numeric" and name == "CDINIT":
         extractor = extract_card_generation_lists
     elif mode == "numeric" and name == "SPINIT":

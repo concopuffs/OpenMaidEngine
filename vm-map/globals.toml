@@ -4056,3 +4056,161 @@ usage = "Card ids parallel to card_generation_weight_schedules. FIELD scans slot
 source = "investigation"
 confidence = "high"
 depends_on = ["0x1519f8", "0x152485", "0x152486"]
+
+[[global]]
+address = "0x4dfbb"
+name = "stage_card_spendable_point_bonus"
+category = "counter"
+type = "int"
+value_domain = "nonnegative accumulated point bonus for the active stage"
+usage = "FIELD clears this on stage entry and adds CDINIT2 type-3 card bonuses. STAGECLEAR adds the accumulated amount to its computed stage award before increasing shared_spendable_points."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x151d7d", "0x671b"]
+
+[[global]]
+address = "0x1519f9"
+name = "card_definition_type_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "1=story event, 2=item award, 3=stage-clear point bonus, 4=recovery, 5=trap, 6=random warp"
+usage = "CDINIT2 behavior class by card id. FIELD applies the common populated effect arrays, uses type 6 for the random valid-tile warp path, and uses type 1 to dispatch the card's event after showing its result."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8"]
+
+[[global]]
+address = "0x151cb5"
+name = "card_definition_awarded_item_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "ITINIT item id; zero means no item award"
+usage = "Optional item granted by FIELD through ADDITEM after card selection. All 24 populated ids resolve through ITINIT."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8", "0x8c877"]
+
+[[global]]
+address = "0x151d19"
+name = "card_definition_event_story_flag_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "story flag / SCINIT decision id; zero means no event"
+usage = "Event dispatched for type-1 cards after FIELD displays the card result. All 40 populated ids resolve through SCINIT."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8", "0x62ccf"]
+
+[[global]]
+address = "0x151d7d"
+name = "card_definition_stage_clear_point_bonuses"
+category = "data-table"
+type = "int[100]"
+value_domain = "nonnegative shared-spendable-point bonus"
+usage = "Type-3 card reward accumulated into stage_card_spendable_point_bonus. STAGECLEAR adds it to the normal performance-adjusted award before updating shared_spendable_points; shipped small/medium/large values are 5, 10, and 15."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4dfbb", "0x671b"]
+
+[[global]]
+address = "0x151de1"
+name = "card_definition_minimum_resource_recovery"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "hp", "1" = "sp", "2" = "fs" }
+value_domain = "nonnegative minimum HP/SP/FS recovery"
+usage = "Lower bounds for type-4 HP/SP/FS card recovery. FIELD starts each resource delta at this value and, when the paired upper bound is larger, adds a random value below their difference."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x151f0d"]
+
+[[global]]
+address = "0x151f0d"
+name = "card_definition_maximum_resource_recovery"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "hp", "1" = "sp", "2" = "fs" }
+value_domain = "exclusive upper HP/SP/FS recovery bound when greater than the minimum"
+usage = "Upper bounds paired with card_definition_minimum_resource_recovery. Equal bounds produce the fixed minimum; larger bounds produce a uniformly selected value from minimum through upper-bound-minus-one."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x151de1"]
+
+[[global]]
+address = "0x152039"
+name = "card_definition_minimum_spirit_recovery"
+category = "data-table"
+type = "int[100]"
+value_domain = "nonnegative minimum familiar spirit recovery"
+usage = "Lower bound for type-4 familiar-spirit recovery. FIELD selects the value with the same minimum/exclusive-upper algorithm as HP/SP/FS and clamps current_spirit to maximum_spirit."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15209d", "0x20530", "0x20534"]
+
+[[global]]
+address = "0x15209d"
+name = "card_definition_maximum_spirit_recovery"
+category = "data-table"
+type = "int[100]"
+value_domain = "exclusive upper spirit-recovery bound when greater than the minimum"
+usage = "Upper bound paired with card_definition_minimum_spirit_recovery. Equal bounds produce the fixed minimum; larger bounds exclude this upper value."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152039"]
+
+[[global]]
+address = "0x152101"
+name = "card_definition_minimum_resource_damage"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "hp", "1" = "sp", "2" = "fs" }
+value_domain = "nonnegative minimum HP/SP/FS loss"
+usage = "Lower bounds for type-5 trap damage. FIELD subtracts these randomized HP/SP/FS amounts from the active entity through the same resource-delta path used for recovery."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x15222d"]
+
+[[global]]
+address = "0x15222d"
+name = "card_definition_maximum_resource_damage"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "hp", "1" = "sp", "2" = "fs" }
+value_domain = "exclusive upper HP/SP/FS damage bound when greater than the minimum"
+usage = "Upper bounds paired with card_definition_minimum_resource_damage. Equal bounds produce fixed damage; larger bounds exclude this upper value."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152101"]
+
+[[global]]
+address = "0x152359"
+name = "card_definition_condition_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "ILINIT condition id; zero means no condition"
+usage = "Condition applied by type-5 trap cards through ADDILL. The three populated rows resolve to paralysis, poison, and water_flow."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1523bd"]
+
+[[global]]
+address = "0x1523bd"
+name = "card_definition_condition_levels"
+category = "data-table"
+type = "int[100]"
+value_domain = "ILINIT condition level; zero means no condition"
+usage = "Condition level paired with card_definition_condition_ids and passed to ADDILL. All three shipped condition traps use level 1."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152359"]
+
+[[global]]
+address = "0x152421"
+name = "card_definition_visual_asset_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "SYS4INI AGF resource id"
+usage = "Card-result visual selected by FIELD before applying and presenting the effect. All 81 authored rows resolve to MVS*.AGF assets, with related card families sharing artwork."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8"]

@@ -3108,5 +3108,42 @@ Regressions protect every selector and entry count, exact instruction accounting
 effective/ignored flag joins, STINIT object joins, raw parallel addresses, the 100/50 scan-clear
 asymmetry, and the original missing-list warning.
 
-**Next:** audit CDINIT2's full 81-card effect schema. CDINIT has now named its selection-facing
-surface, but FIELD's post-selection effect arrays remain the clearest unresolved INIT structure.
+## Data-semantics sidebar: CDINIT2 card definitions and effects (2026-07-23)
+
+CDINIT2 is FIELD's complete 81-card definition registry inside one reserved 100-row block. The
+dedicated extractor classifies all 558 instructions exactly: 162 name/result-message strings,
+395 numeric writes, and `exit`. Its numeric block is contiguous from `0x1519f9` through `0x152484`
+and preserves the raw arrays for card type, required and forbidden story flags, awarded item,
+event story flag, stage-clear point bonus, ranged HP/SP/FS recovery and damage, spirit recovery,
+condition id/level, and visual asset.
+
+The shipped type distribution is forty story events, twenty-four item awards, six resource
+recoveries, three stage-clear point bonuses, seven traps, and one random warp. FIELD filters each
+candidate through two required and three forbidden story-flag cells before selection. CDINIT2 also
+authors eighteen values in a third required-flag column, but FIELD's eligibility loop never reads
+that column; these remain explicit as engine-dead authoring data rather than being promoted into the
+effective gate. All 81 visual ids resolve through SYS4INI to `MVS*.AGF` assets, all 24 item rewards
+join through ITINIT, all 40 event ids join through SCINIT, and all three condition-bearing traps join
+through ILINIT.
+
+After selection, FIELD renders the card's visual and result message, then applies the type-specific
+effect. Resource and spirit ranges use an authored minimum plus `random(maximum - minimum)` when the
+maximum exceeds the minimum, so the stored maximum is exclusive for a non-fixed range and equality
+means a fixed value. Resource recovery and trap damage address HP, SP, and FS independently; spirit
+recovery clamps the current value into its valid range; condition traps call ADDILL with the authored
+condition level; and the random-warp card chooses a valid destination tile. Story-event cards dispatch
+their joined SCINIT event after the result message. Item cards call ADDITEM. Point cards accumulate
+their award in `stage_card_spendable_point_bonus`; STAGECLEAR adds that accumulator to the stage award
+before updating `shared_spendable_points`.
+
+Representative definitions protect each path: card 1 restores HP/SP/FS by 2--4, card 4 restores
+spirit by 2--4, card 7 awards five stage-clear points, card 10 dispatches SC0490, card 50 performs
+ranged resource damage, card 52 applies level-one paralysis, card 55 inflicts fixed ten SP damage,
+card 57 is the random warp, card 58 awards a bronze coin, and card 81 renders `MVS107.AGF`.
+Regressions protect every string and numeric write, the 81-of-100 geometry, type distribution,
+effective/ignored gate split, all four external joins, representative effect projections, and the
+FIELD/STAGECLEAR consumer contract.
+
+**Next:** audit BTANINIT and BTANINIT2 together. Their current generic outputs fragment the
+battle-animation registry across address-derived fields, making the consumer-side row geometry the
+next data-structure target.

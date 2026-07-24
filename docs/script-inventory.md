@@ -47,8 +47,9 @@ Large, table-like scripts — prime candidates for data extraction:
 - `EBINIT` (338 KB) — enemy battle data
 - `MPINIT` (330 KB) — maps
 - `SCINIT` (88 KB), `CGINIT` (79 KB — CG gallery), `ITINIT` (70 KB — items),
-  `RTINIT` (67 KB — movement/battle routine-step banks), `CCINIT` (41 KB — class-change rule program), `SKINIT` (37 KB — skills), `CDINIT` (31 KB),
-  `BTANINIT` (105 KB — battle animations)
+  `RTINIT` (67 KB — movement/battle routine-step banks), `CCINIT` (41 KB — class-change rule program),
+  `SKINIT` (37 KB — skills), `CDINIT` (31 KB — weighted card-generation lists), `CDINIT2`
+  (card definitions and effects), `BTANINIT` (105 KB — battle animations)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
 
@@ -148,6 +149,17 @@ ten-event fields in one contiguous numeric block. TRAIN consumes the complete sc
 replays event ids below each restored execution count as completed story flags. All eight item
 requirements, eight skill awards, three item awards, and 75 event cells resolve through
 ITINIT/SKINIT/SCINIT.
+
+CDINIT defines nine weighted card-generation lists with 383 total candidates. FIELD selects the
+list through STINIT type-28 card objects, filters CDINIT2 story gates, applies the current-stage-turn
+weight curve, and performs cumulative random selection across a 100-slot work buffer. The native
+script clears only the first 50 slots even though its largest authored list contains 75.
+
+CDINIT2 defines 81 cards inside a reserved 100-row registry. Its names and result messages pair with
+six consumer-proven effect types: story event, item award, deferred stage-clear point bonus, ranged
+resource recovery, trap, and random warp. All item, event, condition, and visual references resolve
+through ITINIT, SCINIT, ILINIT, and SYS4INI. FIELD reads two of the three authored required-story-flag
+columns; eighteen third-column values are preserved as engine-dead data.
 
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.

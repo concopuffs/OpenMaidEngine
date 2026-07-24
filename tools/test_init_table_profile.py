@@ -196,7 +196,7 @@ def main() -> int:
             {"stage_ids": [32, 33, 34]},
             {"stage_ids": [35, 36]},
         ],
-        "records": [],
+        "records": [{}, {}, {}],
     }
     map_summary = profile.profile_map_atlas(map_fixture)
     assert map_summary["row_stride"] == 53
@@ -319,6 +319,36 @@ def main() -> int:
     rendered_cards = profile.render_markdown(card_fixture, [], 40)
     assert "- card-generation lists: 2" in rendered_cards
     assert "- runtime scan/clear prefix: 100/50 slots" in rendered_cards
+
+    definition_fixture = {
+        "table": "CARDDEFS",
+        "mode": "name",
+        "schema": "card-definitions",
+        "record_count": 3,
+        "reserved_record_count": 100,
+        "type_counts": {
+            "item_award": 1,
+            "resource_recovery": 1,
+            "trap": 1,
+        },
+        "awarded_item_join_count": 1,
+        "event_dispatch_join_count": 0,
+        "condition_join_count": 1,
+        "visual_asset_join_count": 3,
+        "ignored_required_story_flag_count": 1,
+        "records": [{}, {}, {}],
+    }
+    definition_summary = profile.profile_card_definitions(
+        definition_fixture
+    )
+    assert definition_summary["card_count"] == 3
+    assert definition_summary["reserved_record_count"] == 100
+    assert definition_summary["visual_asset_join_count"] == 3
+    rendered_definitions = profile.render_markdown(
+        definition_fixture, [], 40
+    )
+    assert "- card definitions: 3/100 rows" in rendered_definitions
+    assert "- engine-dead third required flags: 1" in rendered_definitions
 
     training_fixture = {
         "table": "TRAINING",

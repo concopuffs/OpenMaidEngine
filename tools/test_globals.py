@@ -94,6 +94,15 @@ def test_load_and_lint():
           == "engine_dead_required_flag_3"
           and entries[0x204f4]["name"] == "current_stage_turn",
           "CDINIT/FIELD card-generation state is curated")
+    check(entries[0x1519f9]["name"] == "card_definition_type_ids"
+          and entries[0x151de1]["columns"]["2"] == "fs"
+          and entries[0x15222d]["name"]
+          == "card_definition_maximum_resource_damage"
+          and entries[0x152359]["name"] == "card_definition_condition_ids"
+          and entries[0x152421]["name"] == "card_definition_visual_asset_ids"
+          and entries[0x4dfbb]["name"]
+          == "stage_card_spendable_point_bonus",
+          "CDINIT2/FIELD card-effect state is curated")
     check(entries[0x15a095]["name"] == "information_tab_index"
           and entries[0x15a096]["name"] == "information_message_handled"
           and entries[0x15a097]["name"]

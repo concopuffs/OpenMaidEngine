@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5053 globals (370 curated, 4683 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5054 globals (384 curated, 4670 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -36,6 +36,7 @@
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x20530` | current_spirit | high | investigation | Current 精気 (spirit/essence) resource. TRAIN rejects a selected action when adding its negative TRINIT spirit delta would fall below zero, deducts the cost on execution, and passes the updated value to DRAWCHP. Field and scene reward paths update the same resource and clamp it to maximum_spirit. |
 | `0x20534` | maximum_spirit | high | investigation | Maximum 精気 capacity paired with current_spirit. TRAIN clamps the post-cost current value against it, DRAWCHP renders the current/maximum gauge, and field/scene reward paths raise or restore the same capacity. |
+| `0x4dfbb` | stage_card_spendable_point_bonus | high | investigation | FIELD clears this on stage entry and adds CDINIT2 type-3 card bonuses. STAGECLEAR adds the accumulated amount to its computed stage award before increasing shared_spendable_points. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
 | `0x665e2` | modal_annotation_count | high | investigation | Number of populated modal_annotation_texts entries. MES and SBUNKI iterate this many annotations and clear it on dismissal; no direct shipped producer was found. |
@@ -252,8 +253,21 @@
 | `0x12a8f8` | battle_routine_parameter_1 | high | investigation | RTINIT battle bank 12. RTN_B004 uses it to choose an entry from the prepared battle-action candidate table. |
 | `0x147db8` | battle_routine_required_story_flag_ids | high | investigation | RTINIT battle bank 18. BTRTN subtracts one and rejects the step when the referenced story flag is not set. |
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
+| `0x1519f9` | card_definition_type_ids | high | investigation | CDINIT2 behavior class by card id. FIELD applies the common populated effect arrays, uses type 6 for the random valid-tile warp path, and uses type 1 to dispatch the card's event after showing its result. |
 | `0x151a5d` | card_definition_required_story_flag_ids | high | investigation | CDINIT2 card eligibility rows. FIELD checks only columns 0 and 1 before admitting a card to weighted selection. CDINIT2 nevertheless authors column 2 for eighteen cards; those third requirements are engine-dead in the shipped FIELD loop and are retained separately by the extractor. Columns: 0=required_flag_1, 1=required_flag_2, 2=engine_dead_required_flag_3. |
 | `0x151b89` | card_definition_forbidden_story_flag_ids | high | investigation | CDINIT2 card exclusion rows. FIELD checks columns 0 and 1 and rejects a card when either populated flag is set; the shipped definitions populate only column 0. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=reserved_forbidden_flag_3. |
+| `0x151cb5` | card_definition_awarded_item_ids | high | investigation | Optional item granted by FIELD through ADDITEM after card selection. All 24 populated ids resolve through ITINIT. |
+| `0x151d19` | card_definition_event_story_flag_ids | high | investigation | Event dispatched for type-1 cards after FIELD displays the card result. All 40 populated ids resolve through SCINIT. |
+| `0x151d7d` | card_definition_stage_clear_point_bonuses | high | investigation | Type-3 card reward accumulated into stage_card_spendable_point_bonus. STAGECLEAR adds it to the normal performance-adjusted award before updating shared_spendable_points; shipped small/medium/large values are 5, 10, and 15. |
+| `0x151de1` | card_definition_minimum_resource_recovery | high | investigation | Lower bounds for type-4 HP/SP/FS card recovery. FIELD starts each resource delta at this value and, when the paired upper bound is larger, adds a random value below their difference. Columns: 0=hp, 1=sp, 2=fs. |
+| `0x151f0d` | card_definition_maximum_resource_recovery | high | investigation | Upper bounds paired with card_definition_minimum_resource_recovery. Equal bounds produce the fixed minimum; larger bounds produce a uniformly selected value from minimum through upper-bound-minus-one. Columns: 0=hp, 1=sp, 2=fs. |
+| `0x152039` | card_definition_minimum_spirit_recovery | high | investigation | Lower bound for type-4 familiar-spirit recovery. FIELD selects the value with the same minimum/exclusive-upper algorithm as HP/SP/FS and clamps current_spirit to maximum_spirit. |
+| `0x15209d` | card_definition_maximum_spirit_recovery | high | investigation | Upper bound paired with card_definition_minimum_spirit_recovery. Equal bounds produce the fixed minimum; larger bounds exclude this upper value. |
+| `0x152101` | card_definition_minimum_resource_damage | high | investigation | Lower bounds for type-5 trap damage. FIELD subtracts these randomized HP/SP/FS amounts from the active entity through the same resource-delta path used for recovery. Columns: 0=hp, 1=sp, 2=fs. |
+| `0x15222d` | card_definition_maximum_resource_damage | high | investigation | Upper bounds paired with card_definition_minimum_resource_damage. Equal bounds produce fixed damage; larger bounds exclude this upper value. Columns: 0=hp, 1=sp, 2=fs. |
+| `0x152359` | card_definition_condition_ids | high | investigation | Condition applied by type-5 trap cards through ADDILL. The three populated rows resolve to paralysis, poison, and water_flow. |
+| `0x1523bd` | card_definition_condition_levels | high | investigation | Condition level paired with card_definition_condition_ids and passed to ADDILL. All three shipped condition traps use level 1. |
+| `0x152421` | card_definition_visual_asset_ids | high | investigation | Card-result visual selected by FIELD before applying and presenting the effect. All 81 authored rows resolve to MVS*.AGF assets, with related card families sharing artwork. |
 | `0x152486` | card_generation_weight_schedules | high | investigation | CDINIT's selector-specific candidate weights, parallel to card_generation_card_ids. FIELD computes base_weight + floor(current_stage_turn / growth_interval_turns) * growth_weight, with a zero interval selecting the fixed base path. The shipped lists populate 11..75 one-based slots. Columns: 0=base_weight, 1=growth_interval_turns, 2=growth_weight. |
 | `0x1525b2` | card_generation_card_ids | high | investigation | Card ids parallel to card_generation_weight_schedules. FIELD scans slots 0..99, filters each nonzero id through the CDINIT2 story-flag rows, and performs cumulative weighted random selection. CDINIT clears only the first 50 slots even though its largest authored list reaches slot 75. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
@@ -378,15 +392,6 @@
 | `0xed865` | — | low | auto-shape | array |
 | `0xeebed` | — | low | auto-shape | array |
 | `0xefb8d` | — | low | auto-shape | array |
-| `0x1519f9` | — | low | auto-shape | array |
-| `0x151cb5` | — | low | auto-shape | array |
-| `0x151d19` | — | low | auto-shape | array |
-| `0x151d7d` | — | low | auto-shape | array |
-| `0x152039` | — | low | auto-shape | array |
-| `0x15209d` | — | low | auto-shape | array |
-| `0x152359` | — | low | auto-shape | array |
-| `0x1523bd` | — | low | auto-shape | array |
-| `0x152421` | — | low | auto-shape | array |
 | `0x15287b` | — | low | auto-shape | array |
 | `0x15287d` | — | low | auto-shape | array |
 | `0x15287f` | — | low | auto-shape | array |
@@ -5082,10 +5087,6 @@
 | `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
 | `0xee035` | — | med | auto-shape | record-table[stride 3] |
 | `0xeefd5` | — | med | auto-shape | record-table[stride 3] |
-| `0x151de1` | — | med | auto-shape | record-table[stride 3] |
-| `0x151f0d` | — | med | auto-shape | record-table[stride 3] |
-| `0x152101` | — | med | auto-shape | record-table[stride 3] |
-| `0x15222d` | — | med | auto-shape | record-table[stride 3] |
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |

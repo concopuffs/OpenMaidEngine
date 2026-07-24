@@ -685,9 +685,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    SPINIT closes HMODE's eight-by-fifteen thumbnail-page-to-scene registry, with all 118 scripts and
    eight INIT2 sheets resolved. TRINIT closes TRAIN's 21 training/sexual-magic actions: six text
    slots, all eligibility/cost/stat/alignment/progress/award families, and 75 event cells joined
-   through SCINIT and GAMESTART's restored story flags. With RTINIT's used-provider surface closed and
-   ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined and INFOMES/MES classified, audit CDINIT's card-generation
-   registry next;
+   through SCINIT and GAMESTART's restored story flags. CDINIT/CDINIT2 close FIELD's nine weighted
+   generation lists and 81 typed card effects, including story gates and item/event/condition/visual
+   joins. With RTINIT's used-provider surface closed and ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined
+   and INFOMES/MES classified, audit BTANINIT/BTANINIT2's battle-animation registry next;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
 2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context, preserving reserved rows and sparse cells. RECOVER's
