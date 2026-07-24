@@ -2153,6 +2153,18 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x6f70"
+name = "unit_stat_growth_fractions"
+category = "data-table"
+type = "int[100][14]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power", "10" = "movement", "11" = "max_hp", "12" = "max_sp", "13" = "max_fs" }
+value_domain = "signed fractional hundredths carried between stat changes; normalized remainder magnitude below 100"
+usage = "Persistent fractional-growth row paired with each playable unit's unit_current_stats. ADDEXP adds unit_stat_growth_rates, TRAIN adds training_action_stat_growth_hundredths, and UNITECH applies level catch-up growth; each path awards the quotient divided by 100 to the current stat and retains the remainder modulo 100. GAMESTART serializes the rows, while GAMECLEAR and EVOLVE copy them with the rest of the persistent unit record."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x69f8", "0x7e5e6", "0x155e9b"]
+
+[[global]]
 address = "0x74e8"
 name = "unit_skill_ids"
 category = "data-table"

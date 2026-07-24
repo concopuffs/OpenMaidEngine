@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-4277 globals (430 curated, 3847 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+4277 globals (431 curated, 3846 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -60,6 +60,7 @@
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
 | `0x6930` | unit_current_levels | high | investigation | Persistent current level by playable-unit id. CCINIT compares current_unit_id's row with each promotion threshold; ADDEXP increments and reports the same value. |
 | `0x69f8` | unit_current_stats | high | investigation | Persistent fourteen-stat row for each playable unit, using the same column order as unit_base_stats. CALCCC adds class_change_stat_bonuses to the current unit's row and clamps each result to the shared stat caps. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x6f70` | unit_stat_growth_fractions | high | investigation | Persistent fractional-growth row paired with each playable unit's unit_current_stats. ADDEXP adds unit_stat_growth_rates, TRAIN adds training_action_stat_growth_hundredths, and UNITECH applies level catch-up growth; each path awards the quotient divided by 100 to the current stat and retains the remainder modulo 100. GAMESTART serializes the rows, while GAMECLEAR and EVOLVE copy them with the rest of the persistent unit record. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
 | `0x74e8` | unit_skill_ids | high | investigation | Persistent four-skill row for each playable unit. CALCCC copies positive class_change_skill_awards into the first three slots after a promotion; ADDEXP compares the before/after row to report learned or replaced skills. Columns: 0=skill_slot_1, 1=skill_slot_2, 2=skill_slot_3, 3=skill_slot_4. |
 | `0x7684` | stage_clear_state | high | investigation | Persistent per-stage completion state indexed by stage id. STAGECLEAR sets the current stage cell to 1, while FORT, SELSTAGE, and FIELD use zero versus one to distinguish an uncleared mission from a cleared replay. |
 | `0x141a4` | stage_object_runtime_state | high | investigation | Per-stage, per-object-slot runtime state. FIELD initializes mode-1 objects from STINIT's first tagged payload on a fresh stage and updates capturable-object ownership; DRAWOBJ uses it as the vertical sprite-row index. RTN_M015 treats the state of Magic Pillar types 2..4 as their controlling faction and targets pillars whose value differs from the acting entity's faction. |
@@ -3760,7 +3761,6 @@
 | `0x24ce` | — | high | auto-shape | skill-desc-table |
 | `0x32f0` | — | med | auto-shape | current-entity-index? |
 | `0x3ebe` | — | med | auto-shape | record-table[stride 10] |
-| `0x6f70` | — | med | auto-shape | record-table[stride 14] |
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |

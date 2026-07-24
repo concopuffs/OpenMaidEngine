@@ -710,9 +710,10 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    RTINIT's used-provider surface closed, ITMES/SKMES/VIMES/EIMES/CIMES/MAMES joined, INFOMES/MES
    classified, STINIT2's engine-dead authoring tier retained at medium confidence, and the
    309-script ADV primary/alternate/transition surface-slot registry named, the selected
-   movement-route grid reconstructed, and CALCDMG/BTL's two-side-by-300 triggered-passive
-   matrix plus actor HP-recovery output closed, continue with consumer-led tables that still
-   have shipped readers;
+   movement-route grid reconstructed, CALCDMG/BTL's two-side-by-300 triggered-passive
+   matrix plus actor HP-recovery output closed, and the persistent 100-by-14 unit stat-growth
+   fraction table joined to level-up, training, catch-up, save/load, and unit-copy consumers,
+   continue with consumer-led tables that still have shipped readers;
    never assign one universal meaning to a parameter bank whose meaning varies by provider selector.
 2. **Label remaining 2D record tables by their readers** — cross-reference which scripts read each
    `rec[sN]` table and infer purpose from context, preserving reserved rows and sparse cells. RECOVER's

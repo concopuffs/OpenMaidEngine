@@ -3298,3 +3298,33 @@ presentation consumers, and the actor-recovery producer/consumer pair.
 
 **Next:** investigate the highest-use remaining auto-shaped row table, the stride-14 table at
 `G[0x6f70]` (27 references across ADDEXP, EVOLVE, GAMECLEAR, GAMESTART, TRAIN, and UNITECH).
+
+## Data-semantics sidebar: persistent unit stat-growth fractions (2026-07-24)
+
+The former stride-14 auto table at `G[0x6f70]` is the `100 x 14`
+`unit_stat_growth_fractions` table. It is the fractional half of the persistent playable-unit stat
+record: the preceding `unit_current_stats` table has the same 100-row geometry, and both use the
+standard accuracy-through-max-FS fourteen-column ABI. The table ends exactly where the following
+100-by-4 `unit_skill_ids` block begins.
+
+Three independent growth paths prove the value scale and role. ADDEXP adds the unit definition's
+`unit_stat_growth_rates`; TRAIN adds the selected action's
+`training_action_stat_growth_hundredths`; and UNITECH multiplies the definition growth rate by its
+level catch-up factor. Each path divides the accumulated cell by 100, adds that quotient to the
+matching `unit_current_stats` cell, and retains the remainder modulo 100. ADDEXP and TRAIN can also
+convert the surviving positive fraction into a probabilistic extra point, while all three paths
+clamp the integer result to the shared fourteen-stat caps.
+
+The fractions are durable unit state rather than temporary growth work. GAMESTART serializes each
+cell immediately after its matching current-stat cell. GAMECLEAR copies complete fourteen-cell
+rows during its unit-record transfer and registers all 100 rows with the shared profile; EVOLVE
+copies the same rows between Lily forms. The complete corpus surface is exactly 27 two-dimensional
+lookups across these six scripts.
+
+Evidence regressions protect all 27 offsets and their stride, the three source/add/divide/modulo
+growth paths, the current-stat join, both save/load sites, both complete-row copy paths, and the
+shared-profile registration.
+
+**Next:** investigate the highest-use remaining auto-shaped row table, the stride-10 table at
+`G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
+TUNE).

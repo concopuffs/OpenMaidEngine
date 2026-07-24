@@ -31,6 +31,10 @@ def test_load_and_lint():
           "entity activity and faction arrays are curated")
     check(entries[0x4e693]["name"] == "entity_skill_flags",
           "per-entity skill flags are curated")
+    check(entries[0x6f70]["name"] == "unit_stat_growth_fractions"
+          and entries[0x6f70]["type"] == "int[100][14]"
+          and entries[0x6f70]["columns"]["13"] == "max_fs",
+          "persistent unit stat-growth fractions are curated")
     check(entries[0x53e13]["name"] == "entity_carried_item_ids"
           and entries[0x53e77]["name"] == "entity_carried_item_counts",
           "per-entity carried-item slots are curated")
@@ -417,6 +421,105 @@ def test_battle_triggered_passive_skill_flags_evidence():
                   if name == "BTL.BIN"),
           "CALCDMG computes actor recovery and BTL adds it to the acting entity's HP")
 
+def test_unit_stat_growth_fractions_evidence():
+    target = 0x6f70
+    expected_offsets = {
+        "ADDEXP.BIN": {0x1ea, 0x200, 0x212, 0x241, 0x24c, 0x263, 0x2a0},
+        "EVOLVE.BIN": {0xa2a, 0xa3a},
+        "GAMECLEAR.BIN": {0x331, 0x341, 0x417},
+        "GAMESTART.BIN": {0x942, 0xac5},
+        "TRAIN.BIN": {0x901, 0x917, 0x929, 0x958, 0x963, 0x975, 0x9a5, 0x9db},
+        "UNITECH.BIN": {0x403, 0x40e, 0x420, 0x44f, 0x45a},
+    }
+    refs = []
+    loaded = {}
+    for name, path in paths.scripts().items():
+        if path.read_bytes()[:8] != b"SYS4422 ":
+            continue
+        script = sys4load.load(path)
+        loaded[name] = script
+        refs.extend(
+            (name, instruction)
+            for instruction in script.instructions
+            if (3, target) in instruction.args
+        )
+
+    actual_offsets = {}
+    for name, instruction in refs:
+        actual_offsets.setdefault(name, set()).add(instruction.offset)
+    check(actual_offsets == expected_offsets
+          and len(refs) == 27
+          and all(instruction.opcode == 0x12c
+                  and instruction.args[3] == (0, 14)
+                  for _, instruction in refs),
+          "stat-growth fractions have exactly 27 stride-14 lookups in six scripts")
+
+    instructions = {
+        name: {instruction.offset: instruction for instruction in loaded[name].instructions}
+        for name in expected_offsets
+    }
+    growth_paths = {
+        "ADDEXP.BIN": {
+            "source": (0x1f5, 0x7e5e6),
+            "add": 0x20b,
+            "divide": 0x21d,
+            "current": 0x224,
+            "modulo": 0x257,
+        },
+        "TRAIN.BIN": {
+            "source": (0x90c, 0x155e9b),
+            "add": 0x922,
+            "divide": 0x934,
+            "current": 0x93b,
+            "modulo": 0x96e,
+        },
+        "UNITECH.BIN": {
+            "source": (0x3f1, 0x7e5e6),
+            "add": 0x419,
+            "divide": 0x42b,
+            "current": 0x432,
+            "modulo": 0x465,
+        },
+    }
+    growth_mechanics_ok = True
+    for name, path in growth_paths.items():
+        script = instructions[name]
+        source_offset, source_address = path["source"]
+        growth_mechanics_ok &= (
+            script[source_offset].opcode == 0x12c
+            and script[source_offset].args[1] == (3, source_address)
+            and script[path["add"]].label == "add"
+            and script[path["divide"]].label == "div"
+            and script[path["divide"]].args[-1] == (0, 100)
+            and script[path["current"]].opcode == 0x12c
+            and script[path["current"]].args[1] == (3, 0x69f8)
+            and script[path["modulo"]].label == "mod"
+            and script[path["modulo"]].args[-1] == (0, 100)
+        )
+    check(growth_mechanics_ok,
+          "level-up, training, and catch-up growth carry hundredths into current stats")
+
+    persistence_ok = all(
+        instructions["GAMESTART.BIN"][offset + 0xb].label == "string-lookup-set"
+        for offset in expected_offsets["GAMESTART.BIN"]
+    )
+    for name, first, second, copy in (
+        ("GAMECLEAR.BIN", 0x331, 0x341, 0x351),
+        ("EVOLVE.BIN", 0xa2a, 0xa3a, 0xa4a),
+    ):
+        script = instructions[name]
+        persistence_ok &= (
+            script[first + 0xb].opcode == 0x63
+            and script[second + 0xb].opcode == 0x63
+            and script[copy].opcode == 0x1b0
+            and script[copy].args[-1] == (0, 14)
+        )
+    persistence_ok &= (
+        instructions["GAMECLEAR.BIN"][0x422].opcode == 0x1a2
+    )
+    check(persistence_ok,
+          "save/load, game-clear, and evolution preserve the complete fractional rows")
+
 def test_merge_precedence():
     curated, _ = G.load_toml(paths.VM_MAP / "globals.toml")
     auto = G.load_auto(paths.BUILD / "global-var-map.json")
@@ -482,6 +585,7 @@ if __name__ == "__main__":
     test_adv_layer_surface_slot_evidence()
     test_selected_movement_route_grid_evidence()
     test_battle_triggered_passive_skill_flags_evidence()
+    test_unit_stat_growth_fractions_evidence()
     test_merge_precedence()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
