@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5049 globals (335 curated, 4714 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5052 globals (361 curated, 4691 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -26,7 +26,15 @@
 | `0x671f` | item_tuning_facility_progress | high | investigation | Progress toward the next equipment-tuning facility level. IMPROVE adds the selected item's tuning-level increases, applies row 0 of facility_level_progress_thresholds, and carries or clamps progress when the level rises. |
 | `0x6720` | alchemy_level_progress | high | investigation | Progress toward the next alchemy level. Each successful ALCHEMY synthesis increments it; reaching the current threshold raises alchemy_level and resets this counter. |
 | `0x6721` | magic_facility_progress | high | investigation | Progress toward the next magic/research facility level. USEMAGIC adds the selected action's progress award and applies row 2 of facility_level_progress_thresholds; MAGIC renders the same current/threshold pair. |
+| `0x6722` | familiar_alignment | high | investigation | The familiar's alignment/personality axis. TRAIN decodes TRINIT minimum and maximum gates by subtracting 100 from the stored threshold, matching the locked hints' kind-versus-evil wording, and applies training_action_alignment_delta_hundredths through the paired fractional accumulator. DRAWCHP renders the signed value and EVOLVE/scene scripts use the same axis. |
+| `0x6723` | familiar_alignment_fraction | high | investigation | Fractional accumulator paired with familiar_alignment. TRAIN adds the selected action's hundredths delta, applies the integral quotient and probabilistic remainder, and preserves the remaining fraction. |
+| `0x6724` | familiar_training_progress | high | investigation | Cumulative familiar training/sexual-magic progress. TRAIN tests it against TRINIT's minimum/maximum progress gates, then applies training_action_training_progress_delta_hundredths through the paired fractional accumulator and clamps the result to 99. DRAWCHP and EVOLVE display or compare the same value. |
+| `0x6725` | familiar_training_progress_fraction | high | investigation | Fractional accumulator paired with familiar_training_progress. TRAIN adds the action's hundredths delta, advances the integer value by the quotient and probabilistic remainder, and preserves the remaining fraction. |
+| `0x6726` | training_action_total_execution_count | high | investigation | TRAIN increments this once after every successful action, independently of the selected action's own execution count. DRAWCHP displays it with the familiar's other training statistics and SAVE persists it. |
+| `0x6727` | training_action_execution_counts | high | investigation | Per-action completed execution counts. TRAIN uses the prior count as the column in training_action_event_story_flag_ids, increments the selected cell, and treats a zero next event as the cap; GAMESTART restores each count and replays its completed event flags. |
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
+| `0x20530` | current_spirit | high | investigation | Current 精気 (spirit/essence) resource. TRAIN rejects a selected action when adding its negative TRINIT spirit delta would fall below zero, deducts the cost on execution, and passes the updated value to DRAWCHP. Field and scene reward paths update the same resource and clamp it to maximum_spirit. |
+| `0x20534` | maximum_spirit | high | investigation | Maximum 精気 capacity paired with current_spirit. TRAIN clamps the post-cost current value against it, DRAWCHP renders the current/maximum gauge, and field/scene reward paths raise or restore the same capacity. |
 | `0x4dfbc` | scjump_progress_a | med | inference | Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough. |
 | `0x665d6` | modal_message_line_count | high | investigation | Number of populated strings in modal_message_lines. Dozens of menu/gameplay producers append at lines[count] and increment this value; MES renders the resulting non-selecting modal and clears the count, while SBUNKI consumes the same buffer as selectable options. |
 | `0x665e2` | modal_annotation_count | high | investigation | Number of populated modal_annotation_texts entries. MES and SBUNKI iterate this many annotations and clear it on dismissal; no direct shipped producer was found. |
@@ -43,6 +51,7 @@
 |---|---|---|---|---|
 | `0x6d3` | story_event_flags | high | investigation | Shared one-based story/event flag bank. Progression, recruitment, item, and stage logic read or write individual cells; STINIT object prerequisite ids are decremented by one before SETOBJ tests this array. |
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
+| `0x453b` | training_action_text | high | investigation | TRINIT's six-string row for each of 21 training/sexual-magic actions. TRAIN renders columns 0..2 for the action description and cost/reward summary, or columns 3..5 for the unmet-condition hint. Columns: 0=description_line_1, 1=description_line_2, 2=description_line_3, 3=locked_hint_line_1, 4=locked_hint_line_2, 5=locked_hint_line_3. |
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
@@ -70,6 +79,7 @@
 | `0x53643` | entity_movement_routine_progress | high | investigation | Per-runtime-entity movement-routine progress counters. FIELD clears all fifty rows, movement providers increment the current step, and MVRTN compares it with movement_routine_minimum_progress_counts before enabling a step. |
 | `0x53e13` | entity_carried_item_ids | high | investigation | Two carried/drop-item slots per runtime entity. SETEN initializes slot 0 from the unit's starting equipment item, FIELD fills an empty or matching slot when treasure is collected, and RTN_M009 requires an empty slot or an item-id match before approaching a chest/treasure object. Columns: 0=slot_0, 1=slot_1. |
 | `0x53e77` | entity_carried_item_counts | high | investigation | Quantities for the two per-entity carried/drop-item slots. SETEN seeds a starting item with quantity one; FIELD adds treasure quantities to the matching slot and caps the result at 999. Columns: 0=slot_0, 1=slot_1. |
+| `0x53ede` | training_action_unlock_flags | high | investigation | Persistent per-action discovered/unlocked state maintained by TRAIN after evaluating eligibility. TRAIN uses it while choosing the locked-versus-known menu presentation, GAMESTART restores every cell, and SAVE persists the same block. |
 | `0x56223` | unit_story_speaker_seen_flags | high | investigation | Scene scripts set and persist a unit's cell when drawing that speaker's name. CONFIG reloads the twelve CVINIT-mapped unit cells and enables each named character-voice control only after its speaker has been encountered. |
 | `0x5660b` | skill_info_revealed_flags | high | investigation | Persistent skill-information visibility flags. ADDSKILL sets the selected skill, BTL marks every equipped skill when it is observed in combat, and INFOIT suppresses a skill's icon/handler-driven details until this flag is nonzero. This is broader than skill_acquired_flags. |
 | `0x56738` | entity_battle_routine_random_rolls | high | investigation | Per-runtime-entity battle-step random rolls. FIELD and BTL fill every active entity's twenty cells with random-modulo-100; BTRTN executes a step when the matching roll is below battle_routine_activation_percents. |
@@ -242,6 +252,25 @@
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
+| `0x155bbc` | training_action_required_story_flag_ids | high | investigation | Up to three prerequisite story flags per TRINIT action. TRAIN subtracts one before indexing story_event_flags and rejects the action unless every populated flag equals one. Columns: 0=required_story_flag_id_1, 1=required_story_flag_id_2, 2=required_story_flag_id_3. |
+| `0x155bfb` | training_action_forbidden_story_flag_ids | high | investigation | Reserved three-slot exclusion table paired with training_action_required_story_flag_ids. TRAIN rejects an action when any populated flag equals one; shipped TRINIT leaves all 63 cells zero. Columns: 0=forbidden_story_flag_id_1, 1=forbidden_story_flag_id_2, 2=forbidden_story_flag_id_3. |
+| `0x155c3a` | training_action_minimum_unit_levels | high | investigation | Minimum familiar level for each TRINIT action. TRAIN compares the selected unit's level and rejects values below the populated threshold. |
+| `0x155c4f` | training_action_maximum_unit_levels | high | investigation | Maximum familiar level for each TRINIT action. TRAIN rejects levels above a populated threshold; shipped TRINIT leaves this reserved family empty. |
+| `0x155c64` | training_action_minimum_alignment_thresholds_encoded | high | investigation | Encoded lower alignment/personality gates. TRAIN subtracts 100 from a populated value and requires familiar_alignment to be at least that signed threshold; the five shipped gates correspond to the locked hints' kind-personality requirements. |
+| `0x155c79` | training_action_maximum_alignment_thresholds_encoded | high | investigation | Encoded upper alignment/personality gates. TRAIN subtracts 100 and requires familiar_alignment not to exceed the signed threshold; the five shipped gates correspond to evil-personality requirements. |
+| `0x155c8e` | training_action_minimum_progress | high | investigation | Minimum familiar_training_progress required by each TRINIT action. TRAIN rejects the action when the current value is below a populated threshold. |
+| `0x155ca3` | training_action_maximum_progress | high | investigation | Upper training-progress gate paired with training_action_minimum_progress. TRAIN enforces populated values; shipped TRINIT leaves all 21 cells zero. |
+| `0x155cb8` | training_action_minimum_unit_stats | high | investigation | Ten-column minimum-stat gate using the first ten unit-stat ABI columns. TRAIN compares each populated cell with the selected familiar's current stat; shipped TRINIT leaves the table empty. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power. |
+| `0x155d8a` | training_action_maximum_unit_stats | high | investigation | Ten-column maximum-stat gate paired with training_action_minimum_unit_stats. TRAIN enforces populated cells; shipped TRINIT leaves the table empty. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power. |
+| `0x155e5c` | training_action_required_item_ids | high | investigation | Optional item prerequisite for each TRINIT action. TRAIN requires a nonzero inventory count and displays the joined item name; the item is a gate, not consumed by this path. |
+| `0x155e71` | training_action_required_skill_ids | high | investigation | Optional acquired-skill prerequisite. TRAIN requires the corresponding skill_acquired_flags cell; shipped TRINIT leaves all 21 cells zero. |
+| `0x155e86` | training_action_spirit_deltas | high | investigation | Signed current_spirit delta for each TRINIT action. TRAIN rejects an action whose post-delta spirit would be negative, displays the negated value as its cost, and applies the delta before scene dispatch. |
+| `0x155e9b` | training_action_unit_stat_deltas | high | investigation | Fourteen-column familiar stat effects for each TRINIT action. TRAIN adds populated values through the unit stat-growth ABI, carries fractional growth, applies caps, and invokes SHOWGROW when any stat changes. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x155fc1` | training_action_alignment_deltas_hundredths | high | investigation | Alignment/personality change for each TRINIT action in hundredths. TRAIN combines it with familiar_alignment_fraction, applies the integral and stochastic fractional change to familiar_alignment, and clamps the result to -99..99. |
+| `0x155fd6` | training_action_progress_deltas_hundredths | high | investigation | Training-progress gain for each TRINIT action in hundredths. TRAIN combines it with familiar_training_progress_fraction, advances familiar_training_progress with fractional probability, and clamps the result to 99. |
+| `0x155feb` | training_action_awarded_skill_ids | high | investigation | Optional skill granted by a TRINIT action. TRAIN checks whether it is new, marks the reward path, and passes the id to ADDSKILL; the extractor joins all eight populated ids to SKINIT names. |
+| `0x156000` | training_action_awarded_item_ids | high | investigation | Optional item granted by a TRINIT action. TRAIN suppresses already-owned key/story rewards, displays the joined item name, and calls ADDITEM for the three populated shipped actions. |
+| `0x156015` | training_action_event_story_flag_ids | high | investigation | Per-action event sequence selected by the prior execution count. TRAIN copies the chosen id to scjump_decision_out and dispatches it through SCINIT; GAMESTART marks every slot below a restored count in story_event_flags. Repeated ids intentionally reuse a scene, and the first zero defines the execution cap. Columns: 0=execution_1, 1=execution_2, 2=execution_3, 3=execution_4, 4=execution_5, 5=execution_6, 6=execution_7, 7=execution_8, 8=execution_9, 9=execution_10. |
 | `0x1561f6` | magic_action_information_handler_script_ids | high | investigation | MAINIT handler column indexed by current_magic_action_id. MAGIC and STUDY call the selected packed script id; every shipped action routes to MAMES, whose text dispatcher has authored descriptions for ids 1..9 only. |
 | `0x156214` | alchemy_recipe_output_item_ids | high | investigation | Output item id indexed by sparse alchemy recipe id. ALCHEMY scans recipe ids 0..999, treats a nonzero cell as a populated recipe, and adds one copy of this item after a successful synthesis. |
 | `0x1565fc` | alchemy_recipe_minimum_levels | high | investigation | Minimum alchemy level indexed by recipe id. ALCHEMY exposes a populated recipe only when this value is less than or equal to alchemy_level. |
@@ -280,7 +309,6 @@
 | `0x3ad6` | — | low | auto-shape | array |
 | `0x4315` | — | low | auto-shape | array |
 | `0x4379` | — | low | auto-shape | array |
-| `0x6727` | — | low | auto-shape | array |
 | `0x6804` | — | low | auto-shape | array |
 | `0x6868` | — | low | auto-shape | array |
 | `0x6994` | — | low | auto-shape | array |
@@ -298,7 +326,6 @@
 | `0x52225` | — | low | auto-shape | array |
 | `0x52257` | — | low | auto-shape | array |
 | `0x522bb` | — | low | auto-shape | array |
-| `0x53ede` | — | low | auto-shape | array |
 | `0x55e3b` | — | low | auto-shape | array |
 | `0x56b52` | — | low | auto-shape | array |
 | `0x56f6d` | — | low | auto-shape | array |
@@ -381,19 +408,6 @@
 | `0x155b98` | — | low | auto-shape | array |
 | `0x155b9e` | — | low | auto-shape | array |
 | `0x155ba4` | — | low | auto-shape | array |
-| `0x155c3a` | — | low | auto-shape | array |
-| `0x155c4f` | — | low | auto-shape | array |
-| `0x155c64` | — | low | auto-shape | array |
-| `0x155c79` | — | low | auto-shape | array |
-| `0x155c8e` | — | low | auto-shape | array |
-| `0x155ca3` | — | low | auto-shape | array |
-| `0x155e5c` | — | low | auto-shape | array |
-| `0x155e71` | — | low | auto-shape | array |
-| `0x155e86` | — | low | auto-shape | array |
-| `0x155fc1` | — | low | auto-shape | array |
-| `0x155fd6` | — | low | auto-shape | array |
-| `0x155feb` | — | low | auto-shape | array |
-| `0x156000` | — | low | auto-shape | array |
 | `0x1560e8` | — | low | auto-shape | array |
 | `0x156106` | — | low | auto-shape | array |
 | `0x156124` | — | low | auto-shape | array |
@@ -413,6 +427,7 @@
 |---|---|---|---|---|
 | `0x32f1` | difficulty_index | high | investigation | GAMESTART's three-way difficulty selection. SETEN uses the zero-based index to select difficulty stat adjustments; FIELD indexes three-column stage-enemy arrays with it, and SETOBJ tests it against each object's difficulty mask. |
 | `0x6718` | selected_party_slot | high | investigation | Current/selected slot in the 100-entry party-unit arrays. UNITECH chooses a free slot here before populating it; CHMENU replaces it with the selected sorted roster slot, then uses it to index party_slot_flags, party_slot_character_id, and companion per-slot tables. A natural New Game enters SC0000 with slot 2 selected. |
+| `0x53edd` | selected_training_action_id | high | investigation | TRAIN's selected action row. It indexes all TRINIT eligibility, effect, text, award, and event arrays during detail rendering and execution. |
 | `0x66713` | acting_entity_index | high | investigation | Entity whose movement or battle turn is being resolved. FIELD sets it before MVRTN; RTN_M providers use it for faction, position, resources, selected action, and routine progress. Together with target_entity_index it forms the attacker/target pair passed into battle. |
 | `0x66714` | target_entity_index | high | investigation | Selected target/opponent entity. RTN_M051/052 choose and write an active foreign-faction target; FIELD pairs it with acting_entity_index for movement presentation and battle setup. |
 | `0x66715` | current_unit_id | high | investigation | Shared current-unit selector used by character growth and setup scripts. CCINIT keys every class-change rule on this value; CALCCC, ADDEXP, SETEN, SALLY, and related scripts use it to index unit definitions and persistent per-unit state. |
@@ -443,16 +458,12 @@
 | `0x3231` | game_mode | med | inference | Game-mode/phase selector in the 0x3231-0x3234 progression-state cluster (chapter_mode is 0x3234). Enum 1..9, written by the gameplay scripts (AIM/ALCHEMY/BTL/BUNKI), branch-read in 136 scenes. Distinct from chapter; likely current sub-mode/screen. INFERENCE — confirm with a listing/sweep before relying on the exact meaning. |
 | `0x3234` | chapter_mode | high | investigation | Progression chapter/mode selector. SCJUMP's top-level switch keys on it; branch-read by progression scripts (FIELD etc.), not directly by SC/SP scenes. |
 | `0x3275` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 143 scripts; compared against [0]; writers=['CAMP.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN', 'FIELD.BIN']. |
-| `0x6722` | — | med | auto-shape | TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']. |
-| `0x6724` | — | med | auto-shape | TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x7679` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0, 1, 4, 8, 16, 256, 512, 1024]; writers=['FIELD.BIN']. |
 | `0x767a` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 4 scripts; compared against [0]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'FIELD.BIN']. |
 | `0x767b` | — | med | auto-shape | TODO: confirm. Branch-read in 136 scenes / 150 scripts; compared against [0, 1]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x767d` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']. |
 | `0x204f5` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 8, 16, 32, 64]; writers=['FIELD.BIN']. |
 | `0x204f7` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']. |
-| `0x20530` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 22 scripts; compared against [0]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
-| `0x20534` | — | med | auto-shape | TODO: confirm. Branch-read in 14 scenes / 24 scripts; compared against [0, 10, 100, 999]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']. |
 | `0x53ef4` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CAMP.BIN']. |
 | `0x55e37` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['EVOLVE.BIN', 'STUDY.BIN']. |
 | `0x55e38` | — | med | auto-shape | TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2]; writers=['CHMENU.BIN', 'INFO.BIN', 'INFOAF.BIN', 'INFOCH.BIN']. |
@@ -3509,7 +3520,6 @@
 | `0x4537` | — | med | auto-shape | string-table (written by CTINIT) |
 | `0x4538` | — | med | auto-shape | string-table (written by CTINIT) |
 | `0x4539` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x453b` | — | med | auto-shape | string-table (written by TRINIT) |
 | `0x453c` | — | med | auto-shape | string-table (written by TRINIT) |
 | `0x4541` | — | med | auto-shape | string-table (written by TRINIT) |
 | `0x4542` | — | med | auto-shape | string-table (written by TRINIT) |
@@ -3734,7 +3744,6 @@
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |
-| `0x53edd` | — | low | auto-shape | index/counter? |
 | `0x53ef5` | — | low | auto-shape | index/counter? |
 | `0x53ef7` | — | med | auto-shape | record-table[stride 8] |
 | `0x57356` | — | med | auto-shape | current-entity-index? |
@@ -5083,12 +5092,6 @@
 | `0x15288e` | — | med | auto-shape | record-table[stride 6] |
 | `0x153ffe` | — | med | auto-shape | record-table[stride 6] |
 | `0x155baa` | — | med | auto-shape | record-table[stride 3] |
-| `0x155bbc` | — | med | auto-shape | record-table[stride 3] |
-| `0x155bfb` | — | med | auto-shape | record-table[stride 3] |
-| `0x155cb8` | — | med | auto-shape | record-table[stride 10] |
-| `0x155d8a` | — | med | auto-shape | record-table[stride 10] |
-| `0x155e9b` | — | med | auto-shape | record-table[stride 14] |
-| `0x156015` | — | med | auto-shape | record-table[stride 10] |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
 

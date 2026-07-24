@@ -2273,25 +2273,25 @@ depends_on = ["0x671e", "0xab8b2"]
 
 [[global]]
 address = "0x6722"
-name = ""
-category = "story-flag"
+name = "familiar_alignment"
+category = "counter"
 type = "int"
-value_domain = "one of {0, 1, 5, 99}"
-usage = "TODO: confirm. Branch-read in 13 scenes / 18 scripts; compared against [0, 1, 5, 99]; writers=['GAMESTART.BIN', 'SALLY.BIN', 'SC0010.BIN', 'SC0140.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "-99..99; negative is evil/chaotic, positive is kind/lawful"
+usage = "The familiar's alignment/personality axis. TRAIN decodes TRINIT minimum and maximum gates by subtracting 100 from the stored threshold, matching the locked hints' kind-versus-evil wording, and applies training_action_alignment_delta_hundredths through the paired fractional accumulator. DRAWCHP renders the signed value and EVOLVE/scene scripts use the same axis."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6723", "0x155c64", "0x155c79", "0x155fc1"]
 
 [[global]]
 address = "0x6724"
-name = ""
-category = "story-flag"
+name = "familiar_training_progress"
+category = "counter"
 type = "int"
-value_domain = "one of {0, 25, 50, 99}"
-usage = "TODO: confirm. Branch-read in 4 scenes / 10 scripts; compared against [0, 25, 50, 99]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..99"
+usage = "Cumulative familiar training/sexual-magic progress. TRAIN tests it against TRINIT's minimum/maximum progress gates, then applies training_action_training_progress_delta_hundredths through the paired fractional accumulator and clamps the result to 99. DRAWCHP and EVOLVE display or compare the same value."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6725", "0x155c8e", "0x155ca3", "0x155fd6"]
 
 [[global]]
 address = "0x7679"
@@ -2383,25 +2383,25 @@ depends_on = []
 
 [[global]]
 address = "0x20530"
-name = ""
-category = "story-flag"
+name = "current_spirit"
+category = "counter"
 type = "int"
-value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 14 scenes / 22 scripts; compared against [0]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0..maximum_spirit"
+usage = "Current 精気 (spirit/essence) resource. TRAIN rejects a selected action when adding its negative TRINIT spirit delta would fall below zero, deducts the cost on execution, and passes the updated value to DRAWCHP. Field and scene reward paths update the same resource and clamp it to maximum_spirit."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x20534", "0x155e86"]
 
 [[global]]
 address = "0x20534"
-name = ""
-category = "story-flag"
+name = "maximum_spirit"
+category = "counter"
 type = "int"
-value_domain = "one of {0, 10, 100, 999}"
-usage = "TODO: confirm. Branch-read in 14 scenes / 24 scripts; compared against [0, 10, 100, 999]; writers=['DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "nonnegative spirit capacity; debug clamp 0..999"
+usage = "Maximum 精気 capacity paired with current_spirit. TRAIN clamps the post-cost current value against it, DRAWCHP renders the current/maximum gauge, and field/scene reward paths raise or restore the same capacity."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x20530"]
 
 [[global]]
 address = "0x53ef4"
@@ -3662,3 +3662,295 @@ usage = "AFINIT's three facility-progression rows. IMPROVE uses row 0 for equipm
 source = "investigation"
 confidence = "high"
 depends_on = ["0x671c", "0x671d", "0x671e", "0x671f", "0x6720", "0x6721"]
+
+[[global]]
+address = "0x453b"
+name = "training_action_text"
+category = "data-table"
+type = "string[21][6]"
+columns = { "0" = "description_line_1", "1" = "description_line_2", "2" = "description_line_3", "3" = "locked_hint_line_1", "4" = "locked_hint_line_2", "5" = "locked_hint_line_3" }
+value_domain = "player-facing Japanese text; empty cells are unused lines"
+usage = "TRINIT's six-string row for each of 21 training/sexual-magic actions. TRAIN renders columns 0..2 for the action description and cost/reward summary, or columns 3..5 for the unmet-condition hint."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x53edd", "0x53ede"]
+
+[[global]]
+address = "0x155bbc"
+name = "training_action_required_story_flag_ids"
+category = "data-table"
+type = "int[21][3]"
+columns = { "0" = "required_story_flag_id_1", "1" = "required_story_flag_id_2", "2" = "required_story_flag_id_3" }
+value_domain = "one-based story flag id; zero means no requirement"
+usage = "Up to three prerequisite story flags per TRINIT action. TRAIN subtracts one before indexing story_event_flags and rejects the action unless every populated flag equals one."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]
+
+[[global]]
+address = "0x155bfb"
+name = "training_action_forbidden_story_flag_ids"
+category = "data-table"
+type = "int[21][3]"
+columns = { "0" = "forbidden_story_flag_id_1", "1" = "forbidden_story_flag_id_2", "2" = "forbidden_story_flag_id_3" }
+value_domain = "one-based story flag id; zero means no exclusion"
+usage = "Reserved three-slot exclusion table paired with training_action_required_story_flag_ids. TRAIN rejects an action when any populated flag equals one; shipped TRINIT leaves all 63 cells zero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3"]
+
+[[global]]
+address = "0x155c3a"
+name = "training_action_minimum_unit_levels"
+category = "data-table"
+type = "int[21]"
+value_domain = "unit level; zero means no lower bound"
+usage = "Minimum familiar level for each TRINIT action. TRAIN compares the selected unit's level and rejects values below the populated threshold."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6930"]
+
+[[global]]
+address = "0x155c4f"
+name = "training_action_maximum_unit_levels"
+category = "data-table"
+type = "int[21]"
+value_domain = "unit level; zero means no upper bound"
+usage = "Maximum familiar level for each TRINIT action. TRAIN rejects levels above a populated threshold; shipped TRINIT leaves this reserved family empty."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6930"]
+
+[[global]]
+address = "0x155c64"
+name = "training_action_minimum_alignment_thresholds_encoded"
+category = "data-table"
+type = "int[21]"
+value_domain = "100 + signed alignment threshold; zero means no lower bound"
+usage = "Encoded lower alignment/personality gates. TRAIN subtracts 100 from a populated value and requires familiar_alignment to be at least that signed threshold; the five shipped gates correspond to the locked hints' kind-personality requirements."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6722"]
+
+[[global]]
+address = "0x155c79"
+name = "training_action_maximum_alignment_thresholds_encoded"
+category = "data-table"
+type = "int[21]"
+value_domain = "100 + signed alignment threshold; zero means no upper bound"
+usage = "Encoded upper alignment/personality gates. TRAIN subtracts 100 and requires familiar_alignment not to exceed the signed threshold; the five shipped gates correspond to evil-personality requirements."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6722"]
+
+[[global]]
+address = "0x155c8e"
+name = "training_action_minimum_progress"
+category = "data-table"
+type = "int[21]"
+value_domain = "familiar training progress 0..99; zero means no lower bound"
+usage = "Minimum familiar_training_progress required by each TRINIT action. TRAIN rejects the action when the current value is below a populated threshold."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6724"]
+
+[[global]]
+address = "0x155ca3"
+name = "training_action_maximum_progress"
+category = "data-table"
+type = "int[21]"
+value_domain = "familiar training progress 0..99; zero means no upper bound"
+usage = "Upper training-progress gate paired with training_action_minimum_progress. TRAIN enforces populated values; shipped TRINIT leaves all 21 cells zero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6724"]
+
+[[global]]
+address = "0x155cb8"
+name = "training_action_minimum_unit_stats"
+category = "data-table"
+type = "int[21][10]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power" }
+value_domain = "minimum unit stat; zero means no lower bound"
+usage = "Ten-column minimum-stat gate using the first ten unit-stat ABI columns. TRAIN compares each populated cell with the selected familiar's current stat; shipped TRINIT leaves the table empty."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x69f8"]
+
+[[global]]
+address = "0x155d8a"
+name = "training_action_maximum_unit_stats"
+category = "data-table"
+type = "int[21][10]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power" }
+value_domain = "maximum unit stat; zero means no upper bound"
+usage = "Ten-column maximum-stat gate paired with training_action_minimum_unit_stats. TRAIN enforces populated cells; shipped TRINIT leaves the table empty."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x69f8"]
+
+[[global]]
+address = "0x155e5c"
+name = "training_action_required_item_ids"
+category = "data-table"
+type = "int[21]"
+value_domain = "ITINIT item id; zero means no item requirement"
+usage = "Optional item prerequisite for each TRINIT action. TRAIN requires a nonzero inventory count and displays the joined item name; the item is a gate, not consumed by this path."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x155e71"
+name = "training_action_required_skill_ids"
+category = "data-table"
+type = "int[21]"
+value_domain = "SKINIT skill id; zero means no skill requirement"
+usage = "Optional acquired-skill prerequisite. TRAIN requires the corresponding skill_acquired_flags cell; shipped TRINIT leaves all 21 cells zero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x65ce"]
+
+[[global]]
+address = "0x155e86"
+name = "training_action_spirit_deltas"
+category = "data-table"
+type = "int[21]"
+value_domain = "negative 精気 cost; shipped values -90..-20"
+usage = "Signed current_spirit delta for each TRINIT action. TRAIN rejects an action whose post-delta spirit would be negative, displays the negated value as its cost, and applies the delta before scene dispatch."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x20530"]
+
+[[global]]
+address = "0x155e9b"
+name = "training_action_unit_stat_deltas"
+category = "data-table"
+type = "int[21][14]"
+columns = { "0" = "accuracy", "1" = "evasion", "2" = "physical_attack", "3" = "physical_defense", "4" = "magic_attack", "5" = "magic_defense", "6" = "speed", "7" = "luck", "8" = "critical_chance", "9" = "capture_power", "10" = "movement", "11" = "max_hp", "12" = "max_sp", "13" = "max_fs" }
+value_domain = "signed additive unit stat delta; zero means unchanged"
+usage = "Fourteen-column familiar stat effects for each TRINIT action. TRAIN adds populated values through the unit stat-growth ABI, carries fractional growth, applies caps, and invokes SHOWGROW when any stat changes."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x69f8"]
+
+[[global]]
+address = "0x155fc1"
+name = "training_action_alignment_deltas_hundredths"
+category = "data-table"
+type = "int[21]"
+value_domain = "signed hundredths of familiar alignment; shipped -2000..300"
+usage = "Alignment/personality change for each TRINIT action in hundredths. TRAIN combines it with familiar_alignment_fraction, applies the integral and stochastic fractional change to familiar_alignment, and clamps the result to -99..99."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6722", "0x6723"]
+
+[[global]]
+address = "0x155fd6"
+name = "training_action_progress_deltas_hundredths"
+category = "data-table"
+type = "int[21]"
+value_domain = "positive hundredths of training progress; shipped 100..300"
+usage = "Training-progress gain for each TRINIT action in hundredths. TRAIN combines it with familiar_training_progress_fraction, advances familiar_training_progress with fractional probability, and clamps the result to 99."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6724", "0x6725"]
+
+[[global]]
+address = "0x155feb"
+name = "training_action_awarded_skill_ids"
+category = "data-table"
+type = "int[21]"
+value_domain = "SKINIT skill id; zero means no award"
+usage = "Optional skill granted by a TRINIT action. TRAIN checks whether it is new, marks the reward path, and passes the id to ADDSKILL; the extractor joins all eight populated ids to SKINIT names."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x65ce", "0xa6e59"]
+
+[[global]]
+address = "0x156000"
+name = "training_action_awarded_item_ids"
+category = "data-table"
+type = "int[21]"
+value_domain = "ITINIT item id; zero means no award"
+usage = "Optional item granted by a TRINIT action. TRAIN suppresses already-owned key/story rewards, displays the joined item name, and calls ADDITEM for the three populated shipped actions."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8c877"]
+
+[[global]]
+address = "0x156015"
+name = "training_action_event_story_flag_ids"
+category = "data-table"
+type = "int[21][10]"
+columns = { "0" = "execution_1", "1" = "execution_2", "2" = "execution_3", "3" = "execution_4", "4" = "execution_5", "5" = "execution_6", "6" = "execution_7", "7" = "execution_8", "8" = "execution_9", "9" = "execution_10" }
+value_domain = "story flag / SCINIT decision id; zero ends the action's execution sequence"
+usage = "Per-action event sequence selected by the prior execution count. TRAIN copies the chosen id to scjump_decision_out and dispatches it through SCINIT; GAMESTART marks every slot below a restored count in story_event_flags. Repeated ids intentionally reuse a scene, and the first zero defines the execution cap."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x53edd", "0x62ccf", "0x6727", "0x6d3", "0x87a57"]
+
+[[global]]
+address = "0x6723"
+name = "familiar_alignment_fraction"
+category = "counter"
+type = "int"
+value_domain = "signed fractional hundredths carried between alignment changes"
+usage = "Fractional accumulator paired with familiar_alignment. TRAIN adds the selected action's hundredths delta, applies the integral quotient and probabilistic remainder, and preserves the remaining fraction."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6722", "0x155fc1"]
+
+[[global]]
+address = "0x6725"
+name = "familiar_training_progress_fraction"
+category = "counter"
+type = "int"
+value_domain = "fractional hundredths carried between training-progress gains"
+usage = "Fractional accumulator paired with familiar_training_progress. TRAIN adds the action's hundredths delta, advances the integer value by the quotient and probabilistic remainder, and preserves the remaining fraction."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6724", "0x155fd6"]
+
+[[global]]
+address = "0x6726"
+name = "training_action_total_execution_count"
+category = "counter"
+type = "int"
+value_domain = "nonnegative total completed training actions"
+usage = "TRAIN increments this once after every successful action, independently of the selected action's own execution count. DRAWCHP displays it with the familiar's other training statistics and SAVE persists it."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6727"]
+
+[[global]]
+address = "0x6727"
+name = "training_action_execution_counts"
+category = "counter"
+type = "int[21]"
+value_domain = "0..10 completed executions by TRINIT action id"
+usage = "Per-action completed execution counts. TRAIN uses the prior count as the column in training_action_event_story_flag_ids, increments the selected cell, and treats a zero next event as the cap; GAMESTART restores each count and replays its completed event flags."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x156015"]
+
+[[global]]
+address = "0x53edd"
+name = "selected_training_action_id"
+category = "index-pointer"
+type = "int"
+value_domain = "TRINIT action id 0..20"
+usage = "TRAIN's selected action row. It indexes all TRINIT eligibility, effect, text, award, and event arrays during detail rendering and execution."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x453b", "0x155bbc", "0x156015"]
+
+[[global]]
+address = "0x53ede"
+name = "training_action_unlock_flags"
+category = "data-table"
+type = "int[21]"
+value_domain = "0/1 by TRINIT action id"
+usage = "Persistent per-action discovered/unlocked state maintained by TRAIN after evaluating eligibility. TRAIN uses it while choosing the locked-versus-known menu presentation, GAMESTART restores every cell, and SAVE persists the same block."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x53edd"]

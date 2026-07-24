@@ -78,6 +78,14 @@ def test_load_and_lint():
           and entries[0x1561f6]["name"]
           == "magic_action_information_handler_script_ids",
           "MAINIT/MAMES action state is curated")
+    check(entries[0x453b]["name"] == "training_action_text"
+          and entries[0x155bbc]["name"]
+          == "training_action_required_story_flag_ids"
+          and entries[0x155e9b]["columns"]["13"] == "max_fs"
+          and entries[0x156015]["columns"]["9"] == "execution_10"
+          and entries[0x6722]["name"] == "familiar_alignment"
+          and entries[0x6727]["name"] == "training_action_execution_counts",
+          "TRINIT/TRAIN action state is curated")
     check(entries[0x15a095]["name"] == "information_tab_index"
           and entries[0x15a096]["name"] == "information_message_handled"
           and entries[0x15a097]["name"]

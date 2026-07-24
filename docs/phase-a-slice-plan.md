@@ -3040,5 +3040,41 @@ semantics without inventing a stronger name for opcode `0x19d`.
 Regressions protect the 8-by-15 geometry, 118/120 population, exact two-cell gap, all eight INIT2
 thumbnail joins, all 118 SYS4INI script joins, and complete instruction accounting.
 
-**Next:** audit TRINIT's 365-instruction ritual/action registry by its direct consumers; it is the
+**Next:** audit TRINIT's 365-instruction training-action registry by its direct consumers; it is the
 next compact mixed string/numeric INIT surface.
+
+## Data-semantics sidebar: TRINIT training actions (2026-07-23)
+
+TRINIT is TRAIN's complete 21-row training/sexual-magic action registry. Its 75 string writes form
+six slots per row at `0x453b`: three available-description/cost/reward lines followed by three
+locked-condition hint lines. The numeric storage is one contiguous block from `0x155bbc` through
+`0x1560e6`, divided into nineteen parallel or row-major families. The dedicated schema classifies
+all 365 instructions exactly: 75 strings, 289 static integer writes, and `exit`.
+
+TRAIN proves the eligibility half of the schema. Each action can require up to three story flags,
+minimum/maximum unit level, signed familiar alignment thresholds encoded with a +100 bias,
+minimum/maximum training progress, ten minimum/maximum combat stats, one inventory item, and one
+acquired skill. The shipped data uses thirteen story-flag cells, one minimum-level gate, five
+minimum and five maximum alignment gates, fourteen minimum-progress gates, and eight required
+items; the forbidden-flag, maximum-level, maximum-progress, stat-bound, and required-skill families
+are reserved but empty. All item gates resolve to ITINIT.
+
+The effect half stores a negative 精気 delta, fourteen unit-stat deltas, signed alignment and
+training-progress changes in hundredths, optional skill/item awards, and ten event ids. TRAIN checks
+and deducts the spirit cost, applies the unit-stat growth ABI, carries fractional alignment/progress,
+and grants the selected reward. All eight skill awards resolve to SKINIT and all three item awards
+resolve to ITINIT. The new global names also identify current/maximum spirit, familiar alignment and
+its fraction, training progress and its fraction, total execution count, and the 21 per-action counts.
+
+The 75 populated event cells resolve through SCINIT to `SC0800`, `SC0810`, `SC0820`, `SC0830`,
+`SC0840`, or `SC0850` paths. TRAIN indexes the row by the prior per-action execution count, copies
+the selected value to the SCJUMP decision output, increments the count, and treats the first zero as
+the execution cap. GAMESTART independently confirms the dual story-flag role: after restoring each
+saved count it marks every preceding event id complete. Repeated ids intentionally reuse a scene.
+
+Regressions protect the complete write accounting, all text/gate/effect populations, representative
+signed thresholds and stat rows, every ITINIT/SKINIT join, all 75 SCINIT joins, and the observed
+one/three/four/six-execution limit distribution.
+
+**Next:** audit CDINIT's card-generation registry and its STINIT/FIELD consumers; it is the clearest
+remaining INIT table already joined to a decoded stage-object payload.

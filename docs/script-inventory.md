@@ -142,6 +142,13 @@ the matching `SO027A.AGF` through `SO027H.AGF` thumbnail sheets, and all populat
 `SP*.BIN` resources. HMODE filters cells through opcode `0x19d` and indirectly call-scripts the
 selected available entry.
 
+TRINIT defines TRAIN's 21 training/sexual-magic actions. Each row owns six available/locked text
+slots plus eligibility, spirit-cost, fourteen-stat, alignment, training-progress, reward, and
+ten-event fields in one contiguous numeric block. TRAIN consumes the complete schema; GAMESTART
+replays event ids below each restored execution count as completed story flags. All eight item
+requirements, eight skill awards, three item awards, and 75 event cells resolve through
+ITINIT/SKINIT/SCINIT.
+
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.
 The generated 172 routine-set records assemble 1,043 movement steps and fourteen battle steps, join

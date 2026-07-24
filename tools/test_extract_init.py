@@ -1572,6 +1572,90 @@ def test_h_scene_gallery() -> None:
     )
 
 
+def test_training_actions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["TRINIT.BIN"])
+    records, meta = extract_init.extract_training_actions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 21
+        and meta["reserved_record_count"] == 21
+        and meta["string_stride"] == 6
+        and meta["numeric_block_start"] == "0x155bbc"
+        and meta["numeric_block_end_exclusive"] == "0x1560e7",
+        "TRINIT exposes its 21-row text and contiguous numeric geometry",
+    )
+    check(
+        meta["string_write_count"] == 75
+        and meta["static_write_count"] == 289
+        and meta["classified_static_write_count"] == 289
+        and meta["classified_instruction_count"] == 365,
+        "TRINIT classifies every text, numeric, and exit instruction",
+    )
+    check(
+        by_id[0]["description_lines"]
+        == [
+            "使い魔と性魔術を行い、能力を高める。",
+            "精気20必要。『捕獲攻撃』獲得。",
+        ]
+        and by_id[1]["locked_hint_lines"]
+        == [
+            "使い魔の成長や特別なアイテムが必要の",
+            "ようだ……。",
+            "作る為の方法と材料は……。",
+        ]
+        and by_id[15]["description_lines"][2]
+        == "さらに最大精気+2。",
+        "TRINIT preserves the available and locked three-line text families",
+    )
+    check(
+        by_id[0]["eligibility"]["minimum_unit_level"] == 3
+        and by_id[4]["eligibility"]["minimum_alignment"] == 15
+        and by_id[13]["eligibility"]["maximum_alignment"] == -75
+        and by_id[13]["eligibility"]["minimum_training_progress"] == 45
+        and by_id[1]["eligibility"]["required_item_name"]
+        == "マタタビの媚薬",
+        "TRINIT decodes level, alignment, training, and ITINIT gates",
+    )
+    check(
+        by_id[0]["effects"]["spirit_cost"] == 20
+        and by_id[0]["effects"]["unit_stat_deltas"]
+        == {
+            "physical_attack": 7,
+            "physical_defense": 4,
+            "speed": 8,
+            "luck": 2,
+            "max_hp": 15,
+            "max_sp": 12,
+            "max_fs": 6,
+        }
+        and by_id[0]["effects"]["awarded_skill_name"] == "捕獲攻撃"
+        and by_id[13]["effects"]["alignment_delta_hundredths"] == -2000
+        and by_id[13]["effects"]["awarded_item_name"] == "死王の喚石",
+        "TRINIT joins spirit, stat, alignment, skill, and item effects",
+    )
+    check(
+        meta["event_cell_count"] == 75
+        and len(meta["distinct_event_story_flag_ids"]) == 38
+        and meta["resolved_event_dispatch_count"] == 75
+        and by_id[0]["execution_limit"] == 6
+        and by_id[0]["event_story_flag_ids"]
+        == [800, 830, 830, 830, 830, 830, 0, 0, 0, 0]
+        and by_id[0]["events"][0]["script_name"] == "SC0800.BIN"
+        and by_id[0]["events"][1]["script_name"] == "SC0830.BIN",
+        "TRINIT event slots join to SCINIT and retain repeat-scene limits",
+    )
+    check(
+        meta["required_item_join_count"] == 8
+        and meta["awarded_item_join_count"] == 3
+        and meta["awarded_skill_join_count"] == 8
+        and meta["authored_numeric_cell_counts"]["unit_stat_deltas"] == 95
+        and meta["authored_numeric_cell_counts"]["event_story_flag_ids"]
+        == 75,
+        "TRINIT accounts for every definition join and populated field family",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1788,6 +1872,7 @@ if __name__ == "__main__":
     test_voice_configuration()
     test_terrain_definitions()
     test_h_scene_gallery()
+    test_training_actions()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

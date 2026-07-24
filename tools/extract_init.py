@@ -29,6 +29,10 @@ MPINIT is a special footer-mode terrain atlas: each footer copy owns the fifty
 authored cells of one 53-cell half-tile grid row. STINIT2's per-stage tile
 bounds select rectangles after multiplying both coordinates by two.
 
+TRINIT is a special name-mode registry: 21 training/sexual-magic actions each
+own six display-text slots and a contiguous block of eligibility, cost, effect,
+award, and ten-slot event arrays consumed by TRAIN and restored by GAMESTART.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -676,6 +680,31 @@ H_SCENE_GALLERY_SCRIPT_BASE = 0x6638B
 H_SCENE_GALLERY_PAGE_COUNT = 8
 H_SCENE_GALLERY_SLOTS_PER_PAGE = 15
 H_SCENE_GALLERY_THUMBNAIL_BASE = 0x66421
+
+TRAINING_ACTION_STRING_BASE = 0x453B
+TRAINING_ACTION_STRING_STRIDE = 6
+TRAINING_ACTION_COUNT = 21
+TRAINING_ACTION_ARRAYS = {
+    "required_story_flag_ids": (0x155BBC, 3),
+    "forbidden_story_flag_ids": (0x155BFB, 3),
+    "minimum_unit_level": (0x155C3A, 1),
+    "maximum_unit_level": (0x155C4F, 1),
+    "minimum_alignment_encoded": (0x155C64, 1),
+    "maximum_alignment_encoded": (0x155C79, 1),
+    "minimum_training_progress": (0x155C8E, 1),
+    "maximum_training_progress": (0x155CA3, 1),
+    "minimum_unit_stats": (0x155CB8, 10),
+    "maximum_unit_stats": (0x155D8A, 10),
+    "required_item_id": (0x155E5C, 1),
+    "required_skill_id": (0x155E71, 1),
+    "spirit_delta": (0x155E86, 1),
+    "unit_stat_deltas": (0x155E9B, 14),
+    "alignment_delta_hundredths": (0x155FC1, 1),
+    "training_progress_delta_hundredths": (0x155FD6, 1),
+    "awarded_skill_id": (0x155FEB, 1),
+    "awarded_item_id": (0x156000, 1),
+    "event_story_flag_ids": (0x156015, 10),
+}
 
 
 def resolve(name: str) -> Path:
@@ -3784,6 +3813,416 @@ def extract_h_scene_gallery(scr):
     }
 
 
+def extract_training_actions(scr):
+    """Extract TRINIT's 21 training/sexual-magic action definitions."""
+    string_cells: dict[tuple[int, int], str] = {}
+    numeric_cells = {
+        field_name: {}
+        for field_name in TRAINING_ACTION_ARRAYS
+    }
+    classified_offsets = set()
+    string_write_count = 0
+    static_write_count = 0
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            destination = ins.args[0][1]
+            index = destination - TRAINING_ACTION_STRING_BASE
+            capacity = (
+                TRAINING_ACTION_COUNT
+                * TRAINING_ACTION_STRING_STRIDE
+            )
+            if not 0 <= index < capacity:
+                raise ValueError(
+                    f"{scr.path.name}: training string write "
+                    f"0x{destination:x} outside the {capacity}-cell table"
+                )
+            action_id, column = divmod(
+                index, TRAINING_ACTION_STRING_STRIDE
+            )
+            value = scr.strings[ins.args[1][1]][0]
+            _store_unique(
+                string_cells, (action_id, column), value, action_id
+            )
+            classified_offsets.add(ins.offset)
+            string_write_count += 1
+            continue
+
+        write = _static_global_write(ins)
+        if write is None:
+            continue
+        static_write_count += 1
+        destination, value = write
+        if not isinstance(value, int):
+            raise ValueError(
+                f"{scr.path.name}: non-static training value "
+                f"at 0x{ins.offset:x}"
+            )
+        for field_name, (base, stride) in TRAINING_ACTION_ARRAYS.items():
+            index = destination - base
+            if 0 <= index < TRAINING_ACTION_COUNT * stride:
+                action_id, column = divmod(index, stride)
+                _store_unique(
+                    numeric_cells[field_name],
+                    (action_id, column),
+                    value,
+                    action_id,
+                )
+                classified_offsets.add(ins.offset)
+                break
+        else:
+            raise ValueError(
+                f"{scr.path.name}: unclassified training write "
+                f"0x{destination:x} at 0x{ins.offset:x}"
+            )
+
+    exit_offsets = {
+        ins.offset
+        for ins in scr.instructions
+        if sys4load.display_label(ins.opcode) == "exit"
+    }
+    classified_offsets.update(exit_offsets)
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+    if len(exit_offsets) != 1:
+        raise ValueError(
+            f"{scr.path.name}: expected one exit, found {len(exit_offsets)}"
+        )
+
+    item_records, _ = extract_name(sys4load.load(resolve("ITINIT")))
+    item_names = {
+        record["id"]: record["name"] for record in item_records
+    }
+    skill_records, _ = extract_name(sys4load.load(resolve("SKINIT")))
+    skill_names = {
+        record["id"]: record["name"] for record in skill_records
+    }
+    dispatch_records, _ = extract_dispatch(
+        sys4load.load(resolve("SCINIT"))
+    )
+    event_dispatch = {
+        record["id"]: record for record in dispatch_records
+    }
+
+    def values(field_name: str, action_id: int) -> list[int]:
+        _, stride = TRAINING_ACTION_ARRAYS[field_name]
+        cells = numeric_cells[field_name]
+        return [
+            cells.get((action_id, column), 0)
+            for column in range(stride)
+        ]
+
+    def scalar(field_name: str, action_id: int) -> int:
+        return values(field_name, action_id)[0]
+
+    records = []
+    for action_id in range(TRAINING_ACTION_COUNT):
+        description_lines = [
+            string_cells.get((action_id, column))
+            for column in range(3)
+        ]
+        locked_hint_lines = [
+            string_cells.get((action_id, column))
+            for column in range(3, 6)
+        ]
+        description_lines = [
+            line for line in description_lines if line is not None
+        ]
+        locked_hint_lines = [
+            line for line in locked_hint_lines if line is not None
+        ]
+
+        raw_fields = {}
+        raw_record_fields = {}
+        raw_string_fields = {}
+        for column in range(TRAINING_ACTION_STRING_STRIDE):
+            cell = (action_id, column)
+            if cell in string_cells:
+                raw_string_fields[
+                    f"0x{TRAINING_ACTION_STRING_BASE:x}/"
+                    f"{TRAINING_ACTION_STRING_STRIDE}/{column}"
+                ] = string_cells[cell]
+        for field_name, (base, stride) in TRAINING_ACTION_ARRAYS.items():
+            for column in range(stride):
+                cell = (action_id, column)
+                if cell not in numeric_cells[field_name]:
+                    continue
+                value = numeric_cells[field_name][cell]
+                if stride == 1:
+                    raw_fields[f"0x{base:x}"] = value
+                else:
+                    raw_record_fields[
+                        f"0x{base:x}/{stride}/{column}"
+                    ] = value
+
+        required_flags = [
+            value
+            for value in values(
+                "required_story_flag_ids", action_id
+            )
+            if value
+        ]
+        forbidden_flags = [
+            value
+            for value in values(
+                "forbidden_story_flag_ids", action_id
+            )
+            if value
+        ]
+        minimum_stats = {
+            UNIT_STAT_COLUMNS[column]: value
+            for column, value in enumerate(
+                values("minimum_unit_stats", action_id)
+            )
+            if value
+        }
+        maximum_stats = {
+            UNIT_STAT_COLUMNS[column]: value
+            for column, value in enumerate(
+                values("maximum_unit_stats", action_id)
+            )
+            if value
+        }
+        stat_deltas = {
+            UNIT_STAT_COLUMNS[column]: value
+            for column, value in enumerate(
+                values("unit_stat_deltas", action_id)
+            )
+            if value
+        }
+        event_ids = values("event_story_flag_ids", action_id)
+        events = []
+        for slot, event_id in enumerate(event_ids):
+            if not event_id:
+                continue
+            dispatch = event_dispatch.get(event_id, {})
+            events.append({
+                "slot": slot,
+                "story_flag_id": event_id,
+                "script_resource_id": dispatch.get(
+                    "script_resource_id", 0
+                ),
+                "script_name": dispatch.get("script_name", ""),
+            })
+
+        required_item_id = scalar("required_item_id", action_id)
+        required_skill_id = scalar("required_skill_id", action_id)
+        awarded_item_id = scalar("awarded_item_id", action_id)
+        awarded_skill_id = scalar("awarded_skill_id", action_id)
+        spirit_delta = scalar("spirit_delta", action_id)
+        minimum_alignment_encoded = scalar(
+            "minimum_alignment_encoded", action_id
+        )
+        maximum_alignment_encoded = scalar(
+            "maximum_alignment_encoded", action_id
+        )
+        alignment_delta = scalar(
+            "alignment_delta_hundredths", action_id
+        )
+        training_delta = scalar(
+            "training_progress_delta_hundredths", action_id
+        )
+
+        eligibility = {
+            "required_story_flag_ids": required_flags,
+            "forbidden_story_flag_ids": forbidden_flags,
+            "minimum_unit_stats": minimum_stats,
+            "maximum_unit_stats": maximum_stats,
+        }
+        for field_name in (
+            "minimum_unit_level",
+            "maximum_unit_level",
+            "minimum_training_progress",
+            "maximum_training_progress",
+        ):
+            value = scalar(field_name, action_id)
+            if value:
+                eligibility[field_name] = value
+        if minimum_alignment_encoded:
+            eligibility["minimum_alignment"] = (
+                minimum_alignment_encoded - 100
+            )
+        if maximum_alignment_encoded:
+            eligibility["maximum_alignment"] = (
+                maximum_alignment_encoded - 100
+            )
+        if required_item_id:
+            eligibility.update({
+                "required_item_id": required_item_id,
+                "required_item_name": item_names.get(
+                    required_item_id, ""
+                ),
+            })
+        if required_skill_id:
+            eligibility.update({
+                "required_skill_id": required_skill_id,
+                "required_skill_name": skill_names.get(
+                    required_skill_id, ""
+                ),
+            })
+
+        effects = {
+            "spirit_delta": spirit_delta,
+            "spirit_cost": -spirit_delta,
+            "unit_stat_deltas": stat_deltas,
+            "alignment_delta_hundredths": alignment_delta,
+            "training_progress_delta_hundredths": training_delta,
+        }
+        if awarded_skill_id:
+            effects.update({
+                "awarded_skill_id": awarded_skill_id,
+                "awarded_skill_name": skill_names.get(
+                    awarded_skill_id, ""
+                ),
+            })
+        if awarded_item_id:
+            effects.update({
+                "awarded_item_id": awarded_item_id,
+                "awarded_item_name": item_names.get(
+                    awarded_item_id, ""
+                ),
+            })
+
+        records.append({
+            "id": action_id,
+            "name": f"training_action_{action_id:02d}",
+            "description_lines": description_lines,
+            "description": "".join(description_lines),
+            "locked_hint_lines": locked_hint_lines,
+            "locked_hint": "".join(locked_hint_lines),
+            "eligibility": eligibility,
+            "effects": effects,
+            "event_story_flag_ids": event_ids,
+            "execution_limit": len(events),
+            "events": events,
+            "fields": raw_fields,
+            "record_fields": raw_record_fields,
+            "string_fields": raw_string_fields,
+        })
+
+    string_key = f"0x{TRAINING_ACTION_STRING_BASE:x}"
+    array_layouts = {
+        string_key: {"stride": TRAINING_ACTION_STRING_STRIDE},
+        **{
+            f"0x{base:x}": {"stride": stride}
+            for base, stride in TRAINING_ACTION_ARRAYS.values()
+            if stride > 1
+        },
+    }
+    semantic_names = {
+        string_key: "training_action_text",
+        **{
+            f"0x{base:x}": f"training_action_{field_name}"
+            for field_name, (base, _) in TRAINING_ACTION_ARRAYS.items()
+        },
+    }
+    schema_field_semantics = {}
+    for column in range(TRAINING_ACTION_STRING_STRIDE):
+        family = (
+            "description_line" if column < 3 else "locked_hint_line"
+        )
+        ordinal = column + 1 if column < 3 else column - 2
+        schema_field_semantics[
+            f"{string_key}/{TRAINING_ACTION_STRING_STRIDE}/{column}"
+        ] = f"training_action_{family}_{ordinal}"
+    for field_name, (base, stride) in TRAINING_ACTION_ARRAYS.items():
+        key = f"0x{base:x}"
+        if stride == 1:
+            schema_field_semantics[key] = semantic_names[key]
+            continue
+        for column in range(stride):
+            schema_field_semantics[
+                f"{key}/{stride}/{column}"
+            ] = f"training_action_{field_name}.column_{column}"
+
+    event_values = [
+        event["story_flag_id"]
+        for record in records
+        for event in record["events"]
+    ]
+    authored_cell_counts = {
+        field_name: len(cells)
+        for field_name, cells in numeric_cells.items()
+    }
+    return records, {
+        "schema": "training-action-definitions",
+        "reserved_record_count": TRAINING_ACTION_COUNT,
+        "string_table_base": string_key,
+        "string_stride": TRAINING_ACTION_STRING_STRIDE,
+        "numeric_block_start": (
+            f"0x{TRAINING_ACTION_ARRAYS['required_story_flag_ids'][0]:x}"
+        ),
+        "numeric_block_end_exclusive": "0x1560e7",
+        "array_layouts": array_layouts,
+        "schema_field_semantics": schema_field_semantics,
+        "semantic_array_names": semantic_names,
+        "authored_numeric_cell_counts": authored_cell_counts,
+        "string_write_count": string_write_count,
+        "static_write_count": static_write_count,
+        "classified_static_write_count": sum(
+            len(cells) for cells in numeric_cells.values()
+        ),
+        "classified_instruction_count": len(classified_offsets),
+        "required_item_join_count": sum(
+            bool(record["eligibility"].get("required_item_name"))
+            for record in records
+        ),
+        "awarded_item_join_count": sum(
+            bool(record["effects"].get("awarded_item_name"))
+            for record in records
+        ),
+        "awarded_skill_join_count": sum(
+            bool(record["effects"].get("awarded_skill_name"))
+            for record in records
+        ),
+        "event_cell_count": len(event_values),
+        "distinct_event_story_flag_ids": sorted(set(event_values)),
+        "resolved_event_dispatch_count": sum(
+            bool(event["script_name"])
+            for record in records
+            for event in record["events"]
+        ),
+        "runtime_contract": {
+            "selected_action_id": "0x53edd",
+            "availability_state_by_action": "0x53ede",
+            "familiar_alignment": "0x6722",
+            "familiar_alignment_fraction": "0x6723",
+            "training_progress": "0x6724",
+            "training_progress_fraction": "0x6725",
+            "total_execution_count": "0x6726",
+            "execution_count_by_action": "0x6727",
+            "current_spirit": "0x20530",
+            "maximum_spirit": "0x20534",
+        },
+        "consumer_contract": {
+            "TRAIN.BIN": (
+                "evaluates every eligibility family, renders the available "
+                "or locked three-line text, deducts spirit, applies fourteen-"
+                "stat/alignment/training effects, awards items or skills, "
+                "increments per-action execution counts, and dispatches the "
+                "event id selected by the prior execution count"
+            ),
+            "GAMESTART.BIN": (
+                "restores all event story flags in slots below each saved "
+                "per-action execution count so prior training scenes remain "
+                "completed after load"
+            ),
+        },
+    }
+
+
 def _map_stage_definitions() -> list[dict]:
     """Read the STINIT2 records that own all four terrain-atlas bounds."""
     stage_scr = sys4load.load(resolve("STINIT2"))
@@ -4399,6 +4838,11 @@ def write_data_index(data_dir: Path) -> None:
         "joins every page to its INIT2 SO027 thumbnail sheet, resolves all 118 populated",
         "scene resources, and retains the two implicit empty cells in the final page.",
         "",
+        "TRINIT's dedicated training-action schema exposes 21 six-line text rows and",
+        "the contiguous eligibility/cost/effect/award/event block consumed by TRAIN.",
+        "Item and skill ids join to ITINIT/SKINIT; all 75 event slots join through",
+        "SCINIT, and GAMESTART's restored-story-flag contract remains explicit.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -4459,7 +4903,14 @@ def main() -> int:
         raise SystemExit(str(error)) from error
     scr = sys4load.load(resolve(name))
 
-    mode = mode_arg or detect_mode(scr)
+    if mode_arg is not None:
+        mode = mode_arg
+    elif name == "TRINIT":
+        # TRINIT's six-column sparse string matrix is not the generic
+        # one-name-per-record layout expected by name-mode auto-detection.
+        mode = "name"
+    else:
+        mode = detect_mode(scr)
     extractor = {
         "name": extract_name,
         "numeric": extract_numeric,
@@ -4491,6 +4942,8 @@ def main() -> int:
         extractor = extract_voice_configuration
     elif mode == "name" and name == "LAINIT":
         extractor = extract_terrain_definitions
+    elif mode == "name" and name == "TRINIT":
+        extractor = extract_training_actions
     elif mode == "numeric" and name == "SPINIT":
         extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":

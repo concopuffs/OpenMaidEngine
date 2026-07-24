@@ -267,6 +267,60 @@ def main() -> int:
     assert "- geometry: 8 pages × 15 slots" in rendered_h_gallery
     assert "- populated scenes: 118/120" in rendered_h_gallery
 
+    training_fixture = {
+        "table": "TRAINING",
+        "mode": "name",
+        "schema": "training-action-definitions",
+        "record_count": 3,
+        "string_write_count": 7,
+        "authored_numeric_cell_counts": {
+            "required_story_flag_ids": 2,
+            "unit_stat_deltas": 4,
+        },
+        "event_cell_count": 6,
+        "distinct_event_story_flag_ids": [800, 801, 830],
+        "resolved_event_dispatch_count": 6,
+        "records": [
+            {
+                "description_lines": ["one", "cost"],
+                "locked_hint_lines": [],
+                "eligibility": {},
+                "effects": {"awarded_skill_id": 1},
+                "execution_limit": 3,
+            },
+            {
+                "description_lines": ["two", "cost"],
+                "locked_hint_lines": ["locked"],
+                "eligibility": {
+                    "required_item_id": 35,
+                    "minimum_alignment": 10,
+                    "minimum_training_progress": 5,
+                },
+                "effects": {"awarded_item_id": 51},
+                "execution_limit": 2,
+            },
+            {
+                "description_lines": ["three"],
+                "locked_hint_lines": ["locked", "more"],
+                "eligibility": {"maximum_alignment": -20},
+                "effects": {},
+                "execution_limit": 1,
+            },
+        ],
+    }
+    training_summary = profile.profile_training_actions(training_fixture)
+    assert training_summary["action_count"] == 3
+    assert training_summary["description_line_count"] == 5
+    assert training_summary["locked_hint_line_count"] == 3
+    assert training_summary["required_item_count"] == 1
+    assert training_summary["minimum_alignment_gate_count"] == 1
+    assert training_summary["maximum_alignment_gate_count"] == 1
+    assert training_summary["stat_delta_cell_count"] == 4
+    assert training_summary["execution_limits"] == {"1": 1, "2": 1, "3": 1}
+    rendered_training = profile.render_markdown(training_fixture, [], 40)
+    assert "- training actions: 3" in rendered_training
+    assert "- event slots: 6 across 3 distinct story flags" in rendered_training
+
     messages = profile.profile_messages(fixture)
     assert messages["population"] == 1
     assert messages["coverage"] == 1 / 3

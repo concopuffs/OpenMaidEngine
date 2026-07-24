@@ -365,6 +365,67 @@ def profile_h_scene_gallery(data: dict) -> dict:
     }
 
 
+def profile_training_actions(data: dict) -> dict:
+    """Summarize TRINIT's training-action gates, effects, and events."""
+    if data.get("schema") != "training-action-definitions":
+        return {}
+    records = data.get("records", [])
+    return {
+        "action_count": len(records),
+        "string_line_count": data.get("string_write_count", 0),
+        "description_line_count": sum(
+            len(record.get("description_lines", []))
+            for record in records
+        ),
+        "locked_hint_line_count": sum(
+            len(record.get("locked_hint_lines", []))
+            for record in records
+        ),
+        "required_story_flag_cell_count": data.get(
+            "authored_numeric_cell_counts", {}
+        ).get("required_story_flag_ids", 0),
+        "required_item_count": sum(
+            "required_item_id" in record.get("eligibility", {})
+            for record in records
+        ),
+        "minimum_alignment_gate_count": sum(
+            "minimum_alignment" in record.get("eligibility", {})
+            for record in records
+        ),
+        "maximum_alignment_gate_count": sum(
+            "maximum_alignment" in record.get("eligibility", {})
+            for record in records
+        ),
+        "minimum_training_gate_count": sum(
+            "minimum_training_progress"
+            in record.get("eligibility", {})
+            for record in records
+        ),
+        "stat_delta_cell_count": data.get(
+            "authored_numeric_cell_counts", {}
+        ).get("unit_stat_deltas", 0),
+        "awarded_item_count": sum(
+            "awarded_item_id" in record.get("effects", {})
+            for record in records
+        ),
+        "awarded_skill_count": sum(
+            "awarded_skill_id" in record.get("effects", {})
+            for record in records
+        ),
+        "event_cell_count": data.get("event_cell_count", 0),
+        "distinct_event_count": len(
+            data.get("distinct_event_story_flag_ids", [])
+        ),
+        "resolved_event_dispatch_count": data.get(
+            "resolved_event_dispatch_count", 0
+        ),
+        "execution_limits": dict(sorted(collections.Counter(
+            str(record.get("execution_limit", 0))
+            for record in records
+        ).items(), key=lambda item: int(item[0]))),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -492,7 +553,29 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if h_gallery_profile := profile_h_scene_gallery(data):
+    if training_profile := profile_training_actions(data):
+        lines.extend([
+            f"- training actions: {training_profile['action_count']}",
+            f"- display text lines: "
+            f"{training_profile['description_line_count']} available + "
+            f"{training_profile['locked_hint_line_count']} locked",
+            f"- eligibility cells: "
+            f"{training_profile['required_story_flag_cell_count']} required "
+            f"story flags, {training_profile['required_item_count']} items, "
+            f"{training_profile['minimum_alignment_gate_count']} minimum + "
+            f"{training_profile['maximum_alignment_gate_count']} maximum "
+            f"alignment gates, "
+            f"{training_profile['minimum_training_gate_count']} training gates",
+            f"- effect cells: {training_profile['stat_delta_cell_count']} stat "
+            f"deltas, {training_profile['awarded_skill_count']} skill awards, "
+            f"{training_profile['awarded_item_count']} item awards",
+            f"- event slots: {training_profile['event_cell_count']} across "
+            f"{training_profile['distinct_event_count']} distinct story flags "
+            f"({training_profile['resolved_event_dispatch_count']} dispatches "
+            f"resolved)",
+            f"- execution limits: {training_profile['execution_limits']}",
+        ])
+    elif h_gallery_profile := profile_h_scene_gallery(data):
         lines.extend([
             f"- geometry: {h_gallery_profile['page_count']} pages × "
             f"{h_gallery_profile['slots_per_page']} slots",
@@ -667,6 +750,7 @@ def main() -> int:
         "map_atlas_profile": profile_map_atlas(data),
         "terrain_definition_profile": profile_terrain_definitions(data),
         "h_scene_gallery_profile": profile_h_scene_gallery(data),
+        "training_action_profile": profile_training_actions(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),
