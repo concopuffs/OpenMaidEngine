@@ -2339,13 +2339,13 @@ depends_on = []
 
 [[global]]
 address = "0x204f4"
-name = ""
-category = "unknown"
+name = "current_stage_turn"
+category = "counter"
 type = "int"
-value_domain = "small int"
-usage = "Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes."
-source = "inference"
-confidence = "low"
+value_domain = "positive one-based turn number while a stage is active"
+usage = "FIELD initializes this to 1, increments it after end-of-turn processing, compares it with STINIT's stage turn limit and timed object schedules, and displays it through DRAWCHP. Card generation divides it by each CDINIT growth interval to increase that card's weighted-selection share."
+source = "investigation"
+confidence = "high"
 depends_on = []
 
 [[global]]
@@ -3954,3 +3954,105 @@ usage = "Persistent per-action discovered/unlocked state maintained by TRAIN aft
 source = "investigation"
 confidence = "high"
 depends_on = ["0x53edd"]
+
+[[global]]
+address = "0x4315"
+name = "card_definition_names"
+category = "string-table"
+type = "string[100]"
+value_domain = "CDINIT2 display name by one-based card id"
+usage = "Card names populated by CDINIT2. FIELD indexes this table with current_card_id when presenting the card selected from CDINIT's weighted generation list."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8"]
+
+[[global]]
+address = "0x4379"
+name = "card_definition_result_messages"
+category = "string-table"
+type = "string[100]"
+value_domain = "CDINIT2 result text by one-based card id"
+usage = "Short player-facing result text paired with card_definition_names. FIELD displays the selected card's row after applying its CDINIT2 effect."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8"]
+
+[[global]]
+address = "0x1519f8"
+name = "current_card_id"
+category = "index-pointer"
+type = "int"
+value_domain = "CDINIT2 card id 1..81"
+usage = "FIELD's selected card-definition row. Card generation copies a surviving CDINIT card id here, uses it to test CDINIT2 story-flag gates, retains it through weighted selection, and indexes the chosen card's effects, graphics, name, and result text."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4315", "0x4379", "0x1525b2"]
+
+[[global]]
+address = "0x151a5d"
+name = "card_definition_required_story_flag_ids"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "required_flag_1", "1" = "required_flag_2", "2" = "engine_dead_required_flag_3" }
+value_domain = "story flag id; zero means no requirement"
+usage = "CDINIT2 card eligibility rows. FIELD checks only columns 0 and 1 before admitting a card to weighted selection. CDINIT2 nevertheless authors column 2 for eighteen cards; those third requirements are engine-dead in the shipped FIELD loop and are retained separately by the extractor."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8", "0x6d3"]
+
+[[global]]
+address = "0x151b89"
+name = "card_definition_forbidden_story_flag_ids"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2", "2" = "reserved_forbidden_flag_3" }
+value_domain = "story flag id; zero means no exclusion"
+usage = "CDINIT2 card exclusion rows. FIELD checks columns 0 and 1 and rejects a card when either populated flag is set; the shipped definitions populate only column 0."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8", "0x6d3"]
+
+[[global]]
+address = "0x152485"
+name = "current_card_generation_list_id"
+category = "index-pointer"
+type = "int"
+value_domain = "one of {1, 11, 31, 41, 55, 61, 71, 94, 160}"
+usage = "Selector consumed by CDINIT. FIELD loads it from the current STINIT type-28 card object's payload before rebuilding the parallel card-id and weight-schedule buffers; selectors 55 and 94 are authored but have no shipped STINIT object reference."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xe73bb"]
+
+[[global]]
+address = "0xe73bb"
+name = "stage_object_primary_payload"
+category = "data-table"
+type = "int[50]"
+value_domain = "object-type-tagged payload"
+usage = "STINIT's primary per-object payload array. FIELD interprets it by the parallel object type: initial faction for Magic Pillars, teleport destination X, item id, card-generation list id for type 28, non-triggering faction for hazards/barriers, or initial object state for the consumer-proven stateful types."
+source = "investigation"
+confidence = "high"
+depends_on = []
+
+[[global]]
+address = "0x152486"
+name = "card_generation_weight_schedules"
+category = "data-table"
+type = "int[100][3]"
+columns = { "0" = "base_weight", "1" = "growth_interval_turns", "2" = "growth_weight" }
+value_domain = "nonnegative weighted-selection parameters"
+usage = "CDINIT's selector-specific candidate weights, parallel to card_generation_card_ids. FIELD computes base_weight + floor(current_stage_turn / growth_interval_turns) * growth_weight, with a zero interval selecting the fixed base path. The shipped lists populate 11..75 one-based slots."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x152485", "0x1525b2", "0x204f4"]
+
+[[global]]
+address = "0x1525b2"
+name = "card_generation_card_ids"
+category = "data-table"
+type = "int[100]"
+value_domain = "CDINIT2 card id; zero means empty candidate slot"
+usage = "Card ids parallel to card_generation_weight_schedules. FIELD scans slots 0..99, filters each nonzero id through the CDINIT2 story-flag rows, and performs cumulative weighted random selection. CDINIT clears only the first 50 slots even though its largest authored list reaches slot 75."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x1519f8", "0x152485", "0x152486"]

@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5052 globals (361 curated, 4691 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5053 globals (370 curated, 4683 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -32,6 +32,7 @@
 | `0x6725` | familiar_training_progress_fraction | high | investigation | Fractional accumulator paired with familiar_training_progress. TRAIN adds the action's hundredths delta, advances the integer value by the quotient and probabilistic remainder, and preserves the remaining fraction. |
 | `0x6726` | training_action_total_execution_count | high | investigation | TRAIN increments this once after every successful action, independently of the selected action's own execution count. DRAWCHP displays it with the familiar's other training statistics and SAVE persists it. |
 | `0x6727` | training_action_execution_counts | high | investigation | Per-action completed execution counts. TRAIN uses the prior count as the column in training_action_event_story_flag_ids, increments the selected cell, and treats a zero next event as the cap; GAMESTART restores each count and replays its completed event flags. |
+| `0x204f4` | current_stage_turn | high | investigation | FIELD initializes this to 1, increments it after end-of-turn processing, compares it with STINIT's stage turn limit and timed object schedules, and displays it through DRAWCHP. Card generation divides it by each CDINIT growth interval to increase that card's weighted-selection share. |
 | `0x2052e` | scjump_progress_b | med | inference | Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage. |
 | `0x20530` | current_spirit | high | investigation | Current 精気 (spirit/essence) resource. TRAIN rejects a selected action when adding its negative TRINIT spirit delta would fall below zero, deducts the cost on execution, and passes the updated value to DRAWCHP. Field and scene reward paths update the same resource and clamp it to maximum_spirit. |
 | `0x20534` | maximum_spirit | high | investigation | Maximum 精気 capacity paired with current_spirit. TRAIN clamps the post-cost current value against it, DRAWCHP renders the current/maximum gauge, and field/scene reward paths raise or restore the same capacity. |
@@ -212,6 +213,7 @@
 | `0xe7325` | stage_object_tile_x | high | investigation | X coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_y for object interaction and occupancy. |
 | `0xe7357` | stage_object_tile_y | high | investigation | Y coordinate for each current-stage object slot. DRAWOBJ converts it to centered map-space pixels; FIELD and CALCOCC use it with stage_object_tile_x for object interaction and occupancy. |
 | `0xe7389` | stage_object_type_id | high | investigation | Object-definition id for each current-stage object slot. SETOBJ decides whether the slot exists, while DRAWOBJ and FIELD use the id to select shared object graphics, dimensions, animation, collision, and behavior metadata. |
+| `0xe73bb` | stage_object_primary_payload | high | investigation | STINIT's primary per-object payload array. FIELD interprets it by the parallel object type: initial faction for Magic Pillars, teleport destination X, item id, card-generation list id for type 28, non-triggering faction for hazards/barriers, or initial object state for the consumer-proven stateful types. |
 | `0xe741f` | stage_object_reinforcement_interval_turns | high | investigation | Per-object reinforcement schedule. FIELD compares the current turn and the object's runtime spawn count against this interval to calculate due weighted enemy spawns; object type 27 uses the same value as its one-shot trigger turn. |
 | `0xe7451` | stage_object_reinforcement_spawn_limit | high | investigation | Maximum number of scheduled units materialized through a stage object. FIELD stops the object's reinforcement path once its runtime spawn counter reaches this value; object type 27 stores one for its one-shot special spawn. |
 | `0xe7483` | stage_object_difficulty_mask | high | investigation | Per-object difficulty inclusion mask. SETOBJ uses check-bit with difficulty_index and rejects the object slot when the selected difficulty bit is absent. |
@@ -250,6 +252,10 @@
 | `0x12a8f8` | battle_routine_parameter_1 | high | investigation | RTINIT battle bank 12. RTN_B004 uses it to choose an entry from the prepared battle-action candidate table. |
 | `0x147db8` | battle_routine_required_story_flag_ids | high | investigation | RTINIT battle bank 18. BTRTN subtracts one and rejects the step when the referenced story flag is not set. |
 | `0x14cbd8` | battle_routine_forbidden_story_flag_ids | high | investigation | RTINIT battle bank 19. BTRTN subtracts one and rejects the step when the referenced story flag is set. |
+| `0x151a5d` | card_definition_required_story_flag_ids | high | investigation | CDINIT2 card eligibility rows. FIELD checks only columns 0 and 1 before admitting a card to weighted selection. CDINIT2 nevertheless authors column 2 for eighteen cards; those third requirements are engine-dead in the shipped FIELD loop and are retained separately by the extractor. Columns: 0=required_flag_1, 1=required_flag_2, 2=engine_dead_required_flag_3. |
+| `0x151b89` | card_definition_forbidden_story_flag_ids | high | investigation | CDINIT2 card exclusion rows. FIELD checks columns 0 and 1 and rejects a card when either populated flag is set; the shipped definitions populate only column 0. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=reserved_forbidden_flag_3. |
+| `0x152486` | card_generation_weight_schedules | high | investigation | CDINIT's selector-specific candidate weights, parallel to card_generation_card_ids. FIELD computes base_weight + floor(current_stage_turn / growth_interval_turns) * growth_weight, with a zero interval selecting the fixed base path. The shipped lists populate 11..75 one-based slots. Columns: 0=base_weight, 1=growth_interval_turns, 2=growth_weight. |
+| `0x1525b2` | card_generation_card_ids | high | investigation | Card ids parallel to card_generation_weight_schedules. FIELD scans slots 0..99, filters each nonzero id through the CDINIT2 story-flag rows, and performs cumulative weighted random selection. CDINIT clears only the first 50 slots even though its largest authored list reaches slot 75. |
 | `0x152877` | battle_entity_indices | high | investigation | The two runtime entity rows participating in BTL. battle_actor_side_index and battle_target_side_index select these cells before BTL and CALCDMG access HP, unit definitions, skills, animation state, and voice banks. Columns: 0=side_0, 1=side_1. |
 | `0x152879` | battle_selected_skill_ids | high | investigation | Selected skill for each battle side. BTL displays a positive entry through the skill-name table and selects skill-use voice columns; CALCDMG uses the same id for skill parameters. A zero entry follows the equipped/default ordinary-attack path. Columns: 0=side_0, 1=side_1. |
 | `0x155bbc` | training_action_required_story_flag_ids | high | investigation | Up to three prerequisite story flags per TRINIT action. TRAIN subtracts one before indexing story_event_flags and rejects the action unless every populated flag equals one. Columns: 0=required_story_flag_id_1, 1=required_story_flag_id_2, 2=required_story_flag_id_3. |
@@ -307,8 +313,6 @@
 | `0x3306` | — | low | auto-shape | array |
 | `0x36ee` | — | low | auto-shape | array |
 | `0x3ad6` | — | low | auto-shape | array |
-| `0x4315` | — | low | auto-shape | array |
-| `0x4379` | — | low | auto-shape | array |
 | `0x6804` | — | low | auto-shape | array |
 | `0x6868` | — | low | auto-shape | array |
 | `0x6994` | — | low | auto-shape | array |
@@ -364,7 +368,6 @@
 | `0xccc2f` | — | low | auto-shape | array |
 | `0xe7305` | — | low | auto-shape | array |
 | `0xe730e` | — | low | auto-shape | array |
-| `0xe73bb` | — | low | auto-shape | array |
 | `0xe73ed` | — | low | auto-shape | array |
 | `0xe770d` | — | low | auto-shape | array |
 | `0xe7e8d` | — | low | auto-shape | array |
@@ -384,7 +387,6 @@
 | `0x152359` | — | low | auto-shape | array |
 | `0x1523bd` | — | low | auto-shape | array |
 | `0x152421` | — | low | auto-shape | array |
-| `0x1525b2` | — | low | auto-shape | array |
 | `0x15287b` | — | low | auto-shape | array |
 | `0x15287d` | — | low | auto-shape | array |
 | `0x15287f` | — | low | auto-shape | array |
@@ -436,6 +438,8 @@
 | `0xaac76` | current_condition_id | high | investigation | Shared condition selector consumed by CALCILL, ADDILL, ADDILLSUB, DISARM, FIELD, and related condition handlers. It indexes the 30-column runtime condition rows and ILINIT definition arrays. |
 | `0xeff75` | current_routine_set_id | high | investigation | Shared RTINIT row selector. MVRTN loads the current entity's difficulty-selected movement routine set; BTRTN loads its battle routine set. Both then iterate routine_step_index across the selected twenty-slot row. |
 | `0xeff76` | routine_step_index | high | investigation | Shared RTINIT step selector. MVRTN and BTRTN iterate it from zero through nineteen and use it as the column index in every routine bank and matching per-entity runtime row. |
+| `0x1519f8` | current_card_id | high | investigation | FIELD's selected card-definition row. Card generation copies a surviving CDINIT card id here, uses it to test CDINIT2 story-flag gates, retains it through weighted selection, and indexes the chosen card's effects, graphics, name, and result text. |
+| `0x152485` | current_card_generation_list_id | high | investigation | Selector consumed by CDINIT. FIELD loads it from the current STINIT type-28 card object's payload before rebuilding the parallel card-id and weight-schedule buffers; selectors 55 and 94 are authored but have no shipped STINIT object reference. |
 | `0x152616` | current_entity_index | med | investigation | Primary current-entity row index (RECOVER-confirmed; purity 0.51, 363 row-index uses). |
 | `0x152617` | current_stage_enemy_spawn_slot | high | investigation | Current STINIT enemy-template slot. FIELD selects slots 1..29 while materializing stage units, SETEN records the slot on the runtime entity and reads every parallel enemy buffer through it, and ADDEN uses slot 0 for its special generated unit. |
 | `0x15261a` | battle_actor_side_index | high | investigation | Index of the acting side in BTL's two-entry battle arrays. CALCDMG derives battle_target_side_index as 1 minus this value; BTL uses the actor's unit-definition row for attack, skill, critical, and finishing-blow voices. |
@@ -501,6 +505,8 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x4315` | card_definition_names | high | investigation | Card names populated by CDINIT2. FIELD indexes this table with current_card_id when presenting the card selected from CDINIT's weighted generation list. |
+| `0x4379` | card_definition_result_messages | high | investigation | Short player-facing result text paired with card_definition_names. FIELD displays the selected card's row after applying its CDINIT2 effect. |
 | `0x43dd` | name_entry_character_palette | high | investigation | INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer. |
 | `0x45b9` | magic_action_names | high | investigation | MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry. |
 | `0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
@@ -3718,7 +3724,6 @@
 | `0x3301` | — | low | inference | Config/settings global (INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 6 scripts; compared against [1, 2]. |
 | `0x3303` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 8 scripts; compared against [1]. |
 | `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |
-| `0x204f4` | — | low | inference | Map/field display state (FIELD.BIN writer; used in DRAWCHP draw call u00422460 and `div 0x204f4/3`). A numeric display parameter, NOT a story flag. Branch-read in 2 scenes. |
 | `0x6249e` | — | low | inference | Graphics-subsystem state in the 0x624xx gfx-object range (set via `mov 0x6249e,<n>` alongside `mov 0x62450,<slot>`). Likely a draw/slot parameter, NOT a story flag. Branch-read in 78 scenes. |
 | `0xab8e7` | class_change_selected_level | high | investigation | CALCCC clears this accumulator before invoking the class-change rule scripts. Each eligible CCINIT rule replaces it only when its threshold is higher than the current selection; nonzero then signals CALCCC and ADDEXP to apply and report the chosen promotion. |
 | `0xab8e8` | class_change_deployment_cost_delta | high | investigation | Shared class-change output initialized by CALCCC and incremented by the selected CCINIT rule. CALCCC adds it to unit_deployment_cost_adjustments and ADDEXP reports the signed cost change. |
@@ -5077,14 +5082,10 @@
 | `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
 | `0xee035` | — | med | auto-shape | record-table[stride 3] |
 | `0xeefd5` | — | med | auto-shape | record-table[stride 3] |
-| `0x1519f8` | — | med | auto-shape | current-entity-index? |
-| `0x151a5d` | — | med | auto-shape | record-table[stride 3] |
-| `0x151b89` | — | med | auto-shape | record-table[stride 3] |
 | `0x151de1` | — | med | auto-shape | record-table[stride 3] |
 | `0x151f0d` | — | med | auto-shape | record-table[stride 3] |
 | `0x152101` | — | med | auto-shape | record-table[stride 3] |
 | `0x15222d` | — | med | auto-shape | record-table[stride 3] |
-| `0x152486` | — | med | auto-shape | record-table[stride 3] |
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |

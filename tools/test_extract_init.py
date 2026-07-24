@@ -1656,6 +1656,87 @@ def test_training_actions() -> None:
     )
 
 
+def test_card_generation_lists() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["CDINIT.BIN"])
+    check(
+        extract_init.detect_mode(script) == "numeric",
+        "CDINIT remains compatible with numeric-mode auto-detection",
+    )
+    records, meta = extract_init.extract_card_generation_lists(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        list(by_id) == [1, 11, 31, 41, 55, 61, 71, 94, 160]
+        and [record["entry_count"] for record in records]
+        == [11, 36, 38, 51, 26, 52, 64, 30, 75],
+        "CDINIT exposes all nine selector branches and their candidate counts",
+    )
+    check(
+        meta["entry_count"] == 383
+        and len(meta["distinct_card_ids"]) == 81
+        and meta["resolved_card_reference_count"] == 383
+        and meta["classified_instruction_count"] == 1565,
+        "CDINIT classifies every instruction and resolves every card reference",
+    )
+    first = by_id[1]["entries"][0]
+    check(
+        first["slot"] == 1
+        and first["card_id"] == 1
+        and first["card_name"] == "癒しのカード・小"
+        and first["base_weight"] == 25
+        and first["growth_interval_turns"] == 5
+        and first["growth_weight"] == 1
+        and first["source_addresses"]
+        == {
+            "card_id": "0x1525b3",
+            "base_weight": "0x152489",
+            "growth_interval_turns": "0x15248a",
+            "growth_weight": "0x15248b",
+        },
+        "CDINIT retains the parallel card-id and weight-table provenance",
+    )
+    gated = next(
+        entry
+        for entry in by_id[11]["entries"]
+        if entry["card_id"] == 14
+    )
+    check(
+        gated["card_name"] == "使い魔のカード"
+        and gated["required_story_flag_ids"] == [901]
+        and gated["forbidden_story_flag_ids"] == [861],
+        "CDINIT entries join CDINIT2 names and FIELD story-flag gates",
+    )
+    ignored_gate = next(
+        entry
+        for entry in by_id[41]["entries"]
+        if entry["card_id"] == 18
+    )
+    check(
+        meta["ignored_required_story_flag_definition_count"] == 18
+        and meta["ignored_required_story_flag_entry_count"] == 54
+        and ignored_gate["required_story_flag_ids"] == [901, 863]
+        and ignored_gate["ignored_required_story_flag_ids"] == [51],
+        "CDINIT distinguishes FIELD's two live required flags from column three",
+    )
+    check(
+        meta["used_selector_ids"] == [1, 11, 31, 41, 61, 71, 160]
+        and meta["unreferenced_selector_ids"] == [55, 94]
+        and meta["stage_definition_reference_count"] == 50
+        and meta["stage_object_reference_count"] == 246
+        and by_id[1]["stage_object_references"]
+        == [{"stage_id": 1, "object_slots": [8]}],
+        "CDINIT joins every used list back to STINIT type-28 stage objects",
+    )
+    check(
+        meta["runtime_scan_capacity"] == 100
+        and meta["cleared_entry_prefix"] == 50
+        and by_id[160]["entry_count"] == 75
+        and meta["fallback_comment"]
+        == "カード発生リストの設定が不足しています",
+        "CDINIT preserves its 100-slot scan, 50-slot clear, and fallback warning",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -1873,6 +1954,7 @@ if __name__ == "__main__":
     test_terrain_definitions()
     test_h_scene_gallery()
     test_training_actions()
+    test_card_generation_lists()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

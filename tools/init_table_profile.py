@@ -426,6 +426,49 @@ def profile_training_actions(data: dict) -> dict:
     }
 
 
+def profile_card_generation_lists(data: dict) -> dict:
+    """Summarize CDINIT's weighted, selector-dispatched card lists."""
+    if data.get("schema") != "card-generation-lists":
+        return {}
+    entries = [
+        entry
+        for record in data.get("records", [])
+        for entry in record.get("entries", [])
+    ]
+    return {
+        "list_count": len(data.get("records", [])),
+        "entry_count": data.get("entry_count", 0),
+        "distinct_card_count": len(data.get("distinct_card_ids", [])),
+        "resolved_card_reference_count": data.get(
+            "resolved_card_reference_count", 0
+        ),
+        "used_selector_count": len(data.get("used_selector_ids", [])),
+        "unreferenced_selector_ids": data.get(
+            "unreferenced_selector_ids", []
+        ),
+        "stage_definition_reference_count": data.get(
+            "stage_definition_reference_count", 0
+        ),
+        "stage_object_reference_count": data.get(
+            "stage_object_reference_count", 0
+        ),
+        "story_flag_gated_entry_count": sum(
+            bool(entry.get("required_story_flag_ids"))
+            or bool(entry.get("forbidden_story_flag_ids"))
+            for entry in entries
+        ),
+        "ignored_required_story_flag_entry_count": data.get(
+            "ignored_required_story_flag_entry_count", 0
+        ),
+        "runtime_scan_capacity": data.get("runtime_scan_capacity", 0),
+        "cleared_entry_prefix": data.get("cleared_entry_prefix", 0),
+        "list_entry_counts": {
+            str(record["id"]): record.get("entry_count", 0)
+            for record in data.get("records", [])
+        },
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -553,7 +596,29 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
         f"- records: {data['record_count']}",
         f"- populated fields: {len(rows)}",
     ]
-    if training_profile := profile_training_actions(data):
+    if card_profile := profile_card_generation_lists(data):
+        lines.extend([
+            f"- card-generation lists: {card_profile['list_count']}",
+            f"- weighted entries: {card_profile['entry_count']} across "
+            f"{card_profile['distinct_card_count']} distinct cards "
+            f"({card_profile['resolved_card_reference_count']} CDINIT2 "
+            f"references resolved)",
+            f"- selector usage: {card_profile['used_selector_count']} used; "
+            f"unreferenced {card_profile['unreferenced_selector_ids']}",
+            f"- STINIT joins: "
+            f"{card_profile['stage_object_reference_count']} type-28 objects "
+            f"across {card_profile['stage_definition_reference_count']} "
+            f"stage definitions",
+            f"- story-flag-gated entries: "
+            f"{card_profile['story_flag_gated_entry_count']} effective; "
+            f"{card_profile['ignored_required_story_flag_entry_count']} "
+            f"carry an engine-dead third required flag",
+            f"- runtime scan/clear prefix: "
+            f"{card_profile['runtime_scan_capacity']}/"
+            f"{card_profile['cleared_entry_prefix']} slots",
+            f"- entries by selector: {card_profile['list_entry_counts']}",
+        ])
+    elif training_profile := profile_training_actions(data):
         lines.extend([
             f"- training actions: {training_profile['action_count']}",
             f"- display text lines: "
@@ -751,6 +816,7 @@ def main() -> int:
         "terrain_definition_profile": profile_terrain_definitions(data),
         "h_scene_gallery_profile": profile_h_scene_gallery(data),
         "training_action_profile": profile_training_actions(data),
+        "card_generation_profile": profile_card_generation_lists(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

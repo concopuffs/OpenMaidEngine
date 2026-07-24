@@ -86,6 +86,14 @@ def test_load_and_lint():
           and entries[0x6722]["name"] == "familiar_alignment"
           and entries[0x6727]["name"] == "training_action_execution_counts",
           "TRINIT/TRAIN action state is curated")
+    check(entries[0x152485]["name"] == "current_card_generation_list_id"
+          and entries[0x152486]["columns"]["2"] == "growth_weight"
+          and entries[0x1525b2]["name"] == "card_generation_card_ids"
+          and entries[0x1519f8]["name"] == "current_card_id"
+          and entries[0x151a5d]["columns"]["2"]
+          == "engine_dead_required_flag_3"
+          and entries[0x204f4]["name"] == "current_stage_turn",
+          "CDINIT/FIELD card-generation state is curated")
     check(entries[0x15a095]["name"] == "information_tab_index"
           and entries[0x15a096]["name"] == "information_message_handled"
           and entries[0x15a097]["name"]

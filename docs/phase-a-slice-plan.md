@@ -3076,5 +3076,37 @@ Regressions protect the complete write accounting, all text/gate/effect populati
 signed thresholds and stat rows, every ITINIT/SKINIT join, all 75 SCINIT joins, and the observed
 one/three/four/six-execution limit distribution.
 
-**Next:** audit CDINIT's card-generation registry and its STINIT/FIELD consumers; it is the clearest
-remaining INIT table already joined to a decoded stage-object payload.
+## Data-semantics sidebar: CDINIT card-generation lists (2026-07-23)
+
+CDINIT is not a 1,149-row numeric table. It is a nine-way dispatch on
+`current_card_generation_list_id` (`0x152485`) that repopulates two parallel runtime buffers:
+100 card-id slots at `0x1525b2` and 100 three-column weight rows at `0x152486`. The dedicated
+extractor classifies all 1,565 instructions exactly: a three-instruction clear prelude, nine
+selector tests and branches, 383 four-write candidate entries, nine terminal jumps, the missing-list
+comment/marker, and `exit`. The selector ids are 1, 11, 31, 41, 55, 61, 71, 94, and 160, containing
+11, 36, 38, 51, 26, 52, 64, 30, and 75 entries respectively.
+
+FIELD supplies the selector from the active STINIT type-28 card object's primary payload. Seven
+selectors are referenced by 246 such objects across 50 stage definitions; selectors 55 and 94 are
+authored but unreferenced by the shipped STINIT corpus. All 383 candidate references resolve to the
+81 CDINIT2 card definitions, including their display names and result text.
+
+The three per-entry values are `base_weight`, `growth_interval_turns`, and `growth_weight`. For every
+card that passes its CDINIT2 story-flag gates, FIELD computes
+`base_weight + floor(current_stage_turn / growth_interval_turns) * growth_weight`; a zero interval
+would select the fixed base path, although all shipped entries use a nonzero interval. It then chooses
+one card by cumulative weighted random selection. FIELD tests only required-flag columns zero and one:
+CDINIT2 authors a third required flag on eighteen cards, producing 54 occurrences across the generation
+lists, but that column is engine-dead in the shipped eligibility loop and remains separately labeled.
+
+Two runtime geometry facts are intentionally not normalized away. FIELD scans 100 candidate slots,
+while CDINIT's prelude clears only the first 50 card ids and first 50 weight rows. Selector 160 then
+authors 75 slots. The extracted schema records the scan capacity, clear prefix, and complete authored
+extent so a reimplementation can reproduce or deliberately resolve that native stale-tail risk.
+
+Regressions protect every selector and entry count, exact instruction accounting, CDINIT2 names and
+effective/ignored flag joins, STINIT object joins, raw parallel addresses, the 100/50 scan-clear
+asymmetry, and the original missing-list warning.
+
+**Next:** audit CDINIT2's full 81-card effect schema. CDINIT has now named its selection-facing
+surface, but FIELD's post-selection effect arrays remain the clearest unresolved INIT structure.

@@ -267,6 +267,59 @@ def main() -> int:
     assert "- geometry: 8 pages × 15 slots" in rendered_h_gallery
     assert "- populated scenes: 118/120" in rendered_h_gallery
 
+    card_fixture = {
+        "table": "CARDS",
+        "mode": "numeric",
+        "schema": "card-generation-lists",
+        "record_count": 2,
+        "entry_count": 3,
+        "distinct_card_ids": [1, 14],
+        "resolved_card_reference_count": 3,
+        "used_selector_ids": [1],
+        "unreferenced_selector_ids": [55],
+        "stage_definition_reference_count": 1,
+        "stage_object_reference_count": 2,
+        "runtime_scan_capacity": 100,
+        "cleared_entry_prefix": 50,
+        "records": [
+            {
+                "id": 1,
+                "entry_count": 2,
+                "entries": [
+                    {
+                        "card_id": 1,
+                        "required_story_flag_ids": [],
+                        "forbidden_story_flag_ids": [],
+                    },
+                    {
+                        "card_id": 14,
+                        "required_story_flag_ids": [901],
+                        "forbidden_story_flag_ids": [861],
+                    },
+                ],
+            },
+            {
+                "id": 55,
+                "entry_count": 1,
+                "entries": [
+                    {
+                        "card_id": 1,
+                        "required_story_flag_ids": [],
+                        "forbidden_story_flag_ids": [],
+                    },
+                ],
+            },
+        ],
+    }
+    card_summary = profile.profile_card_generation_lists(card_fixture)
+    assert card_summary["list_count"] == 2
+    assert card_summary["entry_count"] == 3
+    assert card_summary["story_flag_gated_entry_count"] == 1
+    assert card_summary["list_entry_counts"] == {"1": 2, "55": 1}
+    rendered_cards = profile.render_markdown(card_fixture, [], 40)
+    assert "- card-generation lists: 2" in rendered_cards
+    assert "- runtime scan/clear prefix: 100/50 slots" in rendered_cards
+
     training_fixture = {
         "table": "TRAINING",
         "mode": "name",

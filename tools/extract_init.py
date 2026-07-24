@@ -33,6 +33,11 @@ TRINIT is a special name-mode registry: 21 training/sexual-magic actions each
 own six display-text slots and a contiguous block of eligibility, cost, effect,
 award, and ten-slot event arrays consumed by TRAIN and restored by GAMESTART.
 
+CDINIT is a special numeric-mode registry: nine selector-dispatched card
+generation lists populate a parallel card-id array and three-column weight
+schedule. FIELD filters the joined CDINIT2 definitions by story flags and uses
+the current stage turn to grow each candidate's weighted-selection share.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -705,6 +710,16 @@ TRAINING_ACTION_ARRAYS = {
     "awarded_item_id": (0x156000, 1),
     "event_story_flag_ids": (0x156015, 10),
 }
+
+CARD_GENERATION_SELECTOR = 0x152485
+CARD_GENERATION_WEIGHT_BASE = 0x152486
+CARD_GENERATION_WEIGHT_STRIDE = 3
+CARD_GENERATION_CARD_ID_BASE = 0x1525B2
+CARD_GENERATION_SCAN_CAPACITY = 100
+CARD_GENERATION_CLEAR_COUNT = 50
+CARD_REQUIRED_STORY_FLAG_BASE = 0x151A5D
+CARD_FORBIDDEN_STORY_FLAG_BASE = 0x151B89
+CARD_STORY_FLAG_STRIDE = 3
 
 
 def resolve(name: str) -> Path:
@@ -4223,6 +4238,417 @@ def extract_training_actions(scr):
     }
 
 
+def extract_card_generation_lists(scr):
+    """Extract CDINIT's selector-dispatched weighted card candidate lists."""
+    instructions = scr.instructions
+    classified_offsets = set()
+    cursor = 0
+
+    expected_prelude = (
+        (
+            "mul",
+            [
+                (T_LOCAL_INT, 0),
+                (T_IMM, CARD_GENERATION_CLEAR_COUNT),
+                (T_IMM, CARD_GENERATION_WEIGHT_STRIDE),
+            ],
+        ),
+        (
+            "copy-to-global",
+            [
+                (T_GLOBAL_INT, CARD_GENERATION_WEIGHT_BASE),
+                (T_LOCAL_INT, 0),
+            ],
+        ),
+        (
+            "copy-to-global",
+            [
+                (T_GLOBAL_INT, CARD_GENERATION_CARD_ID_BASE),
+                (T_IMM, CARD_GENERATION_CLEAR_COUNT),
+            ],
+        ),
+    )
+    for expected_label, expected_args in expected_prelude:
+        if cursor >= len(instructions):
+            raise ValueError(f"{scr.path.name}: truncated CDINIT prelude")
+        ins = instructions[cursor]
+        label = sys4load.display_label(ins.opcode)
+        if label != expected_label or ins.args != expected_args:
+            raise ValueError(
+                f"{scr.path.name}: unexpected prelude instruction "
+                f"at 0x{ins.offset:x}: {label} {ins.args}"
+            )
+        classified_offsets.add(ins.offset)
+        cursor += 1
+
+    list_cells: dict[int, dict[int, dict[str, int]]] = {}
+    branch_offsets: dict[int, int] = {}
+    while cursor < len(instructions):
+        ins = instructions[cursor]
+        if sys4load.display_label(ins.opcode) != "eq":
+            break
+        if (
+            len(ins.args) != 3
+            or ins.args[0] != (T_LOCAL_INT, 0)
+            or ins.args[1] != (T_GLOBAL_INT, CARD_GENERATION_SELECTOR)
+            or ins.args[2][0] != T_IMM
+        ):
+            raise ValueError(
+                f"{scr.path.name}: malformed selector test at 0x{ins.offset:x}"
+            )
+        selector = ins.args[2][1]
+        if selector in list_cells:
+            raise ValueError(
+                f"{scr.path.name}: duplicate selector {selector}"
+            )
+        list_cells[selector] = {}
+        branch_offsets[selector] = ins.offset
+        classified_offsets.add(ins.offset)
+        cursor += 1
+
+        if cursor >= len(instructions):
+            raise ValueError(
+                f"{scr.path.name}: selector {selector} lacks a branch"
+            )
+        branch = instructions[cursor]
+        if (
+            sys4load.display_label(branch.opcode) != "jcc"
+            or branch.args[:2]
+            != [(T_LOCAL_INT, 0), (T_IMM, 0xFFFFFFFF)]
+        ):
+            raise ValueError(
+                f"{scr.path.name}: malformed selector branch "
+                f"at 0x{branch.offset:x}"
+            )
+        classified_offsets.add(branch.offset)
+        cursor += 1
+
+        while cursor < len(instructions):
+            write_ins = instructions[cursor]
+            if sys4load.display_label(write_ins.opcode) != "mov":
+                break
+            write = _static_global_write(write_ins)
+            if write is None or not isinstance(write[1], int):
+                raise ValueError(
+                    f"{scr.path.name}: non-static list write "
+                    f"at 0x{write_ins.offset:x}"
+                )
+            destination, value = write
+            if (
+                CARD_GENERATION_CARD_ID_BASE
+                < destination
+                < CARD_GENERATION_CARD_ID_BASE
+                + CARD_GENERATION_SCAN_CAPACITY
+            ):
+                slot = destination - CARD_GENERATION_CARD_ID_BASE
+                field_name = "card_id"
+            elif (
+                CARD_GENERATION_WEIGHT_BASE
+                <= destination
+                < CARD_GENERATION_WEIGHT_BASE
+                + CARD_GENERATION_SCAN_CAPACITY
+                * CARD_GENERATION_WEIGHT_STRIDE
+            ):
+                index = destination - CARD_GENERATION_WEIGHT_BASE
+                slot, column = divmod(
+                    index, CARD_GENERATION_WEIGHT_STRIDE
+                )
+                field_name = (
+                    "base_weight",
+                    "growth_interval_turns",
+                    "growth_weight",
+                )[column]
+            else:
+                raise ValueError(
+                    f"{scr.path.name}: unclassified list write "
+                    f"0x{destination:x} at 0x{write_ins.offset:x}"
+                )
+            if slot == 0:
+                raise ValueError(
+                    f"{scr.path.name}: selector {selector} writes reserved "
+                    f"slot zero at 0x{write_ins.offset:x}"
+                )
+            entry = list_cells[selector].setdefault(slot, {})
+            if field_name in entry:
+                raise ValueError(
+                    f"{scr.path.name}: selector {selector} slot {slot} "
+                    f"overwrites {field_name}"
+                )
+            entry[field_name] = value
+            classified_offsets.add(write_ins.offset)
+            cursor += 1
+
+        if cursor >= len(instructions):
+            raise ValueError(
+                f"{scr.path.name}: selector {selector} lacks terminal jump"
+            )
+        terminal = instructions[cursor]
+        if sys4load.display_label(terminal.opcode) != "jmp":
+            raise ValueError(
+                f"{scr.path.name}: selector {selector} lacks terminal jump "
+                f"at 0x{terminal.offset:x}"
+            )
+        classified_offsets.add(terminal.offset)
+        cursor += 1
+
+    if not list_cells:
+        raise ValueError(f"{scr.path.name}: no card-generation selectors")
+
+    fallback_comment = ""
+    while cursor < len(instructions):
+        ins = instructions[cursor]
+        label = sys4load.display_label(ins.opcode)
+        if label == "comment":
+            fallback_comment = scr.strings[ins.args[0][1]][0]
+        elif label not in ("instruction-marker-noop", "exit"):
+            raise ValueError(
+                f"{scr.path.name}: unclassified trailing instruction "
+                f"{label} at 0x{ins.offset:x}"
+            )
+        classified_offsets.add(ins.offset)
+        cursor += 1
+
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+
+    required_fields = {
+        "card_id",
+        "base_weight",
+        "growth_interval_turns",
+        "growth_weight",
+    }
+    for selector, cells in list_cells.items():
+        expected_slots = list(range(1, len(cells) + 1))
+        if sorted(cells) != expected_slots:
+            raise ValueError(
+                f"{scr.path.name}: selector {selector} has non-contiguous "
+                f"slots {sorted(cells)}"
+            )
+        for slot, entry in cells.items():
+            if set(entry) != required_fields:
+                raise ValueError(
+                    f"{scr.path.name}: selector {selector} slot {slot} "
+                    f"has fields {sorted(entry)}, expected "
+                    f"{sorted(required_fields)}"
+                )
+
+    card_scr = sys4load.load(resolve("CDINIT2"))
+    card_records, _ = extract_name(card_scr)
+    card_definitions = {
+        record["id"]: {
+            "name": record.get("name") or "",
+            "description": record.get("desc") or "",
+            "required_story_flag_ids": [],
+            "forbidden_story_flag_ids": [],
+            "ignored_required_story_flag_ids": [],
+        }
+        for record in card_records
+    }
+    flag_cells = {
+        "required_story_flag_ids": {},
+        "forbidden_story_flag_ids": {},
+    }
+    for ins in card_scr.instructions:
+        write = _static_global_write(ins)
+        if write is None or not isinstance(write[1], int):
+            continue
+        destination, value = write
+        for field_name, base in (
+            ("required_story_flag_ids", CARD_REQUIRED_STORY_FLAG_BASE),
+            ("forbidden_story_flag_ids", CARD_FORBIDDEN_STORY_FLAG_BASE),
+        ):
+            index = destination - base
+            if not (
+                0
+                <= index
+                < CARD_GENERATION_SCAN_CAPACITY * CARD_STORY_FLAG_STRIDE
+            ):
+                continue
+            card_id, column = divmod(index, CARD_STORY_FLAG_STRIDE)
+            flag_cells[field_name][(card_id, column)] = value
+            break
+    for card_id, definition in card_definitions.items():
+        for field_name in flag_cells:
+            definition[field_name] = [
+                flag_cells[field_name].get((card_id, column), 0)
+                for column in range(2)
+                if flag_cells[field_name].get((card_id, column), 0)
+            ]
+        ignored_required = flag_cells[
+            "required_story_flag_ids"
+        ].get((card_id, 2), 0)
+        if ignored_required:
+            definition["ignored_required_story_flag_ids"] = [
+                ignored_required
+            ]
+
+    stages, _ = extract_mixed(sys4load.load(resolve("STINIT")))
+    attach_stage_object_placements(stages)
+    references_by_selector: dict[int, dict[int, list[int]]] = (
+        collections.defaultdict(lambda: collections.defaultdict(list))
+    )
+    for stage in stages:
+        for obj in stage.get("object_placements", []):
+            selector = obj.get("card_generation_list_id")
+            if selector is None:
+                continue
+            references_by_selector[selector][stage["id"]].append(
+                obj["slot"]
+            )
+
+    records = []
+    all_card_ids = set()
+    resolved_card_reference_count = 0
+    for selector in sorted(list_cells):
+        entries = []
+        for slot, raw_entry in sorted(list_cells[selector].items()):
+            card_id = raw_entry["card_id"]
+            all_card_ids.add(card_id)
+            definition = card_definitions.get(card_id, {})
+            if definition.get("name"):
+                resolved_card_reference_count += 1
+            entries.append({
+                "slot": slot,
+                "card_id": card_id,
+                "card_name": definition.get("name", ""),
+                "card_description": definition.get("description", ""),
+                "base_weight": raw_entry["base_weight"],
+                "growth_interval_turns": raw_entry[
+                    "growth_interval_turns"
+                ],
+                "growth_weight": raw_entry["growth_weight"],
+                "required_story_flag_ids": definition.get(
+                    "required_story_flag_ids", []
+                ),
+                "forbidden_story_flag_ids": definition.get(
+                    "forbidden_story_flag_ids", []
+                ),
+                "ignored_required_story_flag_ids": definition.get(
+                    "ignored_required_story_flag_ids", []
+                ),
+                "source_addresses": {
+                    "card_id": (
+                        f"0x{CARD_GENERATION_CARD_ID_BASE + slot:x}"
+                    ),
+                    "base_weight": (
+                        f"0x{CARD_GENERATION_WEIGHT_BASE + slot * 3:x}"
+                    ),
+                    "growth_interval_turns": (
+                        f"0x{CARD_GENERATION_WEIGHT_BASE + slot * 3 + 1:x}"
+                    ),
+                    "growth_weight": (
+                        f"0x{CARD_GENERATION_WEIGHT_BASE + slot * 3 + 2:x}"
+                    ),
+                },
+            })
+        stage_references = [
+            {
+                "stage_id": stage_id,
+                "object_slots": sorted(object_slots),
+            }
+            for stage_id, object_slots
+            in sorted(references_by_selector.get(selector, {}).items())
+        ]
+        records.append({
+            "id": selector,
+            "name": f"card_generation_list_{selector}",
+            "branch_offset": f"0x{branch_offsets[selector]:x}",
+            "entry_count": len(entries),
+            "stage_object_references": stage_references,
+            "entries": entries,
+            "fields": {},
+        })
+
+    used_selectors = sorted(
+        selector
+        for selector in list_cells
+        if selector in references_by_selector
+    )
+    entry_count = sum(len(cells) for cells in list_cells.values())
+    return records, {
+        "schema": "card-generation-lists",
+        "selector_global": f"0x{CARD_GENERATION_SELECTOR:x}",
+        "card_id_array_base": f"0x{CARD_GENERATION_CARD_ID_BASE:x}",
+        "weight_schedule_table_base": (
+            f"0x{CARD_GENERATION_WEIGHT_BASE:x}"
+        ),
+        "weight_schedule_stride": CARD_GENERATION_WEIGHT_STRIDE,
+        "runtime_scan_capacity": CARD_GENERATION_SCAN_CAPACITY,
+        "cleared_entry_prefix": CARD_GENERATION_CLEAR_COUNT,
+        "selector_ids": sorted(list_cells),
+        "used_selector_ids": used_selectors,
+        "unreferenced_selector_ids": sorted(
+            set(list_cells) - set(used_selectors)
+        ),
+        "entry_count": entry_count,
+        "distinct_card_ids": sorted(all_card_ids),
+        "resolved_card_reference_count": resolved_card_reference_count,
+        "ignored_required_story_flag_definition_count": sum(
+            bool(definition["ignored_required_story_flag_ids"])
+            for definition in card_definitions.values()
+        ),
+        "ignored_required_story_flag_entry_count": sum(
+            bool(entry["ignored_required_story_flag_ids"])
+            for record in records
+            for entry in record["entries"]
+        ),
+        "stage_definition_reference_count": sum(
+            len(stage_map)
+            for stage_map in references_by_selector.values()
+        ),
+        "stage_object_reference_count": sum(
+            len(object_slots)
+            for stage_map in references_by_selector.values()
+            for object_slots in stage_map.values()
+        ),
+        "fallback_comment": fallback_comment,
+        "classified_instruction_count": len(classified_offsets),
+        "semantic_array_names": {
+            f"0x{CARD_GENERATION_SELECTOR:x}": (
+                "current_card_generation_list_id"
+            ),
+            f"0x{CARD_GENERATION_CARD_ID_BASE:x}": (
+                "card_generation_card_ids"
+            ),
+            f"0x{CARD_GENERATION_WEIGHT_BASE:x}": (
+                "card_generation_weight_schedules"
+            ),
+        },
+        "weight_formula": (
+            "base_weight + floor(current_stage_turn / "
+            "growth_interval_turns) * growth_weight; when "
+            "growth_interval_turns is zero, use base_weight"
+        ),
+        "consumer_contract": {
+            "FIELD.BIN": (
+                "load the STINIT type-28 object's card-generation list, "
+                "scan 100 candidate slots, discard empty card ids and "
+                "CDINIT2 definitions whose required/forbidden story flags "
+                "fail, compute the current-turn-adjusted weight, and select "
+                "one surviving card by cumulative weighted random choice"
+            ),
+            "CDINIT2.BIN": (
+                "provides card names, result text, effects, graphics, and "
+                "the required/forbidden story-flag rows used by FIELD; "
+                "FIELD tests only columns zero and one, leaving the eighteen "
+                "authored required-flag values in column two engine-dead"
+            ),
+            "STINIT.BIN": (
+                "type-28 stage objects supply the selector id consumed by "
+                "CDINIT"
+            ),
+        },
+    }
+
+
 def _map_stage_definitions() -> list[dict]:
     """Read the STINIT2 records that own all four terrain-atlas bounds."""
     stage_scr = sys4load.load(resolve("STINIT2"))
@@ -4843,6 +5269,11 @@ def write_data_index(data_dir: Path) -> None:
         "Item and skill ids join to ITINIT/SKINIT; all 75 event slots join through",
         "SCINIT, and GAMESTART's restored-story-flag contract remains explicit.",
         "",
+        "CDINIT's dedicated card-generation schema exposes nine sparse selector lists,",
+        "joins their 383 weighted candidate slots to CDINIT2 card names and story-flag",
+        "gates, and links the seven used selectors back to STINIT type-28 stage objects.",
+        "FIELD's turn-scaled weight formula and 100-slot selection scan remain explicit.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -4909,6 +5340,10 @@ def main() -> int:
         # TRINIT's six-column sparse string matrix is not the generic
         # one-name-per-record layout expected by name-mode auto-detection.
         mode = "name"
+    elif name == "CDINIT":
+        # CDINIT's selector branches look like one fragmented numeric table
+        # to the generic parallel-array detector.
+        mode = "numeric"
     else:
         mode = detect_mode(scr)
     extractor = {
@@ -4944,6 +5379,8 @@ def main() -> int:
         extractor = extract_terrain_definitions
     elif mode == "name" and name == "TRINIT":
         extractor = extract_training_actions
+    elif mode == "numeric" and name == "CDINIT":
+        extractor = extract_card_generation_lists
     elif mode == "numeric" and name == "SPINIT":
         extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":
