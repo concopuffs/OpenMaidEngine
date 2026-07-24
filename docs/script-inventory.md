@@ -50,7 +50,7 @@ Large, table-like scripts — prime candidates for data extraction:
   `RTINIT` (67 KB — movement/battle routine-step banks), `CCINIT` (41 KB — class-change rule program),
   `SKINIT` (37 KB — skills), `CDINIT` (31 KB — weighted card-generation lists), `CDINIT2`
   (card definitions and effects), `BTANINIT` (105 KB — battle-effect definitions), `BTANINIT2`
-  (six-slot battle-animation timelines)
+  (six-slot battle-animation timelines), `STINIT2` (74 stage definitions plus six-line descriptions)
 - Smaller: `AFINIT`, `ALINIT`, `CIINIT`, `CNINIT`, `CTINIT`, `CVINIT`, `ILINIT`,
   `LAINIT`, `MAINIT`, `OBINIT` (46 object definitions), `SPINIT`, `TRINIT`, `VIINIT`
 
@@ -172,6 +172,15 @@ definitions resolve 186 movie visuals and sixteen sprite sheets, 199 optional WA
 anchor flags, surface geometry and offsets, sprite-atlas timing, sound delay, and hit-pulse timing.
 All populated visual/audio resources resolve through SYS4INI; sixteen authored effects are
 unreferenced by BTANINIT2.
+
+STINIT2 is a sparse 1,000-row stage catalog with 74 shipped definitions, not the generic extractor's
+former 321 records. The other 247 apparent records were part of a `1000 × 6` description matrix;
+all 296 populated lines divide into three uncleared and three cleared slots. The numeric surface
+contains main-progression/EX flags, seven required and seven forbidden story gates, shared unlock
+groups, display numbers, map/minimap geometry, performance-scaled point and bronze/silver/gold coin
+rewards, and entry/clear/failure SCJUMP decisions. All 174 transitions resolve through SCINIT and
+all 74 loader ids resolve to STINIT.BIN. The populated `0xedc4d` column has no script reader and
+remains explicitly unresolved.
 
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.

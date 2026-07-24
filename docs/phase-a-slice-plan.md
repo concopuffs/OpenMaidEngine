@@ -3193,3 +3193,30 @@ unreferenced authored surfaces.
 **Next:** audit STINIT2's remaining generic 321-row stage-definition surface. MPINIT already proves
 its tile-bound columns; the next pass should join the rest of its stage metadata to FIELD and the
 stage-selection/initialization consumers.
+
+## Data-semantics sidebar: STINIT2 stage definitions (2026-07-23)
+
+STINIT2's former generic 321-record view was structurally wrong: 247 of those “records” were
+description strings. The dedicated schema classifies all 1,634 instructions into 74 sparse stage
+names, 296 strings in a reserved `1000 × 6` description matrix, 1,263 numeric writes, and one exit.
+SELSTAGE indexes the text matrix as three uncleared lines followed by three cleared lines.
+
+The 74 real rows divide into 66 mapped stages and eight event-only stages. The schema preserves
+numbered, `EVENT`, and `EX` presentation; 49 main-progression flags; the eight EX flags; four
+multi-stage unlock groups; and seven-column required/forbidden story-flag rows. FORT proves the
+availability checks and descending main-stage auto-selection, while FIELD proves unlock-group
+propagation.
+
+Map rows join the four already-proven tile bounds to doubled terrain-atlas coordinates and the
+minimap atlas Y origin. Clear rewards expose the performance-scaled base spendable-point award and
+the three item-quantity columns for bronze, silver, and gold coins. Every populated entry, clear,
+and failure transition resolves through SCINIT (174/174), and every stage-loader resource resolves
+to the shared `STINIT.BIN` selector (74/74).
+
+Regressions protect the corrected record geometry, complete instruction accounting, all six text
+slots, display kinds, story gates, unlock groups, map/minimap coordinates, rewards, SCJUMP joins,
+and loader joins. The 66 populated values at `0xedc4d` have no script consumer and remain explicit
+as unresolved provenance.
+
+**Next:** use live/native observation only to settle STINIT2's unconsumed `0xedc4d` column; the
+remaining script-visible stage-definition surface is closed.

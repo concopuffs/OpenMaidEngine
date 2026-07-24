@@ -414,6 +414,35 @@ def main() -> int:
     assert "- battle animations: 3/1000 rows" in rendered_animations
     assert "- full/auxiliary timelines: 2/1" in rendered_animations
 
+    stage_fixture = {
+        "table": "STAGES",
+        "mode": "name",
+        "schema": "stage-definitions",
+        "record_count": 5,
+        "reserved_record_count": 1000,
+        "description_line_count": 18,
+        "mapped_stage_count": 4,
+        "event_only_stage_count": 1,
+        "main_progression_stage_count": 3,
+        "extra_dungeon_stage_count": 1,
+        "story_flag_gated_stage_count": 5,
+        "scjump_reference_count": 12,
+        "resolved_scjump_reference_count": 12,
+        "resolved_loader_script_count": 5,
+        "clear_coin_reward_cell_count": 4,
+        "unresolved_parameter_population": 4,
+        "records": [{}, {}, {}, {}, {}],
+    }
+    stage_summary = profile.profile_stage_definitions(stage_fixture)
+    assert stage_summary["mapped_stage_count"] == 4
+    assert stage_summary["resolved_scjump_reference_count"] == 12
+    rendered_stages = profile.render_markdown(
+        stage_fixture, [], 40
+    )
+    assert "- stage definitions: 5/1000 rows" in rendered_stages
+    assert "- mapped/event-only stages: 4/1" in rendered_stages
+    assert "- SCJUMP joins: 12/12" in rendered_stages
+
     training_fixture = {
         "table": "TRAINING",
         "mode": "name",

@@ -578,6 +578,49 @@ def profile_battle_animations(data: dict) -> dict:
     }
 
 
+def profile_stage_definitions(data: dict) -> dict:
+    """Summarize STINIT2's stage catalog, text, gates, and flow joins."""
+    if data.get("schema") != "stage-definitions":
+        return {}
+    return {
+        "stage_count": data.get("record_count", 0),
+        "reserved_record_count": data.get(
+            "reserved_record_count", 0
+        ),
+        "description_line_count": data.get(
+            "description_line_count", 0
+        ),
+        "mapped_stage_count": data.get("mapped_stage_count", 0),
+        "event_only_stage_count": data.get(
+            "event_only_stage_count", 0
+        ),
+        "main_progression_stage_count": data.get(
+            "main_progression_stage_count", 0
+        ),
+        "extra_dungeon_stage_count": data.get(
+            "extra_dungeon_stage_count", 0
+        ),
+        "story_flag_gated_stage_count": data.get(
+            "story_flag_gated_stage_count", 0
+        ),
+        "scjump_reference_count": data.get(
+            "scjump_reference_count", 0
+        ),
+        "resolved_scjump_reference_count": data.get(
+            "resolved_scjump_reference_count", 0
+        ),
+        "resolved_loader_script_count": data.get(
+            "resolved_loader_script_count", 0
+        ),
+        "clear_coin_reward_cell_count": data.get(
+            "clear_coin_reward_cell_count", 0
+        ),
+        "unresolved_parameter_population": data.get(
+            "unresolved_parameter_population", 0
+        ),
+    }
+
+
 def profile_messages(data: dict) -> dict:
     """Summarize the joined player-facing message evidence."""
     records = data["records"]
@@ -751,6 +794,32 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             f"{animation_profile['weapon_class_animation_count']}",
             f"- unjoined authored rows: "
             f"{animation_profile['unjoined_authored_animation_ids']}",
+        ])
+    elif stage_profile := profile_stage_definitions(data):
+        lines.extend([
+            f"- stage definitions: {stage_profile['stage_count']}/"
+            f"{stage_profile['reserved_record_count']} rows",
+            f"- description lines: "
+            f"{stage_profile['description_line_count']} across six "
+            f"pre/post-clear slots",
+            f"- mapped/event-only stages: "
+            f"{stage_profile['mapped_stage_count']}/"
+            f"{stage_profile['event_only_stage_count']}",
+            f"- main-progression/EX stages: "
+            f"{stage_profile['main_progression_stage_count']}/"
+            f"{stage_profile['extra_dungeon_stage_count']}",
+            f"- story-flag-gated stages: "
+            f"{stage_profile['story_flag_gated_stage_count']}",
+            f"- SCJUMP joins: "
+            f"{stage_profile['resolved_scjump_reference_count']}/"
+            f"{stage_profile['scjump_reference_count']}",
+            f"- stage-loader joins: "
+            f"{stage_profile['resolved_loader_script_count']}/"
+            f"{stage_profile['stage_count']}",
+            f"- clear coin reward cells: "
+            f"{stage_profile['clear_coin_reward_cell_count']}",
+            f"- unresolved 0xedc4d cells: "
+            f"{stage_profile['unresolved_parameter_population']}",
         ])
     elif definition_profile := profile_card_definitions(data):
         lines.extend([
@@ -989,6 +1058,7 @@ def main() -> int:
         "training_action_profile": profile_training_actions(data),
         "card_generation_profile": profile_card_generation_lists(data),
         "card_definition_profile": profile_card_definitions(data),
+        "stage_definition_profile": profile_stage_definitions(data),
         "columns": sorted(rows, key=lambda row: (
             int(row["base"], 16), row["stride"] or 0, row["column"] or 0
         )),

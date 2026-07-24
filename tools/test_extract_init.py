@@ -1973,6 +1973,118 @@ def test_battle_animations() -> None:
     )
 
 
+def test_stage_definitions() -> None:
+    scripts = paths.scripts()
+    script = sys4load.load(scripts["STINIT2.BIN"])
+    check(
+        extract_init.detect_mode(script) == "name",
+        "STINIT2 remains compatible with name-mode auto-detection",
+    )
+    records, meta = extract_init.extract_stage_definitions(script)
+    by_id = {record["id"]: record for record in records}
+    check(
+        len(records) == 74
+        and meta["reserved_record_count"] == 1000
+        and meta["mapped_stage_count"] == 66
+        and meta["event_only_stage_count"] == 8,
+        "STINIT2 separates 74 stage rows into mapped and event-only records",
+    )
+    check(
+        meta["string_write_count"] == 370
+        and meta["description_line_count"] == 296
+        and meta["static_write_count"] == 1263
+        and meta["classified_instruction_count"] == 1634,
+        "STINIT2 classifies every name, description, numeric, and exit instruction",
+    )
+    check(
+        by_id[1]["descriptions"]["uncleared"]
+        == [
+            "庭園につながっている地下空洞。",
+            "浅い階層なので魔物も少ないようだ。",
+            "",
+        ]
+        and by_id[1]["descriptions"]["cleared"]
+        == [
+            "庭園につながっている地下空洞。",
+            "浅い階層なので魔物も少ないようだ。",
+            "",
+        ],
+        "STINIT2 preserves the six pre/post-clear description slots",
+    )
+    check(
+        by_id[1]["display_number"]
+        == {"kind": "numbered", "major": 0, "minor": 1}
+        and by_id[3]["display_number"]["kind"] == "event"
+        and by_id[160]["display_number"]["kind"] == "extra",
+        "STINIT2 distinguishes numbered, event-only, and EX display labels",
+    )
+    check(
+        by_id[3]["flow"]["entry_scjump_decision_id"] == 150
+        and by_id[3]["flow"]["entry_script_name"] == "SC0150.BIN"
+        and by_id[1]["flow"]["clear_script_name"] == "SC0010.BIN"
+        and by_id[1]["flow"]["failure_script_name"] == "SC0000.BIN"
+        and meta["resolved_scjump_reference_count"] == 174,
+        "STINIT2 resolves every entry, clear, and failure SCJUMP reference",
+    )
+    check(
+        by_id[1]["flow"]["stage_loader_script_name"] == "STINIT.BIN"
+        and meta["resolved_loader_script_count"] == 74,
+        "STINIT2 resolves every shared stage-loader reference",
+    )
+    check(
+        by_id[32]["availability"]["unlock_group_id"] == 32
+        and by_id[33]["availability"]["unlock_group_id"] == 32
+        and by_id[34]["availability"]["unlock_group_id"] == 32
+        and meta["main_progression_stage_count"] == 49
+        and meta["extra_dungeon_stage_count"] == 8,
+        "STINIT2 exposes shared unlock groups and progression/EX flags",
+    )
+    check(
+        by_id[3]["availability"]["required_story_flag_ids"]
+        == [151, 23, 1743, 1886]
+        and by_id[3]["availability"]["forbidden_story_flag_ids"]
+        == [21]
+        and meta["story_flag_gated_stage_count"] == 74,
+        "STINIT2 preserves all seven-column story eligibility rows",
+    )
+    check(
+        by_id[32]["map"]["tile_bounds"]
+        == {"min_x": 1, "max_x": 25, "min_y": 116, "max_y": 136}
+        and by_id[32]["map"]["grid_bounds"]
+        == {"min_x": 2, "max_x": 50, "min_y": 232, "max_y": 272}
+        and by_id[32]["map"]["minimap_atlas_origin_y"] == 66,
+        "STINIT2 joins tile, doubled-grid, and minimap atlas geometry",
+    )
+    check(
+        by_id[167]["clear_rewards"]["base_spendable_points"] == 60
+        and by_id[167]["clear_rewards"]["coins"]
+        == [
+            {
+                "item_id": 91,
+                "item_name": "ブロンズコイン",
+                "quantity": 3,
+            },
+            {
+                "item_id": 92,
+                "item_name": "シルバーコイン",
+                "quantity": 2,
+            },
+            {
+                "item_id": 93,
+                "item_name": "ゴールドコイン",
+                "quantity": 1,
+            },
+        ]
+        and meta["clear_coin_reward_cell_count"] == 64,
+        "STINIT2 resolves the spendable-point and three coin reward columns",
+    )
+    check(
+        meta["unresolved_parameter_population"] == 66
+        and by_id[167]["unresolved_parameter_0xedc4d"] == 8,
+        "STINIT2 preserves the one still-unresolved populated stage column",
+    )
+
+
 def test_condition_definitions() -> None:
     scripts = paths.scripts()
     script = sys4load.load(scripts["ILINIT.BIN"])
@@ -2194,6 +2306,7 @@ if __name__ == "__main__":
     test_card_definitions()
     test_battle_effect_definitions()
     test_battle_animations()
+    test_stage_definitions()
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()

@@ -113,6 +113,25 @@ def test_load_and_lint():
           and entries[0x155b7a]["name"] == "battle_effect_atlas_row_counts"
           and entries[0x155baa]["columns"]["2"] == "pulse_3",
           "BTANINIT/BTANINIT2 battle-animation state is curated")
+    check(entries[0x27bd]["name"] == "stage_display_names"
+          and entries[0x2ba5]["columns"]["5"] == "cleared_line_3"
+          and entries[0xe7e8d]["name"] == "stage_unlock_group_ids"
+          and entries[0xe8275]["name"] == "stage_main_progression_flags"
+          and entries[0xe865d]["columns"]["6"] == "forbidden_flag_7"
+          and entries[0xea1b5]["columns"]["6"] == "required_flag_7",
+          "STINIT2 stage text and availability state is curated")
+    check(entries[0xebd0d]["name"] == "stage_display_number_major"
+          and entries[0xec0f5]["name"] == "stage_display_number_minor"
+          and entries[0xed47d]["name"] == "stage_minimap_atlas_origin_y"
+          and entries[0xed865]["name"]
+          == "stage_clear_base_spendable_point_rewards",
+          "STINIT2 stage numbering, minimap, and point rewards are curated")
+    check(entries[0xee035]["columns"]
+          == {"0": "entry", "1": "clear", "2": "failure"}
+          and entries[0xeebed]["name"] == "stage_extra_dungeon_flags"
+          and entries[0xeefd5]["columns"]["2"] == "gold_coin_item_93"
+          and entries[0xefb8d]["name"] == "stage_loader_script_ids",
+          "STINIT2 flow, EX, coin, and loader columns are curated")
     check(entries[0x15a095]["name"] == "information_tab_index"
           and entries[0x15a096]["name"] == "information_message_handled"
           and entries[0x15a097]["name"]

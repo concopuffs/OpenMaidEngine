@@ -3188,6 +3188,97 @@ confidence = "high"
 depends_on = ["0xe6aa4", "0xe7311"]
 
 [[global]]
+address = "0x27bd"
+name = "stage_display_names"
+category = "string-table"
+type = "string[1000]"
+value_domain = "STINIT2 stage title indexed by sparse stage id; 74 populated shipped rows"
+usage = "FORT and SELSTAGE enumerate this sparse catalog and render the selected title, while FIELD copies the active title into its shared display buffer. STINIT2 reserves 1,000 ids even though the shipped rows end at 170."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4dfbc", "0x2ba5"]
+
+[[global]]
+address = "0x2ba5"
+name = "stage_description_lines"
+category = "string-table"
+type = "string[1000][6]"
+columns = { "0" = "uncleared_line_1", "1" = "uncleared_line_2", "2" = "uncleared_line_3", "3" = "cleared_line_1", "4" = "cleared_line_2", "5" = "cleared_line_3" }
+value_domain = "up to three player-facing lines before clear and three after clear; 296 populated shipped cells"
+usage = "SELSTAGE multiplies stage_clear_state by three and renders the corresponding three-column half of the selected STINIT2 row. The explicit 1,000-by-6 geometry prevents these strings from being mistaken for additional stage records."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x27bd", "0x7684"]
+
+[[global]]
+address = "0xe7e8d"
+name = "stage_unlock_group_ids"
+category = "data-table"
+type = "int[1000]"
+value_domain = "zero for no group; populated group ids are 32, 35, 71, and 82"
+usage = "FIELD propagates an unlocked current stage to every other stage whose nonzero group id matches. The shipped groups bind route variants 32..34, 35..36, 71..72, and 82..83."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4dfbc"]
+
+[[global]]
+address = "0xe8275"
+name = "stage_main_progression_flags"
+category = "data-table"
+type = "int[1000]"
+value_domain = "{0,1}; 49 populated main-progression rows"
+usage = "When returning after a clear, FORT scans uncleared stage ids in descending order and auto-selects the first available row marked one. Side missions and all eight EX dungeons leave the flag zero."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7684", "0xe865d", "0xea1b5"]
+
+[[global]]
+address = "0xe865d"
+name = "stage_forbidden_story_flag_ids"
+category = "data-table"
+type = "int[1000][7]"
+columns = { "0" = "forbidden_flag_1", "1" = "forbidden_flag_2", "2" = "forbidden_flag_3", "3" = "forbidden_flag_4", "4" = "forbidden_flag_5", "5" = "forbidden_flag_6", "6" = "forbidden_flag_7" }
+value_domain = "one-based story_event_flags ids; zero means unused"
+usage = "FORT and SELSTAGE reject a stage when any populated cell resolves to story flag value one. The scripts subtract one before indexing story_event_flags, establishing the stored one-based id convention."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3", "0xea1b5"]
+
+[[global]]
+address = "0xea1b5"
+name = "stage_required_story_flag_ids"
+category = "data-table"
+type = "int[1000][7]"
+columns = { "0" = "required_flag_1", "1" = "required_flag_2", "2" = "required_flag_3", "3" = "required_flag_4", "4" = "required_flag_5", "5" = "required_flag_6", "6" = "required_flag_7" }
+value_domain = "one-based story_event_flags ids; zero means unused"
+usage = "FORT and SELSTAGE require every populated cell to resolve to story flag value one. Every shipped stage carries at least one gate, including common progression flags in columns two and three."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x6d3", "0xe865d"]
+
+[[global]]
+address = "0xebd0d"
+name = "stage_display_number_major"
+category = "data-table"
+type = "int[1000]"
+value_domain = "-1=EX label, 0=no major component, 1..10=numbered chapter"
+usage = "FORT, SELSTAGE, AIM, STAGECLEAR, and management screens render this as the major half of the stage number. A negative value renders EX, while both number components zero identify an event-only row."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xec0f5"]
+
+[[global]]
+address = "0xec0f5"
+name = "stage_display_number_minor"
+category = "data-table"
+type = "int[1000]"
+value_domain = "0 for event-only rows; 1..8 for numbered/EX stages"
+usage = "Rendered after stage_display_number_major as the minor stage number. FORT treats a row with both components zero as a direct event and dispatches its entry SCJUMP decision without entering FIELD."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xebd0d", "0xee035"]
+
+[[global]]
 address = "0xccc93"
 name = "stage_terrain_atlas"
 category = "data-table"
@@ -3252,6 +3343,74 @@ usage = "STINIT2's inclusive bottom map bound indexed by stage id. The maximum s
 source = "investigation"
 confidence = "high"
 depends_on = ["0xeccad"]
+
+[[global]]
+address = "0xed47d"
+name = "stage_minimap_atlas_origin_y"
+category = "data-table"
+type = "int[1000]"
+value_domain = "minimap atlas Y origin; 59 populated shipped cells range from 10 to 726, zero uses the atlas origin"
+usage = "FIELD and SELSTAGE copy this to the minimap drawing origin. SELSTAGE subtracts it from stage_map_min_tile_y to crop the selected stage's vertically packed minimap strip and labels the following 150 atlas rows."
+source = "investigation"
+confidence = "high"
+depends_on = ["0xeccad", "0xed095"]
+
+[[global]]
+address = "0xed865"
+name = "stage_clear_base_spendable_point_rewards"
+category = "data-table"
+type = "int[1000]"
+value_domain = "12..60 shared spendable points across 66 mapped stages"
+usage = "STAGECLEAR multiplies this base award by the turn/party-performance percentage, divides by 100, adds any card bonus, and credits the capped shared_spendable_points balance."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x671b", "0x4dfbb"]
+
+[[global]]
+address = "0xee035"
+name = "stage_scjump_decision_ids"
+category = "data-table"
+type = "int[1000][3]"
+columns = { "0" = "entry", "1" = "clear", "2" = "failure" }
+value_domain = "SCINIT/SCJUMP decision id; zero means no transition"
+usage = "FORT dispatches column zero before entering a stage or for an event-only row. FIELD and a few scene return paths dispatch column one after clear and column two after failure or forced-retreat outcomes; all 174 populated references resolve through SCINIT."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62ccf", "0x4dfbc"]
+
+[[global]]
+address = "0xeebed"
+name = "stage_extra_dungeon_flags"
+category = "data-table"
+type = "int[1000]"
+value_domain = "{0,1}; one for stage ids 160..167"
+usage = "Marks the eight shipped EX dungeons. FORT, SELSTAGE, and management screens combine it with stage_clear_state when deciding whether to show and apply the stage's post-clear coin rewards."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x7684", "0xeefd5"]
+
+[[global]]
+address = "0xeefd5"
+name = "stage_clear_coin_quantities"
+category = "data-table"
+type = "int[1000][3]"
+columns = { "0" = "bronze_coin_item_91", "1" = "silver_coin_item_92", "2" = "gold_coin_item_93" }
+value_domain = "nonnegative ITINIT item quantities; 64 populated shipped cells"
+usage = "FORT and SELSTAGE render the three clear-reward quantities beside coin icons. Management screens grant the same values as item ids 91..93 after a cleared or EX-marked stage."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x8c877", "0xeebed"]
+
+[[global]]
+address = "0xefb8d"
+name = "stage_loader_script_ids"
+category = "data-table"
+type = "int[1000]"
+value_domain = "packed call-script resource id; all 74 shipped rows contain 12893=STINIT.BIN"
+usage = "FIELD indirectly calls the selected STINIT2 row before initializing the map. Every shipped stage points to the shared STINIT selector program, which then populates stage-specific objects, enemies, rules, textures, and audio."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4dfbc"]
 
 [[global]]
 address = "0xe7311"

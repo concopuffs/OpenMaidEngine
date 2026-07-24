@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5054 globals (403 curated, 4651 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5054 globals (417 curated, 4637 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -235,10 +235,22 @@
 | `0xe78e3` | stage_enemy_battle_routine_set_ids | high | investigation | Optional three-column battle-AI routine override per stage enemy. SETEN copies a populated row into the runtime unit or falls back to the unit definition, and BTRTN selects the difficulty_index column as its battle routine table row. Columns: 0=difficulty_0, 1=difficulty_1, 2=difficulty_2. |
 | `0xe793d` | stage_enemy_required_story_flags | high | investigation | Seven positive prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn unless the corresponding story_event_flags cell equals 1. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
 | `0xe7a0f` | stage_enemy_forbidden_story_flags | high | investigation | Five negative prerequisites per stage enemy. FIELD subtracts one from every populated id and suppresses the spawn when the corresponding story_event_flags cell equals 1. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5. |
+| `0xe7e8d` | stage_unlock_group_ids | high | investigation | FIELD propagates an unlocked current stage to every other stage whose nonzero group id matches. The shipped groups bind route variants 32..34, 35..36, 71..72, and 82..83. |
+| `0xe8275` | stage_main_progression_flags | high | investigation | When returning after a clear, FORT scans uncleared stage ids in descending order and auto-selects the first available row marked one. Side missions and all eight EX dungeons leave the flag zero. |
+| `0xe865d` | stage_forbidden_story_flag_ids | high | investigation | FORT and SELSTAGE reject a stage when any populated cell resolves to story flag value one. The scripts subtract one before indexing story_event_flags, establishing the stored one-based id convention. Columns: 0=forbidden_flag_1, 1=forbidden_flag_2, 2=forbidden_flag_3, 3=forbidden_flag_4, 4=forbidden_flag_5, 5=forbidden_flag_6, 6=forbidden_flag_7. |
+| `0xea1b5` | stage_required_story_flag_ids | high | investigation | FORT and SELSTAGE require every populated cell to resolve to story flag value one. Every shipped stage carries at least one gate, including common progression flags in columns two and three. Columns: 0=required_flag_1, 1=required_flag_2, 2=required_flag_3, 3=required_flag_4, 4=required_flag_5, 5=required_flag_6, 6=required_flag_7. |
+| `0xebd0d` | stage_display_number_major | high | investigation | FORT, SELSTAGE, AIM, STAGECLEAR, and management screens render this as the major half of the stage number. A negative value renders EX, while both number components zero identify an event-only row. |
+| `0xec0f5` | stage_display_number_minor | high | investigation | Rendered after stage_display_number_major as the minor stage number. FORT treats a row with both components zero as a direct event and dispatches its entry SCJUMP decision without entering FIELD. |
 | `0xec4dd` | stage_map_min_tile_x | high | investigation | STINIT2's inclusive left map bound indexed by stage id. FIELD, DRAWMAP, DRAWMINIMAP, CALCOCC, and movement providers use it with stage_map_max_tile_x; terrain-grid accesses multiply the coordinate by two. |
 | `0xec8c5` | stage_map_max_tile_x | high | investigation | STINIT2's inclusive right map bound indexed by stage id. Consumers pair it with stage_map_min_tile_x for iteration, camera/minimap limits, random placement, and the doubled-coordinate terrain-atlas copy. |
 | `0xeccad` | stage_map_min_tile_y | high | investigation | STINIT2's inclusive top map bound indexed by stage id. FIELD and all map readers pair it with stage_map_max_tile_y and multiply it by two when addressing the half-tile terrain grid. |
 | `0xed095` | stage_map_max_tile_y | high | investigation | STINIT2's inclusive bottom map bound indexed by stage id. The maximum shipped value 800 explains MPINIT's final authored doubled grid row at Y 1600. |
+| `0xed47d` | stage_minimap_atlas_origin_y | high | investigation | FIELD and SELSTAGE copy this to the minimap drawing origin. SELSTAGE subtracts it from stage_map_min_tile_y to crop the selected stage's vertically packed minimap strip and labels the following 150 atlas rows. |
+| `0xed865` | stage_clear_base_spendable_point_rewards | high | investigation | STAGECLEAR multiplies this base award by the turn/party-performance percentage, divides by 100, adds any card bonus, and credits the capped shared_spendable_points balance. |
+| `0xee035` | stage_scjump_decision_ids | high | investigation | FORT dispatches column zero before entering a stage or for an event-only row. FIELD and a few scene return paths dispatch column one after clear and column two after failure or forced-retreat outcomes; all 174 populated references resolve through SCINIT. Columns: 0=entry, 1=clear, 2=failure. |
+| `0xeebed` | stage_extra_dungeon_flags | high | investigation | Marks the eight shipped EX dungeons. FORT, SELSTAGE, and management screens combine it with stage_clear_state when deciding whether to show and apply the stage's post-clear coin rewards. |
+| `0xeefd5` | stage_clear_coin_quantities | high | investigation | FORT and SELSTAGE render the three clear-reward quantities beside coin icons. Management screens grant the same values as item ids 91..93 after a cleared or EX-marked stage. Columns: 0=bronze_coin_item_91, 1=silver_coin_item_92, 2=gold_coin_item_93. |
+| `0xefb8d` | stage_loader_script_ids | high | investigation | FIELD indirectly calls the selected STINIT2 row before initializing the map. Every shipped stage points to the shared STINIT selector program, which then populates stage-specific objects, enemies, rules, textures, and audio. |
 | `0xeff78` | movement_routine_provider_selectors | high | investigation | RTINIT movement bank 0. MVRTN indexes it by current_routine_set_id and routine_step_index, resolves the selector through its RTN_M001..018/051..053/061 provider table, and call-scripts the selected movement routine. |
 | `0xf4d98` | movement_routine_activation_percents | high | investigation | RTINIT movement bank 1. After all other step gates pass, MVRTN executes the provider only when random-modulo-100 is below this value. |
 | `0xf9bb8` | movement_routine_parameter_1 | high | investigation | RTINIT movement bank 2. Its meaning is tagged by movement_routine_provider_selectors: RTN_M004 uses a stage_object_slot_index; RTN_M005/011/012 use destination_tile_x; RTN_M006/007/015 use maximum_target_route_steps; RTN_M010 uses resource_index (0=HP, 1=SP, 2=FS; shipped cells are unwritten/default zero); RTN_M013 uses target_faction_filter; and RTN_M014 uses maximum_threat_route_steps. The one RTN_M001 and one RTN_M008 authored cells are never read by those providers. |
@@ -335,7 +347,6 @@
 | `0x69e` | — | low | auto-shape | array |
 | `0x6fe` | — | low | auto-shape | array |
 | `0x712` | — | low | auto-shape | array |
-| `0x27bd` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
 | `0x329e` | — | low | auto-shape | array |
@@ -402,14 +413,6 @@
 | `0xe730e` | — | low | auto-shape | array |
 | `0xe73ed` | — | low | auto-shape | array |
 | `0xe770d` | — | low | auto-shape | array |
-| `0xe7e8d` | — | low | auto-shape | array |
-| `0xe8275` | — | low | auto-shape | array |
-| `0xebd0d` | — | low | auto-shape | array |
-| `0xec0f5` | — | low | auto-shape | array |
-| `0xed47d` | — | low | auto-shape | array |
-| `0xed865` | — | low | auto-shape | array |
-| `0xeebed` | — | low | auto-shape | array |
-| `0xefb8d` | — | low | auto-shape | array |
 | `0x15287b` | — | low | auto-shape | array |
 | `0x15287d` | — | low | auto-shape | array |
 | `0x15287f` | — | low | auto-shape | array |
@@ -514,6 +517,8 @@
 | `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
 | `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
 | `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `0x27bd` | stage_display_names | high | investigation | FORT and SELSTAGE enumerate this sparse catalog and render the selected title, while FIELD copies the active title into its shared display buffer. STINIT2 reserves 1,000 ids even though the shipped rows end at 170. |
+| `0x2ba5` | stage_description_lines | high | investigation | SELSTAGE multiplies stage_clear_state by three and renders the corresponding three-column half of the selected STINIT2 row. The explicit 1,000-by-6 geometry prevents these strings from being mistaken for additional stage records. Columns: 0=uncleared_line_1, 1=uncleared_line_2, 2=uncleared_line_3, 3=cleared_line_1, 4=cleared_line_2, 5=cleared_line_3. |
 | `0x4315` | card_definition_names | high | investigation | Card names populated by CDINIT2. FIELD indexes this table with current_card_id when presenting the card selected from CDINIT's weighted generation list. |
 | `0x4379` | card_definition_result_messages | high | investigation | Short player-facing result text paired with card_definition_names. FIELD displays the selected card's row after applying its CDINIT2 effect. |
 | `0x43dd` | name_entry_character_palette | high | investigation | INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer. |
@@ -3750,7 +3755,6 @@
 | `0x1fba` | — | high | auto-shape | item-desc-table |
 | `0x23a2` | — | high | auto-shape | skill-name-table |
 | `0x24ce` | — | high | auto-shape | skill-desc-table |
-| `0x2ba5` | — | med | auto-shape | record-table[stride 6] |
 | `0x3239` | — | med | auto-shape | record-table[stride 3] |
 | `0x32f0` | — | med | auto-shape | current-entity-index? |
 | `0x3ebe` | — | med | auto-shape | record-table[stride 10] |
@@ -5087,10 +5091,6 @@
 | `0xe710e` | — | low | auto-shape | obinit-field? |
 | `0xe7172` | — | low | auto-shape | obinit-field? |
 | `0xe71d6` | — | med | auto-shape | record-table[stride 3] |
-| `0xe865d` | — | med | auto-shape | record-table[stride 7] |
-| `0xea1b5` | — | med | auto-shape | record-table[stride 7] |
-| `0xee035` | — | med | auto-shape | record-table[stride 3] |
-| `0xeefd5` | — | med | auto-shape | record-table[stride 3] |
 | `0x15261f` | — | med | auto-shape | record-table[stride 300] |
 | `0x152878` | — | low | auto-shape | index/counter? |
 | `0x15288b` | — | low | auto-shape | index/counter? |

@@ -47,6 +47,11 @@ occupy three reserved 1,000-row arrays for six effect ids, six start delays,
 and one total duration. BTANINIT dispatches 202 effect ids into BTL's six-slot
 visual/audio/hit-pulse work record.
 
+STINIT2 is a special name-mode registry: 74 stages occupy a sparse 1,000-row
+catalog with six description lines (three before clear and three after),
+availability/story gates, map and minimap geometry, entry/clear/failure
+SCJUMP decisions, clear rewards, and a shared STINIT stage-loader reference.
+
 Records are {id, name?, desc?, fields:{"0x<col_base>": value}} or, for footer tables,
 {id, global_addr, footer_off, values:[...]}. Column addresses are raw engine globals;
 confirmed names come from the generated engine global registry while raw keys remain provenance.
@@ -677,6 +682,40 @@ MAP_STAGE_MIN_X = 0xEC4DD
 MAP_STAGE_MAX_X = 0xEC8C5
 MAP_STAGE_MIN_Y = 0xECCAD
 MAP_STAGE_MAX_Y = 0xED095
+
+STAGE_DEFINITION_NAME_BASE = 0x27BD
+STAGE_DESCRIPTION_BASE = 0x2BA5
+STAGE_DEFINITION_CAPACITY = 1000
+STAGE_DESCRIPTION_STRIDE = 6
+STAGE_DESCRIPTION_COLUMNS = (
+    "uncleared_line_1",
+    "uncleared_line_2",
+    "uncleared_line_3",
+    "cleared_line_1",
+    "cleared_line_2",
+    "cleared_line_3",
+)
+STAGE_DEFINITION_ARRAYS = {
+    "unlock_group_id": (0xE7E8D, 1),
+    "main_progression_flag": (0xE8275, 1),
+    "forbidden_story_flag_ids": (0xE865D, 7),
+    "required_story_flag_ids": (0xEA1B5, 7),
+    "display_number_major": (0xEBD0D, 1),
+    "display_number_minor": (0xEC0F5, 1),
+    "map_min_tile_x": (MAP_STAGE_MIN_X, 1),
+    "map_max_tile_x": (MAP_STAGE_MAX_X, 1),
+    "map_min_tile_y": (MAP_STAGE_MIN_Y, 1),
+    "map_max_tile_y": (MAP_STAGE_MAX_Y, 1),
+    "minimap_atlas_origin_y": (0xED47D, 1),
+    "clear_base_spendable_point_reward": (0xED865, 1),
+    "unresolved_parameter_0xedc4d": (0xEDC4D, 1),
+    "scjump_decision_ids": (0xEE035, 3),
+    "extra_dungeon_flag": (0xEEBED, 1),
+    "clear_coin_quantities": (0xEEFD5, 3),
+    "stage_loader_script_id": (0xEFB8D, 1),
+}
+STAGE_SCJUMP_COLUMNS = ("entry", "clear", "failure")
+STAGE_CLEAR_COIN_ITEM_IDS = (91, 92, 93)
 
 TERRAIN_NAME_BASE = 0x26B5
 TERRAIN_EFFECT_DESCRIPTION_BASE = 0x26D3
@@ -5804,38 +5843,465 @@ def extract_card_generation_lists(scr):
     }
 
 
+def extract_stage_definitions(scr):
+    """Extract STINIT2's sparse stage catalog and six-line text matrix."""
+    records_by_id: dict[int, dict] = {}
+    numeric_cells = {
+        field_name: {}
+        for field_name in STAGE_DEFINITION_ARRAYS
+    }
+    classified_offsets = set()
+    string_write_count = 0
+    static_write_count = 0
+
+    def record_for(stage_id: int) -> dict:
+        if not (1 <= stage_id < STAGE_DEFINITION_CAPACITY):
+            raise ValueError(
+                f"{scr.path.name}: stage id {stage_id} outside reserved "
+                f"1..{STAGE_DEFINITION_CAPACITY - 1} range"
+            )
+        return records_by_id.setdefault(stage_id, {
+            "id": stage_id,
+            "name": "",
+            "string_fields": {},
+            "fields": {},
+            "record_fields": {},
+        })
+
+    for ins in scr.instructions:
+        if (
+            ins.opcode == SET_STRING
+            and len(ins.args) >= 2
+            and ins.args[0][0] == T_GLOBAL_STRING
+        ):
+            destination = ins.args[0][1]
+            text = scr.strings.get(ins.args[1][1], (None,))[0]
+            if (
+                STAGE_DEFINITION_NAME_BASE < destination
+                < STAGE_DEFINITION_NAME_BASE
+                + STAGE_DEFINITION_CAPACITY
+            ):
+                stage_id = destination - STAGE_DEFINITION_NAME_BASE
+                record = record_for(stage_id)
+                if record["name"]:
+                    raise ValueError(
+                        f"{scr.path.name}: duplicate stage name for id "
+                        f"{stage_id}"
+                    )
+                record["name"] = text
+            else:
+                relative = destination - STAGE_DESCRIPTION_BASE
+                if not (
+                    STAGE_DESCRIPTION_STRIDE
+                    <= relative
+                    < STAGE_DEFINITION_CAPACITY
+                    * STAGE_DESCRIPTION_STRIDE
+                ):
+                    raise ValueError(
+                        f"{scr.path.name}: unexpected string write "
+                        f"0x{destination:x}"
+                    )
+                stage_id, column = divmod(
+                    relative, STAGE_DESCRIPTION_STRIDE
+                )
+                record = record_for(stage_id)
+                _store_unique(
+                    record["string_fields"],
+                    (
+                        f"0x{STAGE_DESCRIPTION_BASE:x}/"
+                        f"{STAGE_DESCRIPTION_STRIDE}/{column}"
+                    ),
+                    text,
+                    stage_id,
+                )
+            string_write_count += 1
+            classified_offsets.add(ins.offset)
+            continue
+
+        write = _static_global_write(ins)
+        if write is not None:
+            destination, value = write
+            matches = []
+            for field_name, (base, stride) in (
+                STAGE_DEFINITION_ARRAYS.items()
+            ):
+                relative = destination - base
+                if (
+                    stride <= relative
+                    < STAGE_DEFINITION_CAPACITY * stride
+                ):
+                    stage_id, column = divmod(relative, stride)
+                    matches.append(
+                        (field_name, base, stride, stage_id, column)
+                    )
+            if len(matches) != 1:
+                raise ValueError(
+                    f"{scr.path.name}: numeric destination "
+                    f"0x{destination:x} matched {matches}"
+                )
+            field_name, base, stride, stage_id, column = matches[0]
+            record = record_for(stage_id)
+            numeric_cells[field_name][(stage_id, column)] = value
+            key = (
+                f"0x{base:x}"
+                if stride == 1
+                else f"0x{base:x}/{stride}/{column}"
+            )
+            target = (
+                record["fields"]
+                if stride == 1
+                else record["record_fields"]
+            )
+            _store_unique(target, key, value, stage_id)
+            static_write_count += 1
+            classified_offsets.add(ins.offset)
+            continue
+
+        if sys4load.display_label(ins.opcode) == "exit":
+            classified_offsets.add(ins.offset)
+
+    unclassified = [
+        f"0x{ins.offset:x}"
+        for ins in scr.instructions
+        if ins.offset not in classified_offsets
+    ]
+    if unclassified:
+        raise ValueError(
+            f"{scr.path.name}: unclassified instructions "
+            + ", ".join(unclassified)
+        )
+
+    unnamed = sorted(
+        stage_id
+        for stage_id, record in records_by_id.items()
+        if not record["name"]
+    )
+    if unnamed:
+        raise ValueError(
+            f"{scr.path.name}: numeric/text rows without names: {unnamed}"
+        )
+
+    item_records, _ = extract_name(
+        sys4load.load(resolve("ITINIT"))
+    )
+    item_names = {
+        record["id"]: record["name"] for record in item_records
+    }
+    dispatch_records, _ = extract_dispatch(
+        sys4load.load(resolve("SCINIT"))
+    )
+    dispatch_by_id = {
+        record["id"]: record for record in dispatch_records
+    }
+    resource_names = callscript_names()
+
+    def values(field_name: str, stage_id: int) -> list[int]:
+        _, stride = STAGE_DEFINITION_ARRAYS[field_name]
+        return [
+            numeric_cells[field_name].get((stage_id, column), 0)
+            for column in range(stride)
+        ]
+
+    def scalar(field_name: str, stage_id: int) -> int:
+        return values(field_name, stage_id)[0]
+
+    records = []
+    scjump_reference_count = 0
+    resolved_scjump_reference_count = 0
+    resolved_loader_script_count = 0
+    description_line_count = 0
+    for stage_id in sorted(records_by_id):
+        record = records_by_id[stage_id]
+        descriptions = [
+            record["string_fields"].get(
+                (
+                    f"0x{STAGE_DESCRIPTION_BASE:x}/"
+                    f"{STAGE_DESCRIPTION_STRIDE}/{column}"
+                ),
+                "",
+            )
+            for column in range(STAGE_DESCRIPTION_STRIDE)
+        ]
+        description_line_count += sum(bool(text) for text in descriptions)
+        record["descriptions"] = {
+            "uncleared": descriptions[:3],
+            "cleared": descriptions[3:],
+        }
+
+        major = scalar("display_number_major", stage_id)
+        minor = scalar("display_number_minor", stage_id)
+        if major < 0:
+            display_kind = "extra"
+        elif not major and not minor:
+            display_kind = "event"
+        else:
+            display_kind = "numbered"
+        record["display_number"] = {
+            "kind": display_kind,
+            "major": major,
+            "minor": minor,
+        }
+
+        required_flags = [
+            value
+            for value in values(
+                "required_story_flag_ids", stage_id
+            )
+            if value
+        ]
+        forbidden_flags = [
+            value
+            for value in values(
+                "forbidden_story_flag_ids", stage_id
+            )
+            if value
+        ]
+        record["availability"] = {
+            "main_progression": bool(
+                scalar("main_progression_flag", stage_id)
+            ),
+            "extra_dungeon": bool(
+                scalar("extra_dungeon_flag", stage_id)
+            ),
+            "unlock_group_id": scalar(
+                "unlock_group_id", stage_id
+            ),
+            "required_story_flag_ids": required_flags,
+            "forbidden_story_flag_ids": forbidden_flags,
+        }
+
+        bounds = {
+            "min_x": scalar("map_min_tile_x", stage_id),
+            "max_x": scalar("map_max_tile_x", stage_id),
+            "min_y": scalar("map_min_tile_y", stage_id),
+            "max_y": scalar("map_max_tile_y", stage_id),
+        }
+        if all(bounds.values()):
+            record["map"] = {
+                "tile_bounds": bounds,
+                "grid_bounds": {
+                    key: value * MAP_TILE_TO_GRID_SCALE
+                    for key, value in bounds.items()
+                },
+                "minimap_atlas_origin_y": scalar(
+                    "minimap_atlas_origin_y", stage_id
+                ),
+            }
+
+        scjump_ids = values("scjump_decision_ids", stage_id)
+        flow = {}
+        for column, role in enumerate(STAGE_SCJUMP_COLUMNS):
+            decision_id = scjump_ids[column]
+            if not decision_id:
+                continue
+            joined = dispatch_by_id.get(decision_id, {})
+            flow[f"{role}_scjump_decision_id"] = decision_id
+            flow[f"{role}_script_name"] = joined.get(
+                "script_name", ""
+            )
+            scjump_reference_count += 1
+            if joined:
+                resolved_scjump_reference_count += 1
+        loader_id = scalar("stage_loader_script_id", stage_id)
+        if loader_id:
+            loader_name = resource_names.get(loader_id, "")
+            flow["stage_loader_script_id"] = loader_id
+            flow["stage_loader_script_name"] = loader_name
+            if loader_name:
+                resolved_loader_script_count += 1
+        record["flow"] = flow
+
+        coin_quantities = values(
+            "clear_coin_quantities", stage_id
+        )
+        record["clear_rewards"] = {
+            "base_spendable_points": scalar(
+                "clear_base_spendable_point_reward", stage_id
+            ),
+            "coins": [
+                {
+                    "item_id": item_id,
+                    "item_name": item_names.get(item_id, ""),
+                    "quantity": coin_quantities[column],
+                }
+                for column, item_id in enumerate(
+                    STAGE_CLEAR_COIN_ITEM_IDS
+                )
+                if coin_quantities[column]
+            ],
+        }
+        unresolved = scalar(
+            "unresolved_parameter_0xedc4d", stage_id
+        )
+        if unresolved:
+            record["unresolved_parameter_0xedc4d"] = unresolved
+        records.append(record)
+
+    field_counts = {
+        field_name: len(cells)
+        for field_name, cells in numeric_cells.items()
+    }
+    schema_semantics = {
+        f"0x{STAGE_DESCRIPTION_BASE:x}/"
+        f"{STAGE_DESCRIPTION_STRIDE}/{column}": (
+            f"stage_description_{column_name}"
+        )
+        for column, column_name in enumerate(
+            STAGE_DESCRIPTION_COLUMNS
+        )
+    }
+    semantic_names = {
+        "unlock_group_id": "stage_unlock_group_ids",
+        "main_progression_flag": "stage_main_progression_flags",
+        "forbidden_story_flag_ids": (
+            "stage_forbidden_story_flag_ids"
+        ),
+        "required_story_flag_ids": "stage_required_story_flag_ids",
+        "display_number_major": "stage_display_number_major",
+        "display_number_minor": "stage_display_number_minor",
+        "map_min_tile_x": "stage_map_min_tile_x",
+        "map_max_tile_x": "stage_map_max_tile_x",
+        "map_min_tile_y": "stage_map_min_tile_y",
+        "map_max_tile_y": "stage_map_max_tile_y",
+        "minimap_atlas_origin_y": "stage_minimap_atlas_origin_y",
+        "clear_base_spendable_point_reward": (
+            "stage_clear_base_spendable_point_rewards"
+        ),
+        "scjump_decision_ids": "stage_scjump_decision_ids",
+        "extra_dungeon_flag": "stage_extra_dungeon_flags",
+        "clear_coin_quantities": "stage_clear_coin_quantities",
+        "stage_loader_script_id": "stage_loader_script_ids",
+    }
+    semantic_columns = {
+        "forbidden_story_flag_ids": tuple(
+            f"forbidden_flag_{column + 1}"
+            for column in range(
+                STAGE_DEFINITION_ARRAYS[
+                    "forbidden_story_flag_ids"
+                ][1]
+            )
+        ),
+        "required_story_flag_ids": tuple(
+            f"required_flag_{column + 1}"
+            for column in range(
+                STAGE_DEFINITION_ARRAYS[
+                    "required_story_flag_ids"
+                ][1]
+            )
+        ),
+        "scjump_decision_ids": STAGE_SCJUMP_COLUMNS,
+        "clear_coin_quantities": tuple(
+            f"{coin_name}_coin_item_{item_id}"
+            for coin_name, item_id in zip(
+                ("bronze", "silver", "gold"),
+                STAGE_CLEAR_COIN_ITEM_IDS,
+            )
+        ),
+    }
+    for field_name, semantic_name in semantic_names.items():
+        base, stride = STAGE_DEFINITION_ARRAYS[field_name]
+        if stride == 1:
+            schema_semantics[f"0x{base:x}"] = semantic_name
+        else:
+            column_names = semantic_columns[field_name]
+            for column, column_name in enumerate(column_names):
+                schema_semantics[
+                    f"0x{base:x}/{stride}/{column}"
+                ] = f"{semantic_name}.{column_name}"
+
+    return records, {
+        "schema": "stage-definitions",
+        "reserved_record_count": STAGE_DEFINITION_CAPACITY,
+        "name_array_base": f"0x{STAGE_DEFINITION_NAME_BASE:x}",
+        "description_array_base": (
+            f"0x{STAGE_DESCRIPTION_BASE:x}"
+        ),
+        "description_columns": list(STAGE_DESCRIPTION_COLUMNS),
+        "record_field_columns": sorted({
+            key
+            for record in records
+            for key in record["record_fields"]
+        }, key=lambda key: tuple(
+            int(part, 0) for part in key.split("/")
+        )),
+        "string_field_columns": sorted({
+            key
+            for record in records
+            for key in record["string_fields"]
+        }, key=lambda key: tuple(
+            int(part, 0) for part in key.split("/")
+        )),
+        "schema_field_semantics": schema_semantics,
+        "string_write_count": string_write_count,
+        "static_write_count": static_write_count,
+        "classified_instruction_count": len(classified_offsets),
+        "authored_numeric_cell_counts": field_counts,
+        "description_line_count": description_line_count,
+        "mapped_stage_count": sum("map" in record for record in records),
+        "event_only_stage_count": sum(
+            record["display_number"]["kind"] == "event"
+            for record in records
+        ),
+        "main_progression_stage_count": sum(
+            record["availability"]["main_progression"]
+            for record in records
+        ),
+        "extra_dungeon_stage_count": sum(
+            record["availability"]["extra_dungeon"]
+            for record in records
+        ),
+        "story_flag_gated_stage_count": sum(
+            bool(record["availability"]["required_story_flag_ids"])
+            or bool(
+                record["availability"]["forbidden_story_flag_ids"]
+            )
+            for record in records
+        ),
+        "scjump_reference_count": scjump_reference_count,
+        "resolved_scjump_reference_count": (
+            resolved_scjump_reference_count
+        ),
+        "resolved_loader_script_count": resolved_loader_script_count,
+        "clear_coin_reward_cell_count": field_counts[
+            "clear_coin_quantities"
+        ],
+        "unresolved_parameter_population": field_counts[
+            "unresolved_parameter_0xedc4d"
+        ],
+        "consumer_contract": {
+            "FORT.BIN": (
+                "enumerates named rows, applies required/forbidden story "
+                "flags, auto-selects available main-progression stages, "
+                "renders stage numbers and coin rewards, and dispatches the "
+                "entry SCJUMP decision"
+            ),
+            "FIELD.BIN": (
+                "calls the selected row's STINIT loader, initializes map and "
+                "minimap geometry, propagates unlock groups, awards base "
+                "spendable points, and dispatches clear/failure decisions"
+            ),
+            "SELSTAGE.BIN": (
+                "renders the six description lines selected by clear state, "
+                "draws the numbered/EVENT/EX labels and clear rewards, and "
+                "uses the minimap atlas origin to crop the selected map"
+            ),
+        },
+    }
+
+
 def _map_stage_definitions() -> list[dict]:
     """Read the STINIT2 records that own all four terrain-atlas bounds."""
     stage_scr = sys4load.load(resolve("STINIT2"))
-    stage_records, _ = extract_name(stage_scr)
-    bounds = (
-        MAP_STAGE_MIN_X,
-        MAP_STAGE_MAX_X,
-        MAP_STAGE_MIN_Y,
-        MAP_STAGE_MAX_Y,
-    )
+    stage_records, _ = extract_stage_definitions(stage_scr)
     definitions = []
     for record in stage_records:
-        fields = record.get("fields", {})
-        keys = [f"0x{address:x}" for address in bounds]
-        if not all(key in fields for key in keys):
+        if "map" not in record:
             continue
-        min_x, max_x, min_y, max_y = (fields[key] for key in keys)
         definitions.append({
             "id": record["id"],
             "name": record.get("name", ""),
-            "tile_bounds": {
-                "min_x": min_x,
-                "max_x": max_x,
-                "min_y": min_y,
-                "max_y": max_y,
-            },
-            "grid_bounds": {
-                "min_x": min_x * MAP_TILE_TO_GRID_SCALE,
-                "max_x": max_x * MAP_TILE_TO_GRID_SCALE,
-                "min_y": min_y * MAP_TILE_TO_GRID_SCALE,
-                "max_y": max_y * MAP_TILE_TO_GRID_SCALE,
-            },
+            "tile_bounds": record["map"]["tile_bounds"],
+            "grid_bounds": record["map"]["grid_bounds"],
         })
     return definitions
 
@@ -6439,6 +6905,13 @@ def write_data_index(data_dir: Path) -> None:
         "duration. BTANINIT's paired schema decodes 202 effect ids into BTL's six-slot",
         "movie/sprite, blend, geometry, audio, and hit-pulse work record.",
         "",
+        "STINIT2's dedicated stage-definition schema exposes 74 sparse rows in a",
+        "reserved 1,000-stage catalog. It preserves six pre/post-clear description",
+        "slots, progression and story gates, numbered/EVENT/EX presentation, map and",
+        "minimap geometry, point/coin rewards, and all 174 SCINIT-resolved entry, clear,",
+        "and failure decisions. All rows resolve their shared STINIT loader reference;",
+        "the unconsumed 0xedc4d column remains explicit rather than receiving a guess.",
+        "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",
         "stage definitions, preserves implicit-zero rows and raw footer provenance, and",
@@ -6552,6 +7025,8 @@ def main() -> int:
         extractor = extract_battle_effect_definitions
     elif mode == "numeric" and name == "BTANINIT2":
         extractor = extract_battle_animations
+    elif mode == "name" and name == "STINIT2":
+        extractor = extract_stage_definitions
     elif mode == "numeric" and name == "SPINIT":
         extractor = extract_h_scene_gallery
     elif mode == "footer" and name == "MPINIT":
