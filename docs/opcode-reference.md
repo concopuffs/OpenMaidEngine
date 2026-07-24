@@ -490,7 +490,7 @@ This is the data-only companion to full-resume opcode 0x1a1. It selects the conf
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a0_query_numbered_save_metadata@0x427ba0 calls save_container_read_and_validate_header@0x4306f0. It reads SYSTEMTIME WORDs at header +0x108/+0x10a/+0x10e/+0x110/+0x112/+0x114 and DWORD accumulated playtime at +0x118. Corpus: three calls in SAVE.BIN.
 
-Status 0 means valid metadata was written, 1 means the file could not be opened, and 2 means its native header was invalid or incompatible. Metadata comes from the fixed 0x124-byte S3SD/S4SD container header; no payload decode is needed.
+Status 0 means valid metadata was written, 1 means the file could not be opened, and 2 means its native header was invalid or incompatible. Metadata comes from the fixed 0x124-byte S3SD/S4SD container header; no payload decode is needed. Himegari numbered files use compatibility id 0x42323234, distinct from shared SAVE.DAT/RT.DAT id 0x4a343234. Port status (2026-07-24): implemented through the native directory store with fixed-header-only reads.
 
 ### 0x1a1 `load-numbered-slot-and-resume` (load-numbered-slot-and-resume, argc 2)
 - **summary:** (status_out)(slot) - fully load `SAVE%02d.DAT`, including saved script frames and text history, then resume through `CALLBACK_LOAD.BIN` and opcode 0xae.
@@ -532,19 +532,21 @@ This is the paired reader for opcode 0x1a9 and the string counterpart to integer
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ab_delete_numbered_save@0x427ed0 formats and calls DeleteFileA for the numbered .DAT and .STH paths with the layered status convention. Corpus: one call in SAVE.BIN.
 
-Both deletes are attempted. Status is 0 when both succeed, 1 when only the DAT delete fails, and 2 whenever the STH delete fails (taking precedence over a DAT failure).
+Both deletes are attempted. Status is 0 when both succeed, 1 when only the DAT delete fails, and 2 whenever the STH delete fails (taking precedence over a DAT failure). Port status (2026-07-24): implemented against the paired native filenames.
 
 ### 0x1ac `copy-numbered-save` (copy-numbered-save, argc 3)
 - **summary:** (status_out)(source_slot)(destination_slot) - copy both numbered `.DAT` state and `.STH` thumbnail, replacing destination files.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ac_copy_numbered_save@0x427fb0 formats source/destination SAVE%2.2d.DAT and SAVE%2.2d.STH paths and invokes CopyFileA with fail-if-exists false. Corpus: two calls in SAVE.BIN.
 
-Both copies are attempted with overwrite allowed. Status is 0 when both succeed, 1 when only the DAT copy fails, and 2 whenever the STH copy fails (taking precedence over a DAT failure).
+Both copies are attempted with overwrite allowed. Status is 0 when both succeed, 1 when only the DAT copy fails, and 2 whenever the STH copy fails (taking precedence over a DAT failure). Port status (2026-07-24): implemented against the paired native filenames.
 
 ### 0x1ad `mark-save-resume-frame` (mark-save-resume-frame, argc 0)
 - **summary:** Mark the current script context as the highest frame serialized by numbered-save layouts 2/3. The native serializer saves frames 0 through this boundary and strips the boundary frame's return target so loading resumes it as the top frame. This opcode performs no file I/O itself.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ad_mark_save_resume_frame@0x416b70 writes decoded instruction size 1 and ctx+0x9928c=cur_ctx_index. context_state_serialize@0x40d320 uses that field (or cur_ctx_index when -1) as the inclusive frame cutoff for save layouts 2/3, serializes frames 0..cutoff, and forces the cutoff frame's saved return entry to -1. op_0x2_exit_or_return_frame@0x417940 clears the mark when unwinding below it. Corpus: 1,928 calls in 304 scripts; SC0000's six calls are at startup and immediately after HISTORY/MENU/HIDEWIN/INPUTNAME returns.
+
+Port status (2026-07-24): implemented as an active ExecFrame identity marker. It survives nested calls and clears when its owning frame unwinds; the following full numbered-payload slice will consume the exposed zero-based cutoff.
 
 ### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
 - **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
@@ -596,14 +598,14 @@ The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcod
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ae_write_numbered_save_thumbnail@0x428100 creates SAVE%2.2d.STH with CREATE_ALWAYS and serializes operand 3's surface via the active renderer backend. Corpus: two calls in SAVE.BIN and SELSTAGE.BIN.
 
-Status is 0 on success, 1 when the file cannot be created/opened, and 2 when surface encoding or writing fails. Renderer backend selects a handle-based or path-based native worker.
+Status is 0 on success, 1 when the file cannot be created/opened, and 2 when surface encoding or writing fails. Renderer backend selects a handle-based or path-based native worker. Himegari writes an ordinary bottom-up 24-bit BMP (112x84 in installed files), BGR rows with four-byte padding, under the .STH extension. Its bfSize field historically omits the 14-byte BITMAPFILEHEADER. Port status (2026-07-24): implemented with exact native BMP output and host surface capture.
 
 ### 0x1af `load-numbered-save-thumbnail` (load-numbered-save-thumbnail, argc 3)
 - **summary:** (status_out)(slot)(surface_slot) - decode the numbered save's separate `SAVE%02d.STH` thumbnail into a surface slot.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1af_load_numbered_save_thumbnail@0x428240 opens SAVE%2.2d.STH and passes it plus operand 3's surface slot to the active renderer decoder. Corpus: one call in SAVE.BIN.
 
-Status is 0 on success, 1 when the file cannot be opened, and 2 when image decoding fails. The thumbnail format is owned by the renderer codec and is not embedded in the numbered `.DAT` payload.
+Status is 0 on success, 1 when the file cannot be opened, and 2 when image decoding fails. The thumbnail format is owned by the renderer codec and is not embedded in the numbered `.DAT` payload. Port status (2026-07-24): implemented with 24-bit BMP decode and host surface replacement.
 
 ### 0x1f6 `clear-retained-gfx-objects` (clear-retained-gfx-objects, argc 0)
 - **summary:** Clear the complete retained gfx-object registry while preserving allocated surface resources. Subsequent object queries return absent until draw/geometry operations recreate records.

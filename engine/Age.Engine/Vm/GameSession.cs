@@ -23,11 +23,16 @@ public sealed class GameSession
     public Dictionary<int, string> GlobalStrings { get; } = new();
     /// <summary>AGE's selected profile-wide cells plus native shared SAVE.DAT/RT.DAT lifecycle.</summary>
     public SharedProfile SharedProfile { get; }
+    /// <summary>Native shared/numbered save directory service used by persistence opcodes.</summary>
+    public INativeDatStore? NativeDatStore { get; }
     /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
     public AdvTextHistory TextHistory { get; } = new();
 
-    public GameSession(SharedProfile? sharedProfile = null)
-        => SharedProfile = sharedProfile ?? new SharedProfile();
+    public GameSession(SharedProfile? sharedProfile = null, INativeDatStore? nativeDatStore = null)
+    {
+        SharedProfile = sharedProfile ?? new SharedProfile();
+        NativeDatStore = nativeDatStore;
+    }
 
     public void Seed(int addr, long value) => Globals[addr] = value;
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
@@ -38,7 +43,7 @@ public sealed class GameSession
                                 ITraceSink? sink = null)
     {
         var vm = new VirtualMachine(
-            script, table, host, options, provider, sink, TextHistory, SharedProfile);
+            script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
 

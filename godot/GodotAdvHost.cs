@@ -849,6 +849,34 @@ public sealed class GodotAdvHost : IHost
     public (int Width, int Height) GetTextureSize(int slot)
         => _slotDims.TryGetValue(slot, out var d) ? (d.W, d.H) : (0, 0);
 
+    public RgbaImage? CaptureSurfacePixels(int slot)
+    {
+        RgbaImage? image = ResolveSurfacePixels(slot);
+        return image == null
+            ? null
+            : new RgbaImage(image.Width, image.Height, (byte[])image.Pixels.Clone());
+    }
+
+    public bool ReplaceSurfacePixels(int slot, RgbaImage image)
+    {
+        if (image.Width <= 0 || image.Height <= 0
+            || image.Pixels.Length != checked(image.Width * image.Height * 4))
+            return false;
+        lock (_imageLock)
+        {
+            _surfaceImages[slot] =
+                new RgbaImage(image.Width, image.Height, (byte[])image.Pixels.Clone());
+            _surfaceColorKeys.Remove(slot);
+        }
+        lock (_textLock)
+        {
+            _surfaceText.Remove(slot);
+            _surfaceResources.Remove(slot);
+        }
+        _slotDims[slot] = (image.Width, image.Height);
+        return true;
+    }
+
     // Retained render model: draw-texture updates GfxState (object -> surface bind); Main._Process composites
     // the visible objects each frame in ascending-handle order. No immediate blit here.
     public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }

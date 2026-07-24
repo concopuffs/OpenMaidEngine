@@ -15,6 +15,8 @@ The VM and content pipeline are already mostly platform-neutral:
 - Effectful bytecode operations cross `Hosting/IHost.cs`; the VM does not call native OS APIs.
 - Movie payloads arrive from `IAssetStore` as owned bytes and decoded frames enter the compositor as the
   platform-neutral `RgbaImage` type.
+- Native-compatible persistence uses managed streams behind `INativeDatStore`; Godot redirects AGE's
+  engine-owned root to `user://SAVE` while retaining its fixed portable DAT/STH filenames.
 
 The selected movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API, but only a
 Windows-x64 native bundle is built and staged today. The retired-live DirectShow implementation remains in-tree
@@ -31,6 +33,7 @@ replaced before claiming portable exports.
 | Movie audio | FFmpeg detects the audio stream but the current ABI returns video frames only | MPEG movie audio remains intentionally silent | Extend the ABI with timestamped PCM and select an audio/presentation clock; separate feature slice |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
+| Save/profile storage | Managed `DirectoryNativeDatStore` under Godot `user://SAVE`; native S3SD/S4SD/S3RT files and 24-bit BMP thumbnails | No Win32 path API at runtime; port saves remain isolated from the original installation | Validate replace/flush, case, permissions, and interrupted-write behavior on each export target |
 | Install/repository discovery | `engine/Age.Engine/Sys4/Paths.cs` finds `age-reimpl` above `AppContext.BaseDirectory` and assumes the current workspace sibling layout | Suitable for development, not packaged exports on any OS | Replace runtime discovery with a user-selected game root/profile; retain repository paths only for developer tools/tests |
 | Archive parity oracle | One integration test launches `bin/BinExtractALF.exe` | Windows-only test helper, not a shipped runtime dependency | Skip/replace on non-Windows CI; runtime ALF/AAI readers do not depend on it |
 | Native RE tools | Frida/Ghidra helpers target the original `AGE.EXE`; supporting utilities include Windows executables and Windows command conventions | Development/research only | Keep separate from export requirements; document platform prerequisites per tool |

@@ -27,6 +27,7 @@ public sealed class VirtualMachine
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
+    private readonly INativeDatStore? _nativeDatStore;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
     private int _depth;
@@ -34,6 +35,8 @@ public sealed class VirtualMachine
     private readonly object _interactiveLock = new();
     private readonly object _debugControlLock = new();
     private readonly List<string> _activeFrameNames = new();
+    private readonly List<ExecFrame> _activeExecutionFrames = new();
+    private ExecFrame? _saveResumeFrame;
     private ExecFrame? _debugActiveFrame;
     private long _debugActiveFrameId;
     private long _debugNextFrameId;
@@ -75,6 +78,21 @@ public sealed class VirtualMachine
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
+    /// <summary>
+    /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
+    /// exists. A numbered-save serializer consumes this boundary in the full payload slice.
+    /// </summary>
+    public int? SaveResumeFrameDepth
+    {
+        get
+        {
+            lock (_debugControlLock)
+            {
+                int index = _saveResumeFrame == null ? -1 : _activeExecutionFrames.IndexOf(_saveResumeFrame);
+                return index >= 0 ? index : null;
+            }
+        }
+    }
     /// <summary>True while a script-owned timed mouse/input callback loop (HISTORY/HIDEWIN family) owns input.</summary>
     public bool IsRawInputCallbackActive
     {
@@ -97,13 +115,15 @@ public sealed class VirtualMachine
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
-                          AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null)
+                          AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
+                          INativeDatStore? nativeDatStore = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
+        _nativeDatStore = nativeDatStore;
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -596,6 +616,7 @@ public sealed class VirtualMachine
             _debugActiveFrame = null;
             _debugActiveFrameId = 0;
             _debugFrameReturnRequest = null;
+            _saveResumeFrame = null;
         }
         _autoMessageEnabled = false;
         _autoVoicePending = false;
@@ -629,6 +650,7 @@ public sealed class VirtualMachine
             _debugActiveFrame = frame;
             _debugActiveFrameId = ++_debugNextFrameId;
             _activeFrameNames.Add(frame.Script.Name);
+            _activeExecutionFrames.Add(frame);
         }
         bool hostContextEntered = false;
         try
@@ -664,7 +686,10 @@ public sealed class VirtualMachine
             lock (_debugControlLock)
             {
                 if (ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) _debugFrameReturnRequest = null;
+                if (ReferenceEquals(_saveResumeFrame, frame)) _saveResumeFrame = null;
                 if (_activeFrameNames.Count > 0) _activeFrameNames.RemoveAt(_activeFrameNames.Count - 1);
+                if (_activeExecutionFrames.Count > 0)
+                    _activeExecutionFrames.RemoveAt(_activeExecutionFrames.Count - 1);
                 _debugActiveFrame = previousDebugActiveFrame;
                 _debugActiveFrameId = previousDebugActiveFrameId;
             }
@@ -794,6 +819,110 @@ public sealed class VirtualMachine
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
                 return pc + 1;
+            case "query-numbered-save-metadata": // 0x1a0
+            {
+                if (_nativeDatStore == null)
+                {
+                    Write(a[0], 1);
+                    return pc + 1;
+                }
+                try
+                {
+                    NativeSaveMetadata? metadata =
+                        _nativeDatStore.QueryNumberedMetadata(unchecked((int)Read(a[1])));
+                    if (metadata == null)
+                    {
+                        Write(a[0], 1);
+                        return pc + 1;
+                    }
+                    Write(a[2], metadata.Timestamp.Year);
+                    Write(a[3], metadata.Timestamp.Month);
+                    Write(a[4], metadata.Timestamp.Day);
+                    Write(a[5], metadata.Timestamp.Hour);
+                    Write(a[6], metadata.Timestamp.Minute);
+                    Write(a[7], metadata.Timestamp.Second);
+                    Write(a[8], unchecked((int)metadata.AccumulatedPlaySeconds));
+                    Write(a[0], 0);
+                }
+                catch (EndOfStreamException) { Write(a[0], 2); }
+                catch (InvalidDataException) { Write(a[0], 2); }
+                catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+                catch (IOException) { Write(a[0], 1); }
+                catch (UnauthorizedAccessException) { Write(a[0], 1); }
+                return pc + 1;
+            }
+            case "delete-numbered-save": // 0x1ab
+                try
+                {
+                    Write(a[0], _nativeDatStore?.DeleteNumberedPair(unchecked((int)Read(a[1]))) ?? 2);
+                }
+                catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+                return pc + 1;
+            case "copy-numbered-save": // 0x1ac
+                try
+                {
+                    Write(a[0], _nativeDatStore?.CopyNumberedPair(
+                        unchecked((int)Read(a[1])), unchecked((int)Read(a[2]))) ?? 2);
+                }
+                catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+                catch (IOException) { Write(a[0], 2); }
+                catch (UnauthorizedAccessException) { Write(a[0], 2); }
+                return pc + 1;
+            case "mark-save-resume-frame": // 0x1ad
+                lock (_debugControlLock) _saveResumeFrame = _cur;
+                return pc + 1;
+            case "write-numbered-save-thumbnail": // 0x1ae
+            {
+                if (_nativeDatStore == null)
+                {
+                    Write(a[0], 1);
+                    return pc + 1;
+                }
+                try
+                {
+                    var image = _host.CaptureSurfacePixels(unchecked((int)Read(a[2])));
+                    if (image == null)
+                    {
+                        Write(a[0], 2);
+                        return pc + 1;
+                    }
+                    byte[] encoded = NumberedThumbnailCodec.Encode(image);
+                    _nativeDatStore.SaveNumberedThumbnail(unchecked((int)Read(a[1])), encoded);
+                    Write(a[0], 0);
+                }
+                catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+                catch (InvalidDataException) { Write(a[0], 2); }
+                catch (OverflowException) { Write(a[0], 2); }
+                catch (IOException) { Write(a[0], 1); }
+                catch (UnauthorizedAccessException) { Write(a[0], 1); }
+                return pc + 1;
+            }
+            case "load-numbered-save-thumbnail": // 0x1af
+            {
+                if (_nativeDatStore == null)
+                {
+                    Write(a[0], 1);
+                    return pc + 1;
+                }
+                try
+                {
+                    byte[]? encoded =
+                        _nativeDatStore.LoadNumberedThumbnail(unchecked((int)Read(a[1])));
+                    if (encoded == null)
+                    {
+                        Write(a[0], 1);
+                        return pc + 1;
+                    }
+                    var image = NumberedThumbnailCodec.Decode(encoded);
+                    Write(a[0], _host.ReplaceSurfacePixels(unchecked((int)Read(a[2])), image) ? 0 : 2);
+                }
+                catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+                catch (InvalidDataException) { Write(a[0], 2); }
+                catch (OverflowException) { Write(a[0], 2); }
+                catch (IOException) { Write(a[0], 1); }
+                catch (UnauthorizedAccessException) { Write(a[0], 1); }
+                return pc + 1;
+            }
             case "store-shared-profile-int": // 0x1a2
             {
                 if (!TryResolveSharedProfileCell(a[0], isString: false, out int address))

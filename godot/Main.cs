@@ -8,6 +8,7 @@ using Godot;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
@@ -248,8 +249,17 @@ public partial class Main : Godot.Control
         Age.Engine.Diagnostics.ITraceSink sink = _trace;
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
+        // Persistence opcodes retain AGE's native filenames and binary formats, but the port owns the
+        // root interception point. Keep authored saves isolated from the original installation under
+        // Godot's per-application user directory.
+        var nativeSaveStore = new DirectoryNativeDatStore(
+            ProjectSettings.GlobalizePath("user://SAVE"),
+            new NativeSaveIdentity(
+                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
+                SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
         _vm = new VirtualMachine(script, table, _host,
-            new VmOptions(MaxSteps: 20_000_000, IgnoreExitRequests: nativeDebugMenu), provider, sink);
+            new VmOptions(MaxSteps: 20_000_000, IgnoreExitRequests: nativeDebugMenu), provider, sink,
+            nativeDatStore: nativeSaveStore);
         if (scripts != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);

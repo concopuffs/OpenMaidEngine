@@ -3,6 +3,7 @@ using System.Linq;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Sys4;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets.</summary>
@@ -53,10 +54,18 @@ internal class RecordingHost : IHost
     public readonly List<string> Warnings = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
+    public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
     public int CursorClearCount;
     public int SceneContextResets;
     public void ReportWarning(string message) => Warnings.Add(message);
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
+    public RgbaImage? CaptureSurfacePixels(int slot)
+        => SurfacePixels.TryGetValue(slot, out var image) ? image : null;
+    public bool ReplaceSurfacePixels(int slot, RgbaImage image)
+    {
+        SurfacePixels[slot] = image;
+        return true;
+    }
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
         => SurfaceStrings.Add((surfaceSlot, x, y, text));

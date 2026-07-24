@@ -3426,13 +3426,47 @@ current per-message state. Six focused tests cover exact bytes, malformed files,
 the installed native oracle, queue/growth behavior, paired filesystem transactions, and fresh-VM opcode
 continuity.
 
-**Next persistence step:** implement numbered active-frame SAVE##.DAT layouts and paired BMP `.STH`
-thumbnail lifecycle. JSON inspection/export and mod-owned namespaced state remain extended-mode work.
+**Next persistence step:** implement the numbered pair/thumbnail/frame-boundary layer, then use that proven
+surface to implement the larger layout-3 active-frame/global payload. JSON inspection/export and mod-owned
+namespaced state remain extended-mode work.
 
 Validation: all 370 engine tests pass, including the installed read-only RT.DAT round-trip oracle;
 opcode generator tests/lint and the Godot C# build are clean. SC0000 is now 127/129 distinct opcodes
 handled (98.4%); its only remaining effectful gaps are numbered-save restore boundaries `0x1ad`×6 and
 `0xae`×1.
+
+### Persistence implementation step 4 — numbered pair, metadata, thumbnail, and frame boundary (2026-07-24)
+
+The bounded outer numbered-save lifecycle is now implemented before the much larger logical state payload.
+Himegari's numbered `.DAT` compatibility id is `0x42323234`, distinct from shared `SAVE.DAT`/`RT.DAT`
+id `0x4a343234`; `NativeSaveIdentity` and the directory store now validate those domains independently.
+Opcode `0x1a0` reads and validates only the fixed header, while `0x1ab`/`0x1ac` attempt both native
+`SAVE%02d.DAT` and `SAVE%02d.STH` members and reproduce DAT-failure/STH-precedence statuses.
+
+`NumberedThumbnailCodec` reproduces the installed native `.STH` dialect: bottom-up 24-bit BGR BMP,
+four-byte row padding, 112x84 installed dimensions, and the historical `bfSize` value that omits the
+physically present 14-byte file header. Host capture/replacement seams connect this to Godot surfaces;
+`0x1ae` and `0x1af` expose the native status contract. Godot redirects the engine-owned save root to
+isolated `user://SAVE` while retaining the native names and formats, so it never mutates the original
+installation's AppData saves.
+
+Opcode `0x1ad` now marks the current `ExecFrame` by identity. The boundary survives nested calls and clears
+when its owning frame unwinds, matching AGE's single context-index marker and providing the exact cutoff
+the next serializer slice needs. It is no longer counted as a no-op, but this step deliberately does not
+claim load-compatible numbered `.DAT` bodies: layout-3's fixed state, six global banks, active frames,
+history, resources, surfaces, and retained graphics remain to be serialized together.
+
+Seven focused tests cover exact BMP bytes and round-trip, the installed read-only thumbnail oracle,
+header-only metadata, separate compatibility ids, pair failure precedence, VM opcode integration, and both
+resume-marker unwind cases.
+
+Validation: all 377 engine tests pass; the Godot C# build has zero warnings and the threaded headless
+self-test reports `SELFTEST OK`. SC0000 now has 128/129 distinct opcodes handled (99.2%); only the active
+numbered-load restoration rendezvous `0xae` remains effectful and unimplemented there.
+
+**Next persistence step:** implement complete numbered logical layout 3 and wire `0x19e`, `0x1a1`, and
+the active branch of `0xae`; retain `0x19f` as the mapped but corpus-unused data-only load path. JSON
+inspection/export remains an additive extended-mode feature.
 
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 

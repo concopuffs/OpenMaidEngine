@@ -1,4 +1,5 @@
 using Age.Engine.Model;
+using Age.Engine.Sys4;
 
 namespace Age.Engine.Hosting;
 
@@ -91,6 +92,10 @@ public interface IHost
     // numbered surfaces, then block while the engine alpha-composites target over source.
     void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument) { }
     void CreateTexture(int slot, int width, int height);
+    /// <summary>Return a stable RGBA snapshot of one numbered surface, or null when unavailable.</summary>
+    RgbaImage? CaptureSurfacePixels(int slot) => null;
+    /// <summary>Replace one numbered surface from decoded RGBA pixels. False means unsupported.</summary>
+    bool ReplaceSurfacePixels(int slot, RgbaImage image) => false;
     void SetTexture(long resourceId, int slot);
     void SetTexture(long resourceId, int slot, long colorKey) => SetTexture(resourceId, slot);
     void ReleaseSurface(int slot) { }

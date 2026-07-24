@@ -1610,12 +1610,11 @@ Corpus placement agrees with the native dataflow: 1,928 executions appear across
 return paths from `HISTORY`, `MENU`, `HIDEWIN`, and `INPUTNAME`. Those calls re-establish the enclosing ADV
 frame as the safe numbered-save resume point after modal/nested scripts finish.
 
-**Port implication:** the current port-owned JSON session snapshot persists only global integer/string banks
-and deliberately has no active-frame or numbered-save backend. Treating `0x1ad` as a no-op is behaviorally
-neutral only under that present limitation; counting it as faithfully implemented would be misleading. Its
-real implementation belongs in the future unified save architecture, where the VM must serialize the active
-`ExecFrame` chain and remember which frame is the resume boundary. This is the same architectural deferral as
-the already-deferred profile/read-state work, not a reason to invent a seed or offset-specific shortcut.
+**Port implication:** the port-owned JSON session snapshot still persists only global integer/string banks,
+but the VM now tracks `0x1ad` as an identity reference to the active `ExecFrame`. The marker survives nested
+calls and clears when that same frame unwinds, exposing the inclusive zero-based cutoff for the native
+serializer. The following numbered-payload slice must consume this boundary while serializing the frame
+chain; no script seed or offset-specific shortcut is involved.
 
 ### Native persistence opcode family and file layouts (resolved 2026-07-24)
 
@@ -1652,6 +1651,11 @@ Save paths are native engine policy, not script-provided strings. Every numbered
 `save_root_resolve@0x40b880`, then formats one of the engine-owned names (`SAVE%2.2d.DAT`,
 `SAVE%2.2d.STH`, `SAVE.DAT`, `SAVE.BAK`, `RT.DAT`, and their `$$` temporary names) under that root.
 The script operands select the operation and numbered slot only.
+
+The port preserves that ownership boundary while intercepting the root: Godot supplies `user://SAVE`, and
+`DirectoryNativeDatStore` owns the fixed native names beneath it. This isolates authored port saves from the
+original installation while retaining compatible file structure; another root can be injected without
+changing script semantics.
 
 The resolver reads two per-game settings from the SYS4INI-backed settings registry:
 `set:UseAppDataFolder` and `set:SavePath`. When `UseAppDataFolder == 1`, the modern-Windows branch
@@ -1719,6 +1723,10 @@ Both shared and numbered `.DAT` payloads use the same native container. The fixe
 | `0x11c` | 4 | `SaveVersion1` / logical state-layout version |
 | `0x120` | 4 | `SaveVersion2` / payload-codec subversion |
 
+The wrapper algorithm is shared, but Himegari's identities are domain-specific: shared `SAVE.DAT` and
+`RT.DAT` use compatibility id `0x4a343234`, while installed numbered `SAVE##.DAT` files use
+`0x42323234`. Both carry game id `姫狩りダンジョンマイスター` and versions 3.10.
+
 `save_container_read_and_validate_header@0x4306f0` is the metadata-only path used by `0x1a0`.
 The full writer/reader are `save_container_encode_and_write@0x42fac0` and
 `save_container_read_and_decode@0x42ff80`. Immediately after the header is this exact 20-byte codec frame:
@@ -1763,7 +1771,9 @@ resources, retained state, history, and—when requested by `0x1a1`—the active
 
 The thumbnail is a separate file, never part of that logical state. Both renderer paths prove `.STH` is an
 ordinary bottom-up 24-bit BMP under a nonstandard extension: `BM`, pixel offset `0x36`, a 40-byte info
-header, BGR pixels, and four-byte row padding. The handle-based path is
+header, BGR pixels, and four-byte row padding. Installed Himegari thumbnails are 112x84 and 28,278 bytes.
+The native writer records `bfSize=28,264`—DIB header plus pixel bytes, omitting the 14-byte BMP file header
+even though that header and the `0x36` pixel offset are physically present. The handle-based path is
 `gfx_surface_write_bmp24_to_handle@0x434bf0`; backend 1 reads back supported D3D surface formats and passes
 them to `gfx_surface_write_bmp24_to_path@0x475420`. The load side uses the renderer image decoder. A
 compatibility implementation should therefore preserve the paired-file lifecycle and BMP payload rather than
@@ -1774,7 +1784,7 @@ inventing a second save container.
 a profile/save service so extended mode can later add JSON inspection/export, namespaced mod state, migrations,
 or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
 
-**Port correspondence (2026-07-24, shared payload and selected cells implemented):**
+**Port correspondence (2026-07-24, numbered pair/thumbnail layer implemented):**
 `Age.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
 SYSTEMTIME/playtime/version metadata, both CRC layers, version-2 compression wrapper, and exact reversible
 DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect already consumed by
@@ -1786,8 +1796,13 @@ DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect alre
 lossless opaque-section preservation. `SharedProfile` owns selected integer/string maps and explicit
 load/save lifecycle; `GameSession` injects it into every fresh VM. Opcodes `0x1a2`/`0x1a3` and
 `0x1a9`/`0x1aa` now implement native upsert and missing-value defaults for direct cells and resolved
-global pointers. `RT.DAT` is now implemented as the separate S3RT layer described below. Thumbnails and
-numbered active-frame payloads remain later layers; the existing `GameSession` JSON snapshot is unchanged.
+global pointers. `RT.DAT` is now implemented as the separate S3RT layer described below. The numbered store
+validates its distinct compatibility id, queries metadata without decoding payloads, and performs exact
+paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
+dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
+frame marker) are wired. Godot injects the store at `user://SAVE`. Full layout-3 global/frame/history/
+resource/retained-gfx serialization and the `0x19e`/`0x1a1`/`0xae` save-resume path remain the next layer;
+the existing `GameSession` JSON snapshot is unchanged.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 

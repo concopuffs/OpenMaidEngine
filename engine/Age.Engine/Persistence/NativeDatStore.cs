@@ -7,16 +7,25 @@ public sealed record NativeSaveIdentity(
     uint CompatibilityId,
     string GameId,
     int SaveVersion1,
-    int SaveVersion2)
+    int SaveVersion2,
+    uint? NumberedCompatibilityId = null)
 {
-    public NativeSaveMetadata CreateMetadata(NativeSystemTime timestamp, uint accumulatedPlaySeconds)
-        => new(Magic, CompatibilityId, GameId, timestamp, accumulatedPlaySeconds, SaveVersion1, SaveVersion2);
+    public uint EffectiveNumberedCompatibilityId => NumberedCompatibilityId ?? CompatibilityId;
 
-    public void Validate(NativeSaveMetadata metadata)
+    public NativeSaveMetadata CreateMetadata(
+        NativeSystemTime timestamp,
+        uint accumulatedPlaySeconds,
+        bool numbered = false)
+        => new(
+            Magic, numbered ? EffectiveNumberedCompatibilityId : CompatibilityId, GameId,
+            timestamp, accumulatedPlaySeconds, SaveVersion1, SaveVersion2);
+
+    public void Validate(NativeSaveMetadata metadata, bool numbered = false)
     {
         if (metadata.Magic != Magic)
             throw new InvalidDataException($"Native save generation mismatch: expected {Magic}, got {metadata.Magic}.");
-        if (metadata.CompatibilityId != CompatibilityId)
+        uint expectedCompatibilityId = numbered ? EffectiveNumberedCompatibilityId : CompatibilityId;
+        if (metadata.CompatibilityId != expectedCompatibilityId)
             throw new InvalidDataException("Native save compatibility id mismatch.");
         if (!StringComparer.Ordinal.Equals(metadata.GameId, GameId))
             throw new InvalidDataException("Native save game id mismatch.");
@@ -41,8 +50,13 @@ public interface INativeDatStore
     void SaveShared(ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
     ReadTextDatabaseSnapshot? LoadReadText();
     void SaveReadText(ReadTextDatabaseSnapshot snapshot);
+    NativeSaveMetadata? QueryNumberedMetadata(int slot);
     NativeSaveDocument? LoadNumbered(int slot);
     void SaveNumbered(int slot, ReadOnlySpan<byte> payload, NativeSystemTime timestamp, uint accumulatedPlaySeconds);
+    int DeleteNumberedPair(int slot);
+    int CopyNumberedPair(int sourceSlot, int destinationSlot);
+    byte[]? LoadNumberedThumbnail(int slot);
+    void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data);
 }
 
 /// <summary>
@@ -143,7 +157,21 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
     public NativeSaveDocument? LoadNumbered(int slot)
     {
         string path = Path.Combine(_root, NumberedFileName(slot));
-        return File.Exists(path) ? LoadAndValidate(path) : null;
+        return File.Exists(path) ? LoadAndValidate(path, numbered: true) : null;
+    }
+
+    public NativeSaveMetadata? QueryNumberedMetadata(int slot)
+    {
+        string path = Path.Combine(_root, NumberedFileName(slot));
+        if (!File.Exists(path)) return null;
+        using var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.Read, NativeSaveContainerCodec.HeaderSize,
+            FileOptions.SequentialScan);
+        byte[] header = new byte[NativeSaveContainerCodec.HeaderSize];
+        stream.ReadExactly(header);
+        NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(header);
+        _identity.Validate(metadata, numbered: true);
+        return metadata;
     }
 
     public void SaveNumbered(
@@ -153,9 +181,40 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         uint accumulatedPlaySeconds)
     {
         byte[] encoded = NativeSaveContainerCodec.Encode(
-            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds));
+            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds, numbered: true));
         Directory.CreateDirectory(_root);
         WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
+    }
+
+    public int DeleteNumberedPair(int slot)
+    {
+        bool dataDeleted = TryDelete(Path.Combine(_root, NumberedFileName(slot)));
+        bool thumbnailDeleted = TryDelete(Path.Combine(_root, NumberedThumbnailFileName(slot)));
+        return !thumbnailDeleted ? 2 : !dataDeleted ? 1 : 0;
+    }
+
+    public int CopyNumberedPair(int sourceSlot, int destinationSlot)
+    {
+        Directory.CreateDirectory(_root);
+        bool dataCopied = TryCopy(
+            Path.Combine(_root, NumberedFileName(sourceSlot)),
+            Path.Combine(_root, NumberedFileName(destinationSlot)));
+        bool thumbnailCopied = TryCopy(
+            Path.Combine(_root, NumberedThumbnailFileName(sourceSlot)),
+            Path.Combine(_root, NumberedThumbnailFileName(destinationSlot)));
+        return !thumbnailCopied ? 2 : !dataCopied ? 1 : 0;
+    }
+
+    public byte[]? LoadNumberedThumbnail(int slot)
+    {
+        string path = Path.Combine(_root, NumberedThumbnailFileName(slot));
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+    }
+
+    public void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data)
+    {
+        Directory.CreateDirectory(_root);
+        WriteThrough(Path.Combine(_root, NumberedThumbnailFileName(slot)), data);
     }
 
     public static string NumberedFileName(int slot)
@@ -164,11 +223,40 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         return "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture) + ".DAT";
     }
 
-    private NativeSaveDocument LoadAndValidate(string path)
+    public static string NumberedThumbnailFileName(int slot)
+    {
+        if (slot < 0) throw new ArgumentOutOfRangeException(nameof(slot));
+        return "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture) + ".STH";
+    }
+
+    private NativeSaveDocument LoadAndValidate(string path, bool numbered = false)
     {
         NativeSaveDocument document = NativeSaveContainerCodec.Decode(File.ReadAllBytes(path));
-        _identity.Validate(document.Metadata);
+        _identity.Validate(document.Metadata, numbered);
         return document;
+    }
+
+    private static bool TryDelete(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private static bool TryCopy(string source, string destination)
+    {
+        try
+        {
+            File.Copy(source, destination, overwrite: true);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     private static void WriteThrough(string path, ReadOnlySpan<byte> data)
