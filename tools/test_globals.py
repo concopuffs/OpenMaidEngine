@@ -124,8 +124,10 @@ def test_load_and_lint():
           and entries[0xec0f5]["name"] == "stage_display_number_minor"
           and entries[0xed47d]["name"] == "stage_minimap_atlas_origin_y"
           and entries[0xed865]["name"]
-          == "stage_clear_base_spendable_point_rewards",
-          "STINIT2 stage numbering, minimap, and point rewards are curated")
+          == "stage_clear_base_spendable_point_rewards"
+          and entries[0xedc4d]["name"]
+          == "stage_authoring_difficulty_tiers",
+          "STINIT2 numbering, minimap, points, and authoring tiers are curated")
     check(entries[0xee035]["columns"]
           == {"0": "entry", "1": "clear", "2": "failure"}
           and entries[0xeebed]["name"] == "stage_extra_dungeon_flags"

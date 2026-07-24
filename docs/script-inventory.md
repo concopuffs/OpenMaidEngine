@@ -179,8 +179,9 @@ all 296 populated lines divide into three uncleared and three cleared slots. The
 contains main-progression/EX flags, seven required and seven forbidden story gates, shared unlock
 groups, display numbers, map/minimap geometry, performance-scaled point and bronze/silver/gold coin
 rewards, and entry/clear/failure SCJUMP decisions. All 174 transitions resolve through SCINIT and
-all 74 loader ids resolve to STINIT.BIN. The populated `0xedc4d` column has no script reader and
-remains explicitly unresolved.
+all 74 loader ids resolve to STINIT.BIN. The populated `0xedc4d` column has no script reader; its
+1..8 progression/reward correlation is retained as the medium-confidence, engine-dead
+`stage_authoring_difficulty_tiers` array.
 
 RTINIT is a seventh banked shape. Its 3,336 writes populate twenty parallel `1000 × 20` banks: ten
 movement banks consumed by MVRTN/RTN_M providers and ten battle banks consumed by BTRTN/RTN_B providers.

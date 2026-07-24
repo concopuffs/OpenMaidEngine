@@ -3367,6 +3367,17 @@ confidence = "high"
 depends_on = ["0x671b", "0x4dfbb"]
 
 [[global]]
+address = "0xedc4d"
+name = "stage_authoring_difficulty_tiers"
+category = "data-table"
+type = "int[1000]"
+value_domain = "ordinal 1..8 across all 66 mapped stages; event-only rows are zero"
+usage = "Authoring-only stage challenge/progression tier. No shipped script reads the array and the native engine can only reach VM globals through script operands, so it has no runtime effect. The ordinal correlates strongly with base clear points and encounter progression: late story maps are tier 6, EX maps use tiers 5 and 7, and the final EX map alone is tier 8. The descriptive name is correlation-based."
+source = "inference"
+confidence = "med"
+depends_on = ["0xed865", "0xe782f", "0xe784d", "0xeebed"]
+
+[[global]]
 address = "0xee035"
 name = "stage_scjump_decision_ids"
 category = "data-table"

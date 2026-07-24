@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-5054 globals (417 curated, 4637 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+5055 globals (418 curated, 4637 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -247,6 +247,7 @@
 | `0xed095` | stage_map_max_tile_y | high | investigation | STINIT2's inclusive bottom map bound indexed by stage id. The maximum shipped value 800 explains MPINIT's final authored doubled grid row at Y 1600. |
 | `0xed47d` | stage_minimap_atlas_origin_y | high | investigation | FIELD and SELSTAGE copy this to the minimap drawing origin. SELSTAGE subtracts it from stage_map_min_tile_y to crop the selected stage's vertically packed minimap strip and labels the following 150 atlas rows. |
 | `0xed865` | stage_clear_base_spendable_point_rewards | high | investigation | STAGECLEAR multiplies this base award by the turn/party-performance percentage, divides by 100, adds any card bonus, and credits the capped shared_spendable_points balance. |
+| `0xedc4d` | stage_authoring_difficulty_tiers | med | inference | Authoring-only stage challenge/progression tier. No shipped script reads the array and the native engine can only reach VM globals through script operands, so it has no runtime effect. The ordinal correlates strongly with base clear points and encounter progression: late story maps are tier 6, EX maps use tiers 5 and 7, and the final EX map alone is tier 8. The descriptive name is correlation-based. |
 | `0xee035` | stage_scjump_decision_ids | high | investigation | FORT dispatches column zero before entering a stage or for an event-only row. FIELD and a few scene return paths dispatch column one after clear and column two after failure or forced-retreat outcomes; all 174 populated references resolve through SCINIT. Columns: 0=entry, 1=clear, 2=failure. |
 | `0xeebed` | stage_extra_dungeon_flags | high | investigation | Marks the eight shipped EX dungeons. FORT, SELSTAGE, and management screens combine it with stage_clear_state when deciding whether to show and apply the stage's post-clear coin rewards. |
 | `0xeefd5` | stage_clear_coin_quantities | high | investigation | FORT and SELSTAGE render the three clear-reward quantities beside coin icons. Management screens grant the same values as item ids 91..93 after a cleared or EX-marked stage. Columns: 0=bronze_coin_item_91, 1=silver_coin_item_92, 2=gold_coin_item_93. |

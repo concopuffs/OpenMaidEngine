@@ -3215,8 +3215,10 @@ to the shared `STINIT.BIN` selector (74/74).
 
 Regressions protect the corrected record geometry, complete instruction accounting, all six text
 slots, display kinds, story gates, unlock groups, map/minimap coordinates, rewards, SCJUMP joins,
-and loader joins. The 66 populated values at `0xedc4d` have no script consumer and remain explicit
-as unresolved provenance.
+and loader joins. The 66 populated values at `0xedc4d` have no script consumer. Their ordinal 1..8
+distribution tracks authored challenge/reward progression: late story maps are tier 6, EX maps use
+tiers 5 and 7, and the final EX map alone is tier 8. Because the native engine can reach VM globals
+only through script operands, the array is now named `stage_authoring_difficulty_tiers` at medium
+confidence and explicitly classified as engine-dead authoring metadata.
 
-**Next:** use live/native observation only to settle STINIT2's unconsumed `0xedc4d` column; the
-remaining script-visible stage-definition surface is closed.
+**Next:** continue consumer-led naming of the remaining two-dimensional tables; STINIT2 is closed.

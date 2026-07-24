@@ -155,7 +155,8 @@ matrix, retaining three uncleared and three cleared lines per stage. The schema 
 event-only, and EX presentation; main-progression, unlock-group, and seven-column story gates;
 tile/doubled-grid/minimap geometry; point and bronze/silver/gold coin rewards; all 174
 entry/clear/failure decisions through SCINIT; and all 74 loader ids to STINIT.BIN. The 66 populated
-cells at `0xedc4d` remain raw and explicitly unresolved because no script reads the column.
+cells at `0xedc4d` are exposed as medium-confidence authoring-only difficulty tiers: their 1..8
+ordering tracks challenge/reward progression, but no shipped script reads the array.
 
 Footer-mode MPINIT classifies all 1,472 copies as fifty-cell rows within one stride-53 terrain atlas.
 It derives grid Y from each destination, retains 127 implicit-zero gaps, and joins STINIT2's inclusive

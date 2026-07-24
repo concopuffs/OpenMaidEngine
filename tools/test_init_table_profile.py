@@ -430,7 +430,12 @@ def main() -> int:
         "resolved_scjump_reference_count": 12,
         "resolved_loader_script_count": 5,
         "clear_coin_reward_cell_count": 4,
-        "unresolved_parameter_population": 4,
+        "authoring_difficulty_tier_population": 4,
+        "authoring_difficulty_tier_counts": {
+            "1": 1,
+            "2": 2,
+            "3": 1,
+        },
         "records": [{}, {}, {}, {}, {}],
     }
     stage_summary = profile.profile_stage_definitions(stage_fixture)
@@ -442,6 +447,7 @@ def main() -> int:
     assert "- stage definitions: 5/1000 rows" in rendered_stages
     assert "- mapped/event-only stages: 4/1" in rendered_stages
     assert "- SCJUMP joins: 12/12" in rendered_stages
+    assert "- authoring-only difficulty tiers: 4" in rendered_stages
 
     training_fixture = {
         "table": "TRAINING",

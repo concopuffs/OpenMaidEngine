@@ -2079,9 +2079,20 @@ def test_stage_definitions() -> None:
         "STINIT2 resolves the spendable-point and three coin reward columns",
     )
     check(
-        meta["unresolved_parameter_population"] == 66
-        and by_id[167]["unresolved_parameter_0xedc4d"] == 8,
-        "STINIT2 preserves the one still-unresolved populated stage column",
+        meta["authoring_difficulty_tier_population"] == 66
+        and meta["authoring_difficulty_tier_counts"]
+        == {
+            "1": 7,
+            "2": 11,
+            "3": 17,
+            "4": 5,
+            "5": 12,
+            "6": 9,
+            "7": 4,
+            "8": 1,
+        }
+        and by_id[167]["authoring_difficulty_tier"] == 8,
+        "STINIT2 preserves the inferred authoring-only difficulty tiers",
     )
 
 

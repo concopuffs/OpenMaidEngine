@@ -708,7 +708,7 @@ STAGE_DEFINITION_ARRAYS = {
     "map_max_tile_y": (MAP_STAGE_MAX_Y, 1),
     "minimap_atlas_origin_y": (0xED47D, 1),
     "clear_base_spendable_point_reward": (0xED865, 1),
-    "unresolved_parameter_0xedc4d": (0xEDC4D, 1),
+    "authoring_difficulty_tier": (0xEDC4D, 1),
     "scjump_decision_ids": (0xEE035, 3),
     "extra_dungeon_flag": (0xEEBED, 1),
     "clear_coin_quantities": (0xEEFD5, 3),
@@ -6130,11 +6130,11 @@ def extract_stage_definitions(scr):
                 if coin_quantities[column]
             ],
         }
-        unresolved = scalar(
-            "unresolved_parameter_0xedc4d", stage_id
+        difficulty_tier = scalar(
+            "authoring_difficulty_tier", stage_id
         )
-        if unresolved:
-            record["unresolved_parameter_0xedc4d"] = unresolved
+        if difficulty_tier:
+            record["authoring_difficulty_tier"] = difficulty_tier
         records.append(record)
 
     field_counts = {
@@ -6166,6 +6166,9 @@ def extract_stage_definitions(scr):
         "minimap_atlas_origin_y": "stage_minimap_atlas_origin_y",
         "clear_base_spendable_point_reward": (
             "stage_clear_base_spendable_point_rewards"
+        ),
+        "authoring_difficulty_tier": (
+            "stage_authoring_difficulty_tiers"
         ),
         "scjump_decision_ids": "stage_scjump_decision_ids",
         "extra_dungeon_flag": "stage_extra_dungeon_flags",
@@ -6265,9 +6268,16 @@ def extract_stage_definitions(scr):
         "clear_coin_reward_cell_count": field_counts[
             "clear_coin_quantities"
         ],
-        "unresolved_parameter_population": field_counts[
-            "unresolved_parameter_0xedc4d"
+        "authoring_difficulty_tier_population": field_counts[
+            "authoring_difficulty_tier"
         ],
+        "authoring_difficulty_tier_counts": {
+            str(tier): sum(
+                record.get("authoring_difficulty_tier") == tier
+                for record in records
+            )
+            for tier in range(1, 9)
+        },
         "consumer_contract": {
             "FORT.BIN": (
                 "enumerates named rows, applies required/forbidden story "
@@ -6910,7 +6920,8 @@ def write_data_index(data_dir: Path) -> None:
         "slots, progression and story gates, numbered/EVENT/EX presentation, map and",
         "minimap geometry, point/coin rewards, and all 174 SCINIT-resolved entry, clear,",
         "and failure decisions. All rows resolve their shared STINIT loader reference;",
-        "the unconsumed 0xedc4d column remains explicit rather than receiving a guess.",
+        "the unconsumed 0xedc4d column is retained as a medium-confidence,",
+        "authoring-only difficulty tier rather than being assigned runtime behavior.",
         "",
         "MPINIT's dedicated terrain-atlas schema exposes 1,472 authored rows of a sparse",
         "53-column half-tile grid. It joins STINIT2's doubled tile-bound rectangles to 66",

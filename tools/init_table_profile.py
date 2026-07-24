@@ -615,8 +615,11 @@ def profile_stage_definitions(data: dict) -> dict:
         "clear_coin_reward_cell_count": data.get(
             "clear_coin_reward_cell_count", 0
         ),
-        "unresolved_parameter_population": data.get(
-            "unresolved_parameter_population", 0
+        "authoring_difficulty_tier_population": data.get(
+            "authoring_difficulty_tier_population", 0
+        ),
+        "authoring_difficulty_tier_counts": data.get(
+            "authoring_difficulty_tier_counts", {}
         ),
     }
 
@@ -818,8 +821,9 @@ def render_markdown(data: dict, rows: list[dict], limit: int) -> str:
             f"{stage_profile['stage_count']}",
             f"- clear coin reward cells: "
             f"{stage_profile['clear_coin_reward_cell_count']}",
-            f"- unresolved 0xedc4d cells: "
-            f"{stage_profile['unresolved_parameter_population']}",
+            f"- authoring-only difficulty tiers: "
+            f"{stage_profile['authoring_difficulty_tier_population']} "
+            f"({stage_profile['authoring_difficulty_tier_counts']})",
         ])
     elif definition_profile := profile_card_definitions(data):
         lines.extend([
