@@ -17,7 +17,7 @@ Container format (little-endian x86), signature "S4IC422 " at offset 0:
 
 The LZSS stream (GARbro-style: 0x1000 ring buffer, zero-filled, init pos 0xFEE,
 control bits LSB->MSB, 1=literal, 0=two-byte back-reference: offset=(hi&0xf0)<<4
-| lo, length=3+(hi&0xf)) decompresses to a plain directory:
+| lo, length=3+(hi&0xf)) begins with a plain directory:
 
     uint32   arc_count
     { char name[256] } x arc_count        archive filenames (DATA1.ALF ..)
@@ -25,6 +25,10 @@ control bits LSB->MSB, 1=literal, 0=two-byte back-reference: offset=(hi&0xf0)<<4
     { char name[64]; uint32 arc_id;       one record per asset
       uint32 file_number; uint32 offset;
       uint32 size } x file_count          (80 bytes each)
+
+The directory is followed by VM-bank metadata and a per-game engine-settings
+trailer. This tool currently emits only the asset directory; see
+docs/sys4-format-notes.md for the trailer finding.
 
 Entries whose name is "@" are placeholders and skipped (matches GARbro/exs4alf).
 

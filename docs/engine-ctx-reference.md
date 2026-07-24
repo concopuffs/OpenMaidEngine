@@ -99,8 +99,8 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x9c660` | `sys4ini_records` | `void*` | SYS4INI 80-byte record base at embedded FileDB+0x414; record = base + id*0x50 |
 | `0x9f274` | `mounted_aai_catalogs` | `void*` | base of 256-entry selector-keyed AAI catalog-pointer table inside the embedded FileDB; op 0x143 scans slots 1..255 from +0x9f278 |
 | `0x9f278` | `mounted_aai_catalog_selector_1` | `void*` | selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255 |
-| `0xa0cc0` | `screen_w` | `int` | screen width (640) |
-| `0xa0cc4` | `screen_h` | `int` | screen height (480) |
+| `0xa0cc0` | `screen_w` | `int` | logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800) |
+| `0xa0cc4` | `screen_h` | `int` | logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600) |
 | `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |
 | `0xa0ce4` | `run_state_flags` | `uint` | interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward) |
 | `0xa0ce8` | `timed_callback_abort_signal` | `int` | scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured |

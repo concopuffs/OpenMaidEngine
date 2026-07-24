@@ -146,6 +146,24 @@ decompile `ctx->cur_ctx_index` / `ctx->frame_instruction_word_count` / `ctx->run
 
 ## Findings
 
+### Logical screen dimensions come from the SYS4INI settings trailer (resolved 2026-07-24)
+
+AGE has a compiled fallback, but the shipped game's logical resolution is data-driven. Engine construction
+at `0x413860` initializes `EngineCtx.screen_w/screen_h` to `640x480`, and
+`engine_settings_register_defaults@0x46be30` independently registers `set:WinX=640` and
+`set:WinY=480`. During `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0`, the loader advances past
+the archive/file directory and VM-bank metadata into the remaining SYS4INI data, then calls
+`engine_apply_sys4ini_settings@0x4056d0`. That routine loads the serialized settings through the engine
+settings service and copies `set:WinX`/`set:WinY` into the two context fields before surfaces and the main
+window are created.
+
+The decompressed Himegari SYS4INI trailer explicitly contains `SCREENX=800` and `SCREENY=600`. As an
+independent cross-game check, Kamidori's trailer contains `1024x576`. Thus the answer for the logical game
+canvas is **SYS4INI per-game data overriding a generic EXE fallback**, not a separately compiled AGE
+binary for every resolution. `display:ScreenMode`, `display:FullScreenWidth/Height`, aspect mode, and
+related registered settings govern presentation/fullscreen selection separately; they do not redefine the
+authored logical canvas. The serialized trailer location is recorded in `sys4-format-notes.md`.
+
 ### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
 
 The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong**,

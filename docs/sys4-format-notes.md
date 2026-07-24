@@ -14,6 +14,18 @@ live in `tools/probe_*.py`.
 > `vm-map/opcodes.toml`. The tag values below (0x71/0x03/0x8F etc.) are the
 > *opcodes at table targets*: 0x8F=`call`, 0x03=`call-script`, 0x71=`u0041A7B0`.
 
+## SYS4INI directory and per-game settings trailer — CONFIRMED
+
+`SYS4INI.BIN` is not only the asset catalog. Its `S4IC` LZSS stream begins with the archive names and
+80-byte file records documented in `asset-resolution-re.md`, then continues with VM-bank metadata and a
+NUL-delimited per-game engine-settings trailer. `tools/parse_sys4ini.py` currently consumes only the
+directory prefix.
+
+The Himegari trailer contains `SCREENX=800` and `SCREENY=600`; Kamidori's independent SYS4INI contains
+`SCREENX=1024` and `SCREENY=576`. This establishes the authored logical canvas as per-game data. Native
+initialization and the executable's `640x480` fallback are documented in `engine-re.md`;
+fullscreen/display-mode settings are a separate concern from these logical dimensions.
+
 ## Header — CONFIRMED
 
 Fixed 60-byte (0x3C) header: 8-byte magic + thirteen little-endian u32 fields.

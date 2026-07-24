@@ -476,12 +476,12 @@ note = "selector-one cell and op 0x143 scan start; subsequent dwords are selecto
 offset = 0xa0cc0
 name = "screen_w"
 type = "int"
-note = "screen width (640)"
+note = "logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800)"
 [[field]]
 offset = 0xa0cc4
 name = "screen_h"
 type = "int"
-note = "screen height (480)"
+note = "logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600)"
 [[field]]
 offset = 0xa0cc8
 name = "screen_bpp"
