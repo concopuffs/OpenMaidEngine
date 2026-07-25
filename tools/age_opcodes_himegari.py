@@ -77,6 +77,5 @@ INFERRED: dict[int, dict] = {
     0x23b: dict(name='draw-decimal-glyphs', category='draw', noop=False, confidence='high', source='investigation', summary='Draw an integer as decimal glyph objects from a style registered by opcode 0x13a.'),
     0x23f: dict(name='query-surface-stop-time-ms', category='draw', noop=False, confidence='high', source='investigation', summary='(out_stop_time_ms)(surface_slot) — query the DirectShow stop position retained by a loaded movie surface, convert seconds to integer milliseconds by truncating toward zero, and write -1 when the movie slot is empty. Port-only host decoder failure is modeled as an explicitly completed, zero-duration movie.'),
     0x258: dict(name='decl?', category='marker', noop=True, confidence='low', source='harness', summary='2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?'),
-    0x259: dict(name='script-entry', category='marker', noop=True, confidence='low', source='harness', summary='zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural'),
     0x2c5: dict(name='byte-string-length', category='compute', noop=False, confidence='high', source='investigation', summary="Write the resolved NUL-terminated engine string's raw byte length."),
 }

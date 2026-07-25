@@ -477,7 +477,10 @@ the `0xae` rendezvous. The real `SAVE.BIN` script is covered end to end for list
 read-only installed-save gate now continues through `CALLBACK_LOAD`, reconstructs
 `SYSTEM4.BIN → FORT.BIN`, and reaches FORT's `CHMENU` gameplay poll. Full restoration replaces only the
 serialized mutable bank prefixes (preserving initialized unit/stage/string definitions), restores the
-retained BGM/SFX state, and rebuilds graphics/history/frame state. JSON inspection/export,
+retained BGM/SFX state, preserves initialized flag-zero system surfaces while overlaying explicit saved
+reload records, reproduces the native configuration-gated all-surface release when explicitly enabled,
+and writes native per-slot reload/created metadata rather than treating every texture as reloadable.
+Opcode `0x259` supplies its real script-entry reload-policy clear. JSON inspection/export,
 namespaced mod data, and migrations remain additive extended-mode work rather than 1.0 compatibility
 requirements.
 

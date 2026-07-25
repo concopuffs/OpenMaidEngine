@@ -1750,9 +1750,9 @@ diagnostic/extended-mode surface.
 #### Layout-3 restore mechanics and port correspondence (2026-07-24)
 
 The port tracks the native global banks separately at runtime, captures the marked frame chain, serializes
-live surfaces and retained objects, and reloads host textures from the 20-byte surface records. Full load
-first replaces each serialized mutable bank prefix while preserving initialization-authored cells beyond
-its count, restores history/gfx and retained audio, unwinds the obsolete managed call chain, runs
+live surfaces and retained objects, and applies the 20-byte surface records' explicit reload flags. Full
+load first replaces each serialized mutable bank prefix while preserving initialization-authored cells
+beyond its count, restores history/gfx and retained audio, unwinds the obsolete managed call chain, runs
 `CALLBACK_LOAD.BIN` when
 the mounted script provider resolves it, starts the saved root at its `0xae` rendezvous, recursively
 reconstructs child frames, resumes parents after their saved T2 call sites,
@@ -1774,6 +1774,31 @@ FORT's BGM024 command immediately before its T1 resume boundary. Payload `+0x00c
 tracks both lifecycles through `0xbf`/`0xc2` and `0xb4`/`0xb6`, serializes them, and restores the active
 track plus saved SFX resources. The new EngineCtx fields and function annotations are applied to the
 saved `/v2` image.
+
+The surface records have a related preservation boundary. Resource id is at `+0x00`, packed color key at
+`+0x04`, `+0x08` is a reload flag rather than a general presence bit, `+0x0c` remains unknown, and
+`+0x10` marks a blank/mutable created surface. `gfx_surface_record_tables_init@0x472700` zeroes both
+1,000-record tables and initializes every resource id to `-1`.
+`gfx_surface_create_blank@0x477370` writes resource `-1` and created flag one;
+`gfx_surface_load_asset@0x477c40` writes resource/color and clears the created flag. Neither operation
+changes the reload flag. The layout-3 serializer copies all 20,000 live record bytes verbatim, rather
+than deriving reloadability from the presence of an asset.
+
+The restore loop calls `gfx_surface_load_asset` only when the saved reload flag is one and resource id is
+nonnegative. Otherwise the already-initialized surface survives. The optional all-surface release is
+separately gated by both `set:CreateObject` and `set:AutoFreeTex`; the registered defaults at
+`engine_settings_register_defaults@0x46be30` are one and zero respectively, matching Himegari's active
+path. Opcode `0x259` is also a real lifecycle operation:
+`op_0x259_script_entry_clear_surface_persistence_flags@0x417660` clears record `+0x08` and `+0x0c`
+across both native tables at every script entry.
+Installed slot 15 records resource `0x3383` with reload flag zero. SYSTEM4 loads that atlas before the
+save UI, and BUNKI cuts its reusable choice-box corners, borders, and winged top ornament from it. The
+port formerly released all 1,000 host surfaces unconditionally, so post-load BUNKI retained its black
+backing but lost the atlas decoration. Restoration now preserves live surfaces and overlays only flagged
+reload records by default, while `VmOptions.CreateObject && VmOptions.AutoFreeTextures` reproduces the
+native all-release branch. Port-authored saves emit the exact resource/reload/created fields, including
+`-1` for unused records, and opcode `0x259` clears the modeled reload policy without releasing textures.
+The corrected native functions are renamed/commented in the saved `/v2` image.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 

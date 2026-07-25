@@ -924,6 +924,11 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. The mapped field is also read by op 0x243: bit 1 suppresses its force-complete/clock-reset request.
 
+### 0x259 `script-entry` (script-entry, argc 0)
+- **summary:** zero-arg script/prologue entry; clears surface-record persistence fields +0x08 and +0x0c across both 1,000-record native tables before the declaration chain continues
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x259_script_entry_clear_surface_persistence_flags@0x417660 loops over both 20,000-byte surface-record tables (1,000 records x 20 bytes), writing zero to record +0x08 and +0x0c. SC0000 offset 0x0 and every observed script entry begins with this opcode; 0x258 continues the declaration chain. Port clears its modeled +0x08 reload policy; +0x0c remains opaque/unmodeled.
+
 ## input
 
 ### 0x86 `set-cursor-resource` (u0041B210, argc 1)
@@ -1148,11 +1153,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x258 `decl?` (u00422FE0, argc 2)
 - **summary:** 2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?
 - **grounding:** source=harness, confidence=low, noop_headless=True
-
-### 0x259 `script-entry` (u00416410, argc 0)
-- **summary:** zero-arg; the first instruction of a script (offset 0), opens the decl chain that 0x258 continues — script/prologue entry marker, structural
-- **grounding:** source=harness, confidence=low, noop_headless=True
-- **evidence:** SC0000 offset 0x0 = op 0x259 (argc 0); 0x258's summary names it 'script-entry 0x259'; VM treats it as no-op (default stub) across all 279 CLEAN A0 scenes
 
 ## unknown
 

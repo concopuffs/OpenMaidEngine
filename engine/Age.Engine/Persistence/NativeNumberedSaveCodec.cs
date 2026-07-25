@@ -177,11 +177,19 @@ public static class NativeNumberedSaveCodec
         => new(
             0, 0, new int[NativeNumberedSaveState.SoundEffectChannelCount],
             new byte[NativeNumberedSaveState.ResourceRecordsSize],
-            new byte[NativeNumberedSaveState.SurfaceRecordsSize],
+            EmptySurfaceRecords(),
             frames, Array.Empty<int>(), Array.Empty<int>(), Array.Empty<string>(),
             Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(),
             Array.Empty<NativeSavedGfxObject>(), 0, 0,
             new byte[NativeNumberedSaveState.GfxRecordSize]);
+
+    private static byte[] EmptySurfaceRecords()
+    {
+        byte[] result = new byte[NativeNumberedSaveState.SurfaceRecordsSize];
+        for (int slot = 0; slot < 1000; slot++)
+            WriteInt(result, slot * 20, -1);
+        return result;
+    }
 
     private static void WriteFrame(Span<byte> payload, int offset, NativeSavedScriptFrame frame, bool terminal)
     {

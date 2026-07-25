@@ -17,13 +17,17 @@ internal static class NativeGfxPersistenceCodec
     {
         GfxPersistenceSnapshot snapshot = gfx.CapturePersistenceSnapshot();
         byte[] surfaces = new byte[NativeNumberedSaveState.SurfaceRecordsSize];
-        foreach (var (slot, resourceId, colorKey, created) in snapshot.Surfaces)
+        for (int slot = 0; slot < SurfaceCount; slot++)
+            WriteInt(surfaces, slot * SurfaceRecordSize, -1);
+        foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces)
         {
-            if ((uint)slot >= SurfaceCount || created || resourceId < 0) continue;
-            int at = slot * SurfaceRecordSize;
-            WriteInt(surfaces, at, unchecked((int)resourceId));
-            WriteInt(surfaces, at + 4, PackNativeColorKey(colorKey));
-            WriteInt(surfaces, at + 8, 1);
+            if ((uint)surface.Slot >= SurfaceCount) continue;
+            int at = surface.Slot * SurfaceRecordSize;
+            WriteInt(surfaces, at,
+                surface.Created ? -1 : unchecked((int)surface.ResourceId));
+            WriteInt(surfaces, at + 4, PackNativeColorKey(surface.ColorKey));
+            WriteInt(surfaces, at + 8, surface.ReloadOnRestore ? 1 : 0);
+            WriteInt(surfaces, at + 0x10, surface.Created ? 1 : 0);
         }
         NativeSavedGfxObject[] objects = snapshot.Objects
             .Select(item => new NativeSavedGfxObject(item.Handle, EncodeObject(item.Object)))
@@ -35,15 +39,20 @@ internal static class NativeGfxPersistenceCodec
 
     public static GfxPersistenceSnapshot Decode(NativeNumberedSaveState state)
     {
-        var surfaces = new List<(int Slot, long ResourceId, long ColorKey, bool Created)>();
+        var surfaces = new List<GfxSurfacePersistenceState>();
         for (int slot = 0; slot < SurfaceCount; slot++)
         {
             int at = slot * SurfaceRecordSize;
             int resourceId = ReadInt(state.SurfaceRecords, at);
-            int present = ReadInt(state.SurfaceRecords, at + 8);
-            if (present == 1 && resourceId >= 0)
-                surfaces.Add((slot, unchecked((uint)resourceId),
-                              UnpackNativeColorKey(ReadInt(state.SurfaceRecords, at + 4)), false));
+            bool reload = ReadInt(state.SurfaceRecords, at + 8) == 1;
+            bool created = ReadInt(state.SurfaceRecords, at + 0x10) == 1;
+            if (resourceId >= 0 || reload || created)
+                surfaces.Add(new GfxSurfacePersistenceState(
+                    slot,
+                    resourceId < 0 ? resourceId : unchecked((uint)resourceId),
+                    UnpackNativeColorKey(ReadInt(state.SurfaceRecords, at + 4)),
+                    created,
+                    reload));
         }
         var objects = state.GfxObjects
             .Select(item => (item.Handle, DecodeObject(item.Record)))

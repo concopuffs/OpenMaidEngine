@@ -56,8 +56,11 @@ public sealed record GfxDiagnosticSnapshot(
     BlockingGfxObjectDiagnostic? BlockingRangeTransform,
     IReadOnlyList<BlockingGfxObjectDiagnostic> BlockingObjects);
 
+public readonly record struct GfxSurfacePersistenceState(
+    int Slot, long ResourceId, long ColorKey, bool Created, bool ReloadOnRestore);
+
 public sealed record GfxPersistenceSnapshot(
-    IReadOnlyList<(int Slot, long ResourceId, long ColorKey, bool Created)> Surfaces,
+    IReadOnlyList<GfxSurfacePersistenceState> Surfaces,
     IReadOnlyList<(long Handle, GfxState.GfxObject Object)> Objects,
     long RangeFirst,
     long RangeCount,
@@ -383,6 +386,7 @@ public sealed class GfxState
             _fieldTable.Clear();
             _surfaces.Clear();
             _createdSurfaces.Clear();
+            _reloadableSurfaces.Clear();
             _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
             CurrentObject = 0;
@@ -405,11 +409,18 @@ public sealed class GfxState
     {
         lock (_lock)
         {
-            var surfaces = _surfaces
-                .Select(pair => (
-                    pair.Key, pair.Value.ResId, pair.Value.ColorKey,
-                    _createdSurfaces.Contains(pair.Key)))
-                .OrderBy(item => item.Key)
+            var surfaces = _surfaces.Keys
+                .Concat(_reloadableSurfaces)
+                .Distinct()
+                .Select(slot =>
+                {
+                    bool active = _surfaces.TryGetValue(slot, out var value);
+                    return new GfxSurfacePersistenceState(
+                        slot, active ? value.ResId : -1, active ? value.ColorKey : 0,
+                        active && _createdSurfaces.Contains(slot),
+                        _reloadableSurfaces.Contains(slot));
+                })
+                .OrderBy(item => item.Slot)
                 .ToArray();
             var objects = _orderedObjectHandles
                 .Select(handle => (handle, CloneState(_objects[handle])))
@@ -427,10 +438,13 @@ public sealed class GfxState
         {
             _surfaces.Clear();
             _createdSurfaces.Clear();
-            foreach (var (slot, resourceId, colorKey, created) in snapshot.Surfaces)
+            _reloadableSurfaces.Clear();
+            foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces)
             {
-                _surfaces[slot] = (resourceId, colorKey);
-                if (created) _createdSurfaces.Add(slot);
+                if (surface.ResourceId >= 0 || surface.Created)
+                    _surfaces[surface.Slot] = (surface.ResourceId, surface.ColorKey);
+                if (surface.Created) _createdSurfaces.Add(surface.Slot);
+                if (surface.ReloadOnRestore) _reloadableSurfaces.Add(surface.Slot);
             }
             _objects.Clear();
             _orderedObjectHandles.Clear();
@@ -481,6 +495,9 @@ public sealed class GfxState
     // Created surfaces have real pixels but no asset resource id. Keep their class separate from both
     // loaded textures and truly surfaceless objects because native mode-0 consumes packed alpha differently.
     private readonly HashSet<int> _createdSurfaces = new();
+    // Native surface record +0x08. Ordinary create/load/release workers leave this bit unchanged;
+    // the numbered-save restore loop consults it to decide which asset-backed surfaces to reopen.
+    private readonly HashSet<int> _reloadableSurfaces = new();
     // A separate entry models the native CMovieToTexture object attached to a surface. A null value means
     // the movie object exists but its host decoder supplied no usable IMediaPosition stop time.
     private readonly Dictionary<int, long?> _movieStopTimesMs = new();
@@ -494,6 +511,24 @@ public sealed class GfxState
             _movieStopTimesMs.Remove(slot);
             MarkRetainedMutation();
         }
+    }
+
+    /// <summary>Set the native surface-record +0x08 reload policy. This is separate from loading a
+    /// texture because AGE's ordinary create/load/release workers preserve the existing bit.</summary>
+    public void SetSurfaceReloadOnRestore(int slot, bool reload)
+    {
+        lock (_lock)
+        {
+            if (reload) _reloadableSurfaces.Add(slot);
+            else _reloadableSurfaces.Remove(slot);
+        }
+    }
+
+    /// <summary>Opcode 0x259 script-entry lifecycle: clear record +0x08 for every surface.
+    /// Native also clears the adjacent unknown +0x0c field, which the port does not otherwise model.</summary>
+    public void ClearSurfaceReloadPolicies()
+    {
+        lock (_lock) _reloadableSurfaces.Clear();
     }
 
     /// <summary>Op 0x236 handoff: retain the initialized movie graph's IMediaPosition stop time. Null

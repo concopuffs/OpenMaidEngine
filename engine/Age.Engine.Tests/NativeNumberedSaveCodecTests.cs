@@ -1,5 +1,6 @@
 using Age.Engine.Model;
 using Age.Engine.Persistence;
+using System.Buffers.Binary;
 
 public class NativeNumberedSaveCodecTests
 {
@@ -142,5 +143,14 @@ public class NativeNumberedSaveCodecTests
         Assert.Equal(402459, state.IntegerGlobals.Count);
         Assert.Equal(789, state.StringGlobals.Count);
         Assert.Equal(NativeNumberedSaveState.GfxRecordSize, state.RangeTransformRecord.Length);
+        ReadOnlySpan<byte> systemChoiceAtlas = state.SurfaceRecords.AsSpan(15 * 20, 20);
+        Assert.Equal(0x3383, BinaryPrimitives.ReadInt32LittleEndian(systemChoiceAtlas));
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(systemChoiceAtlas[8..]));
+        Assert.All(
+            Enumerable.Range(0, 1000),
+            slot => Assert.Equal(
+                0,
+                BinaryPrimitives.ReadInt32LittleEndian(
+                    state.SurfaceRecords.AsSpan(slot * 20 + 8))));
     }
 }

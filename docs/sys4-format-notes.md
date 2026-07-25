@@ -252,11 +252,27 @@ Retained graphics then uses:
 ...    native allocation slack
 ```
 
-The 1,000 surface records preserve resource reload state; mapped fields include resource id at `+0x00`,
-packed color key at `+0x04`, and presence at `+0x08`. A retained `0x2d4` record is structurally complete
-but not every internal graphics field is semantically named. The native allocation is larger than the
-records actually written (`0x2e1 + object_count * 0x2d8` DWORDs in the graphics sizing term), leaving
-zero/slack bytes after the meaningful range record.
+The 1,000 surface records preserve the native 20-byte metadata cells verbatim:
+
+| Offset | Size | Meaning |
+|---:|---:|---|
+| `+0x00` | 4 | signed resource id; `-1` means no reloadable asset |
+| `+0x04` | 4 | packed color key |
+| `+0x08` | 4 | reload-on-restore flag |
+| `+0x0c` | 4 | unknown lifecycle field; cleared with `+0x08` at script entry |
+| `+0x10` | 4 | blank/mutable created-surface flag |
+
+Initialization writes resource id `-1` to every otherwise-zero record. Ordinary asset load, blank-surface
+creation, and release do not synthesize or clear the reload flag; opcode `0x259` clears `+0x08` and
+`+0x0c` across both live/saved tables at script entry. During normal layout-3 restoration AGE reopens only
+records whose reload flag is one and whose resource id is nonnegative. Flag-zero records describe
+surfaces expected to remain live across the load. The installed file is decisive: all 1,000 reload flags
+are zero, while SYSTEM4's reusable choice-frame atlas remains recorded as resource `0x3383` in slot 15.
+A separate configuration-gated path can release all 1,000 surfaces before this loop, but Himegari's
+registered `CreateObject=1`, `AutoFreeTex=0` defaults leave it inactive. A retained `0x2d4`
+record is structurally complete but not every internal graphics field is semantically named. The native
+allocation is larger than the records actually written (`0x2e1 + object_count * 0x2d8` DWORDs in the
+graphics sizing term), leaving zero/slack bytes after the meaningful range record.
 
 The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
 `[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and

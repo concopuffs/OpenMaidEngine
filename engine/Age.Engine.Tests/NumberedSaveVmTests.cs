@@ -38,6 +38,12 @@ public class NumberedSaveVmTests
             vm.GlobalFloats[0] = BitConverter.SingleToInt32Bits(2.5f);
             vm.GlobalStrings[4] = "姫狩り";
             vm.Gfx.SetSurface(3, 0x1234, 0xff00ff);
+            vm.Gfx.SetSurface(5, 0x5678, 0);
+            vm.Gfx.SetSurfaceReloadOnRestore(5, true);
+            vm.Gfx.CreateSurface(4);
+            vm.Gfx.SetSurface(7, 0x7777, 0);
+            vm.Gfx.SetSurfaceReloadOnRestore(7, true);
+            vm.Gfx.ReleaseSurfaceRange(7, 1);
             vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 50, 60);
 
             vm.Run();
@@ -53,6 +59,15 @@ public class NumberedSaveVmTests
             Assert.Equal("姫狩り", state.StringGlobals[4]);
             Assert.Equal(0x77u, state.Frames.Single().ScriptId);
             Assert.Contains(state.GfxObjects, item => item.Handle == 100);
+            Assert.Equal(0x1234, ReadSurfaceField(state, 3, 0));
+            Assert.Equal(0, ReadSurfaceField(state, 3, 8));
+            Assert.Equal(-1, ReadSurfaceField(state, 4, 0));
+            Assert.Equal(1, ReadSurfaceField(state, 4, 0x10));
+            Assert.Equal(0x5678, ReadSurfaceField(state, 5, 0));
+            Assert.Equal(1, ReadSurfaceField(state, 5, 8));
+            Assert.Equal(-1, ReadSurfaceField(state, 6, 0));
+            Assert.Equal(-1, ReadSurfaceField(state, 7, 0));
+            Assert.Equal(1, ReadSurfaceField(state, 7, 8));
             var restoredHistory = new AdvTextHistory();
             NativeTextHistoryCodec.DecodeInto(file.HistoryTail, restoredHistory);
             Assert.Equal("保存", restoredHistory.Records.Single().Text);
@@ -144,6 +159,7 @@ public class NumberedSaveVmTests
             vm.Globals[0x124] = 777;
             vm.GlobalStrings[0] = "stale";
             vm.GlobalStrings[1] = "static-unit-name";
+            vm.Gfx.SetSurface(15, 0x3383, 0);
 
             vm.Run();
 
@@ -163,6 +179,12 @@ public class NumberedSaveVmTests
             Assert.Equal(Enumerable.Range(0, 10), host.SfxReleases);
             Assert.Equal("履歴復帰", liveHistory.Records.Single().Text);
             Assert.Equal(3, vm.Gfx.QuerySlot(100));
+            Assert.Contains(
+                vm.Gfx.CapturePersistenceSnapshot().Surfaces,
+                item => item.Slot == 15 && item.ResourceId == 0x3383);
+            Assert.Contains(host.Textures, item => item == (0x1234, 3));
+            Assert.DoesNotContain(host.Textures, item => item.Slot == 15);
+            Assert.Empty(host.ReleasedSurfaceRanges);
             RenderObject restoredObject = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
             Assert.Equal(0x1234, restoredObject.SurfaceResId);
             Assert.Equal((50, 60), (restoredObject.DstX, restoredObject.DstY));
@@ -180,6 +202,74 @@ public class NumberedSaveVmTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public void DataOnlyLoadReleasesAllSurfacesWhenBothNativeSettingsEnableIt()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            Script loader = ScriptAssembler.Assemble(Table, "LOAD_DATA_ONLY.BIN",
+            [
+                (0x19f, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []);
+            NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(
+                [new NativeSavedScriptFrame(-1, 0, [], -1, -1)]) with
+            {
+                SurfaceRecords = NativeSurfaceRecords(3, 0x1234, 0xff00ff),
+            };
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(state), [],
+                NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var host = new RecordingHost();
+            var vm = new VirtualMachine(
+                loader, Table, host,
+                new VmOptions(CreateObject: true, AutoFreeTextures: true),
+                nativeDatStore: store);
+            vm.Gfx.SetSurface(15, 0x3383, 0);
+
+            vm.Run();
+
+            Assert.Contains((0, 1000), host.ReleasedSurfaceRanges);
+            Assert.DoesNotContain(
+                vm.Gfx.CapturePersistenceSnapshot().Surfaces,
+                item => item.Slot == 15);
+            Assert.Contains(
+                vm.Gfx.CapturePersistenceSnapshot().Surfaces,
+                item => item.Slot == 3
+                    && item.ResourceId == 0x1234
+                    && item.ReloadOnRestore);
+            Assert.Contains(host.Textures, item => item == (0x1234, 3));
+            Assert.Equal("exit", vm.HaltReason);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScriptEntryClearsReloadPolicyWithoutReleasingTheSurface()
+    {
+        Script script = ScriptAssembler.Assemble(Table, "ENTRY.BIN",
+        [
+            (0x259, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        vm.Gfx.SetSurface(15, 0x3383, 0);
+        vm.Gfx.SetSurfaceReloadOnRestore(15, true);
+
+        vm.Run();
+
+        GfxSurfacePersistenceState surface = Assert.Single(
+            vm.Gfx.CapturePersistenceSnapshot().Surfaces);
+        Assert.Equal(15, surface.Slot);
+        Assert.Equal(0x3383, surface.ResourceId);
+        Assert.False(surface.ReloadOnRestore);
     }
 
     private static Script WithPackedId(Script source, uint packedId)
@@ -225,12 +315,18 @@ public class NumberedSaveVmTests
     private static byte[] NativeSurfaceRecords(int slot, int resourceId, int colorKey)
     {
         byte[] result = new byte[NativeNumberedSaveState.SurfaceRecordsSize];
+        for (int index = 0; index < 1000; index++)
+            BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(index * 20), -1);
         int at = slot * 20;
         BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at), resourceId);
         BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at + 4), unchecked((int)(0xff000000u | (uint)colorKey)));
         BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at + 8), 1);
         return result;
     }
+
+    private static int ReadSurfaceField(NativeNumberedSaveState state, int slot, int offset)
+        => BinaryPrimitives.ReadInt32LittleEndian(
+            state.SurfaceRecords.AsSpan(slot * 20 + offset));
 
     private static byte[] NativeGfxRecord(int sourceSlot)
     {

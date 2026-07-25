@@ -896,12 +896,24 @@ public sealed class VirtualMachine
         }
 
         GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
-        for (int slot = 0; slot < 1000; slot++) _host.ReleaseSurface(slot);
-        Gfx.RestorePersistenceSnapshot(gfxSnapshot);
-        foreach (var (slot, resourceId, colorKey, created) in gfxSnapshot.Surfaces)
+        bool releaseAllSurfaces = _o.CreateObject && _o.AutoFreeTextures;
+        if (releaseAllSurfaces)
         {
-            if (!created) _host.SetTexture(resourceId, slot, colorKey);
+            Gfx.ReleaseSurfaceRange(0, 1000);
+            _host.ReleaseSurfaceRange(0, 1000);
         }
+        var restoredSurfaces = Gfx.CapturePersistenceSnapshot().Surfaces
+            .ToDictionary(item => item.Slot);
+        foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
+                     .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
+            restoredSurfaces[surface.Slot] = surface;
+        Gfx.RestorePersistenceSnapshot(gfxSnapshot with
+        {
+            Surfaces = restoredSurfaces.Values.OrderBy(item => item.Slot).ToArray(),
+        });
+        foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
+                     .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
+            _host.SetTexture(surface.ResourceId, surface.Slot, surface.ColorKey);
     }
 
     private static void ReplaceDensePrefix<T>(
@@ -1025,6 +1037,8 @@ public sealed class VirtualMachine
         var a = ins.Args;
         switch (_t.Label(op))
         {
+            case "script-entry":
+                Gfx.ClearSurfaceReloadPolicies(); return pc + 1;
             case "add": Write(a[0], Read(a[1]) + Read(a[2])); return pc + 1;
             case "sub": Write(a[0], Read(a[1]) - Read(a[2])); return pc + 1;
             case "mul": Write(a[0], Read(a[1]) * Read(a[2])); return pc + 1;

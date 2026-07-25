@@ -10,6 +10,11 @@ namespace Age.Engine.Vm;
 /// post-exit bytecode can be explored. Leave false for native-faithful execution.</param>
 /// <param name="NativeStringCodePage">Encoding used when an opcode measures the engine's byte-string
 /// representation. SYS4 defaults to CP932; another container frontend can select its own code page.</param>
+/// <param name="CreateObject">Native set:CreateObject profile setting. Together with
+/// <paramref name="AutoFreeTextures"/>, controls the optional all-surface release before numbered load.</param>
+/// <param name="AutoFreeTextures">Native set:AutoFreeTex profile setting. Himegari defaults this off,
+/// so initialized system textures survive a numbered load unless an explicit reload record replaces them.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
-                               int NativeStringCodePage = 932);
+                               int NativeStringCodePage = 932, bool CreateObject = true,
+                               bool AutoFreeTextures = false);

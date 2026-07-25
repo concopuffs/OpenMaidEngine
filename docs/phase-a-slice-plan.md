@@ -3597,6 +3597,37 @@ then confirmed that CHMENU, unit management, SELSTAGE, and FORT audio populate c
 visible load-specific discrepancy is the reusable choice-box frame losing its top winged flourish after
 restoration; that is the next independent investigation slice.
 
+### Persistence implementation step 9 — preserve flag-zero system surfaces (2026-07-24)
+
+The post-load choice-box discrepancy came from the graphics half of the same ownership rule. BUNKI builds
+the common modal frame from SYSTEM4's texture slot 15: resource `0x3383` supplies its corners, borders,
+selection bar, and winged top ornament. The installed layout-3 record retains that resource id but stores
+zero at record `+0x08`.
+
+Native RE confirms `+0x08` is a reload flag, not general surface presence.
+`save_data_deserialize_and_begin_restore@0x40fd10` calls `gfx_surface_load_asset` only for flag-one
+records. Flag-zero system surfaces remain live unless a separate all-1,000 release path is enabled by
+both `set:CreateObject` and `set:AutoFreeTex`. The port instead released every host surface and cleared
+the complete managed surface map before applying only flag-one records. That removed slot 15, leaving
+BUNKI's black backing but none of its atlas decoration.
+
+Full load now preserves the current surface registry, overlays explicitly reloadable saved records, and
+still replaces retained objects and the range transform. Regressions retain an initialized flag-zero
+slot across a synthetic full load, prove that it is not redundantly reopened, and pin the installed
+slot-15 resource/reload-flag oracle. The `/v2` deserializer annotation records the corrected ownership
+boundary and the program is saved. Manual slot-000 acceptance confirms the stage-entry and later BUNKI
+choices retain the complete winged frame.
+
+The follow-up fidelity pass closes the two deferred policy gaps. `VmOptions` now carries the native
+`CreateObject`/`AutoFreeTex` settings with Himegari's registered defaults (`true`/`false`), and enables
+the all-1,000 host/model release only when both are true. Surface snapshots carry a named per-slot reload
+bit; ordinary texture loads no longer manufacture it. Native encoding initializes unused resource ids to
+`-1`, preserves resource/color/reload/created fields, and decoding distinguishes stored records from the
+subset that must actually be reopened. Opcode `0x259`, formerly treated as a structural marker, is now
+mapped and implemented as the script-entry clear of record `+0x08`/`+0x0c` (the port models `+0x08`).
+Regressions cover native-default preservation, opt-in all-release, flag-for-flag port-authored output,
+script-entry clearing, and the installed all-zero reload-bit oracle.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.
