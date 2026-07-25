@@ -16,6 +16,13 @@ internal sealed record MovieCorpusItemResult(
     int FrameRateNumerator,
     int FrameRateDenominator,
     bool HasAudio,
+    int AudioSampleRate,
+    int AudioChannels,
+    long AudioBlockCount,
+    long AudioFrameCount,
+    long FirstAudioPresentationTimeMs,
+    long LastAudioPresentationTimeMs,
+    bool AudioHasSignal,
     long FrameCount,
     long FirstPresentationTimeMs,
     long LastPresentationTimeMs,
@@ -23,6 +30,7 @@ internal sealed record MovieCorpusItemResult(
     long ReadMilliseconds,
     long OpenMilliseconds,
     long DecodeMilliseconds,
+    long AudioDecodeMilliseconds,
     long DisposeMilliseconds,
     bool Passed,
     string? Error);
@@ -123,7 +131,10 @@ internal sealed class MovieCorpusGate
         long stopTimeMs = 0, frameCount = 0, firstPts = -1, lastPts = -1;
         int frameRateNumerator = 0, frameRateDenominator = 0;
         bool hasAudio = false, framesChanged = false;
-        long readMs = 0, openMs = 0, decodeMs = 0, disposeMs = 0;
+        int audioSampleRate = 0, audioChannels = 0;
+        long audioBlockCount = 0, audioFrameCount = 0, firstAudioPts = -1, lastAudioPts = -1;
+        bool audioHasSignal = false;
+        long readMs = 0, openMs = 0, decodeMs = 0, audioDecodeMs = 0, disposeMs = 0;
         string? error = null;
         IFfmpegFrameSource? source = null;
         var itemTime = Stopwatch.StartNew();
@@ -149,6 +160,8 @@ internal sealed class MovieCorpusGate
             frameRateNumerator = info.FrameRateNumerator;
             frameRateDenominator = info.FrameRateDenominator;
             hasAudio = info.HasAudio;
+            audioSampleRate = info.AudioSampleRate;
+            audioChannels = info.AudioChannels;
             if (width != expectedWidth || height != expectedHeight)
                 throw new InvalidDataException(
                     $"decoder dimensions {width}x{height} differ from MPEG sequence {expectedWidth}x{expectedHeight}");
@@ -194,6 +207,53 @@ internal sealed class MovieCorpusGate
                 decodeMs = decodeTime.ElapsedMilliseconds;
             }
             if (frameCount == 0) throw new InvalidDataException("decoder reached EOF without a video frame");
+
+            var audioTime = Stopwatch.StartNew();
+            try
+            {
+                if (hasAudio)
+                {
+                    if (audioSampleRate <= 0 || audioChannels != 2 || info.AudioFrameSamples <= 0)
+                        throw new InvalidDataException(
+                            $"invalid audio metadata {audioSampleRate} Hz, {audioChannels} channels, " +
+                            $"{info.AudioFrameSamples} frame capacity");
+                    while (source.TryDecodeNextAudioChunk(out FfmpegAudioChunk chunk))
+                    {
+                        if (chunk.FrameCount <= 0
+                            || chunk.InterleavedStereo.Length != checked(chunk.FrameCount * 2))
+                            throw new InvalidDataException(
+                                $"audio block {audioBlockCount} has invalid shape " +
+                                $"{chunk.FrameCount}f/{chunk.InterleavedStereo.Length} samples");
+                        if (chunk.PresentationTimeMs < 0 || chunk.PresentationTimeMs < lastAudioPts)
+                            throw new InvalidDataException(
+                                $"audio block {audioBlockCount} timestamp {chunk.PresentationTimeMs} follows {lastAudioPts}");
+                        foreach (float sample in chunk.InterleavedStereo)
+                        {
+                            if (!float.IsFinite(sample))
+                                throw new InvalidDataException(
+                                    $"audio block {audioBlockCount} contains non-finite PCM");
+                            if (Math.Abs(sample) > 0.00001f) audioHasSignal = true;
+                        }
+                        if (audioBlockCount == 0) firstAudioPts = chunk.PresentationTimeMs;
+                        lastAudioPts = chunk.PresentationTimeMs;
+                        audioBlockCount++;
+                        audioFrameCount += chunk.FrameCount;
+                        if (itemTime.ElapsedMilliseconds > maximumItemMilliseconds)
+                            throw new TimeoutException(
+                                $"item exceeded {maximumItemMilliseconds} ms before audio EOF");
+                    }
+                    if (audioBlockCount == 0)
+                        throw new InvalidDataException("audio stream reached EOF without a PCM block");
+                }
+                else if (audioSampleRate != 0 || audioChannels != 0
+                         || source.TryDecodeNextAudioChunk(out _))
+                    throw new InvalidDataException("video-only stream exposed unexpected audio metadata or PCM");
+            }
+            finally
+            {
+                audioTime.Stop();
+                audioDecodeMs = audioTime.ElapsedMilliseconds;
+            }
         }
         catch (Exception exception)
         {
@@ -221,8 +281,11 @@ internal sealed class MovieCorpusGate
         return new MovieCorpusItemResult(
             input.PackedId, $"0x{input.PackedId:x}", input.Name, payloadBytes,
             expectedWidth, expectedHeight, width, height, stopTimeMs,
-            frameRateNumerator, frameRateDenominator, hasAudio, frameCount, firstPts, lastPts,
-            framesChanged, readMs, openMs, decodeMs, disposeMs, error == null, error);
+            frameRateNumerator, frameRateDenominator, hasAudio,
+            audioSampleRate, audioChannels, audioBlockCount, audioFrameCount,
+            firstAudioPts, lastAudioPts, audioHasSignal,
+            frameCount, firstPts, lastPts, framesChanged,
+            readMs, openMs, decodeMs, audioDecodeMs, disposeMs, error == null, error);
     }
 
 }

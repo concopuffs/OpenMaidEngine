@@ -362,8 +362,9 @@ The port implements `0x20f` through a typed packed-movie resolver and a distinct
 asynchronous decoder publishes frames through the retained surface while only the VM thread is parked;
 EOF, mouse click, Accept, or Cancel resumes the wrapper so its scripted cleanup releases surface 42.
 `0x236` retains its non-modal contract; native passes its packed resource operand through the same universal
-catalog opener as `0x20f`. Both paths still intentionally leave the MPEG audio
-pin unrendered; synchronized movie audio remains a deliberate backend/audio-clock slice.
+catalog opener as `0x20f`. Both paths now decode the MPEG audio pin through FFmpeg into timestamped stereo
+float PCM. Godot owns one `AudioStreamGenerator` per playback instance, applies the native flag-selected
+mute/music/SE/voice or default movie route, and uses the sound-hardware position as the presentation clock.
 
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
 instruction-offset set. The captured New Game route is:
@@ -1279,8 +1280,8 @@ queries `IGraphBuilder`, `IMediaControl`, `IMediaPosition`, `IMediaEvent`, and `
 `CMovieTextureRenderer` accepts RGB samples and copies the bottom-up frame into the retained texture.
 
 Operand 3 is retained movie mode plus sound-route policy. Bits `0x10000/0x20000/0x40000/0x80000` force
-sound route 0/1/2/3; without an override, native setting `set:DependMovieSound` supplies the route. This
-slice deliberately does not implement the audio branch. Operand 4 is stored at movie object `+0x42c` as
+mute/music/SE/voice routing; without an override, native setting `set:DependMovieSound` supplies the normal
+movie route. The port applies those categories through Godot audio buses. Operand 4 is stored at movie object `+0x42c` as
 the sync/device mask; it is not a duration or loop count. Replacing or releasing the owning surface stops
 the graph and detaches the renderer.
 
@@ -1300,7 +1301,8 @@ because every sample has the same `(assetId,colorKey)`. An unconditional current
 not help because normal retained composition immediately covered it with that cached first sample. Movie
 surfaces now bypass the static cache and publish only through the retained object. A windowed run records
 first frame 101 and stop frame 190; the user manually confirmed visible playback. The separate lower white
-textbox-area object remains outside this finding, as does the deliberately unrendered movie audio stream.
+textbox-area object remains outside this finding. Embedded audio was added later through the portable
+FFmpeg/audio-clock path described in `docs/platform-portability.md`.
 
 The `/v2` image names/comments the handler; movie ctor/interface/open/play/volume/release workers; sound
 route helpers; renderer media-type/sample workers; and stop/detach/destructor lifecycle. The image was
@@ -1350,6 +1352,12 @@ its timeline -1. Started decoders also have a duration-based completion watchdog
 reported stop time plus two seconds, maximum five minutes; 30 seconds without timing) so missing EOF cannot
 hold the shared `0x21c` wait indefinitely. A normal Game Start through SC0000 was manually validated with
 ordinary positive timing.
+
+**Portable replacement closeout (2026-07-25):** the synchronous metadata, asynchronous presentation,
+failure-as-completed, and watchdog contracts above remain, but `FfmpegMovieDecoder` is now the sole backend.
+After the 213/213 video/audio corpus gate and clean audible LOGO/OP/CHAPTER acceptance, the port deleted
+`DirectShowMovieDecoder`, its COM/temp-file adapter, compatibility test, and managed Windows annotations.
+Native AGE's DirectShow behavior remains relevant evidence for opcode semantics; it is no longer port code.
 
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
 

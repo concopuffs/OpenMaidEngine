@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Versioning;
 using System.Threading;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
@@ -18,7 +17,6 @@ public enum HostPresentationReason
     DiscreteSourceCell = 16,
 }
 
-[SupportedOSPlatform("windows")]
 public sealed class GodotAdvHost : IHost
 {
     private readonly Main _main;
@@ -1061,8 +1059,9 @@ public sealed class GodotAdvHost : IHost
                 ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
             });
-            bool started = _main.TryPlayMovie(movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId,
-                                              out stopTimeMs);
+            bool started = _main.TryPlayMovie(
+                movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId, movieFlags,
+                out stopTimeMs);
             if (!started)
             {
                 stopTimeMs = 0;

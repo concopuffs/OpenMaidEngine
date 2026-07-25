@@ -18,19 +18,19 @@ The VM and content pipeline are already mostly platform-neutral:
 - Native-compatible persistence uses managed streams behind `INativeDatStore`; Godot redirects AGE's
   engine-owned root to `user://SAVE` while retaining its fixed portable DAT/STH filenames.
 
-The selected movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API, but only a
-Windows-x64 native bundle is built and staged today. The retired-live DirectShow implementation remains in-tree
-until the corpus and manual gates pass. There are also softer Windows assumptions that should be tested or
-replaced before claiming portable exports.
+The sole movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API, but only a
+Windows-x64 native bundle is built and staged today. The accepted DirectShow fallback was deleted after the
+corpus and audible LOGO/OP/CHAPTER gates passed. There are also softer Windows assumptions that should be tested
+or replaced before claiming portable exports.
 
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |
 |---|---|---|---|
 | Retained graphics presentation | Backend-neutral `GfxState`; accepted default Godot `Sprite2D` GPU stage plus the retained software pixel oracle, using runtime `ImageTexture`, canvas transforms/materials, and no native graphics API | GPU backend caches static/color-key variants, updates dynamic surfaces, handles retained range transitions, and falls back whole-frame for the legacy host screen-transition path | Godot owns D3D/Vulkan/Metal/OpenGL selection; validate shader/blend/filter behavior per target rather than adding a platform renderer |
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `FfmpegMovieDecoder` is the selected live factory over the project-owned `native/age_movie_ffmpeg` ABI; `DirectShowMovieDecoder` remains unselected pending deletion | Windows-x64 passes the complete 213-payload installed-corpus gate; other native targets and the remaining windowed CHAPTER/combat checks are pending | Run the windowed live gates, then delete DirectShow and add target-specific native builds |
-| Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory, and the FFmpeg worker paces PTS against a monotonic clock with cancellation/failure completion | Concurrent/restarted uses of one asset have independent frame/completion/teardown state; `Main` remains annotated Windows because only the win-x64 bundle is available | Recheck the corrected combat lifecycle, then add Linux/macOS builds and remove the Windows annotation after DirectShow is deleted |
-| Movie audio | FFmpeg detects the audio stream but the current ABI returns video frames only | MPEG movie audio remains intentionally silent | Extend the ABI with timestamped PCM and select an audio/presentation clock; separate feature slice |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/age_movie_ffmpeg` ABI | Windows-x64 passes the complete 213-payload installed video/audio corpus gate plus audible LOGO/OP/CHAPTER playback | Add target-specific native builds and export packaging |
+| Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory; video-only streams use monotonic pacing while audio-bearing streams use the Godot output clock | Concurrent/restarted uses of one asset have independent frame/audio/completion/teardown state; managed code is no longer Windows-annotated, while only the win-x64 native bundle exists today | Add Linux/macOS native builds and smoke gates |
+| Movie audio | ABI v2 returns timestamped stereo float PCM; bounded managed buffering feeds a per-playback Godot `AudioStreamGenerator` and routes native movie flags to engine buses | All 29 installed audio-bearing streams decode with signal; synchronized LOGO/OP/CHAPTER playback is audibly accepted | Treat absent, distorted, or unsynchronized audio from an audio-bearing movie as a runtime bug |
 | ADV font discovery | `godot/Main.cs` probes `C:/Windows/Fonts` for Japanese fonts | Harmless fallback today, but appearance depends on host fonts | Bundle/configure a redistributable font or add platform-specific discovery |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
 | Save/profile storage | Managed `DirectoryNativeDatStore` under Godot `user://SAVE`; native S3SD/S4SD/S3RT files and 24-bit BMP thumbnails | No Win32 path API at runtime; port saves remain isolated from the original installation | Validate replace/flush, case, permissions, and interrupted-write behavior on each export target |
@@ -53,41 +53,43 @@ VM op 0x236 (non-modal) / op 0x20f (modal)
   -> IHost.PlayMovieToSurface / PlayModalMovieToSurface
   -> VFS-owned MoviePayload bytes
   -> IMovieDecoderFactory
-     -> FfmpegMovieDecoder (current live selection)
+     -> FfmpegMovieDecoder
         -> FfmpegMovieSession -> age_movie C ABI
-     -> DirectShowMovieDecoder (unselected; retained only through acceptance)
-  -> newest RGBA frame
-  -> retained movie surface
-  -> Godot compositor
+  -> newest due RGBA frame -> retained movie surface -> Godot compositor
+  -> timestamped stereo float PCM -> per-playback AudioStreamGenerator
 ```
 
 Everything before and after the selected decoder is portable. The replacement decision is an in-process
 FFmpeg backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. FFmpeg
 `n8.1.2-29-g703dcc25b9` is pinned by immutable release URL and SHA-256 in
 `native/age_movie_ffmpeg/dependency-win64.json`; changing that pin requires rerunning the full installed-movie
-gate. The shim dynamically links an LGPL build made without GPL or nonfree components and
-uses only `libavformat`, `libavcodec`, `libavutil`, and `libswscale` for the video slice. `libswresample` and the
-MPEG audio decoders may be packaged now, but PCM delivery remains a separate slice. Release artifacts must carry
+gate. The shim dynamically links an LGPL build made without GPL or nonfree components and uses
+`libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `libswresample`. Release artifacts must carry
 the matching FFmpeg source/configuration and notices required by FFmpeg's
 [license checklist](https://ffmpeg.org/legal.html).
 
 The boundary has two layers:
 
 1. A small native `age_movie` ABI owns all FFmpeg objects and version-sensitive calls. It accepts a borrowed
-   byte span only for the duration of `open`, copies it into native-owned memory, creates a seekable custom
-   `AVIOContext`, probes the MPEG program stream, and returns immutable video metadata. Sequential decode returns
-   one top-down tightly packed RGBA8 frame plus its normalized presentation timestamp. Conversion occurs in an
+   byte span only for the duration of `open`, copies it once into native-owned memory, and creates independent
+   seekable custom `AVIOContext` views for video and audio so either stream can be pulled without duplicating the
+   payload or sharing a demux cursor. ABI v2 returns immutable video/audio metadata. Sequential video decode
+   returns one top-down tightly packed RGBA8 frame; sequential audio decode returns one interleaved stereo float32
+   PCM block. Both carry timestamps normalized to a common media origin. Video conversion occurs in an
    FFmpeg-owned aligned frame; only exact visible row bytes are copied into the caller's tightly packed buffer.
+   `libswresample` converts the source channel/sample layout to the Godot generator contract.
    Return statuses distinguish frame, EOF, invalid arguments, undersized output, and decoder failure; the open
    call returns a bounded UTF-8 diagnostic and an opened handle retains its last decode error. Close accepts a
    null handle, and managed `SafeHandle` ownership guarantees one close for each successfully opened handle. No
    FFmpeg pointer crosses the ABI.
-2. Managed `IMovieDecoder` owns the native handle and the paced worker. Synchronous construction provides
-   `StopTimeMs` before `0x236` returns. The worker uses a monotonic playback origin, decodes ahead by at most one
-   frame, publishes frames when their timestamps become due, and retains newest-frame-wins behavior if Godot is
-   late. EOF becomes completion only after the final frame's presentation interval/stop time, so surface cleanup
-   cannot erase the last frame immediately. Disposal interrupts waits and joins without depending on Godot's main
-   thread.
+2. Managed `IMovieDecoder` owns the native handle and cancellable video/audio workers. Synchronous construction
+   provides `StopTimeMs` and audio format before `0x236` returns. Video remains at most one due frame ahead; PCM
+   uses a bounded roughly half-second queue, so the 263-second ending never becomes a whole-file allocation.
+   Video-only movies use the monotonic playback origin. Audio-bearing movies feed a per-instance
+   `AudioStreamGenerator`; the monotonic-clamped Godot sound-hardware position
+   (`playback + time-since-mix - cached output latency`) advances due video frames. Completion requires video
+   stop time, audio decode EOF, and PCM submission. Disposal interrupts waits, joins both workers, and stops the
+   generator without depending on native default-device playback.
 
 `StopTimeMs` performs a bounded packet scan over the seekable in-memory payload and takes the longest usable
 FFmpeg format duration, video-stream duration, timestamp span, or constant-frame-rate packet-count duration. This
@@ -99,12 +101,11 @@ safety rule still converts any backend initialization failure into an
 explicitly completed zero-duration movie identity, and the presentation watchdog remains a last-resort guard for
 an initialized backend that never reaches EOF.
 
-The factory is injection for tests and future decoder replacement, not runtime codec roulette. FFmpeg is now the
-selected Windows-x64 live backend; once its corpus and live gates pass, DirectShow is deleted rather than shipped
-as a fallback. Modal
-completion/cancel remains owned above the decoder by the existing `0x20f` host path. A future audio implementation
-will consume timestamped PCM and may become the presentation clock; it must not change the VM-facing stop-time,
-surface, or cancellation contracts.
+The factory is injection for tests and future decoder replacement, not runtime codec roulette. FFmpeg is the
+sole backend; DirectShow was deleted rather than shipped as a fallback after the live gate passed. Modal
+completion/cancel remains owned above the decoder by the existing `0x20f` host path and tears down its generator
+with the video instance. Native movie flag overrides select mute/music/SE/voice audio buses; the ordinary path
+uses the movie bus.
 
 This replacement is now also required for Windows gameplay parity. Archive-backed probes on 2026-07-21
 show that the current DirectShow graph accepts tested MPEG widths divisible by 16 (208, 288, 304, 400, and
@@ -119,6 +120,18 @@ is why the narrower `pl_mpeg` library was rejected as the primary backend: it fi
 but only decodes Layer II audio and explicitly ignores program-stream PTS in its high-level synchronization.
 FFmpeg covers the complete installed codec set and leaves the mod/profile boundary open without selecting a
 different decoder per effect.
+
+ABI v2 and MPEG audio playback landed on 2026-07-25. The expanded installed-corpus gate passes all 213 assets:
+184 remain strictly video-only and all 29 audio-bearing streams decode to finite 44.1 kHz stereo PCM with
+monotonic timestamps and clean EOF/teardown. The gate decoded 17,537 audio blocks / 18,185,856 stereo PCM
+frames in the same eight-second unpaced run. A headless natural boot completed audio-clocked `LOGO.AGF` at
+7,288 ms, released it without generator errors, and opened `OP.AGF`. A first windowed run confirmed audible
+LOGO/OP output but exposed crackle/warble. The decoded PCM was continuous; the sink had treated each whole-
+millisecond PTS rounding error (up to 44 samples at 44.1 kHz) as a real boundary and inserted or removed samples
+from every MPEG block. The sink now ignores established-timeline discrepancies within 2 ms while still honoring
+the first timestamp and material later gaps/overlaps. A 4,093-block OP regression pins splice-free continuity.
+The clean audible recheck passed for LOGO/OP and CHAPTER. DirectShow and the managed Windows platform annotations
+were then deleted; missing, distorted, or unsynchronized audio on any of the 29 audio-bearing assets is now a bug.
 
 Native deliverables are RID-specific and bundled with the Godot export; the runtime must not discover an
 arbitrary system FFmpeg. The first implementation gate is Windows x64 because that is the current runnable
@@ -137,7 +150,8 @@ nondecreasing timestamps. Malformed input and repeated teardown are covered. Thi
 packaging. `FfmpegMovieDecoder` now adds cancellable timestamp pacing and is the live selection. The Godot build
 copies the shim, five required shared libraries, and FFmpeg license beside `Himegari.dll`; a natural SYSTEM4
 smoke completed 7288 ms `LOGO.AGF`, opened 106919 ms `OP.AGF`, and published frames from both without loading
-DirectShow; the user subsequently confirmed both opening movies work in normal windowed playback. Full
+DirectShow; the user subsequently confirmed both opening movies work in normal windowed playback. DirectShow
+was deleted after the later synchronized-audio gate. Full
 export/source-offer packaging and non-Windows builds remain outstanding.
 
 The Windows-x64 installed-corpus gate passed on 2026-07-22 with the pinned dependency: all 213 signature-selected
@@ -145,7 +159,8 @@ MPEG payloads opened and reached EOF under a 30-second per-item bound. It decode
 display sizes (120x120 through 800x600), independently matched sequence-header dimensions, found positive
 duration and frame-rate metadata, verified tightly packed RGBA size and nondecreasing timestamps, observed
 changing imagery in every asset, and closed every session. The set includes all 184 video-only and 29 audio-bearing
-streams; audio presence is detected but PCM remains intentionally undelivered. The 263-second `ED.AGF` was the
+streams; at that video-only milestone audio presence was detected but PCM remained intentionally undelivered.
+The later ABI-v2 gate above supersedes that limitation. The 263-second `ED.AGF` was the
 slowest decode at 4.4 seconds in the deliberately unpaced gate, so its prior 30-second failure was test-harness
 whole-frame hashing overhead rather than a decoder incompatibility. The disposable machine report is
 `build/movie-corpus-ffmpeg.json`; invocation and report semantics are canonical in `docs/tools-reference.md`.

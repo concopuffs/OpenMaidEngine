@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
@@ -13,7 +12,6 @@ using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
-[SupportedOSPlatform("windows")]
 public partial class Main : Godot.Control
 {
     private const int ScreenWidth = 800;
@@ -56,10 +54,12 @@ public partial class Main : Godot.Control
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private readonly System.Collections.Generic.Dictionary<long, MovieRuntime> _movies = new();
+    private readonly System.Collections.Generic.Dictionary<long, MovieAudioOutput> _movieAudio = new();
     // 0x236 opens its decoder synchronously on the VM thread so 0x23f can query timing immediately.
     // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
     private IMovieDecoderFactory _movieDecoderFactory = new FfmpegMovieDecoderFactory();
+    private double _audioOutputLatencySeconds;
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
     private readonly System.Collections.Generic.HashSet<long> _movieCompletionNotified = new();
     private GodotTraceSink _trace = null!;
@@ -161,13 +161,18 @@ public partial class Main : Godot.Control
 
         _bgm = new AudioStreamPlayer();
         _voice = new AudioStreamPlayer();
+        EnsureAudioBuses();
+        _bgm.Bus = "Music";
+        _voice.Bus = "Voice";
         AddChild(_bgm);
         AddChild(_voice);
         for (int i = 0; i < _sfx.Length; i++)
         {
             _sfx[i] = new AudioStreamPlayer();
+            _sfx[i].Bus = "SFX";
             AddChild(_sfx[i]);
         }
+        _audioOutputLatencySeconds = AudioServer.GetOutputLatency();
 
         var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
@@ -582,19 +587,30 @@ public partial class Main : Godot.Control
             GodotTraceSnapshot trace = _trace.Snapshot();
             var activeMovies = _movies
                 .OrderBy(pair => pair.Key)
-                .Select(pair => new
+                .Select(pair =>
                 {
-                    playback_id = pair.Key,
-                    resource_id = pair.Value.ResourceId,
-                    name = pair.Value.Name,
-                    asset_id = pair.Value.AssetId,
-                    stop_time_ms = pair.Value.Decoder.StopTimeMs,
-                    decoder_completed = pair.Value.Decoder.IsCompleted,
-                    decoder_failure = pair.Value.Decoder.Failure,
-                    frame_seen = _movieFrameSeen.Contains(pair.Key),
-                    completion_notified = _movieCompletionNotified.Contains(pair.Key),
-                    watchdog_ms = pair.Value.WatchdogMs,
-                    elapsed_ms = (long)Stopwatch.GetElapsedTime(pair.Value.StartedAtTimestamp).TotalMilliseconds,
+                    _movieAudio.TryGetValue(pair.Key, out var audio);
+                    return new
+                    {
+                        playback_id = pair.Key,
+                        resource_id = pair.Value.ResourceId,
+                        name = pair.Value.Name,
+                        asset_id = pair.Value.AssetId,
+                        stop_time_ms = pair.Value.Decoder.StopTimeMs,
+                        decoder_completed = pair.Value.Decoder.IsCompleted,
+                        decoder_failure = pair.Value.Decoder.Failure,
+                        frame_seen = _movieFrameSeen.Contains(pair.Key),
+                        completion_notified = _movieCompletionNotified.Contains(pair.Key),
+                        watchdog_ms = pair.Value.WatchdogMs,
+                        elapsed_ms = (long)Stopwatch.GetElapsedTime(pair.Value.StartedAtTimestamp).TotalMilliseconds,
+                        audio_sample_rate = pair.Value.Decoder.AudioInfo?.SampleRate,
+                        audio_decode_completed = pair.Value.Decoder.AudioInfo == null
+                            ? (bool?)null : pair.Value.Decoder.AudioDecodingCompleted,
+                        audio_route = audio?.Route.ToString(),
+                        audio_clock_ms = audio?.ClockMs,
+                        audio_submitted_through_ms = audio?.SubmittedThroughMs,
+                        audio_buffer_underruns = audio?.BufferUnderruns,
+                    };
                 })
                 .ToArray();
             var pendingMovies = _pendingMovies
@@ -794,6 +810,8 @@ public partial class Main : Godot.Control
             GD.Print($"[perf-log] wrote {_perf.FrameCount} frames / {_perf.RecompositeCount} recomposites -> {_perf.Path}");
             _perf = null;
         }
+        foreach (var audio in _movieAudio.Values) audio.Dispose();
+        _movieAudio.Clear();
         foreach (var movie in _pendingMovies.Values) movie.Decoder.Dispose();
         _pendingMovies.Clear();
         foreach (var movie in _movies.Values) movie.Decoder.Dispose();
@@ -1662,14 +1680,15 @@ public partial class Main : Godot.Control
     }
 
     public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId,
-                             long resourceId, int assetId,
+                             long resourceId, int assetId, long movieFlags,
                              out long? stopTimeMs)
     {
         stopTimeMs = null;
         try
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
-            var runtime = MovieRuntime.Open(assetName, assetId, resourceId, payload, _movieDecoderFactory);
+            var runtime = MovieRuntime.Open(
+                assetName, assetId, resourceId, payload, _movieDecoderFactory, movieFlags);
             stopTimeMs = runtime.Decoder.StopTimeMs;
             while (!_pendingMovies.TryAdd(playbackId, runtime))
                 if (_pendingMovies.TryRemove(playbackId, out var prior)) prior.Decoder.Dispose();
@@ -1689,9 +1708,19 @@ public partial class Main : Godot.Control
             if (!_pendingMovies.TryRemove(playbackId, out var movie)) continue;
             if (_movies.Remove(playbackId, out var prior)) prior.Decoder.Dispose();
             _movies[playbackId] = movie;
+            if (movie.Decoder.AudioInfo != null)
+            {
+                if (_movieAudio.Remove(playbackId, out var priorAudio)) priorAudio.Dispose();
+                _movieAudio[playbackId] = new MovieAudioOutput(
+                    this, movie.Decoder, MovieAudioRouteFromFlags(movie.MovieFlags),
+                    _audioOutputLatencySeconds);
+            }
             _movieCompletionNotified.Remove(playbackId);
             GD.Print($"movie started {movie.Name} playback={playbackId} " +
-                     $"({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS)");
+                     $"({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS" +
+                     (movie.Decoder.AudioInfo is { } audio
+                         ? $", audio={audio.SampleRate}Hz stereo route={MovieAudioRouteFromFlags(movie.MovieFlags)}"
+                         : "") + ")");
         }
     }
 
@@ -1700,6 +1729,7 @@ public partial class Main : Godot.Control
         if (_host == null) return;
         foreach (var (playbackId, movie) in _movies)
         {
+            if (_movieAudio.TryGetValue(playbackId, out var audio)) audio.Update();
             if (movie.Decoder.TryTakeFrame(out var frame))
             {
                 _host.PublishMovieFrame(playbackId, movie.Name, movie.AssetId, frame);
@@ -1722,6 +1752,7 @@ public partial class Main : Godot.Control
 
     public void StopMovie(long playbackId)
     {
+        if (_movieAudio.Remove(playbackId, out var audio)) audio.Dispose();
         if (_pendingMovies.TryRemove(playbackId, out var pending)) pending.Decoder.Dispose();
         if (_movies.Remove(playbackId, out var movie))
         {
@@ -1730,6 +1761,26 @@ public partial class Main : Godot.Control
         }
         _movieFrameSeen.Remove(playbackId);
         _movieCompletionNotified.Remove(playbackId);
+    }
+
+    private static MovieAudioRoute MovieAudioRouteFromFlags(long flags)
+    {
+        ulong value = unchecked((ulong)flags);
+        if ((value & 0x10000) != 0) return MovieAudioRoute.Muted;
+        if ((value & 0x20000) != 0) return MovieAudioRoute.Music;
+        if ((value & 0x40000) != 0) return MovieAudioRoute.SoundEffect;
+        if ((value & 0x80000) != 0) return MovieAudioRoute.Voice;
+        return MovieAudioRoute.Movie;
+    }
+
+    private static void EnsureAudioBuses()
+    {
+        foreach (string name in new[] { "Music", "SFX", "Voice", "Movie" })
+        {
+            if (AudioServer.GetBusIndex(name) >= 0) continue;
+            AudioServer.AddBus();
+            AudioServer.SetBusName(AudioServer.BusCount - 1, name);
+        }
     }
 
     public void AppendLine(string text) => _text.Text += text + "\n";

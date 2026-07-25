@@ -42,6 +42,7 @@ public class MovieOpcodeTests
                                                 params FfmpegVideoFrame[] frames) : IFfmpegFrameSource
     {
         private readonly Queue<FfmpegVideoFrame> _frames = new(frames);
+        private readonly Queue<FfmpegAudioChunk> _audio = new();
         private int _decodeCalls;
         public FfmpegMovieInfo Info { get; } = info;
         public int FailOnDecodeCall { get; init; } = -1;
@@ -53,6 +54,12 @@ public class MovieOpcodeTests
                 throw new InvalidDataException("synthetic decode failure");
             return _frames.TryDequeue(out frame!);
         }
+        public void EnqueueAudio(params FfmpegAudioChunk[] chunks)
+        {
+            foreach (FfmpegAudioChunk chunk in chunks) _audio.Enqueue(chunk);
+        }
+        public bool TryDecodeNextAudioChunk(out FfmpegAudioChunk chunk)
+            => _audio.TryDequeue(out chunk!);
 
         public void Dispose() => Disposed = true;
     }
@@ -199,6 +206,91 @@ public class MovieOpcodeTests
 
         Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
         Assert.Equal("synthetic decode failure", decoder.Failure);
+    }
+
+    [Fact]
+    public void FfmpegAudioDecoderQueuesTimestampedPcmAndCompletesAfterSubmissionAndClock()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 100, 20, 1, true, 1000, 2, 50),
+            SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 50));
+        source.EnqueueAudio(
+            new FfmpegAudioChunk(new float[100], 50, 0),
+            new FfmpegAudioChunk(Enumerable.Repeat(0.25f, 100).ToArray(), 50, 50));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        var chunks = new List<MovieAudioChunk>();
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            while (decoder.TryTakeAudioChunk(out var chunk)) chunks.Add(chunk);
+            return decoder.AudioDecodingCompleted && chunks.Count == 2;
+        }, 1000));
+        Assert.Equal(new long[] { 0, 50 }, chunks.Select(chunk => chunk.PresentationTimeMs));
+        Assert.Equal(100, chunks.Sum(chunk => chunk.FrameCount));
+
+        decoder.MarkAudioSubmitted();
+        clock.AdvanceTo(99);
+        Assert.False(decoder.IsCompleted);
+        clock.AdvanceTo(100);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+        Assert.Null(decoder.Failure);
+    }
+
+    [Fact]
+    public void MovieAudioTimelineDoesNotSpliceContinuousMpegBlocksAtRoundedMillisecondTimestamps()
+    {
+        const int sampleRate = 44100;
+        const int blockFrames = 1152;
+        const int blockCount = 4093; // OP.AGF's installed MPEG audio block count
+        long submittedFrames = 0;
+        bool anchored = false;
+
+        for (int block = 0; block < blockCount; block++)
+        {
+            long exactStartFrame = block * (long)blockFrames;
+            long roundedDownTimestampMs = exactStartFrame * 1000 / sampleRate;
+            long targetFrame = MovieAudioTimeline.PresentationFrame(
+                roundedDownTimestampMs, sampleRate);
+            MovieAudioAdjustment adjustment = MovieAudioTimeline.Align(
+                submittedFrames, targetFrame, blockFrames, sampleRate, anchored);
+
+            Assert.Equal(default, adjustment);
+            submittedFrames += blockFrames;
+            anchored = true;
+        }
+
+        Assert.Equal(blockCount * (long)blockFrames, submittedFrames);
+    }
+
+    [Fact]
+    public void MovieAudioTimelineStillPreservesMaterialGapsAndOverlaps()
+    {
+        const int sampleRate = 44100;
+
+        var initialGap = MovieAudioTimeline.Align(
+            submittedFrames: 0,
+            targetFrame: MovieAudioTimeline.PresentationFrame(100, sampleRate),
+            chunkFrames: 1152,
+            sampleRate: sampleRate,
+            timelineAnchored: false);
+        Assert.Equal(new MovieAudioAdjustment(4410, 0), initialGap);
+
+        var laterGap = MovieAudioTimeline.Align(
+            submittedFrames: 2304,
+            targetFrame: MovieAudioTimeline.PresentationFrame(100, sampleRate),
+            chunkFrames: 1152,
+            sampleRate: sampleRate,
+            timelineAnchored: true);
+        Assert.Equal(new MovieAudioAdjustment(2106, 0), laterGap);
+
+        var overlap = MovieAudioTimeline.Align(
+            submittedFrames: 2304,
+            targetFrame: MovieAudioTimeline.PresentationFrame(40, sampleRate),
+            chunkFrames: 1152,
+            sampleRate: sampleRate,
+            timelineAnchored: true);
+        Assert.Equal(new MovieAudioAdjustment(0, 540), overlap);
     }
 
     [Fact]
@@ -413,39 +505,6 @@ public class MovieOpcodeTests
         Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
     }
 
-    [Fact]
-    public void Sc0000MoviePayloadDecodesAn800By600FrameOnWindows()
-    {
-        if (!OperatingSystem.IsWindows()) return;
-        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
-        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
-        var entry = resources.ResolveMovie(0x33)!;
-        using var decoder = new DirectShowMovieDecoder(resources.ReadMovie(entry));
-
-        Assert.True(decoder.StopTimeMs > 0, "DirectShow should expose a positive IMediaPosition stop time");
-
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        RgbaImage? frame = null;
-        while (DateTime.UtcNow < deadline && !decoder.TryTakeFrame(out frame))
-            Thread.Sleep(20);
-
-        Assert.NotNull(frame);
-        Assert.Equal(800, frame!.Width);
-        Assert.Equal(600, frame.Height);
-        Assert.Equal(800 * 600 * 4, frame.Pixels.Length);
-
-        byte[] firstPixels = frame.Pixels;
-        var changeDeadline = DateTime.UtcNow.AddSeconds(2);
-        bool changed = false;
-        while (DateTime.UtcNow < changeDeadline && !changed)
-        {
-            Thread.Sleep(20);
-            if (decoder.TryTakeFrame(out var later))
-                changed = !firstPixels.AsSpan().SequenceEqual(later.Pixels);
-        }
-        Assert.True(changed, "DirectShow should deliver changing MPEG frames, not one retained still");
-    }
-
     [Theory]
     [InlineData(0x2be3, "MVB961.AGF", 280, 352, 500)]
     [InlineData(0x2b94, "MVB238.AGF", 280, 352, 866)]
@@ -483,6 +542,42 @@ public class MovieOpcodeTests
             }
         }
         Assert.True(changed, $"{expectedName} should deliver changing decoded frames");
+    }
+
+    [Theory]
+    [InlineData(0x33, "CHAPTER.AGF")]
+    [InlineData(0x2bf1, "MVS001.AGF")]
+    [InlineData(0x335f, "LOGO.AGF")]
+    public void FfmpegShimDecodesRepresentativeMpegAudio(int resourceId, string expectedName)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(resourceId)!);
+
+        using var movie = new FfmpegMovieSession(payload);
+
+        Assert.Equal(expectedName, payload.Name);
+        Assert.True(movie.Info.HasAudio);
+        Assert.Equal(44100, movie.Info.AudioSampleRate);
+        Assert.Equal(2, movie.Info.AudioChannels);
+        Assert.True(movie.TryDecodeNextAudioChunk(out var first));
+        Assert.True(first.FrameCount > 0);
+        Assert.Equal(first.FrameCount * 2, first.InterleavedStereo.Length);
+        Assert.True(first.PresentationTimeMs >= 0);
+        Assert.All(first.InterleavedStereo, sample => Assert.True(float.IsFinite(sample)));
+        bool heardSignal = first.InterleavedStereo.Any(sample => Math.Abs(sample) > 0.00001f);
+        long priorTimestamp = first.PresentationTimeMs;
+        for (int block = 0; block < 500 && !heardSignal
+             && movie.TryDecodeNextAudioChunk(out var later); block++)
+        {
+            Assert.True(later.PresentationTimeMs >= priorTimestamp);
+            Assert.All(later.InterleavedStereo, sample => Assert.True(float.IsFinite(sample)));
+            priorTimestamp = later.PresentationTimeMs;
+            heardSignal = later.InterleavedStereo.Any(sample => Math.Abs(sample) > 0.00001f);
+        }
+        Assert.True(heardSignal, $"{expectedName} should contain non-silent MPEG audio");
     }
 
     [Fact]

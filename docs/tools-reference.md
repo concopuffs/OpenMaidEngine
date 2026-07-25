@@ -219,7 +219,7 @@ immutable LGPL shared FFmpeg archive and SHA-256.
 |---|---|---|---|
 | `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, hash-check, extract, and version-check the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-win64.ps1` | Discover the MSVC x64 toolchain, build `age_movie_ffmpeg.dll`, and stage its exact shared-library/license dependencies. | `.\\native\\age_movie_ffmpeg\\build-win64.ps1 -SdkRoot <bootstrap-output> [-OutputDirectory <dir>]` | C ABI source + FFmpeg SDK → disposable `build/native/win-x64/` by default |
-| `tools/movie-corpus-gate` | Discover every MPEG program stream stored under an `.AGF` catalog entry, decode every video frame through the unpaced FFmpeg session, validate independent sequence dimensions, metadata, RGBA size, timestamps, EOF, timeout, and teardown, then emit a per-asset JSON report. Exit 0 means the expected corpus count and every asset passed; exit 1 is a gate failure; exit 2 means the native shim is absent. | `dotnet run --project tools/movie-corpus-gate -- --output build/movie-corpus-ffmpeg.json --expected-count 213 --max-item-ms 30000` · optional `--native-dir <dir>` | `SYS4INI.BIN` + loose/ALF VFS assets + staged FFmpeg shim → stdout progress + disposable `build/movie-corpus-ffmpeg.json` |
+| `tools/movie-corpus-gate` | Discover every MPEG program stream stored under an `.AGF` catalog entry; decode every video frame and, when present, every audio block through the unpaced FFmpeg session; validate independent sequence dimensions, metadata, RGBA size, stereo finite PCM, monotonic video/audio timestamps, EOF, timeout, and teardown; then emit a per-asset JSON report. Audio fields include sample rate/channels, block and PCM-frame counts, first/last PTS, signal presence, and decode time. Exit 0 means the expected corpus count and every asset passed; exit 1 is a gate failure; exit 2 means the native shim is absent. | `dotnet run --project tools/movie-corpus-gate -- --output build/movie-corpus-ffmpeg.json --expected-count 213 --max-item-ms 30000` · optional `--native-dir <dir>` | `SYS4INI.BIN` + loose/ALF VFS assets + staged FFmpeg shim → stdout progress + disposable `build/movie-corpus-ffmpeg.json` |
 
 The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
 `runtimes/win-x64/native` locations. Build the shim before running the `FfmpegShim*` tests; no original-game
@@ -227,8 +227,8 @@ movie is copied into the repository or native output. When `build/native/win-x64
 `dotnet build godot/Himegari.csproj` also stages the shim, its five DLL dependencies, and `FFmpeg-LICENSE.txt`
 beside `Himegari.dll` for development playback.
 
-The corpus gate intentionally bypasses presentation waits: it validates decode compatibility and lifecycle,
-not wall-clock playback pacing. `--expected-count` makes additions, omissions, or profile changes explicit;
+The corpus gate intentionally bypasses presentation waits: it validates video/audio decode compatibility and
+lifecycle, not wall-clock playback pacing or audible output. `--expected-count` makes additions, omissions, or profile changes explicit;
 changing the pinned FFmpeg dependency requires rerunning this gate.
 
 ## Engine (C#) — VM core, CLI, Godot frontend

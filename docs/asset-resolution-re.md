@@ -351,8 +351,8 @@ until DirectShow EOF, then scene cleanup stops the movie. The initial invisible 
 the static `(assetId,colorKey)` image cache froze the first movie sample, while an extra current-sample
 background copy was covered by the correctly positioned retained movie object. Dynamic movie surfaces now
 bypass that cache and publish only at their retained z-position. A windowed run reached first frame 101 and
-stop frame 190, and manual observation confirmed visible changing video. Movie audio remains intentionally
-unrendered. The real-scene trace remains a separate extracted-present test
+stop frame 190, and manual observation confirmed visible changing video. That milestone left movie audio
+unrendered; the synchronized FFmpeg/Godot audio path landed later as described below. The real-scene trace remains a separate extracted-present test
 because the current `Paths.Scripts()` test bootstrap still locates its root `*.BIN` fixtures there; migrating
 that test/bootstrap path is unrelated to movie asset loading and was not folded into this slice.
 
@@ -410,7 +410,9 @@ reported combat stall survives this guard, capture the VM/service coordinate aft
 a separate BTL timed-presentation bug.
 
 The FFmpeg replacement and destination-surface work are recorded in `docs/platform-portability.md` and
-`docs/phase-b-framework.md`. Movie identity also remains typed across the entire retained-surface lifecycle.
+`docs/phase-b-framework.md`. After video/audio corpus validation and clean audible LOGO/OP/CHAPTER acceptance,
+the DirectShow/temp-file adapter was deleted; packed MPEG decode now has one runtime path. Movie identity also
+remains typed across the entire retained-surface lifecycle.
 The packed catalog is immutable while mounted, so once an id enters the movie path its `.AGF`-named MPEG
 payload cannot fall through to the ACGF still decoder before the first frame or after the last live binding
 is detached. The latter guard closes a real cross-thread cleanup window: BTL clears `GfxState` and releases
@@ -430,10 +432,12 @@ depend on the movie service itself to park until EOF/input cancellation before t
 
 `ResourceMap.ResolveMovie` supplies that typed universal lookup, while `ReadMovie` remains the MPEG
 signature gate. `IHost.PlayModalMovieToSurface` is distinct from the non-modal call for lifecycle only: Godot
-reuses the asynchronous DirectShow frame decoder and retained compositor but parks the VM thread until EOF
+reuses the asynchronous FFmpeg decoder and retained compositor but parks the VM thread until EOF
 or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
-The decoder still intentionally leaves audio unrendered; OP/ED audio parity needs an explicit synchronized
-movie-audio/backend contract rather than an unmanaged default-device side path.
+The FFmpeg backend now renders embedded audio through an engine-owned synchronized path rather than an
+unmanaged default-device side path. Timestamped stereo float PCM feeds a per-playback Godot
+`AudioStreamGenerator`; the sound-hardware position drives video presentation, and modal cancellation or
+surface cleanup releases both sides together.
 
 VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
@@ -446,8 +450,8 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 ### Deliberate non-goals
 
 - Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
-- AGF encoding or movie audio. A decoder interface/software MPEG fallback is now required for the installed
-  non-16-aligned MVB effects; synchronized audio remains a separate slice.
+- AGF/MPEG encoding. Runtime MPEG decode and synchronized movie audio now live behind the portable FFmpeg
+  boundary documented in `docs/platform-portability.md`; authoring or repacking those streams remains out of scope.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable
   ordered mod roots can be layered onto the same store later.
 - Removing the extraction/conversion tools immediately. They remain independent parity oracles until the

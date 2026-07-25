@@ -25,6 +25,9 @@ typedef struct age_movie_info {
     int32_t frame_rate_num;
     int32_t frame_rate_den;
     int32_t has_audio;
+    int32_t audio_sample_rate;
+    int32_t audio_channels;
+    int32_t audio_frame_samples;
 } age_movie_info;
 
 enum age_movie_result {
@@ -51,6 +54,17 @@ AGE_MOVIE_API int32_t AGE_MOVIE_CALL age_movie_decode_video(
     age_movie *movie,
     uint8_t *rgba,
     size_t rgba_size,
+    int64_t *out_pts_ms);
+
+/*
+ * Writes one interleaved stereo float32 PCM block and its presentation timestamp.
+ * out_frame_count is also populated with the required frame count when the buffer is too small.
+ */
+AGE_MOVIE_API int32_t AGE_MOVIE_CALL age_movie_decode_audio(
+    age_movie *movie,
+    float *stereo,
+    size_t frame_capacity,
+    int32_t *out_frame_count,
     int64_t *out_pts_ms);
 
 AGE_MOVIE_API const char *AGE_MOVIE_CALL age_movie_last_error(const age_movie *movie);

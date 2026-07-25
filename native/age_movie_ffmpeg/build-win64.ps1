@@ -32,7 +32,7 @@ $source = Join-Path $PSScriptRoot 'age_movie.c'
 $object = Join-Path $OutputDirectory 'age_movie.obj'
 $dll = Join-Path $OutputDirectory 'age_movie_ffmpeg.dll'
 $importLibrary = Join-Path $OutputDirectory 'age_movie_ffmpeg.lib'
-$compile = 'call "{0}" && cl.exe /nologo /std:c11 /utf-8 /O2 /MD /W4 /external:I"{1}" /external:W0 /LD /Fo"{2}" "{3}" /link /OUT:"{4}" /IMPLIB:"{5}" /LIBPATH:"{6}" avformat.lib avcodec.lib avutil.lib swscale.lib' -f
+$compile = 'call "{0}" && cl.exe /nologo /std:c11 /utf-8 /O2 /MD /W4 /external:I"{1}" /external:W0 /LD /Fo"{2}" "{3}" /link /OUT:"{4}" /IMPLIB:"{5}" /LIBPATH:"{6}" avformat.lib avcodec.lib avutil.lib swscale.lib swresample.lib' -f
     $vcvars, $include, $object, $source, $dll, $importLibrary, $lib
 & cmd.exe /d /s /c $compile
 if ($LASTEXITCODE -ne 0) { throw "age_movie_ffmpeg compilation failed with exit code $LASTEXITCODE" }

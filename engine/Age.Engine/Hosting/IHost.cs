@@ -123,7 +123,7 @@ public interface IHost
     void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }
     void ReleaseSoundEffect(int channel) { }
     void FadeBgm(int targetPercent, long durationMs) { }
-    // Native op 0x236 binds a DirectShow movie decoder to an existing retained texture surface.
+    // Native op 0x236 binds a movie decoder to an existing retained texture surface.
     // Playback is non-modal: the VM advances to the following instruction while the host publishes frames.
     /// <returns>The initialized movie graph's stop position in truncated integer milliseconds, or null
     /// when the host could not obtain usable timing metadata. Native op 0x23f queries this state

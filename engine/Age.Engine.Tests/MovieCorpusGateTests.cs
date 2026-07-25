@@ -6,10 +6,17 @@ public class MovieCorpusGateTests
                                          params FfmpegVideoFrame[] frames) : IFfmpegFrameSource
     {
         private readonly Queue<FfmpegVideoFrame> _frames = new(frames);
+        private readonly Queue<FfmpegAudioChunk> _audio = new();
         public FfmpegMovieInfo Info { get; } = info;
         public bool Disposed { get; private set; }
         public bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame)
             => _frames.TryDequeue(out frame!);
+        public void EnqueueAudio(params FfmpegAudioChunk[] chunks)
+        {
+            foreach (FfmpegAudioChunk chunk in chunks) _audio.Enqueue(chunk);
+        }
+        public bool TryDecodeNextAudioChunk(out FfmpegAudioChunk chunk)
+            => _audio.TryDequeue(out chunk!);
         public void Dispose() => Disposed = true;
     }
 
@@ -84,6 +91,32 @@ public class MovieCorpusGateTests
         Assert.False(report.Passed);
         Assert.Contains("rate 0/1", Assert.Single(report.Movies).Error);
         Assert.True(source.Disposed);
+    }
+
+    [Fact]
+    public void GateValidatesAndReportsTimestampedStereoPcm()
+    {
+        var source = new FakeFrameSource(
+            new FfmpegMovieInfo(16, 16, 100, 20, 1, true, 1000, 2, 50),
+            Frame(16, 16, 1, 0), Frame(16, 16, 2, 50));
+        source.EnqueueAudio(
+            new FfmpegAudioChunk(new float[100], 50, 0),
+            new FfmpegAudioChunk(Enumerable.Repeat(0.5f, 100).ToArray(), 50, 50));
+        var input = new MovieCorpusInput(1, "AUDIO.AGF", () =>
+            new MoviePayload("AUDIO.AGF", SyntheticPayload(16, 16)));
+
+        MovieCorpusReport report = new MovieCorpusGate(_ => source).Run([input], 1, 1000);
+
+        var item = Assert.Single(report.Movies);
+        Assert.True(item.Passed);
+        Assert.True(item.HasAudio);
+        Assert.Equal(1000, item.AudioSampleRate);
+        Assert.Equal(2, item.AudioChannels);
+        Assert.Equal(2, item.AudioBlockCount);
+        Assert.Equal(100, item.AudioFrameCount);
+        Assert.Equal(0, item.FirstAudioPresentationTimeMs);
+        Assert.Equal(50, item.LastAudioPresentationTimeMs);
+        Assert.True(item.AudioHasSignal);
     }
 
     private static byte[] SyntheticPayload(int width, int height) =>

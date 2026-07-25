@@ -127,8 +127,8 @@ explained the direct jump to TITLE. LOGO and OP then use the modal movie op
 non-modal movie-to-surface path and uses the same packed lookup. The VM now models the initial-root flag and clears
 it at the op-`0x9` whole-stack root-reload boundary. Godot resolves a typed MPEG asset, reuses the asynchronous decoder
 and retained compositor, and parks the VM until EOF or mouse/Accept/Cancel input. Focused natural-boot tests
-prove `LOGO -> OP -> INIT -> TITLE` ordering and exact movie operands. MPEG audio remains explicitly deferred
-until the decoder abstraction has an engine-owned synchronized audio/volume contract.
+prove `LOGO -> OP -> INIT -> TITLE` ordering and exact movie operands. MPEG audio was explicitly deferred
+at this milestone; the engine-owned synchronized audio/volume contract landed on 2026-07-25 as recorded below.
 
 ## Stage B1 — Persistent session and scene coordinator
 
@@ -636,8 +636,8 @@ dependency pin, corpus codec inventory, timing contract, and packaging rules liv
    as a separate battle-timeline defect.
 6. **Complete distributable packaging.** Bundle pinned dynamically linked libraries and exact license/source
    provenance per target, validate loader isolation from machine-installed codecs, then add Linux/macOS build and
-   smoke gates. Timestamped PCM delivery and Godot `AudioStreamGenerator` integration remain a later movie-audio
-   slice; the video replacement must merely avoid closing that path.
+   smoke gates. Timestamped PCM delivery and Godot `AudioStreamGenerator` integration were assigned to a later
+   movie-audio slice; that slice landed on 2026-07-25 as recorded below.
 
 Steps 1 and 2 landed on 2026-07-21 without changing live playback: `Main` owns an
 `IMovieDecoderFactory`, `MovieRuntime` is backend-neutral, and the default factory still constructs DirectShow.
@@ -725,6 +725,42 @@ regressions cover clipped RGBA replacement and the exact created-surface blend c
 tests, the zero-warning Godot build, and threaded selftest pass. Manual recheck confirms both the translucent
 BUNKI panel and minimap paper are correct. The movement/overlay recheck described above is now the next manual
 gate on the one-player-attack acceptance path.
+
+### MPEG movie audio implemented; audible acceptance in progress (2026-07-25)
+
+The FFmpeg shim ABI is now version 2. Each in-memory MPEG payload feeds independent seekable video and audio
+demuxers, preserving concurrent decode without temporary files, and exposes timestamped interleaved stereo
+float PCM resampled at the source rate. Video and audio timestamps share the same normalized media origin.
+The managed decoder owns bounded video and PCM queues plus separate workers; audio-bearing movies use the
+Godot audio-device clock as the presentation master, while video-only movies retain monotonic stopwatch pacing.
+Completion waits for the final video interval and for decoded PCM to be submitted.
+
+Godot creates a per-playback `AudioStreamGenerator`, compensates for output latency, handles timestamp gaps and
+overlaps, and tears it down with the corresponding playback instance. Native movie flags route sound to the
+Movie bus by default, with exact overrides for mute (`0x10000`), Music (`0x20000`), SFX (`0x40000`), and Voice
+(`0x80000`). F6 diagnostics now expose audio format, decode/submission state, route, clock, and underruns.
+
+The full installed-corpus gate passes all 213 movies: 29 audio-bearing assets decode 17,537 blocks /
+18,185,856 stereo PCM frames at 44.1 kHz with nondecreasing timestamps and non-silent signal, while all 184
+video-only assets remain audio-free. At the initial landing, focused real-stream tests covered MP2 and MP1
+content, all 404 engine tests passed, the Godot build was warning-free, threaded selftest passed, and a natural
+headless boot completed LOGO with its audio path active before opening OP. This moved acceptance to audible,
+synchronized LOGO/OP and representative CHAPTER/MVS playback in a normal windowed run; DirectShow remained
+unselected but in-tree until that live gate.
+
+The first normal windowed LOGO/OP run confirmed that audio reaches the intended output, but it sounded
+crackly/warbled. Corpus endpoints showed continuous decoded PCM; the fault was presentation alignment.
+Audio PTS crosses ABI v2 in whole milliseconds, losing up to 44 samples of precision at 44.1 kHz, while the
+initial sink inserted or dropped that tiny discrepancy at every MPEG block boundary. Established timelines
+now tolerate 2 ms of timestamp quantization and remain sample-contiguous, while initial offsets and material
+later gaps/overlaps still insert silence or trim PCM. A regression simulates all 4,093 OP blocks without a
+splice and separately pins real discontinuity handling. The repeat LOGO/OP run and SC0000 CHAPTER playback are
+audibly clean. Together with signal-bearing decode of all 29 audio streams, this closes the movie-audio acceptance
+gate: missing, distorted, or unsynchronized audio is now a runtime bug. The unused DirectShow implementation,
+COM/temp-file adapter, compatibility test, and managed Windows platform annotations are deleted. **NEXT:** add
+Linux/macOS FFmpeg builds and packaging smoke gates when work returns to cross-platform distribution.
+Post-cleanup validation passes all 405 engine tests, the warning-free Godot build, threaded selftest, opcode
+lint/tooling, and the 213/213 installed video/audio corpus gate.
 
 ## Later Phase B breadth
 

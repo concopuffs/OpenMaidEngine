@@ -24,6 +24,7 @@
     <ProjectReference Include="..\Age.Engine\Age.Engine.csproj" />
     <Compile Include="..\..\godot\IMovieDecoder.cs" Link="IMovieDecoder.cs" />
     <Compile Include="..\..\godot\MovieRuntime.cs" Link="MovieRuntime.cs" />
+    <Compile Include="..\..\godot\MovieAudioTimeline.cs" Link="MovieAudioTimeline.cs" />
     <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
     <Compile Include="..\..\godot\FfmpegMovieDecoder.cs" Link="FfmpegMovieDecoder.cs" />
     <Compile Include="..\..\godot\PageLocatorState.cs" Link="PageLocatorState.cs" />
@@ -33,7 +34,6 @@
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
     <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
-    <Compile Include="..\..\godot\DirectShowMovieDecoder.cs" Link="DirectShowMovieDecoder.cs" />
   </ItemGroup>
 
 </Project>
