@@ -348,9 +348,11 @@ public sealed class SharedProfile
     private uint[] _extendedSelectorCounts = Array.Empty<uint>();
     private uint[] _extendedValues = Array.Empty<uint>();
     private uint[] _reservedTail = new uint[SharedProfilePayloadCodec.ReservedTailDwordCount];
+    private uint _accumulatedPlaySeconds;
 
     public IReadOnlyDictionary<int, uint> IntegerCells => _integerCells;
     public IReadOnlyDictionary<int, string> StringCells => _stringCells;
+    public uint AccumulatedPlaySeconds => _accumulatedPlaySeconds;
     public ReadTextDatabase ReadText { get; } = new();
     /// <summary>The engine setting manipulated by opcodes 0x1ca/0x1cb.</summary>
     public bool ReadMessageSkipEnabled { get; set; }
@@ -388,10 +390,12 @@ public sealed class SharedProfile
         if (document is null)
         {
             ClearSharedPayload();
+            _accumulatedPlaySeconds = 0;
         }
         else
         {
             Replace(SharedProfilePayloadCodec.Decode(document.Payload, document.Metadata));
+            _accumulatedPlaySeconds = document.Metadata.AccumulatedPlaySeconds;
         }
         bool readTextLoaded = ReadText.Load(store);
         return document is not null || readTextLoaded;
@@ -406,6 +410,7 @@ public sealed class SharedProfile
         NativeSaveMetadata metadata = store.Identity.CreateMetadata(timestamp, accumulatedPlaySeconds);
         byte[] payload = SharedProfilePayloadCodec.Encode(Snapshot(), metadata);
         store.SaveShared(payload, timestamp, accumulatedPlaySeconds);
+        _accumulatedPlaySeconds = accumulatedPlaySeconds;
         ReadText.Save(store);
     }
 
@@ -436,6 +441,7 @@ public sealed class SharedProfile
         ClearSharedPayload();
         ReadText.Clear();
         ReadMessageSkipEnabled = false;
+        _accumulatedPlaySeconds = 0;
     }
 
     private void ClearSharedPayload()

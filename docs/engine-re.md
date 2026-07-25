@@ -1929,8 +1929,11 @@ Persistence is shared across numbered save slots. `shared_profile_save@0x40c950`
 `SAVE.DAT`, then serializes `ReadTextDB` through `$$RT.DAT` to `RT.DAT`, with `RT.BAK` handling.
 `shared_profile_load@0x40ccd0` loads `SAVE.DAT` (falling back to `SAVE.BAK`) and then independently loads
 `RT.DAT` when present. Numbered saves use the separate `SAVE%2.2d.DAT` pattern. A successful context/slot
-save calls the shared-profile writer, and shutdown also calls it unless `set:NoSaveDat` suppresses shared
-data writes.
+save calls the shared-profile writer directly. On accepted `WM_CLOSE`, `age_main_window_proc@0x486320`
+queries `set:NoSaveDat` and calls the same writer only when that value is zero; forced and confirmed close
+share that post-acceptance path. `engine_settings_register_defaults@0x46be30` registers `NoSaveDat=0`.
+Thus the switch suppresses only the shutdown write, not the shared flush following a successful numbered
+save.
 
 The selected integer-cell portion of shared `SAVE.DAT` is the `0x1a2` store / `0x1a3` restore service
 documented above. It is independent of the `RT.DAT` read-message database even though the shared-profile
@@ -1951,6 +1954,13 @@ pointer residue, and writes zero in that ignored field. `DirectoryNativeDatStore
 `$$RT.DAT` → `RT.DAT` / `RT.BAK` replacement; load follows native behavior and reads `RT.DAT` directly
 rather than treating `RT.BAK` as a fallback. `SharedProfile.ReadText` owns records and the pending queue
 across fresh VMs, and shared-profile Save/Load updates SAVE.DAT and RT.DAT as separate native domains.
+Godot now requests a VM stop, releases the blocking host, waits for the VM worker to leave its opcode
+boundary, and performs one shared-profile flush before frontend teardown. Repeated exit notifications do
+not rotate backups twice; expected I/O failures are reported without crashing teardown; self-test uses
+`NoSaveDat`; and the loaded shared header's accumulated-playtime value seeds the new process baseline.
+Focused restart coverage proves selected integer/string cells and committed read flags survive a clean
+exit without any numbered slot write. `NoSaveDat` suppresses that exit write while a successful `0x19e`
+still writes both shared files.
 
 Scripts now retain their packed resource id and decoded F7/T1 table. Opcode `0x71` commits pending tuples
 and snapshots its T1 coordinate; `0x6e`/`0x71`/`0x72` refresh read eligibility; wait completion queues
@@ -1958,8 +1968,8 @@ and snapshots its T1 coordinate; `0x6e`/`0x71`/`0x72` refresh read eligibility; 
 `message:ReadTextSkip` setting, while `0x1cc` reports the current message state. This implements native
 read-message behavior without scene-offset special cases and leaves JSON/export tooling as extended mode.
 
-The `/v2` Ghidra image now names/comments the lookup, queue, commit, mark, file read/write, and shared-profile
-save/load chain and corrects the relevant function prototypes; saved 2026-07-18.
+The `/v2` Ghidra image now names/comments the lookup, queue, commit, mark, file read/write, shared-profile
+save/load chain, exact `WM_CLOSE` gate, and `NoSaveDat=0` default; saved/refined through 2026-07-24.
 
 ### Remaining ADV control-strip actions and implementation cost (2026-07-18)
 

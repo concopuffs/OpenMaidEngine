@@ -3730,8 +3730,34 @@ the numbered-load reload policy; bit 1 remains identified but has no known consu
 Validation: engine **393/393**, clean opcode lint/tooling, zero-warning Godot build, threaded
 `SELFTEST OK`, and exact slot-006 software replay with zoom 80 and a nonblack dungeon raster.
 
-Acceptance: rebuild and interactively load existing slot 006. The expected result is the restored
-dungeon map and controls without a re-save.
+Manual acceptance passed: the unchanged slot 006 restores its dungeon map and controls without a re-save.
+
+### Persistence implementation step 14 — shared-profile shutdown lifecycle closeout (2026-07-24)
+
+Shared `SAVE.DAT` and `RT.DAT` already loaded at Godot startup and flushed after successful numbered
+opcode `0x19e`, but closing the port only disposed frontend resources. Profile-selected cells and
+committed ReadTextDB flags could therefore be lost if the user exited without making a numbered save.
+
+Native `age_main_window_proc@0x486320` resolves the policy exactly. Once `WM_CLOSE` is forced or accepted
+by the normal confirmation path, it queries `set:NoSaveDat`; zero calls `shared_profile_save@0x40c950`
+before teardown and nonzero skips it. `engine_settings_register_defaults@0x46be30` registers zero.
+Successful numbered/context save calls the shared writer directly, so `NoSaveDat` gates shutdown only.
+Both native functions are annotated in the saved `/v2` image.
+
+Godot now requests a clean VM stop, releases the blocking host, waits up to five seconds for the worker
+to leave its opcode boundary, and only then flushes the shared profile. This avoids serializing while the
+VM can still mutate selected cells or read flags. The shutdown operation is idempotent across repeated
+frontend notifications, reports expected I/O failures without throwing through teardown, and skips the
+write rather than racing if the worker cannot stop. Self-test uses the native `NoSaveDat` seam and remains
+filesystem-isolated.
+
+`SharedProfile` now retains the accumulated-playtime value from the loaded `SAVE.DAT` header; a new VM
+adds its elapsed process time to that baseline instead of resetting the shared header to the current
+launch. Six focused regressions prove restart continuity without any numbered save, `NoSaveDat`
+suppression, numbered-save independence from that switch, single-write teardown, playtime preservation,
+and graceful I/O failure.
+
+Validation: engine **399/399**, zero-warning Godot build, and threaded `SELFTEST OK`.
 
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 

@@ -14,7 +14,9 @@ namespace Age.Engine.Vm;
 /// <paramref name="AutoFreeTextures"/>, controls the optional all-surface release before numbered load.</param>
 /// <param name="AutoFreeTextures">Native set:AutoFreeTex profile setting. Himegari defaults this off,
 /// so initialized system textures survive a numbered load unless an explicit reload record replaces them.</param>
+/// <param name="NoSaveDat">Native set:NoSaveDat profile setting. This suppresses the clean-shutdown
+/// shared SAVE.DAT/RT.DAT flush only; successful numbered saves still flush both shared files.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, bool CreateObject = true,
-                               bool AutoFreeTextures = false);
+                               bool AutoFreeTextures = false, bool NoSaveDat = false);

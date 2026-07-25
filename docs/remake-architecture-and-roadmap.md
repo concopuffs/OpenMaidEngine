@@ -491,7 +491,10 @@ the later SYSTEM4 unwind that otherwise re-entered the Eushully intro. Slot 005 
 base-load and stage-launch round trip. Dungeon-authored slot 006 exposed one further native-ordering
 requirement: restored scripts must begin at their ordinary entry, run frame-local prologues, and reach
 `0xae` themselves. Matching that order restores FIELD's 80% zoom table entry and produces the dungeon
-map from the unchanged slot; interactive slot-006 confirmation is the remaining visual gate.
+map from the unchanged slot; interactive slot-006 confirmation passed. The shared-profile lifecycle is
+also closed: accepted frontend shutdown stops and joins the VM worker before writing `SAVE.DAT` plus
+`RT.DAT`, honors native `NoSaveDat=0` shutdown policy without suppressing numbered-save flushes, preserves
+loaded accumulated playtime, and handles repeated teardown and I/O failure safely.
 JSON inspection/export,
 namespaced mod data, and migrations remain additive extended-mode work rather than 1.0 compatibility
 requirements.

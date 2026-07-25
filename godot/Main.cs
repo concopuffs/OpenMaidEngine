@@ -71,6 +71,7 @@ public partial class Main : Godot.Control
     private bool _histDumped;
     private volatile bool _done;
     private bool _ended;
+    private Task? _vmTask;
     private bool _selftest;
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
@@ -260,7 +261,11 @@ public partial class Main : Godot.Control
         var sharedProfile = new SharedProfile();
         if (!_selftest) sharedProfile.Load(nativeSaveStore);
         _vm = new VirtualMachine(script, table, _host,
-            new VmOptions(MaxSteps: 20_000_000, IgnoreExitRequests: nativeDebugMenu), provider, sink,
+            new VmOptions(
+                MaxSteps: 20_000_000,
+                IgnoreExitRequests: nativeDebugMenu,
+                NoSaveDat: _selftest),
+            provider, sink,
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore);
         if (scripts != null)
@@ -323,7 +328,11 @@ public partial class Main : Godot.Control
         if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
             _vm.ExternalGlobals[0x6242d] = 4;
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
-        _ = Task.Run(() => { _vm.Run(); _done = true; });
+        _vmTask = Task.Run(() =>
+        {
+            try { _vm.Run(); }
+            finally { _done = true; }
+        });
 
         if (_selftest)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
@@ -745,7 +754,39 @@ public partial class Main : Godot.Control
 
     public override void _ExitTree()
     {
-        DumpHistogram(); _host?.Stop(); _timeline?.Dispose(); _locator?.Dispose();
+        bool vmStopped = true;
+        if (_vm != null) _vm.RequestStop();
+        _host?.Stop();
+        if (_vmTask != null)
+        {
+            try
+            {
+                vmStopped = _vmTask.Wait(System.TimeSpan.FromSeconds(5));
+            }
+            catch (System.AggregateException error)
+            {
+                vmStopped = true;
+                GD.PushError($"[vm] worker failed during shutdown: {error.Flatten().InnerException?.Message}");
+            }
+        }
+
+        if (!_selftest && _vm != null)
+        {
+            if (!vmStopped)
+            {
+                GD.PushWarning("[persistence] VM did not stop within 5 seconds; skipped concurrent shared-profile flush");
+            }
+            else
+            {
+                SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
+                if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
+                    GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");
+                else if (flush.Outcome == SharedProfileShutdownFlushOutcome.Failed)
+                    GD.PushWarning($"[persistence] clean-shutdown shared-profile write failed: {flush.Error}");
+            }
+        }
+
+        DumpHistogram(); _timeline?.Dispose(); _locator?.Dispose();
         _gpuRenderer?.Dispose();
         if (_perf != null)
         {

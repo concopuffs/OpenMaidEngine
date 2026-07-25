@@ -8,6 +8,19 @@ namespace Age.Engine.Vm;
 /// <summary>A stable identity/snapshot of the exact script frame currently executing.</summary>
 public sealed record DebugFrameSnapshot(long FrameId, string CurrentScript, IReadOnlyList<string> CallStack);
 
+public enum SharedProfileShutdownFlushOutcome
+{
+    Saved,
+    AlreadyHandled,
+    Suppressed,
+    StoreUnavailable,
+    Failed,
+}
+
+public readonly record struct SharedProfileShutdownFlushResult(
+    SharedProfileShutdownFlushOutcome Outcome,
+    string? Error = null);
+
 public sealed class VirtualMachine
 {
     private const long NoJump = 0xFFFFFFFF;
@@ -34,6 +47,7 @@ public sealed class VirtualMachine
     private readonly ITraceSink _sink;
     private readonly object _interactiveLock = new();
     private readonly object _debugControlLock = new();
+    private readonly object _sharedProfileShutdownLock = new();
     private readonly List<string> _activeFrameNames = new();
     private readonly List<ExecFrame> _activeExecutionFrames = new();
     private ExecFrame? _saveResumeFrame;
@@ -61,6 +75,8 @@ public sealed class VirtualMachine
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
     private bool _initialRootRun = true;
+    private volatile bool _stopRequested;
+    private bool _sharedProfileShutdownHandled;
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
     private volatile bool _advSkipServiceEnabled;
@@ -135,7 +151,46 @@ public sealed class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
         _nativeDatStore = nativeDatStore;
+        _accumulatedPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
         _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+    }
+
+    /// <summary>Request a clean stop at the next opcode boundary.</summary>
+    public void RequestStop() => _stopRequested = true;
+
+    /// <summary>
+    /// Match AGE's accepted-WM_CLOSE shared-profile lifecycle. The native NoSaveDat setting gates only
+    /// this shutdown write; numbered-save opcode 0x19e continues to flush shared state independently.
+    /// Repeated frontend teardown notifications are handled without rotating backups more than once.
+    /// </summary>
+    public SharedProfileShutdownFlushResult FlushSharedProfileOnShutdown()
+    {
+        lock (_sharedProfileShutdownLock)
+        {
+            if (_sharedProfileShutdownHandled)
+                return new(SharedProfileShutdownFlushOutcome.AlreadyHandled);
+            _sharedProfileShutdownHandled = true;
+
+            if (_o.NoSaveDat)
+                return new(SharedProfileShutdownFlushOutcome.Suppressed);
+            if (_nativeDatStore == null)
+                return new(SharedProfileShutdownFlushOutcome.StoreUnavailable);
+
+            try
+            {
+                _sharedProfile.Save(
+                    _nativeDatStore,
+                    NativeSystemTime.FromLocalDateTime(DateTime.Now),
+                    AccumulatedPlaySeconds());
+                return new(SharedProfileShutdownFlushOutcome.Saved);
+            }
+            catch (Exception error) when (
+                error is IOException or UnauthorizedAccessException or InvalidDataException
+                or ArgumentOutOfRangeException or OverflowException)
+            {
+                return new(SharedProfileShutdownFlushOutcome.Failed, error.Message);
+            }
+        }
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -721,6 +776,7 @@ public sealed class VirtualMachine
             {
                 while (pc >= 0 && pc < frame.Script.Instructions.Count)
                 {
+                    if (_stopRequested) { outcome = FrameOutcome.ExitRequested; break; }
                     if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
                     Steps++;
                     frame.Pc = pc;
@@ -1040,6 +1096,7 @@ public sealed class VirtualMachine
             _cur.CallStack.Add(HOTSPOT_RETURN);
             while (pc >= 0 && pc < _cur.Script.Instructions.Count)
             {
+                if (_stopRequested) break;
                 if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
                 Steps++;
                 _cur.Pc = pc;
