@@ -3628,6 +3628,111 @@ mapped and implemented as the script-entry clear of record `+0x08`/`+0x0c` (the 
 Regressions cover native-default preservation, opt-in all-release, flag-for-flag port-authored output,
 script-entry clearing, and the installed all-zero reload-bit oracle.
 
+### Persistence implementation step 10 — publish selected offscreen render targets (2026-07-24)
+
+The first port-authored dungeon save exposed two symptoms with one graphics cause: its 112x84 `.STH`
+was completely black, and loading it showed the dungeon map for one frame before the map surface became
+black while the UI/minimap remained live.
+
+SAVE.BIN's bytecode makes the missing contract explicit. It renders the underlying gameplay handle range
+into created 800x600 surface 2, binds that surface to handle `0x15f90`, scales it to 14% into created
+112x84 surface 192, then asks opcode `0x1ae` to serialize surface 192. Both render passes use `0x20d`
+target selection, `0x20e` clear, and `0x222` range publication. Dungeon map construction uses the same
+offscreen path. Godot had modeled selection and black allocation, but `PresentObjectRange` only requested
+an onscreen recomposition, so neither target ever received pixels.
+
+Selected-target `0x222` and `0x20c` now publish through a platform-neutral retained-surface rasterizer.
+It filters the requested handle range and reproduces affine/range transforms, scaling, tint, opacity,
+blend mode, color keys, created/source surfaces, and black clears before storing the target pixels.
+Backbuffer publication is unchanged. A focused regression reproduces SAVE.BIN's scaled texture capture
+and proves objects outside the range cannot leak into the target. The original black SAVE01 thumbnail is
+a preserved diagnostic artifact; a newly overwritten save is required for visual acceptance of the
+fixed `.STH`. The subsequent immediate-resave test showed that a separate numbered-state round-trip defect
+still prevented the rewritten `.DAT` from resuming interactively.
+
+### Persistence implementation step 11 — repair port-authored numbered-state round trips (2026-07-24)
+
+The clean comparison target was `SAVE03`: load native slot 0 and save immediately, without entering a
+dungeon. Loading that rewrite was completely black, proving the remaining failure was not dungeon-map
+construction. The source slot has two saved frames; the rewrite had four and incorrectly included the
+currently open save-menu/helper frames. Full `0xae` restoration had not re-established the terminal saved
+frame as opcode `0x1ad`'s ongoing save cutoff, so the later `0x19e` fell back to the deepest active helper.
+The terminal restore now retains its `ExecFrame` as `_saveResumeFrame`. A regression reconstructs a
+two-frame save, invokes `0x19e` from a nested helper, and proves the new slot still contains only the two
+gameplay frames.
+
+Binary comparison also corrected the retained-gfx writer. Native records are not tightly packed:
+each handle plus meaningful `0x2d4`-byte record begins on a `0x2d5`-DWORD / `0xb54`-byte stride. The port
+now emits that sparse layout and imports its earlier packed experimental files. New records start from
+the exact `gfx_object_init_default` identity-matrix/color state; decoded native records retain an opaque
+byte template so unnamed fields survive rewrites; and translation is encoded at row-vector matrix
+entries 12..14 rather than over the matrix diagonal. Focused tests cover the native stride, all six
+identity matrices, translation placement, opaque-byte preservation, and the restored save boundary.
+
+The `/v2` serializer/deserializer annotations and canonical format notes are updated. The next acceptance
+action is to rebuild, load native slot 0, immediately overwrite a fresh slot, and load that fresh rewrite;
+older slot 1/2/3 files remain useful compatibility inputs but retain the already-written bad frame chain.
+
+Validation: all 391 engine tests pass; opcode lint/tooling tests are clean; the Godot C# build has zero
+warnings; the 211-object SAVE03 compatibility rewrite decodes with the native stride; and threaded
+headless execution reports `SELFTEST OK`.
+
+### Persistence implementation step 12 — preserve restored ancestor continuations (2026-07-24)
+
+Fresh slot 004 passed the immediate load gate, but selecting a stage played the Eushully intro. Its frame
+count was fixed at two, yet a decoded comparison found the decisive remaining difference:
+native slot 000's SYSTEM4 parent stores `resume=8, call=8`, while slot 004 stored `-1,-1`.
+
+Native `0xae` restores each parent context to its real T1/T2/T3 coordinates before activating the next
+saved child. The managed reconstruction instead recursively runs FORT while its SYSTEM4 `ExecFrame` is
+physically parked at the synthetic `0xae` instruction. Re-save capture derived coordinates from that
+synthetic PC, found neither a T1 nor T2 table entry, and wrote `-1`. FORT could initially run, but the
+later stage-launch unwind had no SYSTEM4 T2 continuation and fell into ordinary boot.
+
+Restored frames now shadow their original serialized coordinates while a restored descendant remains
+active. Re-saves use those T1/T2/T3 values; T3 rebuilds the live local-return stack; T1 initializes the
+read-message coordinate; and the shadow clears only when the child genuinely returns to its parent.
+Root-reload and process-exit results now propagate through this synthetic recursion as they do through
+ordinary `call-script`. The existing two-frame load/re-save regression now asserts the ancestor's resume
+and call indices and loads the rewrite again, rejecting any ordinary re-entry into the restored child.
+
+The `0xae` opcode source/reference, engine RE, roadmap, status memory, and `/v2` plate comment record the
+refinement. Existing slot 004 retains its already-written `-1,-1`; acceptance requires another fresh
+slot created from native slot 000, followed by load and stage launch.
+
+Validation: engine **392/392**, clean opcode lint/tooling, zero-warning Godot build, and threaded
+`SELFTEST OK`. The remaining gate is interactive confirmation with a newly authored slot; the fix cannot
+retroactively repair slot 004's serialized parent coordinates.
+
+### Persistence implementation step 13 — run restored script prologues before `0xae` (2026-07-24)
+
+Manual slot 005 acceptance passed both immediate base restoration and later stage launch. The next
+dungeon-authored rewrite, slot 006, loaded with its UI present but a black, noninteractive map. Binary
+and software-renderer inspection showed that the slot itself was healthy: it contained FIELD's saved
+range, 704 retained objects, map textures, and a native-looking 0.8 transform. During restore, however,
+FIELD overwrote the map objects with zero scale. Global zoom selector `G[0x7682]` was 3, while the
+frame-local zoom table entry that should have returned 80 was zero.
+
+Native `script_frame_restore_saved_layout@0x40f2d0` calls
+`script_frame_load_resource@0x40e980`, which creates each saved script frame at its ordinary codebase.
+The script runs its entry prologue and reaches `0xae` itself. The managed restore instead created frames
+directly at `0xae`, skipping FIELD's inline initialization of `[40, 50, 64, 80, 100, 124, 156]`.
+
+Restored frames now start at script offset zero while retaining the serialized T1/T2/T3 coordinates
+consumed at `0xae`. Synthetic root and child tests require their pre-rendezvous prologues to execute.
+The unchanged real slot 006 then replays with zoom 80, 0.8 object scale, a nonblack dungeon raster, and
+the gameplay poll; the fix does not require rewriting that save.
+
+The adjacent surface declaration gap is also closed. Native opcode `0x258` sets surface-record `+0x08`
+from flags bit 0 and `+0x0c` from bit 1 after `0x259` clears both tables. The port now applies bit 0 as
+the numbered-load reload policy; bit 1 remains identified but has no known consumer.
+
+Validation: engine **393/393**, clean opcode lint/tooling, zero-warning Godot build, threaded
+`SELFTEST OK`, and exact slot-006 software replay with zoom 80 and a nonblack dungeon raster.
+
+Acceptance: rebuild and interactively load existing slot 006. The expected result is the restored
+dungeon map and controls without a re-save.
+
 ## Data-semantics sidebar: focused append EBINIT inspection (2026-07-24)
 
 The static INIT surface now accepts a universal packed script id for focused append inspection.

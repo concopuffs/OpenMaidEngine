@@ -480,7 +480,19 @@ serialized mutable bank prefixes (preserving initialized unit/stage/string defin
 retained BGM/SFX state, preserves initialized flag-zero system surfaces while overlaying explicit saved
 reload records, reproduces the native configuration-gated all-surface release when explicitly enabled,
 and writes native per-slot reload/created metadata rather than treating every texture as reloadable.
-Opcode `0x259` supplies its real script-entry reload-policy clear. JSON inspection/export,
+Opcode `0x259` supplies its real script-entry reload-policy clear. Selected offscreen render targets now
+receive actual retained-object pixels, closing the black-thumbnail half of the first port-authored-save
+failure. The following immediate-resave oracle exposed and fixed two separate numbered-state defects:
+`0xae` now re-establishes the saved `0x1ad` gameplay-frame boundary before a later save UI opens, and
+retained objects use AGE's sparse stride plus native-initialized matrix/default bytes while preserving
+unnamed fields. The next fresh rewrite also proved that reconstructed managed ancestor frames must retain
+their original T1/T2/T3 coordinates while parked at synthetic `0xae`; preserving those coordinates fixes
+the later SYSTEM4 unwind that otherwise re-entered the Eushully intro. Slot 005 subsequently passed the
+base-load and stage-launch round trip. Dungeon-authored slot 006 exposed one further native-ordering
+requirement: restored scripts must begin at their ordinary entry, run frame-local prologues, and reach
+`0xae` themselves. Matching that order restores FIELD's 80% zoom table entry and produces the dungeon
+map from the unchanged slot; interactive slot-006 confirmation is the remaining visual gate.
+JSON inspection/export,
 namespaced mod data, and migrations remain additive extended-mode work rather than 1.0 compatibility
 requirements.
 

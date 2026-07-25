@@ -1754,8 +1754,9 @@ live surfaces and retained objects, and applies the 20-byte surface records' exp
 load first replaces each serialized mutable bank prefix while preserving initialization-authored cells
 beyond its count, restores history/gfx and retained audio, unwinds the obsolete managed call chain, runs
 `CALLBACK_LOAD.BIN` when
-the mounted script provider resolves it, starts the saved root at its `0xae` rendezvous, recursively
-reconstructs child frames, resumes parents after their saved T2 call sites,
+the mounted script provider resolves it, loads each saved script at its ordinary entry so its frame-local
+prologue runs, lets that script reach its own `0xae` rendezvous, recursively reconstructs child frames,
+resumes parents after their saved T2 call sites,
 and finally resumes the terminal frame at its T1 boundary. Successful `0x19e` also flushes shared
 `SAVE.DAT`/`RT.DAT`, matching `context_state_serialize`.
 
@@ -1791,6 +1792,11 @@ separately gated by both `set:CreateObject` and `set:AutoFreeTex`; the registere
 path. Opcode `0x259` is also a real lifecycle operation:
 `op_0x259_script_entry_clear_surface_persistence_flags@0x417660` clears record `+0x08` and `+0x0c`
 across both native tables at every script entry.
+Opcode `0x258` then declares the exceptions:
+`op_0x258_set_surface_persistence_flags@0x4250a0` calls
+`gfx_surface_set_persistence_flags@0x4159c0`, which replaces record `+0x08` from flags bit 0 and
+record `+0x0c` from bit 1 in both tables. The port models bit 0 because layout-3 restoration consumes
+that reload policy; the adjacent bit-1 consumer remains unnamed.
 Installed slot 15 records resource `0x3383` with reload flag zero. SYSTEM4 loads that atlas before the
 save UI, and BUNKI cuts its reusable choice-box corners, borders, and winged top ornament from it. The
 port formerly released all 1,000 host surfaces unconditionally, so post-load BUNKI retained its black
@@ -1799,6 +1805,67 @@ reload records by default, while `VmOptions.CreateObject && VmOptions.AutoFreeTe
 native all-release branch. Port-authored saves emit the exact resource/reload/created fields, including
 `-1` for unused records, and opcode `0x259` clears the modeled reload policy without releasing textures.
 The corrected native functions are renamed/commented in the saved `/v2` image.
+
+#### Port-authored round trips: restored frame boundary and retained-object encoding (2026-07-24)
+
+An immediate `installed SAVE00 -> port SAVE03` round trip isolated two independent writer defects.
+The source file contains two frames (`SYSTEM4.BIN -> FORT.BIN`), while the first port rewrite contained
+four: the same gameplay pair plus `SAVE.BIN` and its nested helper. Native opcode `0x1ad` selects the
+terminal gameplay frame before opening modal helpers. Full restore through `0xae` reinstates that saved
+terminal context as the effective boundary. The managed restore cleared its temporary restore state but
+did not restore `_saveResumeFrame`, so the next `0x19e` fell back to the currently deepest frame. The port
+now marks the terminal restored `ExecFrame` before resuming at T1; a regression loads two frames, saves
+from a nested helper, and proves the rewrite still contains only the original two.
+
+The first fresh rewrite (`SAVE04`) then exposed the other half of that managed/native representation gap.
+It had two frames, but its restored SYSTEM4 ancestor changed from native `resume=8, call=8` to
+`resume=-1, call=-1`. Native `op_0xae_continue_save_load_stack_restore@0x416790` restores the parent
+context's real T1/T2/T3 coordinates before activating its child. The managed port instead leaves the
+parent physically parked at the synthetic `0xae` rendezvous while `RunFrame` recursively runs FORT.
+Recomputing a save record from that synthetic PC cannot find a T1 or T2 table entry. FORT itself loads
+and runs, but when stage launch unwinds through SYSTEM4, the missing T2 continuation enters ordinary
+Eushully boot.
+
+Each restored `ExecFrame` now shadows its original `NativeSavedScriptFrame` while a restored descendant
+is active. An intervening `0x19e` serializes those original T1/T2/T3 indices; T3 also reconstructs the
+live local-return stack, and the saved T1 coordinate seeds the frame's read-message state. The shadow is
+discarded only when that child genuinely returns and the parent resumes at its restored T2 continuation.
+Restored root-reload and process-exit outcomes also propagate through the synthetic recursion. A focused
+load -> nested save -> reload regression proves the parent indices survive and the child is not invoked
+again through ordinary `CallScript`.
+
+Manual slot 005 acceptance then proved that an immediate base rewrite could load and later launch a
+stage. Slot 006, authored immediately after entering that stage, still restored a black dungeon with
+visible but noninteractive UI. Its serialized FIELD range, 704 retained objects, map textures, and
+native-looking 0.8 transform were intact. A software replay reproduced the black result because FIELD
+had changed every restored map object's scale to `(0,0,1)`: global zoom selector `G[0x7682]` was 3, but
+the frame-local lookup table that should yield 80 was still zero.
+
+Ghidra resolves the ordering precisely. `script_frame_restore_saved_layout@0x40f2d0` calls
+`script_frame_load_resource@0x40e980`; that loader allocates and zeroes locals, loads the script body,
+and initializes its PC to the script codebase, not to `0xae`. The restored script therefore executes its
+ordinary entry prologue before reaching the rendezvous. FIELD's prologue constructs the inline zoom
+table `[40, 50, 64, 80, 100, 124, 156]`; the port's direct jump to `0xae` skipped those copies and let
+FIELD apply zero scale after the gfx record restore.
+
+Restored managed frames now likewise begin at script offset zero while retaining their saved T1/T2/T3
+coordinates for `0xae`. Synthetic root and child regressions prove both prologues execute. Replaying the
+unchanged real slot 006 now selects zoom 80, leaves the map at 0.8 scale, produces a nonblack dungeon
+raster, and reaches the gameplay poll. No slot rewrite is required for this correction.
+
+The same comparison exposed native retained-gfx pointer arithmetic. `context_state_serialize@0x40d320`
+writes a handle and copies the meaningful `0xb5` DWORD / `0x2d4`-byte record, then advances its DWORD
+cursor by `0x2d5`; `save_data_deserialize_and_begin_restore@0x40fd10` mirrors that stride. Early port
+output packed entries contiguously. In addition, `gfx_object_init_default@0x472810` seeds six identity
+matrices and three `0xffffffff` color defaults before the loader overwrites the complete record; the old
+writer began with zero bytes and only filled modeled fields. It also wrote translation vectors over the
+first row of the native 4x4 matrices instead of entries 12..14.
+
+`NativeNumberedSaveCodec` now emits the native `0xb54`-byte entry stride and recognizes the old tight
+experimental layout for compatibility. `NativeGfxPersistenceCodec` begins new records from the exact
+native defaults, writes row-vector translation matrices correctly, and retains the original raw record
+behind the semantic object so still-unnamed fields survive native load/save cycles. The `/v2` serializer
+and deserializer comments record the corrected stride and overwrite behavior.
 
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
@@ -1815,6 +1882,12 @@ serialized contexts. `script_frame_restore_saved_layout@0x40f2d0` loads each pac
 T1/T2/T3 indices back into live PC/call/return offsets. At the saved terminal context the handler clears
 the restore flag and reinstates the saved context/return state. The corpus placement supports that control-flow role: 305 calls overwhelmingly follow
 coroutine-resume or call boundaries, including SC0000's main-loop resume sequence.
+
+The load order is significant: `script_frame_restore_saved_layout` delegates script creation to
+`script_frame_load_resource@0x40e980`, which initializes the new frame PC to the script codebase.
+Consequently the script runs its normal frame-local initialization and reaches `0xae` itself. Starting
+a restored frame directly at `0xae` is not native behavior; in FIELD it leaves the local zoom table
+zeroed and collapses the restored dungeon to a black point.
 
 The port now implements both branches: an ordinary one-instruction no-op outside restoration, and the
 T1/T2/T3-driven managed-frame reconstruction described above while a full numbered load is active.
@@ -2534,7 +2607,24 @@ backbuffer zero instead and record current target `-1` at manager `+0xb530` (`En
 `0x20e` then calls `d3d_clear_render_target_black@0x471460`, which invokes `IDirect3DDevice9::Clear` with no
 rectangles, `D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER`, color zero, depth 1.0, and stencil zero. The port tracks
 the selected target and forwards the clear to the host; the retained compositor reconstructs its main
-backbuffer from black at publication boundaries, while offscreen clears also discard modeled text pixels.
+backbuffer from black at publication boundaries, while offscreen clears discard both modeled pixels and
+text draws.
+
+Opcode `0x222` publishes its retained handle range into whichever target `0x20d` selected; it is not
+merely an onscreen repaint request. SAVE.BIN provides a compact end-to-end example. It creates slot 2 at
+800x600, selects and clears it, then publishes handles `[0,0x130b0)` to capture the underlying gameplay
+without the save-menu objects. It next creates/selects/clears slot 192 at 112x84, binds slot 2 through
+handle `0x15f90`, scales that object to 14%, publishes the two-handle range, and passes slot 192 to
+`0x1ae`. Dungeon scripts use the same selected-target publication to construct map surfaces.
+
+The port originally retained only an object-list snapshot for transitions and requested an ordinary
+backbuffer repaint from `PresentObjectRange`; the selected surface's pixels remained its cleared black
+allocation. That produced completely black port-authored `.STH` files and caused restored dungeon map
+surfaces to turn black when their rebuild published offscreen. Godot now uses the platform-neutral
+software affine compositor for selected-target `0x222`/`0x20c` publication, including source surfaces,
+scaling, transforms, tint/opacity/blend, handle-range filtering, and real pixel clears. Backbuffer
+publication remains on the existing renderer. `gfx_present_object_range@0x482230` records the refined
+target ownership in the saved `/v2` image.
 
 This trace also corrects an important base-pointer assumption in earlier graphics notes. Offsets `+0x408`
 and `+0xb550` are relative to the retained-gfx manager at `EngineCtx+0x46614`, not to `EngineCtx` itself.

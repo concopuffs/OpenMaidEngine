@@ -55,18 +55,27 @@ internal static class NativeGfxPersistenceCodec
                     reload));
         }
         var objects = state.GfxObjects
-            .Select(item => (item.Handle, DecodeObject(item.Record)))
+            .Select(item => (item.Handle, DecodeObject(item.Record, state.LegacyTightGfxLayout)))
             .ToArray();
         return new GfxPersistenceSnapshot(
             surfaces, objects, state.RangeTransformFirst, state.RangeTransformCount,
-            DecodeObject(state.RangeTransformRecord));
+            DecodeObject(state.RangeTransformRecord, state.LegacyTightGfxLayout));
     }
 
     private static byte[] EncodeObject(GfxState.GfxObject value)
     {
-        byte[] raw = new byte[NativeNumberedSaveState.GfxRecordSize];
-        int flags = value.Visible ? 1 : 0;
-        if (value.RotationEnabled || value.SrcAnim || value.ColorAnim) flags |= 4;
+        byte[] raw = value.NativePersistenceRecord is { Length: NativeNumberedSaveState.GfxRecordSize }
+            ? value.NativePersistenceRecord.ToArray()
+            : CreateDefaultObjectRecord();
+        int flags = ReadInt(raw, 0);
+        flags = value.Visible ? flags | 1 : flags & ~1;
+        flags = value.OneShotColorEnabled || value.ScaleEnabled
+            || value.RotationChannelEnabled || value.TranslationEnabled
+            ? flags | 2
+            : flags & ~2;
+        flags = value.RotationEnabled || value.SrcAnim || value.ColorAnim
+            ? flags | 4
+            : flags & ~4;
         WriteInt(raw, 0, flags);
         WriteInt(raw, 4, value.SourceSlot);
         WriteInt(raw, 8, value.SrcRect.X);
@@ -76,7 +85,7 @@ internal static class NativeGfxPersistenceCodec
         WriteVector(raw, 0x18, value.V18);
         WriteVector(raw, 0x24, value.V24);
         WriteInt(raw, 0x30, unchecked((int)value.StaticColorMode));
-        WriteInt(raw, 0x34, unchecked((int)value.OneShotStartMs));
+        WriteInt(raw, 0x34, EncodeNativeStart(value.OneShotStartMs));
         WriteInt(raw, 0x38, unchecked((int)value.ColorDelayMs));
         WriteInt(raw, 0x3c, unchecked((int)value.ScaleDelayMs));
         WriteInt(raw, 0x40, unchecked((int)value.RotationDelayMs));
@@ -89,27 +98,34 @@ internal static class NativeGfxPersistenceCodec
         WriteInt(raw, 0x64, unchecked((int)value.OneShotColorTarget));
         WriteScaleMatrix(raw, 0x6c, value.ScaleCurrent);
         WriteScaleMatrix(raw, 0xac, value.ScaleTarget);
-        WriteFloat(raw, 0x16c, value.TranslationCurrent.X);
-        WriteFloat(raw, 0x170, value.TranslationCurrent.Y);
-        WriteFloat(raw, 0x174, value.TranslationCurrent.Z);
-        WriteFloat(raw, 0x1ac, value.TranslationTarget.X);
-        WriteFloat(raw, 0x1b0, value.TranslationTarget.Y);
-        WriteFloat(raw, 0x1b4, value.TranslationTarget.Z);
-        WriteInt(raw, 0x20c, unchecked((int)value.ColorStart));
-        WriteInt(raw, 0x214, unchecked((int)value.RotationStartMs));
+        WriteRotationMatrix(raw, 0xec, value.RotationCurrent);
+        WriteRotationMatrix(raw, 0x12c, value.RotationTarget);
+        WriteTranslationMatrix(raw, 0x16c, value.TranslationCurrent);
+        WriteTranslationMatrix(raw, 0x1ac, value.TranslationTarget);
+        WriteFloat(raw, 0x1ec, value.RotationCurrent.X);
+        WriteFloat(raw, 0x1f0, value.RotationCurrent.Y);
+        WriteFloat(raw, 0x1f4, value.RotationCurrent.Z);
+        WriteFloat(raw, 0x1f8, value.RotationTarget.X);
+        WriteFloat(raw, 0x1fc, value.RotationTarget.Y);
+        WriteFloat(raw, 0x200, value.RotationTarget.Z);
+        WriteFloat(raw, 0x204, value.RotationCurrent.Angle);
+        WriteFloat(raw, 0x208, value.RotationTarget.Angle);
+        WriteInt(raw, 0x20c, EncodeNativeStart(value.ColorStart));
+        WriteInt(raw, 0x214, EncodeNativeStart(value.RotationStartMs));
         WriteInt(raw, 0x220, unchecked((int)value.ColorPeriod));
         WriteInt(raw, 0x228, unchecked((int)value.RotationPeriodMs));
         WriteInt(raw, 0x230, unchecked((int)value.SrcPeriod));
         WriteInt(raw, 0x234, unchecked((int)value.SrcCell));
-        WriteInt(raw, 0x238, unchecked((int)value.SrcFrameCount));
-        WriteInt(raw, 0x23c, unchecked((int)value.SrcColumns));
-        WriteInt(raw, 0x240, unchecked((int)value.ColorTarget));
+        WriteInt(raw, 0x238, value.SrcAnim ? unchecked((int)value.SrcFrameCount) : 0);
+        WriteInt(raw, 0x23c, value.SrcAnim ? unchecked((int)value.SrcColumns) : 0);
+        if (value.ColorAnim)
+            WriteInt(raw, 0x240, unchecked((int)value.ColorTarget));
         WriteVector(raw, 0x244, value.RotationAxis);
         WriteInt(raw, 0x2d0, unchecked((int)value.OneShotAnimationControlFlags));
         return raw;
     }
 
-    private static GfxState.GfxObject DecodeObject(ReadOnlySpan<byte> raw)
+    private static GfxState.GfxObject DecodeObject(ReadOnlySpan<byte> raw, bool legacyTightLayout)
     {
         if (raw.Length != NativeNumberedSaveState.GfxRecordSize)
             throw new InvalidDataException("Native retained-gfx record has the wrong size.");
@@ -118,13 +134,16 @@ internal static class NativeGfxPersistenceCodec
         int flags = ReadInt(raw, 0);
         return new GfxState.GfxObject
         {
+            NativePersistenceRecord = legacyTightLayout
+                ? CreateDefaultObjectRecord()
+                : raw.ToArray(),
             Visible = (flags & 1) != 0,
             SourceSlot = ReadInt(raw, 4),
             SrcRect = (left, top, right - left, bottom - top),
             V18 = ReadLongVector(raw, 0x18),
             V24 = ReadLongVector(raw, 0x24),
             StaticColorMode = ReadInt(raw, 0x30),
-            OneShotStartMs = ReadInt(raw, 0x34),
+            OneShotStartMs = DecodeNativeStart(ReadInt(raw, 0x34)),
             ColorDelayMs = ReadInt(raw, 0x38),
             ScaleDelayMs = ReadInt(raw, 0x3c),
             RotationDelayMs = ReadInt(raw, 0x40),
@@ -138,11 +157,17 @@ internal static class NativeGfxPersistenceCodec
             OneShotColorTarget = unchecked((uint)ReadInt(raw, 0x64)),
             ScaleCurrent = ReadScale(raw, 0x6c),
             ScaleTarget = ReadScale(raw, 0xac),
-            TranslationCurrent = ReadDoubleVector(raw, 0x16c),
-            V16c = ReadLongFloatVector(raw, 0x16c),
-            TranslationTarget = ReadDoubleVector(raw, 0x1ac),
-            ColorStart = ReadInt(raw, 0x20c),
-            RotationStartMs = ReadInt(raw, 0x214),
+            TranslationCurrent = ReadMatrixTranslation(raw, 0x16c),
+            V16c = ReadLongMatrixTranslation(raw, 0x16c),
+            TranslationTarget = ReadMatrixTranslation(raw, 0x1ac),
+            RotationCurrent = (
+                ReadFloat(raw, 0x1ec), ReadFloat(raw, 0x1f0), ReadFloat(raw, 0x1f4),
+                ReadFloat(raw, 0x204)),
+            RotationTarget = (
+                ReadFloat(raw, 0x1f8), ReadFloat(raw, 0x1fc), ReadFloat(raw, 0x200),
+                ReadFloat(raw, 0x208)),
+            ColorStart = DecodeNativeStart(ReadInt(raw, 0x20c)),
+            RotationStartMs = DecodeNativeStart(ReadInt(raw, 0x214)),
             ColorPeriod = ReadInt(raw, 0x220),
             RotationPeriodMs = ReadInt(raw, 0x228),
             SrcPeriod = ReadInt(raw, 0x230),
@@ -170,6 +195,7 @@ internal static class NativeGfxPersistenceCodec
 
     private static void WriteScaleMatrix(Span<byte> raw, int offset, (double X, double Y, double Z) scale)
     {
+        ClearMatrix(raw, offset);
         WriteFloat(raw, offset, scale.X);
         WriteFloat(raw, offset + 0x14, scale.Y);
         WriteFloat(raw, offset + 0x28, scale.Z);
@@ -178,6 +204,40 @@ internal static class NativeGfxPersistenceCodec
 
     private static (double X, double Y, double Z) ReadScale(ReadOnlySpan<byte> raw, int offset)
         => (ReadFloat(raw, offset), ReadFloat(raw, offset + 0x14), ReadFloat(raw, offset + 0x28));
+
+    private static void WriteRotationMatrix(
+        Span<byte> raw, int offset, (double X, double Y, double Z, double Angle) rotation)
+    {
+        ClearMatrix(raw, offset);
+        double length = Math.Sqrt(
+            rotation.X * rotation.X + rotation.Y * rotation.Y + rotation.Z * rotation.Z);
+        if (length <= double.Epsilon || rotation.Angle == 0)
+        {
+            WriteFloat(raw, offset, 1);
+            WriteFloat(raw, offset + 0x14, 1);
+            WriteFloat(raw, offset + 0x28, 1);
+            WriteFloat(raw, offset + 0x3c, 1);
+            return;
+        }
+
+        double x = rotation.X / length;
+        double y = rotation.Y / length;
+        double z = rotation.Z / length;
+        double radians = rotation.Angle * Math.PI / 180.0;
+        double cosine = Math.Cos(radians);
+        double sine = Math.Sin(radians);
+        double complement = 1.0 - cosine;
+        WriteFloat(raw, offset, x * x * complement + cosine);
+        WriteFloat(raw, offset + 0x04, x * y * complement + z * sine);
+        WriteFloat(raw, offset + 0x08, x * z * complement - y * sine);
+        WriteFloat(raw, offset + 0x10, x * y * complement - z * sine);
+        WriteFloat(raw, offset + 0x14, y * y * complement + cosine);
+        WriteFloat(raw, offset + 0x18, x * sine + y * z * complement);
+        WriteFloat(raw, offset + 0x20, y * sine + x * z * complement);
+        WriteFloat(raw, offset + 0x24, y * z * complement - x * sine);
+        WriteFloat(raw, offset + 0x28, z * z * complement + cosine);
+        WriteFloat(raw, offset + 0x3c, 1);
+    }
 
     private static void WriteVector(Span<byte> raw, int offset, (long X, long Y, long Z) vector)
     {
@@ -189,11 +249,55 @@ internal static class NativeGfxPersistenceCodec
     private static (long X, long Y, long Z) ReadLongVector(ReadOnlySpan<byte> raw, int offset)
         => (ReadInt(raw, offset), ReadInt(raw, offset + 4), ReadInt(raw, offset + 8));
 
-    private static (long X, long Y, long Z) ReadLongFloatVector(ReadOnlySpan<byte> raw, int offset)
-        => ((long)ReadFloat(raw, offset), (long)ReadFloat(raw, offset + 4), (long)ReadFloat(raw, offset + 8));
+    private static void WriteTranslationMatrix(
+        Span<byte> raw, int offset, (double X, double Y, double Z) translation)
+    {
+        ClearMatrix(raw, offset);
+        WriteFloat(raw, offset, 1);
+        WriteFloat(raw, offset + 0x14, 1);
+        WriteFloat(raw, offset + 0x28, 1);
+        WriteFloat(raw, offset + 0x30, translation.X);
+        WriteFloat(raw, offset + 0x34, translation.Y);
+        WriteFloat(raw, offset + 0x38, translation.Z);
+        WriteFloat(raw, offset + 0x3c, 1);
+    }
 
-    private static (double X, double Y, double Z) ReadDoubleVector(ReadOnlySpan<byte> raw, int offset)
-        => (ReadFloat(raw, offset), ReadFloat(raw, offset + 4), ReadFloat(raw, offset + 8));
+    private static (long X, long Y, long Z) ReadLongMatrixTranslation(
+        ReadOnlySpan<byte> raw, int offset)
+        => ((long)ReadFloat(raw, offset + 0x30),
+            (long)ReadFloat(raw, offset + 0x34),
+            (long)ReadFloat(raw, offset + 0x38));
+
+    private static (double X, double Y, double Z) ReadMatrixTranslation(
+        ReadOnlySpan<byte> raw, int offset)
+        => (ReadFloat(raw, offset + 0x30),
+            ReadFloat(raw, offset + 0x34),
+            ReadFloat(raw, offset + 0x38));
+
+    private static void ClearMatrix(Span<byte> raw, int offset)
+        => raw.Slice(offset, 0x40).Clear();
+
+    private static int EncodeNativeStart(long value)
+        => value < 0 ? 0 : unchecked((int)value);
+
+    private static long DecodeNativeStart(int value)
+        => value == 0 ? -1 : value;
+
+    private static byte[] CreateDefaultObjectRecord()
+    {
+        byte[] raw = new byte[NativeNumberedSaveState.GfxRecordSize];
+        WriteInt(raw, 0x60, -1);
+        WriteInt(raw, 0x64, -1);
+        foreach (int matrixOffset in new[] { 0x6c, 0xac, 0xec, 0x12c, 0x16c, 0x1ac })
+        {
+            WriteFloat(raw, matrixOffset, 1);
+            WriteFloat(raw, matrixOffset + 0x14, 1);
+            WriteFloat(raw, matrixOffset + 0x28, 1);
+            WriteFloat(raw, matrixOffset + 0x3c, 1);
+        }
+        WriteInt(raw, 0x240, -1);
+        return raw;
+    }
 
     private static void WriteFloat(Span<byte> raw, int offset, double value)
         => WriteInt(raw, offset, BitConverter.SingleToInt32Bits((float)value));

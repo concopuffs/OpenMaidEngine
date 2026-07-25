@@ -28,6 +28,8 @@ public class NativeNumberedSaveCodecTests
                 new NativeSavedGfxObject(0xcf08,
                     Enumerable.Range(0, NativeNumberedSaveState.GfxRecordSize)
                         .Select(i => unchecked((byte)i)).ToArray()),
+                new NativeSavedGfxObject(0xcf09,
+                    Enumerable.Repeat((byte)0xa5, NativeNumberedSaveState.GfxRecordSize).ToArray()),
             ],
             RangeTransformFirst = 100,
             RangeTransformCount = 4,
@@ -53,7 +55,16 @@ public class NativeNumberedSaveCodecTests
         Assert.Equal(state.PointerGlobals, decoded.PointerGlobals);
         Assert.Equal(state.GfxObjects[0].Handle, decoded.GfxObjects[0].Handle);
         Assert.Equal(state.GfxObjects[0].Record, decoded.GfxObjects[0].Record);
+        Assert.Equal(state.GfxObjects[1].Handle, decoded.GfxObjects[1].Handle);
+        Assert.Equal(state.GfxObjects[1].Record, decoded.GfxObjects[1].Record);
+        Assert.False(decoded.LegacyTightGfxLayout);
         Assert.Equal(state.RangeTransformRecord, decoded.RangeTransformRecord);
+
+        const int nativeEntryStride = (1 + NativeNumberedSaveState.GfxRecordSize) * 4;
+        int objectsAt = FindGfxObjects(encoded, 2, 0xcf08);
+        Assert.Equal(0xcf08, BinaryPrimitives.ReadInt32LittleEndian(encoded.AsSpan(objectsAt)));
+        Assert.Equal(0xcf09, BinaryPrimitives.ReadInt32LittleEndian(
+            encoded.AsSpan(objectsAt + nativeEntryStride)));
     }
 
     [Fact]
@@ -152,5 +163,16 @@ public class NativeNumberedSaveCodecTests
                 0,
                 BinaryPrimitives.ReadInt32LittleEndian(
                     state.SurfaceRecords.AsSpan(slot * 20 + 8))));
+    }
+
+    private static int FindGfxObjects(byte[] payload, int count, int firstHandle)
+    {
+        for (int offset = 0; offset <= payload.Length - 12; offset += 4)
+            if (BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset)) ==
+                    NativeNumberedSaveState.GfxRecordSize
+                && BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset + 4)) == count
+                && BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset + 8)) == firstHandle)
+                return offset + 8;
+        throw new Xunit.Sdk.XunitException("Encoded gfx table was not found.");
     }
 }

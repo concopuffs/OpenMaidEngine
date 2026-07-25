@@ -28,7 +28,8 @@ public sealed record NativeNumberedSaveState(
     IReadOnlyList<NativeSavedGfxObject> GfxObjects,
     long RangeTransformFirst,
     int RangeTransformCount,
-    byte[] RangeTransformRecord)
+    byte[] RangeTransformRecord,
+    bool LegacyTightGfxLayout = false)
 {
     public const int SoundEffectChannelCount = 10;
     public const int ResourceRecordsSize = 300 * 4;
@@ -45,6 +46,9 @@ public static class NativeNumberedSaveCodec
     private const int FrameReturnCapacity = 256;
     private const int GfxAllocationDwords = 0x2d8;
     private const int GfxConstantDwords = 0x2e1;
+    // AGE stores a byte-sized 0x2d4 object record at the front of a 0x2d4-DWORD region.
+    // The handle consumes one preceding DWORD, so consecutive entries start 0x2d5 DWORDs apart.
+    private const int GfxEntryStrideBytes = (1 + NativeNumberedSaveState.GfxRecordSize) * 4;
     private static readonly Encoding NativeEncoding = CreateNativeEncoding();
 
     public static byte[] Encode(NativeNumberedSaveState state)
@@ -103,7 +107,7 @@ public static class NativeNumberedSaveCodec
         {
             WriteInt(payload, at, unchecked((int)gfx.Handle));
             gfx.Record.CopyTo(payload, at + 4);
-            at += 4 + NativeNumberedSaveState.GfxRecordSize;
+            at += GfxEntryStrideBytes;
         }
         WriteInt(payload, at, unchecked((int)state.RangeTransformFirst));
         WriteInt(payload, at + 4, state.RangeTransformCount);
@@ -154,14 +158,19 @@ public static class NativeNumberedSaveCodec
         if (gfxRecordSize != NativeNumberedSaveState.GfxRecordSize)
             throw new InvalidDataException($"Unsupported native gfx record size 0x{gfxRecordSize:x}.");
         at += 8;
-        var objects = new NativeSavedGfxObject[gfxCount];
-        for (int i = 0; i < objects.Length; i++)
+        int objectsAt = at;
+        (NativeSavedGfxObject[] objects, int afterObjects) =
+            ReadGfxObjects(payload, objectsAt, gfxCount, GfxEntryStrideBytes);
+        bool legacyTightGfxLayout = false;
+        // Compatibility for experimental files written by the port before the native DWORD stride was
+        // understood. A native retained-object map cannot contain duplicate handles.
+        if (objects.Select(item => item.Handle).Distinct().Count() != objects.Length)
         {
-            Require(payload, at, 4 + gfxRecordSize, "numbered-save gfx object");
-            long handle = ReadInt(payload, at);
-            objects[i] = new NativeSavedGfxObject(handle, payload.Slice(at + 4, gfxRecordSize).ToArray());
-            at += 4 + gfxRecordSize;
+            (objects, afterObjects) =
+                ReadGfxObjects(payload, objectsAt, gfxCount, 4 + gfxRecordSize);
+            legacyTightGfxLayout = true;
         }
+        at = afterObjects;
         Require(payload, at, 8 + gfxRecordSize, "numbered-save range transform");
         long rangeFirst = ReadInt(payload, at);
         int rangeCount = ReadInt(payload, at + 4);
@@ -170,7 +179,25 @@ public static class NativeNumberedSaveCodec
         return new NativeNumberedSaveState(
             ReadInt(payload, 4), ReadInt(payload, 8), soundEffects, resources, surfaces, frames,
             integers, floats, strings, pointers, pointerStrings, localPointerScratch, objects,
-            rangeFirst, rangeCount, rangeRecord);
+            rangeFirst, rangeCount, rangeRecord, legacyTightGfxLayout);
+    }
+
+    private static (NativeSavedGfxObject[] Objects, int After) ReadGfxObjects(
+        ReadOnlySpan<byte> payload, int offset, int count, int strideBytes)
+    {
+        var objects = new NativeSavedGfxObject[count];
+        int at = offset;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            Require(payload, at, 4 + NativeNumberedSaveState.GfxRecordSize,
+                "numbered-save gfx object");
+            long handle = ReadInt(payload, at);
+            objects[i] = new NativeSavedGfxObject(
+                handle,
+                payload.Slice(at + 4, NativeNumberedSaveState.GfxRecordSize).ToArray());
+            at = checked(at + strideBytes);
+        }
+        return (objects, at);
     }
 
     public static NativeNumberedSaveState Empty(IReadOnlyList<NativeSavedScriptFrame> frames)

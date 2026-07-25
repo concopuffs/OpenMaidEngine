@@ -595,12 +595,17 @@ public sealed class VirtualMachine
         Script root = _s;
         int rootEntry = root.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
         FrameCause cause = FrameCause.TopScene;
+        NativeSavedScriptFrame? restoredRootFrame = null;
         while (true)
         {
             FrameOutcome outcome;
             try
             {
-                outcome = RunFrame(new ExecFrame(root, rootEntry), cause);
+                ExecFrame rootFrame = restoredRootFrame == null
+                    ? new ExecFrame(root, rootEntry)
+                    : CreateRestoredFrame(root, restoredRootFrame);
+                restoredRootFrame = null;
+                outcome = RunFrame(rootFrame, cause);
             }
             catch (NumberedRestoreRequestedException)
             {
@@ -618,8 +623,9 @@ public sealed class VirtualMachine
                     }
                 }
                 root = ResolveSavedScript(_loadedNumberedState.Frames[0]);
-                rootEntry = FindRestoreRendezvous(root);
+                rootEntry = 0;
                 _restoreFrameIndex = 0;
+                restoredRootFrame = _loadedNumberedState.Frames[0];
                 cause = FrameCause.SaveRestore;
                 continue;
             }
@@ -800,19 +806,26 @@ public sealed class VirtualMachine
         for (int i = 0; i <= cutoff; i++)
         {
             ExecFrame frame = active[i];
-            int[] returns = frame.CallStack
-                .Where(returnPc => (uint)returnPc < (uint)frame.Script.Instructions.Count)
-                .Select(returnPc =>
-                {
-                    int returnOffset = frame.Script.Instructions[returnPc].Offset;
-                    return FindTableIndex(frame.Script.LocalCallOffsets, returnOffset - 3);
-                })
-                .Where(index => index >= 0)
-                .ToArray();
-            int resumeIndex = CurrentReadMessageIndex(frame);
-            int callTargetIndex = i == cutoff || (uint)frame.Pc >= (uint)frame.Script.Instructions.Count
+            NativeSavedScriptFrame? restored = frame.RestoredSaveFrame;
+            int[] returns = restored?.ReturnIndices.ToArray()
+                ?? frame.CallStack
+                    .Where(returnPc => (uint)returnPc < (uint)frame.Script.Instructions.Count)
+                    .Select(returnPc =>
+                    {
+                        int returnOffset = frame.Script.Instructions[returnPc].Offset;
+                        return FindTableIndex(frame.Script.LocalCallOffsets, returnOffset - 3);
+                    })
+                    .Where(index => index >= 0)
+                    .ToArray();
+            int resumeIndex = restored?.ResumeIndex ?? CurrentReadMessageIndex(frame);
+            int callTargetIndex = i == cutoff
                 ? -1
-                : FindTableIndex(frame.Script.ScriptCallOffsets, frame.Script.Instructions[frame.Pc].Offset);
+                : restored?.CallTargetIndex
+                    ?? ((uint)frame.Pc >= (uint)frame.Script.Instructions.Count
+                        ? -1
+                        : FindTableIndex(
+                            frame.Script.ScriptCallOffsets,
+                            frame.Script.Instructions[frame.Pc].Offset));
             frames[i] = new NativeSavedScriptFrame(
                 i - 1, frame.Script.PackedId, returns, resumeIndex, callTargetIndex);
         }
@@ -941,6 +954,29 @@ public sealed class VirtualMachine
             $"Saved script {script.Name} has no opcode 0xae restore rendezvous.");
     }
 
+    private static ExecFrame CreateRestoredFrame(Script script, NativeSavedScriptFrame saved)
+    {
+        // Native creates each saved script context at its ordinary entrypoint. The script runs its
+        // local-array/constants/resource prologue and rendezvouses at 0xae itself; jumping directly
+        // to 0xae leaves those frame-local tables zeroed (FIELD then collapses its map zoom to 0%).
+        _ = FindRestoreRendezvous(script);
+        int entry = script.IndexByOffset.TryGetValue(0, out int index) ? index : 0;
+        var frame = new ExecFrame(script, entry)
+        {
+            RestoredSaveFrame = saved,
+        };
+        if ((uint)saved.ResumeIndex < (uint)script.ReadMessageOffsets.Count)
+            frame.ReadMessageOffset = script.ReadMessageOffsets[saved.ResumeIndex];
+        foreach (int returnIndex in saved.ReturnIndices)
+        {
+            if ((uint)returnIndex >= (uint)script.LocalCallOffsets.Count) continue;
+            int returnOffset = checked(script.LocalCallOffsets[returnIndex] + 3);
+            if (script.IndexByOffset.TryGetValue(returnOffset, out int returnPc))
+                frame.CallStack.Add(returnPc);
+        }
+        return frame;
+    }
+
     private static int ResolveTableOffset(
         Script script, IReadOnlyList<int> table, int index, int fallback)
     {
@@ -1039,6 +1075,9 @@ public sealed class VirtualMachine
         {
             case "script-entry":
                 Gfx.ClearSurfaceReloadPolicies(); return pc + 1;
+            case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
+                Gfx.SetSurfaceReloadOnRestore(unchecked((int)Read(a[0])), (Read(a[1]) & 1) != 0);
+                return pc + 1;
             case "add": Write(a[0], Read(a[1]) + Read(a[2])); return pc + 1;
             case "sub": Write(a[0], Read(a[1]) - Read(a[2])); return pc + 1;
             case "mul": Write(a[0], Read(a[1]) * Read(a[2])); return pc + 1;
@@ -1139,6 +1178,11 @@ public sealed class VirtualMachine
                 bool terminal = _restoreFrameIndex == _loadedNumberedState.Frames.Count - 1;
                 if (terminal)
                 {
+                    // Native restores the saved top frame as the numbered-save boundary selected by
+                    // opcode 0x1ad. Re-establish that identity so a subsequent save excludes transient
+                    // SAVE/menu helper frames instead of serializing the currently open modal stack.
+                    lock (_debugControlLock) _saveResumeFrame = _cur;
+                    _cur.RestoredSaveFrame = null;
                     _loadedNumberedState = null;
                     _restoreFrameIndex = -1;
                     return ResolveTableOffset(_cur.Script, _cur.Script.ReadMessageOffsets, saved.ResumeIndex, pc + 1);
@@ -1149,11 +1193,14 @@ public sealed class VirtualMachine
                 Script child = ResolveSavedScript(childSaved);
                 _restoreFrameIndex = parentIndex + 1;
                 FrameOutcome childOutcome = RunFrame(
-                    new ExecFrame(child, FindRestoreRendezvous(child)), FrameCause.SaveRestore,
+                    CreateRestoredFrame(child, childSaved), FrameCause.SaveRestore,
                     childSaved.ScriptId);
                 _restoreFrameIndex = parentIndex;
-                if (childOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested)
-                    return HALT;
+                if (childOutcome == FrameOutcome.Halted) return HALT;
+                if (childOutcome == FrameOutcome.RootReload) return ROOT_RELOAD;
+                if (childOutcome == FrameOutcome.ExitRequested)
+                    throw new ProcessExitRequestedException();
+                _cur.RestoredSaveFrame = null;
                 return ResolveTableOffset(
                     _cur.Script, _cur.Script.ScriptCallOffsets, saved.CallTargetIndex, pc) + 1;
             }

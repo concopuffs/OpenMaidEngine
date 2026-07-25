@@ -274,6 +274,11 @@ public sealed class GodotAdvHost : IHost
 
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
     {
+        if (gfx.CurrentRenderTargetSlot >= 0)
+        {
+            PublishObjectRangeToSurface(gfx, firstHandle, count);
+            return;
+        }
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
     }
@@ -573,6 +578,7 @@ public sealed class GodotAdvHost : IHost
         {
             int slot = gfx.CurrentRenderTargetSlot;
             var snapshot = gfx.SnapshotVisibleObjects(_clock.NowMs);
+            PublishObjectRangeToSurface(gfx, 0, long.MaxValue, snapshot);
             lock (_screenTransitionLock) _renderTargetSnapshots[slot] = snapshot;
             _timeline?.Event("render-target-snapshot", new()
             {
@@ -1110,8 +1116,65 @@ public sealed class GodotAdvHost : IHost
         // For an offscreen target, discard separately retained text draws so its modeled pixel contents
         // observe the native D3D clear as well.
         if (surfaceSlot >= 0)
+        {
             lock (_textLock) _surfaceText.Remove(surfaceSlot);
+            lock (_imageLock)
+            {
+                if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
+                    System.Array.Clear(image.Pixels);
+                else if (_slotDims.TryGetValue(surfaceSlot, out var dimensions)
+                         && dimensions.W > 0 && dimensions.H > 0)
+                    _surfaceImages[surfaceSlot] = new RgbaImage(
+                        dimensions.W, dimensions.H,
+                        new byte[checked(dimensions.W * dimensions.H * 4)]);
+            }
+        }
         _timeline?.Event("render-target-clear", new() { ["surface"] = surfaceSlot });
+    }
+
+    private void PublishObjectRangeToSurface(
+        GfxState gfx, long firstHandle, long count,
+        IReadOnlyList<RenderObject>? sampled = null)
+    {
+        int targetSlot = gfx.CurrentRenderTargetSlot;
+        if (targetSlot < 0 || !_slotDims.TryGetValue(targetSlot, out var dimensions)
+            || dimensions.W <= 0 || dimensions.H <= 0)
+            return;
+
+        RgbaImage destination;
+        lock (_imageLock)
+            destination = _surfaceImages.TryGetValue(targetSlot, out var current)
+                ? new RgbaImage(current.Width, current.Height, (byte[])current.Pixels.Clone())
+                : new RgbaImage(dimensions.W, dimensions.H,
+                    new byte[checked(dimensions.W * dimensions.H * 4)]);
+
+        IReadOnlyList<RenderObject> visible = sampled ?? gfx.SnapshotVisibleObjects(_clock.NowMs);
+        int rendered = RetainedSurfaceRasterizer.CompositeRange(
+            destination, visible, firstHandle, count,
+            item =>
+            {
+                var raw = gfx.TryGet(item.Handle);
+                var resolved = raw != null
+                    ? ResolveSurfaceTexture(raw.SourceSlot, item.SurfaceResId)
+                    : ResolveResIdTexture(item.SurfaceResId);
+                return resolved == null
+                    ? null
+                    : RgbaSurfaceOps.WithColorKey(resolved.Value.Image, item.ColorKey);
+            });
+
+        lock (_imageLock) _surfaceImages[targetSlot] = destination;
+        IReadOnlyList<RenderObject> retained = visible
+            .Where(item => item.Handle >= firstHandle && item.Handle - firstHandle < count)
+            .ToArray();
+        lock (_screenTransitionLock) _renderTargetSnapshots[targetSlot] = retained;
+        _timeline?.Event("render-target-publish", new()
+        {
+            ["surface"] = targetSlot,
+            ["first"] = firstHandle,
+            ["count"] = count,
+            ["objects"] = retained.Count,
+            ["rendered"] = rendered,
+        });
     }
 
     public void ReleaseSurfaceRange(int firstSlot, int count)

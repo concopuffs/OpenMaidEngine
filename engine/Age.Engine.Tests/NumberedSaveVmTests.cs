@@ -45,6 +45,8 @@ public class NumberedSaveVmTests
             vm.Gfx.SetSurfaceReloadOnRestore(7, true);
             vm.Gfx.ReleaseSurfaceRange(7, 1);
             vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 50, 60);
+            vm.Gfx.SetCurrentTranslation(100, (7, 8, 9));
+            vm.Gfx.SetRotationChannel(100, 0, 500, (0, 0, 1), 90);
 
             vm.Run();
 
@@ -58,7 +60,25 @@ public class NumberedSaveVmTests
             Assert.Equal(0x3321, state.SoundEffectResourceIds[1]);
             Assert.Equal("姫狩り", state.StringGlobals[4]);
             Assert.Equal(0x77u, state.Frames.Single().ScriptId);
-            Assert.Contains(state.GfxObjects, item => item.Handle == 100);
+            NativeSavedGfxObject savedObject =
+                Assert.Single(state.GfxObjects, item => item.Handle == 100);
+            Assert.Equal(0, ReadGfxField(savedObject.Record, 0x34));
+            Assert.Equal(-1, ReadGfxField(savedObject.Record, 0x60));
+            Assert.Equal(0, ReadGfxField(savedObject.Record, 0x238));
+            Assert.Equal(-1, ReadGfxField(savedObject.Record, 0x240));
+            foreach (int matrixOffset in new[] { 0x6c, 0xac, 0xec, 0x16c, 0x1ac })
+            {
+                Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, matrixOffset));
+                Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, matrixOffset + 0x14));
+                Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, matrixOffset + 0x28));
+                Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, matrixOffset + 0x3c));
+            }
+            Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, 0x168));
+            Assert.Equal(BitConverter.SingleToInt32Bits(7), ReadGfxField(savedObject.Record, 0x19c));
+            Assert.Equal(BitConverter.SingleToInt32Bits(8), ReadGfxField(savedObject.Record, 0x1a0));
+            Assert.Equal(BitConverter.SingleToInt32Bits(9), ReadGfxField(savedObject.Record, 0x1a4));
+            Assert.Equal(BitConverter.SingleToInt32Bits(1), ReadGfxField(savedObject.Record, 0x130));
+            Assert.Equal(BitConverter.SingleToInt32Bits(-1), ReadGfxField(savedObject.Record, 0x13c));
             Assert.Equal(0x1234, ReadSurfaceField(state, 3, 0));
             Assert.Equal(0, ReadSurfaceField(state, 3, 8));
             Assert.Equal(-1, ReadSurfaceField(state, 4, 0));
@@ -88,14 +108,18 @@ public class NumberedSaveVmTests
             var store = new DirectoryNativeDatStore(root, Identity);
             Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
             [
+                (Table.ByLabel("mov")!.Value,
+                    [new Operand(GlobalInt, 0x510), new Operand(Immediate, 11)]),
                 (0xae, Array.Empty<Operand>()),
                 (0x3, [new Operand(Immediate, 0x89)]),
                 (Table.ByLabel("mov")!.Value,
                     [new Operand(GlobalInt, 0x500), new Operand(GlobalInt, 0x123)]),
                 (0x2, Array.Empty<Operand>()),
-            ], []), 0x88), scriptCallOffsets: [1]);
+            ], []), 0x88), scriptCallOffsets: [6]);
             Script child = WithPackedId(ScriptAssembler.Assemble(Table, "CHILD.BIN",
             [
+                (Table.ByLabel("mov")!.Value,
+                    [new Operand(GlobalInt, 0x511), new Operand(Immediate, 22)]),
                 (0xae, Array.Empty<Operand>()),
                 (Table.ByLabel("mov")!.Value,
                     [new Operand(GlobalInt, 0x501), new Operand(GlobalInt, 0x123)]),
@@ -168,6 +192,8 @@ public class NumberedSaveVmTests
             Assert.Equal(777, vm.Globals[0x124]);
             Assert.Equal(456, vm.Globals[0x500]);
             Assert.Equal(456, vm.Globals[0x501]);
+            Assert.Equal(11, vm.Globals[0x510]);
+            Assert.Equal(22, vm.Globals[0x511]);
             Assert.Equal(1, vm.Globals[0x502]);
             Assert.Equal("復帰", vm.GlobalStrings[0]);
             Assert.Equal(0x123, vm.GlobalPointers[0]);
@@ -197,6 +223,163 @@ public class NumberedSaveVmTests
                 && item.Name == "CHILD.BIN"
                 && item.Cause == Age.Engine.Diagnostics.FrameCause.CallScript);
             Assert.Equal("exit", vm.HaltReason);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FullLoadReestablishesSaveBoundaryBeforeNestedSaveUiWritesAnotherSlot()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            int callScript = Table.ByLabel("call-script")!.Value;
+            Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (callScript, [new Operand(Immediate, 0x89)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x88), scriptCallOffsets: [1]);
+            Script child = WithPackedId(ScriptAssembler.Assemble(Table, "CHILD.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (callScript, [new Operand(Immediate, 0x91)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x89);
+            Script saveUi = WithPackedId(ScriptAssembler.Assemble(Table, "SAVE_UI.BIN",
+            [
+                (0x19e, [new Operand(LocalInt, 0), new Operand(Immediate, 2)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x91);
+            Script loader = WithPackedId(ScriptAssembler.Assemble(Table, "LOADER.BIN",
+            [
+                (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x99);
+            byte[] opaqueRecord = NativeGfxRecord(3);
+            BinaryPrimitives.WriteInt32LittleEndian(opaqueRecord.AsSpan(0x68), 0x12345678);
+            NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
+            [
+                new NativeSavedScriptFrame(-1, 0x88, [], 8, 0),
+                new NativeSavedScriptFrame(0, 0x89, [], -1, -1),
+            ]) with
+            {
+                GfxObjects = [new NativeSavedGfxObject(100, opaqueRecord)],
+            };
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(source), [],
+                NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var vm = new VirtualMachine(
+                loader, Table, new RecordingHost(),
+                provider: new MapProvider(new()
+                {
+                    [0x88] = resumed,
+                    [0x89] = child,
+                    [0x91] = saveUi,
+                }),
+                nativeDatStore: store);
+
+            vm.Run();
+
+            NativeNumberedSaveFile? resaved = store.LoadNumberedFile(2);
+            Assert.NotNull(resaved);
+            NativeNumberedSaveState state =
+                NativeNumberedSaveCodec.Decode(resaved!.Document.Payload);
+            Assert.Equal([0x88u, 0x89u], state.Frames.Select(frame => frame.ScriptId));
+            Assert.Equal(8, state.Frames[0].ResumeIndex);
+            Assert.Equal(0, state.Frames[0].CallTargetIndex);
+            Assert.Equal(
+                0x12345678,
+                ReadGfxField(Assert.Single(state.GfxObjects).Record, 0x68));
+
+            Script reloader = WithPackedId(ScriptAssembler.Assemble(Table, "RELOADER.BIN",
+            [
+                (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 2)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x9a);
+            var trace = new RecordingTraceSink();
+            var roundTrippedVm = new VirtualMachine(
+                reloader, Table, new RecordingHost(),
+                provider: new MapProvider(new()
+                {
+                    [0x88] = resumed,
+                    [0x89] = child,
+                    [0x91] = saveUi,
+                }),
+                sink: trace,
+                nativeDatStore: store);
+
+            roundTrippedVm.Run();
+
+            Assert.DoesNotContain(trace.Events, item =>
+                item.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                && item.Name == "CHILD.BIN"
+                && item.Cause == Age.Engine.Diagnostics.FrameCause.CallScript);
+            Assert.Equal("exit", roundTrippedVm.HaltReason);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void RestoredChildRootReloadDiscardsSyntheticAncestorChain()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            int callScript = Table.ByLabel("call-script")!.Value;
+            int move = Table.ByLabel("mov")!.Value;
+            Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (callScript, [new Operand(Immediate, 0x89)]),
+                (move, [new Operand(GlobalInt, 0x600), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x88), scriptCallOffsets: [1]);
+            Script child = WithPackedId(ScriptAssembler.Assemble(Table, "CHILD_RELOAD.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (0x9, Array.Empty<Operand>()),
+            ], []), 0x89);
+            Script reloaded = WithPackedId(ScriptAssembler.Assemble(Table, "RELOADED.BIN",
+            [
+                (move, [new Operand(GlobalInt, 0x601), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0);
+            Script loader = WithPackedId(ScriptAssembler.Assemble(Table, "LOADER.BIN",
+            [
+                (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x99);
+            NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
+            [
+                new NativeSavedScriptFrame(-1, 0x88, [], -1, 0),
+                new NativeSavedScriptFrame(0, 0x89, [], -1, -1),
+            ]);
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(source), [],
+                NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var vm = new VirtualMachine(
+                loader, Table, new RecordingHost(),
+                provider: new MapProvider(new()
+                {
+                    [0] = reloaded,
+                    [0x88] = resumed,
+                    [0x89] = child,
+                }),
+                nativeDatStore: store);
+
+            vm.Run();
+
+            Assert.False(vm.Globals.ContainsKey(0x600));
+            Assert.Equal(1, vm.Globals[0x601]);
         }
         finally
         {
@@ -272,6 +455,28 @@ public class NumberedSaveVmTests
         Assert.False(surface.ReloadOnRestore);
     }
 
+    [Fact]
+    public void SurfacePersistenceDeclarationSetsAndClearsReloadBit()
+    {
+        Script script = ScriptAssembler.Assemble(Table, "SURFACE_POLICY.BIN",
+        [
+            (0x258, [new Operand(Immediate, 15), new Operand(Immediate, 1)]),
+            (0x258, [new Operand(Immediate, 16), new Operand(Immediate, 3)]),
+            (0x258, [new Operand(Immediate, 15), new Operand(Immediate, 0)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        vm.Gfx.SetSurface(15, 0x3383, 0);
+        vm.Gfx.SetSurface(16, 0x3384, 0);
+
+        vm.Run();
+
+        GfxSurfacePersistenceState[] surfaces =
+            vm.Gfx.CapturePersistenceSnapshot().Surfaces.ToArray();
+        Assert.False(Assert.Single(surfaces, item => item.Slot == 15).ReloadOnRestore);
+        Assert.True(Assert.Single(surfaces, item => item.Slot == 16).ReloadOnRestore);
+    }
+
     private static Script WithPackedId(Script source, uint packedId)
         => new()
         {
@@ -342,10 +547,20 @@ public class NumberedSaveVmTests
         Write(0x24, 50);
         Write(0x28, 60);
         Write(0x60, -1);
-        Write(0x238, 1);
-        Write(0x23c, 1);
+        Write(0x64, -1);
+        foreach (int matrixOffset in new[] { 0x6c, 0xac, 0xec, 0x12c, 0x16c, 0x1ac })
+        {
+            Write(matrixOffset, BitConverter.SingleToInt32Bits(1));
+            Write(matrixOffset + 0x14, BitConverter.SingleToInt32Bits(1));
+            Write(matrixOffset + 0x28, BitConverter.SingleToInt32Bits(1));
+            Write(matrixOffset + 0x3c, BitConverter.SingleToInt32Bits(1));
+        }
+        Write(0x240, -1);
         return result;
     }
+
+    private static int ReadGfxField(byte[] record, int offset)
+        => BinaryPrimitives.ReadInt32LittleEndian(record.AsSpan(offset));
 
     private static string NewTemporaryDirectory()
     {

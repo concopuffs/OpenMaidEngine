@@ -405,9 +405,9 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 ### 0xae `continue-save-load-stack-restore` (continue-save-load-stack-restore, argc 0)
 - **summary:** () - during serialized save restoration, replace the current frame PC with its saved resume/call target and advance through the saved script-context stack; otherwise a no-op.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with script_frame_restore_saved_layout@0x40f2d0, and clears the restore flag on reaching the saved terminal context. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries, which provide the rendezvous points used while reconstructing the stack.
+- **evidence:** Ghidra /v2: op_0xae_continue_save_load_stack_restore@0x416790 first tests ctx+0x53d24 (set by save_data_deserialize_and_begin_restore@0x40fd10). When clear it returns. When set, it selects the serialized frame layout through set:SaveVersion1/2, restores the current PC from that layout's saved return/call target, advances through contexts with script_frame_restore_saved_layout@0x40f2d0, and clears the restore flag on reaching the saved terminal context. The restore helper calls script_frame_load_resource@0x40e980, which initializes each new frame PC to its script codebase; the script therefore executes its ordinary prologue before reaching 0xae. Native parent contexts retain restored coordinates while the child runs. SAVE00 -> SAVE03 proved the port must retain the terminal 0x1ad boundary; SAVE00 -> SAVE04 proved a managed parent parked at synthetic 0xae must serialize original resume=8/call=8 rather than synthetic -1/-1; slot 006 proved direct entry at 0xae skips FIELD's zoom-table prologue and collapses the dungeon map. Its 305 corpus sites overwhelmingly follow coroutine-resume/call boundaries.
 
-Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): the active path reconstructs the saved recursive frame chain and resumes the terminal frame at its T1 boundary. The installed SAVE00 continuation gate proves SYSTEM4 -> FORT restoration reaches FORT's CHMENU gameplay poll; the synthetic gate asserts the child frame enters with SaveRestore rather than ordinary CallScript cause.
+Layout 3 frame d259 indexes SYS4 T1 read-message reset sites, d260 indexes T2 call-script sites, and the saved local return stack indexes T3 local-call sites. Port status (2026-07-24): each saved script is loaded at its ordinary entry, runs its frame-local prologue, and reaches 0xae itself; the active path then reconstructs the saved recursive frame chain, preserves each synthetic ancestor's original T1/T2/T3 coordinates while its restored child is active, reinstates the terminal restored frame as opcode 0x1ad's save boundary, and resumes it at T1. The installed SAVE00 continuation gate proves SYSTEM4 -> FORT restoration reaches FORT's CHMENU gameplay poll; the unchanged port-authored dungeon slot 006 proves FIELD's pre-rendezvous zoom table is initialized; synthetic gates assert both root/child prologue execution, SaveRestore rather than ordinary CallScript entry, exclusion of nested SAVE helpers from a re-save, and reload of that rewrite without ordinary boot re-entry.
 
 ### 0xc8 `sleep` (sleep, argc 1)
 - **summary:** Pause the current script for <duration> milliseconds while retained presentation continues.
@@ -790,9 +790,9 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **evidence:** Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. Consumer 0x472f00 uses delay obj+0x44, duration obj+0x58, current obj+0x16c, target obj+0x1ac, shared start obj+0x34, and retained-gfx frame time owner+0xb550 (EngineCtx+0x51b64).
 
 ### 0x222 `present-gfx-object-range` (present-gfx-object-range, argc 2)
-- **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range and clear their pending update flags.
+- **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range into the currently selected backbuffer or offscreen render target, then clear their pending update flags.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch. HISTORY.BIN uses (0,60000) after rebuilding its retained presentation.
+- **evidence:** Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch in the D3D target previously selected by op 0x20d. HISTORY.BIN uses (0,60000) for the backbuffer. SAVE.BIN instead renders [0,0x130b0) into 800x600 slot 2, then handle 0x15f90 at 14% scale into 112x84 slot 192; op 0x1ae writes slot 192 as the numbered .STH thumbnail.
 
 ### 0x223 `queue-surface-alpha-transition` (queue-surface-alpha-transition, argc 8)
 - **summary:** (command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration.
@@ -923,6 +923,13 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **summary:** Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. The mapped field is also read by op 0x243: bit 1 suppresses its force-complete/clock-reset request.
+
+### 0x258 `set-surface-persistence-flags` (set-surface-persistence-flags, argc 2)
+- **summary:** (surface_slot)(flags) - replace the native surface record's numbered-save persistence flags; bit 0 controls asset reload on restore and bit 1 controls the adjacent still-unnamed field.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x258_set_surface_persistence_flags@0x4250a0 reads the slot and flags operands and calls gfx_surface_set_persistence_flags@0x4159c0. The worker writes flags&1 to record +0x08 and (flags>>1)&1 to +0x0c in both 1,000-record tables. This corrects the old upstream address/name association: 0x422fe0 is opcode 0x20f movie playback, not 0x258. Corpus declaration chains follow opcode 0x259 at script entry.
+
+Scripts place declaration chains immediately after opcode 0x259 clears both fields. The port models bit 0 because it is consumed by layout-3 restoration; bit 1 is retained as an identified native field but has no known runtime consumer yet.
 
 ### 0x259 `script-entry` (script-entry, argc 0)
 - **summary:** zero-arg script/prologue entry; clears surface-record persistence fields +0x08 and +0x0c across both 1,000-record native tables before the declaration chain continues
@@ -1149,10 +1156,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x21b `line-id?` (u004213E0, argc 1)
 - **summary:** 1 imm; mov->0x21b->stmt-end; near save/load-messkip — likely line/stmt id, verify not msg-control
 - **grounding:** source=harness, confidence=med, noop_headless=True
-
-### 0x258 `decl?` (u00422FE0, argc 2)
-- **summary:** 2 imm; runs in a chain right after script-entry 0x259, enumerating ids — prologue declaration/registration?
-- **grounding:** source=harness, confidence=low, noop_headless=True
 
 ## unknown
 

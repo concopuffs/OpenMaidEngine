@@ -1,4 +1,5 @@
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 namespace Age.Engine.Vm;
 
 /// <summary>One script activation: the running script, its instruction cursor, its local slots,
@@ -10,6 +11,10 @@ internal sealed class ExecFrame
 
     public readonly Script Script;
     public int Pc;                                       // entry instruction index
+    // While a restored descendant is running, this activation is parked at the synthetic op-0xae
+    // rendezvous rather than its native T1/T2/T3 coordinate. Retain the serialized coordinates until
+    // the descendant returns so an intervening save can reproduce the native parent frame.
+    public NativeSavedScriptFrame? RestoredSaveFrame;
     public int ReadMessageOffset = -1;                   // latest op-0x71 code DWORD coordinate
     public readonly Frame Locals = new();
     public readonly List<int> CallStack = new();         // intra-script `call` (op 0x8f) returns

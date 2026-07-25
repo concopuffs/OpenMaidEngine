@@ -101,6 +101,10 @@ public sealed class GfxState
     }
     public sealed class GfxObject
     {
+        // The native numbered-save record contains several full transform matrices and reserved fields
+        // beyond the port's semantic model. Preserve the decoded bytes so a native load/save round trip
+        // does not erase state that the port has not modeled yet; known fields are patched by the codec.
+        public byte[]? NativePersistenceRecord;
         public (long X, long Y, long Z) V18, V24, V16c;
         public long Field64, Field68, Field6c;
         public long Color = 0xffffffff; // native gfx_object_init_default obj+0x60: identity packed ARGB
@@ -464,6 +468,7 @@ public sealed class GfxState
     private static GfxObject CloneState(GfxObject s)
         => new()
         {
+            NativePersistenceRecord = s.NativePersistenceRecord?.ToArray(),
             V18 = s.V18, V24 = s.V24, V16c = s.V16c,
             Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
             Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,

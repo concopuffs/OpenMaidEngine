@@ -245,12 +245,22 @@ Retained graphics then uses:
 ```text
 0x00  gfx_record_size:u32              # 0x2d4
 +0x04  gfx_object_count:u32
-+0x08  repeated { handle:u32, record[0x2d4] }
++0x08  repeated sparse entries:
+         handle:u32
+         record[0x2d4]                 # 0xb5 meaningful DWORDs
+         padding[0x87c]
+       entry stride = 0x2d5 DWORDs = 0xb54 bytes
 ...    range_first:u32
 ...    range_count:i32
 ...    range_transform_record[0x2d4]
 ...    native allocation slack
 ```
+
+The sparse stride is not an allocator-only artifact. Both native writer and reader hold a DWORD pointer:
+after the handle, they copy `0x2d4` **bytes** but advance by `0x2d4` **DWORDs**. Consecutive handles are
+therefore `0x2d5` DWORDs apart. Early experimental port saves incorrectly packed
+`{handle,record}` contiguously; compatibility import recognizes that layout, while all new output uses
+the native sparse form.
 
 The 1,000 surface records preserve the native 20-byte metadata cells verbatim:
 
@@ -270,9 +280,13 @@ surfaces expected to remain live across the load. The installed file is decisive
 are zero, while SYSTEM4's reusable choice-frame atlas remains recorded as resource `0x3383` in slot 15.
 A separate configuration-gated path can release all 1,000 surfaces before this loop, but Himegari's
 registered `CreateObject=1`, `AutoFreeTex=0` defaults leave it inactive. A retained `0x2d4`
-record is structurally complete but not every internal graphics field is semantically named. The native
-allocation is larger than the records actually written (`0x2e1 + object_count * 0x2d8` DWORDs in the
-graphics sizing term), leaving zero/slack bytes after the meaningful range record.
+record is structurally complete but not every internal graphics field is semantically named. Native
+`gfx_object_init_default` initializes six embedded 4x4 matrices (current/target scale, rotation, and
+translation) to identity, packed colors at `+0x60/+0x64/+0x240` to `0xffffffff`, and other fields to zero.
+Deserialization initializes an object and then overwrites all `0x2d4` bytes, so a compatibility writer
+must emit or preserve those defaults rather than zero-fill unnamed fields. The graphics sizing term remains
+larger than the meaningful sparse entries and range record
+(`0x2e1 + object_count * 0x2d8` DWORDs), leaving final allocation slack as well.
 
 The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
 `[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and
