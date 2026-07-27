@@ -82,6 +82,7 @@ public sealed class VirtualMachine
     private volatile bool _advSkipServiceEnabled;
     private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
+    private int _messageGlyphDelayMilliseconds;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
     // slot zero as their packed-coordinate flood-fill worklist; op 0x132 replaces a slot.
@@ -125,6 +126,10 @@ public sealed class VirtualMachine
     {
         get { lock (_interactiveLock) return _rawInputFrame != null; }
     }
+    public string? RawInputCallbackScriptName
+    {
+        get { lock (_interactiveLock) return _rawInputFrame?.Script.Name; }
+    }
     public AdvTextHistory TextHistory { get; }
 
     /// <summary>The currently executing recursive script frame and stack, or null outside VM execution.</summary>
@@ -151,6 +156,7 @@ public sealed class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
         _nativeDatStore = nativeDatStore;
+        _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
         _accumulatedPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
         _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }
@@ -1808,15 +1814,19 @@ public sealed class VirtualMachine
                 RefreshAdvReadSkipState();
                 foreach (var o in a)
                 {
-                    if (o.Type != T_STR) continue;
-                    int off = (int)o.Value;
+                    if (!IsStr(o)) continue;
+                    int off = o.Type == T_STR ? (int)o.Value : ins.Offset;
                     _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
                     if (c > _o.EmitCap) { HaltReason = $"LOOP:line@0x{off:x}×{c}"; return HALT; }
-                    string text = _cur.Script.GetString(off);
+                    string text = ReadStr(o);
                     Emitted.Add((off, text, _cur.Script.Name));
                     int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
+                    string[] scriptStack;
+                    lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
+                    var liveRun = new AdvLiveTextRun(
+                        off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack);
                     TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
-                    _host.ShowText(off, text);
+                    _host.ShowText(liveRun, _messageGlyphDelayMilliseconds);
                 }
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
@@ -2235,10 +2245,20 @@ public sealed class VirtualMachine
             case "get-message-window-alpha": // 0x131: host profile/config seam; default host currently supplies 0
             case "u00415F70":
                 Write(a[0], _host.MessageWindowAlphaSetting); return pc + 1;
+            case "get-message-glyph-delay": // 0x7f
+            case "u00414C60":
+                Write(a[0], _messageGlyphDelayMilliseconds); return pc + 1;
+            case "set-message-glyph-delay": // 0x1b5
+            case "u0041B5F0":
+                _messageGlyphDelayMilliseconds = System.Math.Max(0, (int)Read(a[0]));
+                _host.SetMessageGlyphDelayMilliseconds(_messageGlyphDelayMilliseconds);
+                return pc + 1;
             case "u00415BF0":
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
                 return pc + 1;
-            case "end-text-line": case "set-font":
+            case "end-text-line":
+                TextHistory.EndLine((int)Read(a[0]), _advTextStyle); return pc + 1;
+            case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot

@@ -57,11 +57,20 @@ internal class RecordingHost : IHost
     public readonly List<string> Warnings = new();
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
+    public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
     public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
+    public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
     public int CursorClearCount;
     public int SceneContextResets;
     public void ReportWarning(string message) => Warnings.Add(message);
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
+    public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
+    {
+        Lines.Add((run.SourceOffset, run.Text));
+        LiveTextRuns.Add((run, glyphDelayMilliseconds));
+    }
+    public void SetMessageGlyphDelayMilliseconds(int milliseconds)
+        => MessageGlyphDelayMilliseconds = milliseconds;
     public RgbaImage? CaptureSurfacePixels(int slot)
         => SurfacePixels.TryGetValue(slot, out var image) ? image : null;
     public bool ReplaceSurfacePixels(int slot, RgbaImage image)

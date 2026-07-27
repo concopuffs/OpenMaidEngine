@@ -34,6 +34,37 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void ShowTextPublishesDynamicStringOperandsAsAdjacentLiveRuns()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "DYNAMIC_ADV_TEXT",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { new Operand(0, 1), new Operand(0, 640), new Operand(0, 160),
+                               new Operand(0, 0), new Operand(0, 430) }),
+                (0x79, new[] { new Operand(0, 1), new Operand(0, 100), new Operand(0, 47) }),
+                (0x71, new[] { new Operand(0, 1) }),
+                (0x1b5, new[] { new Operand(0, 0) }),
+                (0x6e, new[] { new Operand(0, 0), new Operand(2, 0) }),
+                (0x6e, new[] { new Operand(0, 0), new Operand(5, 0x279) }),
+                (0x6e, new[] { new Operand(0, 0), new Operand(2, 1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "「", "！」" });
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+        vm.GlobalStrings[0x279] = "リリィ";
+
+        vm.Run();
+
+        Assert.Equal(new[] { "「", "リリィ", "！」" },
+                     host.LiveTextRuns.Select(emitted => emitted.Run.Text));
+        Assert.All(host.LiveTextRuns,
+            emitted => Assert.Equal((0, 430, 100, 47),
+                (emitted.Run.Layout.OriginX, emitted.Run.Layout.OriginY,
+                 emitted.Run.Layout.CursorX, emitted.Run.Layout.CursorY)));
+    }
+
+    [Fact]
     public void LayoutResetRestoresConfiguredCursorAndPreservesConfiguredBounds()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -58,6 +89,121 @@ public class AdvTextOpsTests
         Assert.Equal(new[] { (1, 0, 0), (1, 12, 34), (1, 100, 47) }, host.TextCursors);
         Assert.Equal(new AdvTextLayoutSnapshot(1, 800, 160, 0, 430, 100, 47, 720, 147),
                      vm.TextHistory.GetLayoutSnapshot(1));
+    }
+
+    [Fact]
+    public void SuppressedUiTextPublishesRetainedRunsImmediatelyAndAdvancesLines()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        static Operand L(int index) => new(9, index);
+        static Operand S(int index) => new(2, index);
+        var script = ScriptAssembler.Assemble(table, "UI_RETAINED_TEXT",
+            new List<(int, Operand[])>
+            {
+                (0x1bb, new[] { I(0) }),
+                (0x70, new[] { I(7), I(500), I(180), I(0), I(0) }),
+                (0x79, new[] { I(7), I(53), I(10) }),
+                (0x71, new[] { I(7) }),
+                (0x75, new[] { I(16) }),
+                (0x8b, new[] { I(9) }),
+                (0x7f, new[] { L(0) }),
+                (0x1b5, new[] { I(0) }),
+                (0x198, new[] { I(7), I(275), I(90) }),
+                (0x6e, new[] { I(0), S(0) }),
+                (0x6f, new[] { I(0) }),
+                (0x6e, new[] { I(0), S(1) }),
+                (0x6f, new[] { I(0) }),
+                (0x198, new[] { I(7), I(275), I(135) }),
+                (0x6e, new[] { I(0), S(2) }),
+                (0x6f, new[] { I(0) }),
+                (0x6e, new[] { I(0), S(3) }),
+                (0x6f, new[] { I(0) }),
+                (0x198, new[] { I(7), I(275), I(180) }),
+                (0x6e, new[] { I(0), S(4) }),
+                (0x6f, new[] { I(0) }),
+                (0x6e, new[] { I(0), S(5) }),
+                (0x6f, new[] { I(0) }),
+                (0x1b5, new[] { L(0) }),
+                (0x1bb, new[] { I(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "row1a", "row1b", "row2a", "row2b", "row3a", "row3b" });
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(50, host.MessageGlyphDelayMilliseconds);
+        Assert.Empty(vm.TextHistory.Entries);
+        Assert.Empty(vm.TextHistory.Records);
+        Assert.All(host.LiveTextRuns, emitted => Assert.Equal(0, emitted.GlyphDelayMilliseconds));
+        Assert.Equal(
+            new[]
+            {
+                (275, 90, 53, 10),
+                (275, 90, 53, 35),
+                (275, 135, 53, 60),
+                (275, 135, 53, 85),
+                (275, 180, 53, 110),
+                (275, 180, 53, 135),
+            },
+            host.LiveTextRuns.Select(emitted =>
+                (emitted.Run.Layout.OriginX, emitted.Run.Layout.OriginY,
+                 emitted.Run.Layout.CursorX, emitted.Run.Layout.CursorY)));
+        Assert.Equal(new[] { "row1a", "row1b", "row2a", "row2b", "row3a", "row3b" },
+                     host.LiveTextRuns.Select(emitted => emitted.Run.Text));
+    }
+
+    [Fact]
+    public void RealMamesResearchDescriptionUsesImmediateRetainedTextPath()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var mames = scripts.RequireByName("MAMES.BIN");
+        static Operand I(long value) => new(0, value);
+        var caller = ScriptAssembler.Assemble(table, "MAMES_RESEARCH_CALLER",
+            new List<(int, Operand[])>
+            {
+                (0x1bb, new[] { I(0) }),
+                (0x70, new[] { I(7), I(500), I(180), I(0), I(0) }),
+                (0x79, new[] { I(7), I(53), I(10) }),
+                (0x71, new[] { I(7) }),
+                (0x75, new[] { I(16) }),
+                (0x8b, new[] { I(9) }),
+                (0x198, new[] { I(7), I(275), I(90) }),
+                (0x3, new[] { I(mames.PackedId) }),
+                (0x1bb, new[] { I(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(caller, table, host, provider: scripts);
+        vm.Globals[0x1560e7] = 7;
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(50, host.MessageGlyphDelayMilliseconds);
+        Assert.Empty(vm.TextHistory.Records);
+        Assert.Collection(host.LiveTextRuns,
+            first =>
+            {
+                Assert.Equal("錬成の研究をして知識を高める", first.Run.Text);
+                Assert.Equal(0, first.GlyphDelayMilliseconds);
+                Assert.True(first.Run.BelongsToScript("MAMES_RESEARCH_CALLER"));
+                Assert.True(first.Run.BelongsToScript("MAMES.BIN"));
+                Assert.Equal((275, 90, 53, 10),
+                    (first.Run.Layout.OriginX, first.Run.Layout.OriginY,
+                     first.Run.Layout.CursorX, first.Run.Layout.CursorY));
+            },
+            second =>
+            {
+                Assert.Equal("錬成LVの熟練度が上昇", second.Run.Text);
+                Assert.Equal(0, second.GlyphDelayMilliseconds);
+                Assert.Equal((275, 90, 53, 35),
+                    (second.Run.Layout.OriginX, second.Run.Layout.OriginY,
+                     second.Run.Layout.CursorX, second.Run.Layout.CursorY));
+            });
     }
 
     [Fact]

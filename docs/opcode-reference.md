@@ -5,6 +5,16 @@
 
 ## adv
 
+### 0x6e `show-text` (show-text, argc 2)
+- **summary:** (layout_slot)(text) - build and publish a retained text run in the selected ADV layout, using the current glyph delay and raster style; slot zero selects the current layout.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which snapshots the selected layout cursor and active font/color state, rasterizes one record per CP932 glyph, advances the live cursor, and publishes records through adv_text_publish_next_glyph@0x451220 using text-manager charDelay. Native SC0000 traces show a 50-ms ordinary delay and retained layout publication; MAMES/ITMES/SKMES/INFOMES set delay zero for immediate UI descriptions.
+
+### 0x6f `end-text-line` (end-text-line, argc 1)
+- **summary:** (layout_slot) - reset the selected layout's horizontal cursor and advance vertically by the primary font height plus configured line spacing.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout's configured line origin and advance y by text-manager line spacing at +0x560 minus the negative primary LOGFONT height. The corpus pairs op 0x6f after show-text throughout ADV and retained UI helpers; STUDY's 16-pixel font plus 9-pixel spacing yields the observed 25-pixel MAMES line step.
+
 ### 0x70 `define-adv-text-layout` (define-adv-text-layout, argc 5)
 - **summary:** (layout_slot)(width)(height)(x)(y) - configure an ADV text layout/surface and, when history recording is enabled, append its logical history index and arm the next retained record as a group start.
 - **grounding:** source=investigation, confidence=high
@@ -63,6 +73,11 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and calls adv_text_set_cursor@0x4530f0 on text manager ctx+0x14940. Slot 0 resolves manager+0x4c8; manager+0x414[slot] selects the layout; text_layout_set_cursor@0x452530 writes x/y to +4/+8 of its last 0x14-byte record. SC0000 0x9d3 computes slot 1, x=75, y=47 before voiced show-text.
 
+### 0x7f `get-message-glyph-delay` (u00414C60, argc 1)
+- **summary:** (out) - read the current per-glyph ADV text reveal delay in milliseconds.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Complete corpus consistency across all 7 uses in 5 scripts: MAMES, ITMES, SKMES, and INFOMES save this value immediately before op 0x1b5 sets zero for retained UI-description text, then restore it on exit; CONFIG reads it for the message-speed slider, whose paired op 0x1b5 adjustments use 5-ms steps over 5..100. Native ADV traces identify the consumed text-manager field as the per-glyph charDelay (normally 50 ms).
+
 ### 0x85 `clear-text-history` (clear-text-history, argc 0)
 - **summary:** Clear both the retained ADV text-record vector and its logical layout/message index.
 - **grounding:** source=investigation, confidence=high
@@ -87,6 +102,11 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 - **summary:** (x)(y) - set the horizontal and vertical extent/offset used by the current text effect mode.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1a4_handler@0x41f440 writes operands 1/2 to text-manager+0x564/+0x568. Native raster/bounds paths expand or shift text by these values when an effect mode is active; mode 3 subtracts both. HISTORY.BIN uses (1,1).
+
+### 0x1b5 `set-message-glyph-delay` (u0041B5F0, argc 1)
+- **summary:** (milliseconds) - set the per-glyph ADV text reveal delay; zero makes retained UI text publish immediately.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Complete corpus consistency across all 11 uses in 5 scripts: CONFIG initializes the value to 50 ms and changes it in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Native ADV traces show ordinary show-text consuming the corresponding charDelay with a 50-ms default.
 
 ### 0x1bb `set-text-history-recording` (set-text-history-recording, argc 1)
 - **summary:** (enabled) - enable or suppress retained ADV text-history recording. Zero suppresses recording; one enables it.
@@ -1239,18 +1259,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x6e `show-text` (show-text, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x6f `end-text-line` (end-text-line, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x7f `u00414C60` (u00414C60, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x8c `jmp` (jmp, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
@@ -1344,10 +1352,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 
 ### 0x1b4 `u004237C0` (u004237C0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b5 `u0041B5F0` (u0041B5F0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

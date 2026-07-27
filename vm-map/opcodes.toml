@@ -912,22 +912,22 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "show-text"
-category = "unknown"
-summary = ""
+category = "adv"
+summary = "(layout_slot)(text) - build and publish a retained text run in the selected ADV layout, using the current glyph delay and raster style; slot zero selects the current layout."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which snapshots the selected layout cursor and active font/color state, rasterizes one record per CP932 glyph, advances the live cursor, and publishes records through adv_text_publish_next_glyph@0x451220 using text-manager charDelay. Native SC0000 traces show a 50-ms ordinary delay and retained layout publication; MAMES/ITMES/SKMES/INFOMES set delay zero for immediate UI descriptions."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "text source"
 observed_types = ["string", "g-str"]
 
 [[opcode]]
@@ -938,17 +938,17 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "end-text-line"
-category = "unknown"
-summary = ""
+category = "adv"
+summary = "(layout_slot) - reset the selected layout's horizontal cursor and advance vertically by the primary font height plus configured line spacing."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout's configured line origin and advance y by text-manager line spacing at +0x560 minus the negative primary LOGFONT height. The corpus pairs op 0x6f after show-text throughout ADV and retained UI helpers; STUDY's 16-pixel font plus 9-pixel spacing yields the observed 25-pixel MAMES line step."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -1297,18 +1297,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414C60"
-category = "unknown"
-summary = ""
+name = "get-message-glyph-delay"
+category = "adv"
+summary = "(out) - read the current per-glyph ADV text reveal delay in milliseconds."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Complete corpus consistency across all 7 uses in 5 scripts: MAMES, ITMES, SKMES, and INFOMES save this value immediately before op 0x1b5 sets zero for retained UI-description text, then restore it on exit; CONFIG reads it for the message-speed slider, whose paired op 0x1b5 adjustments use 5-ms steps over 5..100. Native ADV traces identify the consumed text-manager field as the per-glyph charDelay (normally 50 ms)."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "output: current per-glyph reveal delay in milliseconds"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -3948,18 +3948,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041B5F0"
-category = "unknown"
-summary = ""
+name = "set-message-glyph-delay"
+category = "adv"
+summary = "(milliseconds) - set the per-glyph ADV text reveal delay; zero makes retained UI text publish immediately."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Complete corpus consistency across all 11 uses in 5 scripts: CONFIG initializes the value to 50 ms and changes it in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Native ADV traces show ordinary show-text consuming the corresponding charDelay with a 50-ms default."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "per-glyph reveal delay in milliseconds"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]

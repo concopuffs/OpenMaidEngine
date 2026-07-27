@@ -45,6 +45,26 @@ public readonly record struct AdvTextLayoutSnapshot(
     int Bottom);
 
 /// <summary>
+/// One live show-text run with the layout and raster state captured when the opcode executes.
+/// Unlike <see cref="AdvTextHistoryRecord"/>, this presentation record exists even while History
+/// backlog recording is suppressed.
+/// </summary>
+public sealed record AdvLiveTextRun(
+    int SourceOffset,
+    AdvTextLayoutSnapshot Layout,
+    AdvTextStyle Style,
+    string Text,
+    IReadOnlyList<string> ScriptStack)
+{
+    public bool BelongsToScript(string scriptName)
+    {
+        foreach (string frame in ScriptStack)
+            if (string.Equals(frame, scriptName, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+}
+
+/// <summary>
 /// One semantic counterpart of AGE's 0x48-byte retained text record. Metadata uses
 /// <see cref="Value"/> plus <see cref="AuxValue"/> as value/type; voice uses them as id/argument.
 /// </summary>
@@ -155,6 +175,19 @@ public sealed class AdvTextHistory
         var layout = GetOrCreateLayout(slot);
         layout.OriginX = x;
         layout.OriginY = y;
+    }
+
+    /// <summary>
+    /// Advance to the next horizontal text line. Native resets x to the layout's configured reset cursor
+    /// and adds the primary font's pixel height plus the current extra line spacing to y.
+    /// </summary>
+    public void EndLine(int requestedSlot, AdvTextStyle style)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        int fontHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
+        layout.CursorX = layout.ResetCursorX;
+        layout.CursorY += fontHeight + style.LineSpacing;
     }
 
     public AdvTextLayoutSnapshot GetLayoutSnapshot(int requestedSlot)

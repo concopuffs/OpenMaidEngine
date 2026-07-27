@@ -31,6 +31,7 @@ public partial class Main : Godot.Control
     private readonly byte[] _screenPixels = new byte[ScreenWidth * ScreenHeight * 4];
     private Label _text = null!;
     private Label _speaker = null!;
+    private readonly System.Collections.Generic.List<Label> _advTextLabels = new();
     private readonly System.Collections.Generic.List<Label> _surfaceTextLabels = new();
     private readonly System.Collections.Generic.Dictionary<int, Label> _historyTextLabels = new();
     private Font? _presentationRegularFont;
@@ -123,6 +124,7 @@ public partial class Main : Godot.Control
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
         AddChild(_text);
         _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _advTextLabels.Add(_text);
         _speaker = new Label { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         AddChild(_speaker);
         _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -1238,17 +1240,49 @@ public partial class Main : Godot.Control
     private void UpdateAdvTextPresentation()
     {
         // Modal callback scripts composite their own full-screen UI while the enclosing ADV wait remains
-        // parked. The ordinary dialogue Label is a Godot overlay rather than part of the retained surface,
-        // so hide it while that nested input owner is active or it leaks above HISTORY's background.
-        _text.Visible = !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive;
-        if (!_text.Visible) return;
-        var t = _host.SnapshotAdvText();
-        var layout = _vm.TextHistory.GetLayoutSnapshot(_host.AdvPageLayoutSlot);
-        _text.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
-        _text.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
-                                 System.Math.Max(1, layout.Bottom - layout.CursorY));
-        int count = System.Math.Clamp(t.VisibleGlyphs, 0, t.Text.Length);
-        _text.Text = count == 0 ? "" : t.Text[..count];
+        // parked. Live layout text is a Godot overlay rather than part of the retained surface. During a
+        // raw-input callback, keep runs owned by that callback's script stack (STUDY -> MAMES) while hiding
+        // enclosing ADV runs that would otherwise leak above a nested screen such as HISTORY.
+        foreach (var label in _advTextLabels) label.Visible = false;
+        if (_host.IsAdvPagePresentationSuspended) return;
+
+        int labelIndex = 0;
+        string? rawInputOwner = _vm.RawInputCallbackScriptName;
+        var snapshots = _host.SnapshotLiveAdvText();
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            var snapshot = snapshots[i];
+            var run = snapshot.Run;
+            if (run.Text.Length == 0 || !ShouldShow(run)) continue;
+            var visibleText = new System.Text.StringBuilder();
+            AppendVisible(snapshot);
+            while (i + 1 < snapshots.Count
+                   && snapshots[i + 1].Run.Layout == run.Layout
+                   && snapshots[i + 1].Run.Style == run.Style
+                   && ShouldShow(snapshots[i + 1].Run))
+            {
+                i++;
+                AppendVisible(snapshots[i]);
+            }
+
+            var label = GetAdvTextLabel(labelIndex++);
+            var layout = run.Layout;
+            label.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
+            label.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
+                                     System.Math.Max(1, layout.Bottom - layout.CursorY));
+            label.Text = visibleText.ToString();
+            ApplyAdvTextStyle(label, run.Style);
+            label.Visible = true;
+
+            void AppendVisible(LiveAdvTextSnapshot item)
+            {
+                int count = System.Math.Clamp(item.VisibleGlyphs, 0, item.Run.Text.Length);
+                if (count != 0) visibleText.Append(item.Run.Text, 0, count);
+            }
+
+            bool ShouldShow(AdvLiveTextRun item)
+                => rawInputOwner == null || item.BelongsToScript(rawInputOwner);
+        }
     }
 
     private void UpdateHistoryTextPresentation()
@@ -1276,6 +1310,12 @@ public partial class Main : Godot.Control
     {
         while (_surfaceTextLabels.Count <= index) _surfaceTextLabels.Add(CreateAdvPresentationLabel());
         return _surfaceTextLabels[index];
+    }
+
+    private Label GetAdvTextLabel(int index)
+    {
+        while (_advTextLabels.Count <= index) _advTextLabels.Add(CreateAdvPresentationLabel());
+        return _advTextLabels[index];
     }
 
     private static void ApplySurfaceTextTransform(Label label, Affine2D localToDestination,
@@ -1825,7 +1865,11 @@ public partial class Main : Godot.Control
         _status.Text = "";
         if (_locatorHudVisible) _locatorHud.Text = _locator.CurrentDisplay;
     }
-    public void ClearPage() { _text.Text = ""; _status.Text = ""; }
+    public void ClearPage()
+    {
+        foreach (var label in _advTextLabels) label.Text = "";
+        _status.Text = "";
+    }
     public void ShowEnd() => _status.Text = "— end —";
 
     // The selftest verifies the GODOT PLUMBING (background thread + semaphore suspend on wait-for-input

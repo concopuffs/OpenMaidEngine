@@ -51,10 +51,20 @@ public sealed class GodotAdvHost : IHost
     private readonly object _textLock = new();
     private readonly Dictionary<int, List<SurfaceTextDraw>> _surfaceText = new();
     private readonly Dictionary<int, AdvTextHistoryRenderBatch> _historyText = new();
+    private sealed class LiveTextState
+    {
+        public required AdvLiveTextRun Run;
+        public required long StartedMs;
+        public required int GlyphDelayMilliseconds;
+    }
+    private readonly List<LiveTextState> _liveText = new();
+    private LiveTextState? _activeLiveText;
     private string _advText = "";
     private int _advTextX = 100, _advTextY = 47;
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
     private long _advTextStartedMs;
+    private int _activeGlyphDelayMilliseconds = 50;
+    private int _messageGlyphDelayMilliseconds = 50;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private readonly object _messageSkipLock = new();
@@ -138,22 +148,72 @@ public sealed class GodotAdvHost : IHost
             _presentationRequestConsumed.WaitOne(50);
     }
 
+    public int MessageGlyphDelayMilliseconds
+    {
+        get
+        {
+            lock (_textLock) return _messageGlyphDelayMilliseconds;
+        }
+    }
+
+    public void SetMessageGlyphDelayMilliseconds(int milliseconds)
+    {
+        lock (_textLock) _messageGlyphDelayMilliseconds = System.Math.Max(0, milliseconds);
+        _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = milliseconds });
+    }
+
     public void ShowText(int offset, string text)
     {
-        Captured.Add((offset, text));
-        _locator.Text(offset, text);
+        AdvTextLayoutSnapshot layout;
+        int delay;
         lock (_textLock)
         {
-            _advText = text;
-            _advTextStartedMs = _clock.NowMs;
+            layout = new AdvTextLayoutSnapshot(
+                _currentAdvLayout, 800, 600, 0, 0, _advTextX, _advTextY, 800, 600);
+            delay = _messageGlyphDelayMilliseconds;
+        }
+        ShowText(new AdvLiveTextRun(
+            offset, layout, AdvTextStyle.Default, text, Array.Empty<string>()), delay);
+    }
+
+    public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
+    {
+        Captured.Add((run.SourceOffset, run.Text));
+        _locator.Text(run.SourceOffset, run.Text);
+        int delay = System.Math.Max(0, glyphDelayMilliseconds);
+        var state = new LiveTextState
+        {
+            Run = run,
+            StartedMs = _clock.NowMs,
+            GlyphDelayMilliseconds = delay,
+        };
+        lock (_textLock)
+        {
+            _liveText.Add(state);
+            _activeLiveText = state;
+            _advText = run.Text;
+            _advTextX = run.Layout.CursorX;
+            _advTextY = run.Layout.CursorY;
+            _currentAdvLayout = run.Layout.Slot;
+            _advTextStartedMs = state.StartedMs;
+            _activeGlyphDelayMilliseconds = delay;
             _advTextForceComplete = _messageSkipActive;
-            IsTextRevealing = text.Length > 0 && !_messageSkipActive;
+            IsTextRevealing = run.Text.Length > 0 && delay > 0 && !_messageSkipActive;
         }
         _timeline?.State("text-reveal", new()
         {
-            ["offset"] = $"0x{offset:x}", ["x"] = _advTextX, ["y"] = _advTextY,
-            ["glyphs"] = text.Length, ["delay_ms"] = 50,
+            ["offset"] = $"0x{run.SourceOffset:x}",
+            ["layout"] = run.Layout.Slot,
+            ["x"] = run.Layout.OriginX + run.Layout.CursorX,
+            ["y"] = run.Layout.OriginY + run.Layout.CursorY,
+            ["glyphs"] = run.Text.Length, ["delay_ms"] = delay,
         });
+        if (!IsTextRevealing)
+        {
+            Interlocked.Exchange(ref _presentRequested, 1);
+            _timeline?.State("running", new() { ["text_reveal_complete"] = true });
+            return;
+        }
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
@@ -162,7 +222,8 @@ public sealed class GodotAdvHost : IHost
             {
                 lock (_textLock)
                 {
-                    if (_advTextForceComplete || _clock.NowMs - _advTextStartedMs >= text.Length * 50L)
+                    if (_advTextForceComplete
+                        || _clock.NowMs - _advTextStartedMs >= run.Text.Length * (long)delay)
                         IsTextRevealing = false;
                 }
                 if (IsTextRevealing) _frameSignal.WaitOne(50);
@@ -207,8 +268,30 @@ public sealed class GodotAdvHost : IHost
         {
             int visible = _advTextForceComplete || !IsTextRevealing
                 ? _advText.Length
-                : (int)System.Math.Clamp((_clock.NowMs - _advTextStartedMs) / 50L + 1, 0, _advText.Length);
+                : (int)System.Math.Clamp(
+                    (_clock.NowMs - _advTextStartedMs) / System.Math.Max(1, _activeGlyphDelayMilliseconds) + 1,
+                    0, _advText.Length);
             return (_advText, _advTextX, _advTextY, visible, IsTextRevealing);
+        }
+    }
+
+    public IReadOnlyList<LiveAdvTextSnapshot> SnapshotLiveAdvText()
+    {
+        lock (_textLock)
+        {
+            var snapshot = new LiveAdvTextSnapshot[_liveText.Count];
+            for (int i = 0; i < _liveText.Count; i++)
+            {
+                var state = _liveText[i];
+                bool revealing = ReferenceEquals(state, _activeLiveText) && IsTextRevealing;
+                int visible = !revealing || _advTextForceComplete || state.GlyphDelayMilliseconds == 0
+                    ? state.Run.Text.Length
+                    : (int)System.Math.Clamp(
+                        (_clock.NowMs - state.StartedMs) / state.GlyphDelayMilliseconds + 1,
+                        0, state.Run.Text.Length);
+                snapshot[i] = new LiveAdvTextSnapshot(state.Run, visible, revealing);
+            }
+            return snapshot;
         }
     }
 
@@ -244,7 +327,19 @@ public sealed class GodotAdvHost : IHost
 
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
-        lock (_textLock) _historyText.Remove(layoutSlot == 0 ? _currentAdvLayout : layoutSlot);
+        lock (_textLock)
+        {
+            int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+            _historyText.Remove(slot);
+            _liveText.RemoveAll(state => state.Run.Layout.Slot == slot);
+            if (_activeLiveText?.Run.Layout.Slot == slot)
+            {
+                _activeLiveText = null;
+                _advText = "";
+                _advTextForceComplete = false;
+                IsTextRevealing = false;
+            }
+        }
     }
 
     public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
@@ -817,6 +912,8 @@ public sealed class GodotAdvHost : IHost
             _surfaceText.Clear();
             _surfaceResources.Clear();
             _historyText.Clear();
+            _liveText.Clear();
+            _activeLiveText = null;
             _advText = "";
             _advTextX = 100;
             _advTextY = 47;
@@ -1558,6 +1655,8 @@ public sealed class GodotAdvHost : IHost
 }
 
 public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);
+public readonly record struct LiveAdvTextSnapshot(
+    AdvLiveTextRun Run, int VisibleGlyphs, bool Revealing);
 public sealed record GodotHostDiagnosticSnapshot(
     string CurrentScene, bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
     bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,

@@ -36,6 +36,10 @@ public interface IHost
     void EnterScriptContext(string scriptName) { }
     void ExitScriptContext() { }
     void ShowText(int offset, string text);
+    void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
+        => ShowText(run.SourceOffset, run.Text);
+    int MessageGlyphDelayMilliseconds => 50;
+    void SetMessageGlyphDelayMilliseconds(int milliseconds) { }
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
     void SetAdvTextCursor(int layoutSlot, int x, int y) { }

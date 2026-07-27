@@ -2332,6 +2332,21 @@ VM until the 50 ms/glyph service completes or a click forces completion, so the 
 pre-arm the following `wait-for-input`. Local/global string-pointer operand tags (8/14) are now resolved by
 the VM, which is required for SC0000's `lookup-array local-string-ptr -> draw-string` name path.
 
+The 2026-07-27 retained-layout polish closes the non-dialogue half of this contract. `STUDY.BIN` selects
+layout 7, changes its origin for each research row, and calls `MAMES.BIN`; the helper saves the current
+glyph delay with op `0x7f`, sets zero with op `0x1b5`, emits two `0x6e/0x6f` lines, and restores the saved
+delay. Native therefore publishes all six descriptions immediately and retains them until op `0x71`
+resets layout 7, even though op `0x1bb(0)` suppresses History-backlog recording for the menu. The port now
+keeps that live presentation stream separate from the persisted History backlog, captures layout/style
+and execution-stack ownership per run, implements the delay pair and the font-height-plus-leading line
+advance, and draws every retained run rather than replacing a singleton dialogue Label. Raw-input menus
+retain runs owned by their own script stack while suppressing unrelated enclosing ADV runs, so STUDY's
+MAMES descriptions remain visible without leaking the parent page above HISTORY. Consecutive same-line
+literal/global-string runs are joined for presentation, preserving the common
+`"literal" + dynamic name + "literal"` ADV idiom.
+The same generic path covers `ITMES.BIN`, `SKMES.BIN`, and `INFOMES.BIN`; no STUDY-specific coordinates or
+strings live in the runtime.
+
 **Deliberate Phase-A fidelity gap — Label rendering instead of native glyph objects.** The native engine
 GDI-rasterizes CP932 glyph bitmaps and publishes retained 20-byte records one glyph at a time; the port
 collapses that representation into Godot `Label` nodes for the ADV body and surface-bound speaker name.
