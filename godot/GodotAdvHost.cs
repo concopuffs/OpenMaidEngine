@@ -1539,8 +1539,20 @@ public sealed class GodotAdvHost : IHost
         _main.CallDeferred("FadeBgm", targetPercent, realSeconds);
         long deadline = _clock.NowMs + ms;
         IsSleeping = true;
-        while (_clock.NowMs < deadline && !_stopping) _frameSignal.WaitOne(50);
-        IsSleeping = false;
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            // Native parks the interpreter in its audio service while the main render loop continues.
+            // Publish scene changes accumulated before the fade (notably GAMESTART -> SC0000's black
+            // frame), then leave presentation ownership with the compositor for the timed wait.
+            RequestSynchronizedPresentation();
+            while (_clock.NowMs < deadline && !_stopping) _frameSignal.WaitOne(50);
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+            IsSleeping = false;
+        }
         _timeline?.State("running", new() { ["bgm_fade_complete"] = true });
     }
 }

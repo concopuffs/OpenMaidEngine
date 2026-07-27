@@ -2444,7 +2444,12 @@ can start that track normally.
 `0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
 and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
 durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
-The VM is parked for the requested duration. `0xd9` is adjacent startup control, not audio data: it clears
+The VM is parked for the requested duration while the native main loop continues rendering. The Godot host
+mirrors that ownership split: its VM worker waits on the fade clock only after publishing the completed
+pre-fade graphics burst and releasing the script presentation barrier. This is required at
+`SC0000@0x7c1`, where the three-second title-BGM fade begins after the New Game scene has already cleared
+to black; retaining presentation ownership during the wait incorrectly froze the last menu frame until the
+opening CG transition began. `0xd9` is adjacent startup control, not audio data: it clears
 run/service bit `0x1000` in the primary and, when active, secondary context and has no VM-visible result.
 
 Opcode `0x1cf` belongs to the voice/BGM envelope rather than SFX. Handler
