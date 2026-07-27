@@ -127,6 +127,9 @@ public sealed class GfxState
         // opacity + multiplicative modulation even after the target commits. This distinguishes ADV chrome
         // fades from a static mode-0 0x203 such as a CG initialized with 0x00ffffff (opaque identity).
         public bool OneShotColorBlend;
+        // FIELD applies static mode-0 alpha after binding a looping unit sprite to suppress the retained
+        // idle object while a separate clone moves between tiles. A later draw-texture rebind clears it.
+        public bool StaticLoopColorBlend;
 
         // ---- src-rect / spritesheet-cell channel (ops 0x239 one-shot cell, 0x231 looping animation).
         // Native obj+0x238 is the TOTAL FRAME COUNT and +0x23c is the COLUMN COUNT. Each frame keeps
@@ -483,7 +486,7 @@ public sealed class GfxState
             Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
             OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
             ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
-            OneShotColorBlend = s.OneShotColorBlend,
+            OneShotColorBlend = s.OneShotColorBlend, StaticLoopColorBlend = s.StaticLoopColorBlend,
             SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
             SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
             ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
@@ -630,7 +633,12 @@ public sealed class GfxState
     public void SetStaticObjectColorResolved(long handle, long mode, long alpha, long rgb)
     {
         SetObjectColorResolved(handle, alpha, rgb);
-        lock (_lock) GetOrCreate(handle).StaticColorMode = mode;
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.StaticColorMode = mode;
+            o.StaticLoopColorBlend = mode == 0 && o.Visible && o.SrcAnim;
+        }
     }
 
     /// <summary>Ops 0x239 (one-shot cell endpoint, period=0 in this retained model) / 0x231 (looping):
@@ -903,6 +911,7 @@ public sealed class GfxState
         {
             var o = GetOrCreate(handle);
             o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
+            o.StaticLoopColorBlend = false;
         }
     }
 
@@ -1256,6 +1265,13 @@ public sealed class GfxState
                     }
                     else if (o.StaticColorMode == 0 && o.OneShotColorBlend)
                     {
+                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                    }
+                    else if (o.StaticColorMode == 0 && o.StaticLoopColorBlend)
+                    {
+                        // FIELD clones the visible idle unit to its moving handle, then writes alpha zero
+                        // to the still-bound looping original. Consume that post-bind write as opacity;
+                        // ADV's ordinary static alpha-zero CG initialization remains the opaque mode-0 path.
                         alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
                     }
                     else if (o.StaticColorMode == 2)

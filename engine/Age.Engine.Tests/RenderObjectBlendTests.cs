@@ -67,6 +67,41 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
+    public void FieldMovement_StaticAlphaSuppressesOnlyIdleLoopingClone()
+    {
+        const long prototype = 0x9c40;
+        const long idle = prototype + 7;
+        const long moving = prototype + 0x76c;
+
+        var g = new GfxState();
+        g.SetSurface(0x8e, 0x1234, 0x00ff00);
+
+        // FIELD@0x9230: the shared zero-area prototype receives mode-0 color before its loop is armed.
+        g.BindDraw(prototype, 0x3e, 0, 0, 0, 0, 0, 0);
+        g.SetStaticObjectColorResolved(prototype, mode: 0, alpha: 0, rgb: 0);
+        g.SetSrcRect(prototype, frameCount: 4, columns: 2, cell: 0, period: 200);
+
+        // DRAWCH clones the prototype, then draw-texture makes the concrete unit visible.
+        Assert.True(g.CloneObject(prototype, idle));
+        g.BindDraw(idle, 0x8e, 0, 0, 32, 48, 100, 100);
+        Assert.Equal(255, g.SnapshotVisibleObjects().Single(x => x.Handle == idle).Alpha);
+
+        // FIELD@0x45c9 clones the idle unit for motion and @0x45dc suppresses the retained original.
+        Assert.True(g.CloneObject(idle, moving));
+        g.SetStaticObjectColorResolved(idle, mode: 0, alpha: 0, rgb: -1);
+        var movingFrame = g.SnapshotVisibleObjects();
+        Assert.Equal(0, movingFrame.Single(x => x.Handle == idle).Alpha);
+        Assert.Equal(255, movingFrame.Single(x => x.Handle == moving).Alpha);
+
+        // DRAWCH at the next tile republishes the idle object; the following static write can suppress
+        // it for another route segment or restore it at alpha 255 when movement finishes.
+        g.BindDraw(idle, 0x8e, 0, 0, 32, 48, 200, 100);
+        Assert.Equal(255, g.SnapshotVisibleObjects().Single(x => x.Handle == idle).Alpha);
+        g.SetStaticObjectColorResolved(idle, mode: 0, alpha: 255, rgb: 0xffffff);
+        Assert.Equal(255, g.SnapshotVisibleObjects().Single(x => x.Handle == idle).Alpha);
+    }
+
+    [Fact]
     public void TransitionCleanup_Mode2ToMode0PreservedWhite_RemainsIdentity()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);

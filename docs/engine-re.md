@@ -770,6 +770,16 @@ and those clones, so every copied start remains zero and their first render seed
 Those unit sprites are therefore phase-locked at one cell change every 200 ms (5 Hz), even though the
 engine generally permits different object-local starts and periods.
 
+FIELD's per-tile movement animation uses two retained objects. At `0x45c9`/`0x4686` and again at
+`0x51fd`, it clones the bound idle handle `0x9c40+entity_index` into temporary moving handle
+`0x9c40+0x76c`. The following mode-0 `0x203` write sets the idle handle's alpha to zero, while translation
+`0x220` and source-cell endpoint `0x239` animate only the temporary handle. After the presentation boundary,
+`DRAWCH@0x51ec` rebinds the idle handle at the new tile; a multi-tile route immediately repeats the
+clone/suppress cycle. Treating every static mode-0 alpha byte on a loaded texture as inert therefore leaves
+the old idle sprite composited beneath the moving clone until each segment ends. The port records the
+post-bind static-alpha consumption for looping objects as a transient opacity latch, cleared by the next
+`draw-texture` bind. This preserves ADV's distinct pre-animation/static alpha-zero CG initialization.
+
 **Port implication:** replace the current “any spritesheet is active” redraw predicate with native-style
 shared current/previous sampling and request a composition only when at least one visible sampled cell
 changes. The FIELD `sleep(1)` input-poll loop must also stop requesting a redraw when no retained mutation
