@@ -245,7 +245,13 @@ public partial class Main : Godot.Control
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load();
-        _host = new GodotAdvHost(this, resources, scene, _clock, _locator, _timeline) { SleepScale = sleepScale, TraceOps = _gfxLogPath != null };
+        _host = new GodotAdvHost(
+            this, resources, scene, _clock, _locator, _timeline,
+            synchronizeExplicitPresentation: !_selftest)
+        {
+            SleepScale = sleepScale,
+            TraceOps = _gfxLogPath != null,
+        };
         _trace = new GodotTraceSink(_locator, _timeline);
         if (_perfLogPath != null) _perf = new PerformanceFrameLog(_perfLogPath);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
@@ -382,15 +388,32 @@ public partial class Main : Godot.Control
             perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            HostPresentationReason presentationReasons = !_selftest && _vm != null && _host != null
-                ? _host.ConsumePresentationReasons(_vm.Gfx)
-                : HostPresentationReason.None;
-            bool shouldRecomposite = presentationReasons != HostPresentationReason.None;
-            perf?.RecordPresentationReasons((int)presentationReasons);
-            perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
+            HostPresentationReason presentationReasons = HostPresentationReason.None;
+            bool presentationEntered = !_selftest && _vm != null && _host != null
+                && _host.TryEnterPresentation();
             long allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            if (shouldRecomposite)
-                Recomposite();   // native publishes retained mutations only at present/service boundaries
+            bool shouldRecomposite = false;
+            try
+            {
+                if (presentationEntered)
+                {
+                    presentationReasons = _host!.ConsumePresentationReasons(_vm!.Gfx);
+                    shouldRecomposite = presentationReasons != HostPresentationReason.None;
+                    perf?.RecordPresentationReasons((int)presentationReasons);
+                    perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
+                    if (shouldRecomposite)
+                        Recomposite();   // native publishes retained mutations only at present/service boundaries
+                }
+                else
+                {
+                    perf?.RecordPresentationReasons(0);
+                    perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
+                }
+            }
+            finally
+            {
+                if (presentationEntered) _host!.ExitPresentation();
+            }
             perf?.RecordRecomposeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;

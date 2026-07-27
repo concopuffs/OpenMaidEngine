@@ -780,6 +780,17 @@ the old idle sprite composited beneath the moving clone until each segment ends.
 post-bind static-alpha consumption for looping objects as a transient opacity latch, cleared by the next
 `draw-texture` bind. This preserves ADV's distinct pre-animation/static alpha-zero CG initialization.
 
+The same route exposed an independent publication-atomicity requirement. Each tile step reaches
+`FIELD@0x4eb2 -> 0x9225`, which calls `DRAWMAP`, `DRAWOBJ`, and `DRAWMINIMAP`. `DRAWMAP` first erases its
+old terrain handle ranges and then rebuilds them; `DRAWMINIMAP` recreates mutable surfaces `0x42..0x44`
+from transparent pixels before filling the terrain and copying object/unit markers. Those are ordinary
+VM-side construction bursts, not a series of front-buffer presents. Letting Godot's render thread sample
+between their individual erase/fill/copy instructions displayed a partially blank minimap at every tile
+and could display the erased terrain state for one frame when a complete route returned. The interactive
+host now holds one writer-side presentation barrier for the whole script burst. Explicit presentation,
+transition, sleep, text, movie, and input services temporarily expose the completed state; callbacks
+serviced inside a parked input wait reacquire the writer side for their own atomic burst.
+
 **Port implication:** replace the current “any spritesheet is active” redraw predicate with native-style
 shared current/previous sampling and request a composition only when at least one visible sampled cell
 changes. The FIELD `sleep(1)` input-poll loop must also stop requesting a redraw when no retained mutation

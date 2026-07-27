@@ -24,6 +24,11 @@ public sealed class GodotAdvHost : IHost
     private readonly string _rootScene;
     private readonly object _scriptContextLock = new();
     private readonly Stack<string> _scriptContexts = new();
+    private readonly ScriptPresentationBarrier _presentationBarrier = new();
+    private readonly AutoResetEvent _presentationRequestConsumed = new(false);
+    private readonly bool _synchronizeExplicitPresentation;
+    private long _explicitPresentationRequestGeneration;
+    private long _consumedPresentationRequestGeneration;
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // packed catalog id -> decoded pixels
     // Mutable AGE surfaces are published by replacing immutable RgbaImage snapshots, so the compositor
@@ -83,10 +88,12 @@ public sealed class GodotAdvHost : IHost
     public readonly List<(int Offset, string Text)> Captured = new();
 
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
-                        PageLocatorState locator, GodotTimelineLog? timeline = null)
+                        PageLocatorState locator, GodotTimelineLog? timeline = null,
+                        bool synchronizeExplicitPresentation = true)
     {
         _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
+        _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
     }
 
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
@@ -98,6 +105,7 @@ public sealed class GodotAdvHost : IHost
 
     public void EnterScriptContext(string scriptName)
     {
+        _presentationBarrier.EnterScript();
         string scene = System.IO.Path.GetFileNameWithoutExtension(scriptName).ToUpperInvariant();
         lock (_scriptContextLock) _scriptContexts.Push(scene);
         _timeline?.Event("script-context-enter", new() { ["scene"] = scene });
@@ -109,6 +117,25 @@ public sealed class GodotAdvHost : IHost
         lock (_scriptContextLock)
             if (_scriptContexts.TryPop(out var popped)) scene = popped;
         if (scene != null) _timeline?.Event("script-context-exit", new() { ["scene"] = scene });
+        _presentationBarrier.ExitScript();
+    }
+
+    public bool TryEnterPresentation() => _presentationBarrier.TryEnterPresentation();
+
+    public void ExitPresentation() => _presentationBarrier.ExitPresentation();
+
+    private bool SuspendScriptForPresentation() => _presentationBarrier.SuspendScript();
+
+    private void ResumeScriptAfterPresentation(bool suspended)
+        => _presentationBarrier.ResumeScript(suspended);
+
+    private void RequestSynchronizedPresentation()
+    {
+        long requested = Interlocked.Increment(ref _explicitPresentationRequestGeneration);
+        Interlocked.Exchange(ref _presentRequested, 1);
+        if (!_synchronizeExplicitPresentation) return;
+        while (Interlocked.Read(ref _consumedPresentationRequestGeneration) < requested && !_stopping)
+            _presentationRequestConsumed.WaitOne(50);
     }
 
     public void ShowText(int offset, string text)
@@ -127,14 +154,23 @@ public sealed class GodotAdvHost : IHost
             ["offset"] = $"0x{offset:x}", ["x"] = _advTextX, ["y"] = _advTextY,
             ["glyphs"] = text.Length, ["delay_ms"] = 50,
         });
-        while (IsTextRevealing && !_stopping)
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
         {
-            lock (_textLock)
+            RequestSynchronizedPresentation();
+            while (IsTextRevealing && !_stopping)
             {
-                if (_advTextForceComplete || _clock.NowMs - _advTextStartedMs >= text.Length * 50L)
-                    IsTextRevealing = false;
+                lock (_textLock)
+                {
+                    if (_advTextForceComplete || _clock.NowMs - _advTextStartedMs >= text.Length * 50L)
+                        IsTextRevealing = false;
+                }
+                if (IsTextRevealing) _frameSignal.WaitOne(50);
             }
-            if (IsTextRevealing) _frameSignal.WaitOne(50);
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
         }
         _timeline?.State("running", new() { ["text_reveal_complete"] = true });
     }
@@ -363,9 +399,6 @@ public sealed class GodotAdvHost : IHost
         Pages++;
         _locator.Wait(Pages);
         _main.CallDeferred("PageBreak");
-        // Publish retained mutations accumulated before the wait once. A static input wait is not itself a
-        // reason to rebuild the 800x600 background every frame; ambient channels are queried separately.
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         lock (_textLock)
         {
             _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
@@ -377,39 +410,60 @@ public sealed class GodotAdvHost : IHost
         var autoTimer = new AdvAutoAdvanceTimer();
         bool autoAdvanced = false;
         bool messageSkipped = false;
-        while (!_stopping)
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
         {
-            while (true)
+            // Publish the completed pre-wait burst once. Callback scripts temporarily reacquire the
+            // write side below, so each hover/click update is likewise exposed only after it returns.
+            RequestSynchronizedPresentation();
+            while (!_stopping)
             {
-                bool markerWasEnabled;
-                lock (_textLock) markerWasEnabled = _waitIndicatorEnabled;
-                bool keepServicing = serviceInputCallback();
-                // The native callback returns through the shared ADV redraw/wait path, whose op 0x72
-                // re-arms a marker stopped by nested HISTORY. Our blocking host keeps the parent wait
-                // parked, so restore that parent-owned state at the equivalent callback boundary.
-                lock (_textLock)
+                while (true)
                 {
-                    if (markerWasEnabled && !_waitIndicatorEnabled)
+                    bool markerWasEnabled;
+                    lock (_textLock) markerWasEnabled = _waitIndicatorEnabled;
+                    if (scriptSuspended) ResumeScriptAfterPresentation(true);
+                    bool keepServicing;
+                    try
                     {
-                        _waitIndicatorEnabled = true;
-                        _waitIndicatorStartedMs = _clock.NowMs;
+                        keepServicing = serviceInputCallback();
                     }
+                    finally
+                    {
+                        if (scriptSuspended && !SuspendScriptForPresentation())
+                            throw new InvalidOperationException("Input callback did not retain the script burst.");
+                    }
+                    // The native callback returns through the shared ADV redraw/wait path, whose op 0x72
+                    // re-arms a marker stopped by nested HISTORY. Our blocking host keeps the parent wait
+                    // parked, so restore that parent-owned state at the equivalent callback boundary.
+                    lock (_textLock)
+                    {
+                        if (markerWasEnabled && !_waitIndicatorEnabled)
+                        {
+                            _waitIndicatorEnabled = true;
+                            _waitIndicatorStartedMs = _clock.NowMs;
+                        }
+                    }
+                    if (!keepServicing) break;
                 }
-                if (!keepServicing) break;
+                if (_messageSkipActive)
+                {
+                    messageSkipped = true;
+                    break;
+                }
+                if (autoTimer.Poll(autoWaitState(), _main.IsVoicePlaybackActive, _clock.NowMs))
+                {
+                    autoAdvanced = true;
+                    break;
+                }
+                if (_gate.Wait(0)) break;
+                WaitHandle.WaitAny(new[] { _gate.AvailableWaitHandle, _inputCallbackSignal, _frameSignal });
+                if (_gate.Wait(0)) break;
             }
-            if (_messageSkipActive)
-            {
-                messageSkipped = true;
-                break;
-            }
-            if (autoTimer.Poll(autoWaitState(), _main.IsVoicePlaybackActive, _clock.NowMs))
-            {
-                autoAdvanced = true;
-                break;
-            }
-            if (_gate.Wait(0)) break;
-            WaitHandle.WaitAny(new[] { _gate.AvailableWaitHandle, _inputCallbackSignal, _frameSignal });
-            if (_gate.Wait(0)) break;
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
         }
         IsWaiting = false;
         lock (_textLock) _waitIndicatorEnabled = false;
@@ -558,30 +612,44 @@ public sealed class GodotAdvHost : IHost
     public void WaitForForegroundTransition(GfxState gfx)
     {
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
-        if (started == 0 && !gfx.HasActiveTimedPresentation(_clock.NowMs) && !HasActiveMoviePresentation()) return;
-        _foregroundGfx = gfx;
-        System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
-        IsTransitionWaiting = true;
-        _timeline?.State("transition-start", new() { ["count"] = started });
-        int lastBucket = -1;
-        while ((gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation()) && !_stopping)
+        bool hasActivePresentation =
+            gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation();
+        if (hasActivePresentation)
         {
-            var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
-            int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
-            if (bucket != lastBucket)
-            {
-                lastBucket = bucket;
-                _timeline?.State("transition-progress", new()
-                {
-                    ["progress"] = active.Count == 0 ? 1.0 : active[0].Progress,
-                    ["forced"] = active.Count != 0 && active[0].Forced,
-                });
-            }
-            _frameSignal.WaitOne(50);
+            _foregroundGfx = gfx;
+            System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
+            IsTransitionWaiting = true;
+            _timeline?.State("transition-start", new() { ["count"] = started });
         }
-        // The active query becomes false at the exact transition/movie endpoint. Publish that terminal sample
-        // once so the last visible frame cannot remain fractionally incomplete.
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            RequestSynchronizedPresentation();
+            if (!hasActivePresentation) return;
+            int lastBucket = -1;
+            while ((gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation()) && !_stopping)
+            {
+                var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
+                int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
+                if (bucket != lastBucket)
+                {
+                    lastBucket = bucket;
+                    _timeline?.State("transition-progress", new()
+                    {
+                        ["progress"] = active.Count == 0 ? 1.0 : active[0].Progress,
+                        ["forced"] = active.Count != 0 && active[0].Forced,
+                    });
+                }
+                _frameSignal.WaitOne(50);
+            }
+            // The active query becomes false at the exact transition/movie endpoint. Publish that terminal sample
+            // once so the last visible frame cannot remain fractionally incomplete.
+            RequestSynchronizedPresentation();
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+        }
         IsTransitionWaiting = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         _foregroundGfx = null;
@@ -610,7 +678,15 @@ public sealed class GodotAdvHost : IHost
             {
                 ["started"] = started, ["completed"] = completed,
             });
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            RequestSynchronizedPresentation();
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+        }
     }
 
     // Op 0x25's native mode-4 path advances an 8-bit alpha accumulator. Values <=64 use the
@@ -640,26 +716,35 @@ public sealed class GodotAdvHost : IHost
             ["interval_argument"] = intervalArgument, ["duration_ms"] = duration,
             ["source_objects"] = source.Count, ["target_objects"] = target.Count,
         });
-        while (!_stopping)
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
         {
-            bool complete;
+            RequestSynchronizedPresentation();
+            while (!_stopping)
+            {
+                bool complete;
+                lock (_screenTransitionLock)
+                    complete = _screenTransition == null || _screenTransition.Forced
+                        || _clock.NowMs - start >= duration;
+                if (complete) break;
+                _frameSignal.WaitOne(50);
+            }
+            // Publish the exact target endpoint before the following surface releases/root reload.
             lock (_screenTransitionLock)
-                complete = _screenTransition == null || _screenTransition.Forced
-                    || _clock.NowMs - start >= duration;
-            if (complete) break;
-            _frameSignal.WaitOne(50);
+                if (_screenTransition != null) _screenTransition.Forced = true;
+            RequestSynchronizedPresentation();
+            // Do not let the VM release both source surfaces (or immediately reload SYSTEM4) until the
+            // main thread has actually published the terminal target frame.
+            while (!_stopping)
+            {
+                lock (_screenTransitionLock)
+                    if (_screenTransition == null) break;
+                _frameSignal.WaitOne(50);
+            }
         }
-        // Publish the exact target endpoint before the following surface releases/root reload.
-        lock (_screenTransitionLock)
-            if (_screenTransition != null) _screenTransition.Forced = true;
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-        // Do not let the VM release both source surfaces (or immediately reload SYSTEM4) until the
-        // main thread has actually published the terminal target frame.
-        while (!_stopping)
+        finally
         {
-            lock (_screenTransitionLock)
-                if (_screenTransition == null) break;
-            _frameSignal.WaitOne(50);
+            ResumeScriptAfterPresentation(scriptSuspended);
         }
         IsTransitionWaiting = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
@@ -694,7 +779,12 @@ public sealed class GodotAdvHost : IHost
         lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
         var reasons = HostPresentationReason.None;
         if (System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0)
+        {
             reasons |= HostPresentationReason.HostRequest;
+            long requested = Interlocked.Read(ref _explicitPresentationRequestGeneration);
+            Interlocked.Exchange(ref _consumedPresentationRequestGeneration, requested);
+            _presentationRequestConsumed.Set();
+        }
         if (screenTransitionActive) reasons |= HostPresentationReason.ScreenTransition;
         GfxPresentationReason gfxReasons = gfx.ConsumePresentationReasons(_clock.NowMs);
         if ((gfxReasons & GfxPresentationReason.RetainedMutation) != 0)
@@ -821,10 +911,19 @@ public sealed class GodotAdvHost : IHost
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
         IsSleeping = true;
-        while (_clock.NowMs < deadline)
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
         {
-            if (_stopping) break;
-            _frameSignal.WaitOne(50);
+            RequestSynchronizedPresentation();
+            while (_clock.NowMs < deadline)
+            {
+                if (_stopping) break;
+                _frameSignal.WaitOne(50);
+            }
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
         }
         IsSleeping = false;
         _timeline?.State("running", new() { ["sleep_complete"] = true });
@@ -1023,6 +1122,7 @@ public sealed class GodotAdvHost : IHost
 
         _modalMovieCancelled = false;
         _modalMovieWaiting = true;
+        bool scriptSuspended = false;
         try
         {
             if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
@@ -1032,6 +1132,8 @@ public sealed class GodotAdvHost : IHost
                 ["resource"] = resourceId, ["playback"] = playbackId,
                 ["surface"] = surfaceSlot, ["file"] = asset.Name,
             });
+            scriptSuspended = SuspendScriptForPresentation();
+            RequestSynchronizedPresentation();
             while (!_stopping && !_modalMovieCancelled)
             {
                 if (!_movieSurfaces.IsActive(surfaceSlot)) break;
@@ -1050,6 +1152,7 @@ public sealed class GodotAdvHost : IHost
         }
         finally
         {
+            ResumeScriptAfterPresentation(scriptSuspended);
             _modalMovieWaiting = false;
             _modalMovieCancelled = false;
         }
