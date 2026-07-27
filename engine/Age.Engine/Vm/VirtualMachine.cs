@@ -2330,9 +2330,18 @@ public sealed class VirtualMachine
                 Gfx.ReleaseSurfaceRange(42, 1000 - 42);
                 _host.ReleaseSurfaceRange(42, 1000 - 42); return pc + 1;
             case "play-bgm":
-                _currentBgmTrackId = Read(a[0]);
-                _host.PlayBgm(_currentBgmTrackId);
+            {
+                long requestedTrackId = Read(a[0]);
+                // Native scripts freely reassert the stage BGM after FIELD action/event cleanup.
+                // The music facade retains the current track id, so an identical request keeps the
+                // existing stream position instead of reopening the OGG from the beginning.
+                if (requestedTrackId != _currentBgmTrackId)
+                {
+                    _currentBgmTrackId = requestedTrackId;
+                    _host.PlayBgm(_currentBgmTrackId);
+                }
                 return pc + 1;
+            }
             case "get-current-bgm-track":
                 Write(a[0], _currentBgmTrackId);
                 return pc + 1;

@@ -1887,12 +1887,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "play-bgm"
 category = "audio"
-summary = "Play background music by id. BGM is addressed by DIRECT LITERAL NAME: id -> BGM{id:03d}.OGG (in DATA3), unlike ordinary resource operands, which are universal packed SYS4INI/AAI ids. E.g. play-bgm 5 -> BGM005."
+summary = "Play background music by id. BGM is addressed by DIRECT LITERAL NAME: id -> BGM{id:03d}.OGG (in DATA3), unlike ordinary resource operands, which are universal packed SYS4INI/AAI ids. E.g. play-bgm 5 -> BGM005. Reasserting the facade's current track id is idempotent and preserves playback position; a different id starts the new track, while fade-to-zero clears the current id so a later request can start it again."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for play-bgm 0x5 and BGM008 for play-bgm 0x8 (we initially mis-played BGM006/BGM009 via the disproven scene-section model). Direct-name proven by play-bgm 0x23 -> BGM035.OGG, a real standalone track (the BGM set skips 030-034). Ghidra /v2 op_0xbf_handler@0x420390 forwards the numeric track to the BGM facade rather than asset_open_indexed_entry. Diagnostic: `Age.Cli audio SC0000.BIN`."
+evidence = "By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for play-bgm 0x5 and BGM008 for play-bgm 0x8 (we initially mis-played BGM006/BGM009 via the disproven scene-section model). Direct-name proven by play-bgm 0x23 -> BGM035.OGG, a real standalone track (the BGM set skips 030-034). Ghidra /v2 op_0xbf_handler@0x420390 forwards the numeric track to the BGM facade rather than asset_open_indexed_entry; the facade retains that id at EngineCtx.current_bgm_track_id for op 0xc0 and numbered saves. FIELD intentionally reasserts stage_bgm_id from its common post-action/event cleanup at 0x884a, reached after unit movement; restarting an identical host stream there resets the music once per unit during enemy turns. Op 0xc2 target zero releases the source and the VM clears the retained id. Diagnostic: `Age.Cli audio SC0000.BIN`."
 
 [[opcode.semantics.args]]
 i = 1

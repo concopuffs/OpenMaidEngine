@@ -2421,6 +2421,15 @@ callback if that channel is loaded again or released before its deadline.
 Normal-speed windowed validation reached `wait-for-input@0x1a58` after 45.6 seconds without an audio stall;
 the user confirmed the opening effects were audible and sounded good.
 
+FIELD deliberately reasserts `play-bgm(stage_bgm_id)` from its common post-action/event cleanup at
+`0x884a`; ordinary unit movement reaches that cleanup once per acting unit. The BGM facade already retains
+the selected direct-name track id for op `0xc0` and numbered-save state. An identical `0xbf` request must
+therefore preserve the current stream and playback position rather than reopen the OGG. The former host path
+decoded and assigned a fresh Godot stream on every request, resetting the stage music after every player
+move and repeatedly throughout enemy turns. The VM now treats a current-track reassertion as idempotent.
+A different id still starts a new track, and `0xc2` target zero clears the retained id so a later request
+can start that track normally.
+
 `0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
 and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
 durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
