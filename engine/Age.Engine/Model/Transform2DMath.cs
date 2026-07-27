@@ -31,6 +31,20 @@ public readonly record struct Affine2D(double XX, double XY, double YX, double Y
         inverse = new(xx, xy, yx, yy, -(TX * xx + TY * yx), -(TX * xy + TY * yy));
         return true;
     }
+
+    /// <summary>Decompose the projected axes for a Godot-style canvas item. AGE's ordinary retained
+    /// transforms contain scale/rotation but no shear; the determinant preserves reflected Y axes.</summary>
+    public (double RotationRadians, double ScaleX, double ScaleY) DecomposeCanvasAxes()
+    {
+        double scaleX = System.Math.Sqrt(XX * XX + XY * XY);
+        double scaleY = System.Math.Sqrt(YX * YX + YY * YY);
+        double determinant = XX * YY - XY * YX;
+        if (determinant < 0) scaleY = -scaleY;
+        double rotation = scaleX > 1e-12
+            ? System.Math.Atan2(XY, XX)
+            : System.Math.Atan2(-YX, YY);
+        return (rotation, scaleX, scaleY);
+    }
 }
 
 /// <summary>Exact 2D projection of AGE's row-vector retained-object matrix. Native call order is anchored

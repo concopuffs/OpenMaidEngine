@@ -48,6 +48,19 @@ public class Transform2DMathTests
         Assert.Equal(0, allocated);
     }
 
+    [Fact]
+    public void CanvasAxisDecompositionPreservesBunkiPopupScale()
+    {
+        var affine = Transform2DMath.Build(new TransformState(
+            0.05, 0.65, 1, 0, 0, 0, 400, 300, 0));
+
+        var (rotation, scaleX, scaleY) = affine.DecomposeCanvasAxes();
+
+        Assert.Equal(0, rotation, 12);
+        Assert.Equal(0.05, scaleX, 12);
+        Assert.Equal(0.65, scaleY, 12);
+    }
+
     private static double Next(Random random, double minimum, double maximum)
         => minimum + random.NextDouble() * (maximum - minimum);
 

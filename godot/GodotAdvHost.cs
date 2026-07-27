@@ -69,6 +69,8 @@ public sealed class GodotAdvHost : IHost
     private GfxState? _foregroundGfx;
     private readonly object _screenTransitionLock = new();
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
+    private readonly object _backbufferRangeLock = new();
+    private GfxHandleRange _backbufferRange = GfxHandleRange.All;
     private LegacyScreenTransition? _screenTransition;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
@@ -277,8 +279,26 @@ public sealed class GodotAdvHost : IHost
             PublishObjectRangeToSurface(gfx, firstHandle, count);
             return;
         }
+        // The software/GPU port reconstructs the backbuffer instead of preserving native D3D pixels.
+        // Zero-based ranges therefore define the complete published scene. A nonzero range is an
+        // incremental overlay in native code, so retain the full reconstruction for those call sites.
+        lock (_backbufferRangeLock)
+            _backbufferRange = firstHandle == 0
+                ? new GfxHandleRange(firstHandle, count)
+                : GfxHandleRange.All;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
+    }
+
+    public void SnapshotBackbufferObjects(GfxState gfx, long nowMs, List<RenderObject> snapshot)
+    {
+        gfx.SnapshotVisibleObjects(nowMs, snapshot);
+        GfxHandleRange range;
+        lock (_backbufferRangeLock) range = _backbufferRange;
+        int write = 0;
+        for (int read = 0; read < snapshot.Count; read++)
+            if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
+        if (write < snapshot.Count) snapshot.RemoveRange(write, snapshot.Count - write);
     }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
@@ -323,9 +343,7 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.ResolveTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         if (asset == null || image == null || config.CellWidth <= 0 || config.CellHeight <= 0) return null;
-        int frames = System.Math.Max(1, config.TerminalFrame + 1);
-        long period = System.Math.Max(1, config.FramePeriodMs);
-        int frame = (int)((_clock.NowMs - _waitIndicatorStartedMs) / period % frames);
+        int frame = config.FrameAt(_clock.NowMs - _waitIndicatorStartedMs);
         return new AdvWaitIndicatorSnapshot(image, asset.Name, asset.PackedId, config, frame);
     }
 
@@ -584,6 +602,7 @@ public sealed class GodotAdvHost : IHost
             });
             return;
         }
+        lock (_backbufferRangeLock) _backbufferRange = GfxHandleRange.All;
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
         int completed = gfx.CompleteForegroundTransitions(_clock.NowMs);
         if (started > 0 || completed > 0)
@@ -702,6 +721,7 @@ public sealed class GodotAdvHost : IHost
         // scene_context_init_reset releases ordinary surface/movie bindings but keeps decoded asset
         // caches and process-owned audio/configuration available to the reloaded SYSTEM4 root.
         ReleaseSurfaceRange(0, 1000);
+        lock (_backbufferRangeLock) _backbufferRange = GfxHandleRange.All;
         lock (_textLock)
         {
             _surfaceText.Clear();
@@ -1162,6 +1182,8 @@ public sealed class GodotAdvHost : IHost
             });
 
         lock (_imageLock) _surfaceImages[targetSlot] = destination;
+        PublishSurfaceTextRangeToSurface(
+            gfx, visible, firstHandle, count, targetSlot, dimensions.W, dimensions.H);
         IReadOnlyList<RenderObject> retained = visible
             .Where(item => item.Handle >= firstHandle && item.Handle - firstHandle < count)
             .ToArray();
@@ -1174,6 +1196,51 @@ public sealed class GodotAdvHost : IHost
             ["objects"] = retained.Count,
             ["rendered"] = rendered,
         });
+    }
+
+    private void PublishSurfaceTextRangeToSurface(
+        GfxState gfx, IReadOnlyList<RenderObject> visible, long firstHandle, long count,
+        int targetSlot, int targetWidth, int targetHeight)
+    {
+        List<SurfaceTextDraw> projected;
+        lock (_textLock)
+            projected = _surfaceText.TryGetValue(targetSlot, out var retained)
+                ? new List<SurfaceTextDraw>(retained)
+                : new List<SurfaceTextDraw>();
+
+        foreach (RenderObject item in visible)
+        {
+            if (item.Handle < firstHandle || item.Handle - firstHandle >= count) continue;
+            var raw = gfx.TryGet(item.Handle);
+            if (raw == null) continue;
+            List<SurfaceTextDraw>? source;
+            lock (_textLock)
+                source = _surfaceText.TryGetValue(raw.SourceSlot, out var draws)
+                    ? new List<SurfaceTextDraw>(draws)
+                    : null;
+            if (source == null) continue;
+
+            Affine2D localToTarget =
+                Transform2DMath.Build(item.Transform, item.Rotation).FromLocalOrigin(item.DstX, item.DstY);
+            if (item.RangeTransform is { } rangeTransform)
+                localToTarget = localToTarget.Then(rangeTransform);
+            foreach (SurfaceTextDraw draw in source)
+            {
+                if (draw.X < item.SrcX || draw.X >= item.SrcX + item.W ||
+                    draw.Y < item.SrcY || draw.Y >= item.SrcY + item.H) continue;
+                var position = localToTarget.Apply(draw.X - item.SrcX, draw.Y - item.SrcY);
+                int x = (int)System.Math.Round(position.X);
+                int y = (int)System.Math.Round(position.Y);
+                if (x < 0 || x >= targetWidth || y < 0 || y >= targetHeight) continue;
+                projected.Add(new SurfaceTextDraw(x, y, draw.Text, draw.Style));
+            }
+        }
+
+        lock (_textLock)
+        {
+            if (projected.Count == 0) _surfaceText.Remove(targetSlot);
+            else _surfaceText[targetSlot] = projected;
+        }
     }
 
     public void ReleaseSurfaceRange(int firstSlot, int count)

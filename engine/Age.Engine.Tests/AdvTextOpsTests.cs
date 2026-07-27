@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
@@ -104,6 +106,22 @@ public class AdvTextOpsTests
 
         Assert.Equal(new Age.Engine.Hosting.AdvWaitIndicatorConfig(1, 385, 140, 12, 0, 0, 30, 27, 12, 48),
                      Assert.Single(host.WaitIndicators));
+    }
+
+    [Fact]
+    public void WaitIndicatorTerminalFrameIsExclusive()
+    {
+        var config = new AdvWaitIndicatorConfig(
+            1, 385, 140, 12, 0, 0, 30, 27, 12, 48);
+
+        int[] frames = Enumerable.Range(0, 24)
+            .Select(tick => config.FrameAt(tick * 48L))
+            .ToArray();
+
+        Assert.Equal(
+            Enumerable.Range(0, 12).Concat(Enumerable.Range(0, 12)),
+            frames);
+        Assert.DoesNotContain(12, frames);
     }
 
     [Fact]

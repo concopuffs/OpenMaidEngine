@@ -864,7 +864,7 @@ public partial class Main : Godot.Control
         long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         if (_host.TrySnapshotScreenTransition(out _)) return false; // P4: whole-screen offscreen targets
-        _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot);
+        _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
         snapshotCaptured = true;
         _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
@@ -952,9 +952,9 @@ public partial class Main : Godot.Control
                 {
                     if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
                         surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
-                    var textPos = affine.Apply(surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
                     var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
-                    label.Position = new Vector2((float)textPos.X, (float)textPos.Y);
+                    ApplySurfaceTextTransform(
+                        label, affine, surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
                     label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
                                              System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
                     label.Text = surfaceText.Text;
@@ -1078,7 +1078,8 @@ public partial class Main : Godot.Control
             phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             if (sampledVisible == null)
-                _vm.Gfx.SnapshotVisibleObjects(_clock.NowMs, _visibleSnapshot); // synchronized objects + ranges
+                _host.SnapshotBackbufferObjects(
+                    _vm.Gfx, _clock.NowMs, _visibleSnapshot); // synchronized objects + publication range
             _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
             _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
@@ -1197,9 +1198,9 @@ public partial class Main : Godot.Control
                 {
                     if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
                         surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
-                    var textPos = localToDest.Apply(surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
                     var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
-                    label.Position = new Vector2((float)textPos.X, (float)textPos.Y);
+                    ApplySurfaceTextTransform(
+                        label, localToDest, surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
                     label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
                                              System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
                     label.Text = surfaceText.Text;
@@ -1252,6 +1253,17 @@ public partial class Main : Godot.Control
     {
         while (_surfaceTextLabels.Count <= index) _surfaceTextLabels.Add(CreateAdvPresentationLabel());
         return _surfaceTextLabels[index];
+    }
+
+    private static void ApplySurfaceTextTransform(Label label, Affine2D localToDestination,
+                                                  int localX, int localY)
+    {
+        var position = localToDestination.Apply(localX, localY);
+        var (rotation, scaleX, scaleY) = localToDestination.DecomposeCanvasAxes();
+        label.Position = new Vector2((float)position.X, (float)position.Y);
+        label.PivotOffset = Vector2.Zero;
+        label.Rotation = (float)rotation;
+        label.Scale = new Vector2((float)scaleX, (float)scaleY);
     }
 
     private Label CreateAdvPresentationLabel()

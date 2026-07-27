@@ -2330,9 +2330,11 @@ non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
 The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`
-loads universal raw asset `0x337c` (`SO000.AGF`) into surface slot 12. SO000 is a 390x27 strip of thirteen
-30x27 bat frames. It then executes op `0x73` with
+loads universal raw asset `0x337c` (`SO000.AGF`) into surface slot 12. SO000 decodes to a 360x27 strip of
+twelve 30x27 bat frames. It then executes op `0x73` with
 `(layout=1, x=385, y=140, surface=12, src=0,0, cell=30x27, terminalFrame=12, period=48ms)`.
+The terminal value is exclusive/a frame count: native publishes frames `0..11` and wraps before frame
+`12`.
 Layout 1 begins at screen y=430, so the marker lands at `(385,570)`, matching the original screenshot.
 
 Native `op_0x73_configure_wait_indicator@0x41e900` writes this descriptor through
@@ -2345,10 +2347,12 @@ the following click releases the wait.
 **Port implementation:** the single-scene harness now injects SYSTEM4's exact SO000 surface-12 and op-`0x73`
 configuration alongside its existing SO001 shortcut. The VM forwards all ten operands through the host ABI;
 `GodotAdvHost` retains configurations by layout and resolves slot 0 to the active Phase-A layout. A separate
-Godot atlas overlay advances the inclusive frames `0..12` on the 48 ms host clock only while `IsWaiting`,
-then hides immediately when input releases the wait. Keeping this 30x27 overlay outside the software
-backbuffer preserves the static-wait compositor optimization. Full SYSTEM4 replay remains Phase-B work;
-the shortcut carries the same state in the meantime.
+Godot atlas overlay advances on the 48 ms host clock only while `IsWaiting`, then hides immediately when
+input releases the wait. A 2026-07-27 polish fix removed the port's erroneous `TerminalFrame + 1`
+interpretation, which had selected nonexistent frame `12` once per cycle and made Godot render one empty
+atlas cell. Frame selection now treats the terminal value as the exclusive frame count and loops `0..11`.
+Keeping this 30x27 overlay outside the software backbuffer preserves the static-wait compositor optimization.
+Full SYSTEM4 replay remains Phase-B work; the shortcut carries the same state in the meantime.
 
 ### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9` (2026-07-11)
 
@@ -2996,6 +3000,28 @@ writes zero or one, so stale destinations cannot leak into the branch. Focused t
 embedded-NUL termination, all observed comparison operand classes, and the exact BUNKI empty-title stale-handle
 case. The full 281-test engine suite, zero-warning Godot build, and threaded frontend selftest pass; manual
 DEBUGMAP and developer-menu visual rechecks remain.
+
+#### BUNKI popup publication and BUNKIMOVE lifecycle (2026-07-27)
+
+BUNKI's opening/closing effect is an offscreen capture, not an independent decoration behind a stable
+popup. BUNKI builds the complete panel under handles `60000..60099`, including surface-200 text, and calls
+`BUNKIMOVE.BIN`. BUNKIMOVE selects 800x600 surface 2, publishes that retained range into it, restores the
+backbuffer, binds the capture at handle `59999`, and scales it horizontally and then vertically through
+timed callbacks. Each transition frame publishes `[0,60000)`, deliberately including the animated capture
+while excluding BUNKI's stable objects. On open, BUNKI publishes the stable menu only after BUNKIMOVE
+returns; on close, it removes the stable range after the reverse animation.
+
+The port previously treated a backbuffer `0x222` as a generic repaint request and reconstructed every
+visible retained object. It therefore drew handles `60000+` at full size above handle `59999`, making the
+real popup appear immediately while its opening animation ran behind it; closing had the symmetric error.
+Godot now retains zero-based backbuffer publication ranges and filters reconstruction to the active range.
+Nonzero ranges remain incremental overlays over a full reconstruction because the port does not preserve
+native D3D backbuffer pixels between publications.
+
+Surface text also remains modeled metadata rather than pixels. Selected-target publication now projects
+that metadata into the destination surface, and the final Godot labels inherit the retained object's
+projected scale and rotation. Consequently BUNKIMOVE's captured labels follow the same transform as its
+panel instead of escaping as full-size Control overlays.
 
 ### Formatted integers on text surfaces — opcode `0x205` (2026-07-21)
 

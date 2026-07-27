@@ -72,5 +72,16 @@ public class GfxRangeTransformTests
         Assert.NotNull(vm.Gfx.SnapshotVisibleObjects().Single().RangeTransform);
     }
 
+    [Fact]
+    public void BunkiAnimationPublicationExcludesStablePopupHandles()
+    {
+        var animationRange = new GfxHandleRange(0, 60000);
+
+        Assert.True(animationRange.Contains(59999));
+        Assert.False(animationRange.Contains(60000));
+        Assert.False(animationRange.Contains(60050));
+        Assert.True(GfxHandleRange.All.Contains(60050));
+    }
+
     private static Operand I(long v) => new(0, v);
 }

@@ -84,6 +84,15 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            Affine2D? RangeTransform = null,
                                            bool TimeVarying = false);
 
+/// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
+public readonly record struct GfxHandleRange(long First, long Count)
+{
+    public static GfxHandleRange All => new(0, long.MaxValue);
+
+    public bool Contains(long handle)
+        => Count > 0 && handle >= First && (ulong)(handle - First) < (ulong)Count;
+}
+
 /// <summary>Host-agnostic model of the AGE native gfx command-buffer (reversed in
 /// docs/engine-re.md, gfx op-contract table). One registry maps an object handle to a GfxObject — the
 /// native retained-gfx owner+0x408 map (EngineCtx+0x46a1c) that op 0x215 queries and the geometry get/set ops share. Each object carries a
