@@ -3374,7 +3374,14 @@ self-test checks the calibrated variation and both 24px/16px spacing examples.
 Validation: engine **431/431**, zero-warning Godot build, and threaded `SELFTEST OK` with
 `font-calibration=ok`. The probes were deliberately disposable; the canonical measurements live in
 `docs/engine-re.md` rather than adding a Windows-only runtime/tool dependency. User visual acceptance
-passed on 2026-07-28.
+was provisional on 2026-07-28. A later same-page native/port comparison retained exact placement and
+horizontal bounds but found the port 45% lower in bright-pixel population with much softer edges. The
+raw GDI/Godot coverage-sum comparison was therefore not a valid equivalence oracle. Follow-up Ghidra
+work established that AGE uses a GDI-synthesized weight-700 `GGO_GRAY4_BITMAP` and its own integer
+glyph/outline compositor, whereas the slice uses FreeType embolden and Godot's outline primitive.
+The required fidelity follow-up is implementation of that decoded mask contract; screenshots remain
+validation evidence, not the source of rendering behavior. That work is deferred until gameplay settles
+and is scoped in `docs/remake-architecture-and-roadmap.md`; it is not the next Phase A/B slice.
 
 ## Persistence native-format reconnaissance complete (2026-07-24)
 

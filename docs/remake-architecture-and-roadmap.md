@@ -518,6 +518,53 @@ requirements.
 - Enhancements the VM unlocks: higher/wide resolution, faster text, QoL, save-anywhere, new-content
   mods. Modding docs + tools. Save/UX polish.
 
+#### Deferred backlog — AGE-exact glyph-mask text renderer
+
+**Scheduling:** defer this effort until the natural gameplay spine, first dungeon loop, and combat/system
+presentation are settled. The current Godot `Label` backend is readable, respects the script-requested
+Mincho/Gothic family when available, and matches SC0000's placement and effective line width. Its remaining
+weight, hinting, and outline-pixel differences do not block gameplay work. Resume this backlog early only if
+the approximation causes a legibility, layout, input, or gameplay-presentation defect rather than a cosmetic
+native-parity difference.
+
+**Behavioral source:** implement the native contract decoded in `docs/engine-re.md`; screenshots are
+integration/regression evidence, not tuning inputs. AGE selects an exact `LOGFONTA` into a
+`CreateICA("DISPLAY")` information DC, obtains per-glyph metrics and 0..16 coverage through
+`GetGlyphOutlineA(GGO_GRAY4_BITMAP)`, and applies its own integer coverage, outline-sampling, and surface
+compositor. Godot currently substitutes FreeType `FontFile`/`FontVariation` masks and the `Label` outline
+primitive, which cannot be made equivalent by choosing another embolden constant.
+
+**Target architecture:**
+
+1. Add a platform-neutral glyph request/result contract. The request carries the authored face, height,
+   derived width, weight, character/code point, and raster policy. The result carries coverage bytes,
+   dimensions/stride, glyph origin/bearings, and cell advance.
+2. Move AGE's coverage conversion, mode-1 displacement, mode-3 rounded ellipse samples, clipping, and
+   integer surface compositing into shared managed code. This layer must not know whether the mask came
+   from GDI or FreeType.
+3. Add a Windows GDI rasterizer using the decoded `CreateICA`/`CreateFontIndirectA`/
+   `GetGlyphOutlineA` calls. Keep it as the shipped highest-fidelity Windows backend and as the independent
+   reference oracle for the shared contract; it is not disposable calibration scaffolding.
+4. Add an explicitly defined portable rasterizer behind the same contract. A FreeType/Godot
+   implementation may produce different hinted pixels, especially when the proprietary requested face is
+   unavailable; profile/configuration must select requested-face substitutions and the default fallback
+   rather than claiming GDI pixel equivalence.
+5. Route live ADV, retained text, History, immediate surface strings, and later ruby/furigana presentation
+   through one cached glyph service. Retain the existing `Label` path as a temporary portable fallback until
+   that integration is complete, then remove synthetic embolden/glyph-spacing constants from the exact path.
+
+**Acceptance gates:**
+
+- Fixed synthetic-mask tests byte-match AGE's decoded 16-/32-bit compositor, including overlapping mode-3
+  neighbors, clipping, alpha, and RGB integer rounding.
+- On Windows, representative CP932 glyph masks, `GLYPHMETRICS`, and advances match a direct invocation of
+  the decoded GDI request; tests compare returned data, not screenshot histograms.
+- SC0000 and menu/history checks retain current placement, wrapping, line advance, reveal timing, colors,
+  effects, and retained-object lifetime after the backend swap.
+- The portable backend starts without Windows fonts or GDI, reports/uses its selected substitution policy,
+  and passes layout/legibility tests without being labeled pixel-identical to native AGE.
+- Glyph/font caches remain bounded and reveal-time rendering does not introduce visible frame stalls.
+
 ---
 
 ## 5. The VM as our analysis instrument — and the correctness bootstrap

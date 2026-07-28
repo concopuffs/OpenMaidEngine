@@ -16,9 +16,10 @@ public partial class Main : Godot.Control
 {
     private const int ScreenWidth = 800;
     private const int ScreenHeight = 600;
-    // Calibrated against GDI GetGlyphOutlineW(GGO_GRAY4_BITMAP) for Himegari's 24px MS Mincho
-    // weight-700 profile. This matches native glyph coverage while one pixel of spacing approximates
-    // GDI's synthetic-bold advance expansion; see docs/engine-re.md.
+    // Provisional approximation only: AGE asks GDI to synthesize LOGFONT weight 700, grid-fit a
+    // GGO_GRAY4 mask, and composites that mask itself. Godot instead applies FreeType embolden plus
+    // spacing. Do not retune these values from screenshots; replace this approximation from the decoded
+    // native glyph-mask contract. See docs/engine-re.md.
     private const float NativeBoldEmbolden = 0.53f;
     private const int NativeBoldGlyphSpacing = 1;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer

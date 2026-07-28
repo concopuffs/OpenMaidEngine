@@ -2522,17 +2522,52 @@ horizontal agreement for regular 24px Mincho and regular 16px Gothic. GDI also p
 measurements with the native negative half-height `lfWidth` and `lfWidth=0`; no horizontal scaling is
 needed for those profiles on this installation.
 
-The old `VariationEmbolden=1.2` was not a good weight-700 approximation: the sample glyph `魔` had
-coverage sum 6,651 versus native 4,615 (+44%), while complete strings remained as much as 9 pixels
-narrower than native. `VariationEmbolden=0.53` plus one pixel of glyph spacing yields coverage 4,600
-(-0.3%) and bounds all six complete-string errors to 0..3 pixels. Godot reports a 25px/17px line box
-for the native 24px/16px profiles, so presentation subtracts that one-pixel backend excess from the
-script's extra line spacing, retaining AGE's requested total line advance. The calibration is applied
-per bold font variation and through the common live/History/surface style path.
+The first numeric pass selected `VariationEmbolden=0.53` plus one pixel of glyph spacing because its raw
+Godot atlas sum was close to GDI's raw 4-bit coverage sum and it bounded the six complete-string errors
+to 0..3 pixels. A subsequent direct native/port SC0000 screenshot comparison proved that cross-API sum
+was not a visually comparable quantity. For `――かつて、戦いがあった。`, both screenshots have the
+same viewport-relative top (`y=478`) and bright horizontal bounds (`x=101..410`, 310px), confirming
+placement and effective advance. Native nevertheless has 1,656 bright neutral pixels versus the port's
+1,145 (+45%), 1,296 near-white pixels versus 713 (+82%), a 23px rather than 22px bright box, and roughly
+twice the gray edge population. The port is materially underweight and softer despite requesting the
+correct Mincho face.
 
-Mode 3 still does not reproduce AGE's exact sampled coverage at each ellipse angle. Exact per-pixel
-parity beyond the calibrated profiles requires a dedicated glyph backend. Portable configurable face
-substitutions/defaults are intentionally deferred to the broader runtime configuration design.
+The discrepancy is not an unknown value to tune. The native and port pipelines are behaviorally
+different:
+
+1. `adv_text_manager_construct@0x456570` creates an information DC with
+   `CreateICA("DISPLAY",NULL,NULL,NULL)`. AGE selects the `CreateFontIndirectA` result for its complete
+   `LOGFONTA` into this display IC. For SC0000 that state is height `-24`, width `-12`, weight `700`,
+   `DEFAULT_CHARSET`, default precision/quality/pitch, and `ＭＳ 明朝`. Windows GDI therefore owns font
+   mapping, grid fitting, and weight-700 synthesis.
+2. `text_raster_string_cached@0x45b600` calls `GetGlyphOutlineA` with identity `MAT2` and
+   `GGO_GRAY4_BITMAP`. It retains GDI's `GLYPHMETRICS`, uses `gmCellIncX` as the per-glyph advance, and
+   consumes the returned 17-level coverage mask (`0..16`) directly.
+3. `text_blit_glyph_bitmap@0x458c80` converts coverage `c` to integer alpha `c*255/16`. On a 32-bit
+   surface it takes `max(destination alpha, glyph alpha)` and interpolates each RGB channel as
+   `(dst*(255-alpha)+src*alpha)/255`.
+4. Mode 3 does not invoke a font-renderer outline. Its step is
+   `360/(sqrt(effect_x²+effect_y²)*8)`, with nearest-integer ellipse coordinates. Radius `(1,1)` makes
+   twelve calls covering the eight neighboring offsets: each cardinal offset is visited twice and each
+   diagonal once, followed by one primary-color glyph blit at the unshifted position.
+
+The port does none of those raster operations. It loads the same TTC into Godot/FreeType with grayscale
+antialiasing, light hinting, automatic subpixel positioning, embedded bitmaps disabled, and otherwise
+default `FontFile` policy. Bold is the unrelated `FontVariation.VariationEmbolden=0.53` operation plus
+one pixel of artificial glyph spacing; mode 3 is Godot `Label`'s `outline_size=1`. Thus the family,
+nominal size, placement, and total width can agree while stems, serifs, white-core coverage, and edge
+pixels differ. The screenshot is useful evidence that the difference is visible, but it is not the
+behavioral source.
+
+The fidelity correction is consequently a decoded glyph-mask backend, not screenshot-driven embolden
+calibration. A Windows reference implementation can call the same GDI APIs with the decoded `LOGFONTA`
+and reproduce AGE's integer compositor. A portable backend must expose the same mask/metrics/compositing
+contract while explicitly defining its font-substitution and rasterizer policy; FreeType output should
+be treated as that backend's result, not claimed to be GDI-equivalent. Godot's one-pixel line-box
+compensation remains independently supported by the matching viewport placement. Portable configurable
+face substitutions/defaults remain deferred to the broader runtime configuration design. Implementation
+is explicitly backlogged until gameplay settles; the scoped architecture and acceptance gates live in
+`docs/remake-architecture-and-roadmap.md` under “AGE-exact glyph-mask text renderer.”
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
