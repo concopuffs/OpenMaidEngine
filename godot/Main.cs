@@ -624,6 +624,7 @@ public partial class Main : Godot.Control
                         stop_time_ms = pair.Value.Decoder.StopTimeMs,
                         decoder_completed = pair.Value.Decoder.IsCompleted,
                         decoder_failure = pair.Value.Decoder.Failure,
+                        first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
                         frame_seen = _movieFrameSeen.Contains(pair.Key),
                         completion_notified = _movieCompletionNotified.Contains(pair.Key),
                         watchdog_ms = pair.Value.WatchdogMs,
@@ -649,6 +650,7 @@ public partial class Main : Godot.Control
                     stop_time_ms = pair.Value.Decoder.StopTimeMs,
                     decoder_completed = pair.Value.Decoder.IsCompleted,
                     decoder_failure = pair.Value.Decoder.Failure,
+                    first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
                 })
                 .ToArray();
             var snapshot = new
@@ -1804,13 +1806,21 @@ public partial class Main : Godot.Control
         if (_host == null) return;
         foreach (var (playbackId, movie) in _movies)
         {
-            if (_movieAudio.TryGetValue(playbackId, out var audio)) audio.Update();
+            bool frameWasAlreadySeen = _movieFrameSeen.Contains(playbackId);
+            _movieAudio.TryGetValue(playbackId, out var audio);
+            if (frameWasAlreadySeen) audio?.Update();
             if (movie.Decoder.TryTakeFrame(out var frame))
             {
                 _host.PublishMovieFrame(playbackId, movie.Name, movie.AssetId, frame);
                 if (_movieFrameSeen.Add(playbackId))
+                {
                     GD.Print($"movie first frame {movie.Name} playback={playbackId}: " +
-                             $"{frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame}");
+                             $"{frame.Width}x{frame.Height} RGBA8 at render frame {_timelineFrame} " +
+                             $"(source PTS {movie.Decoder.FirstFramePresentationTimeMs?.ToString() ?? "unknown"} ms)");
+                    // Do not let decode startup consume the opening audio timeline. The first PCM push
+                    // begins only after the first decoded image has reached the retained movie surface.
+                    audio?.Update();
+                }
             }
             bool watchdogExpired = Stopwatch.GetElapsedTime(movie.StartedAtTimestamp).TotalMilliseconds
                                    >= movie.WatchdogMs;

@@ -2416,13 +2416,15 @@ public sealed class VirtualMachine
                 long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
                 // Modal and non-modal paths share packed resolution and retained-surface composition.
-                // The distinct host entry point owns only 0x20f's blocking lifecycle.
-                Gfx.SetSurface(surfaceSlot, resourceId, 0);
+                // The distinct host entry point owns only 0x20f's blocking lifecycle. Native attaches its
+                // renderer to the existing mutable target; it does not reload that surface with resource
+                // id/movie bytes or apply color key 0. Keep the created surface's no-key state so MPEG
+                // black remains opaque.
                 _host.PlayModalMovieToSurface(resourceId, surfaceSlot, Read(a[2]));
                 return pc + 1;
             }
             case "u004221A0":           // pre-reference compatibility
-            case "play-movie-to-surface": // 0x236 (resource)(surface)(movie flags)(sync mask)
+            case "play-movie-to-surface": // 0x236 (resource)(surface)(movie flags)(start delay ms)
             {
                 long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
@@ -2442,9 +2444,8 @@ public sealed class VirtualMachine
                 // boundary; publishing the movie resource first would let a concurrent compositor mistake
                 // the MPEG payload's .AGF name for a still image before the host registers/decodes it.
                 long? stopTimeMs = _host.PlayMovieToSurface(resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
-                // The native CMovieToTexture renderer replaces the pixels of the already-created surface.
-                // Retain the same resource binding so the compositor resolves live movie frames for its objects.
-                Gfx.SetSurface(surfaceSlot, resourceId, 0);
+                // Native replaces the pixels of the already-created surface without changing its resource
+                // identity or color key. The host's playback-to-surface binding resolves the live frame.
                 // Native never encounters a missing system decoder for shipped assets. If a host backend
                 // cannot initialize one, model the valid movie as completing immediately: BTL feeds this
                 // value into its effect timeline, where zero is a safe duration and -1 is not meaningful.

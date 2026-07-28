@@ -133,6 +133,28 @@ the first timestamp and material later gaps/overlaps. A 4,093-block OP regressio
 The clean audible recheck passed for LOGO/OP and CHAPTER. DirectShow and the managed Windows platform annotations
 were then deleted; missing, distorted, or unsynchronized audio on any of the 29 audio-bearing assets is now a bug.
 
+Movie startup was corrected on 2026-07-28 after a first-frame latch exposed a second, visible 600 ms freeze.
+`LOGO.AGF` and `OP.AGF` begin audio at 0 ms on the shim's shared mux timeline, while their first decoded video
+frames carry PTS 600 ms and 601 ms. Signal-bearing PCM in OP's first 600 ms initially looked like an intentional
+audio lead, but native OP advances video and audio immediately. A real-asset regression proves the decoder is not
+losing opening data: the first 20 LOGO/OP video frames are consecutive 33/34 ms samples, change within that window,
+and contain alpha 255 at every pixel. The mux offset is therefore not a presentation deadline.
+
+The paced decoder still latches frame zero and Godot still waits to start its `AudioStreamGenerator` until that
+image has been published. It now schedules every later video frame from
+`source_video_pts - first_video_pts`, including audio-bearing movies, while submitting the complete audio stream
+from its own timestamp zero. This preserves every decoded sample and immediately advances frame cadence instead
+of freezing frame zero until the audio clock reaches the program-stream offset. Startup logs and F6 snapshots
+retain the raw first video PTS for diagnosis.
+
+A separate compositor error amplified the symptom. MPEG-1 has no transparency and FFmpeg's RGBA conversion
+produces opaque pixels, but the VM had replaced the existing mutable movie target with an invented RGB color key
+of zero. Exact black became transparent and exposed the Godot clear color, producing the previously reported grey
+MPEG speckles. Both movie opcodes now retain the existing surface's no-key state; the host's instance binding
+supplies changing movie pixels without changing surface resource identity. Native `0x20f` likewise attaches its
+DirectShow renderer to the existing D3D target without assigning an RGB key. The annotated native details and the
+DirectShow preroll/stream-origin inference are recorded in `docs/engine-re.md`.
+
 Native deliverables are RID-specific and bundled with the Godot export; the runtime must not discover an
 arbitrary system FFmpeg. The first implementation gate is Windows x64 because that is the current runnable
 target, but the C ABI and loader paths must reserve Windows x64, Linux x64, macOS x64, and macOS arm64 from the

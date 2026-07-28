@@ -366,6 +366,38 @@ catalog opener as `0x20f`. Both paths now decode the MPEG audio pin through FFmp
 float PCM. Godot owns one `AudioStreamGenerator` per playback instance, applies the native flag-selected
 mute/music/SE/voice or default movie route, and uses the sound-hardware position as the presentation clock.
 
+**Native first-frame preroll and stream origin (2026-07-28):** AGE does not seek or manually decode an
+opening frame. `movie_to_texture_open_asset_graph@0x463e20` finishes with the DirectShow graph stopped.
+`movie_start_modal_playback@0x463280` then calls `IMediaControl::Run` at vtable slot `+0x1c`; there is no
+preceding `Pause` or `IMediaPosition` mutation in `0x20f`. DirectShow's stopped-to-running transition
+necessarily passes through paused/preroll. For a file source, the graph manager waits for each renderer to
+receive a sample; a video renderer displays that held first sample as a poster image before the graph enters
+running state. See Microsoft's [Filter States](https://learn.microsoft.com/en-us/windows/win32/directshow/filter-states)
+contract.
+
+The custom `movie_texture_renderer_receive_sample@0x4628d0` copies that preroll sample into the D3D texture
+and sets renderer `+0x5b4`. `movie_consume_renderer_new_frame_flag@0x405120` clears the flag and makes the
+outer engine tick render the retained surface. Audio is cued during the same graph transition but begins only
+with the running reference clock. Native observation adds the decisive cadence constraint: OP's image advances
+immediately with its audio; it does not hold the preroll image for roughly 600 ms. AGE contains no later
+timestamp correction, so the DirectShow splitter/graph is necessarily presenting the video stream relative to
+its first sample rather than exposing FFmpeg's shared program-stream timestamp origin. This last mapping is an
+inference about DirectShow internals, but the visible native behavior is the parity oracle.
+
+The installed FFmpeg probe rules out dropped or transparent source frames. LOGO and OP first report video PTS
+600/601 ms on the shim's shared mux timeline, then deliver every tested opening frame at consecutive 33/34 ms
+steps; pixels change within the first 20 frames. Every decoded alpha byte in those frames is 255. MPEG-1 has no
+alpha plane. Native `movie_texture_renderer_set_media_type@0x463750` accepts RGB24/RGB32, and the RGB24 copy
+path promotes pixels to alpha `0xff` before comparing the complete packed ARGB value with its renderer key.
+Opcode `0x20f` attaches that renderer to the existing D3D target and never reloads the retained surface or
+assigns it an RGB color key. The former port did both `Gfx.SetSurface(..., colorKey: 0)` and RGB-only keying,
+which incorrectly made exact-black movie texels transparent and explained grey-background MPEG speckles.
+
+The corrected port publishes frame zero before starting audio, then schedules all video frames from
+`source_video_pts - first_video_pts`; audio retains its own complete stream from timestamp zero. No video or
+audio samples are discarded. Signal-bearing PCM in OP's first 600 ms proves only that the audio data is real,
+not that the MPEG mux's cross-stream start offset is an intended 600 ms visible lead.
+
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
 instruction-offset set. The captured New Game route is:
 
@@ -1293,18 +1325,22 @@ their later lifecycle/presentation slices.
 
 ### Movie-to-surface opcode `0x236` (2026-07-11)
 
-The exact ABI is `play-movie-to-surface(resource_id, surface_slot, movie_flags, sync_mask)`. Handler
+The exact ABI is `play-movie-to-surface(resource_id, surface_slot, movie_flags, start_delay_ms)`. Handler
 `op_0x236_play_movie_to_surface@0x423ee0` records a 9-dword instruction length and requires the destination texture to exist.
 It allocates/reuses a 0x478-byte `CMovieToTexture` object, binds the D3D device/backing texture, opens
-operand 1 through `asset_open_indexed_entry`, constructs a DirectShow FilterGraph, and starts it. The graph
+operand 1 through `asset_open_indexed_entry`, constructs a stopped DirectShow FilterGraph, and configures its
+pending start. The graph
 queries `IGraphBuilder`, `IMediaControl`, `IMediaPosition`, `IMediaEvent`, and `IBasicAudio`; its custom
 `CMovieTextureRenderer` accepts RGB samples and copies the bottom-up frame into the retained texture.
 
 Operand 3 is retained movie mode plus sound-route policy. Bits `0x10000/0x20000/0x40000/0x80000` force
 mute/music/SE/voice routing; without an override, native setting `set:DependMovieSound` supplies the normal
-movie route. The port applies those categories through Godot audio buses. Operand 4 is stored at movie object `+0x42c` as
-the sync/device mask; it is not a duration or loop count. Replacing or releasing the owning surface stops
-the graph and detaches the renderer.
+movie route. The port applies those categories through Godot audio buses. Operand 4 is stored at movie object
+`+0x42c` as a millisecond start delay: `movie_start_pending_after_sync_delay` records `timeGetTime()` on the
+first service tick and starts the graph once `current - start >= operand4`. It is not a device mask or movie
+duration. Replacing or releasing the owning surface stops the graph and detaches the renderer. The port still
+threads this value through a legacy `syncMask`-named host parameter but does not yet delay FFmpeg start for
+nonzero values. The corpus has 25 sites: 24 pass literal zero, while BTL supplies a dynamic local-pointer value.
 
 Graph construction/open is synchronous, but playback and sample delivery are asynchronous. The handler
 returns normally and the interpreter advances one instruction: at SC0000 `0x13c8`, the native operand
@@ -1313,6 +1349,11 @@ not itself block the VM. SC0000 prepares additional static layers, then reaches 
 `label_1235a@0x1574`. That opcode sets run-state bit `0x400` and yields the interpreter; the presentation
 service continues sampling the retained movie until DirectShow EOF, after which the following script
 cleanup releases it. The static preparation before `0x21c` is not a movie teardown boundary.
+
+Non-modal start is deferred through `movie_play_configure@0x4625e0`: the outer tick's
+`movie_start_pending_after_sync_delay@0x4633b0` records the first service time and calls the same shared
+`IMediaControl::Run` worker once operand 4's sync delay has elapsed. A zero mask starts on the first service
+tick. It therefore receives the same stopped-to-paused preroll and first-frame poster behavior as modal `0x20f`.
 
 **Manual-test corrections (2026-07-11):** the initial port incorrectly treated pre-yield static loads as
 surface replacement, producing start/first-frame/stop all in render frame 0. The bounded host now retains

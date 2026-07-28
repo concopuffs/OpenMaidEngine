@@ -7,6 +7,7 @@ using Age.Engine.Sys4;
 
 internal interface IMoviePacingClock
 {
+    void StartPresentation() { }
     bool WaitUntil(long elapsedMilliseconds, WaitHandle cancellation);
 }
 
@@ -17,14 +18,22 @@ internal interface IExternallyAdvancedMoviePacingClock : IMoviePacingClock
 
 internal sealed class StopwatchMoviePacingClock : IMoviePacingClock
 {
-    private readonly long _startedAt = Stopwatch.GetTimestamp();
+    private long _startedAt;
+
+    public void StartPresentation()
+    {
+        long startedAt = Stopwatch.GetTimestamp();
+        Interlocked.CompareExchange(ref _startedAt, startedAt, 0);
+    }
 
     public bool WaitUntil(long elapsedMilliseconds, WaitHandle cancellation)
     {
+        StartPresentation();
         while (true)
         {
+            long startedAt = Interlocked.Read(ref _startedAt);
             double remaining = elapsedMilliseconds
-                               - Stopwatch.GetElapsedTime(_startedAt).TotalMilliseconds;
+                               - Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
             if (remaining <= 0) return true;
             int waitMilliseconds = (int)Math.Clamp(Math.Ceiling(remaining), 1, 1000);
             if (cancellation.WaitOne(waitMilliseconds)) return false;
@@ -71,6 +80,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private readonly IFfmpegFrameSource _source;
     private readonly IMoviePacingClock _clock;
     private readonly ManualResetEvent _cancel = new(false);
+    private readonly ManualResetEvent _firstFramePresented = new(false);
     private readonly Thread _thread;
     private readonly Thread? _audioThread;
     private readonly object _frameLock = new();
@@ -87,10 +97,20 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private int _queuedAudioFrames;
     private int _activeWorkers;
     private int _disposed;
+    private int _firstFrameTaken;
+    private long _firstFramePresentationTimeMs = -1;
 
     public long? StopTimeMs => _source.Info.StopTimeMs;
     public bool IsCompleted => _completed;
     public string? Failure => Volatile.Read(ref _failure);
+    public long? FirstFramePresentationTimeMs
+    {
+        get
+        {
+            long value = Interlocked.Read(ref _firstFramePresentationTimeMs);
+            return value < 0 ? null : value;
+        }
+    }
     public MovieAudioInfo? AudioInfo { get; }
     public bool AudioDecodingCompleted => _audioDecodingCompleted;
 
@@ -134,6 +154,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
             if (_audioThread?.IsAlive == true) _audioThread.Join();
             _source.Dispose();
             _cancel.Dispose();
+            _firstFramePresented.Dispose();
             _audioSpace.Dispose();
             if (_clock is IDisposable disposableClock) disposableClock.Dispose();
             throw;
@@ -151,8 +172,13 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
             }
             frame = _latestFrame;
             _latestFrame = null;
-            return true;
         }
+        if (Interlocked.Exchange(ref _firstFrameTaken, 1) == 0)
+        {
+            _clock.StartPresentation();
+            _firstFramePresented.Set();
+        }
+        return true;
     }
 
     public bool TryTakeAudioChunk(out MovieAudioChunk chunk)
@@ -189,14 +215,17 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         {
             long lastTimestamp = -1;
             long decodedFrames = 0;
+            long firstTimestamp = -1;
             while (!_cancel.WaitOne(0))
             {
                 if (!_source.TryDecodeNextVideoFrame(out var frame))
                 {
                     if (decodedFrames == 0)
                         throw new InvalidDataException("FFmpeg stream ended before producing a video frame");
-                    long completionTime = Math.Max(_source.Info.StopTimeMs,
-                                                   lastTimestamp + FrameIntervalMilliseconds(_source.Info));
+                    long completionTime = PresentationDeadline(
+                        Math.Max(_source.Info.StopTimeMs,
+                                 lastTimestamp + FrameIntervalMilliseconds(_source.Info)),
+                        firstTimestamp);
                     if (_clock.WaitUntil(completionTime, _cancel))
                     {
                         _videoTimelineCompleted = true;
@@ -207,7 +236,20 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                 if (frame.PresentationTimeMs < 0 || frame.PresentationTimeMs < lastTimestamp)
                     throw new InvalidDataException(
                         $"FFmpeg returned non-monotonic video timestamp {frame.PresentationTimeMs} after {lastTimestamp}");
-                if (!_clock.WaitUntil(frame.PresentationTimeMs, _cancel)) return;
+                if (decodedFrames == 0)
+                {
+                    firstTimestamp = frame.PresentationTimeMs;
+                    Interlocked.Exchange(ref _firstFramePresentationTimeMs, firstTimestamp);
+                    lock (_frameLock) _latestFrame = frame.Image;
+                    lastTimestamp = frame.PresentationTimeMs;
+                    decodedFrames++;
+                    int signalled = WaitHandle.WaitAny([_cancel, _firstFramePresented]);
+                    if (signalled == 0) return;
+                    continue;
+                }
+                if (!_clock.WaitUntil(PresentationDeadline(frame.PresentationTimeMs, firstTimestamp),
+                                      _cancel))
+                    return;
                 lock (_frameLock) _latestFrame = frame.Image;
                 lastTimestamp = frame.PresentationTimeMs;
                 decodedFrames++;
@@ -295,16 +337,27 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         return Math.Max(1, scaledDenominator / info.FrameRateNumerator);
     }
 
+    private long PresentationDeadline(long sourceTimestamp, long firstVideoTimestamp)
+    {
+        // MPEG program streams may put the first video sample hundreds of milliseconds after the audio
+        // stream's mux timestamp origin. DirectShow presents the video's first sample as video time zero;
+        // retaining the absolute mux offset here would freeze that sample until the audio clock caught up.
+        // Preserve every decoded frame and its cadence, but rebase the video stream to its first sample.
+        return Math.Max(0, sourceTimestamp - firstVideoTimestamp);
+    }
+
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cancel.Set();
+        _firstFramePresented.Set();
         _audioSpace.Set();
         if (_thread.IsAlive && Thread.CurrentThread != _thread)
             _thread.Join();
         if (_audioThread?.IsAlive == true && Thread.CurrentThread != _audioThread)
             _audioThread.Join();
         _cancel.Dispose();
+        _firstFramePresented.Dispose();
         _audioSpace.Dispose();
         if (_clock is IDisposable disposableClock) disposableClock.Dispose();
     }

@@ -434,6 +434,10 @@ depend on the movie service itself to park until EOF/input cancellation before t
 signature gate. `IHost.PlayModalMovieToSurface` is distinct from the non-modal call for lifecycle only: Godot
 reuses the asynchronous FFmpeg decoder and retained compositor but parks the VM thread until EOF
 or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
+Native attaches the movie renderer to the already-created target without replacing that surface's resource
+identity or color key. The port now does the same: `MovieSurfaceRegistry` resolves the live instance pixels while
+the VM retains the mutable surface's `resourceId=0, colorKey=-1`. The former synthetic `colorKey=0` binding made
+exact-black MPEG pixels transparent and was not part of the native asset-resolution contract.
 The FFmpeg backend now renders embedded audio through an engine-owned synchronized path rather than an
 unmanaged default-device side path. Timestamped stereo float PCM feeds a per-playback Godot
 `AudioStreamGenerator`; the sound-hardware position drives video presentation, and modal cancellation or

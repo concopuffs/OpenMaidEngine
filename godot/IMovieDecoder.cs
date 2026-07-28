@@ -13,6 +13,7 @@ internal interface IMovieDecoder : IDisposable
     long? StopTimeMs { get; }
     bool IsCompleted { get; }
     string? Failure { get; }
+    long? FirstFramePresentationTimeMs => null;
     bool TryTakeFrame(out RgbaImage frame);
     MovieAudioInfo? AudioInfo => null;
     bool AudioDecodingCompleted => true;

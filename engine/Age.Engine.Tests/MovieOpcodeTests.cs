@@ -46,11 +46,13 @@ public class MovieOpcodeTests
         private int _decodeCalls;
         public FfmpegMovieInfo Info { get; } = info;
         public int FailOnDecodeCall { get; init; } = -1;
+        public int DecodeCalls => Volatile.Read(ref _decodeCalls);
         public bool Disposed { get; private set; }
 
         public bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame)
         {
-            if (_decodeCalls++ == FailOnDecodeCall)
+            int call = Interlocked.Increment(ref _decodeCalls) - 1;
+            if (call == FailOnDecodeCall)
                 throw new InvalidDataException("synthetic decode failure");
             return _frames.TryDequeue(out frame!);
         }
@@ -177,6 +179,65 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void FfmpegDecoderPublishesAndRetainsFirstDecodedFrameBeforePacing()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 700, 30, 1, true, 1000, 2, 50),
+            SyntheticMovieFrame(1, 600), SyntheticMovieFrame(2, 634));
+        using var clock = new ManualMoviePacingClock();
+        clock.AdvanceTo(1000);
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        Assert.True(SpinWait.SpinUntil(() => source.DecodeCalls == 1, 1000));
+        Thread.Sleep(20);
+        Assert.Equal(1, source.DecodeCalls);
+        Assert.Equal(600, decoder.FirstFramePresentationTimeMs);
+        Assert.True(decoder.TryTakeFrame(out var first));
+        Assert.Equal((byte)1, first.Pixels[0]);
+
+        Assert.True(SpinWait.SpinUntil(() => source.DecodeCalls >= 2, 1000));
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+    }
+
+    [Fact]
+    public void FfmpegAudioBearingDecoderRebasesVideoPacingToFirstSourceTimestamp()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 700, 30, 1, true, 1000, 2, 50),
+            SyntheticMovieFrame(1, 600), SyntheticMovieFrame(2, 634));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(34));
+        clock.AdvanceTo(33);
+        Assert.False(decoder.TryTakeFrame(out _));
+        clock.AdvanceTo(34);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+    }
+
+    [Fact]
+    public void FfmpegVideoOnlyDecoderRebasesPacingToFirstSourceTimestamp()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 700, 30, 1, false),
+            SyntheticMovieFrame(1, 600), SyntheticMovieFrame(2, 634));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(34));
+        clock.AdvanceTo(33);
+        Assert.False(decoder.TryTakeFrame(out _));
+        clock.AdvanceTo(34);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+
+        Assert.True(clock.WaitForDeadline(100));
+        clock.AdvanceTo(100);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+    }
+
+    [Fact]
     public void FfmpegDecoderDisposalInterruptsFutureFrameWait()
     {
         var source = new FakeFfmpegFrameSource(
@@ -184,6 +245,7 @@ public class MovieOpcodeTests
             SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 60000));
         using var clock = new ManualMoviePacingClock();
         var decoder = new FfmpegMovieDecoder(source, clock);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
         Assert.True(clock.WaitForDeadline(60000));
 
         var elapsed = Stopwatch.StartNew();
@@ -204,6 +266,7 @@ public class MovieOpcodeTests
         using var clock = new ManualMoviePacingClock();
         using var decoder = new FfmpegMovieDecoder(source, clock);
 
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
         Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
         Assert.Equal("synthetic decode failure", decoder.Failure);
     }
@@ -229,6 +292,7 @@ public class MovieOpcodeTests
         Assert.Equal(new long[] { 0, 50 }, chunks.Select(chunk => chunk.PresentationTimeMs));
         Assert.Equal(100, chunks.Sum(chunk => chunk.FrameCount));
 
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
         decoder.MarkAudioSubmitted();
         clock.AdvanceTo(99);
         Assert.False(decoder.IsCompleted);
@@ -323,6 +387,7 @@ public class MovieOpcodeTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "MODAL", new List<(int, Operand[])>
         {
+            (0x1f8, new[] { new Operand(0, 42), new Operand(0, 800), new Operand(0, 600), new Operand(0, 0) }),
             (0x20f, new[] { new Operand(0, 0x335f), new Operand(0, 42), new Operand(0, 4) }),
             (0x55, new[] { new Operand(3, 0x1234), new Operand(0, 0x5678) }),
             (0x2, System.Array.Empty<Operand>()),
@@ -335,7 +400,9 @@ public class MovieOpcodeTests
         Assert.Equal(new[] { (0x335fL, 42, 4L) }, host.ModalMovies);
         Assert.Equal(0x5678, vm.Globals[0x1234]);
         vm.Gfx.BindDraw(1, 42, 0, 0, 1, 1, 0, 0);
-        Assert.Equal(0x335f, vm.Gfx.SnapshotVisibleObjects().Single().SurfaceResId);
+        var visible = vm.Gfx.SnapshotVisibleObjects().Single();
+        Assert.Equal(0, visible.SurfaceResId);
+        Assert.Equal(-1, visible.ColorKey);
     }
 
     [Fact]
@@ -382,7 +449,9 @@ public class MovieOpcodeTests
         Assert.Equal(0x5678, vm.Globals[0x1234]);
         Assert.Equal(new[] { (0x33L, 5, 2L, 0L) }, host.Movies);
         vm.Gfx.BindDraw(1, 5, 0, 0, 1, 1, 0, 0);
-        Assert.Equal(0x33, vm.Gfx.SnapshotVisibleObjects().Single().SurfaceResId);
+        var visible = vm.Gfx.SnapshotVisibleObjects().Single();
+        Assert.Equal(0, visible.SurfaceResId);
+        Assert.Equal(-1, visible.ColorKey);
     }
 
     [Fact]
@@ -409,7 +478,9 @@ public class MovieOpcodeTests
         vm.Run();
 
         Assert.Equal(0, resourceDuringSetup);
-        Assert.Equal(0x33, vm.Gfx.SnapshotVisibleObjects().Single().SurfaceResId);
+        var visible = vm.Gfx.SnapshotVisibleObjects().Single();
+        Assert.Equal(0, visible.SurfaceResId);
+        Assert.Equal(-1, visible.ColorKey);
     }
 
     [Fact]
@@ -503,6 +574,38 @@ public class MovieOpcodeTests
         Assert.Equal(expectedName, entry?.Name);
         var movie = resources.ReadMovie(entry!);
         Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
+    }
+
+    [Theory]
+    [InlineData(0x335f, "LOGO.AGF")]
+    [InlineData(0x3364, "OP.AGF")]
+    public void ModalMovieOpeningFramesAreOpaqueAndHaveContinuousCadence(
+        int resourceId, string expectedName)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(resourceId)!);
+
+        using var movie = new FfmpegMovieSession(payload);
+        Assert.Equal(expectedName, payload.Name);
+        long priorTimestamp = -1;
+        byte[]? firstPixels = null;
+        bool openingChanged = false;
+        for (int frameIndex = 0; frameIndex < 20; frameIndex++)
+        {
+            Assert.True(movie.TryDecodeNextVideoFrame(out var frame),
+                $"{expectedName} ended before opening frame {frameIndex}");
+            if (priorTimestamp >= 0)
+                Assert.InRange(frame.PresentationTimeMs - priorTimestamp, 33, 34);
+            priorTimestamp = frame.PresentationTimeMs;
+            firstPixels ??= frame.Image.Pixels;
+            openingChanged |= !firstPixels.AsSpan().SequenceEqual(frame.Image.Pixels);
+            for (int alpha = 3; alpha < frame.Image.Pixels.Length; alpha += 4)
+                Assert.Equal((byte)255, frame.Image.Pixels[alpha]);
+        }
+        Assert.True(openingChanged, $"{expectedName} should change within its first 20 decoded frames");
     }
 
     [Theory]
