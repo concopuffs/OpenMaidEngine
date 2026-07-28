@@ -2515,12 +2515,24 @@ backend-native approximation for every shipped mode-3 call because Himegari alwa
 `(1,1)` radii. The same style applicator covers live ADV, retained History, and surface text. Mode 2
 remains unimplemented and is unused by this game.
 
-The remaining raster behavior is still an approximation: weight 700 uses Godot
-`VariationEmbolden=1.2`, and mode 3 does not reproduce AGE's exact sampled coverage at each ellipse
-angle. Exact GDI-compatible advances, grayscale coverage, and edge pixels require a dedicated glyph
-backend (or a deliberately calibrated approximation) behind the existing engine-owned layout/style
-contract. Portable configurable face substitutions/defaults are intentionally deferred to the broader
-runtime configuration design.
+A 2026-07-28 Windows calibration compared exact-profile GDI
+`CreateFontIndirectW`/`GetTextExtentPoint32W`/`GetGlyphOutlineW(GGO_GRAY4_BITMAP)` results with Godot's
+loaded TTCs. Six mixed kanji, kana, punctuation, full-width digit, and Latin samples found exact
+horizontal agreement for regular 24px Mincho and regular 16px Gothic. GDI also produced identical
+measurements with the native negative half-height `lfWidth` and `lfWidth=0`; no horizontal scaling is
+needed for those profiles on this installation.
+
+The old `VariationEmbolden=1.2` was not a good weight-700 approximation: the sample glyph `魔` had
+coverage sum 6,651 versus native 4,615 (+44%), while complete strings remained as much as 9 pixels
+narrower than native. `VariationEmbolden=0.53` plus one pixel of glyph spacing yields coverage 4,600
+(-0.3%) and bounds all six complete-string errors to 0..3 pixels. Godot reports a 25px/17px line box
+for the native 24px/16px profiles, so presentation subtracts that one-pixel backend excess from the
+script's extra line spacing, retaining AGE's requested total line advance. The calibration is applied
+per bold font variation and through the common live/History/surface style path.
+
+Mode 3 still does not reproduce AGE's exact sampled coverage at each ellipse angle. Exact per-pixel
+parity beyond the calibrated profiles requires a dedicated glyph backend. Portable configurable face
+substitutions/defaults are intentionally deferred to the broader runtime configuration design.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 

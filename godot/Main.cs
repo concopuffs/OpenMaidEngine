@@ -16,6 +16,11 @@ public partial class Main : Godot.Control
 {
     private const int ScreenWidth = 800;
     private const int ScreenHeight = 600;
+    // Calibrated against GDI GetGlyphOutlineW(GGO_GRAY4_BITMAP) for Himegari's 24px MS Mincho
+    // weight-700 profile. This matches native glyph coverage while one pixel of spacing approximates
+    // GDI's synthetic-bold advance expansion; see docs/engine-re.md.
+    private const float NativeBoldEmbolden = 0.53f;
+    private const int NativeBoldGlyphSpacing = 1;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // 800x600 immediate-mode canvas
     private ImageTexture _screenTex = null!;
@@ -1374,6 +1379,7 @@ public partial class Main : Godot.Control
     {
         int fontSize = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
         Font regularFont = ResolvePresentationFont(style.FontFace, out string fontKey);
+        Font presentationFont = regularFont;
         if (style.Bold)
         {
             if (!_presentationBoldFonts.TryGetValue(fontKey, out FontVariation? boldFont))
@@ -1381,25 +1387,30 @@ public partial class Main : Godot.Control
                 boldFont = new FontVariation
                 {
                     BaseFont = regularFont,
-                    VariationEmbolden = 1.2f,
+                    VariationEmbolden = NativeBoldEmbolden,
+                    SpacingGlyph = NativeBoldGlyphSpacing,
                 };
                 _presentationBoldFonts.Add(fontKey, boldFont);
             }
-            label.AddThemeFontOverride("font", boldFont);
+            presentationFont = boldFont;
         }
-        else label.AddThemeFontOverride("font", regularFont);
+        label.AddThemeFontOverride("font", presentationFont);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
         Color effectColor = RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f));
         AdvTextEffectTheme effect = ResolveAdvTextEffectTheme(style);
         label.AddThemeColorOverride("font_outline_color", effectColor);
         label.AddThemeColorOverride("font_shadow_color", effect.ShadowEnabled ? effectColor : Colors.Transparent);
-        label.AddThemeConstantOverride("line_spacing", style.LineSpacing);
+        label.AddThemeConstantOverride("line_spacing",
+            CalibratedLineSpacing(style.LineSpacing, fontSize, presentationFont.GetHeight(fontSize)));
         label.AddThemeConstantOverride("outline_size", effect.OutlineSize);
         label.AddThemeConstantOverride("shadow_offset_x", effect.ShadowOffsetX);
         label.AddThemeConstantOverride("shadow_offset_y", effect.ShadowOffsetY);
         label.AddThemeConstantOverride("shadow_outline_size", 0);
     }
+
+    private static int CalibratedLineSpacing(int nativeSpacing, int nativeFontHeight, float backendFontHeight)
+        => nativeSpacing + nativeFontHeight - System.Math.Max(1, (int)System.MathF.Round(backendFontHeight));
 
     private readonly record struct AdvTextEffectTheme(
         int OutlineSize,
@@ -2104,18 +2115,35 @@ public partial class Main : Godot.Control
         });
         textEffectModesOk &= textEffectSmoke.GetThemeConstant("outline_size") == 1
                              && textEffectSmoke.GetThemeColor("font_shadow_color").A < 0.01f;
+        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
+        {
+            PrimaryFontSize = 24,
+            Bold = true,
+            FontFace = "ＭＳ 明朝",
+            LineSpacing = 8,
+        });
+        var calibratedBold = textEffectSmoke.GetThemeFont("font") as FontVariation;
+        bool fontCalibrationOk = calibratedBold != null
+                                 && System.Math.Abs(calibratedBold.VariationEmbolden
+                                                    - NativeBoldEmbolden) < 0.001f
+                                 && calibratedBold.SpacingGlyph == NativeBoldGlyphSpacing
+                                 && CalibratedLineSpacing(8, 24, 25) == 7
+                                 && CalibratedLineSpacing(9, 16, 17) == 8
+                                 && textEffectSmoke.GetThemeConstant("line_spacing")
+                                    == CalibratedLineSpacing(
+                                        8, 24, calibratedBold.GetHeight(24));
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
-              && bgmReplacementCancelsFade && textEffectModesOk;
+              && bgmReplacementCancelsFade && textEffectModesOk && fontCalibrationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
-                         $"bgm-fade-replacement=ok; text-effect-modes=ok");
+                         $"bgm-fade-replacement=ok; text-effect-modes=ok; font-calibration=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
-                      $"text-effect-modes={textEffectModesOk}");
+                      $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 
