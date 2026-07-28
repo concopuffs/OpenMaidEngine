@@ -1720,9 +1720,29 @@ generic save operation:
 | `0x1ae(status,slot,surface)` | write `SAVE%02d.STH` from a surface |
 | `0x1af(status,slot,surface)` | load `SAVE%02d.STH` into a surface |
 
-Opcode `0x19d`, adjacent in number and used by CGMODE/ED/HMODE/MMODE, is not persistence: its handler is a
-resource/compatibility lookup. It is deliberately excluded rather than named from proximity. The actual
-persistence cluster has calls in `SAVE`, `SELSTAGE`, `GAMESTART`, `GAMECLEAR`, `INPUTNAME`, and INIT2.
+Opcode `0x19d`, adjacent in number and used by CGMODE/ED/HMODE/MMODE, queries the shared-profile catalog
+unlock database:
+
+- `op_0x19d_is_catalog_resource_unlocked@0x427810` fetches `(out, packed_resource_id)`. Packed append
+  ids return zero when the configured save version is older than 3.10; otherwise it calls
+  `asset_catalog_is_resource_unlocked@0x415920` on `EngineCtx+0x9c24c`.
+- Base ids use the marker table at asset-catalog `+0x41c`. A nonzero high byte selects the append
+  pointer at `+0x3844 + selector*4`; the low 24 bits are the table index.
+- The marker is valid exactly when its low word equals
+  `low16(index * 0x053d6f99 + 0xb0b0b0b0)`. `asset_catalog_mark_resource_opened@0x44e410`, called only
+  after `asset_open_indexed_entry` succeeds, writes the plain marker and its modular-exponent encrypted
+  SAVE.DAT counterpart.
+- `shared_profile_load` decrypts base and flattened append marker arrays through
+  `modular_exponent_u32@0x471e60`, then
+  `asset_catalog_restore_resource_unlock_marker@0x404ca0` installs and re-encrypts them under the
+  current session key. The two leading table DWORDs are private-exponent XOR `0x87912345` and modulus.
+
+CGMODE passes each CGINIT full-image AGF id; HMODE passes each SPINIT scene-script id. The copied port
+profile validates all 851 gallery images and all 118 H-scene scripts. The former all-locked presentation
+was therefore an opcode/runtime integration defect, not missing save data. The port now decodes and
+queries the native markers, marks successful VFS opens, and writes a native-decodable encrypted table.
+The actual numbered/selected-cell persistence cluster remains the adjacent `0x19e` through `0x1af`
+family described above.
 
 **Numbered operation status contracts.** Save/load open failure is `1`; metadata uses `0=valid`,
 `1=absent/open failure`, and `2=invalid/incompatible`. Delete/copy attempt both members of the pair and use

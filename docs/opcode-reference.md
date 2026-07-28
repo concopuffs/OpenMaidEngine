@@ -323,6 +323,13 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 
 This is the logical inverse of op 0x194 string-equals. Skipping it is stateful: the destination is not cleared. At BUNKI@0x905, local 0x99 still contains a nonzero graphics handle, so the missing write falsely reserves a 30-pixel title row and shifts every choice down. The C# VM implements ordinal inequality through the shared string resolver; focused tests cover literal/global/local/pointer operands and the exact empty-title stale-handle overwrite.
 
+### 0x19d `is-catalog-resource-unlocked` (is-catalog-resource-unlocked, argc 2)
+- **summary:** (out)(packed_resource_id) - return 1 when the shared SAVE.DAT catalog marker for the selected base or append resource decodes to AGE's deterministic per-index unlock stamp, otherwise 0.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x19d_handler@0x427810 fetches operand 2, rejects packed append ids when `set:SaveVersion1/2` is older than 3.10, calls asset_catalog_is_resource_unlocked@0x415920 on ctx+0x9c24c, and writes the bool to operand 1. The helper selects base table +0x41c or append pointer table +0x3844 and compares the stored low word to `(short)index * 0x6f99 - 0x4f50`. asset_catalog_mark_resource_opened@0x44e410 writes the equivalent full stamp and encrypted profile marker after asset_open_indexed_entry succeeds. shared_profile_load decodes the catalog arrays with modular exponentiation before populating those tables. Corpus: four calls, in CGMODE, HMODE, MMODE, and ED. The installed port SAVE.DAT decodes to 7,966/13,208 base markers and 75/81 append markers; all 851 CGINIT gallery images and all 118 SPINIT H-scene scripts validate unlocked.
+
+Base ids use the low 24-bit index in the primary catalog marker table. A nonzero high-byte selector addresses that append catalog's independent table; selectors require SaveVersion 3.10 or later, and AGE's signed selector lookup only supports 1..127. Successful native catalog opens write the stamp `low16(index * 0x053d6f99 + 0xb0b0b0b0)` and its encrypted SAVE.DAT form. CGMODE tests CGINIT image ids and HMODE tests SPINIT scene-script ids through this predicate. Port status (2026-07-28): shared-profile import decodes both catalog sections, successful VFS opens mark resources, shared SAVE.DAT writes native-decodable encrypted markers, and the opcode returns the live profile predicate.
+
 ### 0x1a6 `half-byte-string-length` (halve-strlen, argc 2)
 - **summary:** Write half the resolved string's byte length, using integer truncation.
 - **grounding:** source=investigation, confidence=high
@@ -1331,10 +1338,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x196 `display-furigana` (display-furigana, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x19d `u0041C680` (u0041C680, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1a5 `set-font` (set-font, argc 1)
 - **summary:** —

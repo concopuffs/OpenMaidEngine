@@ -3351,28 +3351,29 @@ evidence = "Ghidra /v2: op_0x19c_resume_adv_skip_service@0x4165a0 sets ctx+0x551
 
 [[opcode]]
 op = 0x19d
-label = "u0041C680"
+label = "is-catalog-resource-unlocked"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041C680"
-category = "unknown"
-summary = ""
+name = "is-catalog-resource-unlocked"
+category = "compute"
+summary = "(out)(packed_resource_id) - return 1 when the shared SAVE.DAT catalog marker for the selected base or append resource decodes to AGE's deterministic per-index unlock stamp, otherwise 0."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+details = "Base ids use the low 24-bit index in the primary catalog marker table. A nonzero high-byte selector addresses that append catalog's independent table; selectors require SaveVersion 3.10 or later, and AGE's signed selector lookup only supports 1..127. Successful native catalog opens write the stamp `low16(index * 0x053d6f99 + 0xb0b0b0b0)` and its encrypted SAVE.DAT form. CGMODE tests CGINIT image ids and HMODE tests SPINIT scene-script ids through this predicate. Port status (2026-07-28): shared-profile import decodes both catalog sections, successful VFS opens mark resources, shared SAVE.DAT writes native-decodable encrypted markers, and the opcode returns the live profile predicate."
+evidence = "Ghidra /v2: op_0x19d_handler@0x427810 fetches operand 2, rejects packed append ids when `set:SaveVersion1/2` is older than 3.10, calls asset_catalog_is_resource_unlocked@0x415920 on ctx+0x9c24c, and writes the bool to operand 1. The helper selects base table +0x41c or append pointer table +0x3844 and compares the stored low word to `(short)index * 0x6f99 - 0x4f50`. asset_catalog_mark_resource_opened@0x44e410 writes the equivalent full stamp and encrypted profile marker after asset_open_indexed_entry succeeds. shared_profile_load decodes the catalog arrays with modular exponentiation before populating those tables. Corpus: four calls, in CGMODE, HMODE, MMODE, and ED. The installed port SAVE.DAT decodes to 7,966/13,208 base markers and 75/81 append markers; all 851 CGINIT gallery images and all 118 SPINIT H-scene scripts validate unlocked."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "out"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "packed_resource_id"
 observed_types = ["imm", "l-ptr"]
 
 [[opcode]]

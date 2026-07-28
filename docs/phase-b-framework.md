@@ -272,6 +272,22 @@ voice ids were reaching `play-voice` but failing the port's SC-section-only look
 section. The initial compatibility fix added a raw fallback, but later native RE proved the broader rule:
 voice and frontend texture operands are already universal packed catalog ids and never receive a scene base.
 
+**Extra Room CG/H-scene unlock database (`CGMODE.BIN` / `HMODE.BIN`, 2026-07-28).** The copied
+`user://SAVE/SAVE.DAT` was intact: native decode finds 7,966/13,208 valid base-catalog markers and
+75/81 append markers, including all 851 CGINIT gallery-image ids and all 118 SPINIT H-scene script ids.
+The encyclopedia and New Game settings looked correct because they restore selected integer cells through
+`0x1a3`; CGMODE/HMODE instead filter their entries through opcode `0x19d`, which the port still stubbed and
+therefore left as zero/locked.
+
+Native RE identifies `0x19d` as the profile catalog-resource unlock predicate. Successful catalog opens
+write a deterministic per-index stamp into a live marker table and its modular-exponent encrypted
+SAVE.DAT table; shared-profile load decrypts base and selector-keyed append arrays before the query runs.
+`SharedProfile` now owns that decoded set, the VM implements the query, and a shared VFS wrapper marks only
+successful script/texture/audio/movie/cursor opens. Saving emits native-decodable base and append tables,
+so imported unlocks display immediately and newly encountered resources persist. Focused regressions cover
+exact native ciphertexts, base/append queries, successful-open timing, round-trip import/export, and known
+installed CG/H-scene entries.
+
 **Natural Game Start diagnostic gate (2026-07-21; captured).** The opt-in `-StartupDiagnostics` route kept
 the persistent `SYSTEM4` root and native exit semantics and added no seeds, boot prefix, timing changes, or
 input automation. A user-driven cold boot traversed the complete initialization family, `LOGO`/`LOGO.AGF`,

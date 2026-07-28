@@ -1191,6 +1191,9 @@ public sealed class VirtualMachine
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
                 return pc + 1;
+            case "is-catalog-resource-unlocked": // 0x19d
+                Write(a[0], _sharedProfile.IsCatalogResourceUnlocked(Read(a[1])) ? 1 : 0);
+                return pc + 1;
             case "save-numbered-slot": // 0x19e
             {
                 if (_nativeDatStore == null)

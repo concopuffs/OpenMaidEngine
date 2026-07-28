@@ -231,13 +231,38 @@ public partial class Main : Godot.Control
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        // Persistence opcodes retain AGE's native filenames and binary formats, but the port owns the
+        // root interception point. Keep authored saves isolated from the original installation under
+        // Godot's per-application user directory.
+        var nativeSaveStore = new DirectoryNativeDatStore(
+            ProjectSettings.GlobalizePath("user://SAVE"),
+            new NativeSaveIdentity(
+                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
+                SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
+        var sharedProfile = new SharedProfile();
+        if (!_selftest) sharedProfile.Load(nativeSaveStore);
+
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
         // runs a SYNTHESIZED scene (not a real scene in a crippled mode) so its output is deterministic.
         Script script;
         IScriptProvider provider;
         Sys4ScriptProvider? scripts = null;
+        IAssetStore? trackedAssetStore = null;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
-        else { scripts = Sys4ScriptProvider.Load(table); script = scripts.RequireByName(scene + ".BIN"); provider = scripts; }
+        else
+        {
+            var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+            sharedProfile.ConfigureCatalogUnlockSlots(
+                catalog.RawSlots.Count,
+                catalog.AppendPacks.Select(pair =>
+                    new KeyValuePair<int, int>(pair.Key, pair.Value.RawSlots.Count)));
+            trackedAssetStore = new CatalogTrackingAssetStore(
+                new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir),
+                entry => sharedProfile.MarkCatalogResourceOpened(entry.PackedId));
+            scripts = new Sys4ScriptProvider(table, catalog, trackedAssetStore);
+            script = scripts.RequireByName(scene + ".BIN");
+            provider = scripts;
+        }
         _scripts = scripts;
         bool directSceneHarness = !_selftest
             && !scene.Equals("SYSTEM4", System.StringComparison.OrdinalIgnoreCase);
@@ -246,7 +271,9 @@ public partial class Main : Godot.Control
             pageMapPath = System.IO.Path.Combine(Paths.Build, $"page-map-{scene.ToUpperInvariant()}.jsonl");
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
-        var resources = scripts != null ? new ResourceMap(scripts.Catalog) : ResourceMap.Load();
+        var resources = scripts != null
+            ? new ResourceMap(scripts.Catalog, trackedAssetStore)
+            : ResourceMap.Load();
         _host = new GodotAdvHost(
             this, resources, scene, _clock, _locator, _timeline,
             synchronizeExplicitPresentation: !_selftest)
@@ -263,16 +290,6 @@ public partial class Main : Godot.Control
         Age.Engine.Diagnostics.ITraceSink sink = _trace;
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
-        // Persistence opcodes retain AGE's native filenames and binary formats, but the port owns the
-        // root interception point. Keep authored saves isolated from the original installation under
-        // Godot's per-application user directory.
-        var nativeSaveStore = new DirectoryNativeDatStore(
-            ProjectSettings.GlobalizePath("user://SAVE"),
-            new NativeSaveIdentity(
-                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
-                SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
-        var sharedProfile = new SharedProfile();
-        if (!_selftest) sharedProfile.Load(nativeSaveStore);
         _vm = new VirtualMachine(script, table, _host,
             new VmOptions(
                 MaxSteps: 20_000_000,

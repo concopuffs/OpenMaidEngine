@@ -468,7 +468,9 @@ JSON inspection/export, migrations, and namespaced mod state are additive extend
 replacement for compatibility-mode import/export. The recovered native contract lives in
 `docs/engine-re.md`. The common container codec/store and typed shared `SAVE.DAT` payload landed on
 2026-07-24. Profile-owned selected integer/string cells now survive across scene VMs and are wired to
-their four native opcodes while opaque catalog/version sections round-trip unchanged. Native `RT.DAT`
+their four native opcodes. The base/append catalog sections are now decoded as encrypted resource-seen
+markers: opcode `0x19d` queries them, successful VFS opens add them, and compatibility saves write
+native-decodable tables. Native `RT.DAT`
 import/export and the packed-script/T1 ReadTextDB queue/commit/query lifecycle are also implemented,
 including `message:ReadTextSkip` ops `0x1ca`/`0x1cb` and state query `0x1cc`. Numbered active-frame state
 is now implemented in native layout 3: metadata query, paired `.DAT`/`.STH` lifecycle, exact native BMP

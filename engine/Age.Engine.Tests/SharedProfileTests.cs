@@ -190,4 +190,153 @@ public class SharedProfileTests
         Assert.Equal(42, jsonClone.Globals[0x900]);
         Assert.Equal(0, jsonClone.SharedProfile.LoadInteger(0x900));
     }
+
+    [Fact]
+    public void CatalogUnlockMarkersRoundTripBaseAndAppendResources()
+    {
+        var profile = new SharedProfile();
+        profile.ConfigureCatalogUnlockSlots(
+            6000,
+            new Dictionary<int, int> { [1] = 32 });
+        profile.MarkCatalogResourceOpened(5407);
+        profile.MarkCatalogResourceOpened(0x01000011);
+
+        SharedProfilePayload encoded = profile.Snapshot();
+
+        Assert.Equal(6002, encoded.CatalogCompatibilityValues.Count);
+        Assert.Equal(0x8791233au, encoded.CatalogCompatibilityValues[0]);
+        Assert.Equal(0x6868a8e1u, encoded.CatalogCompatibilityValues[5407 + 2]);
+        Assert.Equal(32u, encoded.ExtendedSelectorCounts[1]);
+        Assert.Equal(34, encoded.ExtendedValues.Count);
+        Assert.Equal(0x42d5ee4eu, encoded.ExtendedValues[17 + 2]);
+
+        var reloaded = new SharedProfile();
+        reloaded.Replace(encoded);
+
+        Assert.True(reloaded.IsCatalogResourceUnlocked(5407));
+        Assert.True(reloaded.IsCatalogResourceUnlocked(0x01000011));
+        Assert.False(reloaded.IsCatalogResourceUnlocked(5406));
+        Assert.False(reloaded.IsCatalogResourceUnlocked(0x01000012));
+        Assert.False(reloaded.IsCatalogResourceUnlocked(0x80000000));
+    }
+
+    [Fact]
+    public void CatalogUnlockOpcodeReturnsImportedProfilePredicate()
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        Script script = ScriptAssembler.Assemble(table, "CATALOG_UNLOCK_QUERY", new List<(int, Operand[])>
+        {
+            (0x19d, [new Operand(GlobalInt, 0x900), new Operand(Immediate, 5407)]),
+            (0x19d, [new Operand(GlobalInt, 0x901), new Operand(Immediate, 5406)]),
+            (0x19d, [new Operand(GlobalInt, 0x902), new Operand(Immediate, 0x01000011)]),
+            (0x2, []),
+        }, []);
+        var profile = new SharedProfile();
+        profile.ConfigureCatalogUnlockSlots(6000, new Dictionary<int, int> { [1] = 32 });
+        profile.MarkCatalogResourceOpened(5407);
+        profile.MarkCatalogResourceOpened(0x01000011);
+        var vm = new VirtualMachine(
+            script, table, new RecordingHost(), sharedProfile: profile);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.Globals[0x900]);
+        Assert.Equal(0, vm.Globals[0x901]);
+        Assert.Equal(1, vm.Globals[0x902]);
+    }
+
+    [Fact]
+    public void TrackingStoreMarksOnlySuccessfulCatalogOpens()
+    {
+        var profile = new SharedProfile();
+        profile.ConfigureCatalogUnlockSlots(8);
+        var tracker = new CatalogTrackingAssetStore(
+            new SelectiveAssetStore(),
+            entry => profile.MarkCatalogResourceOpened(entry.PackedId));
+        var available = new AssetEntry("A.BIN", "DATA1.ALF", 0, 1, RawIndex: 3);
+        var missing = new AssetEntry("MISSING.BIN", "DATA1.ALF", 0, 1, RawIndex: 4);
+
+        Assert.Equal(new byte[] { 42 }, tracker.ReadAll(available));
+        Assert.Throws<FileNotFoundException>(() => tracker.ReadAll(missing));
+
+        Assert.True(profile.IsCatalogResourceUnlocked(3));
+        Assert.False(profile.IsCatalogResourceUnlocked(4));
+    }
+
+    [Fact]
+    public void InstalledSharedProfileUnlocksKnownCgAndHSceneResourcesWhenPresent()
+    {
+        string root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Eushully", "姫狩りダンジョンマイスター", "SAVE");
+        if (!File.Exists(Path.Combine(root, "SAVE.DAT"))) return;
+
+        var store = new DirectoryNativeDatStore(
+            root,
+            new NativeSaveIdentity(
+                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター", 3, 10));
+        var profile = new SharedProfile();
+
+        Assert.True(profile.Load(store));
+        Assert.True(profile.IsCatalogResourceUnlocked(0x3324)); // ED.AGF
+
+        using var cgDocument = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(Paths.Build, "data", "CGINIT.json")));
+        uint[] cgIds = cgDocument.RootElement.GetProperty("records").EnumerateArray()
+            .Select(record => record.GetProperty("gallery_image_asset_id").GetUInt32())
+            .ToArray();
+        Assert.Equal(851, cgIds.Length);
+        Assert.All(cgIds, id => Assert.True(
+            profile.IsCatalogResourceUnlocked(id), $"CG resource 0x{id:x} should be unlocked"));
+
+        using var hDocument = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(Paths.Build, "data", "SPINIT.json")));
+        uint[] hSceneIds = hDocument.RootElement.GetProperty("records").EnumerateArray()
+            .SelectMany(page => page.GetProperty("script_resource_ids").EnumerateArray())
+            .Select(id => id.GetUInt32())
+            .Where(id => id != 0)
+            .ToArray();
+        Assert.Equal(118, hSceneIds.Length);
+        Assert.All(hSceneIds, id => Assert.True(
+            profile.IsCatalogResourceUnlocked(id), $"H-scene resource 0x{id:x} should be unlocked"));
+
+        int newlyOpenedId = Enumerable.Range(0, 13_208)
+            .First(id => !profile.IsCatalogResourceUnlocked(id));
+        profile.MarkCatalogResourceOpened(newlyOpenedId);
+        string roundTripRoot = Path.Combine(
+            Path.GetTempPath(), "age-installed-profile-unlocks-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var roundTripStore = new DirectoryNativeDatStore(roundTripRoot, store.Identity);
+            profile.Save(roundTripStore, Timestamp, profile.AccumulatedPlaySeconds);
+            var reloaded = new SharedProfile();
+
+            Assert.True(reloaded.Load(roundTripStore));
+            Assert.True(reloaded.IsCatalogResourceUnlocked(newlyOpenedId));
+            Assert.All(cgIds, id => Assert.True(reloaded.IsCatalogResourceUnlocked(id)));
+            Assert.All(hSceneIds, id => Assert.True(reloaded.IsCatalogResourceUnlocked(id)));
+        }
+        finally
+        {
+            if (Directory.Exists(roundTripRoot)) Directory.Delete(roundTripRoot, recursive: true);
+        }
+    }
+
+    private sealed class SelectiveAssetStore : IAssetStore
+    {
+        public Stream Open(AssetEntry entry)
+        {
+            if (entry.Name == "MISSING.BIN") throw new FileNotFoundException();
+            return new MemoryStream([42], writable: false);
+        }
+
+        public byte[] ReadAll(AssetEntry entry)
+        {
+            using Stream stream = Open(entry);
+            var result = new byte[stream.Length];
+            stream.ReadExactly(result);
+            return result;
+        }
+    }
 }

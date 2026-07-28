@@ -6,9 +6,9 @@ using System.Text;
 namespace Age.Engine.Persistence;
 
 /// <summary>
-/// Typed logical contents of AGE's shared SAVE.DAT payload. The catalog and extended arrays are
-/// intentionally opaque: the selected-cell service owns only the integer and string maps, while
-/// native import/export must preserve the other engine-owned sections losslessly.
+/// Typed logical contents of AGE's shared SAVE.DAT payload. CatalogCompatibilityValues retains the
+/// historical codec-facing name but carries AGE's encrypted base resource-unlock table; the selector
+/// and extended arrays carry the parallel append-catalog tables.
 /// </summary>
 public sealed class SharedProfilePayload
 {
@@ -337,17 +337,28 @@ public static class SharedProfilePayloadCodec
 }
 
 /// <summary>
-/// Profile-lifetime selected cells plus the opaque SAVE.DAT sections and independent RT.DAT read
-/// history. VM opcodes mutate this object; explicit Load/Save calls own both filesystem lifecycles.
+/// Profile-lifetime selected cells, catalog resource-unlock markers, and independent RT.DAT read
+/// history. VM opcodes and successful catalog opens mutate this object; explicit Load/Save calls own
+/// both filesystem lifecycles.
 /// </summary>
 public sealed class SharedProfile
 {
+    private const uint CatalogPrivateExponentMask = 0x87912345;
+    private const uint CanonicalCatalogPrivateExponent = 127;
+    private const uint CanonicalCatalogPublicExponent = 14_478_031;
+    private const uint CanonicalCatalogModulus = 1_838_797_217;
+
     private uint[] _catalogCompatibilityValues = Array.Empty<uint>();
     private readonly Dictionary<int, uint> _integerCells = new();
     private readonly Dictionary<int, string> _stringCells = new();
     private uint[] _extendedSelectorCounts = Array.Empty<uint>();
     private uint[] _extendedValues = Array.Empty<uint>();
     private uint[] _reservedTail = new uint[SharedProfilePayloadCodec.ReservedTailDwordCount];
+    private readonly object _catalogUnlockLock = new();
+    private readonly HashSet<uint> _unlockedCatalogResources = new();
+    private int _baseCatalogSlotCount;
+    private readonly int[] _appendCatalogSlotCounts = new int[SharedProfilePayloadCodec.ExtendedSelectorCount];
+    private bool _catalogUnlocksDirty;
     private uint _accumulatedPlaySeconds;
 
     public IReadOnlyDictionary<int, uint> IntegerCells => _integerCells;
@@ -356,6 +367,71 @@ public sealed class SharedProfile
     public ReadTextDatabase ReadText { get; } = new();
     /// <summary>The engine setting manipulated by opcodes 0x1ca/0x1cb.</summary>
     public bool ReadMessageSkipEnabled { get; set; }
+
+    /// <summary>
+    /// Set the mounted catalog geometry used when newly opened resources must be written back to
+    /// SAVE.DAT. Existing imported unlocks survive when catalogs grow; absent new slots begin locked.
+    /// </summary>
+    public void ConfigureCatalogUnlockSlots(
+        int baseSlotCount,
+        IEnumerable<KeyValuePair<int, int>>? appendSlotCounts = null)
+    {
+        if (baseSlotCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(baseSlotCount));
+
+        var configuredAppendCounts = new int[SharedProfilePayloadCodec.ExtendedSelectorCount];
+        if (appendSlotCounts != null)
+        {
+            foreach ((int selector, int count) in appendSlotCounts)
+            {
+                if (selector is <= 0 or >= 0x80)
+                    throw new ArgumentOutOfRangeException(
+                        nameof(appendSlotCounts), "Append catalog selectors must be in 1..127.");
+                if (count < 0 || count > 0x1000000)
+                    throw new ArgumentOutOfRangeException(
+                        nameof(appendSlotCounts), "Append catalog slot counts must fit the packed 24-bit index.");
+                configuredAppendCounts[selector] = count;
+            }
+        }
+
+        lock (_catalogUnlockLock)
+        {
+            bool changed = _baseCatalogSlotCount != baseSlotCount
+                           || !_appendCatalogSlotCounts.SequenceEqual(configuredAppendCounts);
+            _baseCatalogSlotCount = baseSlotCount;
+            configuredAppendCounts.CopyTo(_appendCatalogSlotCounts, 0);
+            _catalogUnlocksDirty |= changed;
+        }
+    }
+
+    /// <summary>AGE marks a resource unlocked only after its catalog entry opens successfully.</summary>
+    public void MarkCatalogResourceOpened(long packedId)
+    {
+        if (packedId < 0 || packedId > uint.MaxValue) return;
+        uint id = unchecked((uint)packedId);
+        int selector = (int)(id >> 24);
+        int index = (int)(id & 0x00ff_ffff);
+        if (selector >= 0x80) return;
+
+        lock (_catalogUnlockLock)
+        {
+            if (selector == 0)
+                _baseCatalogSlotCount = Math.Max(_baseCatalogSlotCount, checked(index + 1));
+            else
+                _appendCatalogSlotCounts[selector] =
+                    Math.Max(_appendCatalogSlotCounts[selector], checked(index + 1));
+            if (_unlockedCatalogResources.Add(id)) _catalogUnlocksDirty = true;
+        }
+    }
+
+    /// <summary>Native opcode 0x19d's profile-wide resource-seen predicate.</summary>
+    public bool IsCatalogResourceUnlocked(long packedId)
+    {
+        if (packedId < 0 || packedId > uint.MaxValue) return false;
+        uint id = unchecked((uint)packedId);
+        if ((id >> 24) >= 0x80) return false;
+        lock (_catalogUnlockLock) return _unlockedCatalogResources.Contains(id);
+    }
 
     public void StoreInteger(int address, long value)
     {
@@ -408,31 +484,60 @@ public sealed class SharedProfile
     {
         ArgumentNullException.ThrowIfNull(store);
         NativeSaveMetadata metadata = store.Identity.CreateMetadata(timestamp, accumulatedPlaySeconds);
-        byte[] payload = SharedProfilePayloadCodec.Encode(Snapshot(), metadata);
+        SharedProfilePayload snapshot = Snapshot();
+        byte[] payload = SharedProfilePayloadCodec.Encode(snapshot, metadata);
         store.SaveShared(payload, timestamp, accumulatedPlaySeconds);
+        lock (_catalogUnlockLock)
+        {
+            _catalogCompatibilityValues = snapshot.CatalogCompatibilityValues.ToArray();
+            _extendedSelectorCounts = snapshot.ExtendedSelectorCounts.ToArray();
+            _extendedValues = snapshot.ExtendedValues.ToArray();
+            _catalogUnlocksDirty = false;
+        }
         _accumulatedPlaySeconds = accumulatedPlaySeconds;
         ReadText.Save(store);
     }
 
     public SharedProfilePayload Snapshot()
-        => new(
-            _catalogCompatibilityValues,
+    {
+        uint[] catalog;
+        uint[] selectors;
+        uint[] extended;
+        lock (_catalogUnlockLock)
+        {
+            if (_catalogUnlocksDirty)
+                (catalog, selectors, extended) = EncodeCatalogUnlockSections();
+            else
+            {
+                catalog = _catalogCompatibilityValues.ToArray();
+                selectors = _extendedSelectorCounts.ToArray();
+                extended = _extendedValues.ToArray();
+            }
+        }
+        return new SharedProfilePayload(
+            catalog,
             _integerCells,
             _stringCells,
-            _extendedSelectorCounts,
-            _extendedValues,
+            selectors,
+            extended,
             _reservedTail);
+    }
 
     public void Replace(SharedProfilePayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        _catalogCompatibilityValues = payload.CatalogCompatibilityValues.ToArray();
+        lock (_catalogUnlockLock)
+        {
+            _catalogCompatibilityValues = payload.CatalogCompatibilityValues.ToArray();
+            _extendedSelectorCounts = payload.ExtendedSelectorCounts.ToArray();
+            _extendedValues = payload.ExtendedValues.ToArray();
+            DecodeCatalogUnlockSections();
+            _catalogUnlocksDirty = false;
+        }
         _integerCells.Clear();
         foreach (var entry in payload.IntegerCells) _integerCells.Add(entry.Key, entry.Value);
         _stringCells.Clear();
         foreach (var entry in payload.StringCells) _stringCells.Add(entry.Key, entry.Value);
-        _extendedSelectorCounts = payload.ExtendedSelectorCounts.ToArray();
-        _extendedValues = payload.ExtendedValues.ToArray();
         _reservedTail = payload.ReservedTail.ToArray();
     }
 
@@ -446,12 +551,128 @@ public sealed class SharedProfile
 
     private void ClearSharedPayload()
     {
-        _catalogCompatibilityValues = Array.Empty<uint>();
+        lock (_catalogUnlockLock)
+        {
+            _catalogCompatibilityValues = Array.Empty<uint>();
+            _extendedSelectorCounts = Array.Empty<uint>();
+            _extendedValues = Array.Empty<uint>();
+            _unlockedCatalogResources.Clear();
+            _baseCatalogSlotCount = 0;
+            Array.Clear(_appendCatalogSlotCounts);
+            _catalogUnlocksDirty = false;
+        }
         _integerCells.Clear();
         _stringCells.Clear();
-        _extendedSelectorCounts = Array.Empty<uint>();
-        _extendedValues = Array.Empty<uint>();
         _reservedTail = new uint[SharedProfilePayloadCodec.ReservedTailDwordCount];
+    }
+
+    private void DecodeCatalogUnlockSections()
+    {
+        _unlockedCatalogResources.Clear();
+        _baseCatalogSlotCount = Math.Max(0, _catalogCompatibilityValues.Length - 2);
+        Array.Clear(_appendCatalogSlotCounts);
+
+        DecodeCatalogTable(_catalogCompatibilityValues, _baseCatalogSlotCount, 0, 0);
+
+        int encodedOffset = 0;
+        int availableExtendedSlots = Math.Max(0, _extendedValues.Length - 2);
+        for (int selector = 0; selector < _extendedSelectorCounts.Length
+                                   && selector < _appendCatalogSlotCounts.Length; selector++)
+        {
+            uint rawCount = _extendedSelectorCounts[selector];
+            int count = rawCount > int.MaxValue ? 0 : unchecked((int)rawCount);
+            _appendCatalogSlotCounts[selector] = count;
+            int readable = Math.Min(count, Math.Max(0, availableExtendedSlots - encodedOffset));
+            DecodeCatalogTable(_extendedValues, readable, encodedOffset, selector);
+            encodedOffset = checked(encodedOffset + readable);
+            if (readable != count) break;
+        }
+    }
+
+    private void DecodeCatalogTable(
+        IReadOnlyList<uint> encoded,
+        int count,
+        int encodedOffset,
+        int selector)
+    {
+        if (encoded.Count < 2 || encoded[1] == 0) return;
+        uint exponent = encoded[0] ^ CatalogPrivateExponentMask;
+        uint modulus = encoded[1];
+        for (int index = 0; index < count && encodedOffset + index + 2 < encoded.Count; index++)
+        {
+            uint cipher = encoded[encodedOffset + index + 2];
+            if (cipher == 0) continue;
+            uint plain = ModularPow(cipher, exponent, modulus);
+            if (unchecked((ushort)plain) != CatalogUnlockStamp(index)) continue;
+            _unlockedCatalogResources.Add(unchecked(((uint)selector << 24) | (uint)index));
+        }
+    }
+
+    private (uint[] Catalog, uint[] Selectors, uint[] Extended) EncodeCatalogUnlockSections()
+    {
+        uint[] catalog = NewEncodedCatalogTable(_baseCatalogSlotCount);
+        uint[] selectors = new uint[SharedProfilePayloadCodec.ExtendedSelectorCount];
+        int extendedSlotCount = 0;
+        for (int selector = 0; selector < selectors.Length; selector++)
+        {
+            int count = _appendCatalogSlotCounts[selector];
+            selectors[selector] = checked((uint)count);
+            extendedSlotCount = checked(extendedSlotCount + count);
+        }
+        uint[] extended = NewEncodedCatalogTable(extendedSlotCount);
+
+        int[] selectorOffsets = new int[selectors.Length];
+        int offset = 0;
+        for (int selector = 0; selector < selectors.Length; selector++)
+        {
+            selectorOffsets[selector] = offset;
+            offset = checked(offset + _appendCatalogSlotCounts[selector]);
+        }
+
+        foreach (uint id in _unlockedCatalogResources)
+        {
+            int selector = (int)(id >> 24);
+            int index = (int)(id & 0x00ff_ffff);
+            uint cipher = ModularPow(
+                CatalogUnlockStamp(index),
+                CanonicalCatalogPublicExponent,
+                CanonicalCatalogModulus);
+            if (selector == 0)
+            {
+                if (index < _baseCatalogSlotCount) catalog[index + 2] = cipher;
+            }
+            else if ((uint)selector < (uint)_appendCatalogSlotCounts.Length
+                     && index < _appendCatalogSlotCounts[selector])
+            {
+                extended[selectorOffsets[selector] + index + 2] = cipher;
+            }
+        }
+        return (catalog, selectors, extended);
+    }
+
+    private static uint[] NewEncodedCatalogTable(int slotCount)
+    {
+        var result = new uint[checked(slotCount + 2)];
+        result[0] = CanonicalCatalogPrivateExponent ^ CatalogPrivateExponentMask;
+        result[1] = CanonicalCatalogModulus;
+        return result;
+    }
+
+    private static ushort CatalogUnlockStamp(int index)
+        => unchecked((ushort)((uint)index * 0x053d6f99u + 0xb0b0b0b0u));
+
+    private static uint ModularPow(uint value, uint exponent, uint modulus)
+    {
+        if (modulus == 0) return 0;
+        ulong result = 1;
+        ulong factor = value % modulus;
+        for (int bit = 0; bit < 32; bit++)
+        {
+            if ((exponent & (1u << bit)) != 0)
+                result = result * factor % modulus;
+            factor = factor * factor % modulus;
+        }
+        return unchecked((uint)result);
     }
 
     private static void ValidateAddress(int address)

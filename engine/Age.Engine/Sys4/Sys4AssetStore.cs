@@ -7,6 +7,36 @@ public interface IAssetStore
     byte[] ReadAll(AssetEntry entry);
 }
 
+/// <summary>Reports only successful catalog opens, matching AGE's profile unlock marker timing.</summary>
+public sealed class CatalogTrackingAssetStore : IAssetStore
+{
+    private readonly IAssetStore _inner;
+    private readonly Action<AssetEntry> _opened;
+
+    public CatalogTrackingAssetStore(IAssetStore inner, Action<AssetEntry> opened)
+    {
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        _opened = opened ?? throw new ArgumentNullException(nameof(opened));
+    }
+
+    public Stream Open(AssetEntry entry)
+    {
+        Stream stream = _inner.Open(entry);
+        _opened(entry);
+        return stream;
+    }
+
+    public byte[] ReadAll(AssetEntry entry)
+    {
+        using Stream stream = Open(entry);
+        if (stream.Length > int.MaxValue)
+            throw new InvalidDataException($"{entry.Name}: payload is too large");
+        var bytes = new byte[checked((int)stream.Length)];
+        stream.ReadExactly(bytes);
+        return bytes;
+    }
+}
+
 /// <summary>Native base-game precedence: exact-basename loose roots first, indexed ALF range second.</summary>
 public sealed class Sys4AssetStore : IAssetStore
 {

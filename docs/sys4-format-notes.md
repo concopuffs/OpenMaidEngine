@@ -111,11 +111,11 @@ After decoding the common container, the shared payload is sequential:
 
 | Order | Field |
 |---:|---|
-| 1 | `catalog_count:u32`, then `catalog_values[catalog_count]:u32` |
+| 1 | `catalog_count:u32`, then the encrypted base-catalog unlock table |
 | 2 | `integer_count:u32`, then `integer_entries[integer_count]`, 16 bytes each |
 | 3 | `string_count:u32`, `string_blob_dwords:u32`, then the DWORD-padded string blob |
-| 4 | for version 3.10 or later, `selector_counts[256]:u32` |
-| 5 | for version 3.10 or later, `extended_count:u32`, then `extended_values[extended_count]:u32` |
+| 4 | for version 3.10 or later, `selector_counts[256]:u32` for append-catalog unlock tables |
+| 5 | for version 3.10 or later, `extended_count:u32`, then the flattened encrypted append tables |
 | 6 | `reserved_tail[9]:u32` |
 
 An integer entry is:
@@ -135,14 +135,35 @@ type byte `0x05` plus the same eight-digit address and NUL; values are CP932. Th
 a DWORD count. AGE rounds with `(unpadded_bytes / 4) + 1`, deliberately adding a whole zero DWORD when
 the last value already ends on a DWORD boundary.
 
-The nine-DWORD tail consists of one explicit terminator plus eight DWORDs produced by the native
-allocation formula. Catalog, selector, extended, and tail sections are structurally bounded but not
-fully assigned game-level meanings, so compatibility import/export preserves them rather than treating
-them as mod storage.
+The catalog sections are AGE's profile-wide **resource-seen/unlock database**. Each encrypted table begins
+with two header DWORDs:
 
-The installed Himegari profile is a complete oracle: version 3.10 decodes to 13,210 catalog values,
-24,070 integer cells, 605 string cells, selector entry 1 equal to 81, 83 extended values, and nine tail
-DWORDs.
+| Table word | Meaning |
+|---:|---|
+| `0` | private exponent XOR `0x87912345` |
+| `1` | modular-exponentiation modulus |
+| `index + 2` | zero when locked/unseen; otherwise the encrypted resource marker |
+
+Loading computes `plain = cipher^private_exponent mod modulus`. A marker is available when its low word
+equals `low16(index * 0x053d6f99 + 0xb0b0b0b0)`. Native `asset_open_indexed_entry` writes that marker
+only after successfully opening the resource, and opcode `0x19d` queries it. Thus ordinary CG assets
+unlock when their AGF is opened and H-scene entries unlock when their SP script is opened.
+
+The base table maps universal resource ids whose high byte is zero. For version 3.10 or later,
+`selector_counts[selector]` gives the slot count of each append catalog; the extended array has its own
+two-word crypto header followed by those selector tables concatenated in selector order. Packed resource
+ids use the high byte as selector and the low 24 bits as the per-catalog index. Runtime lookup accepts
+selectors 1 through 127.
+
+The nine-DWORD tail consists of one explicit terminator plus eight DWORDs produced by the native
+allocation formula. It remains compatibility-owned rather than mod storage.
+
+The installed Himegari profile is a complete oracle: version 3.10 decodes to 13,210 base-table DWORDs
+(13,208 resource slots), 24,070 integer cells, 605 string cells, selector entry 1 equal to 81, 83
+extended-table DWORDs (two header plus 81 resource slots), and nine tail DWORDs. The port copy contains
+7,966 valid base markers and 75 valid append markers. Those include all 851 CGINIT gallery images and
+all 118 SPINIT H-scene scripts; a different encryption key can change every nonzero stored DWORD without
+changing the decoded unlock set.
 
 The integer/string maps are AGE's generic selected-cell service, not copies of whole global banks.
 Himegari scripts assign their meanings through opcodes `0x1a2`/`0x1a3` and `0x1a9`/`0x1aa`. Known
@@ -345,7 +366,7 @@ The remaining uncertainty is deliberately narrower:
 
 - numbered layouts 1 and 2 are structurally identified but are not the implemented or installed
   Himegari compatibility target;
-- the shared catalog/extended arrays and some selected cells are still opaque at the game-semantic level;
+- some shared selected cells and the nine-DWORD tail remain opaque at the game-semantic level;
 - the `0x2d4` retained-graphics record is byte-bounded, but not every field is named.
 
 This distinction is important: AGE owns most numbered-save and ReadTextDB structure, while Himegari
