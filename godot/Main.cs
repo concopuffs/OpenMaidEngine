@@ -1390,12 +1390,35 @@ public partial class Main : Godot.Control
         else label.AddThemeFontOverride("font", regularFont);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
-        label.AddThemeColorOverride("font_outline_color", RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f)));
+        Color effectColor = RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f));
+        AdvTextEffectTheme effect = ResolveAdvTextEffectTheme(style);
+        label.AddThemeColorOverride("font_outline_color", effectColor);
+        label.AddThemeColorOverride("font_shadow_color", effect.ShadowEnabled ? effectColor : Colors.Transparent);
         label.AddThemeConstantOverride("line_spacing", style.LineSpacing);
-        int outline = style.RenderMode == 0 ? 0 : System.Math.Max(1,
-            System.Math.Max(System.Math.Abs(style.EffectOffsetX), System.Math.Abs(style.EffectOffsetY)));
-        label.AddThemeConstantOverride("outline_size", outline);
+        label.AddThemeConstantOverride("outline_size", effect.OutlineSize);
+        label.AddThemeConstantOverride("shadow_offset_x", effect.ShadowOffsetX);
+        label.AddThemeConstantOverride("shadow_offset_y", effect.ShadowOffsetY);
+        label.AddThemeConstantOverride("shadow_outline_size", 0);
     }
+
+    private readonly record struct AdvTextEffectTheme(
+        int OutlineSize,
+        bool ShadowEnabled,
+        int ShadowOffsetX,
+        int ShadowOffsetY);
+
+    private static AdvTextEffectTheme ResolveAdvTextEffectTheme(AdvTextStyle style)
+        => style.RenderMode switch
+        {
+            // AGE mode 1 draws one effect-color glyph at (+x,+y), then the primary glyph.
+            1 => new(0, true, style.EffectOffsetX, style.EffectOffsetY),
+            // AGE mode 3 samples an ellipse. Himegari always uses equal (1,1) radii, for which
+            // Godot's symmetric outline is the closest backend-native presentation.
+            3 => new(System.Math.Max(System.Math.Abs(style.EffectOffsetX),
+                                     System.Math.Abs(style.EffectOffsetY)),
+                     false, 0, 0),
+            _ => new(0, false, 0, 0),
+        };
 
     private Font ResolvePresentationFont(string requestedFace, out string fontKey)
     {
@@ -2043,16 +2066,56 @@ public partial class Main : Godot.Control
                                          && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
         _bgm.Stop();
         _bgm.Stream = null;
+        AdvTextEffectTheme mode1 = ResolveAdvTextEffectTheme(AdvTextStyle.Default with
+        {
+            RenderMode = 1,
+            EffectOffsetX = 0,
+            EffectOffsetY = 0,
+        });
+        AdvTextEffectTheme mode3 = ResolveAdvTextEffectTheme(AdvTextStyle.Default with
+        {
+            RenderMode = 3,
+            EffectOffsetX = 1,
+            EffectOffsetY = 1,
+        });
+        AdvTextEffectTheme mode0 = ResolveAdvTextEffectTheme(AdvTextStyle.Default);
+        bool textEffectModesOk = mode1 == new AdvTextEffectTheme(0, true, 0, 0)
+                                 && mode3 == new AdvTextEffectTheme(1, false, 0, 0)
+                                 && mode0 == new AdvTextEffectTheme(0, false, 0, 0);
+        var textEffectSmoke = new Label();
+        AddChild(textEffectSmoke);
+        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
+        {
+            RenderMode = 1,
+            EffectColor = 0x123456,
+            EffectOffsetX = 2,
+            EffectOffsetY = -1,
+        });
+        textEffectModesOk &= textEffectSmoke.GetThemeConstant("outline_size") == 0
+                             && textEffectSmoke.GetThemeConstant("shadow_offset_x") == 2
+                             && textEffectSmoke.GetThemeConstant("shadow_offset_y") == -1
+                             && textEffectSmoke.GetThemeColor("font_shadow_color").A > 0.99f;
+        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
+        {
+            RenderMode = 3,
+            EffectColor = 0x123456,
+            EffectOffsetX = 1,
+            EffectOffsetY = 1,
+        });
+        textEffectModesOk &= textEffectSmoke.GetThemeConstant("outline_size") == 1
+                             && textEffectSmoke.GetThemeColor("font_shadow_color").A < 0.01f;
+        textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
-              && bgmReplacementCancelsFade;
+              && bgmReplacementCancelsFade && textEffectModesOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
-                         $"bgm-fade-replacement=ok");
+                         $"bgm-fade-replacement=ok; text-effect-modes=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
-                      $"bgm-fade-replacement={bgmReplacementCancelsFade}");
+                      $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
+                      $"text-effect-modes={textEffectModesOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

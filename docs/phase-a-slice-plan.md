@@ -3343,6 +3343,20 @@ design, especially for Linux/macOS where the proprietary Microsoft faces are not
 Focused regressions cover face changes flowing into both live and retained styles; the engine tests and
 Godot C# build pass. User visual acceptance passed on 2026-07-28.
 
+## ADV text effect modes separated (2026-07-28)
+
+The shared Godot text-style applicator no longer treats every nonzero render mode as an outline. Mode 1
+uses the Label shadow layer to draw one effect-color glyph at the configured displacement before the
+primary glyph; this includes Himegari's 43 zero-offset uses. Mode 3 uses a symmetric outline sized from
+the configured radii, matching the shape of all 164 paired Himegari sites because they uniformly request
+`(1,1)`. Mode 0 clears both layers, while native mode 2 remains unused and unimplemented.
+
+The mapping applies uniformly to live ADV runs, retained History batches, and text drawn onto retained
+surfaces. A focused VM regression protects mode/color/offset propagation through live and retained style
+records, and the Godot self-test applies both modes to a real Label and checks its shadow/outline theme
+state. Validation: engine **431/431**, zero-warning Godot build, and threaded `SELFTEST OK` with
+`text-effect-modes=ok`. User visual acceptance passed on 2026-07-28.
+
 ## Persistence native-format reconnaissance complete (2026-07-24)
 
 The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native

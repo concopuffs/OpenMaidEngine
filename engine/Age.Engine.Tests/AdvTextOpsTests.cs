@@ -36,6 +36,41 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void TextEffectModeColorAndOffsetsFlowIntoLiveAndRetainedStyles()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        static Operand S(int index) => new(2, index);
+        var script = ScriptAssembler.Assemble(table, "ADV_TEXT_EFFECT",
+            new List<(int, Operand[])>
+            {
+                (0x77, new[] { I(0x123456) }),
+                (0x78, new[] { I(1) }),
+                (0x1a4, new[] { I(2), I(-1) }),
+                (0x6e, new[] { I(0), S(0) }),
+                (0x78, new[] { I(3) }),
+                (0x1a4, new[] { I(1), I(1) }),
+                (0x6e, new[] { I(0), S(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "shadow", "outline" });
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Collection(host.LiveTextRuns,
+            shadow => Assert.Equal((0x123456L, 1, 2, -1),
+                (shadow.Run.Style.EffectColor, shadow.Run.Style.RenderMode,
+                 shadow.Run.Style.EffectOffsetX, shadow.Run.Style.EffectOffsetY)),
+            outline => Assert.Equal((0x123456L, 3, 1, 1),
+                (outline.Run.Style.EffectColor, outline.Run.Style.RenderMode,
+                 outline.Run.Style.EffectOffsetX, outline.Run.Style.EffectOffsetY)));
+        Assert.Equal(
+            host.LiveTextRuns.Select(run => run.Run.Style),
+            vm.TextHistory.Records.Select(record => record.Style));
+    }
+
+    [Fact]
     public void TextCursorAndDrawStringReachHostWithLocalStringPointer()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

@@ -2507,12 +2507,20 @@ face so a runtime face switch cannot reuse the preceding family's synthetic-bold
 important Mincho/Gothic distinction on a normal Windows installation without treating the proprietary
 fonts as game assets.
 
+Godot presentation now distinguishes the two shipped effect profiles. Mode 1 uses the Label shadow
+layer as one effect-color glyph at the configured `(x,y)` displacement behind the primary glyph; this
+also preserves Himegari's zero-offset double-composite profile instead of inventing an outline. Mode 3
+uses a symmetric outline whose size is the maximum absolute configured radius. That is a good
+backend-native approximation for every shipped mode-3 call because Himegari always requests equal
+`(1,1)` radii. The same style applicator covers live ADV, retained History, and surface text. Mode 2
+remains unimplemented and is unused by this game.
+
 The remaining raster behavior is still an approximation: weight 700 uses Godot
-`VariationEmbolden=1.2`, and every nonzero render mode becomes a symmetric Godot outline. Mode 1 is
-therefore modeled as an outline rather than its native displaced-copy operation. Exact GDI-compatible
-advances, grayscale coverage, and mode-3 edge pixels require a dedicated glyph backend (or a deliberately
-calibrated approximation) behind the existing engine-owned layout/style contract. Portable configurable
-face substitutions/defaults are intentionally deferred to the broader runtime configuration design.
+`VariationEmbolden=1.2`, and mode 3 does not reproduce AGE's exact sampled coverage at each ellipse
+angle. Exact GDI-compatible advances, grayscale coverage, and edge pixels require a dedicated glyph
+backend (or a deliberately calibrated approximation) behind the existing engine-owned layout/style
+contract. Portable configurable face substitutions/defaults are intentionally deferred to the broader
+runtime configuration design.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
