@@ -208,7 +208,10 @@ In a live Godot run, **F6** writes an observe-only stall snapshot under
 `SCRIPT@offset · stall snapshot <path>` to the clipboard. The JSON contains the current call stack, a bounded
 128-instruction ring, VM/host wait flags, surface/movie completion state, decoder state, and the exact finite
 graphics channels capable of holding an op-`0x21c` presentation wait. Press it while the apparent stall is still
-active; unlike `--timeline-log`, it does not require a special launch or emit a continuous per-op stream.
+active; unlike `--timeline-log`, it does not require a special launch or emit a continuous per-op stream. Active
+and pending movie records include `first_frame_source_pts_ms`; the ordinary `movie first frame` console line prints
+the same source PTS alongside the render frame, which distinguishes encoded stream lead-in from decode/presentation
+latency.
 
 ## Native FFmpeg movie shim (Windows x64)
 

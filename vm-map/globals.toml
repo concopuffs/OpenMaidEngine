@@ -699,7 +699,7 @@ name = "unit_boss_class"
 category = "data-table"
 type = "int[1000]"
 value_domain = "0=ordinary; signed boss class ±1..±4: 1=named/story character, 2=monster/special encounter, 3=demon-lord class, 4=final boss; positive values are defeat-boss victory targets and negative values are exempt"
-usage = "Nonzero for 112 bosses, special encounters, summoned adds, and map hazards. CALCDMG grants every nonzero class the boss adjustment, CALCILL grants condition immunity, and FIELD/MAGIC/USEMAGIC exclude nonzero classes from ordinary-unit rules. On stages whose clear rule is defeat-boss targets, FIELD blocks victory only while a positive-class enemy remains; negative peers keep boss treatment but are ignored, as with Octavia beside Bridget, Deirdre's shadows, EX-8 adds beside Tiamat, and the final boss's three organs. Classes 1..3 are otherwise authoring categories with no distinct shipped-script branch. Either sign of class 4 selects the final-boss battle BGM and special tactical-map presentation."
+usage = "Nonzero for 112 bosses, special encounters, summoned adds, and map hazards. CALCDMG grants every nonzero class the boss adjustment, CALCILL grants condition immunity, and FIELD/MAGIC/USEMAGIC exclude nonzero classes from ordinary-unit rules. FIELD draws the normal faction-colored unit banner for classes 0 and ±1..±3, then adds the separate yellow boss marker below it when this value is nonzero; class ±4 suppresses both standard markers for its special presentation. On stages whose clear rule is defeat-boss targets, FIELD blocks victory only while a positive-class enemy remains; negative peers keep boss treatment but are ignored, as with Octavia beside Bridget, Deirdre's shadows, EX-8 adds beside Tiamat, and the final boss's three organs. Classes 1..3 are otherwise authoring categories with no distinct shipped-script branch. Either sign of class 4 selects the final-boss battle BGM and special tactical-map presentation."
 source = "investigation"
 confidence = "med"
 
@@ -2213,6 +2213,18 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x152883"
+name = "battle_critical_chance_percent"
+category = "data-table"
+type = "int[2]"
+columns = { "0" = "side_0", "1" = "side_1" }
+value_domain = "0..100 percentage points"
+usage = "Final per-side critical chance for the current exchange. CALCBTPARAM starts with the side's effective critical-chance stat plus its effective luck minus the opposing side's effective luck, applies selected-skill and applicable target-tile terrain critical/luck deltas through the same channels, and clamps the result to 0..100. Equipment has already entered through entity_effective_stats: CT affects only its owner's outgoing critical chance, whereas luck both raises outgoing chance and lowers the opponent's. After a successful hit, CALCDMG rolls random-modulo-100 against this value; success sets battle_hit_result to 2 and doubles the signed HP delta."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x4e11b", "0xa99b6", "0xe6afe", "0x15261c", "0x152877", "0x152879"]
+
+[[global]]
 address = "0x26b4"
 name = "class_change_title_output"
 category = "string-table"
@@ -3121,14 +3133,14 @@ depends_on = []
 
 [[global]]
 address = "0x2052e"
-name = "scjump_progress_b"
-category = "counter"
+name = "current_faction_id"
+category = "index-pointer"
 type = "int"
-value_domain = "progress index"
-usage = "Second SCJUMP switch input (1223 comparison reads) — progression counter/position. INFERENCE from SCJUMP usage."
-source = "inference"
-confidence = "med"
-depends_on = []
+value_domain = "{0,1,2,3}; 0 = gray, 1 = red/player, 2 = blue, 3 = green"
+usage = "Active tactical faction/side. FIELD initializes it during stage entry, assigns 1 for the player phase, advances (value + 1) modulo 4 between phases, filters runtime entities and capturable objects by faction equality, and uses it as the bit index into tile_faction_traversal_masks. SCJUMP reads the same live stage context; this is not a story-progress counter."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x522ed", "0x141a4", "0x20543"]
 
 [[global]]
 address = "0x152618"

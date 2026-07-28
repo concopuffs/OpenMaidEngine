@@ -194,7 +194,11 @@ same drop-item ids. Third, explicit menu messages and state updates identify cap
 listing, summon unlock indices/knowledge thresholds/point costs, essence yield, automatic enemy level
 scaling, and the large-battle-sprite layout flag. The signed `unit_boss_class` remains medium-confidence as
 an authoring vocabulary, but its runtime split is now concrete. Every nonzero value receives the shared
-boss damage adjustment, condition immunity, targeting exclusions, and boss battle treatment. FIELD's
+boss damage adjustment, condition immunity, targeting exclusions, and boss battle treatment. Its yellow
+map flag is also a separate boss marker rather than a fifth faction: FIELD draws the ordinary banner from
+the runtime faction id, then adds the yellow badge for a nonzero class ±1..±3. Class ±4 suppresses both
+standard markers for the final boss's special presentation. DRAWMINIMAP continues to color its 3×3 unit
+dot solely from the four-valued runtime faction id. FIELD's
 `stage_clear_rule == -2` path scans only living enemy units whose class is positive, so a positive class is
 a required defeat-boss target while the matching negative class is a boss-treated add, decoy, or hazard
 that does not delay victory. STINIT confirms the distinction in the same encounters: Bridget is positive

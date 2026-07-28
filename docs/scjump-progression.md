@@ -7,8 +7,9 @@ readable, VM-verified table.
 ## Mechanism
 - **Top switch** on `0x3234` (`chapter_mode`, 1..9) dispatches to a per-chapter block
   (`1→0x81, 2→0x9f, 3→0x1ded, 4→0x1e6d, 5→0x54c1, 6→0x93c4, 7→0x1e868, 8→0x2aa42, 9→0x2b8a3`).
-- Each chapter block is an **acyclic tree** (0 back-edges) of comparisons on progress counters
-  (`scjump_progress_a/b/d` = `0x4dfbc`/`0x2052e`/`0xe6c5d`), `battle_outcome_flags`
+- Each chapter block is an **acyclic tree** (0 back-edges) of comparisons on stage/context inputs
+  (`scjump_progress_a`, `current_faction_id`, and `scjump_progress_d` =
+  `0x4dfbc`/`0x2052e`/`0xe6c5d`; the first and third names remain provisional), `battle_outcome_flags`
   (`0x152618`; low bits target-defeated/actor-defeated/both-survived), story flags, **and a native
   computed value** (see below).
 - At each of **1755 decision sites** it writes `0x0 = 1` (decision-valid) and

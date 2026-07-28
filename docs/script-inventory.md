@@ -131,6 +131,29 @@ The dedicated view joins 66 named stage definitions to 53 unique rectangles, pre
 groups and 47 nonzero border-context cells, and resolves terrain ids through LAINIT's name, texture-slot,
 area-fill, and layout-class columns.
 
+Conceptually, MPINIT is the game's master dungeon terrain plan. A mapped STINIT2 row does not identify a
+standalone map resource; it selects an inclusive tile-coordinate rectangle from that plan through
+min/max X/Y bounds (equivalently, an origin plus derived width and height). FIELD makes the active
+rectangle mutable, while STINIT overlays the stage-specific mission content: objects, enemies,
+reinforcements, conditions, BGM, and texture overrides. The left minimap deliberately preserves the
+larger-floor illusion. DRAWMINIMAP reads the mutable current-stage grid inside the active rectangle but
+reads the immutable MPINIT atlas outside it, so nearby authored terrain can remain visible without
+bringing in another stage's enemies or interactable objects. The STINIT2 minimap-origin field chooses
+the vertically packed atlas band shown for that stage; MPINIT itself contains terrain cells, not stage
+adjacency metadata.
+
+Factions are a fixed four-side tactical convention rather than INIT-defined faction records:
+0=gray, 1=red/player, 2=blue, and 3=green. STINIT assigns a side id to each enemy spawn and initial
+ownership to faction-bearing objects; FIELD assigns deployed party entities to side 1 and copies enemy
+spawn ids into their runtime entity records. The same ids select the active turn, compare allied versus
+foreign entities, represent capturable-object ownership, and index faction bits in terrain traversal
+masks. Generic tactical logic treats equal ids as allied and unequal ids as foreign—there is no
+discovered alliance/diplomacy matrix—so gray is a fourth independent side, not an intrinsically
+non-hostile neutral category. A unit definition is not faction-bound: the same EBINIT unit can be
+instantiated on different sides by different STINIT entries. The separate yellow map flag is a boss
+badge selected by EBINIT's `unit_boss_class`, not a fifth faction or object-owner value; minimap unit
+dots still use only the four faction ids.
+
 LAINIT defines the twenty shipped terrain ids inside a reserved thirty-row registry. Its sparse
 strings provide seventeen names and five effect summaries; its numeric surface provides
 texture-slot, area-fill, layout-class, required-skill, and ten-column combat-stat data. CALCBTPARAM
