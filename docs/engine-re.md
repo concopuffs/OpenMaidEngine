@@ -2567,8 +2567,14 @@ enabled=`1` and target=`50` percent; SC0000 writes only control masks `0` and `1
 
 The port therefore retains `0x1cf` as script-owned runtime state, applies the native registered default
 attenuation when an unsuppressed voice begins, and restores the saved BGM level when that voice completes
-or is stopped by message Skip. This introduces no profile record, boot seed, or persistence backend. A
-future unified settings backend can replace the registered defaults without changing the opcode/host seam.
+or is stopped by message Skip. Godot also gives an explicit `0xc2` fade exclusive ownership of the BGM
+envelope: voice start does not duck during that fade, a new fade cancels its predecessor, and starting a
+replacement BGM cancels any still-live prior fade before restoring normal gain. The last rule closes a
+main-thread scheduling race at the TITLE-to-SC0000 boundary. The VM's blocking fade deadline begins before
+the deferred Godot tween is created, so `BGM005` could start during the tween's final frame and then be
+overwritten to `-80 dB`; a later voice temporarily wrote the audible 50-percent duck level and restored
+the erroneous silent level afterward. This introduces no profile record, boot seed, or persistence backend.
+A future unified settings backend can replace the registered defaults without changing the opcode/host seam.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 

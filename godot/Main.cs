@@ -39,6 +39,7 @@ public partial class Main : Godot.Control
     private Label _status = null!;
     private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
+    private Tween? _bgmFadeTween;
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private int _voiceQueuedGeneration;
     private int _voiceStartedGeneration;
@@ -1631,6 +1632,11 @@ public partial class Main : Godot.Control
         var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
         if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
         stream.Loop = true;
+        // FadeBgm is marshalled from the VM thread and starts on the next Godot frame, while the VM's
+        // blocking deadline begins immediately. Scene startup can consequently request the replacement
+        // track just before the old fade tween reaches zero. Do not let that orphaned tween mute the new
+        // stream after this method restores its normal gain.
+        CancelBgmFade();
         _bgm.VolumeDb = 0;
         _bgm.Stream = stream;
         _bgm.Play();
@@ -1691,6 +1697,8 @@ public partial class Main : Godot.Control
 
     private void BeginVoiceBgmDuck(int generation, int targetPercent)
     {
+        // Native voice ducking is suppressed while an explicit 0xc2 BGM fade owns the envelope.
+        if (_bgmFadeTween != null) return;
         if (!_voiceBgmDuckActive)
             _voiceBgmDuckRestoreDb = _bgm.VolumeDb;
         _voiceBgmDuckActive = true;
@@ -1770,8 +1778,26 @@ public partial class Main : Godot.Control
     {
         float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
         float targetDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
+        RestoreVoiceBgmDuck();
+        CancelBgmFade();
         if (realDurationSeconds <= 0) { _bgm.VolumeDb = targetDb; return; }
-        CreateTween().TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
+
+        var tween = CreateTween();
+        _bgmFadeTween = tween;
+        tween.Finished += () =>
+        {
+            if (ReferenceEquals(_bgmFadeTween, tween))
+                _bgmFadeTween = null;
+        };
+        tween.TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
+    }
+
+    private void CancelBgmFade()
+    {
+        var tween = _bgmFadeTween;
+        _bgmFadeTween = null;
+        if (tween?.IsValid() == true)
+            tween.Kill();
     }
 
     public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId,
@@ -1947,13 +1973,25 @@ public partial class Main : Godot.Control
         byte[] glowGodotWav = RiffWaveSanitizer.RemoveInfoMetadata(glowSfx.Bytes);
         bool cp932WavMetadataOk = glowGodotWav.Length == 688_336
                                  && AudioStreamWav.LoadFromBuffer(glowGodotWav) != null;
-        ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk;
+        AudioPayload bgm = selftestResources.ReadAudio(selftestResources.ResolveBgm(5)!);
+        FadeBgm(0, 10.0);
+        bool bgmFadeStarted = _bgmFadeTween?.IsValid() == true;
+        PlayBgm(bgm.Bytes, bgm.Name);
+        bool bgmReplacementCancelsFade = bgmFadeStarted
+                                         && _bgmFadeTween == null
+                                         && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
+        _bgm.Stop();
+        _bgm.Stream = null;
+        ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
+              && bgmReplacementCancelsFade;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
-                         $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok");
+                         $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
+                         $"bgm-fade-replacement=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
-                      $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}");
+                      $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
+                      $"bgm-fade-replacement={bgmReplacementCancelsFade}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

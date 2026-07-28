@@ -118,6 +118,16 @@ while Godot treated them as active-script manifest ids. The packed resolver maps
 through the existing channel players. A synchronized TITLE→GAMESTART→TITLE trace records every load/start
 with its filename, and manual validation confirms they are audible; BGM remains unaffected.
 
+**TITLE-to-SC0000 BGM fade ownership corrected (2026-07-28).** SC0000's `0xc2@0x7c1` blocks the VM for
+the three-second title-music fade, then starts `BGM005` at `0x7fa`. Godot created the actual gain tween
+through a deferred main-thread call, however, so its start could lag the already-running virtual deadline
+by one frame. On the unlucky schedule, `BGM005` restored unity gain just before that stale title tween
+finished and wrote `-80 dB`. Voice ducking exposed the diagnosis: a voice wrote the configured 50-percent
+level, making the live BGM audible, then restored the captured silent level. The Godot backend now owns
+exactly one explicit BGM fade, cancels it before replacing the track or starting another fade, and suppresses
+voice ducking while the fade owns the envelope as native AGE does. The threaded selftest starts a live
+fade and proves a replacement BGM cancels it and retains normal gain.
+
 **Pre-title video sequence implemented (2026-07-20).** SYSTEM4 already owns the native sequence; the
 port did not lose an executable-side launcher. Its sole op `0x130` call returns an engine initial-root flag
 that is one at context construction and cleared only when op `0x9` resets/reloads root script id zero.
