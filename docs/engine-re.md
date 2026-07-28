@@ -2453,6 +2453,67 @@ Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captur
 non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
 11 clicks completed active reveals and 14 later clicks released 14 distinct waits through `0xe0c`.
 
+#### Native font face, weight, antialiasing, and effects (2026-07-28)
+
+The earlier retained-text work established *where* glyphs appear but deliberately left their final raster
+appearance to Godot `Label`. Static reconstruction now identifies the complete native style selected by
+Himegari and the specific reasons the port's text looks only approximate.
+
+Himegari's decompressed SYS4INI settings trailer supplies `FONT=ＭＳ 明朝`, `DRAWMODE=1`,
+`ENABLEANTIFONT=1`, and `ANTIFONTVERSION=3`. `engine_initialize_subsystems_from_settings@0x415390`
+passes the face to `adv_text_manager_initialize@0x456800`, stores draw mode 1 at `ctx+0x99290`, applies
+the enabled `message:UseAntiFont` default of 1 through `text_set_antialias_enabled@0x4137e0`, and stores
+AntiFont version 3 at text-manager `+0x548`. The ordinary primary `LOGFONTA` begins as:
+
+- `lfHeight=-24`, `lfWidth=-12`, `lfWeight=0`;
+- no escapement/orientation, italic, underline, or strikeout;
+- `DEFAULT_CHARSET`, default output/clip precision, default quality, and default pitch/family;
+- `lfFaceName="ＭＳ 明朝"`.
+
+Size opcode `0x75` keeps the negative pixel height and a negative half-width in both primary LOGFONT
+states. It rounds ordinary odd requested heights down by one and special-cases 32/33 to 31, although every
+Himegari call uses an even size from 8 through 24. Bold opcode `0x2bd` sets `lfWeight` to exactly 700, not
+an arbitrary stroke expansion. Face opcode `0x1a5` is also effectful:
+`op_0x1a5_set_font_face@0x42bbf0` calls `text_set_primary_font_face@0x42b1d0`, which copies the requested
+face and constructs an `@%s` vertical-writing companion before
+`text_rebuild_primary_font_resources@0x44f7f0` recreates the `CreateFontIndirectA` handles, metrics, and
+glyph buffers. The 207 corpus calls use only `ＭＳ 明朝` (168) and `ＭＳ ゴシック` (39).
+
+With Himegari's DrawMode 1 and AntiFont enabled, `GetGlyphOutlineA` requests
+`GGO_GRAY4_BITMAP` with an identity `MAT2`. `text_raster_string_cached@0x45b600` caches the returned
+0..16 coverage bitmap and composites it into the locked 16- or 32-bit destination with ordinary
+source-over color/alpha interpolation. Layout measurement separately uses `GetTextExtentPoint32A` against
+the selected GDI font, so face, explicit `lfWidth`, and weight affect advances and wrapping as well as
+pixels.
+
+The shipped effect profiles use only modes 1 and 3:
+
+- mode 1 draws one effect-color copy at `(x+effect_x,y+effect_y)`, then the primary glyph; all 43
+  Himegari sites pair it with `(0,0)`;
+- mode 3 samples an ellipse around the glyph. `text_compute_outline_ellipse_offset@0x459860` computes
+  `cos(angle)*effect_x` / `sin(angle)*effect_y`; the caller steps by
+  `360 / (sqrt(effect_x²+effect_y²)*8)`, blits the effect-colored glyph at every rounded offset, then
+  draws the primary glyph. All 164 paired sites use `(1,1)`, producing the normal one-pixel outline.
+
+The ordinary ADV preset is therefore 24-pixel `ＭＳ 明朝`, weight 700, white fill, mode-3 `(1,1)` outline
+in `0x606060`, with 8 pixels of line leading. The small menu-description preset is 16-pixel
+`ＭＳ ゴシック`, weight 0, white fill, mode 1 with zero displacement, and 9 pixels of leading.
+
+The port now carries opcode `0x1a5` through `AdvTextStyle` into live, retained, History, and surface-text
+presentation. `godot/Main.cs` recognizes Himegari's two requested families and loads
+`C:/Windows/Fonts/msmincho.ttc` or `msgothic.ttc` when present. Missing or unknown requested faces fall
+back to the existing best-effort Japanese font probe, and regular/bold variants are cached per resolved
+face so a runtime face switch cannot reuse the preceding family's synthetic-bold font. This restores the
+important Mincho/Gothic distinction on a normal Windows installation without treating the proprietary
+fonts as game assets.
+
+The remaining raster behavior is still an approximation: weight 700 uses Godot
+`VariationEmbolden=1.2`, and every nonzero render mode becomes a symmetric Godot outline. Mode 1 is
+therefore modeled as an outline rather than its native displaced-copy operation. Exact GDI-compatible
+advances, grayscale coverage, and mode-3 edge pixels require a dedicated glyph backend (or a deliberately
+calibrated approximation) behind the existing engine-owned layout/style contract. Portable configurable
+face substitutions/defaults are intentionally deferred to the broader runtime configuration design.
+
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
 The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`

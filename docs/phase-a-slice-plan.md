@@ -3329,6 +3329,20 @@ shared-profile registration.
 `G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
 TUNE).
 
+## ADV requested-face selection implemented (2026-07-28)
+
+Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in
+`AdvTextStyle`, so live text, retained backlog records, History replay, and surface strings all preserve
+the active family. Godot resolves Himegari's two authored requests (`ＭＳ 明朝` and `ＭＳ ゴシック`) to
+the corresponding Windows TTC files and caches regular/bold variants independently. If a requested face
+is unavailable or unknown, presentation falls back to the existing best-effort Japanese font rather than
+dropping the text or inventing a bundled font dependency.
+
+Configurable defaults and per-face substitutions remain deferred to the general runtime configuration
+design, especially for Linux/macOS where the proprietary Microsoft faces are not normally installed.
+Focused regressions cover face changes flowing into both live and retained styles; the engine tests and
+Godot C# build pass. User visual acceptance passed on 2026-07-28.
+
 ## Persistence native-format reconnaissance complete (2026-07-24)
 
 The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native

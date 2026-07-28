@@ -17,7 +17,7 @@ public class HistoryPresentationOpsTests
         history.DefineLayout(1, 640, 160, 80, 430);
         history.AppendMetadata(9, 2, AdvTextStyle.Default);
         history.AppendText(0, 10, "retained dialogue", new AdvTextStyle(24, 8, false,
-            0xffffff, 0x606060, 3, 1, 1, 9));
+            0xffffff, 0x606060, 3, 1, 1, 9, "ＭＳ 明朝"));
         history.ResetLayout(1);
         history.AppendText(0, 11, "next group", AdvTextStyle.Default);
         history.SetRecordingEnabled(false);
@@ -42,9 +42,9 @@ public class HistoryPresentationOpsTests
         Assert.Equal((4, 0, "retained dialogue"),
             (render.LayoutSlot, render.FirstRecordIndex, render.Text));
         Assert.Equal(new AdvTextLayoutSnapshot(4, 600, 150, 65, 150, 45, 42, 600, 150), render.Layout);
-        Assert.Equal((24, 0xffffffL, 0x606060L, 8),
+        Assert.Equal((24, 0xffffffL, 0x606060L, 8, "ＭＳ 明朝"),
             (render.Style.PrimaryFontSize, render.Style.TextColor, render.Style.EffectColor,
-             render.Style.LineSpacing));
+             render.Style.LineSpacing, render.Style.FontFace));
     }
 
     [Fact]

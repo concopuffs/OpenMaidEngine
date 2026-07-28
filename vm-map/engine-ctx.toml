@@ -63,10 +63,60 @@ name = "gfx_default_object_slot"
 type = "int"
 note = "op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero"
 [[field]]
+offset = 0x14e0c
+name = "text_primary_font_height"
+type = "int"
+note = "primary LOGFONTA.lfHeight at text-manager+0x4cc; stored as a negative pixel height and updated by op 0x75"
+[[field]]
+offset = 0x14e10
+name = "text_primary_font_width"
+type = "int"
+note = "primary LOGFONTA.lfWidth at text-manager+0x4d0; op 0x75 stores negative half the requested font size"
+[[field]]
+offset = 0x14e1c
+name = "text_primary_font_weight"
+type = "int"
+note = "primary LOGFONTA.lfWeight at text-manager+0x4dc; op 0x2bd writes 700 for enabled or zero for disabled"
+[[field]]
+offset = 0x14e84
+name = "text_antialias_enabled"
+type = "int"
+note = "text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero"
+[[field]]
+offset = 0x14e88
+name = "text_antialias_version"
+type = "int"
+note = "text-manager+0x548 loaded from set:AntiFontVersion; Himegari SYS4INI supplies version 3"
+[[field]]
+offset = 0x14e8c
+name = "text_primary_color_bgr"
+type = "uint"
+note = "text-manager+0x54c internal GDI BGR/COLORREF primary glyph color; op 0x76 converts script RGB into it"
+[[field]]
+offset = 0x14e90
+name = "text_effect_color_bgr"
+type = "uint"
+note = "text-manager+0x550 internal GDI BGR/COLORREF effect glyph color; op 0x77 converts script RGB into it"
+[[field]]
+offset = 0x14e98
+name = "text_render_mode"
+type = "int"
+note = "text-manager+0x558; op 0x78 selects primary-only, displaced shadow, reduced-coverage repeat, or sampled ellipse outline"
+[[field]]
 offset = 0x14ea0
 name = "text_line_spacing"
 type = "int"
 note = "extra pixel leading between text lines; defaults to 6, op 0x8b writes it"
+[[field]]
+offset = 0x14ea4
+name = "text_effect_offset_x"
+type = "int"
+note = "text-manager+0x564; op 0x1a4 horizontal displacement for mode 1 or ellipse radius for mode 3"
+[[field]]
+offset = 0x14ea8
+name = "text_effect_offset_y"
+type = "int"
+note = "text-manager+0x568; op 0x1a4 vertical displacement for mode 1 or ellipse radius for mode 3"
 [[field]]
 offset = 0x14f45
 name = "script_frame_index"
@@ -447,6 +497,11 @@ offset = 0x9928c
 name = "save_frame_boundary_index"
 type = "int"
 note = "highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it"
+[[field]]
+offset = 0x99290
+name = "gfx_draw_mode"
+type = "int"
+note = "loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"

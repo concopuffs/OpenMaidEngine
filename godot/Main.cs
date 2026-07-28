@@ -34,8 +34,13 @@ public partial class Main : Godot.Control
     private readonly System.Collections.Generic.List<Label> _advTextLabels = new();
     private readonly System.Collections.Generic.List<Label> _surfaceTextLabels = new();
     private readonly System.Collections.Generic.Dictionary<int, Label> _historyTextLabels = new();
-    private Font? _presentationRegularFont;
-    private FontVariation? _presentationBoldFont;
+    private Font? _presentationFallbackFont;
+    private readonly Dictionary<string, Font> _presentationFaceFonts =
+        new(System.StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, FontVariation> _presentationBoldFonts =
+        new(System.StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _unavailablePresentationFaces =
+        new(System.StringComparer.OrdinalIgnoreCase);
     private Label _status = null!;
     private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
@@ -146,6 +151,7 @@ public partial class Main : Godot.Control
             try
             {
                 var ff = new FontFile { Data = System.IO.File.ReadAllBytes(fp) };
+                _presentationFallbackFont = ff;
                 _text.AddThemeFontOverride("font", ff);
                 _speaker.AddThemeFontOverride("font", ff);
                 _status.AddThemeFontOverride("font", ff);
@@ -1367,17 +1373,21 @@ public partial class Main : Godot.Control
     private void ApplyAdvTextStyle(Label label, AdvTextStyle style)
     {
         int fontSize = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
-        _presentationRegularFont ??= _text.GetThemeFont("font");
+        Font regularFont = ResolvePresentationFont(style.FontFace, out string fontKey);
         if (style.Bold)
         {
-            _presentationBoldFont ??= new FontVariation
+            if (!_presentationBoldFonts.TryGetValue(fontKey, out FontVariation? boldFont))
             {
-                BaseFont = _presentationRegularFont,
-                VariationEmbolden = 1.2f,
-            };
-            label.AddThemeFontOverride("font", _presentationBoldFont);
+                boldFont = new FontVariation
+                {
+                    BaseFont = regularFont,
+                    VariationEmbolden = 1.2f,
+                };
+                _presentationBoldFonts.Add(fontKey, boldFont);
+            }
+            label.AddThemeFontOverride("font", boldFont);
         }
-        else label.AddThemeFontOverride("font", _presentationRegularFont);
+        else label.AddThemeFontOverride("font", regularFont);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
         label.AddThemeColorOverride("font_outline_color", RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f)));
@@ -1385,6 +1395,57 @@ public partial class Main : Godot.Control
         int outline = style.RenderMode == 0 ? 0 : System.Math.Max(1,
             System.Math.Max(System.Math.Abs(style.EffectOffsetX), System.Math.Abs(style.EffectOffsetY)));
         label.AddThemeConstantOverride("outline_size", outline);
+    }
+
+    private Font ResolvePresentationFont(string requestedFace, out string fontKey)
+    {
+        _presentationFallbackFont ??= _text.GetThemeFont("font");
+        string face = requestedFace?.Trim() ?? "";
+        if (face.Length == 0)
+        {
+            fontKey = "";
+            return _presentationFallbackFont;
+        }
+        if (_presentationFaceFonts.TryGetValue(face, out Font? cached))
+        {
+            fontKey = face;
+            return cached;
+        }
+        if (!_unavailablePresentationFaces.Contains(face))
+        {
+            foreach (string path in PresentationFontPaths(face))
+            {
+                if (!System.IO.File.Exists(path)) continue;
+                try
+                {
+                    var loaded = new FontFile { Data = System.IO.File.ReadAllBytes(path) };
+                    _presentationFaceFonts.Add(face, loaded);
+                    fontKey = face;
+                    return loaded;
+                }
+                catch
+                {
+                    // Try the next known file before falling back to the presentation default.
+                }
+            }
+            _unavailablePresentationFaces.Add(face);
+        }
+        fontKey = "";
+        return _presentationFallbackFont;
+    }
+
+    private static IEnumerable<string> PresentationFontPaths(string face)
+    {
+        if (face.Equals("ＭＳ 明朝", System.StringComparison.OrdinalIgnoreCase)
+            || face.Equals("MS Mincho", System.StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "C:/Windows/Fonts/msmincho.ttc";
+        }
+        else if (face.Equals("ＭＳ ゴシック", System.StringComparison.OrdinalIgnoreCase)
+                 || face.Equals("MS Gothic", System.StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "C:/Windows/Fonts/msgothic.ttc";
+        }
     }
 
     private static Color RgbColor(long rgb, Color fallback)

@@ -19,7 +19,17 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x144e0` | `sfx_channel_resource_ids` | `int` | base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id |
 | `0x14d54` | `adv_text_layout_ptr_table` | `void*` | text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c |
 | `0x14e08` | `gfx_default_object_slot` | `int` | op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero |
+| `0x14e0c` | `text_primary_font_height` | `int` | primary LOGFONTA.lfHeight at text-manager+0x4cc; stored as a negative pixel height and updated by op 0x75 |
+| `0x14e10` | `text_primary_font_width` | `int` | primary LOGFONTA.lfWidth at text-manager+0x4d0; op 0x75 stores negative half the requested font size |
+| `0x14e1c` | `text_primary_font_weight` | `int` | primary LOGFONTA.lfWeight at text-manager+0x4dc; op 0x2bd writes 700 for enabled or zero for disabled |
+| `0x14e84` | `text_antialias_enabled` | `int` | text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero |
+| `0x14e88` | `text_antialias_version` | `int` | text-manager+0x548 loaded from set:AntiFontVersion; Himegari SYS4INI supplies version 3 |
+| `0x14e8c` | `text_primary_color_bgr` | `uint` | text-manager+0x54c internal GDI BGR/COLORREF primary glyph color; op 0x76 converts script RGB into it |
+| `0x14e90` | `text_effect_color_bgr` | `uint` | text-manager+0x550 internal GDI BGR/COLORREF effect glyph color; op 0x77 converts script RGB into it |
+| `0x14e98` | `text_render_mode` | `int` | text-manager+0x558; op 0x78 selects primary-only, displaced shadow, reduced-coverage repeat, or sampled ellipse outline |
 | `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
+| `0x14ea4` | `text_effect_offset_x` | `int` | text-manager+0x564; op 0x1a4 horizontal displacement for mode 1 or ellipse radius for mode 3 |
+| `0x14ea8` | `text_effect_offset_y` | `int` | text-manager+0x568; op 0x1a4 vertical displacement for mode 1 or ellipse radius for mode 3 |
 | `0x14f45` | `script_frame_index` | `int` | call-script frame index (0x1e-dword frames) |
 | `0x46188` | `renderer_device_state` | `int` | embedded D3D9 device/render state; op 0x20e passes this base to the target/depth clear worker |
 | `0x46598` | `d3d9_device` | `void*` | IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac |
@@ -94,6 +104,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x6f8b4` | `script_launch_queue_high_water` | `int` | highest consumed cursor retained across FIFO compaction |
 | `0x6f8b8` | `script_launch_dispatch_active` | `int` | suppresses immediate dispatch while op 0x143 batches mounted append record-zero ids and while a queued script is active |
 | `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
+| `0x99290` | `gfx_draw_mode` | `int` | loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
 | `0x9c658` | `sys4ini_count` | `int` | SYS4INI record count at embedded FileDB+0x40c |
 | `0x9c65c` | `archive_name_table` | `void*` | archive-name table base at embedded FileDB+0x410; arc_id*0x100 indexes it |

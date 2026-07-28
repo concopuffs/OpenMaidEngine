@@ -27,9 +27,10 @@ public readonly record struct AdvTextStyle(
     int RenderMode,
     int EffectOffsetX,
     int EffectOffsetY,
-    int LineSpacing)
+    int LineSpacing,
+    string FontFace)
 {
-    public static AdvTextStyle Default => new(0, 0, false, 0, 0, 0, 0, 0, 6);
+    public static AdvTextStyle Default => new(0, 0, false, 0, 0, 0, 0, 0, 6, "");
 }
 
 /// <summary>A stable snapshot of the layout state associated with a retained record.</summary>

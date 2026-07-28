@@ -45,7 +45,7 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 - **summary:** (pixels) - set the primary text font height and rebuild its native rasterization state.
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x205
-- **evidence:** Ghidra /v2: op_0x75_handler@0x41ea10 calls text_set_primary_font_size@0x415bd0 on ctx+0x14940. The worker writes the negated pixel height to both primary LOGFONT states, derives width, and rebuilds font resources. HISTORY.BIN selects 22 pixels while active and restores 24 on exit.
+- **evidence:** Ghidra /v2: op_0x75_set_font_size@0x41ea10 calls text_set_primary_font_size@0x415bd0 on ctx+0x14940. The worker writes the negated pixel height to both primary LOGFONT states, sets lfWidth to negative half the requested size, applies AGE's odd/32/33-pixel height adjustment, and rebuilds both GDI font resources plus glyph buffers. All shipped Himegari sizes are even and avoid the adjustment; HISTORY.BIN selects 22 pixels while active and restores 24 on exit.
 
 ### 0x76 `set-text-color` (set-text-color, argc 1)
 - **summary:** (rgb) - set the current primary text color.
@@ -60,7 +60,9 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 ### 0x78 `set-text-render-mode` (set-text-render-mode, argc 1)
 - **summary:** (mode) - select the current text raster/effect mode.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x78_handler@0x41eb10 writes operand 1 to text-manager+0x558 and rebuilds font state. Direct draw and text_history_render_records branch on this field (including a distinct mode-3 offset path). HISTORY.BIN selects mode 3 and restores mode 3 with the normal ADV font preset.
+- **evidence:** Ghidra /v2: op_0x78_set_text_render_mode@0x41eb10 writes operand 1 to text-manager+0x558 and rebuilds font state. Himegari's DrawMode=1 path reaches text_raster_string_cached@0x45b600: mode 1 blits effect color at (+x,+y); mode 2 repeats a quarter-coverage glyph bitmap in primary color; mode 3 samples text_compute_outline_ellipse_offset@0x459860 around 360 degrees before the primary blit. The corpus uses only mode 1 (43 sites) and mode 3 (165 sites).
+
+Mode 0 draws only the primary glyph. Mode 1 draws one effect-colored copy displaced by the configured x/y offset, then the primary glyph. Mode 2 adds a reduced-coverage primary-color bitmap pass after the ordinary glyph and is unused by Himegari scripts. Mode 3 repeatedly draws the effect glyph around an ellipse whose radii are the configured x/y extents, then draws the primary glyph; Himegari's (1,1) profile produces its one-pixel outline.
 
 ### 0x79 `set-adv-text-reset-cursor` (set-adv-text-reset-cursor, argc 3)
 - **summary:** (layout_slot)(x)(y) - configure the cursor coordinates restored by a later reset of the selected ADV text layout. Slot 0 selects the current layout. This does not move the live cursor immediately; opcode 0x7a does that.
@@ -101,7 +103,14 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 ### 0x1a4 `set-text-effect-offset` (set-text-effect-offset, argc 2)
 - **summary:** (x)(y) - set the horizontal and vertical extent/offset used by the current text effect mode.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x1a4_handler@0x41f440 writes operands 1/2 to text-manager+0x564/+0x568. Native raster/bounds paths expand or shift text by these values when an effect mode is active; mode 3 subtracts both. HISTORY.BIN uses (1,1).
+- **evidence:** Ghidra /v2: op_0x1a4_set_text_effect_offset@0x41f440 writes operands 1/2 to text-manager+0x564/+0x568. Mode 1 uses them as a single displaced effect-color shadow. Mode 3 treats them as ellipse radii and samples x=cos(angle)*offset_x, y=sin(angle)*offset_y around the glyph before the primary draw. The Himegari corpus pairs mode 1 with (0,0) at all 43 sites and mode 3 with (1,1) at all 164 paired sites.
+
+### 0x1a5 `set-font` (set-font, argc 1)
+- **summary:** (face) - select the primary GDI font face, derive its vertical-writing companion, and rebuild the native font/glyph state.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1a5_set_font_face@0x42bbf0 resolves operand 1 and calls text_set_primary_font_face@0x42b1d0 on ctx+0x14940. The worker copies the face to manager+0x4e8, formats @%s into the vertical LOGFONT state at +0x18e74, rebuilds CreateFontIndirectA handles/metrics/glyph buffers through text_rebuild_primary_font_resources@0x44f7f0, and maintains both names in its font-family caches. SYS4INI seeds FONT=ＭＳ 明朝.
+
+The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE also constructs an @-prefixed vertical face. Himegari uses only the full-width Windows family names ＭＳ 明朝 (168 sites) and ＭＳ ゴシック (39 sites). This is live raster state, not a declaration/no-op.
 
 ### 0x1b5 `set-message-glyph-delay` (u0041B5F0, argc 1)
 - **summary:** (milliseconds) - set the per-glyph ADV text reveal delay; zero makes retained UI text publish immediately.
@@ -173,7 +182,7 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 ### 0x2bd `set-font-bold` (set-font-bold, argc 1)
 - **summary:** (enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x2bd_handler@0x4251c0 writes enabled?700:0 to LOGFONT weight at text-manager+0x4dc and calls the font rebuild worker. It immediately follows set-font throughout the UI corpus; HISTORY.BIN selects the Mincho face with bold enabled.
+- **evidence:** Ghidra /v2: op_0x2bd_set_font_bold@0x4251c0 writes enabled?700:0 to LOGFONT weight at text-manager+0x4dc and calls text_rebuild_primary_font_resources@0x44f7f0. It immediately follows set-font throughout the UI corpus; HISTORY.BIN selects the Mincho face with bold enabled.
 
 ## audio
 
@@ -1336,10 +1345,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=med
 
 ### 0x196 `display-furigana` (display-furigana, argc 3)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x1a5 `set-font` (set-font, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 

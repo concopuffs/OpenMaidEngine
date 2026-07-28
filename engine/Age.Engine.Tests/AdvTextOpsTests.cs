@@ -10,6 +10,32 @@ using Xunit;
 public class AdvTextOpsTests
 {
     [Fact]
+    public void SetFontFaceFlowsIntoLiveAndRetainedTextStyles()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        static Operand S(int index) => new(2, index);
+        var script = ScriptAssembler.Assemble(table, "ADV_FONT_FACE",
+            new List<(int, Operand[])>
+            {
+                (0x1a5, new[] { S(0) }),
+                (0x6e, new[] { I(0), S(2) }),
+                (0x1a5, new[] { S(1) }),
+                (0x6e, new[] { I(0), S(3) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "ＭＳ 明朝", "ＭＳ ゴシック", "mincho", "gothic" });
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { "ＭＳ 明朝", "ＭＳ ゴシック" },
+            host.LiveTextRuns.Select(run => run.Run.Style.FontFace));
+        Assert.Equal(new[] { "ＭＳ 明朝", "ＭＳ ゴシック" },
+            vm.TextHistory.Records.Select(record => record.Style.FontFace));
+    }
+
+    [Fact]
     public void TextCursorAndDrawStringReachHostWithLocalStringPointer()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

@@ -2269,6 +2269,7 @@ public sealed class VirtualMachine
             case "end-text-line":
                 TextHistory.EndLine((int)Read(a[0]), _advTextStyle); return pc + 1;
             case "set-font":
+                _advTextStyle = _advTextStyle with { FontFace = ReadStr(a[0]) }; return pc + 1;
             case "comment": case "display-furigana": case "dev_ukn":
                 return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
