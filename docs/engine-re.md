@@ -164,6 +164,76 @@ binary for every resolution. `display:ScreenMode`, `display:FullScreenWidth/Heig
 related registered settings govern presentation/fullscreen selection separately; they do not redefine the
 authored logical canvas. The serialized trailer location is recorded in `sys4-format-notes.md`.
 
+### SYS4INI startup-settings catalog (resolved 2026-07-28)
+
+The settings trailer is a real per-game startup profile, not a miscellaneous string appendix. The complete
+36-pair serialized inventory and physical offsets are canonical in `sys4-format-notes.md`; this section owns
+their native behavior and current port relevance.
+
+The startup order is:
+
+1. `engine_settings_register_defaults@0x46be30` creates AGE's generic registry.
+2. `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` parses the asset directory and VM-bank metadata,
+   then passes the remaining length-delimited settings record to
+   `EngineCtx::engine_apply_sys4ini_settings@0x4056d0`.
+3. `engine_settings_import_sys4ini_pairs@0x46da80` reads the pair count followed by NUL-terminated CP932
+   key/value strings, matches external names case-insensitively, and inserts their canonical typed keys.
+   Unknown external names take the loader error path.
+4. `engine_apply_sys4ini_settings` copies `set:WinX`, `set:WinY`, and `set:AntiFontVersion` into context
+   fields. `engine_initialize_subsystems_from_settings@0x415390` then initializes text, graphics, and audio
+   from the completed registry before script execution.
+
+Most entries are direct integer/string mappings, but three transforms matter:
+
+- `SAVEVERSION=310` becomes `set:SaveVersion1=3` and `set:SaveVersion2=10` by quotient/remainder division
+  by 100. It is the source of Himegari's persistence layout and append-catalog compatibility version.
+- `NOSETMUSIC=3` stores `set:NoSetMusic=3` and also seeds `sound:Music=2`
+  (`NOSETMUSIC - 1`). `sound_route_is_enabled@0x405420` treats nonnegative music states as enabled;
+  `sound_set_music_route_enabled@0x407f80` moves the state between enabled/disabled bands separated by
+  three. The `set:NoSetMusic` copy itself has no later direct reader in this image.
+- `WHEELKEYUP`/`WHEELKEYDOWN` each populate both `set:WheelKey*` and
+  `message:WheelKey*OnTW`. A nonempty `VERREGPOS` also invokes
+  `registration_read_class00_version@0x46ae80`; its Windows `CLASS00` registry result replaces
+  `set:GameVersion`.
+
+The meaningful consumer catalog is:
+
+| Setting group | Native Himegari effect | Classification |
+|---|---|---|
+| `CREATEOBJECT`, `DRAWMODE` | `CreateObject=2` selects only the retained D3D/object backend; `DrawMode=1` selects its matching draw/text path. Startup verifies that bit `1 << DrawMode` exists in the backend mask. | Active renderer selection |
+| `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. | Active core profile |
+| `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
+| `DEPENDMOVIESOUND` | Supplies the default movie-audio dependency/routing policy when movie opcode flags do not force another route. | Active media policy |
+| `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
+| `SCREENWARNING` | Imported as `set:ScreenWarning`; no reader beyond default registration/import was found in this EXE image. | Loaded, no observed consumer |
+| `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. | Active audio initialization plus otherwise-unused policy copy |
+| all seven `MENU_*` keys | Imported as `set:Menu_*`. No direct non-loader reader of these exact registry keys was found; they appear to be shared AGE native-menu capability metadata rather than Himegari script-menu state. `MENU_USEANTIFONT` does **not** disable the independently enabled `message:UseAntiFont`. | Loaded compatibility/menu metadata |
+| `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
+| `CLICKONUP` | Imported as `set:ClickOnUp`, but no direct runtime reader was found in this image. | Loaded, no observed consumer |
+| `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for persistent message Skip. | Active ADV input behavior; currently missing from port |
+| `CONTROLDISIBLECURSOR` | The spelling is native. Value 1 suppresses AGE's ordinary cursor-restore call when a bound ADV hotspot action or hover callback is selected. | Active ADV cursor behavior; currently missing from port |
+| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. | Active ADV toggle behavior; currently missing from port |
+| `REDRAWTEXTONKEY` | Value 0 disables the wheel/key path that traverses and republishes the current text-history view through `CALLBACK_TEXT.BIN`. | Active ADV history-input policy; port uses its script callback path instead |
+| `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. `adv_input_service_poll@0x411230` uses them for ADV wheel-key/history handling; raw `WM_MOUSEWHEEL` accumulation for op `0x10d` remains a separate channel. | Active ADV input binding; port does not source these values |
+| `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; intentionally redirected by port |
+| `REGFILEPATH` | Supplies the Eushully/product-relative Windows registration-file path used by the native registration integration. | Windows integration only |
+| `SAVEVERSION` | Selects numbered-save layout 3.10 and enables the matching append-catalog persistence structures. | Active persistence ABI |
+| `GAMEVERSION`, `VERREGPOS` | Seeds display/registration version `1.00`, then permits the GUID-selected Windows registry `CLASS00` value to replace it. | Windows version/registration metadata |
+| `REGKEY` | A nonzero value activates `registration_validate_key_file@0x46fc80`, which opens `SYS4RK.BIN`, validates its header/transformed payload and both CRC variants, and publishes the registration result. | Native registration/key validation |
+| `COPYRIGHT`, `RCVERSION` | Both are imported; no later direct consumer of the exact registry keys was found in this image. | Loaded product metadata |
+
+This is intentionally a native-behavior catalog, not a mandate to reproduce every Win32-era switch. The
+current port already preserves the shipped result of several settings through profile-specific constants:
+the `800x600` canvas, requested Mincho/Gothic faces, save version 3.10, and movie/audio behavior. It
+deliberately redirects the native AppData path to Godot `user://SAVE`, and it should not reproduce legacy
+DirectDraw selection or native registration/key validation.
+
+The actionable generic-profile gap is that `Sys4AssetCatalog` still parses only the directory and the frontend
+hard-codes the important results. A future configuration/profile slice should expose the typed trailer values
+once and let the runtime apply only cross-platform semantic settings. In particular, click-cancel, Auto/Skip
+coexistence, cursor policy, redraw policy, and wheel action ids must be decided from this evidence instead of
+AGE's compiled defaults. No runtime behavior changes were made as part of this investigation.
+
 ### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
 
 The SCJUMP slice assumed `u00428010` resolved a decision value to a scene. **That premise is wrong**,
@@ -1632,9 +1702,11 @@ The state queries are deliberately different:
 
 All 301 ordinary ADV button callbacks call `0x88(1)`. `CALLBACK_LOAD.BIN` contains the corpus's only
 `0x88(0)` reset. The engine supports an optional click-cancel state machine, but
-`engine_settings_register_defaults@0x46be30` registers `set:CancelMesSkipOnClick=0`; a nonzero loaded engine
-configuration is required to enable its press/release cancellation path. The port preserves that default
-instead of unconditionally inventing click-to-cancel.
+`engine_settings_register_defaults@0x46be30` registers `set:CancelMesSkipOnClick=0` only as the generic
+fallback. Himegari's SYS4INI trailer overrides it with `CANCELMESSKIPONCLICK=2`, enabling the
+press/release cancellation path. The port currently preserves the fallback instead because it does not yet
+apply the trailer's ADV policy settings; that is now a cataloged parity gap rather than evidence that
+Himegari intended click-cancel to remain disabled.
 
 Voice playback also has a native Skip queue. `op_0xc4_handler@0x420610` plays immediately while the skip bit
 is clear. While it is set, the handler replaces `ctx+0x6dbf4/+0x6dbf8` with the latest requested voice instead

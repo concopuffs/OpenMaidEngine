@@ -3329,6 +3329,35 @@ shared-profile registration.
 `G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
 TUNE).
 
+## SYS4INI startup-settings investigation (2026-07-28)
+
+The post-directory SYS4INI data is now structurally and behaviorally cataloged. Himegari's decompressed
+tail contains a `0x90`-byte VM-metadata block followed by a `0x2bb`-byte, 36-pair CP932 startup-settings
+record. Native AGE first registers generic defaults, imports those pairs case-insensitively, applies three
+special transforms (`SAVEVERSION`, `NOSETMUSIC`, and wheel-key duplication), then initializes the logical
+canvas, text, graphics, audio, ADV input policy, persistence, and Windows registration integration from
+the completed registry.
+
+The investigation distinguishes active Himegari behavior from loaded compatibility metadata. Active core
+results include retained renderer/draw mode, `800x600`, Mincho/antialias profile, movie-audio policy,
+save layout 3.10, and AppData save-root selection. The important newly exposed ADV overrides are
+`CANCELMESSKIPONCLICK=2`, `CONTROLDISIBLECURSOR=1`, `COEXISTMESSKIP=1`,
+`REDRAWTEXTONKEY=0`, and wheel actions 8/9. The port does not currently parse/apply those ADV policy
+values; in particular, the earlier click-cancel conclusion accidentally preserved AGE's zero fallback
+instead of Himegari's override.
+
+Legacy DirectDraw-only values, unused native-menu flags, and Windows registration/key metadata are now
+classified separately so a later generic profile loader does not mistake every serialized setting for a
+portable runtime requirement. No gameplay/runtime behavior changed in this investigation. The exact
+serialized inventory is canonical in `sys4-format-notes.md`, native consumers and port relevance in
+`engine-re.md`, multi-profile direction in `remake-architecture-and-roadmap.md`, and portability impact in
+`platform-portability.md`. The `/v2` Ghidra image names/comments the importer and principal graphics,
+ADV-toggle, audio, and registration consumers.
+
+**Next:** keep the settings parser/application as a bounded generic-profile/configuration slice. Resume
+the Phase-B gameplay spine unless one of the cataloged ADV policy differences becomes a visible gameplay
+or input defect.
+
 ## ADV requested-face selection implemented (2026-07-28)
 
 Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in

@@ -677,9 +677,16 @@ from that game's corpus.
 
 The probe also exposed a separate profile/presentation concern: Kamidori creates a `1024x576` render
 target while the current Himegari frontend assumes an `800x600` presentation. Logical canvas geometry,
-scaling, and any game-specific defaults therefore belong in the selected game profile or script-driven
-surface state rather than in a forked frontend. This experiment was diagnostic only; no Kamidori support
-or `0x1be` semantics were implemented.
+scaling, and other game-specific defaults therefore belong in the selected game profile or script-driven
+surface state rather than in a forked frontend. The source is now known: after its asset directory and
+VM-bank metadata, SYS4INI carries a typed per-game startup-settings record. Himegari uses it for the
+canvas, text face/raster mode, ADV input/skip policy, save ABI/path, audio initialization, and native
+Windows compatibility metadata. A future generic profile loader should parse that record once, preserve
+unknown/profile-specific data for diagnostics, apply cross-platform semantic settings through explicit
+runtime seams, and classify legacy renderer/registration switches rather than blindly emulating them.
+The current frontend's scattered Himegari constants are acceptable while gameplay is the priority, but
+they are not the multi-profile architecture. This experiment was diagnostic only; no Kamidori support or
+`0x1be` semantics were implemented.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5

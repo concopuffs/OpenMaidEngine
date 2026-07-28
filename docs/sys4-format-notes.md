@@ -23,15 +23,72 @@ per format.
 NUL-delimited per-game engine-settings trailer. `tools/parse_sys4ini.py` currently consumes only the
 directory prefix.
 
-The Himegari trailer contains `SCREENX=800` and `SCREENY=600`; Kamidori's independent SYS4INI contains
-`SCREENX=1024` and `SCREENY=576`. This establishes the authored logical canvas as per-game data. Native
-initialization and the executable's `640x480` fallback are documented in `engine-re.md`;
-fullscreen/display-mode settings are a separate concern from these logical dimensions.
+After the directory prefix, Himegari's decompressed stream has this tail:
 
-The same Himegari trailer also contains `USEAPPDATAFOLDER=1` and
-`SAVEPATH=Eushully\姫狩りダンジョンマイスター\SAVE`. AGE's native save-root resolver consumes those
-settings to select `%LOCALAPPDATA%` plus that relative path on modern Windows. Filename patterns remain
-native policy rather than trailer or script strings; see `engine-re.md` under "Save-root resolution."
+```text
+decompressed offset  field
+0x102488             vm_metadata_bytes:u32 = 0x90
+0x10248c             vm_metadata[0x90]
+0x10251c             settings_string_bytes:u32 = 0x2bb
+0x102520             setting_pair_count:u32 = 36
+0x102524             repeated { key:cstring, value:cstring }[36]
+0x1027df             end of decompressed stream
+```
+
+The string-byte count covers only the concatenated key/value strings, not the preceding pair count.
+Keys are ASCII, values are CP932, and every key and value is individually NUL-terminated. Native
+`engine_settings_import_sys4ini_pairs@0x46da80` matches keys case-insensitively and rejects an
+unrecognized key rather than silently retaining it.
+
+Himegari's complete serialized list, in file order, is:
+
+| # | Key | Value |
+|---:|---|---|
+| 1 | `CREATEOBJECT` | `2` |
+| 2 | `DRAWMODE` | `1` |
+| 3 | `DEPENDMOVIESOUND` | `1` |
+| 4 | `SCREENX` | `800` |
+| 5 | `SCREENY` | `600` |
+| 6 | `FONT` | `ＭＳ 明朝` |
+| 7 | `ENABLEANTIFONT` | `1` |
+| 8 | `ANTIFONTVERSION` | `3` |
+| 9 | `FULLSCREENBIT` | `32` |
+| 10 | `SCREENWARNING` | `1` |
+| 11 | `NOSETMUSIC` | `3` |
+| 12 | `MENU_SAVE` | `0` |
+| 13 | `MENU_MESWINA` | `0` |
+| 14 | `MENU_RCLICK` | `0` |
+| 15 | `MENU_MESSPEED` | `0` |
+| 16 | `MENU_USEANTIFONT` | `0` |
+| 17 | `MENU_MESSAGE` | `1` |
+| 18 | `MENU_SOUNDONOFF` | `0` |
+| 19 | `ENABLEMEMFLIP` | `0` |
+| 20 | `CLICKONUP` | `1` |
+| 21 | `ALWAYSBACKUPSURFACE` | `0` |
+| 22 | `CANCELMESSKIPONCLICK` | `2` |
+| 23 | `CONTROLDISIBLECURSOR` | `1` |
+| 24 | `COEXISTMESSKIP` | `1` |
+| 25 | `REDRAWTEXTONKEY` | `0` |
+| 26 | `WHEELKEYUP` | `8` |
+| 27 | `WHEELKEYDOWN` | `9` |
+| 28 | `USEAPPDATAFOLDER` | `1` |
+| 29 | `SAVEPATH` | `Eushully\姫狩りダンジョンマイスター\SAVE` |
+| 30 | `REGFILEPATH` | `Eushully\姫狩りダンジョンマイスター` |
+| 31 | `COPYRIGHT` | `Copyright (c) Eushully 2009` |
+| 32 | `SAVEVERSION` | `310` |
+| 33 | `GAMEVERSION` | `1.00` |
+| 34 | `RCVERSION` | `23` |
+| 35 | `VERREGPOS` | `70724B91-F673-40FB-9EC4-5DE21EA68367` |
+| 36 | `REGKEY` | `1886538641` |
+
+This list is the canonical serialized-data inventory. Native consumers, compiled fallbacks, settings
+that are inert under Himegari's selected renderer, and current port coverage are cataloged in
+`engine-re.md` under "SYS4INI startup-settings catalog."
+
+`SCREENX=800` and `SCREENY=600` are independently corroborated by Kamidori's `1024x576` pair, proving
+that the authored logical canvas is per-game data. Fullscreen/display-mode settings are separate from
+these logical dimensions. `USEAPPDATAFOLDER` and `SAVEPATH` select the native Windows save root; fixed
+save filenames remain AGE policy rather than trailer or script strings.
 
 ## Native persistence files — Himegari 3.10
 
