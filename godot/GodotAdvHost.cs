@@ -65,6 +65,7 @@ public sealed class GodotAdvHost : IHost
     private long _advTextStartedMs;
     private int _activeGlyphDelayMilliseconds = 50;
     private int _messageGlyphDelayMilliseconds = 50;
+    private volatile int _messageWindowAlphaSetting;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private readonly object _messageSkipLock = new();
@@ -365,7 +366,13 @@ public sealed class GodotAdvHost : IHost
         lock (_textLock) return _historyText.Values.OrderBy(batch => batch.LayoutSlot).ToArray();
     }
 
-    public int MessageWindowAlphaSetting => 0;
+    public int MessageWindowAlphaSetting => _messageWindowAlphaSetting;
+
+    public void SetMessageWindowAlphaSetting(int value)
+    {
+        _messageWindowAlphaSetting = value;
+        _timeline?.Event("message-window-alpha", new() { ["value"] = value });
+    }
 
     public void FillSurfaceRect(SurfaceRectFill fill)
     {

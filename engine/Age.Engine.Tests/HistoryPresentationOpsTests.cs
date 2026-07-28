@@ -70,6 +70,25 @@ public class HistoryPresentationOpsTests
     }
 
     [Fact]
+    public void MessageWindowAlphaSetterImmediatelyFeedsThePairedGetter()
+    {
+        var script = ScriptAssembler.Assemble(Table, "MESSAGE_WINDOW_ALPHA",
+            new List<(int, Operand[])>
+            {
+                (0x141, new[] { I(7) }),
+                (0x131, new[] { G(0x100) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host);
+
+        vm.Run();
+
+        Assert.Equal(7, host.MessageWindowAlphaSetting);
+        Assert.Equal(7, vm.Globals[0x100]);
+    }
+
+    [Fact]
     public void ResetLayoutClearsItsPreviouslyBoundHostPresentation()
     {
         var script = ScriptAssembler.Assemble(Table, "HISTORY_CLEAR_RENDER",

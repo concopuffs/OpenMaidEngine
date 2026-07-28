@@ -82,6 +82,7 @@ public sealed class VirtualMachine
     private volatile bool _advSkipServiceEnabled;
     private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
+    private int _messageWindowAlphaSetting;
     private int _messageGlyphDelayMilliseconds;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
@@ -156,6 +157,7 @@ public sealed class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
         _nativeDatStore = nativeDatStore;
+        _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
         _accumulatedPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
         _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -2242,9 +2244,14 @@ public sealed class VirtualMachine
             case "u0041B540":
                 TextHistory.SetLayoutOrigin((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
                 return pc + 1;
-            case "get-message-window-alpha": // 0x131: host profile/config seam; default host currently supplies 0
+            case "get-message-window-alpha": // 0x131: process-owned message:MesWinAlpha setting
             case "u00415F70":
-                Write(a[0], _host.MessageWindowAlphaSetting); return pc + 1;
+                Write(a[0], _messageWindowAlphaSetting); return pc + 1;
+            case "set-message-window-alpha": // 0x141: paired message:MesWinAlpha configuration setter
+            case "u0041FAA0":
+                _messageWindowAlphaSetting = (int)Read(a[0]);
+                _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
+                return pc + 1;
             case "get-message-glyph-delay": // 0x7f
             case "u00414C60":
                 Write(a[0], _messageGlyphDelayMilliseconds); return pc + 1;
@@ -2543,14 +2550,24 @@ public sealed class VirtualMachine
             case "u00420620":             // upstream ABI label
             case "gfx-set-scale-current": // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
                 Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
-            case "set-gfx-field64":     // 0x212 (idx)(val)
-                Gfx.SetObjectField64(Read(a[0]), Read(a[1])); return pc + 1;
-            case "set-gfx-xy":          // 0x213 (idx)(x)(y)
+            case "set-adv-wait-indicator-handle":   // 0x212 (layout)(retained handle)
             {
-                Gfx.SetObjectFields68And6c(Read(a[0]), Read(a[1]), Read(a[2])); return pc + 1;
+                TextHistory.SetWaitIndicatorObjectHandle((int)Read(a[0]), Read(a[1]));
+                return pc + 1;
+            }
+            case "set-adv-text-object-range":       // 0x213 (layout)(first handle)(count)
+            {
+                TextHistory.SetTextObjectRange((int)Read(a[0]), Read(a[1]), Read(a[2]));
+                return pc + 1;
             }
             case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
-                Gfx.EraseRange(Read(a[0]), Read(a[1])); return pc + 1;
+            {
+                long first = Read(a[0]), count = Read(a[1]);
+                Gfx.EraseRange(first, count);
+                foreach (int layoutSlot in TextHistory.LayoutsCoveredByTextObjectErase(first, count))
+                    _host.ClearRenderedAdvTextLayout(layoutSlot);
+                return pc + 1;
+            }
             case "gfx-elem-release":    // 0x1fa (surface slot)
                 _host.ReleaseSurface((int)Read(a[0])); Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
             case "clone-gfx-object":    // 0x21d (source handle)(destination handle)

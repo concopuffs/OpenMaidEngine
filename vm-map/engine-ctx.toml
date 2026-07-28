@@ -54,9 +54,9 @@ type = "int"
 note = "base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id"
 [[field]]
 offset = 0x14d54
-name = "gfx_obj_ptr_table"
+name = "adv_text_layout_ptr_table"
 type = "void*"
-note = "per-object pointer table (ops 0x212/0x213 write obj+0x64/0x68/0x6c)"
+note = "text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c"
 [[field]]
 offset = 0x14e08
 name = "gfx_default_object_slot"

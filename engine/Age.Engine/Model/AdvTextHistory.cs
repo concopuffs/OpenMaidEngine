@@ -108,6 +108,9 @@ public sealed class AdvTextHistory
         public int CursorY;
         public int Right;
         public int Bottom;
+        public long WaitIndicatorObjectHandle = -1;
+        public long TextObjectRangeFirst = -1;
+        public long TextObjectRangeCount;
     }
 
     private readonly List<AdvTextHistoryRecord> _records = new();
@@ -175,6 +178,47 @@ public sealed class AdvTextHistory
         var layout = GetOrCreateLayout(slot);
         layout.OriginX = x;
         layout.OriginY = y;
+    }
+
+    public void SetWaitIndicatorObjectHandle(int requestedSlot, long handle)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        GetOrCreateLayout(slot).WaitIndicatorObjectHandle = handle;
+    }
+
+    public void SetTextObjectRange(int requestedSlot, long firstHandle, long count)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        layout.TextObjectRangeFirst = firstHandle;
+        layout.TextObjectRangeCount = count;
+    }
+
+    /// <summary>
+    /// Resolve layouts whose complete native retained-glyph handle interval is covered by one op-0x1f7
+    /// erase. The Label backend collapses those glyph objects into live text runs, so full native range
+    /// teardown removes the corresponding detached presentation atomically.
+    /// </summary>
+    public IReadOnlyList<int> LayoutsCoveredByTextObjectErase(long firstHandle, long count)
+    {
+        long eraseCount = count > 1 ? count : 1;
+        var slots = new List<int>();
+        foreach (var pair in _layouts)
+        {
+            var layout = pair.Value;
+            if (RangeCovers(firstHandle, eraseCount,
+                            layout.TextObjectRangeFirst, layout.TextObjectRangeCount))
+                slots.Add(pair.Key);
+        }
+        return slots;
+    }
+
+    private static bool RangeCovers(long first, long count, long targetFirst, long targetCount)
+    {
+        if (count <= 0 || targetCount <= 0 || targetFirst < first) return false;
+        ulong offset = (ulong)(targetFirst - first);
+        ulong extent = (ulong)count;
+        return offset <= extent && (ulong)targetCount <= extent - offset;
     }
 
     /// <summary>

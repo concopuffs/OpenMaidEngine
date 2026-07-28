@@ -99,6 +99,7 @@ internal class RecordingHost : IHost
         ActiveHistoryRenders.Clear();
     }
     public int MessageWindowAlphaSetting { get; set; }
+    public void SetMessageWindowAlphaSetting(int value) => MessageWindowAlphaSetting = value;
     public void FillSurfaceRect(SurfaceRectFill fill) => SurfaceFills.Add(fill);
     public void CopySurfaceRect(SurfaceRectCopy copy) => SurfaceCopies.Add(copy);
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)

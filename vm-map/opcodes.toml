@@ -2933,23 +2933,23 @@ observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x141
-label = "u0041FAA0"
+label = "set-message-window-alpha"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041FAA0"
-category = "unknown"
-summary = ""
+name = "set-message-window-alpha"
+category = "draw"
+summary = "(value) - write the configured `message:MesWinAlpha` value read by opcode 0x131. Himegari's CONFIG menu bounds the value to 0..16; larger values make the inverse-width opacity bar shorter."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "CONFIG.BIN is a complete paired getter/setter proof: reset-defaults writes 4; the two message-window-opacity controls read op 0x131, increment/decrement within 0..16, then pass the result to op 0x141; the redraw path reads op 0x131 again and computes bar width (16-value)*80/16. The shared ADV/history paths independently consume the same getter as (16-value)<<4 alpha."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "alpha setting value"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -4915,12 +4915,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-draw-color"
 category = "draw"
-summary = "0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the default textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength). Its consumption is order-sensitive for FIELD's looping unit objects: a post-bind write supplies opacity to suppress/restore the idle object after its moving clone is made, while the prototype's pre-loop alpha-zero initialization remains opaque after DRAWCH binds the clone. Mode 1 is SRCALPHA/ONE additive glow with ARGB alpha scaling the source contribution and RGB providing multiplicative modulation. Mode 2 conditionally forces ONE/ZERO for the selected render target and is used by 0x223 transition sources; mode 3 selects a subtractive special path. Surfaceless mode-0 fill consumption remains distinct."
+summary = "0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the default textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength). Its consumption is order-sensitive: a post-bind write supplies opacity until the next draw-texture bind, covering both FIELD's bound idle-unit suppression and CALLBACK_SETTING's freshly rebuilt ADV backing; pre-bind alpha-zero initialization remains opaque after the later bind. Mode 1 is SRCALPHA/ONE additive glow with ARGB alpha scaling the source contribution and RGB providing multiplicative modulation. Mode 2 conditionally forces ONE/ZERO for the selected render target and is used by 0x223 transition sources; mode 3 selects a subtractive special path. Surfaceless mode-0 fill consumption remains distinct."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9. Correct D3D9 constants at 0x4774c0 prove mode 1 writes SRCBLEND=5/SRCALPHA and DESTBLEND=2/ONE, not INVSRCALPHA. TITLE draws two opaque-black, no-colorkey SO022 flame sprites with mode 1; additive composition removes black and preserves the blue glow, verified in a windowed capture. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white. FIELD's movement lifecycle clones idle handle 0x9c40+entity to temporary handle 0x9c40+0x76c, writes mode-0 alpha zero to the bound looping idle handle at 0x45dc/0x4699/0x5210, animates only the temporary handle, then DRAWCH rebinds the idle handle at the next tile. Rendering static mode-0 alpha as universally inert leaves the reported stationary ghost at every route segment."
+evidence = "Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9. Correct D3D9 constants at 0x4774c0 prove mode 1 writes SRCBLEND=5/SRCALPHA and DESTBLEND=2/ONE, not INVSRCALPHA. TITLE draws two opaque-black, no-colorkey SO022 flame sprites with mode 1; additive composition removes black and preserves the blue glow, verified in a windowed capture. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white. FIELD's movement lifecycle clones idle handle 0x9c40+entity to temporary handle 0x9c40+0x76c, writes mode-0 alpha zero to the bound idle handle at 0x45dc/0x4699/0x5210, animates only the temporary handle, then DRAWCH rebinds the idle handle at the next tile. CALLBACK_SETTING independently erases the ADV family, binds SO001 to fresh handle 0xd2f0, reads message:MesWinAlpha, and writes (16-value)<<4 through static mode-0 0x203 before presenting. Rendering post-bind static mode-0 alpha as inert causes both the stationary FIELD ghost and the reported always-opaque post-CONFIG message window."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5275,59 +5275,59 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x212
-label = "set-gfx-field64"
+label = "set-adv-wait-indicator-handle"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "set-gfx-field64"
-category = "draw"
-summary = "0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table."
+name = "set-adv-wait-indicator-handle"
+category = "adv"
+summary = "0x212 (layout_slot)(retained_handle) — set the retained gfx handle used by that ADV layout's animated wait indicator."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4230c0 (dispatch ctx[0x26c93+0x212]); writes [obj+0x64]=operand2, obj from ctx+0x14d54[operand1*4]."
+evidence = "Ghidra /v2: handler 0x4230c0 indexes ctx+0x14d54, which is text-manager ctx+0x14940 plus its layout-pointer table at +0x414, then writes layout+0x64. adv_text_publish_wait_indicator_frame@0x453120 reads layout+0x64 for both gfx_object_bind_draw and gfx_object_erase. The only corpus site is SYSTEM4(layout 1, handle 0xd674)."
 
 [[opcode.semantics.args]]
 i = 1
-role = "obj_idx"
+role = "ADV layout slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "value"
+role = "retained wait-indicator object handle"
 observed_types = ["imm"]
 
 [[opcode]]
 op = 0x213
-label = "set-gfx-xy"
+label = "set-adv-text-object-range"
 argc = 3
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "set-gfx-xy"
-category = "draw"
-summary = "0x213 (obj_idx)(x)(y) — handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). The generic instruction length is 7 dwords. See docs/engine-re.md gfx op-contract table."
+name = "set-adv-text-object-range"
+category = "adv"
+summary = "0x213 (layout_slot)(first_handle)(capacity) — assign the retained gfx-object interval used to publish that ADV layout's glyphs."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x423110; writes obj+0x68/+0x6c from operands 2/3, obj from ctx+0x14d54[operand1*4]."
+evidence = "Ghidra /v2: handler 0x423110 indexes the ADV layout pointer table at text-manager+0x414 (EngineCtx+0x14d54) and writes layout+0x68/+0x6c. adv_text_publish_next_glyph@0x451220 binds handle first+glyph_index; adv_text_layout_reset@0x455210 and adv_text_publish_layout@0x450c80 erase this interval. All nine corpus sites are SYSTEM4 layout initialization; layout 1 receives 0xd6d8/0x1f4."
 
 [[opcode.semantics.args]]
 i = 1
-role = "obj_idx"
+role = "ADV layout slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "x"
+role = "first retained glyph handle"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 3
-role = "y"
+role = "retained glyph capacity"
 observed_types = ["imm"]
 
 [[opcode]]

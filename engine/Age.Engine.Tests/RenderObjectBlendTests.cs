@@ -102,6 +102,35 @@ public class RenderObjectBlendTests
     }
 
     [Fact]
+    public void AdvCallbackRebuild_PostBindStaticAlphaControlsBackingOpacity()
+    {
+        const long backing = 0xd2f0;
+        var g = new GfxState();
+        g.SetSurface(0x11, resId: 0x1234, colorKey: -1);
+
+        // CALLBACK_SETTING erases the old ADV family, recreates the backing from SO001, then applies
+        // (16-MesWinAlpha)<<4 through static mode-0 op 0x203.
+        g.EraseRange(backing, 7);
+        g.BindDraw(backing, 0x11, 0, 0, 800, 227, 0, 373);
+        g.SetStaticObjectColorResolved(backing, mode: 0, alpha: 0x80, rgb: 0x000000);
+
+        var rebuilt = g.SnapshotVisibleObjects().Single();
+        Assert.Equal(0x80, rebuilt.Alpha);
+        Assert.Equal(0x000000, rebuilt.Tint);
+        Assert.True(rebuilt.MultiplyTint);
+
+        // A later draw-texture bind starts a new presentation lifetime and clears the post-bind latch.
+        g.BindDraw(backing, 0x11, 0, 0, 800, 227, 0, 373);
+        Assert.Equal(255, g.SnapshotVisibleObjects().Single().Alpha);
+
+        // Opening CONFIG again repeats the erase/rebuild sequence and must accept the next setting too.
+        g.EraseRange(backing, 7);
+        g.BindDraw(backing, 0x11, 0, 0, 800, 227, 0, 373);
+        g.SetStaticObjectColorResolved(backing, mode: 0, alpha: 0x20, rgb: 0x000000);
+        Assert.Equal(0x20, g.SnapshotVisibleObjects().Single().Alpha);
+    }
+
+    [Fact]
     public void TransitionCleanup_Mode2ToMode0PreservedWhite_RemainsIdentity()
     {
         var g = WithVisibleObject(0x100, resId: 5, colorKey: -1);

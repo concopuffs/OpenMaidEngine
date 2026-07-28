@@ -52,6 +52,7 @@ public interface IHost
     // recording re-enable at exit ends that presentation and drops every bound target layout.
     void EndTextHistoryPresentation() { }
     int MessageWindowAlphaSetting => 0;
+    void SetMessageWindowAlphaSetting(int value) { }
     void FillSurfaceRect(SurfaceRectFill fill) { }
     void CopySurfaceRect(SurfaceRectCopy copy) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }

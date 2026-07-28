@@ -115,7 +115,6 @@ public sealed class GfxState
         // does not erase state that the port has not modeled yet; known fields are patched by the codec.
         public byte[]? NativePersistenceRecord;
         public (long X, long Y, long Z) V18, V24, V16c;
-        public long Field64, Field68, Field6c;
         public long Color = 0xffffffff; // native gfx_object_init_default obj+0x60: identity packed ARGB
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
         public long StaticColorMode; // op 0x203 operand 2 -> obj+0x30; mode 2 is transition alpha/identity
@@ -127,9 +126,10 @@ public sealed class GfxState
         // opacity + multiplicative modulation even after the target commits. This distinguishes ADV chrome
         // fades from a static mode-0 0x203 such as a CG initialized with 0x00ffffff (opaque identity).
         public bool OneShotColorBlend;
-        // FIELD applies static mode-0 alpha after binding a looping unit sprite to suppress the retained
-        // idle object while a separate clone moves between tiles. A later draw-texture rebind clears it.
-        public bool StaticLoopColorBlend;
+        // A mode-0 static color written after draw-texture binds an object consumes packed alpha as
+        // opacity. FIELD uses this to suppress a bound idle unit, and CALLBACK_SETTING uses it when
+        // rebuilding the ADV backing after CONFIG. A later draw-texture rebind clears the latch.
+        public bool PostBindStaticColorBlend;
 
         // ---- src-rect / spritesheet-cell channel (ops 0x239 one-shot cell, 0x231 looping animation).
         // Native obj+0x238 is the TOTAL FRAME COUNT and +0x23c is the COLUMN COUNT. Each frame keeps
@@ -218,7 +218,7 @@ public sealed class GfxState
 
     public GfxObject GetOrCreate(long handle)
     {
-        // Locked: called from the VM thread (directly by 0x217/0x219/0x1ff/0x212/0x213 and inside BindDraw/anim
+        // Locked: called from the VM thread (directly by geometry/animation ops and inside BindDraw/anim
         // ops) while the main-thread compositor enumerates _objects in SnapshotVisibleObjects. _lock is re-entrant
         // (Monitor) so the callers that already hold it are fine.
         lock (_lock)
@@ -248,21 +248,6 @@ public sealed class GfxState
     public void SetObjectPosition(long handle, (long X, long Y, long Z) position)
     {
         lock (_lock) GetOrCreate(handle).V24 = position;
-    }
-
-    public void SetObjectField64(long handle, long value)
-    {
-        lock (_lock) GetOrCreate(handle).Field64 = value;
-    }
-
-    public void SetObjectFields68And6c(long handle, long value68, long value6c)
-    {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.Field68 = value68;
-            o.Field6c = value6c;
-        }
     }
 
     /// <summary>Op 0x229: reset the embedded range transform, select [first, first+count), and set its
@@ -482,11 +467,10 @@ public sealed class GfxState
         {
             NativePersistenceRecord = s.NativePersistenceRecord?.ToArray(),
             V18 = s.V18, V24 = s.V24, V16c = s.V16c,
-            Field64 = s.Field64, Field68 = s.Field68, Field6c = s.Field6c,
             Color = s.Color, HasColor = s.HasColor, StaticColorMode = s.StaticColorMode,
             OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
             ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
-            OneShotColorBlend = s.OneShotColorBlend, StaticLoopColorBlend = s.StaticLoopColorBlend,
+            OneShotColorBlend = s.OneShotColorBlend, PostBindStaticColorBlend = s.PostBindStaticColorBlend,
             SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
             SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
             ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
@@ -637,7 +621,7 @@ public sealed class GfxState
         {
             var o = GetOrCreate(handle);
             o.StaticColorMode = mode;
-            o.StaticLoopColorBlend = mode == 0 && o.Visible && o.SrcAnim;
+            o.PostBindStaticColorBlend = mode == 0 && o.Visible;
         }
     }
 
@@ -911,7 +895,7 @@ public sealed class GfxState
         {
             var o = GetOrCreate(handle);
             o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
-            o.StaticLoopColorBlend = false;
+            o.PostBindStaticColorBlend = false;
         }
     }
 
@@ -1267,11 +1251,11 @@ public sealed class GfxState
                     {
                         alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
                     }
-                    else if (o.StaticColorMode == 0 && o.StaticLoopColorBlend)
+                    else if (o.StaticColorMode == 0 && o.PostBindStaticColorBlend)
                     {
-                        // FIELD clones the visible idle unit to its moving handle, then writes alpha zero
-                        // to the still-bound looping original. Consume that post-bind write as opacity;
-                        // ADV's ordinary static alpha-zero CG initialization remains the opaque mode-0 path.
+                        // FIELD suppresses a still-bound idle unit while its clone moves; CALLBACK_SETTING
+                        // rebuilds the erased ADV backing and writes the configured opacity after binding it.
+                        // Pre-bind static alpha-zero CG initialization remains the opaque mode-0 path.
                         alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
                     }
                     else if (o.StaticColorMode == 2)

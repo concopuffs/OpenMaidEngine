@@ -16,6 +16,8 @@ public static class AdvTextLayoutBootstrap
         int? resetOpcode = table.ByLabel("reset-adv-text-layout");
         int? resetCursorOpcode = table.ByLabel("set-adv-text-reset-cursor");
         int? boundsOpcode = table.ByLabel("set-adv-text-bounds");
+        int? waitIndicatorHandleOpcode = table.ByLabel("set-adv-wait-indicator-handle");
+        int? textObjectRangeOpcode = table.ByLabel("set-adv-text-object-range");
         int? addOpcode = table.ByLabel("add");
         if (defineOpcode == null || resetOpcode == null) return 0;
 
@@ -60,6 +62,7 @@ public static class AdvTextLayoutBootstrap
             bool inLayoutBlock = false;
             int cursorConfigurations = 0;
             int boundConfigurations = 0;
+            int objectRangeConfigurations = 0;
             foreach (var instruction in systemScript.Instructions)
             {
                 if (!inLayoutBlock)
@@ -89,20 +92,38 @@ public static class AdvTextLayoutBootstrap
                     history.SetBounds(values[0], values[1], values[2]);
                     boundConfigurations++;
                 }
+                else if (waitIndicatorHandleOpcode != null
+                         && instruction.Opcode == waitIndicatorHandleOpcode.Value)
+                {
+                    var values = ResolveConfiguration(
+                        instruction, localInts, systemScript.Name, expectedCount: 2);
+                    history.SetWaitIndicatorObjectHandle(values[0], values[1]);
+                }
+                else if (textObjectRangeOpcode != null
+                         && instruction.Opcode == textObjectRangeOpcode.Value)
+                {
+                    var values = ResolveConfiguration(instruction, localInts, systemScript.Name);
+                    history.SetTextObjectRange(values[0], values[1], values[2]);
+                    objectRangeConfigurations++;
+                }
 
-                if (cursorConfigurations >= definitions && boundConfigurations >= definitions) break;
+                if (cursorConfigurations >= definitions && boundConfigurations >= definitions
+                    && (textObjectRangeOpcode == null || objectRangeConfigurations >= definitions))
+                    break;
             }
         }
         return definitions;
     }
 
     private static int[] ResolveConfiguration(
-        Instruction instruction, IReadOnlyDictionary<int, long> localInts, string scriptName)
+        Instruction instruction, IReadOnlyDictionary<int, long> localInts, string scriptName,
+        int expectedCount = 3)
     {
-        if (instruction.Args.Count != 3)
+        if (instruction.Args.Count != expectedCount)
             throw new InvalidDataException(
-                $"{scriptName}@0x{instruction.Offset:x}: ADV layout configuration must use three operands");
-        var values = new int[3];
+                $"{scriptName}@0x{instruction.Offset:x}: ADV layout configuration must use " +
+                $"{expectedCount} operands");
+        var values = new int[expectedCount];
         for (int i = 0; i < values.Length; i++)
         {
             if (!TryResolveConstant(instruction.Args[i], localInts, out long value))

@@ -585,7 +585,8 @@ Every handler first writes its encoded instruction length in dwords to the curre
 `FUN_0041b940(i)` (1-based). Gfx handlers then either **SET** retained-object fields (call a native worker
 `FUN_0047xxxx`) or **QUERY** them (write results back via `FUN_00425fb0(i, val)`). The length write is generic
 interpreter bookkeeping and is not part of the gfx contract. Handlers resolved through
-the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_op_0x<op>_<role>`.
+the dispatch table (`ctx[0x26c93+op]`). The later ADV-text correction below removes `0x212/0x213`
+from this family: their shared pointer table was initially mistaken for retained gfx objects.
 
 | op | handler | words | dir | argc | contract |
 |---|---|---|---|---|---|
@@ -594,8 +595,8 @@ the dispatch table (`ctx[0x26c93+op]`); all renamed in the Ghidra project `gfx_o
 | `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
 | `0x202` | `0x4228d0` | 0xb | set | 5 | blit obj op1 with (op2,op3) + **packed ARGB** from op4(alpha)/op5(color) → `FUN_0047ea00` |
 | `0x203` | `0x4229a0` | 9 | set | 4 | draw obj op1 with op2 + packed color(op3/op4) → `FUN_0047e9b0` |
-| `0x212` | `0x4230c0` | 5 | set | 2 | `obj[ctx+0x14d54 + op1*4] -> +0x64 = op2` |
-| `0x213` | `0x423110` | 7 | set | 3 | `obj[0x14d54+op1*4] -> +0x68 = op2 ; +0x6c = op3` (an (x,y) pair) |
+| `0x212` | `0x4230c0` | 5 | ADV | 2 | layout `op1` retained wait-indicator handle `+0x64 = op2` |
+| `0x213` | `0x423110` | 7 | ADV | 3 | layout `op1` retained glyph interval `+0x68 = op2` (first handle), `+0x6c = op3` (capacity) |
 | `0x215` | `0x42a0b0` | 5 | **query** | 2 | retained-object **find**(op2 handle) → op1 = obj+4 source slot / `0xffffffff`. **Drives setup and teardown.** |
 | `0x216` | `0x42a0f0` | 5 | **query** | 2 | read `[ctx+0x46d14 + op2*0x14]` → op1 |
 | `0x217` | `0x4231b0` | 9 | set | 4 | 3 int→float on obj op1 → `FUN_0047e960` (SETS a geom 3-vector) |
@@ -616,7 +617,7 @@ ui-clear?         (G 0x62452)               ; 0x1fa: clear the slot
 These get-vectors are exactly the inputs to the anchor-preserve math (`docs/superpowers/specs/2026-07-06-a2b-graphics-geometry-design.md`:
 `G[0x62498] = G[0x6249b] − w/2`, foot-anchor at `G[0x6249c]`). **So the drift has two stubbed drivers, not
 one:** `0x215` (wrong slot → collapse to slot 0) **and** `0x218`/`0x21a` (stale geometry vectors → the
-anchor math reads garbage). Both read object state the SET ops (`0x217`/`0x219`/`0x212`/`0x213`) wrote — all
+anchor math reads garbage). Both read object state the SET ops (`0x217`/`0x219`/`0x1ff`) wrote — all
 bytecode-driven, all host-modelable.
 
 **Model implication for the host-side reimplementation (Phase 2 input).** The subsystem is a set of
@@ -625,8 +626,16 @@ per-object records keyed by handle, carrying: a live source **slot** (written by
 params (`0x202`/`0x203`). The native workers (`FUN_0047xxxx` = the DirectDraw/surface layer) need **not** be
 modelled — only the object-record data model, so the QUERY ops return what the SET ops stored. That makes
 `0x215`/`0x216`/`0x218`/`0x21a` return correct values and the existing bytecode geometry math produces
-correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x14d54` (obj pointers, fields `+0x64/
-+0x68/+0x6c`), `ctx+0x46d14` (stride `0x14`), `ctx+0x52bd4` (element pointers), plus the `0x408` registry.
+correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x46d14` (stride `0x14`),
+`ctx+0x52bd4` (element pointers), plus the `0x408` registry.
+
+**ADV pointer-table correction (2026-07-27).** `ctx+0x14d54` is not a gfx-object table. It is
+text-manager `ctx+0x14940` plus the ADV layout pointer table at manager `+0x414`. Opcode `0x212` writes
+layout `+0x64`, consumed by `adv_text_publish_wait_indicator_frame@0x453120` as the retained indicator
+handle. Opcode `0x213` writes layout `+0x68/+0x6c`, consumed by
+`adv_text_publish_next_glyph@0x451220` as first glyph handle plus capacity and erased by layout reset/
+publication. SYSTEM4 is the complete corpus: one `0x212(1,0xd674)` and nine `0x213` layout ranges, with
+layout 1 assigned `0xd6d8..0xd8cb`.
 
 Worker functions decoded + annotated in the Ghidra project (updated 2026-07-09): `gfx_object_erase`(`0x47d850`),
 `gfx_object_erase_range`(`0x47d8b0`), `gfx_object_query_source_slot`(`0x47f280`),
@@ -809,8 +818,15 @@ FIELD's per-tile movement animation uses two retained objects. At `0x45c9`/`0x46
 `DRAWCH@0x51ec` rebinds the idle handle at the new tile; a multi-tile route immediately repeats the
 clone/suppress cycle. Treating every static mode-0 alpha byte on a loaded texture as inert therefore leaves
 the old idle sprite composited beneath the moving clone until each segment ends. The port records the
-post-bind static-alpha consumption for looping objects as a transient opacity latch, cleared by the next
-`draw-texture` bind. This preserves ADV's distinct pre-animation/static alpha-zero CG initialization.
+post-bind static-alpha consumption as a transient opacity latch, cleared by the next `draw-texture` bind.
+This preserves ADV's distinct pre-bind/static alpha-zero CG initialization.
+
+The same ordering rule applies when an ADV callback rebuilds the message window after a modal menu.
+`CALLBACK_SETTING` erases `0xd2f0..0xd2f6`, binds a fresh `SO001` crop to backing handle `0xd2f0`, reads
+`message:MesWinAlpha`, and only then applies `(16-value)<<4` through mode-0 `0x203`. The erase discards the
+backing's earlier one-shot-color provenance, so classifying only animated or looping objects made every
+rebuilt message window opaque. Post-bind static alpha now controls this fresh backing as well; repeated
+CONFIG changes therefore take effect immediately while the enclosing ADV wait remains active.
 
 The same route exposed an independent publication-atomicity requirement. Each tile step reaches
 `FIELD@0x4eb2 -> 0x9225`, which calls `DRAWMAP`, `DRAWOBJ`, and `DRAWMINIMAP`. `DRAWMAP` first erases its
@@ -2387,6 +2403,19 @@ literal/global-string runs are joined for presentation, preserving the common
 `"literal" + dynamic name + "literal"` ADV idiom.
 The same generic path covers `ITMES.BIN`, `SKMES.BIN`, and `INFOMES.BIN`; no STUDY-specific coordinates or
 strings live in the runtime.
+
+Detached labels must still follow the ordinary ADV page's retained visibility lifecycle. At SC0000
+`show-text@0xb16 -> wait@0xb1e`, the first CG transition calls `0x127d1`: its chrome rebuild helper erases
+and rebinds handles `0xd2f0..0xd2f6`, applies the configured backing alpha, then arms `d2f0`'s one-shot
+color toward transparent. Before the animation wait begins, `label_1226b -> label_12350 -> label_12637`
+executes `gfx_object_erase_range(0xd6d8,0x1f4)` and erases speaker-name handle `0xe678`. AGE therefore
+removes the old glyphs **immediately as the window begins fading**; it does not fade glyph alpha with
+`d2f0`, nor wait for the later op-`0x71` layout reset.
+
+The port now retains SYSTEM4's op-`0x213` handle interval per ADV layout. A full op-`0x1f7` erase covering
+that interval clears the corresponding detached Godot live runs at the same bytecode point. Partial object
+erases do not discard the collapsed layout. This follows native lifetime without coupling text to the
+configured message-window opacity or affecting callback-owned layouts.
 
 **Deliberate Phase-A fidelity gap — Label rendering instead of native glyph objects.** The native engine
 GDI-rasterizes CP932 glyph bitmaps and publishes retained 20-byte records one glyph at a time; the port

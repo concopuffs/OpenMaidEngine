@@ -160,6 +160,16 @@ Port status (2026-07-24): after the blocking host releases this wait, the VM que
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requested slot to adv_text_publish_layout@0x450c80, which rebinds the layout's retained text records. If ADV run-state bit 0x40000000 is active, it also calls adv_text_publish_wait_indicator_frame@0x453120 with ctx+0x5f72c. Slot zero resolves the text manager's current layout; the corpus always uses slot one, including HISTORY.BIN@0x13ab in its shared ADV redraw callback.
 
+### 0x212 `set-adv-wait-indicator-handle` (set-adv-wait-indicator-handle, argc 2)
+- **summary:** 0x212 (layout_slot)(retained_handle) — set the retained gfx handle used by that ADV layout's animated wait indicator.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: handler 0x4230c0 indexes ctx+0x14d54, which is text-manager ctx+0x14940 plus its layout-pointer table at +0x414, then writes layout+0x64. adv_text_publish_wait_indicator_frame@0x453120 reads layout+0x64 for both gfx_object_bind_draw and gfx_object_erase. The only corpus site is SYSTEM4(layout 1, handle 0xd674).
+
+### 0x213 `set-adv-text-object-range` (set-adv-text-object-range, argc 3)
+- **summary:** 0x213 (layout_slot)(first_handle)(capacity) — assign the retained gfx-object interval used to publish that ADV layout's glyphs.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: handler 0x423110 indexes the ADV layout pointer table at text-manager+0x414 (EngineCtx+0x14d54) and writes layout+0x68/+0x6c. adv_text_publish_next_glyph@0x451220 binds handle first+glyph_index; adv_text_layout_reset@0x455210 and adv_text_publish_layout@0x450c80 erase this interval. All nine corpus sites are SYSTEM4 layout initialization; layout 1 receives 0xd6d8/0x1f4.
+
 ### 0x2bd `set-font-bold` (set-font-bold, argc 1)
 - **summary:** (enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state.
 - **grounding:** source=investigation, confidence=high
@@ -620,6 +630,11 @@ The handler uses an alpha step of 1 and timer interval=argument when argument <=
 
 The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error.
 
+### 0x141 `set-message-window-alpha` (set-message-window-alpha, argc 1)
+- **summary:** (value) - write the configured `message:MesWinAlpha` value read by opcode 0x131. Himegari's CONFIG menu bounds the value to 0..16; larger values make the inverse-width opacity bar shorter.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** CONFIG.BIN is a complete paired getter/setter proof: reset-defaults writes 4; the two message-window-opacity controls read op 0x131, increment/decrement within 0..16, then pass the result to op 0x141; the redraw path reads op 0x131 again and computes bar width (16-value)*80/16. The shared ADV/history paths independently consume the same getter as (16-value)<<4 alpha.
+
 ### 0x1ae `write-numbered-save-thumbnail` (write-numbered-save-thumbnail, argc 3)
 - **summary:** (status_out)(slot)(surface_slot) - encode the selected surface into the numbered save's separate `SAVE%02d.STH` thumbnail file.
 - **grounding:** source=investigation, confidence=high
@@ -687,9 +702,9 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **evidence:** Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock retained-gfx owner+0xb550 (EngineCtx+0x51b64); bytewise integer LERP; natural or owner+0xb55c (EngineCtx+0x51b70) forced completion. /v2 annotated and saved 2026-07-10.
 
 ### 0x203 `gfx-draw-color` (gfx-draw-color, argc 4)
-- **summary:** 0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the default textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength). Its consumption is order-sensitive for FIELD's looping unit objects: a post-bind write supplies opacity to suppress/restore the idle object after its moving clone is made, while the prototype's pre-loop alpha-zero initialization remains opaque after DRAWCH binds the clone. Mode 1 is SRCALPHA/ONE additive glow with ARGB alpha scaling the source contribution and RGB providing multiplicative modulation. Mode 2 conditionally forces ONE/ZERO for the selected render target and is used by 0x223 transition sources; mode 3 selects a subtractive special path. Surfaceless mode-0 fill consumption remains distinct.
+- **summary:** 0x203 (handle)(mode)(alpha)(color) — worker stores the D3D blend selector at obj+0x30 and STATIC packed color at obj+0x60; the handler's ctx+0x53d88 write is the generic 9-dword instruction length. Negative alpha/RGB preserve current static bytes. Mode 0 is the default textured path: preserved 0xffffffff is identity (the alpha byte is not tint strength). Its consumption is order-sensitive: a post-bind write supplies opacity until the next draw-texture bind, covering both FIELD's bound idle-unit suppression and CALLBACK_SETTING's freshly rebuilt ADV backing; pre-bind alpha-zero initialization remains opaque after the later bind. Mode 1 is SRCALPHA/ONE additive glow with ARGB alpha scaling the source contribution and RGB providing multiplicative modulation. Mode 2 conditionally forces ONE/ZERO for the selected render target and is used by 0x223 transition sources; mode 3 selects a subtractive special path. Surfaceless mode-0 fill consumption remains distinct.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9. Correct D3D9 constants at 0x4774c0 prove mode 1 writes SRCBLEND=5/SRCALPHA and DESTBLEND=2/ONE, not INVSRCALPHA. TITLE draws two opaque-black, no-colorkey SO022 flame sprites with mode 1; additive composition removes black and preserves the blue glow, verified in a windowed capture. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white. FIELD's movement lifecycle clones idle handle 0x9c40+entity to temporary handle 0x9c40+0x76c, writes mode-0 alpha zero to the bound looping idle handle at 0x45dc/0x4699/0x5210, animates only the temporary handle, then DRAWCH rebinds the idle handle at the next tile. Rendering static mode-0 alpha as universally inert leaves the reported stationary ghost at every route segment.
+- **evidence:** Ghidra handler 0x4229a0; negative operands read current obj+0x60, then worker 0x47e9b0 stores op2 at obj+0x30 and ARGB at +0x60. gfx_object_composite call-site 0x47f78f passes +0x30/+0x60 directly to gfx_object_blit_d3d9. Correct D3D9 constants at 0x4774c0 prove mode 1 writes SRCBLEND=5/SRCALPHA and DESTBLEND=2/ONE, not INVSRCALPHA. TITLE draws two opaque-black, no-colorkey SO022 flame sprites with mode 1; additive composition removes black and preserves the blue glow, verified in a windowed capture. Mode 2 transition setup and synchronized pixels prove 0xffffffff is identity, not solid white. SC0000 page 14 adds the mode-0 endpoint proof: after the EV052CA->EV052DA 0x223 crossfade, 0x203@0x12478 restores the base CG to mode 0 with preserved 0xffffffff; native keeps EV052DA visible while the port's tint-strength interpretation turns every texel white. FIELD's movement lifecycle clones idle handle 0x9c40+entity to temporary handle 0x9c40+0x76c, writes mode-0 alpha zero to the bound idle handle at 0x45dc/0x4699/0x5210, animates only the temporary handle, then DRAWCH rebinds the idle handle at the next tile. CALLBACK_SETTING independently erases the ADV family, binds SO001 to fresh handle 0xd2f0, reads message:MesWinAlpha, and writes (16-value)<<4 through static mode-0 0x203 before presenting. Rendering post-bind static mode-0 alpha as inert causes both the stationary FIELD ghost and the reported always-opaque post-CONFIG message window.
 
 ### 0x205 `draw-formatted-integer` (u00420A60, argc 6)
 - **summary:** Format an integer into a fixed-width decimal field and rasterize it immediately into a numbered graphics surface using the current font/color/effect state.
@@ -747,16 +762,6 @@ This is a target-pixel operation, not retained-object teardown. It invokes IDire
 - **evidence:** Ghidra /v2: op_0x20f_play_modal_movie_to_surface@0x422e50 requires an existing retained D3D target, shares the movie-object allocation, DirectShow graph open, audio-route, and volume setup used by 0x236, then calls movie_start_modal_playback@0x463280, ORs EngineCtx+0xa0ce4 with 0x2000, and marks movie presentation dirty. It does not reload/rebind the gfx surface record or assign an RGB color key. The start worker calls IMediaControl::Run at vtable +0x1c on the freshly stopped graph; AGE performs no explicit Pause, seek, or opening-frame decode. DirectShow's stopped-to-paused-to-running transition cues the first sample. movie_texture_renderer_receive_sample@0x4628d0 copies it to the D3D texture and sets renderer +0x5b4; movie_consume_renderer_new_frame_flag@0x405120 makes the outer tick render it. Native OP then advances video immediately with audio, so FFmpeg's roughly 600 ms shared-mux video origin is not an AGE-visible hold. Corpus has exactly three sites: LOGO (0x335f,42,4), OP (0x3364,42,4), and ED (0x3324,42,dynamic flags).
 
 Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same native universal packed-id catalog contract as 0x236; the separate host call exists for modal wait/cancel lifecycle, not a different resolver. ResourceMap.ResolveMovie selects through ResolvePacked and retains MPEG signature validation in ReadMovie. Godot reuses the asynchronous FFmpeg decoder/retained-surface compositor, parks only the VM thread until EOF, and treats mouse click or Accept/Cancel input as completion before wrapper cleanup releases both video and per-playback audio output. Movie playback leaves the existing mutable target at resourceId 0 with no RGB color key; MovieSurfaceRegistry supplies its live pixels. Audio-bearing movies deliver timestamped stereo float PCM through AudioStreamGenerator and use the sound-hardware position as the master clock. The first decoded image is latched before audio starts, and all video deadlines are rebased to the first video PTS while the complete audio stream begins at its own timestamp zero. No opening samples are discarded.
-
-### 0x212 `set-gfx-field64` (set-gfx-field64, argc 2)
-- **summary:** 0x212 (obj_idx)(val) — handler gfx_op_0x212_set_field64 @0x4230c0: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x64)=val. The generic instruction length is 5 dwords. See docs/engine-re.md gfx op-contract table.
-- **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x4230c0 (dispatch ctx[0x26c93+0x212]); writes [obj+0x64]=operand2, obj from ctx+0x14d54[operand1*4].
-
-### 0x213 `set-gfx-xy` (set-gfx-xy, argc 3)
-- **summary:** 0x213 (obj_idx)(x)(y) — handler gfx_op_0x213_set_field68_6c @0x423110: obj=[ctx+0x14d54 + obj_idx*4]; if obj: *(obj+0x68)=x; *(obj+0x6c)=y (an (x,y) pair). The generic instruction length is 7 dwords. See docs/engine-re.md gfx op-contract table.
-- **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra handler 0x423110; writes obj+0x68/+0x6c from operands 2/3, obj from ctx+0x14d54[operand1*4].
 
 ### 0x215 `query-gfx-object?` (query-gfx-object?, argc 2)
 - **summary:** 0x215 (out_slot)(handle) — query the retained gfx-object map. Handler gfx_op_0x215_query_source_slot@0x42a0b0 calls gfx_object_query_source_slot@0x47f280 with owner ctx+0x46614. The worker searches owner+0x408, the same map populated by geometry/draw workers, and returns obj+4: the live source-surface slot written by draw-texture, or -1 if absent. gfx_object_init_default zeroes obj+4, so a geometry/animation-created but draw-unbound object returns slot 0, not -1. SC0000 uses a successful result for query-guarded teardown: op 0x1f7 erases the object group and op 0x1fa releases this slot. Matching the zero default prevents stale transforms from surviving into the EV050EA CG at SC0000 page 58.
@@ -1306,10 +1311,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x13f `check-bit` (check-bit, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x141 `u0041FAA0` (u0041FAA0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x142 `u0041FB10` (u0041FB10, argc 1)
 - **summary:** —

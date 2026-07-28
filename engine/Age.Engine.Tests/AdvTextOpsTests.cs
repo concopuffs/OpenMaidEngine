@@ -226,9 +226,34 @@ public class AdvTextOpsTests
         Assert.Equal((53, 10, 495, 60), CursorAndBounds(history.GetLayoutSnapshot(8)));
         history.ResetLayout(9);
         Assert.Equal((10, 10, 250, 368), CursorAndBounds(history.GetLayoutSnapshot(9)));
+        Assert.Equal(new[] { 1 }, history.LayoutsCoveredByTextObjectErase(0xd6d8, 0x1f4));
+        Assert.Equal(new[] { 7 }, history.LayoutsCoveredByTextObjectErase(0x7d0, 0x1f4));
 
         static (int X, int Y, int Right, int Bottom) CursorAndBounds(AdvTextLayoutSnapshot layout)
             => (layout.CursorX, layout.CursorY, layout.Right, layout.Bottom);
+    }
+
+    [Fact]
+    public void FullNativeGlyphRangeEraseClearsDetachedLayoutPresentation()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        var script = ScriptAssembler.Assemble(table, "ADV_GLYPH_ERASE",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { I(1), I(800), I(160), I(0), I(430) }),
+                (0x213, new[] { I(1), I(0xd6d8), I(0x1f4) }),
+                (0x1f7, new[] { I(0xd6d8), I(1) }),       // partial erase cannot clear collapsed text
+                (0x1f7, new[] { I(0xd6d8), I(0x1f4) }),  // SC0000 transition teardown
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { 1 }, host.ClearedTextLayouts);
+        Assert.Null(vm.Gfx.TryGet(1)); // 0x213 configures the ADV layout, not retained gfx handle 1
     }
 
     [Fact]

@@ -1244,7 +1244,8 @@ public partial class Main : Godot.Control
         // Modal callback scripts composite their own full-screen UI while the enclosing ADV wait remains
         // parked. Live layout text is a Godot overlay rather than part of the retained surface. During a
         // raw-input callback, keep runs owned by that callback's script stack (STUDY -> MAMES) while hiding
-        // enclosing ADV runs that would otherwise leak above a nested screen such as HISTORY.
+        // enclosing ADV runs that would otherwise leak above a nested screen such as HISTORY. Native
+        // retained-glyph erases remove ordinary live runs through the host before this presentation pass.
         foreach (var label in _advTextLabels) label.Visible = false;
         if (_host.IsAdvPagePresentationSuspended) return;
 
