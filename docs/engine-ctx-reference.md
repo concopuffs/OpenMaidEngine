@@ -117,6 +117,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x9f274` | `mounted_aai_catalogs` | `void*` | base of 256-entry selector-keyed AAI catalog-pointer table inside the embedded FileDB; op 0x143 scans slots 1..255 from +0x9f278 |
 | `0x9f278` | `mounted_aai_catalog_selector_1` | `void*` | selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255 |
 | `0xa0b84` | `current_bgm_track_id` | `int` | direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it |
+| `0xa0b8c` | `current_bgm_start_mode` | `int` | logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero |
 | `0xa0cc0` | `screen_w` | `int` | logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800) |
 | `0xa0cc4` | `screen_h` | `int` | logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600) |
 | `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |

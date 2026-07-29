@@ -43,6 +43,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
     public readonly List<int> SfxReleases = new();
     public readonly List<long> BgmTracks = new();
+    public readonly List<(long Track, int StartMode)> BgmRestartRequests = new();
+    public int BgmStops;
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
     public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
@@ -175,6 +177,8 @@ internal class RecordingHost : IHost
         => TextureDraws.Add((slot, sx, sy, w, h, dx, dy));
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     public void PlayBgm(long id) => BgmTracks.Add(id);
+    public void RestartBgm(long id, int startMode) => BgmRestartRequests.Add((id, startMode));
+    public void StopBgm() => BgmStops++;
     public void PlayVoice(long id) => Voices.Add(id);
     public void PlayVoice(long id, int playbackVariant)
     {

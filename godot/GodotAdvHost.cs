@@ -1584,11 +1584,33 @@ public sealed class GodotAdvHost : IHost
     // ---- audio ops (OGG plays natively in Godot) ----
     // BGM is addressed by direct name (BGM{id:D3}.OGG); voice uses the universal packed catalog.
     public void PlayBgm(long id)
+        => DispatchBgm(id, 1, false);
+
+    public void RestartBgm(long id, int startMode)
+        => DispatchBgm(id, startMode, true);
+
+    private void DispatchBgm(long id, int startMode, bool forceRestart)
     {
         var asset = _res.ResolveBgm(id);
         var audio = asset != null ? LoadAudio(asset) : null;
-        _timeline?.Event("bgm", new() { ["id"] = id, ["file"] = audio?.Name });
-        if (audio != null) _main.CallDeferred("PlayBgm", audio.Bytes, audio.Name);
+        _timeline?.Event("bgm", new()
+        {
+            ["id"] = id,
+            ["file"] = audio?.Name,
+            ["start_mode"] = startMode,
+            ["force_restart"] = forceRestart,
+        });
+        if (audio == null) return;
+        if (forceRestart)
+            _main.CallDeferred("RestartBgm", audio.Bytes, audio.Name, startMode);
+        else
+            _main.CallDeferred("PlayBgm", audio.Bytes, audio.Name);
+    }
+
+    public void StopBgm()
+    {
+        _timeline?.Event("bgm-stop", new());
+        _main.CallDeferred("StopBgm");
     }
 
     public void PlayVoice(long id) => PlayVoice(id, 0);

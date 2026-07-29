@@ -1829,12 +1829,19 @@ public partial class Main : Godot.Control
                 px[i + 3] = 0;
     }
 
-    // Decode VFS-owned bytes in Godot. BGM loops; voice plays once, cutting off any prior line.
+    // Decode VFS-owned bytes in Godot. Ordinary BGM loops; forced starts retain AGE's
+    // loop/one-shot mode. Voice plays once, cutting off any prior line.
     public void PlayBgm(byte[] oggBytes, string assetName)
+        => StartBgm(oggBytes, assetName, 1);
+
+    public void RestartBgm(byte[] oggBytes, string assetName, int startMode)
+        => StartBgm(oggBytes, assetName, startMode);
+
+    private void StartBgm(byte[] oggBytes, string assetName, int startMode)
     {
         var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
         if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
-        stream.Loop = true;
+        stream.Loop = startMode != 0;
         // FadeBgm is marshalled from the VM thread and starts on the next Godot frame, while the VM's
         // blocking deadline begins immediately. Scene startup can consequently request the replacement
         // track just before the old fade tween reaches zero. Do not let that orphaned tween mute the new
@@ -1843,6 +1850,15 @@ public partial class Main : Godot.Control
         _bgm.VolumeDb = 0;
         _bgm.Stream = stream;
         _bgm.Play();
+    }
+
+    public void StopBgm()
+    {
+        RestoreVoiceBgmDuck();
+        CancelBgmFade();
+        _bgm.Stop();
+        _bgm.Stream = null;
+        _bgm.VolumeDb = 0;
     }
 
     private void PersistAudioMixerSettings(AudioMixerSettingsSnapshot snapshot)
@@ -2268,8 +2284,15 @@ public partial class Main : Godot.Control
         bool bgmReplacementCancelsFade = bgmFadeStarted
                                          && _bgmFadeTween == null
                                          && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
-        _bgm.Stop();
-        _bgm.Stream = null;
+        RestartBgm(bgm.Bytes, bgm.Name, 0);
+        bool bgmOneShotModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == false;
+        RestartBgm(bgm.Bytes, bgm.Name, 1);
+        bool bgmLoopModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == true;
+        StopBgm();
+        bool bgmStopReleaseOk = _bgm.Stream == null
+                                && !_bgm.Playing
+                                && _bgmFadeTween == null
+                                && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
         AdvTextEffectTheme mode1 = ResolveAdvTextEffectTheme(AdvTextStyle.Default with
         {
             RenderMode = 1,
@@ -2337,18 +2360,22 @@ public partial class Main : Godot.Control
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight));
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
-              && bgmReplacementCancelsFade && textEffectModesOk && fontCalibrationOk
+              && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
+              && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
               && logicalCanvasOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
-                         $"bgm-fade-replacement=ok; text-effect-modes=ok; font-calibration=ok; " +
+                         $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
+                         $"text-effect-modes=ok; font-calibration=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
+                      $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
+                      $"bgm-stop-release={bgmStopReleaseOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");

@@ -786,6 +786,17 @@ public sealed class VirtualMachine
         _host.ResetSceneContext();
     }
 
+    private void RestartBgm(long requestedTrackId, int startMode)
+    {
+        if (requestedTrackId != 0)
+            _currentBgmTrackId = requestedTrackId;
+
+        if (_currentBgmTrackId == 0)
+            _host.StopBgm();
+        else
+            _host.RestartBgm(_currentBgmTrackId, startMode);
+    }
+
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
         ExecFrame? previousInteractiveFrame;
@@ -2421,6 +2432,16 @@ public sealed class VirtualMachine
                 }
                 return pc + 1;
             }
+            case "restart-bgm-loop": // 0xb7: force start, including current-track/zero alias
+                RestartBgm(Read(a[0]), 1);
+                return pc + 1;
+            case "stop-bgm": // 0xb8: release source and clear retained track
+                _currentBgmTrackId = 0;
+                _host.StopBgm();
+                return pc + 1;
+            case "restart-bgm-once": // 0xb9: force start without decoder rewind at EOF
+                RestartBgm(Read(a[0]), 0);
+                return pc + 1;
             case "get-current-bgm-track":
                 Write(a[0], _currentBgmTrackId);
                 return pc + 1;
@@ -2464,7 +2485,11 @@ public sealed class VirtualMachine
             {
                 int targetPercent = (int)Read(a[0]);
                 _host.FadeBgm(targetPercent, Read(a[1]));
-                if (targetPercent == 0) _currentBgmTrackId = 0;
+                if (targetPercent == 0)
+                {
+                    _currentBgmTrackId = 0;
+                    _host.StopBgm();
+                }
                 return pc + 1;
             }
             case "get-audio-volume": // 0xc5 (category)(out basis points)

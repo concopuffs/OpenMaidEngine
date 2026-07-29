@@ -137,6 +137,11 @@ public interface IHost
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
     (int Width, int Height) GetTextureSize(int slot);
     void PlayBgm(long id);
+    // Ordinary op 0xbf is VM-filtered so reasserting the current track is idempotent. Ops
+    // 0xb7/0xb9 deliberately bypass that guard and restart with logical loop/one-shot mode.
+    void RestartBgm(long id, int startMode) => PlayBgm(id);
+    // Op 0xb8 releases the current source rather than merely applying a zero-volume envelope.
+    void StopBgm() => FadeBgm(0, 0);
     void PlayVoice(long id);
     // Native voice playback retains a second start argument: ordinary dialogue passes 0,
     // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.

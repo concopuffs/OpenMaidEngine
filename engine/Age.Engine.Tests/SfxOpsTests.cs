@@ -30,6 +30,41 @@ public class SfxOpsTests
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal([24L, 25L, 25L], host.BgmTracks);
         Assert.Equal((0, 0L), Assert.Single(host.BgmFades));
+        Assert.Equal(1, host.BgmStops);
+    }
+
+    [Fact]
+    public void ForcedBgmTrioRestartsWithNativeModesReusesCurrentAndStops()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int currentAfterStop = 0x100;
+        const int currentAfterRestart = 0x101;
+        var script = ScriptAssembler.Assemble(table, "BGM-FORCE",
+            new List<(int, Operand[])>
+            {
+                (0xbf, new[] { new Operand(0, 24) }),
+                (0xb7, new[] { new Operand(0, 24) }), // same track still restarts
+                (0xb7, new[] { new Operand(0, 0) }),  // zero aliases retained track
+                (0xb9, new[] { new Operand(0, 0) }),  // retained track, one-shot mode
+                (0xb9, new[] { new Operand(0, 25) }), // nonzero replaces retained track
+                (0xb8, Array.Empty<Operand>()),
+                (0xc0, new[] { new Operand(3, currentAfterStop) }),
+                (0xb7, new[] { new Operand(0, 0) }),  // no retained track: idempotent stop
+                (0xbf, new[] { new Operand(0, 25) }),
+                (0xc0, new[] { new Operand(3, currentAfterRestart) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal([24L, 25L], host.BgmTracks);
+        Assert.Equal([(24L, 1), (24L, 1), (24L, 0), (25L, 0)], host.BgmRestartRequests);
+        Assert.Equal(2, host.BgmStops);
+        Assert.Equal(0, vm.Globals[currentAfterStop]);
+        Assert.Equal(25, vm.Globals[currentAfterRestart]);
     }
 
     [Fact]

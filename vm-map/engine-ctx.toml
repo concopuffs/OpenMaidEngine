@@ -563,6 +563,11 @@ name = "current_bgm_track_id"
 type = "int"
 note = "direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it"
 [[field]]
+offset = 0xa0b8c
+name = "current_bgm_start_mode"
+type = "int"
+note = "logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero"
+[[field]]
 offset = 0xa0cc0
 name = "screen_w"
 type = "int"

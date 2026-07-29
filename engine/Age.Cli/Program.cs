@@ -352,6 +352,13 @@ sealed class AudioTraceHost : IHost
         var entry = _res.ResolveBgm(id);
         Events.Add(("play-bgm", id, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>"));
     }
+    public void RestartBgm(long id, int startMode)
+    {
+        var entry = _res.ResolveBgm(id);
+        string resolved = entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>";
+        Events.Add((startMode == 0 ? "restart-bgm-once" : "restart-bgm-loop", id, resolved));
+    }
+    public void StopBgm() => Events.Add(("stop-bgm", 0, ""));
     public void PlayVoice(long id)                      // voice: universal packed catalog id
     {
         var e = _res.ResolveVoice(id);

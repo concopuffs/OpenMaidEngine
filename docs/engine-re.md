@@ -2826,6 +2826,39 @@ move and repeatedly throughout enemy turns. The VM now treats a current-track re
 A different id still starts a new track, and `0xc2` target zero clears the retained id so a later request
 can start that track normally.
 
+**Forced BGM lifecycle siblings (mapped 2026-07-29).** The remaining `0xb7`/`0xb8`/`0xb9` gap is one
+coherent BGM tranche:
+
+- `op_0xb7_force_play_bgm_loop@0x4202d0` calls `bgm_force_play_track@0x464a90` with start mode one.
+  A nonzero operand replaces and starts that track; zero restarts the retained current track. Unlike
+  ordinary `0xbf`, the force worker has no same-track early return. CALLBACK_LOAD uses zero after a
+  numbered-load callback, and CONFIG uses BGM029 as its music-preview sample.
+- `op_0xb8_stop_bgm@0x416ba0` calls `bgm_stop_release@0x464690`, clearing the retained track and stopping
+  the active backend. CONFIG uses it when leaving the preview path; MMODE uses it before constructing the
+  music-room screen.
+- `op_0xb9_force_play_bgm_once@0x420330` calls the same force worker with start mode zero. Its sole
+  Himegari site starts BGM025 as STAGECLEAR's one-shot fanfare.
+
+All three first complete and cancel an active `0xc2` fade by clearing run-state bit `0x200` and calling
+`bgm_fade_tick(...,100)`. Both start variants store their mode at
+`EngineCtx.current_bgm_start_mode` (`ctx+0xa0b8c`) before invoking the backend. Himegari's OGG backend
+forwards that value through `FUN_00482f00` to `sound_buffer_start`; the already-decoded
+`sound_stream_fill_quarter@0x483b70` rewinds at EOF only when the mode is nonzero. Thus the distinction is
+logical loop versus one-shot, not a mixer flag. A compatible implementation must extend the existing BGM
+host seam with explicit restart and loop ownership, preserve `0xbf`'s current idempotence, treat operand
+zero through the VM's retained track, and make `0xb8` clear that retained state.
+
+The port now implements that split directly. `IHost.RestartBgm(track,startMode)` is distinct from ordinary
+`PlayBgm`, so `0xbf` remains same-track-idempotent while `0xb7`/`0xb9` always replace the stream. The VM
+resolves operand zero through `_currentBgmTrackId`; zero with no retained track calls the same idempotent
+stop path as native. `StopBgm` clears the VM track and makes Godot cancel voice ducking and any deferred
+fade, stop the player, release its stream, and restore neutral gain. Godot sets `AudioStreamOggVorbis.Loop`
+from the native start mode. The already-mapped `0xc2` target-zero endpoint now also calls this seam after
+its blocking fade, replacing the former silent-but-still-bound Godot stream with native release behavior.
+A focused regression covers same-track restart, zero aliasing, loop/one-shot selection, track replacement,
+stop/clear, fade-to-zero release, and restart after stop; the threaded self-test exercises both loop modes
+and real stop/release.
+
 `0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
 and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
 durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.

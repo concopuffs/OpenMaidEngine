@@ -201,6 +201,27 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> sound_buffer_destroy@0x4831a0, which releases the per-channel object under its critical section and clears the slot. Native trace captured SC0000's channels 0..9 release sweep in consecutive calls.
 
+### 0xb7 `restart-bgm-loop` (restart-bgm-loop, argc 1)
+- **summary:** (track_or_zero) — force-start looping BGM even when the requested nonzero track already matches the retained current track. A zero operand restarts the retained track; when no track is retained it resolves to an idempotent stop. Any active BGM fade is completed/cancelled first.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xb7_force_play_bgm_loop@0x4202d0 first clears run-state bit 0x200 and forces bgm_fade_tick(...,100) when a fade is active, then calls bgm_force_play_track@0x464a90 with operand 1 and logical start mode 1. Unlike ordinary bgm_play_track@0x464750 (op 0xbf), the force worker has no same-track early return. A nonzero operand replaces EngineCtx.current_bgm_track_id; zero reuses it, or releases when it is also zero. The OGG backend forwards mode 1 through sound_buffer_start; sound_stream_fill_quarter rewinds at EOF only for nonzero mode. Corpus: CALLBACK_LOAD uses zero to restart restored music; CONFIG uses BGM029 for its music preview.
+
+Implemented: the VM resolves zero through its retained current track and calls the explicit forced-restart host seam with mode 1. Godot replaces the OGG stream with Loop=true and cancels any deferred fade; ordinary op 0xbf keeps its same-track idempotence.
+
+### 0xb8 `stop-bgm` (stop-bgm, argc 0)
+- **summary:** Stop and release the active BGM source and clear the retained current track. Any active BGM fade is completed/cancelled first.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xb8_stop_bgm@0x416ba0 clears run-state bit 0x200 and forces bgm_fade_tick(...,100) when a fade is active, then calls bgm_stop_release@0x464690. The worker clears music-facade current track/status fields and invokes the active backend's stop/release method. Corpus: CONFIG stops the BGM029 preview while closing; MMODE stops current music before building the music-room screen.
+
+Implemented: the VM clears its retained track and calls StopBgm. Godot cancels voice ducking and any fade, stops playback, releases the stream, and restores neutral gain.
+
+### 0xb9 `restart-bgm-once` (restart-bgm-once, argc 1)
+- **summary:** (track_or_zero) — force-start one-shot BGM even when the requested nonzero track already matches the retained current track. A zero operand restarts the retained track once; when no track is retained it resolves to an idempotent stop. Any active BGM fade is completed/cancelled first.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xb9_force_play_bgm_once@0x420330 shares op 0xb7's fade-finalization and bgm_force_play_track@0x464a90 path but supplies logical start mode 0. The OGG backend forwards that mode through sound_buffer_start; sound_stream_fill_quarter pads/stops at decoder EOF instead of rewinding. Corpus: STAGECLEAR's sole site force-starts BGM025 as its one-shot clear fanfare.
+
+Implemented: the VM shares op 0xb7's retained-track/zero handling but supplies mode 0. Godot replaces the OGG stream with Loop=false, so BGM025 naturally stops at EOF.
+
 ### 0xba `sfx-start-loop` (sfx-start-loop, argc 1)
 - **summary:** (channel) — start the already-loaded sound-effect channel with logical loop mode 1; the streaming decoder rewinds at EOF until the channel is replaced or released.
 - **grounding:** source=investigation, confidence=high
@@ -219,6 +240,8 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **summary:** (target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Target 0 releases the current BGM source at completion.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra op 0xc2 handler 0x4204c0 sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830; bgm_fade_tick@0x464960 interpolates current/target percent and applies volume, releasing at target 0. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms.
+
+Implemented through the blocking host fade clock. Target zero clears the VM's retained track after the wait and invokes the shared BGM stop/release seam, so Godot does not retain a silent bound stream.
 
 ### 0xc4 `play-voice` (play-voice, argc 1)
 - **summary:** Play a voice clip by universal packed SYS4INI/AAI id with native playback/history variant 0. While all-message Skip is active, retain/replace the queued voice request instead of starting it; playback resumes from the latest queued request after Skip clears. Uses the same packed-id opener as textures/scripts/movies, unlike play-bgm's direct BGM{id:03d} naming.
@@ -1728,18 +1751,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0xb7 `u0041D0E0` (u0041D0E0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xb8 `u00415520` (u00415520, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xb9 `u0041D140` (u0041D140, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0xbb `u0041D250` (u0041D250, argc 1)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.

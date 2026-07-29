@@ -874,6 +874,41 @@ effectful inventory from 15 distinct opcodes / 22 instructions to 12 / 16.
 
 **NEXT:** rerank the remaining 12 effectful opcode gaps and investigate the widest coherent slice.
 
+**Remaining-gap rerank and forced-BGM investigation (2026-07-29):** a fresh scan of all 481 scripts
+confirms 12 effectful gaps totaling 16 instructions. `0xb7`, `0xb8`, `0x142`, and `0x24d` occur twice
+each; `0xb9`, `0x137`, `0x144`, `0x149`, `0x241`, `0x248`, `0x2c6`, and `0x2c8` are singletons. Raw
+frequency no longer identifies a subsystem, but native RE does: `0xb7`/`0xb8`/`0xb9` are the complete
+forced-BGM lifecycle around the already-implemented `0xbf`/`0xc2` path.
+
+`0xb7(track_or_zero)` force-restarts looping playback, including the same retained track and the zero
+operand's "restart current" form; `0xb9(track_or_zero)` is the corresponding one-shot start; and `0xb8`
+stops/releases and clears the retained track. Each first completes/cancels a pending BGM fade. CONFIG's
+BGM029 preview needs the force-loop/stop pair, CALLBACK_LOAD uses zero to restart restored music, MMODE
+stops current music on entry, and STAGECLEAR uses the one-shot form for BGM025. The existing Godot music
+player and retained VM track provide the whole implementation seam; it needs an explicit loop/restart
+request while ordinary `0xbf` remains same-track-idempotent.
+
+**NEXT:** implement and test `0xb7`/`0xb8`/`0xb9` together. The likely follow-up is INPUTNAME's CP932
+string/UI cluster (`0x144`, `0x2c6`, `0x2c8`), but its modal host contract should be finished only after
+the bounded BGM tranche lands.
+
+**Forced-BGM lifecycle implemented (2026-07-29):** `0xb7` and `0xb9` now force-replace the active BGM
+stream with logical loop and one-shot mode respectively, including zero's native alias to the retained
+track; `0xb8` stops/releases and clears that track. Ordinary `0xbf` remains idempotent for same-track
+FIELD cleanup. Godot cancels deferred fades on replacement, applies the start mode through the OGG loop
+flag, and makes stop release the stream rather than leaving a silent source. The same stop seam now closes
+`0xc2` target zero after its blocking fade, matching native source release instead of retaining a muted
+Godot stream.
+
+All five sites now dispatch, reducing the effectful-gap inventory from 12 opcodes / 16 instructions to
+9 / 11. A focused VM regression covers forced same-track restart, zero reuse, both modes, replacement,
+stop/clear, and restart after stop. All 483 engine tests, opcode/EngineCtx lint, the zero-warning Godot
+build, and the Himegari-targeted threaded self-test pass; the self-test now also validates OGG loop mode
+and true stop/release.
+
+**NEXT:** investigate INPUTNAME's `0x144`/`0x2c6`/`0x2c8` cluster as one modal name-entry and CP932
+string slice.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static
