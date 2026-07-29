@@ -1685,6 +1685,12 @@ at `+0x55180`. Himegari's queue and stack sites use only id 0. Its sole `0x137` 
 `CALLBACK_LOAD@0xf2`, immediately before the helper that rebuilds the eight retained ADV layers; no
 Himegari script calls `0x138` or `0x139`.
 
+The portable VM implements the complete family as eleven isolated logical stacks. All slots exist at
+scene entry, root reload reconstructs them empty, and `0x137` replaces only the selected slot. This keeps
+the handler-admitted id-10 ABI without allowing it to overwrite numeric-glyph state. Empty `0x139`
+preserves `out_value` while writing success zero, because reproducing the native leaked `EngineCtx *`
+would expose meaningless host-dependent data rather than a script-observable engine value.
+
 `op_0x241_play_movie_to_surface_at_position@0x4247e0` is an exact five-operand extension of `0x236`:
 
 `(movie_resource, surface_slot, movie_and_sound_flags, start_delay_ms, position_ms)`.

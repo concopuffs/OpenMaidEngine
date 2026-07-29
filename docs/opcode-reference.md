@@ -371,7 +371,7 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 - **depended on by:** 0x138, 0x139
 - **evidence:** Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer at EngineCtx+0x55158+id*4, allocates 0x14 bytes, and calls int_stack_construct@0x407410. The constructor allocates 0x100 dwords, records a 0x100-dword growth quantum, and initializes top=-1. scene_context_init_reset@0x40b560 constructs exactly ten entries [0,10), while the handler checks only id<=10; id 10 therefore lands at +0x55180, the numeric-glyph-style table. Corpus: CALLBACK_LOAD@0xf2 is the sole site and resets stack 0 before rebuilding the eight retained ADV layers.
 
-AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. As with the port's queue and numeric-style families, a portable implementation should expose the handler-admitted id 10 as safe independent logical state rather than reproduce native adjacent-memory corruption.
+AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. Port status (2026-07-29): implemented with eleven safely isolated handler-addressable stacks, each initially available with native-equivalent 0x100-dword starting capacity and reconstructed empty on root scene reload. Reset replaces only the selected logical stack; invalid ids halt diagnostically.
 
 ### 0x138 `push-int-stack` (push-int-stack, argc 2)
 - **summary:** (stack_id, value) - push one signed integer onto the selected native LIFO, growing its dword buffer by 0x100 entries when full.
@@ -380,13 +380,15 @@ AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs al
 - **depended on by:** 0x139
 - **evidence:** Ghidra /v2: op_0x138_push_int_stack@0x421a40 admits stack ids <=10 and calls int_stack_push@0x408860. The helper grows capacity by the stored 0x100-dword quantum when top+2 reaches capacity, increments top, and stores the value. The ten-slot/id-10 alias caveat is documented on op 0x137. No Himegari script calls this opcode.
 
+Port status (2026-07-29): implemented over the scene-context stack registry. All signed dword values round-trip through the VM's integer-cell representation, and handler-addressable slot 10 remains independent host state.
+
 ### 0x139 `try-pop-int-stack` (try-pop-int-stack, argc 3)
 - **summary:** (stack_id, out_success, out_value) - pop the most recently pushed integer and write success=1, or write success=0 when empty.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x137, 0x138
 - **evidence:** Ghidra /v2: op_0x139_try_pop_int_stack@0x4297a0 reads top at stack+0x10; when top>=0 it reads data[top] and decrements top, then writes success and value. When top<0, the local holding the value was never replaced from the incoming EngineCtx pointer, yet operand 3 is still written. No Himegari script calls this opcode.
 
-On success native writes the removed value. On empty, the release handler still writes its reused `this`/EngineCtx local into out_value, so that cell is implementation garbage and must not be consumed unless out_success is nonzero. A portable compatibility implementation should preserve out_value on failure rather than expose a host pointer. The ten-slot/id-10 alias caveat is documented on op 0x137.
+On success native writes the removed value. On empty, the release handler still writes its reused `this`/EngineCtx local into out_value, so that cell is implementation garbage and must not be consumed unless out_success is nonzero. Port status (2026-07-29): implemented as LIFO TryPop; success writes 1 and the signed dword, while empty writes 0 and deliberately preserves out_value rather than exposing a host pointer. The ten-slot/id-10 alias caveat is documented on op 0x137.
 
 ### 0x191 `absolute-value` (absolute-value, argc 2)
 - **summary:** Write the signed 32-bit absolute value of operand 2 to operand 1.

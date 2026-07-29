@@ -1075,6 +1075,23 @@ fields are saved.
 **NEXT:** implement the coherent `0x137`-`0x139` integer-stack family, then `0x241`, then the DEBUG-only
 `0x24d` compositor slice.
 
+**INTEGER STACK `0x137`-`0x139` IMPLEMENTED (2026-07-29):** the VM now owns eleven safely isolated,
+handler-addressable LIFO slots. They are constructed at VM scene entry, reconstructed empty on whole-root
+scene reload, and individually replaced by `0x137`; `0x138` pushes signed dwords and `0x139` pops in LIFO
+order. Empty pop writes success zero while preserving the prior value destination instead of leaking
+native's reused internal EngineCtx pointer. Slot 10 is intentionally independent logical state rather than
+AGE's adjacent numeric-glyph-table corruption.
+
+Three focused regressions cover independent LIFO ordering and signed values, reset plus empty-output
+behavior, safe slot 10, pre-reset availability, and root-reload lifetime. `CALLBACK_LOAD`'s shipped
+`0x137` is closed, while unobserved `0x138`/`0x139` are implemented for wider AGE compatibility. The
+remaining effectful inventory is 2 opcodes / 3 instructions: singleton `0x241` and DEBUG-only `0x24d` x2.
+Validation passes 504/504 engine tests, opcode/global/EngineCtx build and lint suites, the zero-warning
+Godot build, clean diff checking, and the Himegari-targeted threaded `SELFTEST OK`.
+
+**NEXT:** implement positioned movie playback `0x241` with synchronized FFmpeg initial seek, then finish
+the DEBUG-only `0x24d` green-channel movie-mask compositor.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

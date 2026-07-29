@@ -95,9 +95,12 @@ public sealed class VirtualMachine
     // returns the same dword through the VM's signed integer-cell representation.
     private uint _systemMenuShowDelayMilliseconds;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
-    // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
-    // slot zero as their packed-coordinate flood-fill worklist; op 0x132 replaces a slot.
+    // Eleven safely isolated handler-addressable FIFO slots. Native physically owns ten at
+    // +0x55130; its admitted id 10 aliases stack slot zero. ATSEEK/MVSEEK use FIFO slot zero.
     private readonly Queue<int>?[] _intQueues = new Queue<int>?[11];
+    // Eleven safely isolated handler-addressable LIFO slots. Native constructs ten at +0x55158
+    // on every scene reset; its admitted id 10 aliases numeric-glyph-style storage.
+    private readonly Stack<int>[] _intStacks = CreateIntegerStacks();
     // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
     // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
     private readonly Dictionary<int, PreloadedScriptSlot> _preloadedScriptSlots = new();
@@ -766,6 +769,7 @@ public sealed class VirtualMachine
         Gfx.ResetSceneContext();
         _valueSwitchTargets.Clear();
         _preloadedScriptSlots.Clear();
+        ResetIntegerStacks();
         lock (_interactiveLock)
         {
             _interactiveFrame = null;
@@ -795,6 +799,20 @@ public sealed class VirtualMachine
         _host.SetMessageSkipActive(false);
         _host.SetPhysicalMessageSkipActive(false);
         _host.ResetSceneContext();
+    }
+
+    private static Stack<int>[] CreateIntegerStacks()
+    {
+        var stacks = new Stack<int>[11];
+        for (int i = 0; i < stacks.Length; i++)
+            stacks[i] = new Stack<int>(0x100);
+        return stacks;
+    }
+
+    private void ResetIntegerStacks()
+    {
+        for (int i = 0; i < _intStacks.Length; i++)
+            _intStacks[i] = new Stack<int>(0x100);
     }
 
     private void RestartBgm(long requestedTrackId, int startMode)
@@ -1668,6 +1686,52 @@ public sealed class VirtualMachine
                 {
                     // Native writes success=0 and an implementation pointer to operand 3. Shipped
                     // callers branch on success before reading it, so retain the prior destination.
+                    Write(a[1], 0);
+                }
+                return pc + 1;
+            }
+            case "u0041F1C0":
+            case "reset-int-stack": // 0x137 (stack_id)
+            {
+                int stackId = unchecked((int)Read(a[0]));
+                if ((uint)stackId >= (uint)_intStacks.Length)
+                {
+                    HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
+                    return HALT;
+                }
+                _intStacks[stackId] = new Stack<int>(0x100);
+                return pc + 1;
+            }
+            case "u0041F2B0":
+            case "push-int-stack": // 0x138 (stack_id, value)
+            {
+                int stackId = unchecked((int)Read(a[0]));
+                if ((uint)stackId >= (uint)_intStacks.Length)
+                {
+                    HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
+                    return HALT;
+                }
+                _intStacks[stackId].Push(unchecked((int)Read(a[1])));
+                return pc + 1;
+            }
+            case "u0041F310":
+            case "try-pop-int-stack": // 0x139 (stack_id, out_success, out_value)
+            {
+                int stackId = unchecked((int)Read(a[0]));
+                if ((uint)stackId >= (uint)_intStacks.Length)
+                {
+                    HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
+                    return HALT;
+                }
+                if (_intStacks[stackId].TryPop(out int value))
+                {
+                    Write(a[1], 1);
+                    Write(a[2], value);
+                }
+                else
+                {
+                    // Native writes success=0 and leaks an internal EngineCtx pointer through
+                    // operand 3. Preserve the destination instead of exposing host garbage.
                     Write(a[1], 0);
                 }
                 return pc + 1;
