@@ -1,6 +1,6 @@
 namespace Age.Engine.Model;
 
-/// <summary>Native timing conversion shared by the legacy op-0x25 screen-transition family.</summary>
+/// <summary>Native timing conversion shared by the legacy full-frame screen-transition family.</summary>
 public static class LegacyScreenTransitionTiming
 {
     public static long DurationMilliseconds(long argument)

@@ -658,11 +658,15 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 - **depends on:** 0x20c, 0x20d
 - **evidence:** Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_from_black@0x41cb00. First entry sets run-state bit 8, converts timing <=64 to interval=argument ms and alpha step=16 (otherwise interval=argument/16 and step=1), then starts screen_transition_begin@0x439da0 mode 0 with the operand surface. screen_transition_tick@0x43a7a0 draws that surface below an opaque-black scratch surface whose alpha falls 255->0; re-entry finalizes the operand surface. Corpus: 3 sites in EVOLVE, SELSTAGE, and STUDY, all (1,30), approximately 480 ms.
 
+Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. An explicit empty/black source endpoint is composited beneath the captured target; timing and terminal-frame publication share the op-0x25 lifecycle.
+
 ### 0x22 `fade-surface-out-to-black` (u00418920, argc 2)
 - **summary:** (surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x20d
 - **evidence:** Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_to_black@0x41cbc0. It uses the same timer/alpha-step conversion as 0x21 and 0x25, then starts screen_transition_begin@0x439da0 mode 1. screen_transition_tick@0x43a7a0 keeps the operand surface opaque and raises the black scratch-surface alpha 0->255; re-entry finalizes a black endpoint. Corpus: 8 sites across ALCHEMY, CHMENU, EVOLVE, FORT, SELSTAGE, STUDY, and SUMMON, all (1,30), approximately 480 ms.
+
+Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. The captured source is composited beneath an explicit empty/black target endpoint; timing and terminal-frame publication share the op-0x25 lifecycle.
 
 ### 0x23 `fade-surface-in-from-white` (u004189D0, argc 2)
 - **summary:** (surface_slot)(timing_argument) — broader-AGE mode-2 sibling of 0x21: block while fading from white to a captured full-frame surface.

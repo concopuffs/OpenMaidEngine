@@ -202,6 +202,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "fade-surface-in-from-black"
 category = "draw"
+details = "Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. An explicit empty/black source endpoint is composited beneath the captured target; timing and terminal-frame publication share the op-0x25 lifecycle."
 summary = "(surface_slot)(timing_argument) — block while fading from black to a captured full-frame surface. The captured surface remains the terminal frame."
 noop_headless = false
 source = "investigation"
@@ -228,6 +229,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "fade-surface-out-to-black"
 category = "draw"
+details = "Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. The captured source is composited beneath an explicit empty/black target endpoint; timing and terminal-frame publication share the op-0x25 lifecycle."
 summary = "(surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame."
 noop_headless = false
 source = "investigation"

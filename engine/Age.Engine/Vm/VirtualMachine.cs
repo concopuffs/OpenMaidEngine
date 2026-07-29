@@ -2657,6 +2657,16 @@ public sealed class VirtualMachine
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;
             case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint
                 _host.PresentFrame(Gfx); return pc + 1;
+            case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
+            case "u00418860":
+                _host.FadeSurfaceWithBlack(
+                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack);
+                return pc + 1;
+            case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
+            case "u00418920":
+                _host.FadeSurfaceWithBlack(
+                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack);
+                return pc + 1;
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
                 _host.CrossfadeSurfaces(Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]));

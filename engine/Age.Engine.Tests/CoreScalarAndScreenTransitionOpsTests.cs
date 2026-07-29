@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
@@ -46,6 +47,31 @@ public class CoreScalarAndScreenTransitionOpsTests
         vm.Run();
 
         Assert.InRange(vm.Globals[0x100], 0, 3);
+    }
+
+    [Fact]
+    public void BlackSurfaceFades_ForwardCapturedSlotTimingAndDirection()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "SURFACE_BLACK_FADES", new List<(int, Operand[])>
+        {
+            (0x21, new[] { new Operand(Imm, 1), new Operand(Imm, 30) }),
+            (0x22, new[] { new Operand(Imm, 2), new Operand(Imm, 65) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(
+            new[]
+            {
+                (1, 30L, SurfaceBlackFadeDirection.FromBlack),
+                (2, 65L, SurfaceBlackFadeDirection.ToBlack),
+            },
+            host.SurfaceBlackFades);
+        Assert.Equal(480, LegacyScreenTransitionTiming.DurationMilliseconds(30));
+        Assert.Equal(1024, LegacyScreenTransitionTiming.DurationMilliseconds(65));
     }
 
     [Fact]

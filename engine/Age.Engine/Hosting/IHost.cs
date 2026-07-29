@@ -28,6 +28,12 @@ public readonly record struct SurfaceRectCopy(
     int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
     int Width, int Height, int DestinationX, int DestinationY);
 
+public enum SurfaceBlackFadeDirection
+{
+    FromBlack,
+    ToBlack,
+}
+
 public interface IHost
 {
     /// <summary>Report a recoverable runtime discrepancy while allowing script execution to continue.</summary>
@@ -103,8 +109,10 @@ public interface IHost
     // read/message-skip branch reaches op 0x20c and presents the completed endpoint immediately.
     void WaitForForegroundTransition(GfxState gfx) { }
     void PresentFrame(GfxState gfx) { }
-    // Legacy SYS4 screen-transition family (op 0x25): scripts render two complete frames into
-    // numbered surfaces, then block while the engine alpha-composites target over source.
+    // Legacy SYS4 screen-transition family (ops 0x21, 0x22, and 0x25): scripts render complete
+    // frames into numbered surfaces, then block while the engine alpha-composites an endpoint.
+    void FadeSurfaceWithBlack(
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction) { }
     void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument) { }
     void CreateTexture(int slot, int width, int height);
     /// <summary>Return a stable RGBA snapshot of one numbered surface, or null when unavailable.</summary>

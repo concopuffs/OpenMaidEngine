@@ -828,9 +828,9 @@ native defaults, category isolation, getter/setter round trips, idempotent route
 selectors, native and redirected path resolution, CP932 INI preservation, and persistence. All 476 engine tests, the
 warning-free Godot build, opcode lint, and the Himegari-targeted threaded selftest pass.
 
-**Post-tranche rerank:** a fresh 481-script aggregate confirms exactly 18 effectful gaps totaling only
-39 instructions. The widest are unknown `0x22` (eight sites across seven scripts), unknown `0x230`
-(six sites across two scripts), then `0x21` and `0x1b2` (three sites each); every other gap has at most two
+**Post-tranche rerank:** a fresh 481-script aggregate found exactly 18 effectful gaps totaling only
+39 instructions. The widest were `0x22` (eight sites across seven scripts), `0x230`
+(six sites across two scripts), then `0x21` and `0x1b2` (three sites each); every other gap had at most two
 sites. CONFIG itself is now 1659/1665 instructions implemented, with four unrelated calls remaining
 (`0x142` twice, `0xb7`, and `0xb8`).
 
@@ -841,11 +841,19 @@ timer conversion and full-frame snapshot lifecycle. All 11 combined Himegari sit
 480 ms, across menu entry/exit paths. The existing `LegacyScreenTransition` host seam can own the pair,
 but it needs an explicit black endpoint rather than its mode-4 missing-surface fallback.
 
-The follow-up `0x230(handle)` is also decoded: it clears the retained object's cyclic active flag and five
+**Black-fade pair implemented (2026-07-29):** `0x21` and `0x22` now dispatch through the shared blocking
+full-frame transition path. The compositor represents the solid-black side explicitly as an empty captured
+object list over its normal opaque-black clear: source-empty for black-to-surface and target-empty for
+surface-to-black. This preserves mode-4 `0x25`'s separate missing-target fallback, shares the native timing
+conversion and exact terminal-frame publication, and closes all 11 sites. The remaining effectful inventory
+is 16 distinct opcodes / 28 instructions. All 477 engine tests, opcode build/lint, the zero-warning Godot
+build, and the Himegari-targeted threaded selftest pass.
+
+The follow-up `0x230(handle)` is decoded: it clears the retained object's cyclic active flag and five
 looping-channel start/period pairs without changing current/base transforms. Its six calls are five
 DEBUGADV effect demonstrations plus one FIELD movement setup.
 
-**NEXT:** implement `0x21` and `0x22` together as one black-fade slice, then implement `0x230`.
+**NEXT:** implement `0x230`.
 
 ## Later Phase B breadth
 

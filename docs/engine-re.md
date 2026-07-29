@@ -3193,10 +3193,14 @@ black/white scratch alpha to 255. Re-entry finalizes the named endpoint before s
 Himegari uses only the black pair: three `0x21` calls and eight `0x22` calls, all `(1,30)` and therefore
 about 480 ms. The scripts first select surface 1, clear it, publish a complete retained frame through
 `0x20c`, restore the backbuffer, then fade. `0x21` is the menu-entry reveal; `0x22` is the corresponding
-menu/scene exit to black. Together they close 11 of the 39 remaining skipped instructions across seven
-distinct scripts. Implementation should extend the existing `LegacyScreenTransition` host path with an
-explicit solid-color endpoint; treating a missing numbered surface as black is unsafe because the current
-mode-4 fallback snapshots the live retained frame.
+menu/scene exit to black.
+
+The port dispatches both opcodes through the existing blocking `LegacyScreenTransition` clock and terminal
+publication path. Its compositor already clears the whole frame to opaque black, so an empty source list
+models black-to-captured and an empty target list models captured-to-black without overloading the mode-4
+missing-surface fallback (which intentionally snapshots the live retained frame). This closes 11 formerly
+skipped instructions across seven distinct scripts and reduces the effectful-gap inventory from 18 to 16
+distinct opcodes / 28 instructions.
 
 The same manual pass exposed a resource-addressing issue after `0x6c` was fixed: ROOM did execute
 `play-voice`, but `GodotAdvHost` attempted only inferred SC-section resolution. ROOM's voice operands

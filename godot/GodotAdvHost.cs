@@ -800,33 +800,68 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
-    // Op 0x25's native mode-4 path advances an 8-bit alpha accumulator. Values <=64 use the
-    // operand as the timer interval and step alpha by sixteen; larger values divide the interval
-    // by sixteen and step alpha by one. This reproduces the resulting wall-clock duration.
+    public void FadeSurfaceWithBlack(
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction)
+    {
+        long start = _clock.NowMs;
+        IReadOnlyList<RenderObject> captured;
+        lock (_screenTransitionLock)
+            captured = _renderTargetSnapshots.TryGetValue(surface, out var snapshot)
+                ? snapshot : System.Array.Empty<RenderObject>();
+
+        IReadOnlyList<RenderObject> black = System.Array.Empty<RenderObject>();
+        IReadOnlyList<RenderObject> source =
+            direction == SurfaceBlackFadeDirection.FromBlack ? black : captured;
+        IReadOnlyList<RenderObject> target =
+            direction == SurfaceBlackFadeDirection.FromBlack ? captured : black;
+        RunLegacyScreenTransition(source, target, start, intervalArgument, new()
+        {
+            ["kind"] = "surface-black-fade",
+            ["surface"] = surface,
+            ["direction"] = direction == SurfaceBlackFadeDirection.FromBlack
+                ? "from-black" : "to-black",
+        });
+    }
+
     public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
     {
         IReadOnlyList<RenderObject> source;
         IReadOnlyList<RenderObject> target;
         long start = _clock.NowMs;
-        long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
         lock (_screenTransitionLock)
         {
             source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
                 ? capturedSource : System.Array.Empty<RenderObject>();
             target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
                 ? capturedTarget : gfx.SnapshotVisibleObjects(start);
-            _screenTransition = new LegacyScreenTransition(source, target, start, duration);
         }
+        RunLegacyScreenTransition(source, target, start, intervalArgument, new()
+        {
+            ["kind"] = "surface-crossfade",
+            ["source"] = sourceSurface,
+            ["target"] = targetSurface,
+        });
+    }
+
+    // The native 0x21/0x22/0x25 family advances an 8-bit alpha accumulator. Values <=64 use
+    // the operand as the timer interval and step alpha by sixteen; larger values divide the
+    // interval by sixteen and step alpha by one. This reproduces its blocking wall-clock duration.
+    private void RunLegacyScreenTransition(
+        IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
+        long start, long intervalArgument, Dictionary<string, object?> timelineDetail)
+    {
+        long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
+        lock (_screenTransitionLock)
+            _screenTransition = new LegacyScreenTransition(source, target, start, duration);
         _foregroundGfx = null;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, start);
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsTransitionWaiting = true;
-        _timeline?.State("screen-transition-start", new()
-        {
-            ["source"] = sourceSurface, ["target"] = targetSurface,
-            ["interval_argument"] = intervalArgument, ["duration_ms"] = duration,
-            ["source_objects"] = source.Count, ["target_objects"] = target.Count,
-        });
+        timelineDetail["interval_argument"] = intervalArgument;
+        timelineDetail["duration_ms"] = duration;
+        timelineDetail["source_objects"] = source.Count;
+        timelineDetail["target_objects"] = target.Count;
+        _timeline?.State("screen-transition-start", timelineDetail);
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
