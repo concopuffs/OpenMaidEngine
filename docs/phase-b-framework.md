@@ -910,6 +910,24 @@ again when FIELD resumes, while SC0600 retains its ordinary ADV marker and input
 parent-callback → child-dialogue regression preserves both halves of that lifetime. The engine suite passes
 526/526, the Godot build has zero warnings, and the Himegari-targeted threaded selftest passes.
 
+**Post-boss `A1215.WAV` lockup corrected (2026-07-29):** after the first boss,
+SC0010 executes `play-sound-effect 0x125` at `0xea1`. The packed `DATA1/A1215.WAV` entry is 323,009 bytes:
+a valid 157,940-byte RIFF, then a multipart-upload header, then a second valid RIFF. Godot's whole-buffer WAV
+importer walks into the appended header, treats `Cont` as a chunk id with an impossible size, and loops through
+`FileAccessMemory.seek` errors on the main thread.
+
+AGE does not special-case this resource. Its WinMM decoder (`wav_decoder_open@0x488790`) descends into the
+first `RIFF/WAVE`, finds `fmt ` and `data` within that parent, saves the first `data` chunk's declared size,
+and `wav_decoder_fill_buffer@0x4889b0` stops after exactly that many bytes. The appended upload material and
+second RIFF are unreachable.
+
+`RiffWaveSanitizer.PrepareForGodot` now applies that first-RIFF boundary to the transient decoder buffer after
+validating every declared child, then performs the existing INFO-metadata removal within that boundary.
+Archive/VFS bytes remain pristine, and invalid RIFFs are returned unchanged. Synthetic concatenation and
+installed-A1215 regressions prove the exact prefix and unchanged PCM payload. Validation passes 528/528 engine
+tests, a zero-warning Godot build, and the Himegari-targeted threaded selftest, which loads the real A1215
+buffer through Godot and reports `first-riff-boundary=ok` without seek spam.
+
 **Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
 disables the four looping channels represented by the compositor, and clears the complete native
 start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.

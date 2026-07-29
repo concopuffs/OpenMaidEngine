@@ -2987,6 +2987,23 @@ attenuation `-2377` to both channel loads, and the shared audio service later re
 five handlers. The bounded port does not yet import native audio preferences, so its extracted-WAV bootstrap
 uses unity gain and centered pan rather than hard-coding the captured user's setting.
 
+**Native RIFF boundary contract (2026-07-29).** The RIFF branch constructs
+`wav_decoder_ctor@0x4885b0`; `wav_decoder_open@0x488790` then opens the packed-entry handle with WinMM
+`mmioOpenA`, descends into the first `RIFF/WAVE` with `MMIO_FINDRIFF`, and searches that RIFF's children for
+`fmt ` and `data` with `MMIO_FINDCHUNK`. At `0x488976`, the returned `data` `MMCKINFO.cksize` is copied into
+both remaining-byte and total-byte fields. `wav_decoder_fill_buffer@0x4889b0` reads
+`min(remaining_bytes, 0x2000)`, decrements that counter, and closes the decoder when it reaches zero.
+Native playback therefore cannot consume bytes after the first `data` chunk's declared extent.
+
+This normal RIFF behavior, rather than an asset-specific exception, makes malformed `A1215.WAV` playable.
+Its packed entry is 323,009 bytes, but the first RIFF declares an extent of 157,940 bytes and its first
+`data` chunk is 157,896 bytes. A multipart-upload header and a complete second RIFF begin after that declared
+boundary; AGE ignores both. The whole-buffer Godot importer instead sees the appended `Cont` bytes as another
+RIFF chunk and repeatedly seeks beyond the buffer. The port now reproduces the native boundary in its
+transient Godot decoder copy, leaving the archive/VFS payload untouched. The saved `/v2` image names/comments
+the WAV decoder constructor, open/close, buffer-fill, rewind, and query methods, and records this boundary
+contract on the dispatcher and parser.
+
 The native trace in `build/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
 raw catalog id `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
 `0xb4@0xc31` preloads the same WAV into engine-owned secondary channel 4 for a later service start. The

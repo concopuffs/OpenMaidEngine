@@ -2065,8 +2065,8 @@ public partial class Main : Godot.Control
         _sfx[channel].Stop();
         _sfx[channel].Stream = null;
         // This is intentionally a Godot-only compatibility boundary. The VFS and engine retain the
-        // original WAV bytes; only Godot's UTF-8-assuming INFO parser sees the sanitized copy.
-        byte[] godotWav = RiffWaveSanitizer.RemoveInfoMetadata(wavBytes);
+        // original WAV bytes; Godot sees an AGE-compatible first-RIFF copy without CP932 INFO metadata.
+        byte[] godotWav = RiffWaveSanitizer.PrepareForGodot(wavBytes);
         var stream = AudioStreamWav.LoadFromBuffer(godotWav);
         if (stream == null) { GD.Print($"WAV load failed {assetName}"); return; }
         stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
@@ -2325,9 +2325,15 @@ public partial class Main : Godot.Control
                                       new InputEventKey { PhysicalKeycode = Key.Ctrl }, out int ctrlVk) && ctrlVk == 0x11;
         var selftestResources = new ResourceMap(_catalog, _assetStore);
         AudioPayload glowSfx = selftestResources.ReadAudio(selftestResources.ResolveSoundEffect(0x28)!);
-        byte[] glowGodotWav = RiffWaveSanitizer.RemoveInfoMetadata(glowSfx.Bytes);
+        byte[] glowGodotWav = RiffWaveSanitizer.PrepareForGodot(glowSfx.Bytes);
         bool cp932WavMetadataOk = glowGodotWav.Length == 688_336
                                  && AudioStreamWav.LoadFromBuffer(glowGodotWav) != null;
+        AudioPayload bossSfx = selftestResources.ReadAudio(
+            selftestResources.ResolveSoundEffect(0x125)!);
+        byte[] bossGodotWav = RiffWaveSanitizer.PrepareForGodot(bossSfx.Bytes);
+        bool firstRiffBoundaryOk = bossSfx.Bytes.Length == 323_009
+                                   && bossGodotWav.Length == 157_940
+                                   && AudioStreamWav.LoadFromBuffer(bossGodotWav) != null;
         AudioPayload bgm = selftestResources.ReadAudio(selftestResources.ResolveBgm(5)!);
         FadeBgm(0, 10.0);
         bool bgmFadeStarted = _bgmFadeTween?.IsValid() == true;
@@ -2411,12 +2417,14 @@ public partial class Main : Godot.Control
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight));
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
+              && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
               && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
               && logicalCanvasOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
+                         $"first-riff-boundary=ok; " +
                          $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
                          $"text-effect-modes=ok; font-calibration=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
@@ -2424,6 +2432,7 @@ public partial class Main : Godot.Control
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
+                      $"first-riff-boundary={firstRiffBoundaryOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
                       $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
                       $"bgm-stop-release={bgmStopReleaseOk}; " +

@@ -173,8 +173,11 @@ Godot's WAV loader adds one host-specific compatibility boundary. SC0000 `0xc29`
 the EV052DA glow. Its PCM is valid, but its trailing RIFF `LIST/INFO` fields contain Japanese CP932 text
 (`IPRD`, `IGNR`, and `ICMT`). Godot assumes INFO text is UTF-8 and formerly emitted one Unicode warning per
 invalid CP932 byte each time the sound was loaded; the duplicated SC0000 burst came from loading raw id
-`0x28` on two channels. A complete extracted-corpus scan found 238 RIFF/WAVE files, 61 INFO chunks, no other
-LIST type, and no invalid RIFF containers, explaining the same warnings around combat SFX.
+`0x28` on two channels. A complete extracted-corpus scan found 238 RIFF/WAVE files, 61 INFO chunks, and no
+other LIST type, explaining the same warnings around combat SFX. A later declared-extent audit corrected the
+earlier claim that every container ended exactly at its RIFF boundary: seven entries have trailing bytes.
+Six have small 74- or 234-byte tails; `A1215.WAV` is a 323,009-byte concatenation whose first RIFF ends at
+157,940, followed by a multipart-upload header and a second complete RIFF.
 
 The correction is deliberately confined to the Godot frontend. `RiffWaveSanitizer` removes only `LIST` chunks
 whose form type is `INFO` from the transient byte array passed to `AudioStreamWav.LoadFromBuffer`, updates the
@@ -183,6 +186,17 @@ byte-for-byte, including padding. The shared engine, original loose/archive payl
 `ResourceMap.ReadAudio` output remain untouched. The real E0808 Godot input shrinks from 688,570 to 688,336
 bytes while retaining an identical PCM data chunk and loads headlessly without a Unicode warning. Synthetic
 chunk/padding tests and the installed E0808 regression cover the adapter.
+
+`A1215.WAV` exposes a separate compatibility boundary. Native AGE's
+`wav_decoder_open@0x488790` uses WinMM `mmioDescend` to enter the first `RIFF/WAVE`, finds its first `data`
+child, and streams exactly that child's declared `cksize`; appended bytes are never decoded. Godot's
+whole-buffer importer instead walks beyond the first RIFF and interprets the multipart header's `Cont` as a
+chunk id, causing repeated out-of-range seeks. `RiffWaveSanitizer.PrepareForGodot` now validates the first
+RIFF and all of its declared children, removes any INFO chunks, and returns a transient buffer ending exactly
+at that RIFF's declared extent. It returns the original array without rewriting when the RIFF is invalid and
+preserves the packed/original bytes in every case. The installed A1215 regression proves 323,009 source bytes
+become the exact 157,940-byte first RIFF with the 157,896-byte PCM `data` chunk unchanged; the Godot selftest
+loads that result through `AudioStreamWav.LoadFromBuffer` without seek errors.
 
 ## Runtime asset-VFS track (VFS-A/B/C complete 2026-07-11)
 

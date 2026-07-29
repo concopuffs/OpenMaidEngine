@@ -15,7 +15,7 @@ public class RiffWaveSanitizerTests
         byte[] data = { 1, 2, 3 };
         byte[] source = Wave(("fmt ", fmt), ("LIST", info), ("smpl", sampleLoop), ("data", data));
 
-        byte[] sanitized = RiffWaveSanitizer.RemoveInfoMetadata(source);
+        byte[] sanitized = RiffWaveSanitizer.PrepareForGodot(source);
 
         Assert.NotSame(source, sanitized);
         Assert.Equal(sanitized.Length - 8, BinaryPrimitives.ReadInt32LittleEndian(sanitized.AsSpan(4, 4)));
@@ -30,7 +30,21 @@ public class RiffWaveSanitizerTests
     {
         byte[] source = Wave(("fmt ", new byte[] { 1, 0 }), ("data", new byte[] { 1, 2 }));
 
-        Assert.Same(source, RiffWaveSanitizer.RemoveInfoMetadata(source));
+        Assert.Same(source, RiffWaveSanitizer.PrepareForGodot(source));
+    }
+
+    [Fact]
+    public void DropsBytesAfterFirstDeclaredRiffExtent()
+    {
+        byte[] first = Wave(("fmt ", new byte[] { 1, 0 }), ("data", new byte[] { 1, 2, 3, 4 }));
+        byte[] second = Wave(("fmt ", new byte[] { 1, 0 }), ("data", new byte[] { 5, 6 }));
+        byte[] separator = Encoding.ASCII.GetBytes("Content-Disposition: form-data\r\n\r\n");
+        byte[] source = [.. first, .. separator, .. second];
+
+        byte[] sanitized = RiffWaveSanitizer.PrepareForGodot(source);
+
+        Assert.NotSame(source, sanitized);
+        Assert.Equal(first, sanitized);
     }
 
     [Fact]
@@ -39,13 +53,30 @@ public class RiffWaveSanitizerTests
         var resources = ResourceMap.Load();
         AudioPayload audio = resources.ReadAudio(resources.ResolveSoundEffect(0x28)!);
 
-        byte[] sanitized = RiffWaveSanitizer.RemoveInfoMetadata(audio.Bytes);
+        byte[] sanitized = RiffWaveSanitizer.PrepareForGodot(audio.Bytes);
 
         Assert.Equal("E0808.WAV", audio.Name);
         Assert.Equal(688_570, audio.Bytes.Length);
         Assert.Equal(688_336, sanitized.Length);
         Assert.DoesNotContain("LIST", ChunkIds(sanitized));
         Assert.Equal(Chunk(audio.Bytes, "data"), Chunk(sanitized, "data"));
+    }
+
+    [Fact]
+    public void InstalledFirstBossSoundStopsAtFirstDeclaredRiff()
+    {
+        var resources = ResourceMap.Load();
+        AudioPayload audio = resources.ReadAudio(resources.ResolveSoundEffect(0x125)!);
+
+        byte[] sanitized = RiffWaveSanitizer.PrepareForGodot(audio.Bytes);
+
+        Assert.Equal("A1215.WAV", audio.Name);
+        Assert.Equal(323_009, audio.Bytes.Length);
+        Assert.Equal(157_940, sanitized.Length);
+        Assert.Equal(157_940,
+            8 + BinaryPrimitives.ReadInt32LittleEndian(sanitized.AsSpan(4, 4)));
+        Assert.Equal(157_896, Chunk(sanitized, "data").Length);
+        Assert.Equal(audio.Bytes.AsSpan(0, sanitized.Length).ToArray(), sanitized);
     }
 
     private static byte[] Wave(params (string Id, byte[] Payload)[] chunks)

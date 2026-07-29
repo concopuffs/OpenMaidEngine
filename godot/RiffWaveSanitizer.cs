@@ -1,12 +1,13 @@
 using System;
 using System.Buffers.Binary;
 
-/// <summary>Godot-specific WAV input adapter. Godot assumes RIFF INFO strings are UTF-8, while AGE's
-/// Japanese assets commonly store them as CP932. Playback does not consume these tags, so remove only
-/// INFO metadata while preserving every functional RIFF chunk byte-for-byte.</summary>
+/// <summary>Godot-specific WAV input adapter. Native AGE decodes only the first declared RIFF/WAVE
+/// extent, while Godot walks the entire supplied buffer. AGE's Japanese assets also commonly store
+/// CP932 strings in INFO metadata that Godot assumes is UTF-8. Prepare a transient decoder copy that
+/// follows AGE's first-RIFF boundary and removes only INFO metadata within it.</summary>
 internal static class RiffWaveSanitizer
 {
-    public static byte[] RemoveInfoMetadata(byte[] wavBytes)
+    public static byte[] PrepareForGodot(byte[] wavBytes)
     {
         ReadOnlySpan<byte> input = wavBytes;
         if (input.Length < 12 || !HasId(input, 0, "RIFF") || !HasId(input, 8, "WAVE"))
@@ -26,9 +27,10 @@ internal static class RiffWaveSanitizer
             if (isInfoList) removedBytes = checked(removedBytes + chunkBytes);
             cursor += chunkBytes;
         }
-        if (removedBytes == 0) return wavBytes;
+        if (removedBytes == 0 && declaredEnd == wavBytes.Length) return wavBytes;
 
-        var output = new byte[checked(wavBytes.Length - removedBytes)];
+        int newDeclaredEnd = checked(declaredEnd - removedBytes);
+        var output = new byte[newDeclaredEnd];
         input[..12].CopyTo(output);
         cursor = 12;
         int destination = 12;
@@ -43,8 +45,6 @@ internal static class RiffWaveSanitizer
             cursor += chunkBytes;
         }
 
-        int newDeclaredEnd = declaredEnd - removedBytes;
-        input[declaredEnd..].CopyTo(output.AsSpan(newDeclaredEnd));
         BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(4, 4),
             checked((uint)(newDeclaredEnd - 8)));
         return output;
