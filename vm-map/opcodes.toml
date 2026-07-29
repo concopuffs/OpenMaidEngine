@@ -200,23 +200,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00418860"
-category = "unknown"
-summary = ""
+name = "fade-surface-in-from-black"
+category = "draw"
+summary = "(surface_slot)(timing_argument) — block while fading from black to a captured full-frame surface. The captured surface remains the terminal frame."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x20c, 0x20d]
+evidence = "Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_from_black@0x41cb00. First entry sets run-state bit 8, converts timing <=64 to interval=argument ms and alpha step=16 (otherwise interval=argument/16 and step=1), then starts screen_transition_begin@0x439da0 mode 0 with the operand surface. screen_transition_tick@0x43a7a0 draws that surface below an opaque-black scratch surface whose alpha falls 255->0; re-entry finalizes the operand surface. Corpus: 3 sites in EVOLVE, SELSTAGE, and STUDY, all (1,30), approximately 480 ms."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "captured full-frame surface slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -226,23 +226,23 @@ argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00418920"
-category = "unknown"
-summary = ""
+name = "fade-surface-out-to-black"
+category = "draw"
+summary = "(surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x20c, 0x20d]
+evidence = "Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_to_black@0x41cbc0. It uses the same timer/alpha-step conversion as 0x21 and 0x25, then starts screen_transition_begin@0x439da0 mode 1. screen_transition_tick@0x43a7a0 keeps the operand surface opaque and raises the black scratch-surface alpha 0->255; re-entry finalizes a black endpoint. Corpus: 8 sites across ALCHEMY, CHMENU, EVOLVE, FORT, SELSTAGE, STUDY, and SUMMON, all (1,30), approximately 480 ms."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "captured full-frame surface slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -255,7 +255,7 @@ abi_source = "kelebek+decode-validated"
 name = "crossfade-surfaces"
 category = "draw"
 summary = "(source_surface)(target_surface)(interval_argument) — blocking legacy full-frame mode-4 alpha transition. The native engine composites the captured target surface over the captured source while an 8-bit alpha accumulator advances from 0 to 256."
-details = "The handler uses an alpha step of 1 and timer interval=argument when argument <=64. Above 64 it uses step=16 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host."
+details = "The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -6072,18 +6072,18 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421E70"
-category = "unknown"
-summary = ""
+name = "reset-gfx-cyclic-animations"
+category = "draw"
+summary = "(handle) — get or create a retained gfx object, clear its cyclic-animation active flag, and zero all five looping-channel start/period pairs without changing current/base transforms."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x230_reset_gfx_cyclic_animations@0x423ba0 fetches the handle and calls gfx_object_reset_cyclic_animation_channels@0x47ee60. The worker clears object flag bit 2 and zeroes starts obj+0x20c/+0x210/+0x214/+0x218/+0x21c plus periods obj+0x220/+0x224/+0x228/+0x22c/+0x230, covering looping color, scale, rotation, the second cyclic matrix, and source-rectangle channels. Corpus: five DEBUGADV effect demonstrations plus one FIELD movement setup before 0x239."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "retained gfx object handle"
 observed_types = ["g-int", "l-int"]
 
 [[opcode]]
@@ -7262,14 +7262,24 @@ observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004189D0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "fade-surface-in-from-white"
+category = "draw"
+summary = "(surface_slot)(timing_argument) — broader-AGE mode-2 sibling of 0x21: block while fading from white to a captured full-frame surface."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+source = "investigation"
+confidence = "high"
+depends_on = [0x20c, 0x20d]
+evidence = "Ghidra /v2: dispatch slot 0x23 resolves to op_0x23_fade_surface_in_from_white@0x41cc80 and starts screen_transition_begin@0x439da0 mode 2 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus."
+
+[[opcode.semantics.args]]
+i = 1
+role = "captured full-frame surface slot"
+observed_types = []
+
+[[opcode.semantics.args]]
+i = 2
+role = "transition timer interval / accelerated duration argument"
+observed_types = []
 
 [[opcode]]
 op = 0x24
@@ -7279,14 +7289,24 @@ observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00418A90"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "fade-surface-out-to-white"
+category = "draw"
+summary = "(surface_slot)(timing_argument) — broader-AGE mode-3 sibling of 0x22: block while fading a captured full-frame surface to white."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+source = "investigation"
+confidence = "high"
+depends_on = [0x20c, 0x20d]
+evidence = "Ghidra /v2: dispatch slot 0x24 resolves to op_0x24_fade_surface_out_to_white@0x41cd40 and starts screen_transition_begin@0x439da0 mode 3 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus."
+
+[[opcode.semantics.args]]
+i = 1
+role = "captured full-frame surface slot"
+observed_types = []
+
+[[opcode.semantics.args]]
+i = 2
+role = "transition timer interval / accelerated duration argument"
+observed_types = []
 
 [[opcode]]
 op = 0x26

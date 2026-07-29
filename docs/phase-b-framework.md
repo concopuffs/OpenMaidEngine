@@ -823,9 +823,9 @@ writer updates only the nine audio keys and preserves every unrelated option. Ra
 native `2 ↔ -1` band toggling. Godot applies
 gains through its nested audio buses, so master and category volume compose, and route changes immediately
 stop/mute active playback according to the native worker distinctions. All 37 CONFIG sites now dispatch,
-reducing the effectful fallthrough inventory from 22 to 18 distinct opcodes. Seven focused tests cover
+reducing the effectful fallthrough inventory from 22 to 18 distinct opcodes. Eight focused tests cover
 native defaults, category isolation, getter/setter round trips, idempotent routes, cross-VM state, invalid
-selectors, path resolution, CP932 INI preservation, and persistence. All 475 engine tests, the
+selectors, native and redirected path resolution, CP932 INI preservation, and persistence. All 476 engine tests, the
 warning-free Godot build, opcode lint, and the Himegari-targeted threaded selftest pass.
 
 **Post-tranche rerank:** a fresh 481-script aggregate confirms exactly 18 effectful gaps totaling only
@@ -834,8 +834,18 @@ warning-free Godot build, opcode lint, and the Himegari-targeted threaded selfte
 sites. CONFIG itself is now 1659/1665 instructions implemented, with four unrelated calls remaining
 (`0x142` twice, `0xb7`, and `0xb8`).
 
-**NEXT:** investigate `0x22` as the widest remaining independent opcode, with `0x230` as the next
-candidate if `0x22` proves to own a larger subsystem.
+**Next-opcode investigation complete (2026-07-29):** `0x22` is the mode-1 half of AGE's blocking
+single-surface black-fade pair, not a larger subsystem. `0x21(surface,timing)` fades black to the captured
+surface; `0x22(surface,timing)` fades the captured surface to black. They share `0x25`'s already-modeled
+timer conversion and full-frame snapshot lifecycle. All 11 combined Himegari sites use `(1,30)`, about
+480 ms, across menu entry/exit paths. The existing `LegacyScreenTransition` host seam can own the pair,
+but it needs an explicit black endpoint rather than its mode-4 missing-surface fallback.
+
+The follow-up `0x230(handle)` is also decoded: it clears the retained object's cyclic active flag and five
+looping-channel start/period pairs without changing current/base transforms. Its six calls are five
+DEBUGADV effect demonstrations plus one FIELD movement setup.
+
+**NEXT:** implement `0x21` and `0x22` together as one black-fade slice, then implement `0x230`.
 
 ## Later Phase B breadth
 

@@ -652,13 +652,37 @@ SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 
 
 ## draw
 
+### 0x21 `fade-surface-in-from-black` (u00418860, argc 2)
+- **summary:** (surface_slot)(timing_argument) — block while fading from black to a captured full-frame surface. The captured surface remains the terminal frame.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x20d
+- **evidence:** Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_from_black@0x41cb00. First entry sets run-state bit 8, converts timing <=64 to interval=argument ms and alpha step=16 (otherwise interval=argument/16 and step=1), then starts screen_transition_begin@0x439da0 mode 0 with the operand surface. screen_transition_tick@0x43a7a0 draws that surface below an opaque-black scratch surface whose alpha falls 255->0; re-entry finalizes the operand surface. Corpus: 3 sites in EVOLVE, SELSTAGE, and STUDY, all (1,30), approximately 480 ms.
+
+### 0x22 `fade-surface-out-to-black` (u00418920, argc 2)
+- **summary:** (surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x20d
+- **evidence:** Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_to_black@0x41cbc0. It uses the same timer/alpha-step conversion as 0x21 and 0x25, then starts screen_transition_begin@0x439da0 mode 1. screen_transition_tick@0x43a7a0 keeps the operand surface opaque and raises the black scratch-surface alpha 0->255; re-entry finalizes a black endpoint. Corpus: 8 sites across ALCHEMY, CHMENU, EVOLVE, FORT, SELSTAGE, STUDY, and SUMMON, all (1,30), approximately 480 ms.
+
+### 0x23 `fade-surface-in-from-white` (u004189D0, argc 2)
+- **summary:** (surface_slot)(timing_argument) — broader-AGE mode-2 sibling of 0x21: block while fading from white to a captured full-frame surface.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x20d
+- **evidence:** Ghidra /v2: dispatch slot 0x23 resolves to op_0x23_fade_surface_in_from_white@0x41cc80 and starts screen_transition_begin@0x439da0 mode 2 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus.
+
+### 0x24 `fade-surface-out-to-white` (u00418A90, argc 2)
+- **summary:** (surface_slot)(timing_argument) — broader-AGE mode-3 sibling of 0x22: block while fading a captured full-frame surface to white.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x20c, 0x20d
+- **evidence:** Ghidra /v2: dispatch slot 0x24 resolves to op_0x24_fade_surface_out_to_white@0x41cd40 and starts screen_transition_begin@0x439da0 mode 3 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus.
+
 ### 0x25 `crossfade-surfaces` (u00418B40, argc 3)
 - **summary:** (source_surface)(target_surface)(interval_argument) — blocking legacy full-frame mode-4 alpha transition. The native engine composites the captured target surface over the captured source while an 8-bit alpha accumulator advances from 0 to 256.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x20d
 - **evidence:** Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 sets run-state bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), calls screen_transition_begin@0x439da0 with mode 4, and later screen_transition_finalize@0x4399c0. engine_main_tick_with_exception_policy polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). The step branch was corrected after manual timing validation; /v2 annotated and saved 2026-07-21.
 
-The handler uses an alpha step of 1 and timer interval=argument when argument <=64. Above 64 it uses step=16 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host.
+The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host.
 
 ### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
 - **summary:** (slot) - select the retained graphics-object slot used when op 0x1d9 receives explicit slot zero.
@@ -783,7 +807,7 @@ The worker clips the paired source and destination rectangles against both surfa
 - **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
-- **depended on by:** 0x25, 0x20d, 0x223
+- **depended on by:** 0x21, 0x22, 0x23, 0x24, 0x25, 0x20d, 0x223
 - **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
 
 Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
@@ -792,7 +816,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **summary:** Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x1c7, 0x1cc
-- **depended on by:** 0x25
+- **depended on by:** 0x21, 0x22, 0x23, 0x24, 0x25
 - **evidence:** Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 and retained-gfx owner ctx+0x46614 to retained_gfx_select_render_target@0x479660. Its D3D calls resolve texture level 0 or backbuffer 0, then invoke device vtable +0x94 SetRenderTarget and store selected slot at owner+0xb530. DATA1: 113 calls in 24 scripts.
 
 For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it.
@@ -908,6 +932,11 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **summary:** (handle)(control)(x)(y)(z) — set the object's current/base translation matrix. The native worker also retains operand 2 as channel control state; the port currently applies x/y/z but ignores that control operand.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: gfx_op_0x22f_set_position_anim@0x423b00 fetches x/y/z as floats and passes all five operands to gfx_worker_set_translation@0x472e90. The worker builds the current translation matrix with x/y/z and stores operand 2 in the channel record. This is distinct from the shared range transform at 0x229. The C# handler sets V24 directly and is therefore position-correct but does not yet model operand 2.
+
+### 0x230 `reset-gfx-cyclic-animations` (u00421E70, argc 1)
+- **summary:** (handle) — get or create a retained gfx object, clear its cyclic-animation active flag, and zero all five looping-channel start/period pairs without changing current/base transforms.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x230_reset_gfx_cyclic_animations@0x423ba0 fetches the handle and calls gfx_object_reset_cyclic_animation_channels@0x47ee60. The worker clears object flag bit 2 and zeroes starts obj+0x20c/+0x210/+0x214/+0x218/+0x21c plus periods obj+0x220/+0x224/+0x228/+0x22c/+0x230, covering looping color, scale, rotation, the second cyclic matrix, and source-rectangle channels. Corpus: five DEBUGADV effect demonstrations plus one FIELD movement setup before 0x239.
 
 ### 0x231 `animate-gfx-srcrect-loop` (u00421EA0, argc 4)
 - **summary:** (handle)(frame_period_ms)(frame_count)(column_count) — loop row-major through the spritesheet. Every sample preserves draw-texture's source-rectangle width/height; frame=floor((shared_frame_time-object_start)/frame_period)%frame_count, src offset=(frame%columns*width, frame/columns*height). All objects use the retained manager's shared current/previous millisecond timestamps but retain their own start and period. The native consumer raises redraw dirty only when the current and previous samples select different cells. Worker gfx_worker_anim_srcrect @0x47eec0; consumer gfx_object_anim_interpolate @0x473ed0.
@@ -1339,24 +1368,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x20 `u004187C0` (u004187C0, argc 6)
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x21 `u00418860` (u00418860, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x22 `u00418920` (u00418920, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x23 `u004189D0` (u004189D0, argc 2)
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x24 `u00418A90` (u00418A90, argc 2)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
@@ -2102,10 +2113,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x230 `u00421E70` (u00421E70, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x235 `u00422100` (u00422100, argc 5)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.

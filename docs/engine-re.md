@@ -1355,6 +1355,24 @@ channel, samples the exact triangular phase on the shared frame clock, and compo
 T(anchor)`. It remains frame-driven while visible and survives native-style object cloning independently
 of the immediate and delayed one-shot scale fields.
 
+**Cyclic-channel reset follow-up (2026-07-29):** opcode `0x230` is the shared reset for this looping
+animation family. `op_0x230_reset_gfx_cyclic_animations@0x423ba0` takes one retained-object handle and
+calls `gfx_object_reset_cyclic_animation_channels@0x47ee60`. The worker gets or creates the object, clears
+active flag bit 2, and zeroes five start/period pairs:
+
+| channel field | start | period |
+|---|---:|---:|
+| looping color | `obj+0x20c` | `obj+0x220` |
+| cyclic scale | `obj+0x210` | `obj+0x224` |
+| cyclic rotation | `obj+0x214` | `obj+0x228` |
+| second cyclic matrix | `obj+0x218` | `obj+0x22c` |
+| looping source rectangle | `obj+0x21c` | `obj+0x230` |
+
+It does not change the object's current/base transforms. Five DEBUGADV calls reset an effect object before
+demonstrating a new looping asset; FIELD's sole ordinary call resets the temporary moving-unit handle
+between its one-shot translation setup and `0x239` source-cell animation. This is a bounded retained-state
+operation and is the recommended follow-up after the black-fade pair below.
+
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
 a type-0 command-map record keyed by arg 1: start `+4`, delay/duration `+8/+0xc`, target surface slot `+0x10`,
@@ -3153,6 +3171,32 @@ retained room presentation, captures surface 2 through another `0x20c`, restores
 retained objects when `0x20c` targets an offscreen surface, composites the captured target over the captured
 source on the shared frame clock, blocks the VM through the endpoint, and only then permits the following
 surface release/root reload. Headless hosts retain their non-rendering no-op policy.
+
+#### Single-surface black/white fade family — `0x21`–`0x24` (2026-07-29)
+
+The widest remaining opcode `0x22` is not a new renderer. It and `0x21` are the single-surface siblings of
+the already implemented mode-4 `0x25` transition. Dispatch-table resolution gives:
+
+| op | handler | transition mode | endpoint |
+|---|---|---:|---|
+| `0x21` | `op_0x21_fade_surface_in_from_black@0x41cb00` | 0 | captured surface |
+| `0x22` | `op_0x22_fade_surface_out_to_black@0x41cbc0` | 1 | black |
+| `0x23` | `op_0x23_fade_surface_in_from_white@0x41cc80` | 2 | captured surface |
+| `0x24` | `op_0x24_fade_surface_out_to_white@0x41cd40` | 3 | white |
+
+All four take `(surface_slot, timing_argument)`, set run-state bit 8, and use the exact `0x25` timing
+conversion: arguments up to 64 use `argument` milliseconds per tick with alpha step 16; larger arguments
+use `argument/16` milliseconds with step 1. Modes 0/2 start with an opaque solid scratch surface over the
+captured frame and lower its alpha to zero. Modes 1/3 keep the captured frame opaque and raise the
+black/white scratch alpha to 255. Re-entry finalizes the named endpoint before script execution resumes.
+
+Himegari uses only the black pair: three `0x21` calls and eight `0x22` calls, all `(1,30)` and therefore
+about 480 ms. The scripts first select surface 1, clear it, publish a complete retained frame through
+`0x20c`, restore the backbuffer, then fade. `0x21` is the menu-entry reveal; `0x22` is the corresponding
+menu/scene exit to black. Together they close 11 of the 39 remaining skipped instructions across seven
+distinct scripts. Implementation should extend the existing `LegacyScreenTransition` host path with an
+explicit solid-color endpoint; treating a missing numbered surface as black is unsafe because the current
+mode-4 fallback snapshots the live retained frame.
 
 The same manual pass exposed a resource-addressing issue after `0x6c` was fixed: ROOM did execute
 `play-voice`, but `GodotAdvHost` attempted only inferred SC-section resolution. ROOM's voice operands
