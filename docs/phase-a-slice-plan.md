@@ -3545,6 +3545,30 @@ The Godot C# project builds with zero warnings, and the threaded headless selfte
 windowed startup directly requests the same validated dimensions. Physical window overrides remain the
 second slice described above.
 
+### Physical-window override result (implemented 2026-07-28)
+
+The second slice adds `--window-width <pixels>` and `--window-height <pixels>` as presentation-only
+Godot user arguments. Each omitted dimension independently defaults to the selected SYS4INI logical
+canvas; specifying only width or height therefore changes only that physical client dimension. Repeated
+options use the last value. Present values must be invariant-culture integers in `1..16384`; missing,
+nonnumeric, nonpositive, and oversized values stop startup with a parameter-specific diagnostic.
+
+`WindowLaunchOptions` is resolved immediately after the logical canvas and before any presentation
+allocation. In ordinary windowed mode its result sets `Window.Size`; fullscreen, maximized, or minimized
+launch modes retain their display-owned physical size. In every mode `ContentScaleSize`, backbuffers,
+primary/offscreen surfaces, ADV layouts, and VM/input coordinates remain tied to the unchanged logical
+canvas under Godot's `Viewport`/`Keep` aspect policy. The startup log distinguishes the logical canvas,
+requested physical window, request source, actual backend size, and current window mode. The local
+launchers remain intentionally narrow conveniences; pass these user arguments directly after Godot's
+`--` separator.
+
+Eleven focused cases cover defaults, both overrides, independent partial overrides, duplicates, missing
+values, malformed/nonpositive values, and the upper bound. The complete engine suite passes 454/454 and
+the Godot project builds with zero warnings. Headless selftests pass both the default `800x600` request
+and an overridden `1200x700` request while continuing to report `logical-canvas=800x600`; invalid zero
+width exits during startup with the expected diagnostic. Headless's minimized `64x64` backend remains
+non-authoritative for visible client geometry.
+
 ## ADV requested-face selection implemented (2026-07-28)
 
 Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in

@@ -686,9 +686,10 @@ specific data for diagnostics; semantic settings are applied through explicit cr
 legacy renderer/registration switches remain classified rather than blindly emulated. The first bounded
 application slice is complete: `SCREENX`/`SCREENY` select the validated logical canvas, all presentation
 allocations and primary bounds consume it, and it is the default windowed size. Other settings remain on
-their existing paths while gameplay is the priority. A second slice will add
-independent physical `--window-width`/`--window-height` overrides without changing VM coordinates or
-surface geometry. The executable task plan and gates live in `phase-a-slice-plan.md`. This experiment was
+their existing paths while gameplay is the priority. The second slice is also complete:
+independent physical `--window-width`/`--window-height` overrides change only the windowed client while
+the logical canvas, VM coordinates, and surface geometry remain fixed. The executable task plan and gates
+live in `phase-a-slice-plan.md`. This experiment was
 diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many

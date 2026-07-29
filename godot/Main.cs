@@ -22,6 +22,7 @@ public partial class Main : Godot.Control
     private const int NativeBoldGlyphSpacing = 1;
     private int _screenWidth = Sys4LogicalCanvas.DefaultWidth;
     private int _screenHeight = Sys4LogicalCanvas.DefaultHeight;
+    private WindowLaunchOptions _windowOptions;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // SYS4INI-sized immediate-mode canvas
     private ImageTexture _screenTex = null!;
@@ -108,10 +109,21 @@ public partial class Main : Godot.Control
 
     public override void _Ready()
     {
+        var userArgs = OS.GetCmdlineUserArgs();
         // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
         // instance is reused for scripts and assets later in startup.
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var logicalCanvas = catalog.LogicalCanvas;
+        try
+        {
+            _windowOptions = WindowLaunchOptions.Resolve(userArgs, logicalCanvas);
+        }
+        catch (System.ArgumentException error)
+        {
+            GD.PushError($"[startup] {error.Message}");
+            GetTree().Quit(2);
+            return;
+        }
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;
         _screenPixels = new byte[logicalCanvas.RgbaByteCount];
@@ -120,9 +132,11 @@ public partial class Main : Godot.Control
         rootWindow.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
         rootWindow.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight);
         if (rootWindow.Mode == Window.ModeEnum.Windowed)
-            rootWindow.Size = new Vector2I(_screenWidth, _screenHeight);
+            rootWindow.Size = new Vector2I(_windowOptions.Width, _windowOptions.Height);
         GD.Print($"[profile] SYS4INI logical canvas={_screenWidth}x{_screenHeight} " +
-                 $"window={rootWindow.Size.X}x{rootWindow.Size.Y}");
+                 $"requested window={_windowOptions.Width}x{_windowOptions.Height} " +
+                 $"source={(_windowOptions.IsOverridden ? "boot-arguments" : "logical-canvas")} " +
+                 $"actual={rootWindow.Size.X}x{rootWindow.Size.Y} mode={rootWindow.Mode}");
 
         // One logical canvas that draw-texture blits into, shown behind the dialogue.
         _screen = Image.CreateEmpty(_screenWidth, _screenHeight, false, Image.Format.Rgba8);
@@ -205,7 +219,6 @@ public partial class Main : Godot.Control
         }
         _audioOutputLatencySeconds = AudioServer.GetOutputLatency();
 
-        var userArgs = OS.GetCmdlineUserArgs();
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
         bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0; // diagnostic prefix for direct-scene runs
         bool nativeDebugMenu = System.Array.IndexOf(userArgs, "--native-debug-menu") >= 0;
@@ -2158,7 +2171,10 @@ public partial class Main : Godot.Control
                                && _screen.GetHeight() == _screenHeight
                                && _screenPixels.Length == checked(_screenWidth * _screenHeight * 4)
                                && rootWindow.ContentScaleSize
-                                  == new Vector2I(_screenWidth, _screenHeight);
+                                  == new Vector2I(_screenWidth, _screenHeight)
+                               && _windowOptions == WindowLaunchOptions.Resolve(
+                                      OS.GetCmdlineUserArgs(),
+                                      new Sys4LogicalCanvas(_screenWidth, _screenHeight));
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
               && bgmReplacementCancelsFade && textEffectModesOk && fontCalibrationOk
@@ -2167,13 +2183,15 @@ public partial class Main : Godot.Control
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
                          $"bgm-fade-replacement=ok; text-effect-modes=ok; font-calibration=ok; " +
-                         $"logical-canvas={_screenWidth}x{_screenHeight}");
+                         $"logical-canvas={_screenWidth}x{_screenHeight}; " +
+                         $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
-                      $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight})");
+                      $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
+                      $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

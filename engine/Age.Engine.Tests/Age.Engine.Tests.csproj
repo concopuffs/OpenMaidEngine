@@ -33,6 +33,7 @@
     <Compile Include="..\..\godot\PerformanceFrameLog.cs" Link="PerformanceFrameLog.cs" />
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
     <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
+    <Compile Include="..\..\godot\WindowLaunchOptions.cs" Link="WindowLaunchOptions.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
   </ItemGroup>
 

@@ -318,6 +318,11 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
+- `--window-width <pixels>` / `--window-height <pixels>` — override only the physical windowed client
+  dimensions; each omitted dimension defaults independently to the SYS4INI logical canvas. Godot keeps
+  that logical canvas and aspect-preserving letterboxing, so these options do not change VM coordinates,
+  AGE surfaces, layout, or backbuffer allocation. Values must be integers in `1..16384`; duplicate
+  options use the last value.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
 - `--boot` — direct-scene diagnostic only: with `--scene <non-SYSTEM4>`, run the old
   `INITCONFIG/INIT2/INIT` state prefix before that isolated scene. The normal SYSTEM4-rooted launch neither

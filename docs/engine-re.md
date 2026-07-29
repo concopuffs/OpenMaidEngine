@@ -201,7 +201,7 @@ The meaningful consumer catalog is:
 | Setting group | Native Himegari effect | Classification |
 |---|---|---|
 | `CREATEOBJECT`, `DRAWMODE` | `CreateObject=2` selects only the retained D3D/object backend; `DrawMode=1` selects its matching draw/text path. Startup verifies that bit `1 << DrawMode` exists in the backend mask. | Active renderer selection |
-| `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. The port now parses and applies these dimensions to its logical canvas and default windowed client size. | Active core profile; implemented |
+| `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. The port parses and applies these dimensions to its logical canvas and default windowed client size; optional host boot arguments can vary only the physical client. | Active core profile; implemented |
 | `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
 | `DEPENDMOVIESOUND` | Supplies the default movie-audio dependency/routing policy when movie opcode flags do not force another route. | Active media policy |
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
@@ -226,7 +226,9 @@ This is intentionally a native-behavior catalog, not a mandate to reproduce ever
 `Sys4AssetCatalog` now parses the ordered trailer once, retaining unknown pairs for diagnostics, and projects
 `SCREENX`/`SCREENY` into one validated engine-owned logical canvas. Godot uses that value for its content-scale
 base, default windowed client, backbuffer/compositor bounds, primary surface, movie/layout fallbacks, and input
-coordinates. AGE's independent `640x480` defaults apply for missing or invalid dimensions. The port still
+coordinates. `--window-width`/`--window-height` may vary that client independently while the logical canvas
+and all AGE coordinates remain unchanged. AGE's independent `640x480` defaults apply for missing or invalid
+dimensions. The port still
 preserves requested Mincho/Gothic faces, save version 3.10, and movie/audio behavior through their existing
 paths; those keys have not yet been migrated to the parsed registry.
 
