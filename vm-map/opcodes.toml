@@ -202,13 +202,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "fade-surface-in-from-black"
 category = "draw"
-details = "Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. An explicit empty/black source endpoint is composited beneath the captured target; timing and terminal-frame publication share the op-0x25 lifecycle."
+details = "Port status (2026-07-29, skip lifecycle corrected 2026-07-29): implemented through the blocking legacy full-frame transition host path. An explicit empty/black source endpoint is composited beneath the captured target. An already-active ADV fast-forward channel bypasses the timed service and publishes the target endpoint; logical action 4 forces an in-progress transition endpoint when system:EffectSkipOnClick is enabled."
 summary = "(surface_slot)(timing_argument) — block while fading from black to a captured full-frame surface. The captured surface remains the terminal frame."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x20c, 0x20d]
-evidence = "Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_from_black@0x41cb00. First entry sets run-state bit 8, converts timing <=64 to interval=argument ms and alpha step=16 (otherwise interval=argument/16 and step=1), then starts screen_transition_begin@0x439da0 mode 0 with the operand surface. screen_transition_tick@0x43a7a0 draws that surface below an opaque-black scratch surface whose alpha falls 255->0; re-entry finalizes the operand surface. Corpus: 3 sites in EVOLVE, SELSTAGE, and STUDY, all (1,30), approximately 480 ms."
+evidence = "Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_from_black@0x41cb00. With run_state_flags bit 0x08000000 clear, the handler sets effect-service bit 8, converts timing <=64 to interval=argument ms and alpha step=16 (otherwise interval=argument/16 and step=1), starts screen_transition_begin@0x439da0 mode 0, flushes the initiating trigger, and advances the PC. engine_main_tick_with_exception_policy@0x411840 owns natural progress and, when system:EffectSkipOnClick is enabled, forces action-4 clicks through screen_transition_tick@0x43a7a0 with delta 0x10000000. If fast-forward bit 0x08000000 was already set at dispatch, the handler instead publishes the operand-surface endpoint directly; it is not a post-transition re-entry. Corpus: 3 sites in EVOLVE, SELSTAGE, and STUDY, all (1,30), approximately 480 ms."
 
 [[opcode.semantics.args]]
 i = 1
@@ -229,13 +229,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "fade-surface-out-to-black"
 category = "draw"
-details = "Port status (2026-07-29): implemented through the blocking legacy full-frame transition host path. The captured source is composited beneath an explicit empty/black target endpoint; timing and terminal-frame publication share the op-0x25 lifecycle."
+details = "Port status (2026-07-29, skip lifecycle corrected 2026-07-29): implemented through the blocking legacy full-frame transition host path. The captured source is composited beneath an explicit empty/black target endpoint. An already-active ADV fast-forward channel bypasses the timed service and publishes black; logical action 4 forces an in-progress transition endpoint when system:EffectSkipOnClick is enabled."
 summary = "(surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x20c, 0x20d]
-evidence = "Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_to_black@0x41cbc0. It uses the same timer/alpha-step conversion as 0x21 and 0x25, then starts screen_transition_begin@0x439da0 mode 1. screen_transition_tick@0x43a7a0 keeps the operand surface opaque and raises the black scratch-surface alpha 0->255; re-entry finalizes a black endpoint. Corpus: 8 sites across ALCHEMY, CHMENU, EVOLVE, FORT, SELSTAGE, STUDY, and SUMMON, all (1,30), approximately 480 ms."
+evidence = "Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_to_black@0x41cbc0. With run_state_flags bit 0x08000000 clear, it uses the same timer/alpha-step conversion as 0x21/0x25, starts screen_transition_begin@0x439da0 mode 1, flushes the initiating trigger, and advances the PC. screen_transition_tick@0x43a7a0 keeps the operand surface opaque and raises black alpha 0->255; engine_main_tick_with_exception_policy@0x411840 owns natural and system:EffectSkipOnClick-forced completion. If fast-forward was already active at dispatch, the handler publishes black directly; it is not a post-transition re-entry. Corpus: 8 sites across ALCHEMY, CHMENU, EVOLVE, FORT, SELSTAGE, STUDY, and SUMMON, all (1,30), approximately 480 ms."
 
 [[opcode.semantics.args]]
 i = 1
@@ -257,12 +257,12 @@ abi_source = "kelebek+decode-validated"
 name = "crossfade-surfaces"
 category = "draw"
 summary = "(source_surface)(target_surface)(interval_argument) — blocking legacy full-frame mode-4 alpha transition. The native engine composites the captured target surface over the captured source while an 8-bit alpha accumulator advances from 0 to 256."
-details = "The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer, advances by skipped intervals plus the current interval, and does not resume the script until the target endpoint has been presented. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces this blocking alpha lifecycle in the interactive host."
+details = "The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer and does not resume ordinary script execution until the target endpoint is presented. An already-active ADV fast-forward channel publishes the target without starting the service; with system:EffectSkipOnClick enabled, logical action 4 forces an in-progress service to the same endpoint. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces the blocking and forced-endpoint lifecycle in the interactive host."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x20c, 0x20d]
-evidence = "Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 sets run-state bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), calls screen_transition_begin@0x439da0 with mode 4, and later screen_transition_finalize@0x4399c0. engine_main_tick_with_exception_policy polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). The step branch was corrected after manual timing validation; /v2 annotated and saved 2026-07-21."
+evidence = "Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 checks ADV fast-forward bit 0x08000000. Clear: it sets effect-service bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), starts screen_transition_begin@0x439da0 mode 4, flushes the initiating trigger, and advances the PC. engine_main_tick_with_exception_policy@0x411840 polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. With system:EffectSkipOnClick enabled, logical action 4 is consumed and delta 0x10000000 forces that endpoint. If fast-forward was already set at dispatch, the handler calls screen_transition_finalize@0x4399c0 for the target directly; this is not post-transition re-entry. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). /v2 annotations corrected 2026-07-29."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5588,12 +5588,12 @@ abi_source = "kelebek+decode-validated"
 name = "mark-frame-yield"
 category = "control"
 summary = "Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary."
-details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here. The port publishes and waits for visible finite one-shot channels or 0x223 commands; click forcing remains limited to the latter."
+details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 clears the service wait, requests the same forced completion as 0x243, renders the terminal retained frame, and consumes the trigger. That request completes ordinary finite color/scale/rotation/translation channels and type-0 surface commands together; op-0x242-detached channels, ambient cycles, and movie masks are excluded. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x223, 0x1c7, 0x1cc]
-evidence = "Ghidra handler 0x417520 records the 1-dword instruction length and ORs ctx+0xa0ce4 with 0x400. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10."
+evidence = "Ghidra handler 0x417520 records the 1-dword instruction length and ORs ctx+0xa0ce4 with 0x400. engine_main_tick_with_exception_policy@0x411840 branch 0x4123d1 polls gfx_animation_service_poll; its active branch reads EffectSkipOnClick@0x570f60, rejects gfx_animation_service_flags bit 0, polls/consumes action-4 bit 0x10, clears run-state 0x400, calls gfx_request_force_complete_and_reset_anim_clock@0x4076c0, then gfx_render_frame. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10, click lifecycle refined 2026-07-29."
 
 [[opcode]]
 op = 0x21d
@@ -6732,11 +6732,12 @@ abi_source = "kelebek+decode-validated"
 name = "set-gfx-animation-service-flags"
 category = "draw"
 summary = "Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0."
+details = "Bit 0 disables the run-state-0x400 EffectSkipOnClick branch while finite retained presentation is active. Bit 1 independently suppresses opcode 0x243 and the click branch's shared force-complete/clock-reset request. BTL brackets combat presentation with 1/0 and GAMECLEAR uses 3/0, protecting those service-owned animations from ordinary ADV click completion."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. The mapped field is also read by op 0x243: bit 1 suppresses its force-complete/clock-reset request."
+evidence = "Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. engine_main_tick_with_exception_policy@0x411840 tests bit 0 before polling action 4 in the run-state-0x400 EffectSkipOnClick branch. gfx_request_force_complete_and_reset_anim_clock@0x4076c0 tests bit 1 before setting force-complete and zeroing the service clock; opcode 0x243 calls the same worker."
 
 [[opcode.semantics.args]]
 i = 1

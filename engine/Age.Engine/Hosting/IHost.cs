@@ -131,9 +131,13 @@ public interface IHost
     void PresentFrame(GfxState gfx) { }
     // Legacy SYS4 screen-transition family (ops 0x21, 0x22, and 0x25): scripts render complete
     // frames into numbered surfaces, then block while the engine alpha-composites an endpoint.
+    // Native bypasses the timed service when ADV fast-forward is already active at opcode dispatch.
     void FadeSurfaceWithBlack(
-        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction) { }
-    void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument) { }
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction,
+        bool forceEndpoint = false) { }
+    void CrossfadeSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
+        bool forceEndpoint = false) { }
     void CreateTexture(int slot, int width, int height);
     /// <summary>Return a stable RGBA snapshot of one numbered surface, or null when unavailable.</summary>
     RgbaImage? CaptureSurfacePixels(int slot) => null;

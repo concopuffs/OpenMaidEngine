@@ -60,6 +60,8 @@ internal class RecordingHost : IHost
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<(int Surface, long Interval, SurfaceBlackFadeDirection Direction)> SurfaceBlackFades = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
+    public readonly List<bool> SurfaceBlackFadeForceEndpoints = new();
+    public readonly List<bool> SurfaceCrossfadeForceEndpoints = new();
     public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
@@ -175,10 +177,19 @@ internal class RecordingHost : IHost
         gfx.CompleteForegroundTransitions(100);
     }
     public void FadeSurfaceWithBlack(
-        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction)
-        => SurfaceBlackFades.Add((surface, intervalArgument, direction));
-    public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
-        => SurfaceCrossfades.Add((sourceSurface, targetSurface, intervalArgument));
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction,
+        bool forceEndpoint = false)
+    {
+        SurfaceBlackFades.Add((surface, intervalArgument, direction));
+        SurfaceBlackFadeForceEndpoints.Add(forceEndpoint);
+    }
+    public void CrossfadeSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
+        bool forceEndpoint = false)
+    {
+        SurfaceCrossfades.Add((sourceSurface, targetSurface, intervalArgument));
+        SurfaceCrossfadeForceEndpoints.Add(forceEndpoint);
+    }
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) => Textures.Add((resId, slot));
     public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);

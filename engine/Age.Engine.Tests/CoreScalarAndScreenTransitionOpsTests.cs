@@ -92,4 +92,26 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.Equal(480, LegacyScreenTransitionTiming.DurationMilliseconds(30));
         Assert.Equal(1024, LegacyScreenTransitionTiming.DurationMilliseconds(65));
     }
+
+    [Fact]
+    public void ActiveAdvSkip_ForcesLegacyScreenTransitionEndpointsAtDispatch()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "SKIPPED_SCREEN_TRANSITIONS",
+            new List<(int, Operand[])>
+            {
+                (0x21, new[] { new Operand(Imm, 1), new Operand(Imm, 30) }),
+                (0x25, new[]
+                {
+                    new Operand(Imm, 1), new Operand(Imm, 2), new Operand(Imm, 10),
+                }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost { MessageSkip = true };
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new[] { true }, host.SurfaceBlackFadeForceEndpoints);
+        Assert.Equal(new[] { true }, host.SurfaceCrossfadeForceEndpoints);
+    }
 }

@@ -93,4 +93,47 @@ public class ForegroundTransitionTests
         Assert.False(gfx.HasActiveForegroundTransitions(100));
         Assert.True(gfx.SnapshotMovieMaskTransitions().Single().Completed);
     }
+
+    [Fact]
+    public void ClickCompletionFinishesSurfaceAndOrdinaryOneShotsButPreservesExcludedChannels()
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.BindDraw(101, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
+        gfx.SetScaleChannel(100, 0, 1000, (200, 200, 100));
+        gfx.SetAnimatedObjectColorResolved(101, 0, 1000, 0, 0xffffff);
+        gfx.SetOneShotAnimationControl(101, 1);
+        gfx.SetRotationCycle(100, 1000, (0, 0, 1));
+        gfx.QueueSurfaceAlphaTransition(102, 6, 101, 1, 100, 1, 0, 1000);
+        gfx.StartForegroundTransitions(100);
+        gfx.QueueMovieMaskTransition(new MovieMaskTransitionRequest(
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000));
+
+        Assert.Equal(3, gfx.CompleteClickSkippableTimedPresentation(200));
+
+        Assert.Equal(1.0, gfx.SnapshotForegroundTransitions(200).Single().Progress);
+        Assert.False(gfx.TryGet(100)!.OneShotColorEnabled);
+        Assert.False(gfx.TryGet(100)!.ScaleEnabled);
+        Assert.True(gfx.TryGet(100)!.RotationEnabled);
+        Assert.True(gfx.TryGet(101)!.OneShotColorEnabled);
+        Assert.False(gfx.SnapshotMovieMaskTransitions().Single().Completed);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void AnimationServiceFlagsSuppressClickCompletion(long flags)
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
+        gfx.SetAnimationServiceFlags(flags);
+
+        Assert.Equal(0, gfx.CompleteClickSkippableTimedPresentation(100));
+        Assert.True(gfx.TryGet(100)!.OneShotColorEnabled);
+    }
 }

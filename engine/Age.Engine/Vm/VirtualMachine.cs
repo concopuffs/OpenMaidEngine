@@ -2862,16 +2862,20 @@ public sealed class VirtualMachine
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
             case "u00418860":
                 _host.FadeSurfaceWithBlack(
-                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack);
+                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
+                    _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
             case "u00418920":
                 _host.FadeSurfaceWithBlack(
-                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack);
+                    Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
+                    _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
-                _host.CrossfadeSurfaces(Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]));
+                _host.CrossfadeSurfaces(
+                    Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
+                    _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary
                 _host.WaitForForegroundTransition(Gfx); return pc + 1;

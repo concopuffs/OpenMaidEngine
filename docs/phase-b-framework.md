@@ -854,6 +854,26 @@ conversion and exact terminal-frame publication, and closes all 11 sites. The re
 is 16 distinct opcodes / 28 instructions. All 477 engine tests, opcode build/lint, the zero-warning Godot
 build, and the Himegari-targeted threaded selftest pass.
 
+**Legacy-transition Skip/click lifecycle corrected (2026-07-29):** Ghidra's outer engine tick exposes the
+shared mechanism behind native skippable effects. With ADV fast-forward already active, `0x21`, `0x22`, and
+`0x25` publish their terminal endpoint without starting the timed service. Otherwise run-state bit 8 owns
+the transition; when `SYS4REG.INI` `system:EffectSkipOnClick` is enabled, logical action 4 is consumed and
+the active effect tick receives delta `0x10000000`, forcing that same endpoint. The port now carries the
+fast-forward state into legacy-transition dispatch and prioritizes action 4 over retained ADV hotspots
+while a transition is parked. A focused regression covers forced black-fade and crossfade dispatch.
+Validation passes 519/519 engine tests, opcode build/lint, the zero-warning Godot build, clean diff
+checking, and the Himegari-targeted threaded selftest.
+
+**Retained CG-fade click completion corrected (2026-07-29):** the legacy service above was only one of two
+native paths and did not cover the story CG fades observed in the port. The outer tick's separate
+run-state-`0x400` service applies `EffectSkipOnClick` to the complete ordinary finite retained-animation set:
+queued type-0 surface commands plus object color/alpha, scale, rotation, and translation channels. The port's
+click handler had incorrectly forced only the surface-command subset, so CGs implemented as object alpha or
+matrix fades still consumed their full duration. Interactive advance now completes the complete native set;
+activating Ctrl/Skip during the wait uses the same endpoint path. Ambient loops, op-`0x242` detached channels,
+and movie masks remain unaffected. Focused exclusions and endpoint regressions pass in the 523-test engine
+suite, and the Godot build is warning-free.
+
 **Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
 disables the four looping channels represented by the compositor, and clears the complete native
 start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.

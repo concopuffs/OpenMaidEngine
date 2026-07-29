@@ -654,14 +654,24 @@ public sealed class GodotAdvHost : IHost
             _frameSignal.Set();
             return;
         }
+        if (TryForceActiveTransition("advance")) return;
+        if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
+    }
+
+    private bool TryForceActiveTransition(string source)
+    {
         if (IsTransitionWaiting && _foregroundGfx != null)
         {
-            int completed = _foregroundGfx.CompleteForegroundTransitions(_clock.NowMs);
+            int completed = _foregroundGfx.CompleteClickSkippableTimedPresentation(_clock.NowMs);
             if (completed > 0)
             {
-                _timeline?.State("transition-forced-complete", new() { ["count"] = completed });
+                _timeline?.State("transition-forced-complete", new()
+                {
+                    ["count"] = completed,
+                    ["source"] = source,
+                });
                 _frameSignal.Set();
-                return;
+                return true;
             }
         }
         if (IsTransitionWaiting)
@@ -671,13 +681,16 @@ public sealed class GodotAdvHost : IHost
                 if (_screenTransition != null)
                 {
                     _screenTransition.Forced = true;
-                    _timeline?.State("screen-transition-forced-complete", new());
+                    _timeline?.State("screen-transition-forced-complete", new()
+                    {
+                        ["source"] = source,
+                    });
                     _frameSignal.Set();
-                    return;
+                    return true;
                 }
             }
         }
-        if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
+        return false;
     }
 
     public bool IsMessageSkipActive => _messageSkipActive;
@@ -715,6 +728,7 @@ public sealed class GodotAdvHost : IHost
         if (effective)
         {
             lock (_textLock) _advTextForceComplete = true;
+            TryForceActiveTransition("message-skip");
             _frameSignal.Set();
             _inputCallbackSignal.Set();
             return;
@@ -846,7 +860,8 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void FadeSurfaceWithBlack(
-        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction)
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction,
+        bool forceEndpoint = false)
     {
         long start = _clock.NowMs;
         IReadOnlyList<RenderObject> captured;
@@ -859,7 +874,7 @@ public sealed class GodotAdvHost : IHost
             direction == SurfaceBlackFadeDirection.FromBlack ? black : captured;
         IReadOnlyList<RenderObject> target =
             direction == SurfaceBlackFadeDirection.FromBlack ? captured : black;
-        RunLegacyScreenTransition(source, target, start, intervalArgument, new()
+        RunLegacyScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
         {
             ["kind"] = "surface-black-fade",
             ["surface"] = surface,
@@ -868,7 +883,9 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
-    public void CrossfadeSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument)
+    public void CrossfadeSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
+        bool forceEndpoint = false)
     {
         IReadOnlyList<RenderObject> source;
         IReadOnlyList<RenderObject> target;
@@ -880,7 +897,7 @@ public sealed class GodotAdvHost : IHost
             target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
                 ? capturedTarget : gfx.SnapshotVisibleObjects(start);
         }
-        RunLegacyScreenTransition(source, target, start, intervalArgument, new()
+        RunLegacyScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
         {
             ["kind"] = "surface-crossfade",
             ["source"] = sourceSurface,
@@ -893,11 +910,15 @@ public sealed class GodotAdvHost : IHost
     // interval by sixteen and step alpha by one. This reproduces its blocking wall-clock duration.
     private void RunLegacyScreenTransition(
         IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
-        long start, long intervalArgument, Dictionary<string, object?> timelineDetail)
+        long start, long intervalArgument, bool forceEndpoint,
+        Dictionary<string, object?> timelineDetail)
     {
         long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
         lock (_screenTransitionLock)
-            _screenTransition = new LegacyScreenTransition(source, target, start, duration);
+            _screenTransition = new LegacyScreenTransition(source, target, start, duration)
+            {
+                Forced = forceEndpoint,
+            };
         _foregroundGfx = null;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, start);
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
@@ -906,6 +927,7 @@ public sealed class GodotAdvHost : IHost
         timelineDetail["duration_ms"] = duration;
         timelineDetail["source_objects"] = source.Count;
         timelineDetail["target_objects"] = target.Count;
+        timelineDetail["forced"] = forceEndpoint;
         _timeline?.State("screen-transition-start", timelineDetail);
         bool scriptSuspended = SuspendScriptForPresentation();
         try

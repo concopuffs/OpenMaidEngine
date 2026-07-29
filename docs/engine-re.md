@@ -213,6 +213,7 @@ The meaningful consumer catalog is:
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for persistent message Skip. | Active ADV input behavior; currently missing from port |
 | `CONTROLDISIBLECURSOR` | The spelling is native. Value 1 suppresses AGE's ordinary cursor-restore call when a bound ADV hotspot action or hover callback is selected. | Active ADV cursor behavior; currently missing from port |
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. | Active ADV toggle behavior; currently missing from port |
+| `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The generic fallback is 0; the active Himegari profile has value 1. While one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy; port routes action 4 ahead of retained ADV hotspots while a transition service is parked |
 | `REDRAWTEXTONKEY` | Value 0 disables the wheel/key path that traverses and republishes the current text-history view through `CALLBACK_TEXT.BIN`. | Active ADV history-input policy; port uses its script callback path instead |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. `adv_input_service_poll@0x411230` uses them for ADV wheel-key/history handling; raw `WM_MOUSEWHEEL` accumulation for op `0x10d` remains a separate channel. | Active ADV input binding; port does not source these values |
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
@@ -1016,7 +1017,12 @@ that average had folded service waits into execution time and was not an opcode 
 
 The Godot host therefore leaves ordinary `FrameYield` non-blocking and publishes retained mutations only at
 `0x20c`, `0x21c`, sleep, and stable input waits. `0x21c` waits for visible finite color/matrix channels plus
-`0x223`; ambient cyclic/spritesheet pulses do not block, and click forcing remains restricted to `0x223`.
+`0x223`; ambient cyclic/spritesheet pulses do not block. Click forcing applies to that complete finite
+presentation set, not only `0x223`: the outer tick's run-state-`0x400` branch reads
+`system:EffectSkipOnClick`, consumes logical action 4, calls the same force-complete worker as `0x243`, and
+renders the terminal retained frame. Ordinary object color/alpha and matrix fades therefore jump to their
+endpoints together with type-0 surface commands. Movie-mask commands and `0x242`-detached or ambient channels
+remain outside that completion set.
 This is a native-evidenced scheduler correction, not a guessed duration sleep.
 
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
@@ -3440,6 +3446,14 @@ commits every ordinary finite group; detached objects ignore the request. The po
 commit directly when executing `0x243`, excludes detached groups from its blocking wait predicate, and
 continues including them in its visual recomposition predicate until natural completion.
 
+The main loop also calls this worker, now named
+`gfx_request_force_complete_and_reset_anim_clock@0x4076c0`, from the active run-state-`0x400` service.
+At `0x412408..0x41245c` it reads `system:EffectSkipOnClick`, rejects service-flags bit 0, polls the triggered
+logical-action mask, consumes action-4 bit `0x10`, clears run-state `0x400`, and requests terminal sampling
+before `gfx_render_frame`. This is the generalized native CG-fade click path. It covers the ordinary finite
+color/alpha and matrix channels serviced by `0x21c`, as well as queued type-0 surface commands; it is separate
+from the legacy run-state-bit-8 fade service.
+
 Corpus evidence is unusually sharp: all 303 calls pass an immediate flag, with zero used 302 times and one
 used once. SC0000's two CG-loader sites (`0x12723`, `0x13310`) write zero. `BTL.BIN@0x2b4d` writes one on an
 animated battle object after its texture/movie or sprite-cell setup, matching the nonblocking background
@@ -3470,7 +3484,7 @@ skipped all greeting/farewell ids. Correct zero-range execution fixes the boot d
 or choosing a persistence backend for `0x1a2`/`0x1a3`.
 
 `op_0x25_handler@0x41ce00` starts the legacy transition manager at `EngineCtx+0x1c38`, sets run-state bit
-8, and keeps the script parked until the transition completes. Its three operands are source surface,
+8, and keeps ordinary script execution parked until the transition completes. Its three operands are source surface,
 target surface, and a timing argument. For arguments up to 64, the handler arms that many milliseconds per
 tick and advances the 8-bit alpha by 16. Larger arguments use `argument/16` milliseconds and alpha step
 1. The branch is expressed in decompilation as `((arg < 65) - 1 & 0xfffffff1) + 0x10`; evaluating both
@@ -3478,7 +3492,20 @@ outcomes is significant (`true -> 16`, `false -> 1`). `interval_timer_poll_elaps
 `screen_transition_tick@0x43a7a0` mode 4 composites source first and target over it at the accumulated alpha;
 at `0x100` it commits the target. `screen_transition_begin@0x439da0` and
 `screen_transition_finalize@0x4399c0` own the endpoints. Thus an argument 10 lasts about 160 ms, while 30
-lasts about 480 ms; input can force the endpoint through the same transition-abort service. Manual ROOM
+lasts about 480 ms. The outer service's generalized skip paths are:
+
+- If ADV fast-forward bit `run_state_flags & 0x08000000` is already set when `0x25` dispatches, the
+  handler does not create a transition. It calls `screen_transition_finalize` for the target endpoint
+  and advances normally.
+- Otherwise the handler starts service bit 8 and calls `input_flush_action_triggers@0x405380`, preventing
+  the input that entered the effect from also canceling it. With `system:EffectSkipOnClick` enabled,
+  `engine_main_tick_with_exception_policy@0x411840` polls
+  `input_poll_triggered_action_mask@0x460880`; logical action 4 (`0x10`) is consumed and
+  `screen_transition_tick(0x10000000)` forces the active service to its endpoint.
+
+The PC advances when the service begins. The handler's finalize branch is therefore the skip-at-dispatch
+path, not a re-entry after natural completion; natural and click-forced progress lives wholly in the outer
+service. Manual ROOM
 validation caught the initially inverted alpha-step branch.
 
 ROOM explicitly constructs those full frames. It selects/clears surface 1 and calls `0x20c`, mutates the
@@ -3501,11 +3528,13 @@ the already implemented mode-4 `0x25` transition. Dispatch-table resolution give
 | `0x23` | `op_0x23_fade_surface_in_from_white@0x41cc80` | 2 | captured surface |
 | `0x24` | `op_0x24_fade_surface_out_to_white@0x41cd40` | 3 | white |
 
-All four take `(surface_slot, timing_argument)`, set run-state bit 8, and use the exact `0x25` timing
+All four take `(surface_slot, timing_argument)` and use the exact `0x25` timing
 conversion: arguments up to 64 use `argument` milliseconds per tick with alpha step 16; larger arguments
 use `argument/16` milliseconds with step 1. Modes 0/2 start with an opaque solid scratch surface over the
 captured frame and lower its alpha to zero. Modes 1/3 keep the captured frame opaque and raise the
-black/white scratch alpha to 255. Re-entry finalizes the named endpoint before script execution resumes.
+black/white scratch alpha to 255. With fast-forward inactive, they set service bit 8 and use the same
+natural/action-4 forced-completion path described above. With fast-forward already active at dispatch,
+they publish the named endpoint without starting the service.
 
 Himegari uses only the black pair: three `0x21` calls and eight `0x22` calls, all `(1,30)` and therefore
 about 480 ms. The scripts first select surface 1, clear it, publish a complete retained frame through
@@ -3515,7 +3544,9 @@ menu/scene exit to black.
 The port dispatches both opcodes through the existing blocking `LegacyScreenTransition` clock and terminal
 publication path. Its compositor already clears the whole frame to opaque black, so an empty source list
 models black-to-captured and an empty target list models captured-to-black without overloading the mode-4
-missing-surface fallback (which intentionally snapshots the live retained frame). This closes 11 formerly
+missing-surface fallback (which intentionally snapshots the live retained frame). Active ADV Skip/Ctrl now
+marks the transition forced at dispatch, while action 4 is routed to the transition before retained ADV
+hotspots can consume it. This closes 11 formerly
 skipped instructions across seven distinct scripts and reduces the effectful-gap inventory from 18 to 16
 distinct opcodes / 28 instructions.
 
@@ -3850,8 +3881,9 @@ The following native handlers were decoded while bounding that slice:
   completion-loop predicate: BTL scans its active combat surfaces, while FIELD and USEMAGIC poll slot 42.
 - `op_0x24e_set_gfx_animation_service_flags@0x425070` copies its operand directly to
   `EngineCtx.gfx_animation_service_flags` (`+0x51b80`). BTL brackets combat presentation with 1/0 and
-  GAMECLEAR uses 3/0. Bit 1 is independently consumed by opcode `0x243` to suppress a force-complete and
-  animation-clock-reset request.
+  GAMECLEAR uses 3/0. Bit 0 disables the run-state-`0x400` `EffectSkipOnClick` branch; bit 1 is independently
+  consumed by opcode `0x243` and the shared worker to suppress a force-complete and animation-clock-reset
+  request.
 - `op_0x207_copy_surface_rect@0x422b50` builds source/destination rectangles from
   `(source_surface, destination_surface, source_x, source_y, width, height, destination_x, destination_y)`
   and calls `gfx_copy_surface_rect@0x477da0`. The worker validates both slots, clips both rectangles while

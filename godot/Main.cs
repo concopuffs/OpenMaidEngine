@@ -656,6 +656,14 @@ public partial class Main : Godot.Control
                 GetViewport().SetInputAsHandled();
                 return;
             }
+            // Native blocking effect services poll logical action 4 before ADV hotspot dispatch.
+            // Consume the trigger here so a retained hotspot under the transition cannot steal it.
+            if (mb.Pressed && action == 4 && _host.IsTransitionWaiting)
+            {
+                _host.SignalInput();
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
             // the held physical button through the script-configured logical action map.
             if (mb.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
@@ -678,7 +686,12 @@ public partial class Main : Godot.Control
             && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {
             int action = _vm.UpdateKeyboardVirtualKeyState(virtualKey, gameplayKey.Pressed);
-            if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
+            if (gameplayKey.Pressed && action == 4 && _host.IsTransitionWaiting)
+            {
+                _host.SignalInput();
+                GetViewport().SetInputAsHandled();
+            }
+            else if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
             {
                 GetViewport().SetInputAsHandled();
             }
@@ -697,7 +710,12 @@ public partial class Main : Godot.Control
         if (e is InputEventJoypadButton joyButton)
         {
             int actionMask = _vm.UpdateJoystickButtonState((int)joyButton.ButtonIndex, joyButton.Pressed);
-            if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
+            if (joyButton.Pressed && (actionMask & (1 << 4)) != 0 && _host.IsTransitionWaiting)
+            {
+                _host.SignalInput();
+                GetViewport().SetInputAsHandled();
+            }
+            else if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
             {
                 GetViewport().SetInputAsHandled();
             }

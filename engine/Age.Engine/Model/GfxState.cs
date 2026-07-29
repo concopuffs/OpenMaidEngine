@@ -934,7 +934,49 @@ public sealed class GfxState
                         (o.RotationEnabled && o.RotationPeriodMs > 0)));
     }
 
-    /// <summary>Click completion affects only type-0 foreground transitions, never ambient object channels.</summary>
+    /// <summary>Force the finite retained presentation serviced by native run-state bit 0x400 to its
+    /// endpoint. This is the EffectSkipOnClick path: type-0 surface commands and ordinary finite object
+    /// channels complete together, while movie masks, ambient cycles, and op-0x242-detached channels remain
+    /// active. Op 0x24e bit 0 disables click skipping; bit 1 suppresses the shared force-complete request.</summary>
+    public int CompleteClickSkippableTimedPresentation(long nowMs)
+    {
+        lock (_lock)
+        {
+            if ((AnimationServiceFlags & 3) != 0) return 0;
+
+            int completed = 0;
+            foreach (var t in _surfaceTransitions.Values)
+            {
+                if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+                t.Forced = true;
+                completed++;
+            }
+
+            completed += CountOneShotChannels(_rangeTransform);
+            foreach (var o in _objects.Values)
+            {
+                if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
+                completed += CountOneShotChannels(o);
+            }
+            ForceCompleteOneShotChannels();
+
+            if (AnimClockDurationTicks != 0) completed++;
+            AnimClockDurationTicks = 0;
+            AnimClockGeneration++;
+
+            if (completed > 0) MarkRetainedMutation();
+            return completed;
+        }
+    }
+
+    private static int CountOneShotChannels(GfxObject o)
+        => (o.OneShotColorEnabled ? 1 : 0)
+           + (o.ScaleEnabled ? 1 : 0)
+           + (o.RotationChannelEnabled ? 1 : 0)
+           + (o.TranslationEnabled ? 1 : 0);
+
+    /// <summary>Force only queued type-0 foreground transitions. PresentFrame uses this to publish a
+    /// command endpoint immediately; interactive run-state-0x400 skipping uses the broader method above.</summary>
     public int CompleteForegroundTransitions(long nowMs)
     {
         lock (_lock)
