@@ -6590,23 +6590,24 @@ evidence = "Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set retained-gfx own
 
 [[opcode]]
 op = 0x248
-label = "u00422E80"
+label = "set-tiled-surface-edge-length"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422E80"
-category = "unknown"
-summary = ""
+name = "set-tiled-surface-edge-length"
+category = "draw"
+summary = "Set the legacy mode-1 tiled-surface edge length in pixels. Native surface creation, blitting, rectangle operations, and AGF upload use it to partition one logical surface into ordinary texture tiles; SYSTEM4 initializes it to 128."
+details = "Port status (2026-07-29): implemented as retained signed-dword graphics configuration. The value survives scene-context resets and does not dirty presentation or rebuild existing surfaces. The portable backend deliberately keeps mode-1 surfaces as contiguous RGBA images rather than reproducing legacy D3D texture tiling."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x248_set_tiled_surface_edge_length@0x424af0 directly stores operand 1 in g_nTiledSurfaceEdgeLength@0x5b15b0. Its 30 xrefs are confined to gfx_tiled_surface_create/blit/rect_op/upload_agf, where dimensions are split by ceil(size / edge). SYSTEM4's sole call passes 128 immediately after opcode 0x149. This configures opcode 0x249's mode-1 tiled wrapper and is unrelated to adjacent opcode 0x24d."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "tile edge length in pixels"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -6642,78 +6643,78 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x24d
-label = "u00422E90"
+label = "play-movie-mask-transition"
 argc = 12
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422E90"
-category = "unknown"
-summary = ""
+name = "play-movie-mask-transition"
+category = "draw"
+summary = "Open a movie into a scratch surface, retime it to the requested duration, use its decoded frames as a per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "new retained-command range key"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "scratch movie surface slot"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "old/source retained-object range start"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "old/source retained-object range count"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "mask destination x"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 6
-role = ""
+role = "mask destination y"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 7
-role = ""
+role = "mask width"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 8
-role = ""
+role = "mask height"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 9
-role = ""
+role = "mask direction/mode"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 10
-role = ""
+role = "universal packed movie resource id"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 11
-role = ""
+role = "movie start delay in milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 12
-role = ""
+role = "total transition duration in milliseconds"
 observed_types = ["imm"]
 
 [[opcode]]

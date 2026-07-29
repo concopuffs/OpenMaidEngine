@@ -947,6 +947,41 @@ EngineCtx lint, a zero-warning Godot build, clean diff checking, and the Himegar
 **NEXT:** rerank the remaining six gaps; begin with the two-site `0x24d` and check whether adjacent
 `0x248` belongs to the same native subsystem before choosing the next implementation boundary.
 
+**MOVIE-MASK/TILED-SURFACE INVESTIGATION COMPLETE (2026-07-29):** `0x24d` and `0x248` are unrelated.
+`0x248(edge)` sets the legacy mode-1 tiled-surface edge length; SYSTEM4 supplies 128, while the port's
+contiguous RGBA surfaces do not need to reproduce AGE's old texture-size partitioning. It is an exact,
+small state-parity implementation.
+
+`0x24d(new_key,movie_slot,old_start,old_count,x,y,width,height,mode,movie_id,delay_ms,duration_ms)` is a
+movie-driven per-pixel transition. Native retimes the MPEG to `duration_ms`, allocates a byte mask at the
+requested size, and registers a blocking retained command that composites the old and new ranges through
+successive movie frames. Both sites are confined to DEBUG.BIN's optional TEST.AGF pages; one uses signed
+x=-184. The port's explicit F4 diagnostic route makes those pages reachable, but implementing the opcode
+requires a new mask-frame/compositor seam rather than reuse of the existing scalar crossfade.
+
+The remaining inventory is still 6 opcodes / 8 instructions because this slice changed metadata only.
+`0x248` is the sensible next implementation: it is exact and closes SYSTEM4's singleton without imposing
+obsolete D3D tiling. After that, investigate the two normal CONFIG sites of `0x142` before deciding whether
+the developer-only `0x24d` transition justifies its larger compositor slice. The `/v2` handlers,
+transition helpers, and tiled-size global are named/commented and the program is saved.
+
+**NEXT:** implement `0x248` as retained graphics configuration/state parity, then investigate CONFIG's
+two-site `0x142`; keep exact `0x24d` semantics documented for a later diagnostic-compositor slice.
+
+**TILED-SURFACE EDGE `0x248` IMPLEMENTED (2026-07-29):** the VM now retains AGE's signed-dword tile-edge
+configuration in `GfxState`. It starts at zero, SYSTEM4 sets 128, later writes replace the complete value,
+and scene-context reset does not clear it. Like native, the setter does not dirty presentation or rebuild
+existing mode-1 surfaces. The portable `0x249` path still uses one contiguous RGBA image, preserving every
+script-visible result without reproducing the legacy D3D tile allocation.
+
+Two focused regressions cover SYSTEM4's exact setting followed by a mode-1 texture load, native signed
+replacement, and reset lifetime. The slice removes one instruction and leaves 5 effectful opcodes / 7
+instructions. Validation passes 495/495 engine tests, opcode and EngineCtx lint, a zero-warning Godot
+build, clean diff checking, and the Himegari-targeted threaded `SELFTEST OK`.
+
+**NEXT:** investigate CONFIG's two-site `0x142`; keep developer-only `0x24d` for a later dedicated
+movie-mask compositor slice.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

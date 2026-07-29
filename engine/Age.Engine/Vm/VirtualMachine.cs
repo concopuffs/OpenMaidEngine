@@ -2367,6 +2367,10 @@ public sealed class VirtualMachine
                 _host.SetTexture(resourceId, (int)Read(a[1]), colorKey);
                 return pc + 1;   // host still tracks dims for get-texture-size
             }
+            case "u00422E80":                         // pre-reference compatibility
+            case "set-tiled-surface-edge-length":    // 0x248 (edge pixels)
+                Gfx.SetTiledSurfaceEdgeLength(Read(a[0]));
+                return pc + 1;
             case "u00422EB0":                 // pre-reference compatibility
             case "load-raw-texture-surface":  // 0x249 (packed resource id)(slot)(colorkey)
             {

@@ -205,6 +205,9 @@ public sealed class GfxState
     public int DefaultObjectSlot { get; private set; }
     /// <summary>The D3D render target selected by op 0x20d. -1 denotes the main backbuffer.</summary>
     public int CurrentRenderTargetSlot { get; private set; } = -1;
+    /// <summary>Legacy mode-1 surface tile edge selected by op 0x248. The portable backend retains
+    /// the native process-global value for parity but stores every surface as one contiguous image.</summary>
+    public int TiledSurfaceEdgeLength { get; private set; }
 
     // ---- Separate global animation service clock (op 0x238; ctx+0x51b7c total / +0x51b78 elapsed).
     // Retained for its opcode family; 0x21e scale and 0x220 translation use frame-time directly instead. ----
@@ -248,6 +251,13 @@ public sealed class GfxState
     public void SetDefaultObjectSlot(int slot)
     {
         lock (_lock) DefaultObjectSlot = slot;
+    }
+
+    public void SetTiledSurfaceEdgeLength(long edgeLength)
+    {
+        // Native stores the complete operand in one signed dword. It does not invalidate or rebuild
+        // already-created mode-1 surfaces, nor does it mark the retained compositor dirty.
+        lock (_lock) TiledSurfaceEdgeLength = unchecked((int)edgeLength);
     }
 
     public void SetObjectAnchor(long handle, (long X, long Y, long Z) anchor)

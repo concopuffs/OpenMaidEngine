@@ -1595,6 +1595,56 @@ After the 213/213 video/audio corpus gate and clean audible LOGO/OP/CHAPTER acce
 `DirectShowMovieDecoder`, its COM/temp-file adapter, compatibility test, and managed Windows annotations.
 Native AGE's DirectShow behavior remains relevant evidence for opcode semantics; it is no longer port code.
 
+### Movie-mask transition `0x24d` and tiled-surface edge `0x248` (2026-07-29)
+
+The adjacent opcode numbers do not represent one subsystem. `op_0x248_set_tiled_surface_edge_length`
+(`0x424af0`) only copies its operand into `g_nTiledSurfaceEdgeLength` (`0x5b15b0`). The global's 30
+references are confined to `gfx_tiled_surface_create`, `gfx_tiled_surface_blit`,
+`gfx_tiled_surface_rect_op`, and `gfx_tiled_surface_upload_agf`. Those workers partition a logical mode-1
+surface into `ceil(width / edge)` by `ceil(height / edge)` ordinary texture tiles and clip logical
+operations across them. SYSTEM4's sole call sets the edge to 128 immediately after opcode `0x149`.
+This is legacy texture-allocation configuration for `0x249`; a backend with contiguous RGBA surfaces may
+retain the value for state parity without physically reproducing the tiling.
+
+`op_0x24d_play_movie_mask_transition` (`0x424db0`) is instead a 12-operand presentation operation:
+
+1. It allocates or reuses the scratch movie-to-texture object in operand 2 and opens operand 10 as a
+   universal packed resource. It routes sound with native flag value 6 and configures operand 11 as the
+   movie's start delay.
+2. It reads `IMediaPosition::get_StopTime` and sets `put_Rate` to
+   `(native stop time in milliseconds) / operand 12`, retiming the complete movie to the requested
+   transition duration.
+3. `movie_texture_allocate_transition_mask@0x415d90` allocates an operand-7 by operand-8 byte mask and
+   initializes it to zero when operand 9 is one, or 255 otherwise.
+4. `gfx_movie_mask_transition_register@0x47f560` records a type-1 retained command keyed by operand 1.
+   The record identifies the old/source range (operands 3 and 4), scratch movie surface, mask mode,
+   start delay, and destination rectangle `{x=operand 5, y=operand 6, width=operand 7,
+   height=operand 8}`.
+
+The retained surface-command compositor's type-1 branch captures the old and new object sets, updates the
+byte mask from decoded movie frames, and composites the two captures per pixel within that rectangle. It
+keeps its blocking/redraw state set until the movie completes, at which point it clears the command and
+mask. Operand 1 is the immediately preceding new `draw-texture` range key; operand 3 is the old range that
+the script erases after its `0x21c`/`0x224` presentation boundary.
+
+Both shipped calls are in DEBUG.BIN. They use scratch slots 45/46, old ranges 10/20, new keys 11/21,
+mode zero, zero delay, and a 1000 ms duration. Resource `0x325e` is `TEST.AGF`; its `00 00 01 BA`
+header identifies an MPEG program stream despite the extension. One call uses a signed x coordinate of
+-184, confirming that the position operands are not unsigned dimensions. Retail TITLE cannot enter this
+post-exit developer menu, although the port deliberately exposes DEBUG through its F4 diagnostic route.
+
+The implementation boundary is consequently larger than ordinary movie playback or a scalar crossfade:
+the port needs movie-frame luminance/mask extraction, old/new range capture, per-pixel composition, and
+blocking lifetime cleanup. The two handlers and their exact helpers/global are named and commented in
+the saved `/v2` Ghidra image.
+
+**`0x248` port implementation (2026-07-29):** `GfxState` retains the complete signed dword with native
+zero initialization. The setter neither publishes a retained mutation nor rebuilds surfaces that already
+exist, and scene-context reset leaves the process-global-equivalent setting intact. Opcode `0x249`
+continues to create one contiguous portable RGBA surface; only AGE's obsolete physical D3D partitioning is
+omitted. Focused tests cover SYSTEM4's value 128, mode-1 texture loading, signed replacement, and reset
+lifetime.
+
 ### Grey-background root cause — slot collision + tint-strength (2026-07-08, gfx-log)
 
 Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md). The grey background has

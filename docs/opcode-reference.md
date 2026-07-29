@@ -1090,10 +1090,22 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **depends on:** 0x242
 - **evidence:** Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set retained-gfx owner+0xb55c (EngineCtx+0x51b70)=1 and zero owner+0xb564/+0xb568. gfx_object_apply_transform_channels treats force value 1 as immediate completion unless obj+0x2d0 bit 0 is set. SC0000 label_1235a calls it before present-frame.
 
+### 0x248 `set-tiled-surface-edge-length` (set-tiled-surface-edge-length, argc 1)
+- **summary:** Set the legacy mode-1 tiled-surface edge length in pixels. Native surface creation, blitting, rectangle operations, and AGF upload use it to partition one logical surface into ordinary texture tiles; SYSTEM4 initializes it to 128.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x248_set_tiled_surface_edge_length@0x424af0 directly stores operand 1 in g_nTiledSurfaceEdgeLength@0x5b15b0. Its 30 xrefs are confined to gfx_tiled_surface_create/blit/rect_op/upload_agf, where dimensions are split by ceil(size / edge). SYSTEM4's sole call passes 128 immediately after opcode 0x149. This configures opcode 0x249's mode-1 tiled wrapper and is unrelated to adjacent opcode 0x24d.
+
+Port status (2026-07-29): implemented as retained signed-dword graphics configuration. The value survives scene-context resets and does not dirty presentation or rebuild existing surfaces. The portable backend deliberately keeps mode-1 surfaces as contiguous RGBA images rather than reproducing legacy D3D texture tiling.
+
 ### 0x249 `load-raw-texture-surface` (load-raw-texture-surface, argc 3)
 - **summary:** Load an AGF by universal packed SYS4INI/AAI catalog id into a retained surface slot using native surface mode 1 and the same packed-id/RGB-colorkey contract as set-texture (0x1f9).
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instruction-length 7 and is contract-identical to gfx_op_0x1f9_load_surface through release, unchanged packed operand, asset_open_indexed_entry, RGB colorkey conversion, load failure, and cleanup. Its only relevant distinction is mode-1 gfx_surface_mode1_ctor, a tiled large-image wrapper: gfx_tiled_surface_create@0x432ff0 splits logical dimensions into ordinary mode-0 child textures; gfx_tiled_surface_upload_agf@0x431a10 decodes/uploads regions; gfx_tiled_surface_blit@0x4316b0 subdivides logical source rectangles. Corpus literals include FIELD 0x32da..0x32dd -> SO005/SO007/SO008A/SO007A. The former claim that only 0x249 bypasses scene normalization was wrong because native never performs scene normalization for 0x1f9 either.
+
+### 0x24d `play-movie-mask-transition` (play-movie-mask-transition, argc 12)
+- **summary:** Open a movie into a scratch surface, retime it to the requested duration, use its decoded frames as a per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms.
 
 ### 0x24e `set-gfx-animation-service-flags` (set-gfx-animation-service-flags, argc 1)
 - **summary:** Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0.
@@ -2213,18 +2225,10 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
-### 0x248 `u00422E80` (u00422E80, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x24a `u004163C0` (u004163C0, argc 3)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x24d `u00422E90` (u00422E90, argc 12)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x24f `u00422ED0` (u00422ED0, argc 10)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
