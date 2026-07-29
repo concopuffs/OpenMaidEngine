@@ -909,6 +909,27 @@ and true stop/release.
 **NEXT:** investigate INPUTNAME's `0x144`/`0x2c6`/`0x2c8` cluster as one modal name-entry and CP932
 string slice.
 
+**INPUTNAME string/input slice investigated (2026-07-29):** all three singleton handlers are now exact.
+`0x2c6(out,string)` is Japanese-locale `_mbstrlen`; `0x2c8(out,string,start,count)` slices by CP932
+multibyte-character positions while keeping lead/trail pairs intact. INPUTNAME uses them together to split
+the current name into its eight script-owned display/edit cells.
+
+`0x144(result_inout,initial_text)` is the separate native keyboard-entry button. AGE copies both strings
+into bounded buffers and calls runtime host command 10. A read-only live probe resolved that callback to
+`AGERC.DLL+0x1050`; the shipped DLL is now imported and annotated in Ghidra. Its command-10 resource dialog
+initializes from operand 2, accepts at most 16 CP932 bytes, rejects every non-double-byte character, writes
+valid accepted text to operand 1, and leaves operand 1 unchanged on cancel. This resolves the former
+runtime-pointer uncertainty and also identifies AGERC as the owner of the previously studied command-8
+LABEL service used by `0x140`.
+
+The port has a bounded implementation seam: the two pure helpers use `VmOptions.NativeStringCodePage`,
+while the modal op follows the existing diagnostic-message pattern (VM worker waits, Godot main thread owns
+the dialog, accept/cancel signals completion). Implementing the trio removes 3 of the remaining 9 opcode
+gaps and 3 of 11 instructions; no persistence or save-format work is involved.
+
+**NEXT:** implement and test `0x144`/`0x2c6`/`0x2c8` together, including CP932 mixed-width helper cases,
+the native 16-byte/full-width acceptance rules, accept/cancel behavior, and INPUTNAME's split/rejoin shape.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

@@ -611,16 +611,16 @@ handle array** (native entry-state a cold single-scene harness skips), NOT a sto
   table). So the intended lifecycle is **enter `aba5c=1` → intro loop fills slots → `aba5c→0` → content uses
   slots.** Cold we skip straight to content with an empty slot table → all layers collapse to slot 0 → grey.
 
-**The loop iterator `op 0x140` is a native video-service call — not statically reproducible.** Handler =
+**The loop iterator `op 0x140` is a native AGERC service call.** Handler =
 **`0x4299c0`** (dispatch `ctx[0x9b74c]=0x4299c0`; created+typed `EngineCtx*`+annotated; Kelebek `u0041F9C0` is
 VA-drift). It records the generic 9-dword instruction length, copies operand-2/3 strings (`"LABEL"`, `"J"`) + operand-4 int, calls
-**`(*DAT_005c6018)(8, ctx[0x54fe8], &{str,str,int})`**, and writes the returned PC-like value back to operand 1
-(SC0000: `G[0x6be]`). `DAT_005c6018` is a **runtime-resolved function pointer** (all 6 xrefs are READs, no
-static writer) — the engine's **native video / transition / timing service**: `FUN_00405740` (a screen-
-transition/fade routine full of DirectDraw-layer calls) calls the *same* pointer with `cmd_id=3` and branches
-on its return (`1`/`2` = transition progress). It is the **same class as the DirectDraw workers this project
-deliberately does not model.** ⇒ faithfully emulating `0x140` = emulating the native video service = out of
-static scope, permanently.
+**`(*g_pfnAgercHostCallback)(8, ctx[0x54fe8], &{str,str,int})`**, and writes the returned PC-like value back
+to operand 1 (SC0000: `G[0x6be]`). The callback has no static writer in the unpacked AGE image because the
+loaded resource DLL supplies it. A read-only live probe now resolves it to `AGERC.DLL+0x1050`; the imported
+`/support/AGERC.DLL` image names that thunk `agerc_host_callback_export` and its worker
+`agerc_dispatch_host_command@0x100025f0`. Command 8 opens AGERC dialog resource 8. The same callback's
+command 3 services `FUN_00405740` screen transitions. This closes the callback's ownership and makes a
+future `0x140` dive statically possible, but does not by itself identify command 8's LABEL iterator result.
 
 **The two companion ops (confirmed):**
 - **`0x7b` (`FUN_0041ebf0`)** — *save yield handlers*: writes op1→`ctx[0x6da88+idx*4]`, op2→`ctx[0x6db28+idx*4]`
@@ -638,8 +638,8 @@ completion so content plays — we reproduce the *observable effect*, not the vi
 byte-identical across all ~136 ADV scenes, so it generalizes with zero per-scene work. **Payoff beyond the
 slot fix:** the same `0x7b`/`0x7c` + handler machinery is the ADV frame loop, so a clean host model becomes
 the seam for the interactive-ADV backlog (`0x90` hotspots / EMPTY scenes) and likely fixes the stuck magic
-circle (scene-phase cleanup). **Permanently out of static scope:** the real intro-transition *timing/pacing*
-inside the loop (it lives in the native video service) — we approximate it host-side, as everywhere else.
+circle (scene-phase cleanup). The real intro-transition *timing/pacing* inside AGERC's command-8 service
+remains intentionally unmodeled; the port approximates it host-side, as it does other native transitions.
 **Host model implemented (2026-07-09).** `VirtualMachine` recognizes only the ADV `"LABEL","J"` form
 (138 corpus scripts; all have the same terminal-check shape), synthesizes `G[0xaba5c]=1` on top-level
 scene entry, forces one setup-body pass even if `G[0x6be]` is stale, then returns the terminal immediate
@@ -2858,6 +2858,38 @@ its blocking fade, replacing the former silent-but-still-bound Godot stream with
 A focused regression covers same-track restart, zero aliasing, loop/one-shot selection, track replacement,
 stop/clear, fade-to-zero release, and restart after stop; the threaded self-test exercises both loop modes
 and real stop/release.
+
+**INPUTNAME native editor and CP932 string helpers (mapped 2026-07-29).** The three remaining
+INPUTNAME-only gaps are one implementation slice, but have two ownership layers:
+
+- `op_0x144_edit_fullwidth_string_dialog@0x42bdd0` is the engine wrapper for AGERC host command 10.
+  Its ABI is `(result_inout, initial_text)`. AGE resolves both operands into separate 1024-byte buffers,
+  suspends normal display ownership, calls `g_pfnAgercHostCallback(10,owner_hwnd,&{result,initial,0})`,
+  writes both returned buffers through their string lvalues, and restores display ownership.
+- A read-only Frida probe of the pristine running game resolved `g_pfnAgercHostCallback`
+  (`AGE+0x1c6018`) to `AGERC.DLL+0x1050`. The companion DLL is now imported and annotated at
+  `/support/AGERC.DLL`: `agerc_host_callback_export@0x10001050` forwards to
+  `agerc_dispatch_host_command@0x100025f0`, whose command-10 branch opens dialog resource 10 with
+  `agerc_fullwidth_text_dialog_proc@0x10002140`.
+- The dialog initializes edit control 1006 from the second buffer. Accept reads no more than 255 bytes,
+  rejects a result longer than 16 CP932 bytes with `字数オーバーです`, and walks it in two-byte cells through
+  `agerc_reject_non_dbcs_character@0x10001b50`; any half-width or invalid cell produces
+  `半角文字は使用できません`. A valid accept replaces the first buffer. Cancel closes without changing it.
+  The dispatcher copies both buffers back, so operand 1 is the result/inout value and operand 2 is the
+  initial edit text.
+- `op_0x2c6_cp932_character_length@0x42a6d0` sets the C locale to `japanese`, calls MSVC `_mbstrlen` on
+  operand 2, and writes the multibyte-character count to operand 1.
+- `op_0x2c8_cp932_substring@0x42c420` copies its source into a 256-byte local buffer, counts Japanese
+  multibyte characters, and selects `[start,start+count)` while walking `_mbbtype` lead/trail pairs
+  together. Native clamping replaces the requested end with the full character length when
+  `start+count < 1` or exceeds that length.
+
+The release script's flow is now fully grounded. INPUTNAME's keyboard button assembles its current
+character cells, copies that text into both `0x144` operands, then calls `0x2c6` and loops
+`0x2c8(name,index,1)` to repopulate its eight cells. The pure helpers can use the VM's existing
+`NativeStringCodePage` encoder. The modal op can follow the existing diagnostic-dialog ownership pattern:
+the VM worker blocks while Godot's main thread presents a LineEdit dialog, validates the CP932 byte limit
+and full-width-only rule, and signals the worker on accept or cancel. No save/profile format is involved.
 
 `0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
 and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;

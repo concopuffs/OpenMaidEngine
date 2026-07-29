@@ -418,6 +418,20 @@ Native applies strlen to the NUL-terminated engine byte string and shifts the by
 
 This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all option/title byte lengths, adds four bytes of padding, and converts the result to pixels; skipping the opcode leaves its local maximum at zero, forcing the minimum-width menu and shifting every primary label right. The C# VM shares the configurable native-string byte counter used by op 0x1a6 (CP932 by default), including embedded-NUL termination; focused tests cover literals and local-string pointers.
 
+### 0x2c6 `cp932-character-length` (cp932-character-length, argc 2)
+- **summary:** (out)(string) - write the Japanese-locale multibyte character count of the CP932 string, counting a valid lead/trail pair as one character.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** The real /v2 dispatch slot registers op_0x2c6_cp932_character_length@0x42a6d0. The handler sets LC_ALL to `japanese`, resolves operand 2, calls MSVC _mbstrlen, and writes the result to operand 1. INPUTNAME's sole site at 0x1002 uses this count as the loop bound before slicing each character with opcode 0x2c8.
+
+This is character count rather than .NET UTF-16 length or raw CP932 byte length. The implementation should use VmOptions.NativeStringCodePage and preserve valid CP932 multibyte boundaries.
+
+### 0x2c8 `cp932-substring` (cp932-substring, argc 4)
+- **summary:** (out)(string)(start)(count) - copy a CP932 substring selected by multibyte-character index and count without splitting valid lead/trail pairs.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** The real /v2 dispatch slot registers op_0x2c8_cp932_substring@0x42c420. It copies operand 2 into a 256-byte buffer, sets LC_ALL to `japanese`, obtains _mbstrlen, reads start and count, clamps end=start+count to the character length when end is below 1 or beyond that length, and walks bytes with _mbbtype so CP932 lead/trail pairs are copied together. It writes the selected byte interval back through operand 1. INPUTNAME's sole site at 0x1021 loops substring(name,index,1) into its eight local character cells.
+
+The release call uses nonnegative in-range indices and count 1. A compatible general implementation should reproduce native end clamping (`end = length` when start+count < 1 or > length) and select the half-open character interval [start,end).
+
 ## control
 
 ### 0x1 `throw-exit-request` (throw-exit-request, argc 0)
@@ -550,9 +564,9 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 Implemented as process-lifecycle state owned by the persistent VM: it begins at one and op 0x9 clears it. It is not a script global, save/profile value, command-line seed, or script-name special case.
 
 ### 0x140 `coroutine-label-yield` (u0041F9C0, argc 4)
-- **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls the NATIVE video/transition service (*DAT_005c6018)(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). DAT_005c6018 is runtime-resolved (all xrefs READ) = SAME class as the DirectDraw workers we don't model. PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the video service. See engine-re.md §Scene-coroutine framework.
+- **summary:** (out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls AGERC host command 8 through g_pfnAgercHostCallback(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the service dialog. See engine-re.md §Scene-coroutine framework.
 - **grounding:** source=investigation, confidence=med
-- **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Records the generic 9-dword instruction length; op2→local_204, op3→local_104, op4→local_208; (*DAT_005c6018)(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). DAT_005c6018: 6 xrefs all READ, no static writer; FUN_00405740 (screen-fade) calls it w/ cmd 3, branches on ret 1/2 = transition progress = native video service.
+- **evidence:** Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+typed EngineCtx*+annotated; Kelebek u0041F9C0 = VA-drift). Records the generic 9-dword instruction length; op2→local_204, op3→local_104, op4→local_208; g_pfnAgercHostCallback(8, ctx[0x54fe8], &local_210) → FUN_00425fb0(1,ret). A read-only probe resolves the callback to AGERC.DLL+0x1050; imported /support/AGERC.DLL identifies agerc_dispatch_host_command@0x100025f0 and its command-8 dialog-resource branch. FUN_00405740 calls the same dispatcher with command 3 and branches on return 1/2 for transition progress. Command 8's exact LABEL iterator calculation remains unresolved, so confidence remains medium.
 
 ### 0x143 `run-mounted-append-autoruns` (u00415FB0, argc 0)
 - **summary:** () - enqueue record zero from every mounted nonzero AAI selector in ascending selector order, then execute those packed scripts serially before resuming the caller.
@@ -1231,6 +1245,17 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **summary:** (index_inout)(reference_rect)(pointer_x)(pointer_y)(rect_array)(x_offsets)(y_offsets)(count) - scan after the incoming index for the next inclusive rectangle intersection, or return -1.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, and starts at incoming_index+1. Each candidate is [left,right,top,bottom]; the worker subtracts its per-entry x/y offsets from the pointer, inclusively intersects it with the reference rectangle, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses decoded local arrays for scrollbar/control regions, close region 8, and visible text rows 9..13.
+
+### 0x144 `edit-fullwidth-string-dialog` (edit-fullwidth-string-dialog, argc 2)
+- **summary:** (result_inout)(initial_text) - synchronously open AGERC's modal full-width text editor. Accept writes at most eight valid CP932 double-byte characters to operand 1; cancel leaves operand 1 unchanged. Operand 2 supplies the initial edit text and is preserved.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** The real /v2 dispatch slot registers op_0x144_edit_fullwidth_string_dialog@0x42bdd0. It copies both resolved string operands into 0x400-byte buffers, calls the runtime host callback g_pfnAgercHostCallback with command 10 and owner HWND, then writes both returned buffers back. A read-only Frida probe of the pristine game resolved that callback to AGERC.DLL+0x1050. Imported /support/AGERC.DLL shows agerc_dispatch_host_command@0x100025f0 opening dialog resource 10 with agerc_fullwidth_text_dialog_proc@0x10002140: edit control 1006 is initialized from operand 2; IDOK rejects more than 16 bytes (`字数オーバーです`) or any non-DBCS cell (`半角文字は使用できません`) before copying the accepted text to operand 1; IDCANCEL closes without changing operand 1. INPUTNAME's sole site at 0xdcd passes its assembled current name in both operands, then resplits operand 1 through 0x2c6/0x2c8.
+
+This is INPUTNAME's optional native keyboard-entry button, not the surrounding script-authored
+character palette. The VM can use a synchronous host seam like the existing diagnostic dialog because
+the Godot host runs script execution on its worker thread while the main thread owns the modal UI.
+Compatibility requires the native full-width-only and 16-CP932-byte limits before accepting the result.
+
 
 ### 0x19a `get-message-skip` (u00414E50, argc 1)
 - **summary:** (out) - return the current all-message skip state set by op 0x88.
@@ -1938,10 +1963,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x144 `u004259D0` (u004259D0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x145 `u00416040` (u00416040, argc 1)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
@@ -2325,18 +2346,10 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
-### 0x2c6 `u0042B5E0` (u0042B5E0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x2c7 `u0042B5F0` (u0042B5F0, argc 4)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x2c8 `u0042B610` (u0042B610, argc 4)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x2c9 `2C9` (2C9, argc 3)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
