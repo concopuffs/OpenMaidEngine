@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generator + linter for the living opcode reference (vm-map/opcodes.toml).
   --bootstrap  seed skeletons for every used opcode (append-only; preserves hand edits)
+  --bootstrap-age  seed compatibility stubs for every opcode in the broader AGE catalog
   --build      emit age_opcodes_himegari.py + build/opcodes.json + docs/opcode-reference.md + build/opcode-coverage.md
   --lint       run the linter, print errors/warnings, exit nonzero on errors
 See docs/superpowers/specs/2026-07-06-opcode-reference-design.md."""
@@ -77,14 +78,22 @@ def scan_corpus():
 def _is_named(label: str) -> bool:
     return not (label.startswith("u00") or label == "dev_ukn" or label.startswith("?"))
 
-def skeleton_toml(op: int, label: str, argc: int, argtypes_for_op: dict) -> str:
+def skeleton_toml(op: int, label: str, argc: int, argtypes_for_op: dict,
+                  *, observed_in_himegari: bool = True) -> str:
     conf = "med" if _is_named(label) else "low"
-    lines = ["[[opcode]]", f"op = 0x{op:x}", f'label = "{label}"', f"argc = {argc}",
-             'abi_source = "kelebek+decode-validated"', "", "[opcode.semantics]",
-             f'name = "{label}"', 'category = "unknown"', 'summary = ""',
+    abi_source = "kelebek+decode-validated" if observed_in_himegari else "kelebek"
+    summary = ("" if observed_in_himegari else
+               "Broader AGE-catalog compatibility stub; the port currently traces and skips it.")
+    evidence = ("" if observed_in_himegari else
+                "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.")
+    lines = ["[[opcode]]", f"op = 0x{op:x}", f'label = "{label}"', f"argc = {argc}"]
+    if not observed_in_himegari:
+        lines.append("observed_in_himegari = false")
+    lines += [f'abi_source = "{abi_source}"', "", "[opcode.semantics]",
+             f'name = "{label}"', 'category = "unknown"', f'summary = "{summary}"',
              "noop_headless = false", 'source = "kelebek"', f'confidence = "{conf}"',
-             "depends_on = []", 'evidence = ""']
-    for i in range(argc):
+             "depends_on = []", f'evidence = "{evidence}"']
+    for i in range(argc if observed_in_himegari else 0):
         tnames = [TYPE_NAMES.get(t, "t%#x" % t) for t in sorted(argtypes_for_op.get(i, ()))]
         obs = ", ".join('"%s"' % n for n in tnames)
         lines += ["", "[[opcode.semantics.args]]", f"i = {i + 1}", 'role = ""',
@@ -107,6 +116,22 @@ def bootstrap(toml_path: Path) -> None:
         f.write("\n".join(blocks))
     print(f"bootstrap: {len(used)} used opcodes; appended {len(blocks)} new skeletons -> {toml_path}")
 
+def bootstrap_age(toml_path: Path) -> None:
+    """Append compatibility stubs for catalog opcodes absent from the canonical map."""
+    present = set(M.load(toml_path).opcodes) if toml_path.exists() else set()
+    blocks = [
+        skeleton_toml(op, label, argc, {}, observed_in_himegari=False)
+        for op, (label, argc) in sorted(OPCODES.items())
+        if op not in present
+    ]
+    if not toml_path.exists():
+        toml_path.parent.mkdir(parents=True, exist_ok=True)
+        toml_path.write_text(META_TOML + "\n", encoding="utf-8")
+    with toml_path.open("a", encoding="utf-8") as f:
+        f.write("\n".join(blocks))
+    print(f"bootstrap-age: {len(OPCODES)} catalog opcodes; "
+          f"appended {len(blocks)} compatibility stubs -> {toml_path}")
+
 GEN_HEADER = "# DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build\n"
 
 def emit_inferred_py(model: M.Model) -> str:
@@ -128,6 +153,7 @@ def emit_json(model: M.Model) -> str:
            "dependents": {"0x%x" % k: ["0x%x" % d for d in v] for k, v in rev.items() if v}}
     for op, oc in sorted(model.opcodes.items()):
         e = {"op": "0x%x" % op, "label": oc.label, "argc": oc.argc,
+             "observed_in_himegari": oc.observed_in_himegari,
              "code_target_args": oc.code_target_args, "abi_source": oc.abi_source}
         s = oc.semantics
         if s:
@@ -140,9 +166,12 @@ def emit_json(model: M.Model) -> str:
 
 def emit_reference_md(model: M.Model) -> str:
     rev = M.dependents(model)
+    observed = sum(oc.observed_in_himegari for oc in model.opcodes.values())
+    catalog_only = len(model.opcodes) - observed
     L = ["<!-- DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build -->",
          "# Opcode Reference (generated)", "",
-         f"{len(model.opcodes)} opcodes used by Himegari. Source of truth: `vm-map/opcodes.toml`.", ""]
+         f"{len(model.opcodes)} AGE catalog opcodes: {observed} observed in Himegari and "
+         f"{catalog_only} compatibility stubs. Source of truth: `vm-map/opcodes.toml`.", ""]
     by_cat = collections.defaultdict(list)
     for op, oc in model.opcodes.items():
         cat = oc.semantics.category if oc.semantics else "unknown"
@@ -182,8 +211,12 @@ def emit_coverage_md(model: M.Model) -> str:
             by_cat[s.category] += 1
             if s.name != oc.label:
                 named += 1
+    observed = sum(oc.observed_in_himegari for oc in model.opcodes.values())
     L = ["<!-- DO NOT EDIT -- generated from vm-map/opcodes.toml -->", "# Opcode Coverage (generated)", "",
-         f"- opcodes: {len(model.opcodes)}", f"- given a distinct mnemonic: {named}", "",
+         f"- AGE catalog opcodes: {len(model.opcodes)}",
+         f"- observed in Himegari: {observed}",
+         f"- compatibility stubs: {len(model.opcodes) - observed}",
+         f"- given a distinct mnemonic: {named}", "",
          "## by source", ""]
     L += [f"- {k}: {v}" for k, v in sorted(by_src.items())]
     L += ["", "## by confidence", ""] + [f"- {k}: {by_conf[k]}" for k in ("high", "med", "low")]
@@ -193,6 +226,7 @@ def emit_coverage_md(model: M.Model) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bootstrap", action="store_true")
+    ap.add_argument("--bootstrap-age", action="store_true")
     ap.add_argument("--build", action="store_true")
     ap.add_argument("--lint", action="store_true")
     ap.add_argument("--toml", default=str(TOML_DEFAULT))
@@ -200,6 +234,9 @@ def main(argv=None):
     tp = Path(args.toml)
     if args.bootstrap:
         bootstrap(tp)
+        return 0
+    if args.bootstrap_age:
+        bootstrap_age(tp)
         return 0
     if args.build:
         model = M.load(tp)
@@ -226,7 +263,7 @@ def main(argv=None):
             print("error:", m)
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")
         return 1 if errors else 0
-    ap.error("no action (expected --bootstrap/--build/--lint)")
+    ap.error("no action (expected --bootstrap/--bootstrap-age/--build/--lint)")
 
 if __name__ == "__main__":
     sys.exit(main())

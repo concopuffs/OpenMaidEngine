@@ -29,6 +29,7 @@ class Opcode:
     op: int
     label: str
     argc: int
+    observed_in_himegari: bool = True
     code_target_args: list[int] = field(default_factory=list)
     abi_source: str = "kelebek+decode-validated"
     abi_note: str = ""
@@ -61,6 +62,7 @@ def load(path) -> Model:
             )
         ops[int(e["op"])] = Opcode(
             op=int(e["op"]), label=e.get("label", ""), argc=int(e["argc"]),
+            observed_in_himegari=bool(e.get("observed_in_himegari", True)),
             code_target_args=[int(x) for x in e.get("code_target_args", [])],
             abi_source=e.get("abi_source", "kelebek+decode-validated"),
             abi_note=e.get("abi_note", ""), semantics=sem,
@@ -73,6 +75,12 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     ops = model.opcodes
+    expected_observed = model.meta.get("opcodes_used_by_himegari")
+    actual_observed = sum(oc.observed_in_himegari for oc in ops.values())
+    if expected_observed is not None and int(expected_observed) != actual_observed:
+        errors.append(
+            "meta.opcodes_used_by_himegari="
+            f"{expected_observed} but {actual_observed} entries are marked observed")
     for op, oc in sorted(ops.items()):
         s = oc.semantics
         if not s:

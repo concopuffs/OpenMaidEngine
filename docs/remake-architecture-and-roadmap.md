@@ -655,12 +655,21 @@ A cursory Kamidori boot probe on 2026-07-20 validated much of this boundary: its
 archives loaded, `SYSTEM4.BIN` completed the initializer chain, call-script resolution entered
 `TITLE.BIN`, and title graphics/resource commands resolved. The first hard stop was not a different
 container or catalog. Kamidori's title loop reached opcode `0x1be` (`u0041D9D0`, argc 2) at bytecode
-offset `0xd7`. That opcode exists in Kelebek's full AGE/SYS4 table, but it is absent from the generated
-`build/opcodes.json` because that runtime artifact currently contains only opcodes observed in Himegari.
+offset `0xd7`. That opcode existed in Kelebek's full AGE/SYS4 table, but was absent from the generated
+`build/opcodes.json` because the runtime artifact contained only opcodes observed in Himegari.
 `Sys4Loader` therefore stopped decoding at the unknown opcode; `TITLE.BIN` returned as if it had ended,
 and Godot displayed its ordinary `— end —` marker instead of reporting an incompatibility.
 
-The future multi-game design must keep three separate concepts:
+**ABI-registry floor completed 2026-07-28.** `vm-map/opcodes.toml` and generated `build/opcodes.json`
+now contain the complete 548-entry Kelebek AGE catalog: 248 instructions observed in Himegari and 300
+catalog-only compatibility entries (including the already mapped but unused persistence opcode `0x19f`).
+Each entry carries `observed_in_himegari`; per-game observation no longer limits decoding. A recognized
+but unimplemented opcode reaches the VM's traced stub-and-advance fallback, so a probe continues beyond
+it instead of losing the rest of the script. Catalog-only entries deliberately remain
+`noop_headless=false`: skipping them is a temporary compatibility-probe behavior, not evidence that their
+native effects are semantically safe to omit.
+
+The multi-game design keeps three separate concepts:
 
 1. A **version ABI registry** containing every known opcode number, operand count/shape, and version gate
    needed to decode that SYS generation, regardless of whether the active game uses it.
@@ -669,11 +678,11 @@ The future multi-game design must keep three separate concepts:
 3. **Semantic/runtime implementation coverage**, which may remain incomplete and should report a precise
    unsupported-service error containing game/profile, script, opcode, and bytecode offset.
 
-An opcode that is absent even from the selected version ABI should likewise be a structured decode error,
-not a synthetic final instruction or natural script return. Supporting a new same-version game then means
-selecting the complete shared ABI, measuring its corpus against existing semantics, and implementing only
-the newly exercised services. It should not require cloning the VM or manufacturing a new parser table
-from that game's corpus.
+An opcode that is absent even from the selected version ABI should still become a structured decode error,
+not a synthetic final instruction or natural script return; that diagnostic hardening remains open.
+Supporting a new same-version game now means selecting the complete shared ABI, measuring its corpus
+against existing semantics, and implementing only the newly exercised services. It does not require
+cloning the VM or manufacturing a new parser table from that game's corpus.
 
 The probe also exposed a separate profile/presentation concern: Kamidori creates a `1024x576` render
 target while the current Himegari frontend assumes an `800x600` presentation. Logical canvas geometry,

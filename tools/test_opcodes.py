@@ -118,6 +118,7 @@ def test_lint():
 
 def test_bootstrap():
     import opcodes_build as B
+    from age_opcodes import OPCODES
     from pathlib import Path
     fd, p = tempfile.mkstemp(suffix=".toml"); os.close(fd); os.remove(p)
     tp = Path(p)
@@ -130,6 +131,16 @@ def test_bootstrap():
     check(len(M.load(tp).opcodes) == n1, "second bootstrap adds no duplicates")
     e, w = M.lint(m)
     check(e == [], f"bootstrapped file lints clean (errors: {e[:3]})")
+    B.bootstrap_age(tp)
+    full = M.load(tp)
+    check(len(full.opcodes) == len(OPCODES), "bootstrap-age seeds the complete AGE catalog")
+    check(sum(o.observed_in_himegari for o in full.opcodes.values()) == len(m.opcodes),
+          "bootstrap-age marks only added catalog entries unobserved")
+    check(all(not o.semantics.noop_headless for o in full.opcodes.values()
+              if not o.observed_in_himegari),
+          "compatibility stubs are not misclassified as semantically safe no-ops")
+    e, w = M.lint(full)
+    check(e == [], f"full catalog lints clean (errors: {e[:3]})")
 
 def test_emit_inferred():
     import opcodes_build as B

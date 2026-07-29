@@ -36,7 +36,7 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `opcodes_build.py` | Generator + linter for the opcode reference. | `--build` · `--lint` · `--bootstrap` | `vm-map/opcodes.toml` → ⚙ `tools/age_opcodes_himegari.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ `build/opcode-coverage.md` |
+| `opcodes_build.py` | Generator + linter for the opcode reference. `--bootstrap` appends entries observed in the Himegari corpus; `--bootstrap-age` appends every missing opcode from the pristine 548-entry AGE catalog as an unobserved compatibility stub. Catalog stubs retain Kelebek's ABI label/argument count so other AGE scripts decode past them, but remain `noop_headless=false`: the VM currently traces/skips them, while coverage continues to report them as unresolved rather than semantically safe. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` → ⚙ `tools/age_opcodes_himegari.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ `build/opcode-coverage.md` |
 | `opcodes_model.py` | In-memory model + loader + linter (dangling-ref / confidence-ceiling / vocabulary / dependents). | *Imported by `opcodes_build.py`.* | `vm-map/opcodes.toml` → — |
 | `test_opcodes.py` | Unit tests for the opcode tooling. | `test_opcodes.py` | — |
 | `opcode_context.py` | Read-only evidence gatherer for classifying unnamed opcodes (frequency, argc, operand-type signature, neighbours, disasm snippets, Kelebek comment). | `--top 20` · `opcode_context.py 0x1f4 0x71 …` | corpus → stdout |

@@ -3408,6 +3408,7 @@ observed_types = ["g-int", "l-int"]
 op = 0x19f
 label = "load-numbered-slot-data-only"
 argc = 2
+observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -6925,3 +6926,5085 @@ observed_types = ["l-int"]
 i = 4
 role = ""
 observed_types = ["imm"]
+[[opcode]]
+op = 0x4
+label = "u00417E30"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00417E30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x7
+label = "u00417F90"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00417F90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xa
+label = "u00424170"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00424170"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xb
+label = "u00418090"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418090"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xc
+label = "u004149E0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004149E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd
+label = "u004181A0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004181A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xe
+label = "u00418200"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418200"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xf
+label = "u00418300"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418300"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x10
+label = "u00414A00"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414A00"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x11
+label = "u00418330"
+argc = 9
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418330"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x12
+label = "u004183F0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004183F0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x13
+label = "u00418420"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418420"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x14
+label = "u00414A20"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414A20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x15
+label = "u00418490"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418490"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x16
+label = "u00418520"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418520"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x17
+label = "u00418560"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418560"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1e
+label = "u004185B0"
+argc = 8
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004185B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1f
+label = "u00418690"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418690"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x20
+label = "u004187C0"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004187C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x23
+label = "u004189D0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004189D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x24
+label = "u00418A90"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418A90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x26
+label = "u00418C00"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418C00"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x27
+label = "u00418CC0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418CC0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x28
+label = "u00418D90"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418D90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2a
+label = "u00418E60"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418E60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2b
+label = "u00418F30"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00418F30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c
+label = "u00419010"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419010"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d
+label = "u004190A0"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004190A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e
+label = "u004194B0"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004194B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f
+label = "u004195A0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004195A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x30
+label = "u00419670"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419670"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x31
+label = "u00419750"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419750"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32
+label = "u004197C0"
+argc = 10
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004197C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x33
+label = "u00419900"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419900"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x34
+label = "u004199C0"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004199C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35
+label = "u00419AF0"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419AF0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x36
+label = "u00419C00"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419C00"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x37
+label = "u00419C90"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419C90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x38
+label = "u00419DA0"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00419DA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x62
+label = "u0041A360"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041A360"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x65
+label = "u00414AA0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414AA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x66
+label = "u00414AE0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414AE0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x67
+label = "u00414B20"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414B20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x68
+label = "u00414B60"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414B60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x69
+label = "u00414BA0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414BA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x6a
+label = "u00414BE0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414BE0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x6b
+label = "u00414C20"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414C20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x6d
+label = "u00416960"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416960"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x74
+label = "u0041AC00"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AC00"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x7d
+label = "u0041AE00"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AE00"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x7e
+label = "u0041AEA0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AEA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x81
+label = "u0041AF30"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AF30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x82
+label = "u0041AF80"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AF80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x83
+label = "u00414C90"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00414C90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x84
+label = "u0041AFE0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041AFE0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x89
+label = "u0041B2E0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B2E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x8a
+label = "u0041B330"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B330"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x8d
+label = "u0041BCE0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041BCE0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x8e
+label = "u0041BD60"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041BD60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x91
+label = "u0041BFB0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041BFB0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x92
+label = "u0041C030"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C030"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x95
+label = "u0041C0C0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C0C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x96
+label = "u004150C0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004150C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xaa
+label = "u0041C270"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C270"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xab
+label = "u0041C330"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C330"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xac
+label = "u0041C3E0"
+argc = 9
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C3E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xad
+label = "u00415110"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415110"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xaf
+label = "u00415480"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415480"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xb0
+label = "u0041C530"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C530"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xb1
+label = "u0041C560"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C560"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xb2
+label = "u0041C590"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C590"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xb3
+label = "u004154B0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004154B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xbb
+label = "u0041D250"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041D250"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xbc
+label = "u0041D280"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041D280"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xbd
+label = "u00415570"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415570"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xbe
+label = "u004155E0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004155E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xc1
+label = "u00415650"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415650"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xc3
+label = "u0041D390"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041D390"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xc9
+label = "u00415770"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415770"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xca
+label = "u004157A0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004157A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xcb
+label = "u00415800"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415800"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xce
+label = "u0041E0B0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E0B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xcf
+label = "u00416D40"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416D40"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd1
+label = "u00415860"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415860"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd2
+label = "u0041E110"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E110"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd6
+label = "u004267D0"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004267D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd7
+label = "u0041E1A0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E1A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xd8
+label = "u0041E150"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E150"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xda
+label = "u004158B0"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004158B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xfa
+label = "u00415940"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415940"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xfc
+label = "u004159F0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004159F0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0xfd
+label = "u0041E2D0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E2D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x102
+label = "u0041E3C0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E3C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x103
+label = "u0041E4A0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E4A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x104
+label = "u00415C50"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415C50"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x105
+label = "u0041E4D0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E4D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x106
+label = "u00415E40"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415E40"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x10e
+label = "u0041E650"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E650"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x10f
+label = "u0041E690"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E690"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x12d
+label = "u0041E720"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041E720"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x138
+label = "u0041F2B0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F2B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x139
+label = "u0041F310"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F310"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x13b
+label = "u0041F440"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F440"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x13c
+label = "u0041F7E0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F7E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x13d
+label = "u0041F840"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F840"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x13e
+label = "u0041F8D0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041F8D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x145
+label = "u00416040"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416040"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x146
+label = "u0041FB40"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041FB40"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x147
+label = "u0041FB80"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041FB80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x148
+label = "u004160A0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004160A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x14a
+label = "u0041FD10"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041FD10"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x14b
+label = "u0041FF50"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041FF50"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x14c
+label = "set-agerc-export"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "set-agerc-export"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x14d
+label = "call-agerc-export"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "call-agerc-export"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x190
+label = "u0041C5E0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041C5E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1b1
+label = "u0041B5C0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B5C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1be
+label = "u0041D9D0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041D9D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c0
+label = "u0041DB70"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DB70"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c2
+label = "u0041B860"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B860"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c3
+label = "u0041B8A0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B8A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c4
+label = "u00415720"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00415720"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c5
+label = "u00425800"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00425800"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c6
+label = "u0041DD80"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DD80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1c9
+label = "u0041B8E0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041B8E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1cd
+label = "u0041A560"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041A560"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1d6
+label = "u0041DA40"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DA40"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1d7
+label = "u0041DA80"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DA80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1d8
+label = "u0041DAD0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DAD0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1d9
+label = "u0041DB20"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0041DB20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x1fc
+label = "u004205F0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004205F0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x200
+label = "u00420800"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00420800"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x201
+label = "u00416190"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416190"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x206
+label = "u004161C0"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004161C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x209
+label = "u00420C50"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00420C50"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x210
+label = "u00420FF0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00420FF0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x211
+label = "u00421060"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421060"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x214
+label = "u00421120"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421120"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x221
+label = "u00421670"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421670"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x225
+label = "u00421780"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421780"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x226
+label = "u004217D0"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004217D0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x227
+label = "u00421880"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421880"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x22b
+label = "u00421B30"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421B30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x22e
+label = "u00421D10"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00421D10"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x235
+label = "u00422100"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422100"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x237
+label = "u00422350"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422350"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x23e
+label = "u004228C0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004228C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x240
+label = "u004229A0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004229A0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x244
+label = "u00416360"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416360"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x245
+label = "u00422DA0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422DA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x246
+label = "u00422E10"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422E10"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x247
+label = "u00416390"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416390"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x24a
+label = "u004163C0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004163C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x24f
+label = "u00422ED0"
+argc = 10
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422ED0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x250
+label = "u00422F60"
+argc = 10
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422F60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x251
+label = "u00422FF0"
+argc = 12
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00422FF0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x252
+label = "u00423000"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423000"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x253
+label = "u00423019"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423019"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x254
+label = "u00423049"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423049"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x256
+label = "u00423050"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423050"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x257
+label = "257"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "257"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25a
+label = "u00423120"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423120"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25b
+label = "25B"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "25B"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25c
+label = "u00423122"
+argc = 8
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423122"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25d
+label = "u00423123"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423123"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25e
+label = "u00423124"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423124"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x25f
+label = "u00423125"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423125"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x260
+label = "u00423126"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423126"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x261
+label = "u00423127"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423127"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x262
+label = "262"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "262"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x263
+label = "263"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "263"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x264
+label = "264"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "264"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2bc
+label = "u00423020"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423020"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2be
+label = "u00423140"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423140"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c1
+label = "u00425BC0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00425BC0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c2
+label = "u00425CD0"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00425CD0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c3
+label = "u00423200"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00423200"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c4
+label = "u00416450"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u00416450"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c7
+label = "u0042B5F0"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B5F0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2c9
+label = "2C9"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2C9"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2cc
+label = "2CC"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2CC"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2cd
+label = "2CD"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2CD"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ce
+label = "u0042B616"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B616"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2cf
+label = "u0042B617"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B617"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d0
+label = "u0042B940"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B940"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d1
+label = "u0042B950"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B950"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d2
+label = "u0042B960"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B960"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d3
+label = "u0042B970"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B970"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d5
+label = "u0042B990"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B990"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d7
+label = "u0042B9B0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042B9B0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d8
+label = "set-array-to"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "set-array-to"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2d9
+label = "u0042BA30"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042BA30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2da
+label = "u004234E0"
+argc = 8
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004234E0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2db
+label = "u004235C0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u004235C0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2dc
+label = "u0042BA80"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042BA80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2dd
+label = "u0042D880"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042D880"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2de
+label = "u0042BAC0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042BAC0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2df
+label = "u0042BAC1"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042BAC1"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e0
+label = "u0042CE0F"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE0F"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e1
+label = "u0042CE10"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE10"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e2
+label = "u0042CE11"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE11"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e3
+label = "u0042CE30"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e4
+label = "u0042CE31"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE31"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e5
+label = "u0042CE50"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE50"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e6
+label = "u0042CE60"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e7
+label = "u0042CE70"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE70"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e8
+label = "u0042CE80"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2e9
+label = "u0042CE90"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CE90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ea
+label = "u0042CEA0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2eb
+label = "u0042CEB0"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEB0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ec
+label = "u0042CEC0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ee
+label = "u0042CEC2"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC2"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ef
+label = "u0042CEC3"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC3"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f0
+label = "u0042CEC4"
+argc = 9
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC4"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f1
+label = "u0042CEC5"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC5"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f2
+label = "u0042CEC6"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0042CEC6"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f3
+label = "2F3"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F3"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f4
+label = "2F4"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F4"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f5
+label = "2F5"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F5"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f6
+label = "2F6"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F6"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f7
+label = "2F7"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F7"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f8
+label = "2F8"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F8"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2f9
+label = "2F9"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2F9"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2fa
+label = "2FA"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FA"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2fb
+label = "2FB"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FB"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2fc
+label = "2FC"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FC"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2fd
+label = "2FD"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FD"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2fe
+label = "2FE"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FE"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x2ff
+label = "2FF"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "2FF"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x300
+label = "300"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "300"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x301
+label = "301"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "301"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x302
+label = "302"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "302"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x303
+label = "303"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "303"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x304
+label = "304"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "304"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x305
+label = "305"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "305"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x306
+label = "306"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "306"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x307
+label = "307"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "307"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x308
+label = "308"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "308"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x30a
+label = "30A"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "30A"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x30c
+label = "30C"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "30C"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x320
+label = "u0043AA20"
+argc = 10
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x321
+label = "u0043AA30"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA30"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x322
+label = "u0043AA40"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA40"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x323
+label = "u0043AA50"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA50"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x324
+label = "u0043AA60"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA60"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x325
+label = "u0043AA70"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA70"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x326
+label = "u0043AA80"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA80"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x327
+label = "u0043AA90"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AA90"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x328
+label = "u0043AAA0"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AAA0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x329
+label = "u0043AAB0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AAB0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32a
+label = "32A"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "32A"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32b
+label = "u0043AAD0"
+argc = 0
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AAD0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32c
+label = "u0043AAE0"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AAE0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32d
+label = "u0043AAF0"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AAF0"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32e
+label = "u0043AB10"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB10"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x32f
+label = "u0043AB11"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB11"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x330
+label = "u0043AB12"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB12"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x332
+label = "u0043AB14"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB14"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x334
+label = "u0043AB16"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB16"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x335
+label = "u0043AB17"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB17"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x337
+label = "u0043AB19"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB19"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x33b
+label = "u0043AB1D"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB1D"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x33d
+label = "u0043AB1E"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB1E"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x33e
+label = "u0043AB1F"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB1F"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x33f
+label = "u0043AB20"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "u0043AB20"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "low"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x340
+label = "340"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "340"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x341
+label = "341"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "341"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x342
+label = "342"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "342"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x344
+label = "344"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "344"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x345
+label = "345"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "345"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x349
+label = "349"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "349"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x34d
+label = "34D"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "34D"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x34e
+label = "34E"
+argc = 4
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "34E"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x352
+label = "352"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "352"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x353
+label = "353"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "353"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x354
+label = "354"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "354"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x358
+label = "358"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "358"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35a
+label = "35A"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "35A"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35b
+label = "35B"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "35B"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35c
+label = "35C"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "35C"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35d
+label = "35D"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "35D"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x35f
+label = "35F"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "35F"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x360
+label = "360"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "360"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x361
+label = "361"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "361"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x363
+label = "363"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "363"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x364
+label = "364"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "364"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x384
+label = "384"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "384"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x386
+label = "386"
+argc = 11
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "386"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x387
+label = "387"
+argc = 8
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "387"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x388
+label = "388"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "388"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x389
+label = "389"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "389"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x38f
+label = "38F"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "38F"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x390
+label = "390"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "390"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x391
+label = "391"
+argc = 2
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "391"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x392
+label = "392"
+argc = 1
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "392"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x393
+label = "393"
+argc = 6
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "393"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x396
+label = "396"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "396"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x398
+label = "398"
+argc = 3
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "398"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x399
+label = "399"
+argc = 7
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "399"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+
+[[opcode]]
+op = 0x39b
+label = "39B"
+argc = 5
+observed_in_himegari = false
+abi_source = "kelebek"
+
+[opcode.semantics]
+name = "39B"
+category = "unknown"
+summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+noop_headless = false
+source = "kelebek"
+confidence = "med"
+depends_on = []
+evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."

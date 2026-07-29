@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build -->
 # Opcode Reference (generated)
 
-249 opcodes used by Himegari. Source of truth: `vm-map/opcodes.toml`.
+548 AGE catalog opcodes: 248 observed in Himegari and 300 compatibility stubs. Source of truth: `vm-map/opcodes.toml`.
 
 ## adv
 
@@ -1204,9 +1204,104 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
+### 0x4 `u00417E30` (u00417E30, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x5 `ret` (ret, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
+
+### 0x7 `u00417F90` (u00417F90, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xa `u00424170` (u00424170, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xb `u00418090` (u00418090, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xc `u004149E0` (u004149E0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd `u004181A0` (u004181A0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xe `u00418200` (u00418200, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xf `u00418300` (u00418300, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x10 `u00414A00` (u00414A00, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x11 `u00418330` (u00418330, argc 9)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x12 `u004183F0` (u004183F0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x13 `u00418420` (u00418420, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x14 `u00414A20` (u00414A20, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x15 `u00418490` (u00418490, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x16 `u00418520` (u00418520, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x17 `u00418560` (u00418560, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1e `u004185B0` (u004185B0, argc 8)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1f `u00418690` (u00418690, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x20 `u004187C0` (u004187C0, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x21 `u00418860` (u00418860, argc 2)
 - **summary:** —
@@ -1215,6 +1310,106 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x22 `u00418920` (u00418920, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x23 `u004189D0` (u004189D0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x24 `u00418A90` (u00418A90, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x26 `u00418C00` (u00418C00, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x27 `u00418CC0` (u00418CC0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x28 `u00418D90` (u00418D90, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2a `u00418E60` (u00418E60, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2b `u00418F30` (u00418F30, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2c `u00419010` (u00419010, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d `u004190A0` (u004190A0, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e `u004194B0` (u004194B0, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f `u004195A0` (u004195A0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x30 `u00419670` (u00419670, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x31 `u00419750` (u00419750, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32 `u004197C0` (u004197C0, argc 10)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x33 `u00419900` (u00419900, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x34 `u004199C0` (u004199C0, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35 `u00419AF0` (u00419AF0, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x36 `u00419C00` (u00419C00, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x37 `u00419C90` (u00419C90, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x38 `u00419DA0` (u00419DA0, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x50 `add` (add, argc 3)
 - **summary:** —
@@ -1280,13 +1475,178 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
+### 0x62 `u0041A360` (u0041A360, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x65 `u00414AA0` (u00414AA0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x66 `u00414AE0` (u00414AE0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x67 `u00414B20` (u00414B20, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x68 `u00414B60` (u00414B60, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x69 `u00414BA0` (u00414BA0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x6a `u00414BE0` (u00414BE0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x6b `u00414C20` (u00414C20, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x6d `u00416960` (u00416960, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x74 `u0041AC00` (u0041AC00, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x7d `u0041AE00` (u0041AE00, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x7e `u0041AEA0` (u0041AEA0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x81 `u0041AF30` (u0041AF30, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x82 `u0041AF80` (u0041AF80, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x83 `u00414C90` (u00414C90, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x84 `u0041AFE0` (u0041AFE0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x89 `u0041B2E0` (u0041B2E0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x8a `u0041B330` (u0041B330, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x8c `jmp` (jmp, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
+### 0x8d `u0041BCE0` (u0041BCE0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x8e `u0041BD60` (u0041BD60, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x91 `u0041BFB0` (u0041BFB0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x92 `u0041C030` (u0041C030, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x95 `u0041C0C0` (u0041C0C0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x96 `u004150C0` (u004150C0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0xa0 `jcc` (jcc, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
+
+### 0xaa `u0041C270` (u0041C270, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xab `u0041C330` (u0041C330, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xac `u0041C3E0` (u0041C3E0, argc 9)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xad `u00415110` (u00415110, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xaf `u00415480` (u00415480, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xb0 `u0041C530` (u0041C530, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xb1 `u0041C560` (u0041C560, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xb2 `u0041C590` (u0041C590, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xb3 `u004154B0` (u004154B0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0xb7 `u0041D0E0` (u0041D0E0, argc 1)
 - **summary:** —
@@ -1304,6 +1664,36 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0xbb `u0041D250` (u0041D250, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xbc `u0041D280` (u0041D280, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xbd `u00415570` (u00415570, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xbe `u004155E0` (u004155E0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xc1 `u00415650` (u00415650, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xc3 `u0041D390` (u0041D390, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0xc5 `u0041D4A0` (u0041D4A0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1316,13 +1706,153 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0xc9 `u00415770` (u00415770, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xca `u004157A0` (u004157A0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xcb `u00415800` (u00415800, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xce `u0041E0B0` (u0041E0B0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xcf `u00416D40` (u00416D40, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd1 `u00415860` (u00415860, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd2 `u0041E110` (u0041E110, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd6 `u004267D0` (u004267D0, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd7 `u0041E1A0` (u0041E1A0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xd8 `u0041E150` (u0041E150, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xda `u004158B0` (u004158B0, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xfa `u00415940` (u00415940, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xfc `u004159F0` (u004159F0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0xfd `u0041E2D0` (u0041E2D0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x102 `u0041E3C0` (u0041E3C0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x103 `u0041E4A0` (u0041E4A0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x104 `u00415C50` (u00415C50, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x105 `u0041E4D0` (u0041E4D0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x106 `u00415E40` (u00415E40, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x10e `u0041E650` (u0041E650, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x10f `u0041E690` (u0041E690, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x12c `lookup-array-2d` (lookup-array-2d, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
+### 0x12d `u0041E720` (u0041E720, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x137 `u0041F1C0` (u0041F1C0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x138 `u0041F2B0` (u0041F2B0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x139 `u0041F310` (u0041F310, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x13b `u0041F440` (u0041F440, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x13c `u0041F7E0` (u0041F7E0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x13d `u0041F840` (u0041F840, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x13e `u0041F8D0` (u0041F8D0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x13f `check-bit` (check-bit, argc 3)
 - **summary:** —
@@ -1336,9 +1866,54 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0x145 `u00416040` (u00416040, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x146 `u0041FB40` (u0041FB40, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x147 `u0041FB80` (u0041FB80, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x148 `u004160A0` (u004160A0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x149 `u0041FCE0` (u0041FCE0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x14a `u0041FD10` (u0041FD10, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x14b `u0041FF50` (u0041FF50, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x14c `set-agerc-export` (set-agerc-export, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x14d `call-agerc-export` (call-agerc-export, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x190 `u0041C5E0` (u0041C5E0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x192 `set-string` (set-string, argc 2)
 - **summary:** —
@@ -1351,6 +1926,11 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x1a7 `comment` (comment, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
+
+### 0x1b1 `u0041B5C0` (u0041B5C0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x1b2 `u00425790` (u00425790, argc 1)
 - **summary:** —
@@ -1368,6 +1948,141 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0x1be `u0041D9D0` (u0041D9D0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c0 `u0041DB70` (u0041DB70, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c2 `u0041B860` (u0041B860, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c3 `u0041B8A0` (u0041B8A0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c4 `u00415720` (u00415720, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c5 `u00425800` (u00425800, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c6 `u0041DD80` (u0041DD80, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1c9 `u0041B8E0` (u0041B8E0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1cd `u0041A560` (u0041A560, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1d6 `u0041DA40` (u0041DA40, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1d7 `u0041DA80` (u0041DA80, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1d8 `u0041DAD0` (u0041DAD0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1d9 `u0041DB20` (u0041DB20, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x1fc `u004205F0` (u004205F0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x200 `u00420800` (u00420800, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x201 `u00416190` (u00416190, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x206 `u004161C0` (u004161C0, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x209 `u00420C50` (u00420C50, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x210 `u00420FF0` (u00420FF0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x211 `u00421060` (u00421060, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x214 `u00421120` (u00421120, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x221 `u00421670` (u00421670, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x225 `u00421780` (u00421780, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x226 `u004217D0` (u004217D0, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x227 `u00421880` (u00421880, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x22b `u00421B30` (u00421B30, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x22e `u00421D10` (u00421D10, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x230 `u00421E70` (u00421E70, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
@@ -1376,23 +2091,803 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0x235 `u00422100` (u00422100, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x237 `u00422350` (u00422350, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x23e `u004228C0` (u004228C0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x240 `u004229A0` (u004229A0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x241 `u00422B80` (u00422B80, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x244 `u00416360` (u00416360, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x245 `u00422DA0` (u00422DA0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x246 `u00422E10` (u00422E10, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x247 `u00416390` (u00416390, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x248 `u00422E80` (u00422E80, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0x24a `u004163C0` (u004163C0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x24d `u00422E90` (u00422E90, argc 12)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x24f `u00422ED0` (u00422ED0, argc 10)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x250 `u00422F60` (u00422F60, argc 10)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x251 `u00422FF0` (u00422FF0, argc 12)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x252 `u00423000` (u00423000, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x253 `u00423019` (u00423019, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x254 `u00423049` (u00423049, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x256 `u00423050` (u00423050, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x257 `257` (257, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25a `u00423120` (u00423120, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25b `25B` (25B, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25c `u00423122` (u00423122, argc 8)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25d `u00423123` (u00423123, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25e `u00423124` (u00423124, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x25f `u00423125` (u00423125, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x260 `u00423126` (u00423126, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x261 `u00423127` (u00423127, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x262 `262` (262, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x263 `263` (263, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x264 `264` (264, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2bc `u00423020` (u00423020, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2be `u00423140` (u00423140, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2c1 `u00425BC0` (u00425BC0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2c2 `u00425CD0` (u00425CD0, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2c3 `u00423200` (u00423200, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2c4 `u00416450` (u00416450, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x2c6 `u0042B5E0` (u0042B5E0, argc 2)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
+### 0x2c7 `u0042B5F0` (u0042B5F0, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
 ### 0x2c8 `u0042B610` (u0042B610, argc 4)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
+
+### 0x2c9 `2C9` (2C9, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2cc `2CC` (2CC, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2cd `2CD` (2CD, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ce `u0042B616` (u0042B616, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2cf `u0042B617` (u0042B617, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d0 `u0042B940` (u0042B940, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d1 `u0042B950` (u0042B950, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d2 `u0042B960` (u0042B960, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d3 `u0042B970` (u0042B970, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d5 `u0042B990` (u0042B990, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d7 `u0042B9B0` (u0042B9B0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d8 `set-array-to` (set-array-to, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2d9 `u0042BA30` (u0042BA30, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2da `u004234E0` (u004234E0, argc 8)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2db `u004235C0` (u004235C0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2dc `u0042BA80` (u0042BA80, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2dd `u0042D880` (u0042D880, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2de `u0042BAC0` (u0042BAC0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2df `u0042BAC1` (u0042BAC1, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e0 `u0042CE0F` (u0042CE0F, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e1 `u0042CE10` (u0042CE10, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e2 `u0042CE11` (u0042CE11, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e3 `u0042CE30` (u0042CE30, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e4 `u0042CE31` (u0042CE31, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e5 `u0042CE50` (u0042CE50, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e6 `u0042CE60` (u0042CE60, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e7 `u0042CE70` (u0042CE70, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e8 `u0042CE80` (u0042CE80, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2e9 `u0042CE90` (u0042CE90, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ea `u0042CEA0` (u0042CEA0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2eb `u0042CEB0` (u0042CEB0, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ec `u0042CEC0` (u0042CEC0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ee `u0042CEC2` (u0042CEC2, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ef `u0042CEC3` (u0042CEC3, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f0 `u0042CEC4` (u0042CEC4, argc 9)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f1 `u0042CEC5` (u0042CEC5, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f2 `u0042CEC6` (u0042CEC6, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f3 `2F3` (2F3, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f4 `2F4` (2F4, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f5 `2F5` (2F5, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f6 `2F6` (2F6, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f7 `2F7` (2F7, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f8 `2F8` (2F8, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2f9 `2F9` (2F9, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2fa `2FA` (2FA, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2fb `2FB` (2FB, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2fc `2FC` (2FC, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2fd `2FD` (2FD, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2fe `2FE` (2FE, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x2ff `2FF` (2FF, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x300 `300` (300, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x301 `301` (301, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x302 `302` (302, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x303 `303` (303, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x304 `304` (304, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x305 `305` (305, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x306 `306` (306, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x307 `307` (307, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x308 `308` (308, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x30a `30A` (30A, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x30c `30C` (30C, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x320 `u0043AA20` (u0043AA20, argc 10)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x321 `u0043AA30` (u0043AA30, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x322 `u0043AA40` (u0043AA40, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x323 `u0043AA50` (u0043AA50, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x324 `u0043AA60` (u0043AA60, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x325 `u0043AA70` (u0043AA70, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x326 `u0043AA80` (u0043AA80, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x327 `u0043AA90` (u0043AA90, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x328 `u0043AAA0` (u0043AAA0, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x329 `u0043AAB0` (u0043AAB0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32a `32A` (32A, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32b `u0043AAD0` (u0043AAD0, argc 0)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32c `u0043AAE0` (u0043AAE0, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32d `u0043AAF0` (u0043AAF0, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32e `u0043AB10` (u0043AB10, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x32f `u0043AB11` (u0043AB11, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x330 `u0043AB12` (u0043AB12, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x332 `u0043AB14` (u0043AB14, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x334 `u0043AB16` (u0043AB16, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x335 `u0043AB17` (u0043AB17, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x337 `u0043AB19` (u0043AB19, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x33b `u0043AB1D` (u0043AB1D, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x33d `u0043AB1E` (u0043AB1E, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x33e `u0043AB1F` (u0043AB1F, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x33f `u0043AB20` (u0043AB20, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=low
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x340 `340` (340, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x341 `341` (341, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x342 `342` (342, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x344 `344` (344, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x345 `345` (345, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x349 `349` (349, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x34d `34D` (34D, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x34e `34E` (34E, argc 4)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x352 `352` (352, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x353 `353` (353, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x354 `354` (354, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x358 `358` (358, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35a `35A` (35A, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35b `35B` (35B, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35c `35C` (35C, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35d `35D` (35D, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x35f `35F` (35F, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x360 `360` (360, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x361 `361` (361, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x363 `363` (363, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x364 `364` (364, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x384 `384` (384, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x386 `386` (386, argc 11)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x387 `387` (387, argc 8)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x388 `388` (388, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x389 `389` (389, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x38f `38F` (38F, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x390 `390` (390, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x391 `391` (391, argc 2)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x392 `392` (392, argc 1)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x393 `393` (393, argc 6)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x396 `396` (396, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x398 `398` (398, argc 3)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x399 `399` (399, argc 7)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
+
+### 0x39b `39B` (39B, argc 5)
+- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
+- **grounding:** source=kelebek, confidence=med
+- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
