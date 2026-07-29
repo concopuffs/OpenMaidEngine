@@ -123,3 +123,4 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |
 | `0xa0ce4` | `run_state_flags` | `uint` | interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward) |
 | `0xa0ce8` | `timed_callback_abort_signal` | `int` | scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured |
+| `0xa0d10` | `system_menu_actions_enabled` | `int` | op 0x142 replaces this AGERC/IAGEService reentrancy guard; scene reset defaults it to 1, while CONFIG brackets its scripted settings UI with 0 then 1 |

@@ -88,6 +88,9 @@ public sealed class VirtualMachine
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private int _messageWindowAlphaSetting;
     private int _messageGlyphDelayMilliseconds;
+    // EngineCtx +0xa0d10: AGERC queries this through IAGEService to gray its native
+    // settings/save menu actions while CONFIG owns the scripted settings screen.
+    private int _systemMenuActionsEnabled = 1;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
     // slot zero as their packed-coordinate flood-fill worklist; op 0x132 replaces a slot.
@@ -111,6 +114,7 @@ public sealed class VirtualMachine
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
+    public int SystemMenuActionsEnabled => _systemMenuActionsEnabled;
     public string PendingDiagnosticText => _diagnosticOutput.PendingText;
     /// <summary>
     /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
@@ -781,6 +785,7 @@ public sealed class VirtualMachine
         _advSkipServiceEnabled = false;
         _advReadSkipState = false;
         _advTextStyle = AdvTextStyle.Default;
+        _systemMenuActionsEnabled = 1;
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
         _host.SetPhysicalMessageSkipActive(false);
@@ -2333,6 +2338,10 @@ public sealed class VirtualMachine
             case "u0041FAA0":
                 _messageWindowAlphaSetting = (int)Read(a[0]);
                 _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
+                return pc + 1;
+            case "set-system-menu-enabled": // 0x142: native AGERC menu reentrancy guard
+            case "u0041FB10": // pre-reference compatibility
+                _systemMenuActionsEnabled = unchecked((int)Read(a[0]));
                 return pc + 1;
             case "get-message-glyph-delay": // 0x7f
             case "u00414C60":

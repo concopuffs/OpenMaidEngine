@@ -592,3 +592,8 @@ offset = 0xa0ce8
 name = "timed_callback_abort_signal"
 type = "int"
 note = "scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured"
+[[field]]
+offset = 0xa0d10
+name = "system_menu_actions_enabled"
+type = "int"
+note = "op 0x142 replaces this AGERC/IAGEService reentrancy guard; scene reset defaults it to 1, while CONFIG brackets its scripted settings UI with 0 then 1"

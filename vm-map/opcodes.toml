@@ -2964,23 +2964,24 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x142
-label = "u0041FB10"
+label = "set-system-menu-enabled"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041FB10"
-category = "unknown"
-summary = ""
+name = "set-system-menu-enabled"
+category = "input"
+summary = "(enabled) - replace the EngineCtx flag exposed through IAGEService to gate reentrant native AGERC system-menu actions. Scene reset defaults it to 1; CONFIG writes 0 on entry and 1 immediately before teardown and exit."
+details = "Port status (2026-07-29): implemented as an EngineCtx-lifetime signed-dword field on VirtualMachine. Root scene reload restores one. The current Godot frontend has no AGERC native system menu, so the value is retained for exact state parity and a future equivalent menu consumer without affecting game input or persisted settings."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x142_set_system_menu_actions_enabled@0x421fe0 directly stores operand 1 at EngineCtx+0xa0d10. scene_context_init_reset initializes the field to 1. iage_service_query_system_menu_enabled@0x45f7c0 exposes it as a boolean through the AGE:IAGEService vtable at +0xb4. Shipped /support/AGERC.DLL's agerc_refresh_system_menu_state@0x10002e10 calls that method; zero invokes EnableMenuItem(...,MF_GRAYED) for command ids 0x9c63/64/65/68/6c/6e/6f. CONFIG.BIN's only sites bracket its complete scripted settings UI with 0 then 1."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "native system-menu actions enabled (zero disables; nonzero enables)"
 observed_types = ["imm"]
 
 [[opcode]]

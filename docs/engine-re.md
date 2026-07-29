@@ -903,6 +903,36 @@ backing's earlier one-shot-color provenance, so classifying only animated or loo
 rebuilt message window opaque. Post-bind static alpha now controls this fresh backing as well; repeated
 CONFIG changes therefore take effect immediately while the enclosing ADV wait remains active.
 
+### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
+
+`op_0x142_set_system_menu_actions_enabled@0x421fe0` is a direct one-operand setter for
+`EngineCtx.system_menu_actions_enabled` (`ctx+0xa0d10`). `scene_context_init_reset@0x40b3b0` initializes
+the field to one. CONFIG.BIN contains both shipped calls: `0x142(0)` is its first instruction, before any
+settings data or UI is built, and `0x142(1)` runs after its last optional callback and immediately before
+retained-object/surface/SFX teardown and exit.
+
+The field is not consumed by the interpreter, renderer, gameplay logic, or persistence. AGE exposes it
+through `AGE:IAGEService` virtual method `iage_service_query_system_menu_enabled@0x45f7c0` (vtable offset
+`+0xb4`), which returns whether the field is nonzero. The shipped AGERC.DLL obtains that interface through
+`GetClassObject("AGE:IAGEService")`. Its `agerc_refresh_system_menu_state@0x10002e10` calls the virtual
+getter after refreshing the native menu's settings. A zero result applies `MF_GRAYED` through
+`EnableMenuItem` to command ids `0x9c63`, `0x9c64`, `0x9c65`, `0x9c68`, `0x9c6c`, `0x9c6e`, and
+`0x9c6f`; those entries launch settings/save-related callbacks and modal services that could otherwise
+reenter configuration while CONFIG already owns the scripted settings UI.
+
+The opcode is therefore a host-menu availability guard, not a configuration-persistence switch or input
+lock for the game itself. A portable frontend without AGE's native AGERC menu can retain the flag for
+lifetime/state parity and gate any future equivalent menu, with no immediate visual or headless effect.
+It is an isolated implementation slice and has no dependency on the remaining opcode gaps. The handler,
+IAGEService getter, AGERC menu refresher, and typed EngineCtx field are annotated in the saved Ghidra
+programs.
+
+The port retains the complete signed dword on `VirtualMachine`, initializes it to one, replaces it on each
+`0x142` call, and restores one during opcode-`0x9` root scene-context reset. It deliberately does not call
+an `IHost` service: the Godot frontend has no AGERC/native application menu to gray, and treating the flag
+as a game-input or persistence switch would broaden its native effect. `SystemMenuActionsEnabled` exposes
+the retained value for a future equivalent frontend menu.
+
 The same route exposed an independent publication-atomicity requirement. Each tile step reaches
 `FIELD@0x4eb2 -> 0x9225`, which calls `DRAWMAP`, `DRAWOBJ`, and `DRAWMINIMAP`. `DRAWMAP` first erases its
 old terrain handle ranges and then rebuilds them; `DRAWMINIMAP` recreates mutable surfaces `0x42..0x44`

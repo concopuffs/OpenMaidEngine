@@ -982,6 +982,35 @@ build, clean diff checking, and the Himegari-targeted threaded `SELFTEST OK`.
 **NEXT:** investigate CONFIG's two-site `0x142`; keep developer-only `0x24d` for a later dedicated
 movie-mask compositor slice.
 
+**SYSTEM-MENU GUARD `0x142` INVESTIGATION COMPLETE (2026-07-29):** the opcode directly replaces
+`EngineCtx.system_menu_actions_enabled`. Scene reset defaults it to one. CONFIG's first instruction writes
+zero; its second and final call restores one immediately before UI/surface/SFX teardown and exit.
+
+AGE exposes the field through `AGE:IAGEService` virtual offset `+0xb4`. The shipped AGERC menu refresher
+calls it and, when false, grays seven settings/save-related native menu actions so they cannot reenter
+configuration while CONFIG owns the scripted settings screen. No interpreter, renderer, gameplay, or save
+consumer reads the field. The port has no AGERC native menu, so the exact implementation is a small
+EngineCtx-lifetime boolean retained for parity and available to gate any future host equivalent; it should
+not block game input or change persisted options. The remaining inventory stays 5 opcodes / 7 instructions
+until implementation.
+
+**NEXT:** implement `0x142` as the isolated system-menu availability guard. Afterwards rerank the four
+remaining opcodes, with SYSTEM4 singleton `0x149` the likely next native investigation.
+
+**SYSTEM-MENU GUARD `0x142` IMPLEMENTED (2026-07-29):** the VM now retains AGE's complete signed-dword
+field, starts it at one, replaces it on every call, and restores one on root scene-context reload.
+CONFIG's exact `0 -> 1` bracket is handled without routing the flag into game input, options persistence,
+or a synthetic host service. The public retained value is available if a future frontend grows an
+equivalent application menu.
+
+Three focused regressions cover the native default and signed replacement, CONFIG's exact pair, and
+root-reload lifetime. Both shipped sites are closed, reducing the remaining effectful inventory to
+4 opcodes / 5 instructions. Validation passes 498/498 engine tests, opcode and EngineCtx build/lint, a
+zero-warning Godot build, clean diff checking, and the Himegari-targeted threaded `SELFTEST OK`.
+
+**NEXT:** rerank the final four gaps and investigate SYSTEM4's singleton `0x149`; keep developer-only
+`0x24d` for its dedicated movie-mask compositor slice.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

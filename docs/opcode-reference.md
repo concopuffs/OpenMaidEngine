@@ -1258,6 +1258,13 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the reference rectangle and three array operands as VM pointers, decodes rectangle/offset values with anti_tamper_a, and starts at incoming_index+1. Each candidate is [left,right,top,bottom]; the worker subtracts its per-entry x/y offsets from the pointer, inclusively intersects it with the reference rectangle, and writes the matched array index or -1 to operand 1. HISTORY.BIN uses decoded local arrays for scrollbar/control regions, close region 8, and visible text rows 9..13.
 
+### 0x142 `set-system-menu-enabled` (set-system-menu-enabled, argc 1)
+- **summary:** (enabled) - replace the EngineCtx flag exposed through IAGEService to gate reentrant native AGERC system-menu actions. Scene reset defaults it to 1; CONFIG writes 0 on entry and 1 immediately before teardown and exit.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x142_set_system_menu_actions_enabled@0x421fe0 directly stores operand 1 at EngineCtx+0xa0d10. scene_context_init_reset initializes the field to 1. iage_service_query_system_menu_enabled@0x45f7c0 exposes it as a boolean through the AGE:IAGEService vtable at +0xb4. Shipped /support/AGERC.DLL's agerc_refresh_system_menu_state@0x10002e10 calls that method; zero invokes EnableMenuItem(...,MF_GRAYED) for command ids 0x9c63/64/65/68/6c/6e/6f. CONFIG.BIN's only sites bracket its complete scripted settings UI with 0 then 1.
+
+Port status (2026-07-29): implemented as an EngineCtx-lifetime signed-dword field on VirtualMachine. Root scene reload restores one. The current Godot frontend has no AGERC native system menu, so the value is retained for exact state parity and a future equivalent menu consumer without affecting game input or persisted settings.
+
 ### 0x144 `edit-fullwidth-string-dialog` (edit-fullwidth-string-dialog, argc 2)
 - **summary:** (result_inout)(initial_text) - synchronously open AGERC's modal full-width text editor. Accept writes at most eight valid CP932 double-byte characters to operand 1; cancel leaves operand 1 unchanged. Operand 2 supplies the initial edit text and is preserved.
 - **grounding:** source=investigation, confidence=high
@@ -1975,10 +1982,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x13f `check-bit` (check-bit, argc 3)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
-
-### 0x142 `u0041FB10` (u0041FB10, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x145 `u00416040` (u00416040, argc 1)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
