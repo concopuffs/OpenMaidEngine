@@ -685,8 +685,11 @@ Windows compatibility metadata. A future generic profile loader should parse tha
 unknown/profile-specific data for diagnostics, apply cross-platform semantic settings through explicit
 runtime seams, and classify legacy renderer/registration switches rather than blindly emulating them.
 The current frontend's scattered Himegari constants are acceptable while gameplay is the priority, but
-they are not the multi-profile architecture. This experiment was diagnostic only; no Kamidori support or
-`0x1be` semantics were implemented.
+they are not the multi-profile architecture. The first bounded implementation slice will source the
+logical canvas from `SCREENX`/`SCREENY` and use it as the default windowed size; a second slice will add
+independent physical `--window-width`/`--window-height` overrides without changing VM coordinates or
+surface geometry. The executable task plan and gates live in `phase-a-slice-plan.md`. This experiment was
+diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5

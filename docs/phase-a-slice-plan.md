@@ -3358,6 +3358,169 @@ ADV-toggle, audio, and registration consumers.
 the Phase-B gameplay spine unless one of the cataloged ADV policy differences becomes a visible gameplay
 or input defect.
 
+## SYS4INI logical-resolution implementation plan (planned 2026-07-28)
+
+### Slice boundary
+
+This first settings-application slice makes SYS4INI the runtime source of the game's logical canvas and
+uses that same size as the default windowed client size:
+
+```text
+SYS4INI SCREENX/SCREENY
+    -> effective logical canvas
+    -> software backbuffer + retained presentation bounds + primary surface
+    -> Godot content-scale base
+    -> initial windowed client size
+```
+
+AGE's registered `640x480` values remain the per-dimension fallback when a key is absent or cannot
+produce a positive integer. A present value that would overflow or exceed the runtime's explicitly
+bounded RGBA allocation policy is a profile error with a useful diagnostic, not a request to attempt an
+unbounded allocation.
+
+The physical presentation size is deliberately not independently configurable in this slice. Slice two
+will add `--window-width` and `--window-height`; their defaults will be the logical canvas size established
+here. Those future parameters will change only the physical window, never VM coordinates, surface sizes,
+layout, or the software backbuffer.
+
+### Non-goals
+
+- Do not apply the other 34 SYS4INI settings yet.
+- Do not reproduce native fullscreen mode switching, `FULLSCREENBIT`, aspect/device selection, or
+  DirectDraw behavior.
+- Do not add the window-width/window-height boot parameters early.
+- Do not turn Himegari-authored `800x600` operands, asset dimensions, or test fixtures into profile
+  variables merely because they contain the same numbers.
+- Do not add a second SYS4INI decoder or read the generated `build/asset-index.json` at runtime.
+
+### Design
+
+1. **Parse the settings record at the existing catalog boundary.**
+
+   `Sys4AssetCatalog.Parse` already owns the decompressed S4IC blob and ends with `p` immediately after
+   the raw file records. For a base S4IC catalog, continue from there through the bounded VM-metadata
+   block and settings record documented in `sys4-format-notes.md`. Append S4AC catalogs do not provide
+   the selected game's startup profile.
+
+   Add a platform-neutral settings value on the base catalog, tentatively
+   `Sys4StartupSettings`. Preserve the ordered CP932 key/value pairs for diagnostics and expose a
+   case-insensitive last-value-wins lookup matching AGE's registry assignment behavior. Unknown keys are
+   retained rather than rejected by the generic parser so a newer game can be inspected before every
+   setting has a runtime consumer.
+
+   The parser must bounds-check both length-prefixed blocks, the pair count, every terminating NUL, and
+   exact settings-string consumption. A genuinely absent trailer yields an empty settings set and hence
+   AGE defaults; a structurally present but truncated or inconsistent trailer is an
+   `InvalidDataException` naming the source catalog and field.
+
+2. **Resolve one immutable logical-canvas value.**
+
+   Add a small engine-owned integer size type or settings projection so Godot does not become the owner
+   of SYS4 semantics. Resolve `SCREENX` and `SCREENY` independently from the raw settings, using 640 and
+   480 respectively when missing, nonnumeric, zero, or negative. Validate checked pixel count and byte
+   count once at this boundary. All downstream systems receive the already-validated size and must not
+   reinterpret the strings or invent their own fallback.
+
+3. **Reorder Godot bootstrap around the selected profile.**
+
+   Refactor `Main._Ready()` into the necessary startup phases:
+
+   ```text
+   read existing boot arguments
+       -> load base catalog once
+       -> obtain validated logical canvas
+       -> configure root content-scale base and initial window
+       -> allocate presentation nodes/buffers
+       -> construct persistence, assets, host, and VM from the same catalog
+   ```
+
+   Remove the later duplicate normal-path `Sys4AssetCatalog.Load`. Keep `project.godot` dimensions only
+   as a harmless pre-script bootstrap/fallback; they are not the selected game's resolution. In windowed
+   mode, set the initial client size to the logical canvas. Configure the root viewport's content scale
+   to that logical size with aspect preservation so slice two can vary the physical window without
+   changing the game coordinate system. A pre-existing fullscreen launch retains the display's physical
+   size while using the same logical base.
+
+4. **Replace frontend canvas constants with runtime state.**
+
+   Replace `Main.ScreenWidth`/`ScreenHeight` and the field-initialized pixel array with validated
+   `_screenWidth`, `_screenHeight`, and a buffer allocated after profile loading. Carry those dimensions
+   through:
+
+   - immediate backbuffer creation/publication;
+   - GPU/software compositor destination bounds and performance accounting;
+   - whole-canvas fills and transition captures;
+   - primary surface slot zero and native-sized movie surfaces;
+   - fallback ADV layout bounds;
+   - retained-object fallback geometry;
+   - pointer-to-logical-coordinate conversion.
+
+   Give `GodotAdvHost` the logical size explicitly rather than letting it duplicate defaults.
+   `RetainedSurfaceRasterizer` already receives an `RgbaImage` destination; its null-source whole-canvas
+   fill fallback should use `destination.Width/Height`, not a new global.
+
+   Input conversion must have one scaling owner. Once Godot content scaling is active, derive logical
+   coordinates through the root viewport/canvas transform (including letterbox exclusion) instead of
+   applying the current whole-window `position * 800 / viewport` ratio a second time.
+
+5. **Audit, do not mechanically replace, numeric fixtures.**
+
+   Review every runtime `800`/`600` occurrence. Replace values that mean “current engine canvas” and leave
+   values that are:
+
+   - operands authored by Himegari scripts;
+   - dimensions of installed Himegari assets;
+   - focused regression inputs whose subject is unrelated to profile sizing;
+   - opcode constants such as `0x8000`.
+
+   Update comments that currently call input or slot zero specifically “800x600” when they mean the
+   selected logical canvas.
+
+### Verification
+
+Engine tests:
+
+- parse the installed SYS4INI and assert all 36 pairs plus `800x600`;
+- parse a synthetic bounded trailer with `SCREENX=1024`, `SCREENY=576` and prove the projected canvas;
+- prove absent keys fall back independently to `640x480`;
+- reject truncated lengths, missing NULs, count/byte mismatches, and unsafe dimensions;
+- prove duplicate/case-varied keys use the last value while unknown keys remain inspectable;
+- composite a whole-canvas retained fill into a non-800 destination and prove its exact bounds;
+- construct host/canvas-facing state with a non-800 size and prove slot zero and fallback ADV layout use it.
+
+Godot gates:
+
+- zero-warning build and threaded `SELFTEST OK`;
+- selftest asserts/logs the selected logical canvas, root content-scale base, backbuffer dimensions, and
+  default windowed size;
+- ordinary Himegari boot reports `SYS4INI 800x600`, opens at 800x600, and reaches the existing SC0000
+  presentation with unchanged input coordinates and compositor output;
+- a diagnostic non-800 profile/settings fixture reaches presentation allocation without any 800x600
+  fallback in buffer size, primary-surface size, compositor bounds, or pointer coordinates.
+
+Static closeout:
+
+- `rg` audit all runtime `800`/`600` occurrences and classify every survivor;
+- update `engine-re.md`, `sys4-format-notes.md`, the roadmap/profile boundary, portability inventory,
+  this slice's result, and status memory;
+- update `PROJECT-STRUCTURE.md` only if the implementation introduces a new settings/profile source
+  category, and `tools-reference.md` only if a tool changes.
+
+### Slice-two handoff
+
+After this slice, logical and physical size are equal by default but are represented separately. The next
+slice may add:
+
+```text
+--window-width <pixels>
+--window-height <pixels>
+```
+
+Those parameters will override only the physical window dimensions. Godot will scale the unchanged
+SYS4INI-sized logical canvas into that window using the aspect-preserving/letterbox policy. Validation of
+partial overrides, minimum sizes, fullscreen interaction, integer scaling, and alternate stretch/crop
+policies belongs to that second slice's configuration design.
+
 ## ADV requested-face selection implemented (2026-07-28)
 
 Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in
