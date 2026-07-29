@@ -23,6 +23,8 @@ public partial class Main : Godot.Control
     private int _screenWidth = Sys4LogicalCanvas.DefaultWidth;
     private int _screenHeight = Sys4LogicalCanvas.DefaultHeight;
     private WindowLaunchOptions _windowOptions;
+    private Sys4AssetCatalog _catalog = null!;
+    private IAssetStore _assetStore = null!;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
     private Image _screen = null!;                        // SYS4INI-sized immediate-mode canvas
     private ImageTexture _screenTex = null!;
@@ -110,9 +112,38 @@ public partial class Main : Godot.Control
     public override void _Ready()
     {
         var userArgs = OS.GetCmdlineUserArgs();
+        GameRootSelection gameRoot;
+        Sys4AssetCatalog catalog;
+        try
+        {
+            string workingDirectory = System.IO.Directory.GetCurrentDirectory();
+            if (!System.OperatingSystem.IsWindows())
+            {
+                // Godot can chdir to the project before managed startup. Unix shells preserve the launch
+                // directory in PWD, which keeps terminal-launched exports faithful to their caller.
+                string? inheritedWorkingDirectory =
+                    System.Environment.GetEnvironmentVariable("PWD");
+                if (!string.IsNullOrWhiteSpace(inheritedWorkingDirectory)
+                    && System.IO.Directory.Exists(inheritedWorkingDirectory))
+                    workingDirectory = inheritedWorkingDirectory;
+            }
+            gameRoot = GameRootSelection.Resolve(
+                userArgs, OS.GetExecutablePath(), workingDirectory);
+            catalog = Sys4AssetCatalog.Load(gameRoot.Sys4IniPath);
+        }
+        catch (System.Exception error) when (
+            error is System.ArgumentException or System.IO.IOException or System.UnauthorizedAccessException)
+        {
+            GD.PushError($"[startup] {error.Message}");
+            GetTree().Quit(2);
+            return;
+        }
+        _catalog = catalog;
+        _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, gameRoot.Root);
+        GD.Print($"[profile] game root={gameRoot.Root} source={gameRoot.SourceName}");
+
         // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
         // instance is reused for scripts and assets later in startup.
-        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var logicalCanvas = catalog.LogicalCanvas;
         try
         {
@@ -298,7 +329,7 @@ public partial class Main : Godot.Control
                 catalog.AppendPacks.Select(pair =>
                     new KeyValuePair<int, int>(pair.Key, pair.Value.RawSlots.Count)));
             trackedAssetStore = new CatalogTrackingAssetStore(
-                new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir),
+                _assetStore,
                 entry => sharedProfile.MarkCatalogResourceOpened(entry.PackedId));
             scripts = new Sys4ScriptProvider(table, catalog, trackedAssetStore);
             script = scripts.RequireByName(scene + ".BIN");
@@ -314,7 +345,7 @@ public partial class Main : Godot.Control
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
             ? new ResourceMap(scripts.Catalog, trackedAssetStore)
-            : ResourceMap.Load();
+            : new ResourceMap(catalog, _assetStore);
         _host = new GodotAdvHost(
             this, resources, scene, _clock, _locator, logicalCanvas, _timeline,
             synchronizeExplicitPresentation: !_selftest)
@@ -2080,7 +2111,7 @@ public partial class Main : Godot.Control
         var actual = _host.Captured.ConvertAll(c => c.Offset);
         bool ok = actual.Count == expected.Count;
         for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected[i];
-        var debugEntries = DebugSceneCatalog.Build(Sys4AssetCatalog.Load(Paths.Sys4Ini));
+        var debugEntries = DebugSceneCatalog.Build(_catalog);
         bool launcherOk = debugEntries.Any(entry => entry.Name == "DEBUG.BIN" && entry.Launchable)
                           && debugEntries.Select(entry => entry.PackedId).Distinct().Count() == debugEntries.Count;
         var launcherSmoke = new DebugSceneLauncher();
@@ -2096,7 +2127,7 @@ public partial class Main : Godot.Control
                                       new InputEventKey { PhysicalKeycode = Key.Up }, out int upVk) && upVk == 0x26
                                   && Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Ctrl }, out int ctrlVk) && ctrlVk == 0x11;
-        var selftestResources = ResourceMap.Load();
+        var selftestResources = new ResourceMap(_catalog, _assetStore);
         AudioPayload glowSfx = selftestResources.ReadAudio(selftestResources.ResolveSoundEffect(0x28)!);
         byte[] glowGodotWav = RiffWaveSanitizer.RemoveInfoMetadata(glowSfx.Bytes);
         bool cp932WavMetadataOk = glowGodotWav.Length == 688_336

@@ -6,7 +6,7 @@ be relocated without editing any tool -- there are no hard-coded drive paths.
 Workspace layout (siblings under the workspace root):
 
     <workspace>/                         e.g. S:\\Game Hacking\\Eushully\\Himegari
-      姫狩りダンジョンマイスター/         pristine game install (AGE.EXE, *.ALF,
+      Himegari_Game/                      pristine game install (AGE.EXE, *.ALF,
                                           loose *.BIN patch-overrides, DLLs)
       extracted/                          extracted ALF data: DATA1 .. DATA5
       age-reimpl/                         our work (this repo)
@@ -20,7 +20,7 @@ from pathlib import Path
 
 REPO        = Path(__file__).resolve().parent.parent   # age-reimpl/
 WORKSPACE   = REPO.parent                               # workspace root
-GAME_DIR    = WORKSPACE / "姫狩りダンジョンマイスター"  # pristine game install
+GAME_DIR    = WORKSPACE / "Himegari_Game"  # pristine game install
 EXTRACTED   = WORKSPACE / "extracted"                   # extracted ALF archives
 DATA1       = EXTRACTED / "DATA1"                        # the .BIN script corpus
 BUILD       = REPO / "build"                             # derived corpora (regenerable)

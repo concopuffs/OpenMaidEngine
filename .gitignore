@@ -1,5 +1,5 @@
 # age-reimpl repo. NOTE: the repo root IS age-reimpl/. The original game install
-# (姫狩りダンジョンマイスター/) and the extracted ALF data (extracted/) are SIBLINGS
+# (Himegari_Game/) and the extracted ALF data (extracted/) are SIBLINGS
 # of this directory, outside the repo entirely — they can never be committed.
 
 # Derived / regenerable corpora (rebuild via tools/extract_phase2.py, opcodes_build.py, etc.).

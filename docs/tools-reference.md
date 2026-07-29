@@ -298,11 +298,24 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 
 **Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
-Plays the real bytecode with call-script execution on (subroutines run live). A no-argument launch starts
-the persistent `SYSTEM4.BIN` root and reaches TITLE naturally. The local `run-godot.ps1`/`.cmd` launchers
-make that route explicit with `--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. `--headless` can't
-render texture ops (no GPU context) — run windowed for real scenes. On VM termination the console prints
-the exact halt reason and step count before the generic on-screen `-end-` marker. User args (after `--`):
+Plays the real bytecode with call-script execution on (subroutines run live). The game root is selected
+before catalog loading: `--game-root <directory>` wins, otherwise the directory containing the running
+executable is tried, then the current working directory. A candidate must contain `SYS4INI.BIN`; invalid
+explicit roots and unresolved defaults stop startup with the searched locations. Relative overrides are
+resolved against the current working directory, and repeated overrides use the last value. On Unix,
+Godot preserves the shell launch directory through inherited `PWD` because editor/project startup may
+change the process directory before managed code runs.
+
+With the exported executable placed in an AGE install, a no-argument launch therefore uses that install
+and starts the persistent `SYSTEM4.BIN` root naturally. Direct development runs are hosted by the Godot
+editor executable, so pass `--game-root <install>` after Godot's `--` separator; the local
+`run-godot.ps1`/`.cmd` launchers pass the local script's directly configured `$gameRoot` value. Edit that
+one assignment when testing another installed game. Those launchers make the natural route explicit with
+`--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. Examples below focus on their
+feature-specific arguments and assume the game root is already selected this way. `--headless` can't
+render texture ops (no GPU context) — run windowed for real scenes.
+On VM termination the console prints the exact halt reason and step count before the generic on-screen
+`-end-` marker. User args (after `--`):
 
 The local launchers also accept **`-StartupDiagnostics`** for a native-faithful cold boot through TITLE,
 Game Start, and SC0000. The switch overrides `run-godot.cmd`'s usual `-NativeDebugMenu` convenience for
@@ -316,6 +329,9 @@ wait, optionally press F3, and close the window normally. Until shutdown cancell
 ADV input release, normal window close can append one trailing shutdown-only record to `page-map.jsonl`;
 use the last `input-wait` event in `timeline.jsonl` as the authoritative manual stop coordinate.
 
+- `--game-root <directory>` — select the read-only AGE installation supplying `SYS4INI.BIN`, loose
+  overrides, AAI append catalogs, and ALF archives. Absolute paths are launcher-friendly; relative paths
+  are current-working-directory-relative. This is the stable handoff for future game-profile launchers.
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
 - `--window-width <pixels>` / `--window-height <pixels>` — override only the physical windowed client

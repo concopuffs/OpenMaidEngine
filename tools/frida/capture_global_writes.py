@@ -30,7 +30,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-GAME_DIR = REPO.parent / "姫狩りダンジョンマイスター"
+GAME_DIR = REPO.parent / "Himegari_Game"
 AGE_EXE = GAME_DIR / "AGE.EXE"
 RAW = REPO / "build" / "global-writes.jsonl"
 SNAP = REPO / "build" / "scene-entry-state.json"

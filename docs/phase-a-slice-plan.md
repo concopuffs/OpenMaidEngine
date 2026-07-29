@@ -3569,6 +3569,33 @@ and an overridden `1200x700` request while continuing to report `logical-canvas=
 width exits during startup with the expected diagnostic. Headless's minimized `64x64` backend remains
 non-authoritative for visible client geometry.
 
+### Runtime game-root selection result (implemented 2026-07-28)
+
+Godot no longer obtains installed game data from the development-only `Paths.GameDir` workspace
+assumption. `GameRootSelection` establishes one normalized read-only root before loading SYS4INI:
+`--game-root <directory>` has highest precedence, followed by the running executable's directory and
+then the current working directory. Candidates are accepted only when `SYS4INI.BIN` is present.
+Relative overrides resolve against the working directory, repeated options use the last value, and an
+invalid explicit override fails without silently selecting a different install. On Unix the frontend
+uses inherited shell `PWD` as the launch working directory because Godot can change the process directory
+to its project before managed startup.
+
+The selected root supplies the base catalog, loose overrides, append catalogs, and ALF archives through
+one injected `Sys4AssetStore`. Normal execution, the debug-scene catalog, and threaded self-test reuse
+that same catalog/store rather than re-entering repository path discovery. The local ignored
+`run-godot.ps1` development convenience passes one directly configured `$gameRoot` value because editor
+runs are hosted by the Godot executable; changing that assignment is the local cross-game testing seam.
+An exported executable placed beside the original game data can use the executable-directory default.
+This is the command-line boundary a future multi-profile launcher can populate with an absolute install
+path.
+
+Eight focused cases cover explicit and relative selection, override precedence and duplicates,
+executable-directory defaulting, working-directory fallback, missing values, invalid explicit roots,
+and unresolved diagnostics. The complete engine suite passes **463/463**, the Godot project builds with
+zero warnings, and the threaded headless self-test reports the selected `launch-argument` game root
+before `SELFTEST OK`. Export packaging of generated opcode/profile metadata remains a separate
+distribution step; this slice removes the installed-game hardcoding only.
+
 ## ADV requested-face selection implemented (2026-07-28)
 
 Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in

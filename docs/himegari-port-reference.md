@@ -2,8 +2,8 @@
 
 Working reference for porting *姫狩りダンジョンマイスター* (Eushully, 2009) to Godot.
 
-Source install: `C:\Program Files (x86)\Eushully\姫狩りダンジョンマイスター\`
-Workspace: `S:\Game Hacking\Eushully\Himegari\` — three siblings: `姫狩りダンジョンマイスター\` (pristine game), `extracted\` (extracted ALF data), `age-reimpl\` (our work). See `docs/PROJECT-STRUCTURE.md`.
+Source install: `S:\Game Hacking\Eushully\Himegari\Himegari_Game\`
+Workspace: `S:\Game Hacking\Eushully\Himegari\` — three siblings: `Himegari_Game\` (pristine game), `extracted\` (extracted ALF data), `age-reimpl\` (our work). See `docs/PROJECT-STRUCTURE.md`.
 
 ---
 
@@ -91,10 +91,10 @@ loop in `AGE.EXE`, which is the Ghidra task below. Graphics conversion (DATA2/5 
 save-format work remain deferred.
 
 ### Immediate (no tools needed beyond what's on disk)
-1. ~~**Relocate the `Output\` tree**~~ **DONE** — workspace now at `S:\Game Hacking\Eushully\Himegari\姫狩りダンジョンマイスター\`.
+1. ~~**Relocate the `Output\` tree**~~ **DONE** — pristine install now at `S:\Game Hacking\Eushully\Himegari\Himegari_Game\`.
 2. **Convert remaining AGFs** in DATA2 (985 files) and DATA5 (210 files) with `AGF2BMP2AGF.exe`. *(Deferred — graphics not needed yet.)* The 3-file DATA1 gap is `CHAPTER.AGF`, `LOGO.AGF`, `TEST.AGF`.
 3. ~~**Inventory the script files**~~ **DONE** — see [script-inventory.md](script-inventory.md). Key findings: all 481 scripts share magic `SYS4422 `; 49 loose root-dir script `.BIN` files shadow DATA1 copies (plus two root-only engine BINs; use overrides as authoritative); heavy game logic (damage calc, dungeon loop, battle flow) lives in bytecode, favoring a VM re-implementation in Godot.
-1. ~~**Relocate the `Output\` tree**~~ **DONE** — workspace now at `S:\Game Hacking\Eushully\Himegari\姫狩りダンジョンマイスター\`.
+1. ~~**Relocate the `Output\` tree**~~ **DONE** — pristine install now at `S:\Game Hacking\Eushully\Himegari\Himegari_Game\`.
 2. **Convert remaining AGFs** in DATA2 (985 files) and DATA5 (210 files) with `AGF2BMP2AGF.exe`. *(Deferred — graphics not needed yet.)* The 3-file DATA1 gap is `CHAPTER.AGF`, `LOGO.AGF`, `TEST.AGF`.
 3. ~~**Inventory the script files**~~ **DONE** — see [script-inventory.md](script-inventory.md). Key findings: all 481 scripts share magic `SYS4422 `; 49 loose root-dir script `.BIN` files shadow DATA1 copies (plus two root-only engine BINs; use overrides as authoritative); heavy game logic (damage calc, dungeon loop, battle flow) lives in bytecode, favoring a VM re-implementation in Godot.
 

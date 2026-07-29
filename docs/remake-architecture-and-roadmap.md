@@ -649,6 +649,14 @@ the toolchain at the new game's archives, re-run extraction, rebuild its global 
 **This is the core payoff of the VM approach:** the *engine* cost amortizes across all AGE games; only
 content-mapping recurs — far less than re-coding each game's logic bespoke.
 
+The first runtime install-selection boundary is now in place. Godot receives one normalized game root,
+defaulting to the executable directory with a current-working-directory fallback and accepting an
+explicit `--game-root` override; the selected root is injected into the generic SYS4 catalog/store
+instead of inferred from the Himegari repository layout. A future multi-profile launcher can therefore
+own install discovery and pass the chosen profile's absolute root through the same stable argument.
+Generated engine/profile metadata still needs an export-owned bundle before this constitutes complete
+drop-in packaging; invocation details live in `tools-reference.md`.
+
 #### Opcode ABI registry must be independent of per-game coverage
 
 A cursory Kamidori boot probe on 2026-07-20 validated much of this boundary: its own `SYS4INI.BIN` and

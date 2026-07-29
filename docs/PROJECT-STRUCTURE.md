@@ -11,7 +11,7 @@ Workspace root: `S:\Game Hacking\Eushully\Himegari\`
 ```
 S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 │
-├── 姫狩りダンジョンマイスター/               ← SOURCE — pristine game install (read-only)
+├── Himegari_Game/                          ← SOURCE — pristine game install (read-only)
 │   │   Never edit, move, or add to this folder. It holds ORIGINALS ONLY.
 │   ├── AGE.EXE, AGERC.DLL, *.dll             shipped engine (packed). Stays intact and
 │   │                                         runnable in place — Frida launches it if needed.
@@ -101,8 +101,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
-    │   ├── Age.Engine/Sys4/                 runtime catalog parser, loose-first bounded ALF asset store,
-    │                                       script provider, AGF/LZSS and Windows CUR decoders, and resource facade
+    │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
+    │                                       ALF asset store, script provider, AGF/LZSS and Windows CUR decoders,
+    │                                       and resource facade
     │   └── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state
@@ -119,7 +120,7 @@ page ordinals to their authoritative script offsets for `tools/locate_page.py`.
 
 ## Conventions
 
-- **Three-way separation.** `姫狩りダンジョンマイスター/` = untouched originals; `extracted/` =
+- **Three-way separation.** `Himegari_Game/` = untouched originals; `extracted/` =
   game-derived data (regenerable, game-side); `age-reimpl/` = everything we authored. The first two
   are consumed, never modified.
 - **Tools never hard-code paths.** `tools/paths.py` derives `GAME_DIR`, `EXTRACTED`, `DATA1`,
