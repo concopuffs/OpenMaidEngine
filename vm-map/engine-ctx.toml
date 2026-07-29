@@ -8,6 +8,11 @@ struct_name = "EngineCtx"
 size = 0xa1000
 
 [[field]]
+offset = 0x4
+name = "host_ui_interface"
+type = "void*"
+note = "host-facing UI interface used by the ctx+4 virtual-dispatch thunks; default slot +4 logs and presents AGE message boxes"
+[[field]]
 offset = 0x814
 name = "input_action_count"
 type = "int"
@@ -248,6 +253,11 @@ name = "frame_instruction_word_count"
 type = "int"
 note = "current decoded instruction length in dwords for each 0x78-byte script frame; interpreter advances PC by this value * 4"
 [[field]]
+offset = 0x54fe8
+name = "owner_window_handle"
+type = "void*"
+note = "native owner HWND forwarded to host UI/message-box calls, including op 0x1b4 diagnostic presentation"
+[[field]]
 offset = 0x54ff0
 name = "initial_root_run"
 type = "int"
@@ -452,6 +462,21 @@ offset = 0x6dbf8
 name = "message_skip_queued_voice_arg"
 type = "int"
 note = "second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero"
+[[field]]
+offset = 0x6ddac
+name = "opcode_debug_metadata_table"
+type = "void*"
+note = "base of 512 optional per-opcode debug-metadata pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic COMMAND names render as '-'"
+[[field]]
+offset = 0x6f798
+name = "script_source_line_table"
+type = "void*"
+note = "base of 41 optional per-frame source-line-map pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic LINE values render as -1"
+[[field]]
+offset = 0x6f880
+name = "diagnostic_text_buffer"
+type = "int"
+note = "base of an embedded 28-byte MSVC string accumulator; op 0x1b2 appends formatted operand text, op 0x1b3 appends CRLF, and op 0x1b4 presents then clears it"
 [[field]]
 offset = 0x6f89c
 name = "script_launch_queue"

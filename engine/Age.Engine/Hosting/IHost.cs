@@ -28,6 +28,9 @@ public readonly record struct SurfaceRectCopy(
     int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
     int Width, int Height, int DestinationX, int DestinationY);
 
+/// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
+public readonly record struct DiagnosticMessage(string Caption, string Text);
+
 public enum SurfaceBlackFadeDirection
 {
     FromBlack,
@@ -38,6 +41,9 @@ public interface IHost
 {
     /// <summary>Report a recoverable runtime discrepancy while allowing script execution to continue.</summary>
     void ReportWarning(string message) => System.Console.Error.WriteLine(message);
+    /// <summary>Present a modal diagnostic and return only after the user dismisses it.</summary>
+    void ShowDiagnosticMessage(DiagnosticMessage message)
+        => System.Console.Error.WriteLine($"{message.Caption}: {message.Text}");
     // Script context is retained for diagnostics/page location; resource operands are universal packed ids.
     void EnterScriptContext(string scriptName) { }
     void ExitScriptContext() { }

@@ -1376,6 +1376,51 @@ scale, rotation, and source-rectangle sampling; clears all ten native timing dwo
 numbered-save record, including the unmodeled second cyclic matrix; and leaves base/current transforms,
 cyclic targets, and finite one-shot channels intact.
 
+#### Diagnostic accumulator opcodes `0x1b2`–`0x1b4` (2026-07-29)
+
+The three remaining diagnostic-looking instructions are one native family. The real dispatch registrations
+are `ctx+0x9b914 = 0x41f4b0`, `ctx+0x9b918 = 0x41a400`, and `ctx+0x9b91c = 0x419240`; the legacy Kelebek
+labels do not identify these handlers correctly.
+
+- `op_0x1b2_append_diagnostic_value@0x41f4b0` formats operand 1 through
+  `vm_operand_format_as_string@0x41af90`. Integer operand forms become signed decimal text, while string
+  forms return their byte strings; the helper also covers AGE's other operand families. The handler
+  appends the exact returned bytes to the embedded 28-byte MSVC string at `ctx+0x6f880`, now
+  `EngineCtx::diagnostic_text_buffer`.
+- `op_0x1b3_append_diagnostic_newline@0x41a400` appends the two bytes at `0x57082c`, `0d 0a`, to that
+  same accumulator. It neither presents nor clears anything.
+- `op_0x1b4_show_and_clear_diagnostic@0x419240` passes owner HWND
+  `EngineCtx::owner_window_handle` (`ctx+0x54fe8`), the accumulator's current byte pointer, and flags
+  `0x10004` through `engine_host_show_message@0x403820`. The thunk loads
+  `EngineCtx::host_ui_interface` from `ctx+4` and dispatches virtual slot `+4`; `ctx+0x54fe8` is an
+  explicit argument, not the interface object.
+- The installed default vslot, `default_host_show_message@0x431520`, writes the raw diagnostic between
+  `"\r\n致命的エラー[\r\n"` / `"]\r\n"` trace markers, then calls
+  `age_show_message_box@0x409370`. Flag `0x10000` appends the current interpreter coordinate using
+  `"\n\nデバック情報：\nFILE=%s ADDRESS=%X LINE=%d COMMAND=%s(%d) DEPTH=%d\n"`. Low mode `4`
+  formats body `%s%s`, selects caption `エラーが発生しました`, and invokes USER32 `MessageBoxA`
+  synchronously with style `0x40` (`MB_OK | MB_ICONINFORMATION`) and the supplied owner HWND. The
+  opcode ignores the `IDOK` result and only then erases the whole string with
+  `msvc_string_erase(buffer, 0, 0xffffffff)`.
+- The optional command-metadata table at `ctx+0x6ddac` and per-frame source-line maps at
+  `ctx+0x6f798` are both zeroed by the constructor. Exhaustive immediate-offset xrefs show reads plus
+  that initialization only—no release-image writer—so Himegari deterministically emits
+  `LINE=-1 COMMAND=-(436)` for `0x1b4`. `FILE`, dword `ADDRESS`, and zero-based frame `DEPTH` remain
+  live values.
+
+Himegari contains three `0x1b2` sites. FIELD appends the literal invalid-mutual-destruction-state text and
+then CRLF. SYSTEM4 appends the literal invalid-execution-mode prefix, appends global
+`system_flow_request` in decimal, presents and clears the assembled diagnostic, then appends CRLF to the
+now-empty buffer. The trio therefore owns three effectful gaps totaling six instructions and is a bounded
+next implementation slice; native ordering, including SYSTEM4's apparently odd post-clear newline, should
+be preserved. A compatible host seam therefore needs synchronous modal presentation on the UI thread and
+the current script coordinate; it is not a general shell-command interface.
+
+The port implements the trio with a `GameSession`-shared `DiagnosticOutputState`. Godot marshals the
+completed prompt to the main thread through `OS.Alert` and parks the VM until dismissal; headless
+`CaptureHost` records the same effect. The accumulator clears after the synchronous call returns, so
+FIELD's unpresented line and SYSTEM4's unusual post-clear CRLF retain their native lifetime and ordering.
+
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
 a type-0 command-map record keyed by arg 1: start `+4`, delay/duration `+8/+0xc`, target surface slot `+0x10`,

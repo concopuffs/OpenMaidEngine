@@ -857,7 +857,22 @@ sites (five DEBUGADV demonstrations and one FIELD movement setup), reducing the 
 inventory to 15 distinct opcodes / 22 instructions. All 479 engine tests, opcode build/lint, the
 zero-warning Godot build, and the Himegari-targeted threaded selftest pass.
 
-**NEXT:** investigate `0x1b2`, the widest remaining unknown at three sites.
+**Diagnostic-output trio implemented (2026-07-29):** `0x1b2(value)` now formats string, signed-integer,
+pointer, and float operand families into an EngineCtx-lifetime accumulator; `0x1b3` appends exact CRLF;
+and `0x1b4` appends the native interpreter coordinate, synchronously presents it, then clears only after
+the host returns. The release image's optional debug-name/line tables are never populated, so the port
+matches its deterministic `LINE=-1 COMMAND=-(436)` suffix while retaining live `FILE`, dword `ADDRESS`,
+and zero-based frame `DEPTH`.
+
+`GameSession` carries the accumulator across fresh scene VMs, preserving FIELD's unpresented invalid-state
+line and SYSTEM4's post-clear newline. Interactive Godot dispatches `OS.Alert` on the main thread and parks
+the VM until dismissal; headless `CaptureHost` records rather than drops the effect. Focused regressions
+cover operand formatting, append/show/clear ordering, context formatting, headless presentation, and
+cross-scene lifetime. All 482 engine tests, opcode/EngineCtx build and lint, the zero-warning Godot build,
+and the Himegari-targeted threaded selftest pass. The six instructions are closed, reducing the remaining
+effectful inventory from 15 distinct opcodes / 22 instructions to 12 / 16.
+
+**NEXT:** rerank the remaining 12 effectful opcode gaps and investigate the widest coherent slice.
 
 ## Later Phase B breadth
 

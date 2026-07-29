@@ -633,6 +633,30 @@ Both copies are attempted with overwrite allowed. Status is 0 when both succeed,
 
 Port status (2026-07-24): implemented as an active ExecFrame identity marker. It survives nested calls and clears when its owning frame unwinds; the following full numbered-payload slice will consume the exposed zero-based cutoff.
 
+### 0x1b2 `append-diagnostic-value` (u00425790, argc 1)
+- **summary:** Format operand 1 with AGE's generic operand-to-string conversion and append its exact bytes to the context diagnostic accumulator. This does not present or clear the accumulated text.
+- **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x1b3, 0x1b4
+- **evidence:** The real /v2 dispatch slot ctx+0x9b914 registers op_0x1b2_append_diagnostic_value@0x41f4b0. It formats operand 1 through vm_operand_format_as_string@0x41af90, measures the returned NUL-terminated bytes, and appends them to the embedded MSVC string at ctx+0x6f880. Himegari has two literal-string sites and one SYSTEM4 global-integer site.
+
+Implemented with an EngineCtx-lifetime accumulator shared across GameSession scene VMs. String operands append decoded text, integer and pointer forms append signed decimal, and float forms reproduce native `%lf`'s six fractional digits.
+
+### 0x1b3 `append-diagnostic-newline` (u004257D0, argc 0)
+- **summary:** Append the literal CRLF byte pair to the context diagnostic accumulator without presenting or clearing it.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x1b2
+- **evidence:** The real /v2 dispatch slot ctx+0x9b918 registers op_0x1b3_append_diagnostic_newline@0x41a400. Its one operation appends two bytes from DAT_0057082c to the same embedded string at ctx+0x6f880; memory at that address is 0d 0a 00. Both Himegari sites immediately follow diagnostic construction.
+
+Implemented as an exact `\r\n` append to the shared diagnostic accumulator, including FIELD's persistent line and SYSTEM4's native post-clear newline.
+
+### 0x1b4 `show-and-clear-diagnostic` (u004237C0, argc 0)
+- **summary:** Show the accumulated text plus native script-location context in a synchronous owner-window information message box, then erase the complete accumulator.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x1b2
+- **evidence:** The real /v2 dispatch slot ctx+0x9b91c registers op_0x1b4_show_and_clear_diagnostic@0x419240. It resolves the MSVC string bytes at ctx+0x6f880 and calls engine_host_show_message@0x403820 with owner HWND ctx+0x54fe8 and flags 0x10004. The thunk dispatches host_ui_interface vslot +4; the default host implementation at 0x431520 logs the raw text and calls age_show_message_box@0x409370. Flag 0x10000 appends `FILE=%s ADDRESS=%X LINE=%d COMMAND=%s(%d) DEPTH=%d`; low mode 4 formats `%s%s`, uses caption `エラーが発生しました`, and calls USER32 MessageBoxA with style 0x40 (MB_OK|MB_ICONINFORMATION). The optional command metadata at ctx+0x6ddac and source-line maps at ctx+0x6f798 are zero-initialized and have no writer in Himegari's release image, yielding `LINE=-1 COMMAND=-(436)` at this opcode. The opcode ignores the return, then calls msvc_string_erase(buffer,0,0xffffffff). SYSTEM4's sole site presents its invalid-execution-mode text and value; a following 0x1b3 appends CRLF to the now-empty accumulator.
+
+Implemented as a synchronous host effect. Himegari's release-only null debug tables make the native suffix deterministic (`LINE=-1 COMMAND=-(436)`); FILE, dword ADDRESS, and zero-based frame DEPTH come from the live instruction. Godot marshals `OS.Alert` to the main thread and parks the VM until dismissal; CaptureHost records the effect. The accumulator clears only after the host call returns.
+
 ### 0x1cc `get-adv-read-skip-state` (get-adv-read-skip-state, argc 1)
 - **summary:** (out) - copy the current ADV read/click-skip service state from ctx+0x6dbd4. label_1235a ORs it with 0x1c7's Ctrl/message-skip bit: zero takes 0x21c's normal transition/yield path; nonzero resets the animation service and presents the completed endpoint through 0x20c.
 - **grounding:** source=investigation, confidence=high
@@ -1972,18 +1996,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x1b2 `u00425790` (u00425790, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b3 `u004257D0` (u004257D0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x1b4 `u004237C0` (u004237C0, argc 0)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x1be `u0041D9D0` (u0041D9D0, argc 2)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.

@@ -32,6 +32,8 @@ public sealed class GameSession
     public AudioMixerSettings AudioMixerSettings { get; }
     /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
     public AdvTextHistory TextHistory { get; } = new();
+    /// <summary>The EngineCtx-lifetime diagnostic accumulator shared across script/scene VMs.</summary>
+    public DiagnosticOutputState DiagnosticOutput { get; } = new();
 
     public GameSession(SharedProfile? sharedProfile = null, INativeDatStore? nativeDatStore = null,
                        AudioMixerSettings? audioMixerSettings = null)
@@ -51,7 +53,7 @@ public sealed class GameSession
     {
         var vm = new VirtualMachine(
             script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
-            AudioMixerSettings);
+            AudioMixerSettings, DiagnosticOutput);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

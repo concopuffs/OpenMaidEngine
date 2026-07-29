@@ -29,9 +29,10 @@ public sealed class VirtualMachine
     private const int HOTSPOT_RETURN = int.MinValue + 2;
     private const int ROOT_RELOAD = int.MinValue + 3;
     private const int SceneEntryCoroutineGate = 0xaba5c;
-    private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
+    private const int T_IMM = 0, T_FLOAT = 1, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
                       T_LSTRPTR = 14;
+    private const string DiagnosticCaption = "エラーが発生しました";
 
     private readonly Script _s;
     private readonly OpcodeTable _t;
@@ -41,6 +42,7 @@ public sealed class VirtualMachine
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
     private readonly AudioMixerSettings _audioMixerSettings;
+    private readonly DiagnosticOutputState _diagnosticOutput;
     private readonly INativeDatStore? _nativeDatStore;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
@@ -108,6 +110,7 @@ public sealed class VirtualMachine
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
+    public string PendingDiagnosticText => _diagnosticOutput.PendingText;
     /// <summary>
     /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
     /// exists. A numbered-save serializer consumes this boundary in the full payload slice.
@@ -151,7 +154,8 @@ public sealed class VirtualMachine
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
                           INativeDatStore? nativeDatStore = null,
-                          AudioMixerSettings? audioMixerSettings = null)
+                          AudioMixerSettings? audioMixerSettings = null,
+                          DiagnosticOutputState? diagnosticOutput = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -159,6 +163,7 @@ public sealed class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
         _audioMixerSettings = audioMixerSettings ?? new AudioMixerSettings();
+        _diagnosticOutput = diagnosticOutput ?? new DiagnosticOutputState();
         _nativeDatStore = nativeDatStore;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
@@ -643,6 +648,33 @@ public sealed class VirtualMachine
         => IsStr(operand)
             ? ReadStr(operand)
             : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private string FormatDiagnosticOperand(Operand operand)
+    {
+        if (IsStr(operand)) return ReadStr(operand);
+        if (operand.Type is T_FLOAT or T_GFLOAT or T_LFLOAT)
+        {
+            float value = BitConverter.Int32BitsToSingle(unchecked((int)Read(operand)));
+            return value.ToString("F6", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return unchecked((int)Read(operand))
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private DiagnosticMessage BuildDiagnosticMessage(Instruction instruction)
+    {
+        // Himegari's release AGE initializes both optional debug metadata tables to null and has no
+        // writer for either one. The native formatter consequently emits -1 and "-" here.
+        const int sourceLine = -1;
+        const string commandName = "-";
+        int nativeDepth = Math.Max(0, _depth - 1);
+        string context = string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "\n\nデバック情報：\nFILE={0} ADDRESS={1:X} LINE={2} COMMAND={3}({4}) DEPTH={5}\n",
+            _cur.Script.Name, instruction.Offset, sourceLine, commandName,
+            instruction.Opcode, nativeDepth);
+        return new DiagnosticMessage(DiagnosticCaption, _diagnosticOutput.PendingText + context);
+    }
 
     private sealed class RootReloadRequestedException : Exception { }
     private sealed class NumberedRestoreRequestedException : Exception { }
@@ -1193,6 +1225,19 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
+                return pc + 1;
+            case "u00425790": // upstream ABI label
+            case "append-diagnostic-value": // 0x1b2: generic operand text -> EngineCtx accumulator
+                _diagnosticOutput.Append(FormatDiagnosticOperand(a[0]));
+                return pc + 1;
+            case "u004257D0": // upstream ABI label
+            case "append-diagnostic-newline": // 0x1b3: exact native CRLF bytes
+                _diagnosticOutput.Append("\r\n");
+                return pc + 1;
+            case "u004237C0": // upstream ABI label
+            case "show-and-clear-diagnostic": // 0x1b4: synchronous host prompt, then erase
+                _host.ShowDiagnosticMessage(BuildDiagnosticMessage(ins));
+                _diagnosticOutput.Clear();
                 return pc + 1;
             case "is-catalog-resource-unlocked": // 0x19d
                 Write(a[0], _sharedProfile.IsCatalogResourceUnlocked(Read(a[1])) ? 1 : 0);

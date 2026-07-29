@@ -6,6 +6,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 
 | offset | name | type | note |
 |---|---|---|---|
+| `0x4` | `host_ui_interface` | `void*` | host-facing UI interface used by the ctx+4 virtual-dispatch thunks; default slot +4 logs and presents AGE message boxes |
 | `0x814` | `input_action_count` | `int` | logical action count (0..31); op 0xfe sets it, op 0x100 scans actions below it and uses callback slot count itself when the polled mask is empty |
 | `0x898` | `joystick_physical_button_count` | `int` | WinMM JOYCAPS physical button count returned by op 0x106 |
 | `0x89c` | `joystick_button_map` | `int` | base of 32-entry logical button-slot to physical joystick-button table; op 0x107 writes it, slot N emits action N+4 |
@@ -54,6 +55,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x53d60` | `ctx_record_base` | `void*` | 0x78-byte context-record array base (coroutine/script contexts) |
 | `0x53d64` | `frame_script_resource_id` | `uint` | raw packed SYS4/AAI resource id for this 0x78-byte script frame; persisted ReadTextDB script key |
 | `0x53d88` | `frame_instruction_word_count` | `int` | current decoded instruction length in dwords for each 0x78-byte script frame; interpreter advances PC by this value * 4 |
+| `0x54fe8` | `owner_window_handle` | `void*` | native owner HWND forwarded to host UI/message-box calls, including op 0x1b4 diagnostic presentation |
 | `0x54ff0` | `initial_root_run` | `int` | initialized to 1 at AGE context construction; queried by op 0x130 and cleared by op 0x9 before root script id 0 is reloaded |
 | `0x550fc` | `message_skip_display_enabled` | `int` | persistent all-message Skip state returned by op 0x19a for the ADV control-strip active overlay |
 | `0x55100` | `adv_skip_service_enabled` | `int` | ADV presentation lifecycle gate: op 0x19b clears it while preserving the persistent Skip toggle; op 0x19c sets it before recomputing active message/read skip |
@@ -95,6 +97,9 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x6dbf0` | `voice_bgm_duck_control_flags` | `uint` | transient mask replaced by op 0x1cf; bit 0 suppresses automatic voice-triggered BGM attenuation |
 | `0x6dbf4` | `message_skip_queued_voice_id` | `int` | latest voice resource deferred by op 0xc4 while run_state_flags message-skip bit is active |
 | `0x6dbf8` | `message_skip_queued_voice_arg` | `int` | second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero |
+| `0x6ddac` | `opcode_debug_metadata_table` | `void*` | base of 512 optional per-opcode debug-metadata pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic COMMAND names render as '-' |
+| `0x6f798` | `script_source_line_table` | `void*` | base of 41 optional per-frame source-line-map pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic LINE values render as -1 |
+| `0x6f880` | `diagnostic_text_buffer` | `int` | base of an embedded 28-byte MSVC string accumulator; op 0x1b2 appends formatted operand text, op 0x1b3 appends CRLF, and op 0x1b4 presents then clears it |
 | `0x6f89c` | `script_launch_queue` | `int` | embedded integer FIFO used for engine-level auxiliary/root script launches; data pointer and queue indices follow |
 | `0x6f8a0` | `script_launch_queue_data` | `void*` | dword storage for packed script ids or negative frame-resume ids |
 | `0x6f8a4` | `script_launch_queue_read_cursor` | `int` | next queued launch consumed by script_launch_queue_dispatch_next |

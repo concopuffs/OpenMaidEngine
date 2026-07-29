@@ -26,6 +26,7 @@ public sealed class GodotAdvHost : IHost
     private readonly Stack<string> _scriptContexts = new();
     private readonly ScriptPresentationBarrier _presentationBarrier = new();
     private readonly AutoResetEvent _presentationRequestConsumed = new(false);
+    private readonly AutoResetEvent _diagnosticMessageCompleted = new(false);
     private readonly bool _synchronizeExplicitPresentation;
     private long _explicitPresentationRequestGeneration;
     private long _consumedPresentationRequestGeneration;
@@ -116,6 +117,20 @@ public sealed class GodotAdvHost : IHost
     public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
 
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
+
+    public void ShowDiagnosticMessage(DiagnosticMessage message)
+    {
+        if (_stopping) return;
+        _timeline?.Event("diagnostic-message", new()
+        {
+            ["caption"] = message.Caption,
+            ["text"] = message.Text,
+        });
+        _main.CallDeferred("ShowAgeDiagnostic", message.Text, message.Caption);
+        while (!_stopping && !_diagnosticMessageCompleted.WaitOne(50)) { }
+    }
+
+    public void CompleteDiagnosticMessage() => _diagnosticMessageCompleted.Set();
 
     private string CurrentScene
     {
@@ -950,6 +965,7 @@ public sealed class GodotAdvHost : IHost
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();
         _frameSignal.Set();
+        _diagnosticMessageCompleted.Set();
     }
 
     public void ResetSceneContext()

@@ -912,6 +912,22 @@ public partial class Main : Godot.Control
         _ageCursorTexture = null;
     }
 
+    public void ShowAgeDiagnostic(string text, string caption)
+    {
+        try
+        {
+            OS.Alert(text, caption);
+        }
+        catch (System.Exception error)
+        {
+            GD.PushError($"[diagnostic] native alert failed: {error.Message}");
+        }
+        finally
+        {
+            _host?.CompleteDiagnosticMessage();
+        }
+    }
+
     public override void _ExitTree()
     {
         bool vmStopped = true;

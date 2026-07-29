@@ -59,6 +59,8 @@ internal class RecordingHost : IHost
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
     public readonly List<string> Warnings = new();
+    public readonly List<DiagnosticMessage> Diagnostics = new();
+    public System.Action<DiagnosticMessage>? OnDiagnosticMessage;
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
@@ -67,6 +69,11 @@ internal class RecordingHost : IHost
     public int CursorClearCount;
     public int SceneContextResets;
     public void ReportWarning(string message) => Warnings.Add(message);
+    public void ShowDiagnosticMessage(DiagnosticMessage message)
+    {
+        Diagnostics.Add(message);
+        OnDiagnosticMessage?.Invoke(message);
+    }
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
     {
