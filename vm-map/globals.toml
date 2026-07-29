@@ -1298,6 +1298,17 @@ confidence = "high"
 depends_on = ["0x62450", "0x62452", "0x62455"]
 
 [[global]]
+address = "0x329e"
+name = "adv_layer_movie_stop_time_ms"
+category = "data-table"
+type = "int[8]"
+value_domain = "-1 for an empty movie surface, otherwise opcode 0x23f's truncated stop position in milliseconds"
+usage = "Per-ADV-layer movie stop positions. The common movie-layer loader writes opcode 0x23f's stop time immediately after opcode 0x236 opens the graph. CALLBACK_LOAD passes stop_time_ms-1 to opcode 0x241 so a numbered load reconstructs the movie layer at its terminal frame; this is not a separately sampled live playback cursor."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x3239", "0x62450"]
+
+[[global]]
 address = "0x62424"
 name = "adv_gfx_resource_id"
 category = "index-pointer"

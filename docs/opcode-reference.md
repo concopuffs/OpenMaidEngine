@@ -337,9 +337,9 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 ### 0x132 `reset-int-queue` (reset-int-queue, argc 1)
 - **summary:** (queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Valid queue ids are 0..10.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, immediately before packing and enqueueing the origin coordinate for their flood fills.
+- **evidence:** Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. scene_context_init_reset@0x40b560 constructs exactly ten queue pointers at EngineCtx+0x55130 before the ten stack pointers at +0x55158, so admitted queue id 10 aliases stack slot 0. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, both using id 0 before their flood fills.
 
-Implemented as 11 VM-lifetime queue slots. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic.
+Implemented as 11 safe logical queue slots so the handler-admitted 0..10 script ABI cannot corrupt adjacent host state. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic. Native physically owns only ten independent slots and its id-10 address aliases stack slot 0.
 
 ### 0x133 `enqueue-int` (enqueue-int, argc 2)
 - **summary:** (queue_id, value) - append one integer to the selected engine FIFO, compacting consumed entries or growing its storage when required.
@@ -364,6 +364,29 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 - **summary:** (value)(bit_index) - clear the indexed bit in the destination integer.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
+
+### 0x137 `reset-int-stack` (reset-int-stack, argc 1)
+- **summary:** (stack_id) - destroy the selected native integer LIFO and replace it with an empty stack.
+- **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x138, 0x139
+- **evidence:** Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer at EngineCtx+0x55158+id*4, allocates 0x14 bytes, and calls int_stack_construct@0x407410. The constructor allocates 0x100 dwords, records a 0x100-dword growth quantum, and initializes top=-1. scene_context_init_reset@0x40b560 constructs exactly ten entries [0,10), while the handler checks only id<=10; id 10 therefore lands at +0x55180, the numeric-glyph-style table. Corpus: CALLBACK_LOAD@0xf2 is the sole site and resets stack 0 before rebuilding the eight retained ADV layers.
+
+AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. As with the port's queue and numeric-style families, a portable implementation should expose the handler-admitted id 10 as safe independent logical state rather than reproduce native adjacent-memory corruption.
+
+### 0x138 `push-int-stack` (push-int-stack, argc 2)
+- **summary:** (stack_id, value) - push one signed integer onto the selected native LIFO, growing its dword buffer by 0x100 entries when full.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x137
+- **depended on by:** 0x139
+- **evidence:** Ghidra /v2: op_0x138_push_int_stack@0x421a40 admits stack ids <=10 and calls int_stack_push@0x408860. The helper grows capacity by the stored 0x100-dword quantum when top+2 reaches capacity, increments top, and stores the value. The ten-slot/id-10 alias caveat is documented on op 0x137. No Himegari script calls this opcode.
+
+### 0x139 `try-pop-int-stack` (try-pop-int-stack, argc 3)
+- **summary:** (stack_id, out_success, out_value) - pop the most recently pushed integer and write success=1, or write success=0 when empty.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x137, 0x138
+- **evidence:** Ghidra /v2: op_0x139_try_pop_int_stack@0x4297a0 reads top at stack+0x10; when top>=0 it reads data[top] and decrements top, then writes success and value. When top<0, the local holding the value was never replaced from the incoming EngineCtx pointer, yet operand 3 is still written. No Himegari script calls this opcode.
+
+On success native writes the removed value. On empty, the release handler still writes its reused `this`/EngineCtx local into out_value, so that cell is implementation garbage and must not be consumed unless out_success is nonzero. A portable compatibility implementation should preserve out_value on failure rather than expose a host pointer. The ten-slot/id-10 alias caveat is documented on op 0x137.
 
 ### 0x191 `absolute-value` (absolute-value, argc 2)
 - **summary:** Write the signed 32-bit absolute value of operand 2 to operand 1.
@@ -760,12 +783,12 @@ The handler uses an alpha step of 16 and timer interval=argument when argument <
 - **evidence:** Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
 
 ### 0x13a `register-numeric-glyph-style` (u0041F3A0, argc 6)
-- **summary:** Register one of 11 decimal-glyph atlas styles as (surface slot, source x/y, digit width/height).
+- **summary:** Register a decimal-glyph atlas style as (surface slot, source x/y, digit width/height); the handler admits style indices 0..10.
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x23b
-- **evidence:** Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to the selected five-dword record at EngineCtx+0x55180 after enforcing style_index<11. Corpus: 74 sites in 24 scripts; DRAWCHP has eight registrations immediately before its stylized HUD-number draws.
+- **evidence:** Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to EngineCtx+0x55180+style_index*0x14 after enforcing style_index<11. scene_context_init_reset@0x40b560 clears 200 bytes at +0x55180, exactly ten records; record 10 therefore overlaps ret_stack_a at +0x55248. Corpus: 74 sites in 24 scripts; all literal style registrations are 0..9.
 
-The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error.
+The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. Scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow.
 
 ### 0x141 `set-message-window-alpha` (set-message-window-alpha, argc 1)
 - **summary:** (value) - write the configured `message:MesWinAlpha` value read by opcode 0x131. Himegari's CONFIG menu bounds the value to 0..16; larger values make the inverse-width opacity bar shorter.
@@ -960,7 +983,7 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **summary:** (command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(delay_ms)(duration_ms) — queue a type-0 timed alpha transition command in the separate ctx+0x414 command map. This is render-target/surface presentation state, not an object affine matrix. The render frame composites the two handle ranges into target_slot and ramps alpha 0->1 after delay over duration.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x21c, 0x1c7, 0x1cc
-- **depended on by:** 0x20c, 0x21c, 0x21d
+- **depended on by:** 0x20c, 0x21c, 0x21d, 0x24d
 - **evidence:** Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f440. Record fields: type +0=0, start +4=0, delay +8=arg7, duration +0xc=arg8, slot +0x10=arg2, range A +0x14/+0x1c=args3/4, range B +0x18/+0x20=args5/6. gfx_render_frame@0x47fbc0 initializes start from retained-gfx owner+0xb550 (EngineCtx+0x51b64) and consumes type 0 as an alpha ramp. SC0000 executes one shared-helper site at 0x129e7.
 
 ### 0x224 `clear-gfx-command-queue` (clear-gfx-command-queue, argc 0)
@@ -1030,6 +1053,7 @@ Port status (2026-07-28): implemented as an independent retained-object scale cy
 ### 0x236 `play-movie-to-surface` (play-movie-to-surface, argc 4)
 - **summary:** (packed_resource_id)(surface_slot)(movie_flags)(start_delay_ms) - synchronously open a universal packed SYS4INI/AAI movie and construct its DirectShow graph, then start asynchronous frame delivery into the retained destination surface after the requested service-tick delay. The opcode itself is non-blocking: the VM advances to the next instruction. SC0000's 0x33 and BTL's 0x2axx/0x2bxx MVB ids are already absolute base-catalog indexes.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x241, 0x24d
 - **evidence:** Ghidra /v2 op_0x236_play_movie_to_surface@0x423ee0 fetches operand 1 and passes it unchanged to movie_to_texture_open_asset_graph@0x463e20, which passes it unchanged to asset_open_indexed_entry@0x44f390. The opener directly indexes the flat base table or selected AAI table and has no scene input. The handler leaves playback pending through movie_play_configure@0x4625e0; movie_start_pending_after_sync_delay@0x4633b0 records the first service tick and calls the shared IMediaControl::Run worker after operand 4's delay, giving non-modal playback the same DirectShow first-sample preroll as 0x20f. SC0000 native operand capture and exact 0x13c8->0x13d1 trace prove nonblocking behavior. BTL's live 0x2b21 site supplies 0x2af1/0x2af5/0x2bca/0x2bd8/0x2bde, the exact base entries MVB001/MVB004/MVB914/MVB958/MVB955.
 
 The handler requires an existing destination texture, allocates/reuses a 0x478-byte movie-to-texture object for the surface without replacing its resource identity/color key, opens operand 1 through the native universal packed-id reader, builds FilterGraph/IGraphBuilder/IMediaControl/IMediaPosition/IMediaEvent/IBasicAudio, and presents bottom-up RGB samples through the movie texture renderer. Operand 3 selects movie/sound routing policy: bits 0x10000/0x20000/0x40000/0x80000 force mute/music/SE/voice routes, otherwise set:DependMovieSound selects the normal movie route; SC0000's low value 2 is retained as native movie mode state. Godot maps those categories to audio buses and sends FFmpeg-decoded timestamped stereo float PCM through a per-playback AudioStreamGenerator. The first image is latched before audio start; video cadence is rebased to its first decoded PTS for both audio-bearing and video-only streams, while audio retains every sample from its own timestamp zero. Operand 4 delays the pending graph start in native service ticks. Static layer preparation after 0x236 does not terminate the retained movie; 0x21c services it through EOF and subsequent surface cleanup stops/detaches both decoder and audio output. The port type-checks the selected ResolvePacked record as MPEG without adding a scene base or fallback.
@@ -1055,7 +1079,7 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **depends on:** 0x13a
 - **evidence:** Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy.
 
-First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. Invalid or unregistered style indices raise the engine's script error.
+First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error.
 
 ### 0x23c `sample-frame-time` (sample-frame-time, argc 0)
 - **summary:** Explicitly shift the shared current retained-presentation timestamp to the previous field, then sample the native monotonic millisecond clock as the new current timestamp. The active outer engine tick normally performs the same update; this opcode does not create a distinct timer or fixed-rate animation cadence.
@@ -1072,9 +1096,18 @@ For each fixed slot in [42,1000), the handler stops/releases the movie-to-textur
 ### 0x23f `query-surface-stop-time-ms` (u00422930, argc 2)
 - **summary:** (out_stop_time_ms)(surface_slot) — query the DirectShow stop position retained by a loaded movie surface, convert seconds to integer milliseconds by truncating toward zero, and write -1 when the movie slot is empty. Port-only host decoder failure is modeled as an explicitly completed, zero-duration movie.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x241
 - **evidence:** Ghidra /v2: op_0x23f_query_surface_stop_time_ms@0x42a520 indexes EngineCtx surface array operand 2, returns -1 for a null slot, otherwise dereferences movie+0x414 IMediaPosition and calls vtable+0x28 get_StopTime. The adjacent op 0x23e uses the same interface at vtable+0x24 get_CurrentPosition; movie op 0x245 uses +0x20 put_CurrentPosition, independently confirming the documented vtable layout. The returned seconds are multiplied by g_dMillisecondsPerSecond@0x5713e8 (double 1000.0) and truncated by crt_ftol2_sse_truncate@0x550850 before vm_operand_write(1). All 23 Himegari sites in 17 scripts are associated with a preceding op 0x236 movie load to the queried surface. FIELD divides one result by 16 and adds 1 to build a 16 ms callback schedule; another path clamps the result to 600 ms before DRAWVOL.
 
 The surface object's +0x414 member is IMediaPosition. Its vtable +0x28 entry is get_StopTime (after IUnknown, IDispatch, get_Duration, put_CurrentPosition, and get_CurrentPosition), returning a REFTIME double in seconds. Native multiplies by the double constant 1000.0 and calls the compiler float-to-integer helper, whose SSE2 and x87 paths both truncate toward zero. It does not inspect the getter HRESULT. For a valid graph the default stop time normally equals media duration, which explains duration-style consumers, but the exact ABI is stop position rather than get_Duration. The handler only queries state; it does not yield or alter playback. Native has no meaningful answer for a port host that cannot build a graph for a valid shipped MPEG. Port safety extension: op 0x236 normalizes missing host metadata to stop time 0 and marks decoder failure completed, while a truly empty movie slot still returns -1.
+
+### 0x241 `play-movie-to-surface-at-position` (play-movie-to-surface-at-position, argc 5)
+- **summary:** (packed_resource_id)(surface_slot)(movie_flags)(start_delay_ms)(position_ms) - perform the same non-modal movie-to-retained-surface open as opcode 0x236, seek the graph to the requested millisecond position, then arm playback.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x236, 0x23f
+- **evidence:** Ghidra /v2: op_0x241_play_movie_to_surface_at_position@0x4247e0 uses the same 0x478-byte movie-to-texture object, destination render-target check, packed asset open, sound-route/volume path, and movie_play_configure worker as op 0x236. Between open and configure it calls movie+0x414 IMediaPosition vtable+0x20 put_CurrentPosition with operand5/1000.0; operand4 is then passed unchanged as the start delay. Corpus: sole site CALLBACK_LOAD@0x189 receives the layer resource, surface and flags from globals 0x3276/0x3239/0x328a, delay 0, and global 0x329e[layer]-1. The ordinary ADV creation path writes op 0x23f stop_time_ms into 0x329e immediately after op 0x236.
+
+The seek is applied through IMediaPosition::put_CurrentPosition before movie_play_configure records the flags and start delay. CALLBACK_LOAD does not restore a separately sampled live playback cursor: the ADV setup path stores opcode 0x23f's stop time in global array 0x329e, and load passes stop_time_ms-1. The shipped use therefore reconstructs the movie layer at its terminal frame after a numbered load. The portable FFmpeg seam currently has no initial-position parameter; implementation requires a pre-play seek with keyframe-preroll discard and matching audio positioning, then can reuse the existing 0x236 surface binding, routing, completion, and delayed-start lifecycle.
 
 ### 0x242 `set-object-animation-detached` (set-object-animation-detached, argc 2)
 - **summary:** Replace the retained object's animation-control word at obj+0x2d0. Bit 0 detaches finite one-shot channels from blocking presentation and protects them from 0x243 forced completion until they finish naturally.
@@ -1103,9 +1136,12 @@ Port status (2026-07-29): implemented as retained signed-dword graphics configur
 - **evidence:** Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instruction-length 7 and is contract-identical to gfx_op_0x1f9_load_surface through release, unchanged packed operand, asset_open_indexed_entry, RGB colorkey conversion, load failure, and cleanup. Its only relevant distinction is mode-1 gfx_surface_mode1_ctor, a tiled large-image wrapper: gfx_tiled_surface_create@0x432ff0 splits logical dimensions into ordinary mode-0 child textures; gfx_tiled_surface_upload_agf@0x431a10 decodes/uploads regions; gfx_tiled_surface_blit@0x4316b0 subdivides logical source rectangles. Corpus literals include FIELD 0x32da..0x32dd -> SO005/SO007/SO008A/SO007A. The former claim that only 0x249 bypasses scene normalization was wrong because native never performs scene normalization for 0x1f9 either.
 
 ### 0x24d `play-movie-mask-transition` (play-movie-mask-transition, argc 12)
-- **summary:** Open a movie into a scratch surface, retime it to the requested duration, use its decoded frames as a per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle.
+- **summary:** Open a movie into a scratch surface, retime it to the requested duration, copy each decoded frame's green channel into a byte-per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms.
+- **depends on:** 0x236, 0x223
+- **evidence:** Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. movie_texture_renderer_receive_sample@0x4628d0's mask-active branch copies byte +1 of every bottom-up RGB24 sample pixel, i.e. its green channel, directly into that mask. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms.
+
+The RGB24 sample callback copies the bottom-up green byte verbatim. In the native 32-bit mask compositor, captured RGB remains unchanged and the output alpha byte is the high byte of `((source_argb >> 8) * mask_byte)`; this records the exact packed-integer operation, including its low-color carry, rather than approximating it as a scalar luminance crossfade. Mode 1 initializes the mask to 0 and completes at 255; all other modes initialize at 255 and complete at 0.
 
 ### 0x24e `set-gfx-animation-service-flags` (set-gfx-animation-service-flags, argc 1)
 - **summary:** Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0.
@@ -1959,20 +1995,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
-### 0x137 `u0041F1C0` (u0041F1C0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x138 `u0041F2B0` (u0041F2B0, argc 2)
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x139 `u0041F310` (u0041F310, argc 3)
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
 ### 0x13b `u0041F440` (u0041F440, argc 7)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
@@ -2208,10 +2230,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x241 `u00422B80` (u00422B80, argc 5)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x244 `u00416360` (u00416360, argc 0)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.

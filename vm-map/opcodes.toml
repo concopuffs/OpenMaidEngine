@@ -2687,8 +2687,8 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, immediately before packing and enqueueing the origin coordinate for their flood fills."
-details = "Implemented as 11 VM-lifetime queue slots. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic."
+evidence = "Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. scene_context_init_reset@0x40b560 constructs exactly ten queue pointers at EngineCtx+0x55130 before the ten stack pointers at +0x55158, so admitted queue id 10 aliases stack slot 0. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, both using id 0 before their flood fills."
+details = "Implemented as 11 safe logical queue slots so the handler-admitted 0..10 script ABI cannot corrupt adjacent host state. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic. Native physically owns only ten independent slots and its id-10 address aliases stack slot 0."
 
 [[opcode.semantics.args]]
 i = 1
@@ -2808,23 +2808,24 @@ observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0x137
-label = "u0041F1C0"
+label = "reset-int-stack"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041F1C0"
-category = "unknown"
-summary = ""
+name = "reset-int-stack"
+category = "compute"
+summary = "(stack_id) - destroy the selected native integer LIFO and replace it with an empty stack."
+details = "AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. As with the port's queue and numeric-style families, a portable implementation should expose the handler-admitted id 10 as safe independent logical state rather than reproduce native adjacent-memory corruption."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer at EngineCtx+0x55158+id*4, allocates 0x14 bytes, and calls int_stack_construct@0x407410. The constructor allocates 0x100 dwords, records a 0x100-dword growth quantum, and initializes top=-1. scene_context_init_reset@0x40b560 constructs exactly ten entries [0,10), while the handler checks only id<=10; id 10 therefore lands at +0x55180, the numeric-glyph-style table. Corpus: CALLBACK_LOAD@0xf2 is the sole site and resets stack 0 before rebuilding the eight retained ADV layers."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "stack_id"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -2836,13 +2837,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "register-numeric-glyph-style"
 category = "draw"
-summary = "Register one of 11 decimal-glyph atlas styles as (surface slot, source x/y, digit width/height)."
-details = "The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. An index outside [0,10] raises the engine's script error."
+summary = "Register a decimal-glyph atlas style as (surface slot, source x/y, digit width/height); the handler admits style indices 0..10."
+details = "The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. Scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to the selected five-dword record at EngineCtx+0x55180 after enforcing style_index<11. Corpus: 74 sites in 24 scripts; DRAWCHP has eight registrations immediately before its stylized HUD-number draws."
+evidence = "Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to EngineCtx+0x55180+style_index*0x14 after enforcing style_index<11. scene_context_init_reset@0x40b560 clears 200 bytes at +0x55180, exactly ten records; record 10 therefore overlaps ret_stack_a at +0x55248. Corpus: 74 sites in 24 scripts; all literal style registrations are 0..9."
 
 [[opcode.semantics.args]]
 i = 1
@@ -6404,7 +6405,7 @@ abi_source = "kelebek+decode-validated"
 name = "draw-decimal-glyphs"
 category = "draw"
 summary = "Draw an integer as decimal glyph objects from a style registered by opcode 0x13a."
-details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. Invalid or unregistered style indices raise the engine's script error."
+details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -6508,43 +6509,44 @@ observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
 op = 0x241
-label = "u00422B80"
+label = "play-movie-to-surface-at-position"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422B80"
-category = "unknown"
-summary = ""
+name = "play-movie-to-surface-at-position"
+category = "draw"
+summary = "(packed_resource_id)(surface_slot)(movie_flags)(start_delay_ms)(position_ms) - perform the same non-modal movie-to-retained-surface open as opcode 0x236, seek the graph to the requested millisecond position, then arm playback."
+details = "The seek is applied through IMediaPosition::put_CurrentPosition before movie_play_configure records the flags and start delay. CALLBACK_LOAD does not restore a separately sampled live playback cursor: the ADV setup path stores opcode 0x23f's stop time in global array 0x329e, and load passes stop_time_ms-1. The shipped use therefore reconstructs the movie layer at its terminal frame after a numbered load. The portable FFmpeg seam currently has no initial-position parameter; implementation requires a pre-play seek with keyframe-preroll discard and matching audio positioning, then can reuse the existing 0x236 surface binding, routing, completion, and delayed-start lifecycle."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x236, 0x23f]
+evidence = "Ghidra /v2: op_0x241_play_movie_to_surface_at_position@0x4247e0 uses the same 0x478-byte movie-to-texture object, destination render-target check, packed asset open, sound-route/volume path, and movie_play_configure worker as op 0x236. Between open and configure it calls movie+0x414 IMediaPosition vtable+0x20 put_CurrentPosition with operand5/1000.0; operand4 is then passed unchanged as the start delay. Corpus: sole site CALLBACK_LOAD@0x189 receives the layer resource, surface and flags from globals 0x3276/0x3239/0x328a, delay 0, and global 0x329e[layer]-1. The ordinary ADV creation path writes op 0x23f stop_time_ms into 0x329e immediately after op 0x236."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "universal packed movie resource id"
 observed_types = ["l-ptr"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "surface slot"
 observed_types = ["l-ptr"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "movie flags and sound-route policy"
 observed_types = ["l-ptr"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "start delay ms"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "initial playback position ms"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -6652,12 +6654,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "play-movie-mask-transition"
 category = "draw"
-summary = "Open a movie into a scratch surface, retime it to the requested duration, use its decoded frames as a per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle."
+summary = "Open a movie into a scratch surface, retime it to the requested duration, copy each decoded frame's green channel into a byte-per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle."
+details = "The RGB24 sample callback copies the bottom-up green byte verbatim. In the native 32-bit mask compositor, captured RGB remains unchanged and the output alpha byte is the high byte of `((source_argb >> 8) * mask_byte)`; this records the exact packed-integer operation, including its low-color carry, rather than approximating it as a scalar luminance crossfade. Mode 1 initializes the mask to 0 and completes at 255; all other modes initialize at 255 and complete at 0."
 noop_headless = false
 source = "investigation"
 confidence = "high"
-depends_on = []
-evidence = "Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms."
+depends_on = [0x236, 0x223]
+evidence = "Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens operand 10 through movie_to_texture_open_asset_graph, configures delay operand 11, sets IMediaPosition::put_Rate to native_stop_time_ms / operand12_ms, allocates a width*height byte mask through movie_texture_allocate_transition_mask@0x415d90, and calls gfx_movie_mask_transition_register@0x47f560 with operands 1-9/11. movie_texture_renderer_receive_sample@0x4628d0's mask-active branch copies byte +1 of every bottom-up RGB24 sample pixel, i.e. its green channel, directly into that mask. The retained compositor's type-1 branch applies the movie-updated mask between the old and new object ranges and holds its blocking dirty state until playback completes. Both DEBUG.BIN sites use TEST.AGF (an MPEG program stream), delay 0, and duration 1000 ms."
 
 [[opcode.semantics.args]]
 i = 1
@@ -8679,37 +8682,63 @@ evidence = "Not observed in Himegari's script corpus; ABI label/argc come from K
 
 [[opcode]]
 op = 0x138
-label = "u0041F2B0"
+label = "push-int-stack"
 argc = 2
 observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041F2B0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "push-int-stack"
+category = "compute"
+summary = "(stack_id, value) - push one signed integer onto the selected native LIFO, growing its dword buffer by 0x100 entries when full."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+source = "investigation"
+confidence = "high"
+depends_on = [0x137]
+evidence = "Ghidra /v2: op_0x138_push_int_stack@0x421a40 admits stack ids <=10 and calls int_stack_push@0x408860. The helper grows capacity by the stored 0x100-dword quantum when top+2 reaches capacity, increments top, and stores the value. The ten-slot/id-10 alias caveat is documented on op 0x137. No Himegari script calls this opcode."
+
+[[opcode.semantics.args]]
+i = 1
+role = "stack_id"
+observed_types = []
+
+[[opcode.semantics.args]]
+i = 2
+role = "value"
+observed_types = []
 
 [[opcode]]
 op = 0x139
-label = "u0041F310"
+label = "try-pop-int-stack"
 argc = 3
 observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041F310"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "try-pop-int-stack"
+category = "compute"
+summary = "(stack_id, out_success, out_value) - pop the most recently pushed integer and write success=1, or write success=0 when empty."
+details = "On success native writes the removed value. On empty, the release handler still writes its reused `this`/EngineCtx local into out_value, so that cell is implementation garbage and must not be consumed unless out_success is nonzero. A portable compatibility implementation should preserve out_value on failure rather than expose a host pointer. The ten-slot/id-10 alias caveat is documented on op 0x137."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+source = "investigation"
+confidence = "high"
+depends_on = [0x137, 0x138]
+evidence = "Ghidra /v2: op_0x139_try_pop_int_stack@0x4297a0 reads top at stack+0x10; when top>=0 it reads data[top] and decrements top, then writes success and value. When top<0, the local holding the value was never replaced from the incoming EngineCtx pointer, yet operand 3 is still written. No Himegari script calls this opcode."
+
+[[opcode.semantics.args]]
+i = 1
+role = "stack_id"
+observed_types = []
+
+[[opcode.semantics.args]]
+i = 2
+role = "out_success"
+observed_types = []
+
+[[opcode.semantics.args]]
+i = 3
+role = "out_value"
+observed_types = []
 
 [[opcode]]
 op = 0x13b

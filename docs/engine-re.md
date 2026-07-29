@@ -1666,6 +1666,46 @@ After the 213/213 video/audio corpus gate and clean audible LOGO/OP/CHAPTER acce
 `DirectShowMovieDecoder`, its COM/temp-file adapter, compatibility test, and managed Windows annotations.
 Native AGE's DirectShow behavior remains relevant evidence for opcode semantics; it is no longer port code.
 
+### Integer LIFO family `0x137`-`0x139` and positioned movie playback `0x241` (2026-07-29)
+
+`op_0x137_reset_int_stack@0x421940` is the LIFO counterpart to the implemented integer FIFO family
+`0x132`-`0x134`. It destroys the pointer selected from `EngineCtx+0x55158`, allocates a 0x14-byte object,
+and calls `int_stack_construct@0x407410`. The object starts with a 0x100-dword buffer, a 0x100-dword
+growth quantum, and top index -1. The unobserved paired operations are
+`op_0x138_push_int_stack@0x421a40`, whose `int_stack_push@0x408860` grows and appends, and
+`op_0x139_try_pop_int_stack@0x4297a0`, which removes `data[top]` and writes a success flag.
+On an empty pop the release handler still writes the reused incoming `EngineCtx *` local to `out_value`;
+that output is implementation garbage unless success is nonzero.
+
+The storage has a native bounds bug worth preserving as documentation, not as portable memory corruption.
+Construction, scene reset, and destruction iterate exactly ten queue pointers at `+0x55130` followed by ten
+stack pointers at `+0x55158`. All six queue/stack handlers admit unsigned ids through 10. Queue id 10
+therefore aliases stack slot 0, while stack id 10 aliases the first dword of the numeric-glyph-style table
+at `+0x55180`. Himegari's queue and stack sites use only id 0. Its sole `0x137` is
+`CALLBACK_LOAD@0xf2`, immediately before the helper that rebuilds the eight retained ADV layers; no
+Himegari script calls `0x138` or `0x139`.
+
+`op_0x241_play_movie_to_surface_at_position@0x4247e0` is an exact five-operand extension of `0x236`:
+
+`(movie_resource, surface_slot, movie_and_sound_flags, start_delay_ms, position_ms)`.
+
+It reuses the same movie-to-texture allocation, existing-render-target requirement, packed asset open,
+sound routing/volume setup, and nonblocking `movie_play_configure` lifecycle. Between graph open and
+configuration it calls `IMediaPosition::put_CurrentPosition(position_ms / 1000.0)`. The start-delay
+operand remains distinct and is forwarded unchanged after the seek.
+
+The sole call, `CALLBACK_LOAD@0x189`, clarifies its purpose. Ordinary ADV movie setup writes opcode
+`0x23f`'s stop position into the eight-cell global `adv_layer_movie_stop_time_ms` (`0x329e`) immediately
+after `0x236`; the load callback passes that value minus one to `0x241`. This is terminal-frame
+reconstruction after a numbered load, not restoration of a separately sampled live playback cursor.
+
+The current FFmpeg backend has no initial-position seam. A faithful implementation should add a synchronous
+pre-play seek for both video and audio, discard keyframe preroll until the requested timestamp, then rebase
+the existing decoder pacing/completion timeline at that point. Simply decoding from zero until
+`stop_time_ms-1` would make load latency proportional to the movie length; seeking video without matching
+audio would replay stale audio during restoration. Once that bounded decoder primitive exists, the rest of
+`0x241` can delegate to the existing `0x236` host/surface lifecycle.
+
 ### Movie-mask transition `0x24d` and tiled-surface edge `0x248` (2026-07-29)
 
 The adjacent opcode numbers do not represent one subsystem. `op_0x248_set_tiled_surface_edge_length`
@@ -1686,17 +1726,25 @@ retain the value for state parity without physically reproducing the tiling.
    `(native stop time in milliseconds) / operand 12`, retiming the complete movie to the requested
    transition duration.
 3. `movie_texture_allocate_transition_mask@0x415d90` allocates an operand-7 by operand-8 byte mask and
-   initializes it to zero when operand 9 is one, or 255 otherwise.
+   initializes it to zero when operand 9 is one, or 255 otherwise. While mask mode is active,
+   `movie_texture_renderer_receive_sample@0x4628d0` does not upload ordinary color pixels: for every
+   bottom-up RGB24 pixel it copies byte `+1`, the decoded **green channel**, directly into the mask.
 4. `gfx_movie_mask_transition_register@0x47f560` records a type-1 retained command keyed by operand 1.
    The record identifies the old/source range (operands 3 and 4), scratch movie surface, mask mode,
    start delay, and destination rectangle `{x=operand 5, y=operand 6, width=operand 7,
    height=operand 8}`.
 
-The retained surface-command compositor's type-1 branch captures the old and new object sets, updates the
-byte mask from decoded movie frames, and composites the two captures per pixel within that rectangle. It
-keeps its blocking/redraw state set until the movie completes, at which point it clears the command and
-mask. Operand 1 is the immediately preceding new `draw-texture` range key; operand 3 is the old range that
-the script erases after its `0x21c`/`0x224` presentation boundary.
+`retained_gfx_surface_command_composite@0x47fbc0` captures the old and new object sets for type 1.
+`gfx_apply_movie_transition_mask@0x476e50` preserves source RGB while applying each mask byte to packed
+pixel alpha inside the requested rectangle. The exact 32-bit operation leaves `source_argb & 0x00ffffff`
+unchanged and sets the output alpha byte to the high byte of
+`((source_argb >> 8) * mask_byte)`; this includes the native packed-integer carry from the high color bytes
+and should not be rounded into a generic `alpha * luminance / 255` formula. The 16-bit path performs the
+analogous 4-bit-alpha operation, and pixels outside the rectangle copy unchanged. The compositor keeps its
+blocking/redraw state set while the scratch movie exists. At completion it flips the mask to the terminal
+fill (mode 1: 255; other modes: 0), clears the active command, and releases the blocking lifetime. Operand 1
+is the immediately preceding new `draw-texture` range key; operand 3 is the old range that the script erases
+after its `0x21c`/`0x224` presentation boundary.
 
 Both shipped calls are in DEBUG.BIN. They use scratch slots 45/46, old ranges 10/20, new keys 11/21,
 mode zero, zero delay, and a 1000 ms duration. Resource `0x325e` is `TEST.AGF`; its `00 00 01 BA`
@@ -1704,10 +1752,13 @@ header identifies an MPEG program stream despite the extension. One call uses a 
 -184, confirming that the position operands are not unsigned dimensions. Retail TITLE cannot enter this
 post-exit developer menu, although the port deliberately exposes DEBUG through its F4 diagnostic route.
 
-The implementation boundary is consequently larger than ordinary movie playback or a scalar crossfade:
-the port needs movie-frame luminance/mask extraction, old/new range capture, per-pixel composition, and
-blocking lifetime cleanup. The two handlers and their exact helpers/global are named and commented in
-the saved `/v2` Ghidra image.
+The implementation boundary is consequently larger than ordinary movie playback or a scalar crossfade,
+but no mask heuristic remains: the source is specifically the decoded green byte. The port needs a
+movie-frame-to-mask publication path, old/new range capture, per-pixel alpha composition, and
+movie-completion-driven blocking cleanup. The software compositor can serve as the correctness oracle;
+the GPU path can fall back while a type-1 command is active, as it already does for whole-screen
+transitions. The handlers, sample worker, compositor, and exact helpers are named and commented in the
+saved `/v2` Ghidra image.
 
 **`0x248` port implementation (2026-07-29):** `GfxState` retains the complete signed dword with native
 zero initialization. The setter neither publishes a retained mutation nor rebuilds surfaces that already
@@ -3642,7 +3693,9 @@ the port:
 - `op_0x13a_register_numeric_glyph_style@0x421ab0` takes
   `(style_index, surface_slot, atlas_x, atlas_y, digit_width, digit_height)`. It accepts style indices
   `0..10` and stores the remaining five operands in the 20-byte record at
-  `EngineCtx+0x55180+style_index*0x14`; an invalid index raises the standard script error. The corpus has
+  `EngineCtx+0x55180+style_index*0x14`; an invalid index raises the standard script error. Scene reset
+  clears only 200 bytes here, exactly ten records. Handler-admitted record 10 starts at `+0x55248` and
+  aliases the return-stack table. All literal Himegari registrations use indices 0..9. The corpus has
   74 registrations in 24 scripts, including eight in `DRAWCHP.BIN`.
 - `op_0x23b_draw_decimal_glyphs@0x424190` takes
   `(base_handle, style_index, value, x, y, digit_capacity, flags)`. It first erases the destination handle
@@ -3654,9 +3707,10 @@ the port:
   them for the field HUD's turn/control/mana/level/HP/SP/FS values.
 
 This path creates ordinary retained graphics objects, so the existing atlas decode and compositor are
-the correct backend; it is not an immediate `GodotAdvHost.DrawTexture` raster operation. The port now
-models all 11 EngineCtx style records in `GfxState` and implements both dispatches. Each `0x23b` call erases
-its full destination-handle capacity and then uses the ordinary
+the correct backend; it is not an immediate `GodotAdvHost.DrawTexture` raster operation. The port models
+all eleven handler-addressable indices as safe independent `GfxState` records rather than reproducing
+native index 10's adjacent-memory overwrite. Each `0x23b` call erases its full destination-handle capacity
+and then uses the ordinary
 `BindDraw` path for every displayed digit, preserving surface replacement, z-order, and compositor effects.
 
 The absent unit and weapon names are a separate layout-compute gap. `DRAWCHP.BIN` does populate both
@@ -3799,11 +3853,13 @@ combat state; the unified profile service now handles them through the ordinary 
 
 The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot
 move" is caused by the only three effectful gaps in `MVSEEK.BIN`, not by `CALCSCOPE` or FIELD input. AGE
-provides 11 context-owned integer FIFO slots:
+admits queue ids `0..10`, but scene reset physically constructs ten context-owned FIFO pointers:
 
 - `op_0x132_reset_int_queue@0x4217d0` validates `queue_id <= 10`, destroys any existing object in the
   selected slot, and allocates a fresh 0x1c-byte FIFO. `int_queue_construct@0x4074c0` allocates 0x100
   dwords, uses another 0x100 dwords as its growth quantum, and zeros the read/end/high-water indices.
+  The ten-entry initialization loop covers `EngineCtx+0x55130..+0x55157`; admitted id 10 therefore
+  aliases integer-stack slot 0 at `+0x55158`.
 - `op_0x133_enqueue_int@0x4218d0` validates the slot and calls `int_queue_enqueue@0x408930`. The helper
   appends at the end, first compacting consumed entries when possible or growing storage when necessary.
 - `op_0x134_try_dequeue_int@0x429620` writes `(success=1, value)` and advances the read index when the FIFO
@@ -3817,8 +3873,9 @@ origin valid but left `0x134`'s zero-initialized success local unchanged, so the
 first loop test. This exactly explained why clicking the occupied tile still reached Wait while neither
 reachable overlays nor movement targets existed; `ATSEEK` was blocked identically.
 
-The port now retains 11 VM-lifetime integer FIFO slots and implements reset/enqueue/try-dequeue with native
-signed-dword behavior. It diagnoses invalid or never-reset slots; shipped scripts always reset queue 0
+The port retains all eleven handler-addressable queue ids as safe independent VM-lifetime slots rather than
+reproducing id 10's adjacent stack overwrite, and implements reset/enqueue/try-dequeue with native
+signed-dword behavior. It diagnoses ids above 10 or never-reset slots; shipped scripts always reset queue 0
 first. On empty dequeue it writes `success=0` and retains the value destination rather than reproducing the
 native handler's unusable implementation-pointer value. Focused tests cover independent slots, FIFO order,
 signed values, empty reads, and reset replacement. Real-script tests seed a bounded passable grid and prove

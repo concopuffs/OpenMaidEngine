@@ -1617,7 +1617,7 @@ public sealed class VirtualMachine
                 return pc + 1;
             }
             case "u0041EF00":
-            case "reset-int-queue": // 0x132 (queue_id): destroy/recreate one of 11 native FIFO slots
+            case "reset-int-queue": // 0x132: 11 safe logical slots; native's admitted id 10 aliases stack 0
             {
                 int queueId = unchecked((int)Read(a[0]));
                 if ((uint)queueId >= (uint)_intQueues.Length)

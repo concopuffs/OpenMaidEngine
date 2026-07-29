@@ -65,6 +65,9 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x55120` | `anti_tamper_a` | `int` | anti-tamper checksum operand |
 | `0x55124` | `anti_tamper_b` | `int` | anti-tamper checksum operand |
 | `0x5512c` | `anti_tamper_fp` | `int` | anti-tamper (import fn ptr / result) |
+| `0x55130` | `int_queue_slots` | `void*` | base of ten scene-context-owned integer FIFO pointers used by ops 0x132-0x134; their <=10 validation bug makes id 10 alias int_stack_slots[0] |
+| `0x55158` | `int_stack_slots` | `void*` | base of ten scene-context-owned integer LIFO pointers used by ops 0x137-0x139; their <=10 validation bug makes id 10 alias numeric_glyph_styles[0] |
+| `0x55180` | `numeric_glyph_styles` | `int` | base of ten 20-byte decimal-glyph atlas records used by ops 0x13a/0x23b; opcode validation also admits one out-of-range record |
 | `0x55248` | `ret_stack_a` | `void*` | per-frame return stack (op 0x8f call pushes) |
 | `0x552e8` | `ret_stack_b` | `void*` | per-frame return stack (companion) |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |

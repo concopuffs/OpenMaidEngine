@@ -1045,6 +1045,36 @@ checking, and the Himegari-targeted threaded `SELFTEST OK`.
 
 **NEXT:** rerank `0x137`, `0x241`, and developer-only `0x24d` ×2 before choosing the next slice.
 
+**FINAL OPCODE INVESTIGATION COMPLETE (2026-07-29):** all three remaining contracts are now
+implementation-ready.
+
+- `0x137(stack_id)` replaces one of AGE's ten integer LIFOs with an empty 0x100-dword stack. Its exact
+  unobserved siblings are `0x138(stack_id,value)` push and `0x139(stack_id,out_success,out_value)` pop.
+  AGE's handlers accidentally admit id 10 even though reset constructs only slots 0..9, aliasing adjacent
+  EngineCtx storage; Himegari uses only id 0. The sole call is `CALLBACK_LOAD@0xf2`.
+- `0x241(movie,surface,flags,delay_ms,position_ms)` is `0x236` plus
+  `IMediaPosition::put_CurrentPosition` before playback configuration. CALLBACK_LOAD passes the
+  per-layer stop time recorded by `0x23f`, minus one, so its shipped job is restoring the terminal movie
+  frame after numbered load rather than resuming an arbitrary saved cursor.
+- `0x24d` retains the already-decoded type-1 movie transition ABI. The remaining uncertainty is closed:
+  AGE copies each decoded RGB24 pixel's green byte into the transition mask, then applies that byte to
+  captured pixel alpha inside the supplied rectangle. Completion flips the mask to its terminal fill and
+  releases the blocking command. Both calls remain DEBUG.BIN-only.
+
+The implementation order is correspondingly clear. First land the complete `0x137`-`0x139` stack family:
+it is a small VM-only analogue of the existing FIFO and closes the normal load-path gap. Next land `0x241`
+with one reusable FFmpeg initial-seek primitive for video and audio, including keyframe-preroll discard.
+Finish with `0x24d` as the dedicated diagnostic compositor slice: publish movie green-channel masks,
+capture old/new ranges, use the software renderer as the per-pixel oracle, and fall the GPU path back while
+the type-1 command is active.
+
+The inventory remains 3 opcodes / 4 instructions because this was investigation only. Opcode, global, and
+EngineCtx sources and generated references are current; `/v2` names/comments and the applied EngineCtx
+fields are saved.
+
+**NEXT:** implement the coherent `0x137`-`0x139` integer-stack family, then `0x241`, then the DEBUG-only
+`0x24d` compositor slice.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

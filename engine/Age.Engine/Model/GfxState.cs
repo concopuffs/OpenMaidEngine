@@ -922,7 +922,8 @@ public sealed class GfxState
         }
     }
 
-    /// <summary>Op 0x13a: replace one of the native engine's eleven decimal-glyph atlas styles.</summary>
+    /// <summary>Op 0x13a: replace one of eleven safely isolated handler-addressable styles.
+    /// Native physically clears ten records; its admitted index 10 aliases return-stack storage.</summary>
     public bool RegisterNumericGlyphStyle(int styleIndex, int surfaceSlot, int atlasX, int atlasY,
                                           int digitWidth, int digitHeight)
     {

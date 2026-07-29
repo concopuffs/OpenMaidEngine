@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference (generated)
 
-4278 globals (446 curated, 3832 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+4278 globals (447 curated, 3831 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -61,6 +61,7 @@
 | `0x6d3` | story_event_flags | high | investigation | Shared one-based story/event flag bank. Progression, recruitment, item, and stage logic read or write individual cells; STINIT object prerequisite ids are decremented by one before SETOBJ tests this array. |
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x3239` | adv_layer_surface_slots | high | investigation | Shared ADV graphics-layer surface-slot registry. Scene setup initializes the three banks. The CG loader uses the primary slot for a fresh retained object, alternates between columns zero and one when replacing an already-bound layer, and uses column two for the transition/crossfade surface and cleanup. The corpus has 2,657 table-base accesses across 309 scripts. Columns: 0=primary_surface_slot, 1=alternate_surface_slot, 2=transition_surface_slot. |
+| `0x329e` | adv_layer_movie_stop_time_ms | high | investigation | Per-ADV-layer movie stop positions. The common movie-layer loader writes opcode 0x23f's stop time immediately after opcode 0x236 opens the graph. CALLBACK_LOAD passes stop_time_ms-1 to opcode 0x241 so a numbered load reconstructs the movie layer at its terminal frame; this is not a separately sampled live playback cursor. |
 | `0x453b` | training_action_text | high | investigation | TRINIT's six-string row for each of 21 training/sexual-magic actions. TRAIN renders columns 0..2 for the action description and cost/reward summary, or columns 3..5 for the unmet-condition hint. Columns: 0=description_line_1, 1=description_line_2, 2=description_line_3, 3=locked_hint_line_1, 4=locked_hint_line_2, 5=locked_hint_line_3. |
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
@@ -360,7 +361,6 @@
 | `0x712` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
-| `0x329e` | — | low | auto-shape | array |
 | `0x32b2` | — | low | auto-shape | array |
 | `0x32c6` | — | low | auto-shape | array |
 | `0x32da` | — | low | auto-shape | array |

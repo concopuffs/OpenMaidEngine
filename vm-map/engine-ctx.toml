@@ -303,6 +303,21 @@ name = "anti_tamper_fp"
 type = "int"
 note = "anti-tamper (import fn ptr / result)"
 [[field]]
+offset = 0x55130
+name = "int_queue_slots"
+type = "void*"
+note = "base of ten scene-context-owned integer FIFO pointers used by ops 0x132-0x134; their <=10 validation bug makes id 10 alias int_stack_slots[0]"
+[[field]]
+offset = 0x55158
+name = "int_stack_slots"
+type = "void*"
+note = "base of ten scene-context-owned integer LIFO pointers used by ops 0x137-0x139; their <=10 validation bug makes id 10 alias numeric_glyph_styles[0]"
+[[field]]
+offset = 0x55180
+name = "numeric_glyph_styles"
+type = "int"
+note = "base of ten 20-byte decimal-glyph atlas records used by ops 0x13a/0x23b; opcode validation also admits one out-of-range record"
+[[field]]
 offset = 0x55248
 name = "ret_stack_a"
 type = "void*"
