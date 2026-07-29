@@ -33,10 +33,13 @@ public class MovieOpcodeTests
     {
         public MoviePayload? OpenedPayload { get; private set; }
         public long OpenedInitialPositionMs { get; private set; }
-        public IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0)
+        public long? OpenedPresentationDurationMs { get; private set; }
+        public IMovieDecoder Open(
+            MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null)
         {
             OpenedPayload = movie;
             OpenedInitialPositionMs = initialPositionMs;
+            OpenedPresentationDurationMs = presentationDurationMs;
             return decoder;
         }
     }
@@ -200,6 +203,27 @@ public class MovieOpcodeTests
         clock.AdvanceTo(100);
         Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
         Assert.Null(decoder.Failure);
+    }
+
+    [Fact]
+    public void FfmpegDecoderRetimeUsesRequestedDurationAndHoldsTerminalFrameToEndpoint()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 1000, 30, 1, false),
+            SyntheticMovieFrame(1, 600), SyntheticMovieFrame(2, 900));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(
+            source, clock, presentationDurationMs: 500);
+
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(150)); // (900 - 600) * 500 / 1000
+        clock.AdvanceTo(150);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(500));
+        clock.AdvanceTo(499);
+        Assert.False(decoder.IsCompleted);
+        clock.AdvanceTo(500);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
     }
 
     [Fact]
@@ -606,6 +630,37 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void MovieMaskTransitionDispatchesAllTwelveOperandsAndResumes()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MOVIE-MASK",
+        [
+            (0x24d,
+            [
+                new Operand(0, 11), new Operand(0, 45),
+                new Operand(0, 10), new Operand(0, 1),
+                new Operand(0, unchecked((uint)-184)), new Operand(0, 0),
+                new Operand(0, 800), new Operand(0, 600),
+                new Operand(0, 0), new Operand(0, 0x325e),
+                new Operand(0, 0), new Operand(0, 1000),
+            ]),
+            (0x55, [new Operand(3, 0x1234), new Operand(0, 0x5678)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0x5678, vm.Globals[0x1234]);
+        Assert.Equal(new MovieMaskTransitionRequest(
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000),
+            host.MovieMaskTransitions.Single());
+        Assert.True(vm.Gfx.SnapshotMovieMaskTransitions().Single().Completed);
+    }
+
+    [Fact]
     public void PlayMovieKeepsCreatedSurfaceBlankDuringSynchronousHostSetup()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -725,6 +780,28 @@ public class MovieOpcodeTests
         Assert.Equal(expectedName, entry?.Name);
         var movie = resources.ReadMovie(entry!);
         Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
+    }
+
+    [Fact]
+    public void DebugTestMovieDecodesToExactGreenMaskDimensions()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(0x325e)!);
+
+        using var movie = new FfmpegMovieSession(payload);
+        Assert.Equal("TEST.AGF", payload.Name);
+        Assert.Equal(800, movie.Info.Width);
+        Assert.Equal(600, movie.Info.Height);
+        Assert.Equal(1000, movie.Info.StopTimeMs);
+        Assert.False(movie.Info.HasAudio);
+        Assert.True(movie.TryDecodeNextVideoFrame(out var frame));
+
+        byte[] mask = MovieMaskSurface.ExtractGreen(frame.Image, 800, 600, 255);
+        Assert.Equal(800 * 600, mask.Length);
+        Assert.True(mask.Distinct().Skip(1).Any(), "TEST.AGF should publish a nonuniform green mask");
     }
 
     [Theory]

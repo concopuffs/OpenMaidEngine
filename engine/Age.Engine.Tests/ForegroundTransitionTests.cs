@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Age.Engine.Model;
+using Age.Engine.Hosting;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
@@ -73,5 +74,23 @@ public class ForegroundTransitionTests
         Assert.Equal(1, vm.Globals[2]);
         Assert.Equal(1, host.TransitionWaits);
         Assert.Equal(1.0, vm.Gfx.SnapshotForegroundTransitions(100).Single().Progress);
+    }
+
+    [Fact]
+    public void MovieMaskTransitionBlocksUntilMovieCompletionAndIgnoresClickCompletion()
+    {
+        var gfx = new GfxState();
+        var request = new MovieMaskTransitionRequest(
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000);
+
+        gfx.QueueMovieMaskTransition(request);
+
+        Assert.True(gfx.HasActiveForegroundTransitions(0));
+        Assert.True(gfx.HasActiveTimedPresentation(0));
+        Assert.Equal(0, gfx.CompleteForegroundTransitions(100));
+        Assert.False(gfx.SnapshotMovieMaskTransitions().Single().Completed);
+        Assert.True(gfx.CompleteMovieMaskTransition(45));
+        Assert.False(gfx.HasActiveForegroundTransitions(100));
+        Assert.True(gfx.SnapshotMovieMaskTransitions().Single().Completed);
     }
 }

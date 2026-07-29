@@ -2846,6 +2846,14 @@ public sealed class VirtualMachine
                 Gfx.ResetAnimClock(); return pc + 1;
             case "set-gfx-animation-service-flags": // 0x24e: bit 1 suppresses op 0x243
                 Gfx.SetAnimationServiceFlags(Read(a[0])); return pc + 1;
+            case "play-movie-mask-transition": // 0x24d: captured retained range + movie green-channel mask
+                _host.PlayMovieMaskTransition(Gfx, new MovieMaskTransitionRequest(
+                    Read(a[0]), unchecked((int)Read(a[1])),
+                    Read(a[2]), unchecked((int)Read(a[3])),
+                    unchecked((int)Read(a[4])), unchecked((int)Read(a[5])),
+                    unchecked((int)Read(a[6])), unchecked((int)Read(a[7])),
+                    Read(a[8]), Read(a[9]), Read(a[10]), Read(a[11])));
+                return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
                 Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;

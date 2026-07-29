@@ -29,5 +29,6 @@ internal interface IMovieDecoder : IDisposable
 
 internal interface IMovieDecoderFactory
 {
-    IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0);
+    IMovieDecoder Open(
+        MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null);
 }

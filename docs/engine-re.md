@@ -1761,12 +1761,29 @@ header identifies an MPEG program stream despite the extension. One call uses a 
 post-exit developer menu, although the port deliberately exposes DEBUG through its F4 diagnostic route.
 
 The implementation boundary is consequently larger than ordinary movie playback or a scalar crossfade,
-but no mask heuristic remains: the source is specifically the decoded green byte. The port needs a
-movie-frame-to-mask publication path, old/new range capture, per-pixel alpha composition, and
-movie-completion-driven blocking cleanup. The software compositor can serve as the correctness oracle;
-the GPU path can fall back while a type-1 command is active, as it already does for whole-screen
-transitions. The handlers, sample worker, compositor, and exact helpers are named and commented in the
-saved `/v2` Ghidra image.
+but no mask heuristic remains: the source is specifically the decoded green byte. It requires
+movie-frame-to-mask publication, retained-range capture, per-pixel alpha composition, and
+movie-completion-driven blocking cleanup. The handlers, sample worker, compositor, and exact helpers are
+named and commented in the saved `/v2` Ghidra image.
+
+**Port implementation (2026-07-29):** `IHost.PlayMovieMaskTransition` carries the complete
+twelve-operand request. At dispatch, Godot snapshots the old/source retained range through
+`RetainedSurfaceRasterizer` into the script-created scratch surface; the immediately preceding
+`draw-texture` command key therefore displays that captured range without a second compositor model.
+Mask playback remains instance-keyed in the ordinary movie registry, but frame publication is redirected:
+`MovieMaskSurface.ExtractGreen` copies logical top-down RGBA green bytes into the requested mask dimensions,
+and `MovieMaskSurface.Apply` republishes an immutable dynamic-surface snapshot with the exact packed-ARGB
+multiplication above. Signed rectangles clip mask and destination coordinates together, while pixels outside
+the rectangle remain the captured source.
+
+The initial mask is published before decoder adoption. `MovieRuntime` defers its first-frame take for the
+requested start delay, so decoder pacing cannot run ahead during that interval. Its optional presentation
+duration scales frame deadlines by `requested_duration/native_stop_time` and holds the terminal frame until
+the requested endpoint; this is the managed equivalent of `IMediaPosition::put_Rate`. Completion publishes
+the mode-specific terminal fill, marks the type-1 command complete in `GfxState`, and only then releases
+opcode `0x21c`'s blocking lifetime. The existing click/skip completion path deliberately affects only type 0.
+Because the result is an ordinary dynamic RGBA scratch surface, both the software oracle and accepted Godot
+GPU renderer consume the same pixels; no backend-specific mask shader or approximation is involved.
 
 **`0x248` port implementation (2026-07-29):** `GfxState` retains the complete signed dword with native
 zero initialization. The setter neither publishes a retained mutation nor rebuilds surfaces that already

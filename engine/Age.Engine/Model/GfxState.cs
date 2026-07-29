@@ -1,4 +1,5 @@
 using System.Linq;
+using Age.Engine.Hosting;
 
 namespace Age.Engine.Model;
 
@@ -31,6 +32,9 @@ public enum GfxPresentationReason
 public readonly record struct SurfaceTransitionState(long CommandKey, int TargetSlot,
     long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
+
+public readonly record struct MovieMaskTransitionState(
+    MovieMaskTransitionRequest Request, bool Completed);
 
 /// <summary>One synchronized sample of op 0x202's native one-shot packed-color channel.</summary>
 public readonly record struct ColorTransitionState(long Current, long Target,
@@ -111,6 +115,11 @@ public sealed class GfxState
         public int TargetSlot, RangeACount, RangeBCount;
         public long StartMs = -1;
         public bool Forced;
+    }
+    private sealed class MovieMaskTransition
+    {
+        public required MovieMaskTransitionRequest Request;
+        public bool Completed;
     }
     public sealed class GfxObject
     {
@@ -410,6 +419,7 @@ public sealed class GfxState
             _reloadableSurfaces.Clear();
             _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
+            _movieMaskTransitions.Clear();
             CurrentObject = 0;
             CurrentRenderTargetSlot = -1;
             _rangeTransformFirst = 0;
@@ -525,6 +535,7 @@ public sealed class GfxState
     // the movie object exists but its host decoder supplied no usable IMediaPosition stop time.
     private readonly Dictionary<int, long?> _movieStopTimesMs = new();
     private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
+    private readonly Dictionary<int, MovieMaskTransition> _movieMaskTransitions = new();
     public void SetSurface(int slot, long resId, long colorKey)
     {
         lock (_lock)
@@ -587,6 +598,7 @@ public sealed class GfxState
                 _createdSurfaces.Remove(slot);
                 _movieStopTimesMs.Remove(slot);
                 _surfaceTransitions.Remove(slot);
+                _movieMaskTransitions.Remove(slot);
             }
             if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
                 CurrentRenderTargetSlot = -1;
@@ -707,6 +719,7 @@ public sealed class GfxState
             _createdSurfaces.Remove(slot);
             _movieStopTimesMs.Remove(slot);
             _surfaceTransitions.Remove(slot);
+            _movieMaskTransitions.Remove(slot);
             MarkRetainedMutation();
         }
     }
@@ -729,6 +742,45 @@ public sealed class GfxState
         }
     }
 
+    public void QueueMovieMaskTransition(MovieMaskTransitionRequest request)
+    {
+        lock (_lock)
+        {
+            _movieMaskTransitions[request.SurfaceSlot] = new MovieMaskTransition
+            {
+                Request = request with
+                {
+                    SourceRangeCount = System.Math.Max(0, request.SourceRangeCount),
+                    Width = System.Math.Max(0, request.Width),
+                    Height = System.Math.Max(0, request.Height),
+                    StartDelayMs = System.Math.Max(0, request.StartDelayMs),
+                    DurationMs = System.Math.Max(0, request.DurationMs),
+                },
+            };
+            MarkRetainedMutation();
+        }
+    }
+
+    public bool CompleteMovieMaskTransition(int surfaceSlot)
+    {
+        lock (_lock)
+        {
+            if (!_movieMaskTransitions.TryGetValue(surfaceSlot, out var transition)
+                || transition.Completed)
+                return false;
+            transition.Completed = true;
+            MarkRetainedMutation();
+            return true;
+        }
+    }
+
+    public IReadOnlyList<MovieMaskTransitionState> SnapshotMovieMaskTransitions()
+    {
+        lock (_lock)
+            return _movieMaskTransitions.Values
+                .Select(t => new MovieMaskTransitionState(t.Request, t.Completed)).ToList();
+    }
+
     /// <summary>Start every pending foreground transition at the native present boundary.</summary>
     public int StartForegroundTransitions(long nowMs)
     {
@@ -744,7 +796,8 @@ public sealed class GfxState
     public bool HasActiveForegroundTransitions(long nowMs)
     {
         lock (_lock)
-            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0);
+            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                   || _movieMaskTransitions.Values.Any(t => !t.Completed);
     }
 
     /// <summary>Native op 0x21c keeps presenting until both queued surface commands and finite one-shot
@@ -753,6 +806,7 @@ public sealed class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _movieMaskTransitions.Values.Any(t => !t.Completed) ||
                    _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
                    _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&
@@ -780,10 +834,12 @@ public sealed class GfxState
             return new GfxDiagnosticSnapshot(
                 nowMs,
                 _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                    || _movieMaskTransitions.Values.Any(t => !t.Completed)
                     || range != null || objects.Length != 0,
                 _objects.Count,
                 _objects.Values.Count(o => o.Visible),
-                _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0),
+                _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                    + _movieMaskTransitions.Values.Count(t => !t.Completed),
                 AnimationServiceFlags,
                 AnimClockDurationTicks,
                 AnimClockGeneration,
@@ -866,6 +922,7 @@ public sealed class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _movieMaskTransitions.Values.Any(t => !t.Completed) ||
                    _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
                    _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&

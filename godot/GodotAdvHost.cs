@@ -41,6 +41,11 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, long> _surfaceColorKeys = new();
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     private readonly MovieSurfaceRegistry _movieSurfaces = new();
+    private sealed record MovieMaskPlayback(
+        GfxState Gfx, MovieMaskTransitionRequest Request, RgbaImage Captured);
+    private readonly object _movieMaskLock = new();
+    private readonly Dictionary<long, MovieMaskPlayback> _movieMasksByPlayback = new();
+    private readonly Dictionary<int, long> _movieMaskPlaybackBySurface = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's
     // logical canvas, but op 0x1fa releases it like any other slot; subsequent queries return 0x0.
@@ -1256,6 +1261,12 @@ public sealed class GodotAdvHost : IHost
     public (RgbaImage Image, string Name, int AssetId, bool IsDynamic)? ResolveSurfaceTexture(
         int surfaceSlot, long fallbackResourceId)
     {
+        lock (_movieMaskLock)
+            if (_movieMaskPlaybackBySurface.ContainsKey(surfaceSlot))
+                lock (_imageLock)
+                    if (_surfaceImages.TryGetValue(surfaceSlot, out var masked))
+                        return (masked, $"<movie-mask:{surfaceSlot}>",
+                            int.MinValue + surfaceSlot, true);
         if (_movieSurfaces.TryResolveSurface(surfaceSlot, out var movie) && movie != null)
             return (movie.Image, movie.Name, movie.AssetId, true);
         if (_movieSurfaces.IsBound(surfaceSlot)) return null;
@@ -1273,7 +1284,8 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   initialPositionMs: 0, out long? stopTimeMs, out _);
+                   initialPositionMs: 0, startDelayMs: 0, presentationDurationMs: null,
+                   movieMask: null, out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
     }
 
@@ -1284,8 +1296,38 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   initialPositionMs: positionMs, out long? stopTimeMs, out _);
+                   initialPositionMs: positionMs, startDelayMs: 0, presentationDurationMs: null,
+                   movieMask: null, out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
+    }
+
+    public void PlayMovieMaskTransition(GfxState gfx, MovieMaskTransitionRequest request)
+    {
+        gfx.QueueMovieMaskTransition(request);
+        RgbaImage captured = CaptureRetainedRange(
+            gfx, request.SurfaceSlot, request.SourceRangeStart, request.SourceRangeCount);
+        byte initialFill = request.Mode == 1 ? (byte)0 : (byte)255;
+        PublishMaskedCapture(
+            request.SurfaceSlot, captured,
+            CreateFilledMask(request.Width, request.Height, initialFill), request);
+
+        var asset = _res.ResolveMovie(request.ResourceId);
+        if (asset == null)
+        {
+            Godot.GD.Print($"movie mask unresolved {CurrentScene}:0x{request.ResourceId:x}");
+            PublishMovieMaskTerminal(new MovieMaskPlayback(gfx, request, captured));
+            return;
+        }
+
+        var mask = new MovieMaskPlayback(gfx, request, captured);
+        bool started = StartMovie(
+            asset, request.ResourceId, request.SurfaceSlot, movieFlags: 6, syncMask: 0,
+            modal: false, initialPositionMs: 0,
+            startDelayMs: request.StartDelayMs,
+            presentationDurationMs: request.DurationMs,
+            movieMask: mask, out long? stopTimeMs, out _);
+        gfx.SetMovieStopTime(request.SurfaceSlot, stopTimeMs ?? 0);
+        if (!started) PublishMovieMaskTerminal(mask);
     }
 
     public bool IsMovieSurfaceActive(int surfaceSlot)
@@ -1327,7 +1369,8 @@ public sealed class GodotAdvHost : IHost
         try
         {
             if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
-                            initialPositionMs: 0,
+                            initialPositionMs: 0, startDelayMs: 0,
+                            presentationDurationMs: null, movieMask: null,
                             out _, out long playbackId)) return;
             _timeline?.State("modal-movie-wait", new()
             {
@@ -1361,7 +1404,8 @@ public sealed class GodotAdvHost : IHost
     }
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            long syncMask, bool modal, long initialPositionMs,
+                            long syncMask, bool modal, long initialPositionMs, long startDelayMs,
+                            long? presentationDurationMs, MovieMaskPlayback? movieMask,
                             out long? stopTimeMs, out long playbackId)
     {
         stopTimeMs = null;
@@ -1369,14 +1413,27 @@ public sealed class GodotAdvHost : IHost
         // asset on multiple surfaces; replacing one binding must not erase another binding's completion.
         MovieSurfaceBinding binding = _movieSurfaces.Begin(surfaceSlot, resourceId, out var replaced);
         playbackId = binding.PlaybackId;
-        if (replaced is { } prior) _main.CallDeferred("StopMovie", prior.PlaybackId);
+        if (replaced is { } prior)
+        {
+            AbandonMovieMaskPlayback(prior.PlaybackId);
+            ForgetMovieMaskSurface(prior.SurfaceSlot, prior.PlaybackId);
+            _main.CallDeferred("StopMovie", prior.PlaybackId);
+        }
+        if (movieMask != null)
+            lock (_movieMaskLock)
+            {
+                _movieMasksByPlayback[playbackId] = movieMask;
+                _movieMaskPlaybackBySurface[surfaceSlot] = playbackId;
+            }
         lock (_imageLock)
         {
-            _surfaceImages.Remove(surfaceSlot);
+            if (movieMask == null) _surfaceImages.Remove(surfaceSlot);
             _surfaceColorKeys.Remove(surfaceSlot);
         }
         // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
-        _slotDims[surfaceSlot] = (_screenWidth, _screenHeight);
+        _slotDims[surfaceSlot] = movieMask == null
+            ? (_screenWidth, _screenHeight)
+            : (movieMask.Captured.Width, movieMask.Captured.Height);
         try
         {
             var movie = _res.ReadMovie(asset);
@@ -1386,10 +1443,13 @@ public sealed class GodotAdvHost : IHost
                 ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
                 ["initial_position_ms"] = Math.Max(0, initialPositionMs),
+                ["start_delay_ms"] = Math.Max(0, startDelayMs),
+                ["presentation_duration_ms"] = presentationDurationMs,
+                ["movie_mask"] = movieMask != null,
             });
             bool started = _main.TryPlayMovie(
                 movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId, movieFlags,
-                initialPositionMs, out stopTimeMs);
+                initialPositionMs, startDelayMs, presentationDurationMs, out stopTimeMs);
             if (!started)
             {
                 stopTimeMs = 0;
@@ -1399,6 +1459,7 @@ public sealed class GodotAdvHost : IHost
         }
         catch (System.Exception e)
         {
+            AbandonMovieMaskPlayback(playbackId);
             _movieSurfaces.Abandon(playbackId, out _);
             _slotDims.Remove(surfaceSlot);
             stopTimeMs = 0;
@@ -1427,6 +1488,8 @@ public sealed class GodotAdvHost : IHost
         if (movieRelease.Kind == MovieSurfaceReleaseKind.Released)
         {
             var binding = movieRelease.Binding;
+            AbandonMovieMaskPlayback(binding.PlaybackId);
+            ForgetMovieMaskSurface(binding.SurfaceSlot, binding.PlaybackId);
             _timeline?.Event("movie-stop", new()
             {
                 ["resource"] = binding.ResourceId,
@@ -1577,6 +1640,8 @@ public sealed class GodotAdvHost : IHost
         }
         foreach (MovieSurfaceBinding binding in stoppedMovies)
         {
+            AbandonMovieMaskPlayback(binding.PlaybackId);
+            ForgetMovieMaskSurface(binding.SurfaceSlot, binding.PlaybackId);
             _timeline?.Event("movie-stop", new()
             {
                 ["resource"] = binding.ResourceId,
@@ -1592,12 +1657,25 @@ public sealed class GodotAdvHost : IHost
     // sample callback: the retained object keeps its surface binding while only the surface pixels change.
     public void PublishMovieFrame(long playbackId, string name, int assetId, RgbaImage frame)
     {
+        MovieMaskPlayback? maskPlayback;
+        lock (_movieMaskLock) _movieMasksByPlayback.TryGetValue(playbackId, out maskPlayback);
+        if (maskPlayback != null)
+        {
+            var request = maskPlayback.Request;
+            byte initialFill = request.Mode == 1 ? (byte)0 : (byte)255;
+            byte[] mask = MovieMaskSurface.ExtractGreen(
+                frame, request.Width, request.Height, initialFill);
+            PublishMaskedCapture(request.SurfaceSlot, maskPlayback.Captured, mask, request);
+            return;
+        }
         if (_movieSurfaces.PublishFrame(playbackId, frame, name, assetId))
             System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
     }
 
     public void NotifyMovieCompleted(long playbackId)
     {
+        MovieMaskPlayback? maskPlayback = RemoveMovieMaskPlayback(playbackId);
+        if (maskPlayback != null) PublishMovieMaskTerminal(maskPlayback);
         if (!_movieSurfaces.Complete(playbackId)) return;
         _timeline?.Event("movie-complete", new() { ["playback"] = playbackId });
         _frameSignal.Set();
@@ -1605,6 +1683,85 @@ public sealed class GodotAdvHost : IHost
 
     private bool HasActiveMoviePresentation()
         => _movieSurfaces.HasActivePlayback;
+
+    private RgbaImage CaptureRetainedRange(
+        GfxState gfx, int targetSlot, long firstHandle, int count)
+    {
+        var dimensions = _slotDims.GetValueOrDefault(
+            targetSlot, (W: _screenWidth, H: _screenHeight));
+        int width = System.Math.Max(0, dimensions.W);
+        int height = System.Math.Max(0, dimensions.H);
+        var captured = new RgbaImage(width, height, new byte[checked(width * height * 4)]);
+        IReadOnlyList<RenderObject> visible = gfx.SnapshotVisibleObjects(_clock.NowMs);
+        RetainedSurfaceRasterizer.CompositeRange(
+            captured, visible, firstHandle, System.Math.Max(0, count),
+            item =>
+            {
+                var raw = gfx.TryGet(item.Handle);
+                var resolved = raw != null
+                    ? ResolveSurfaceTexture(raw.SourceSlot, item.SurfaceResId)
+                    : ResolveResIdTexture(item.SurfaceResId);
+                return resolved == null
+                    ? null
+                    : RgbaSurfaceOps.WithColorKey(resolved.Value.Image, item.ColorKey);
+            });
+        return captured;
+    }
+
+    private static byte[] CreateFilledMask(int width, int height, byte fill)
+    {
+        var mask = new byte[checked(System.Math.Max(0, width) * System.Math.Max(0, height))];
+        if (fill != 0) System.Array.Fill(mask, fill);
+        return mask;
+    }
+
+    private void PublishMaskedCapture(
+        int surfaceSlot, RgbaImage captured, byte[] mask, MovieMaskTransitionRequest request)
+    {
+        RgbaImage image = MovieMaskSurface.Apply(
+            captured, mask, System.Math.Max(0, request.Width),
+            System.Math.Max(0, request.Height), request.X, request.Y);
+        lock (_imageLock) _surfaceImages[surfaceSlot] = image;
+        _slotDims[surfaceSlot] = (image.Width, image.Height);
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _frameSignal.Set();
+    }
+
+    private void PublishMovieMaskTerminal(MovieMaskPlayback playback)
+    {
+        byte terminalFill = playback.Request.Mode == 1 ? (byte)255 : (byte)0;
+        PublishMaskedCapture(
+            playback.Request.SurfaceSlot, playback.Captured,
+            CreateFilledMask(playback.Request.Width, playback.Request.Height, terminalFill),
+            playback.Request);
+        playback.Gfx.CompleteMovieMaskTransition(playback.Request.SurfaceSlot);
+    }
+
+    private MovieMaskPlayback? RemoveMovieMaskPlayback(long playbackId)
+    {
+        lock (_movieMaskLock)
+        {
+            if (!_movieMasksByPlayback.Remove(playbackId, out var playback)) return null;
+            return playback;
+        }
+    }
+
+    private void AbandonMovieMaskPlayback(long playbackId)
+    {
+        MovieMaskPlayback? playback = RemoveMovieMaskPlayback(playbackId);
+        if (playback != null)
+        {
+            ForgetMovieMaskSurface(playback.Request.SurfaceSlot, playbackId);
+            playback.Gfx.CompleteMovieMaskTransition(playback.Request.SurfaceSlot);
+        }
+    }
+
+    private void ForgetMovieMaskSurface(int surfaceSlot, long playbackId)
+    {
+        lock (_movieMaskLock)
+            if (_movieMaskPlaybackBySurface.GetValueOrDefault(surfaceSlot) == playbackId)
+                _movieMaskPlaybackBySurface.Remove(surfaceSlot);
+    }
 
     private RgbaImage? Decode(AssetEntry asset)
     {

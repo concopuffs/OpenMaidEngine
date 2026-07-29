@@ -1116,6 +1116,30 @@ Himegari-targeted threaded `SELFTEST OK`.
 
 **NEXT:** implement the DEBUG-only `0x24d` green-channel movie-mask compositor.
 
+**MOVIE-MASK TRANSITION `0x24d` IMPLEMENTED (2026-07-29):** the final effectful opcode now dispatches
+all twelve operands through a dedicated host request. The old/source retained range is captured into the
+script-created scratch surface with the existing platform-neutral retained rasterizer. Each due TEST.AGF
+frame publishes its logical green channel as a byte mask, and the scratch surface applies AGE's exact
+packed-ARGB alpha multiplication inside the signed/clipped destination rectangle while preserving captured
+RGB and every pixel outside the rectangle. Mode 1 runs from zero to 255; other modes run from 255 to zero.
+
+Movie playback retains ordinary instance ownership and VFS/FFmpeg decode, while the mask path redirects
+frame publication away from visible movie RGB. Start delay parks first-frame consumption, stop/duration
+retiming scales decoder presentation deadlines, and the terminal frame is held to the requested endpoint.
+The type-1 command remains blocking until decoder completion and cannot be click-completed through the
+type-0 transition shortcut. Completion publishes the exact terminal fill before opcode `0x21c` resumes.
+The resulting scratch surface is an ordinary dynamic RGBA image, so software and GPU presentation share
+one correctness path.
+
+Focused regressions cover exact VM dispatch, transition lifetime, click immunity, green extraction,
+dimension padding, signed clipping, RGB/outside preservation, the native packed-color carry, requested
+decoder retiming, and real VFS TEST.AGF metadata/green-mask decode. The effectful opcode inventory is now
+empty. Validation passes 518/518 engine tests, the zero-warning Godot build, opcode/global/EngineCtx suites,
+clean diff checking, and the Himegari-targeted threaded selftest.
+
+**NEXT:** return to playthrough-led polish and save compatibility testing; no decoded effectful opcode gap
+remains in the shipped 481-script corpus.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

@@ -28,6 +28,13 @@ public readonly record struct SurfaceRectCopy(
     int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
     int Width, int Height, int DestinationX, int DestinationY);
 
+/// <summary>Opcode 0x24d's captured-range movie-mask transition. The movie's decoded green channel
+/// becomes a byte-per-pixel alpha mask over SourceRange in the scratch surface.</summary>
+public readonly record struct MovieMaskTransitionRequest(
+    long CommandKey, int SurfaceSlot, long SourceRangeStart, int SourceRangeCount,
+    int X, int Y, int Width, int Height, long Mode, long ResourceId,
+    long StartDelayMs, long DurationMs);
+
 /// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
 public readonly record struct DiagnosticMessage(string Caption, string Text);
 
@@ -181,6 +188,14 @@ public interface IHost
     long? PlayMovieToSurfaceAtPosition(
         long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
         => PlayMovieToSurface(resourceId, surfaceSlot, movieFlags, syncMask);
+    // Native op 0x24d captures a retained range into the scratch surface, then publishes each
+    // decoded movie frame's green channel as an exact packed-alpha mask. A nonvisual host completes
+    // the lifecycle immediately so a following 0x21c can never strand script execution.
+    void PlayMovieMaskTransition(GfxState gfx, MovieMaskTransitionRequest request)
+    {
+        gfx.QueueMovieMaskTransition(request);
+        gfx.CompleteMovieMaskTransition(request.SurfaceSlot);
+    }
     bool IsMovieSurfaceActive(int surfaceSlot) => false;
     // Native op 0x20f uses a universal packed id and parks script execution until the movie
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host

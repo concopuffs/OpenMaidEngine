@@ -89,6 +89,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private readonly AutoResetEvent _audioSpace = new(false);
     private readonly int _maximumQueuedAudioFrames;
     private readonly long _initialPositionMs;
+    private readonly long? _presentationDurationMs;
     private RgbaImage? _latestFrame;
     private volatile bool _completed;
     private volatile bool _videoTimelineCompleted;
@@ -116,17 +117,21 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     public MovieAudioInfo? AudioInfo { get; }
     public bool AudioDecodingCompleted => _audioDecodingCompleted;
 
-    public FfmpegMovieDecoder(MoviePayload movie, long initialPositionMs = 0)
-        : this(new FfmpegMovieSession(movie), null, initialPositionMs) { }
+    public FfmpegMovieDecoder(
+        MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null)
+        : this(new FfmpegMovieSession(movie), null, initialPositionMs, presentationDurationMs) { }
 
     internal FfmpegMovieDecoder(IFfmpegFrameSource source, IMoviePacingClock? clock,
-                                long initialPositionMs = 0)
+                                long initialPositionMs = 0, long? presentationDurationMs = null)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _initialPositionMs = Math.Clamp(
             initialPositionMs,
             0,
             Math.Max(0, source.Info.StopTimeMs - 1));
+        _presentationDurationMs = presentationDurationMs is >= 0
+            ? Math.Max(0, presentationDurationMs.Value)
+            : null;
         try
         {
             if (_initialPositionMs > 0)
@@ -254,10 +259,11 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                 {
                     if (decodedFrames == 0)
                         throw new InvalidDataException("FFmpeg stream ended before producing a video frame");
-                    long completionTime = PresentationDeadline(
-                        Math.Max(_source.Info.StopTimeMs,
-                                 lastTimestamp + FrameIntervalMilliseconds(_source.Info)),
-                        firstTimestamp);
+                    long completionTime = _presentationDurationMs
+                        ?? PresentationDeadline(
+                            Math.Max(_source.Info.StopTimeMs,
+                                     lastTimestamp + FrameIntervalMilliseconds(_source.Info)),
+                            firstTimestamp);
                     if (_clock.WaitUntil(completionTime, _cancel))
                     {
                         _videoTimelineCompleted = true;
@@ -432,7 +438,11 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         // stream's mux timestamp origin. DirectShow presents the video's first sample as video time zero;
         // retaining the absolute mux offset here would freeze that sample until the audio clock caught up.
         // Preserve every decoded frame and its cadence, but rebase the video stream to its first sample.
-        return Math.Max(0, sourceTimestamp - firstVideoTimestamp);
+        long sourceElapsed = Math.Max(0, sourceTimestamp - firstVideoTimestamp);
+        if (_presentationDurationMs is not { } duration
+            || _source.Info.StopTimeMs <= 0)
+            return sourceElapsed;
+        return checked(sourceElapsed * duration / _source.Info.StopTimeMs);
     }
 
     public void Dispose()
@@ -454,6 +464,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
 
 internal sealed class FfmpegMovieDecoderFactory : IMovieDecoderFactory
 {
-    public IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0)
-        => new FfmpegMovieDecoder(movie, initialPositionMs);
+    public IMovieDecoder Open(
+        MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null)
+        => new FfmpegMovieDecoder(movie, initialPositionMs, presentationDurationMs);
 }

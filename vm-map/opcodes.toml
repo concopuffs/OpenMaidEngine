@@ -6654,8 +6654,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "play-movie-mask-transition"
 category = "draw"
-summary = "Open a movie into a scratch surface, retime it to the requested duration, copy each decoded frame's green channel into a byte-per-pixel mask, and register a blocking retained-surface transition from an old object range to a newly drawn range within the supplied rectangle."
-details = "The RGB24 sample callback copies the bottom-up green byte verbatim. In the native 32-bit mask compositor, captured RGB remains unchanged and the output alpha byte is the high byte of `((source_argb >> 8) * mask_byte)`; this records the exact packed-integer operation, including its low-color carry, rather than approximating it as a scalar luminance crossfade. Mode 1 initializes the mask to 0 and completes at 255; all other modes initialize at 255 and complete at 0."
+summary = "Capture an old retained-object range into the newly drawn scratch surface, retime a movie to the requested duration, and use each decoded frame's green channel as a byte-per-pixel alpha mask within the supplied rectangle."
+details = "The RGB24 sample callback copies the bottom-up green byte verbatim. In the native 32-bit mask compositor, captured RGB remains unchanged and the output alpha byte is the high byte of `((source_argb >> 8) * mask_byte)`; this records the exact packed-integer operation, including its low-color carry, rather than approximating it as a scalar luminance crossfade. Mode 1 initializes the mask to 0 and completes at 255; all other modes initialize at 255 and complete at 0. Port status (2026-07-29): implemented through the existing retained-range software rasterizer and dynamic scratch-surface path. The decoder honors start delay and native stop/duration retiming, publishes logical top-down green masks, and holds opcode 0x21c until movie completion; click completion remains limited to type-0 transitions."
 noop_headless = false
 source = "investigation"
 confidence = "high"

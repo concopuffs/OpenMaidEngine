@@ -2129,7 +2129,8 @@ public partial class Main : Godot.Control
 
     public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId,
                              long resourceId, int assetId, long movieFlags,
-                             long initialPositionMs,
+                             long initialPositionMs, long startDelayMs,
+                             long? presentationDurationMs,
                              out long? stopTimeMs)
     {
         stopTimeMs = null;
@@ -2138,7 +2139,7 @@ public partial class Main : Godot.Control
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
             var runtime = MovieRuntime.Open(
                 assetName, assetId, resourceId, payload, _movieDecoderFactory, movieFlags,
-                initialPositionMs);
+                initialPositionMs, startDelayMs, presentationDurationMs);
             stopTimeMs = runtime.Decoder.StopTimeMs;
             while (!_pendingMovies.TryAdd(playbackId, runtime))
                 if (_pendingMovies.TryRemove(playbackId, out var prior)) prior.Decoder.Dispose();
@@ -2180,6 +2181,9 @@ public partial class Main : Godot.Control
         if (_host == null) return;
         foreach (var (playbackId, movie) in _movies)
         {
+            long elapsedMs = (long)Stopwatch.GetElapsedTime(
+                movie.StartedAtTimestamp).TotalMilliseconds;
+            if (elapsedMs < movie.StartDelayMs) continue;
             bool frameWasAlreadySeen = _movieFrameSeen.Contains(playbackId);
             _movieAudio.TryGetValue(playbackId, out var audio);
             if (frameWasAlreadySeen) audio?.Update();
@@ -2196,8 +2200,7 @@ public partial class Main : Godot.Control
                     audio?.Update();
                 }
             }
-            bool watchdogExpired = Stopwatch.GetElapsedTime(movie.StartedAtTimestamp).TotalMilliseconds
-                                   >= movie.WatchdogMs;
+            bool watchdogExpired = elapsedMs >= movie.WatchdogMs;
             if ((movie.Decoder.IsCompleted || watchdogExpired) && _movieCompletionNotified.Add(playbackId))
             {
                 if (movie.Decoder.Failure is { } failure)
