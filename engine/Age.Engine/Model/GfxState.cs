@@ -1097,6 +1097,37 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x230: stop every cyclic object channel without changing its base/current state,
+    /// one-shot channels, or retained cyclic targets. Native clears flag bit 2 and the five start/period
+    /// pairs at obj+0x20c..0x230, including one secondary matrix channel not otherwise modeled here.</summary>
+    public void ResetCyclicAnimationChannels(long handle)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.ColorStart = -1;
+            o.ScaleCycleStartMs = -1;
+            o.RotationStartMs = -1;
+            o.SrcStart = -1;
+            o.ColorPeriod = 0;
+            o.ScaleCyclePeriodMs = 0;
+            o.RotationPeriodMs = 0;
+            o.SrcPeriod = 0;
+            o.ColorAnim = false;
+            o.ScaleCycleEnabled = false;
+            o.RotationEnabled = false;
+            o.SrcAnim = false;
+
+            // Preserve drop-in numbered-save compatibility for the unmodeled secondary cyclic matrix
+            // as well as the modeled channels. The ten native timing dwords form one contiguous range.
+            if (o.NativePersistenceRecord is { Length: >= 0x234 } raw)
+            {
+                raw[0] &= 0xfb;
+                System.Array.Clear(raw, 0x20c, 0x28);
+            }
+        }
+    }
+
     /// <summary>Op 0x238: set its separate global animation-service duration and reset marker.</summary>
     public void SetAnimClock(long durationTicks)
     {

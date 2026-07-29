@@ -849,11 +849,15 @@ conversion and exact terminal-frame publication, and closes all 11 sites. The re
 is 16 distinct opcodes / 28 instructions. All 477 engine tests, opcode build/lint, the zero-warning Godot
 build, and the Himegari-targeted threaded selftest pass.
 
-The follow-up `0x230(handle)` is decoded: it clears the retained object's cyclic active flag and five
-looping-channel start/period pairs without changing current/base transforms. Its six calls are five
-DEBUGADV effect demonstrations plus one FIELD movement setup.
+**Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
+disables the four looping channels represented by the compositor, and clears the complete native
+start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.
+Base/current transforms, cyclic targets, and finite one-shot channels remain intact. This closes its six
+sites (five DEBUGADV demonstrations and one FIELD movement setup), reducing the remaining effectful
+inventory to 15 distinct opcodes / 22 instructions. All 479 engine tests, opcode build/lint, the
+zero-warning Godot build, and the Himegari-targeted threaded selftest pass.
 
-**NEXT:** implement `0x230`.
+**NEXT:** investigate `0x1b2`, the widest remaining unknown at three sites.
 
 ## Later Phase B breadth
 

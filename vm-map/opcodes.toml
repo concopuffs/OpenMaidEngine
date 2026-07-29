@@ -6076,6 +6076,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "reset-gfx-cyclic-animations"
 category = "draw"
+details = "Port status (2026-07-29): implemented as one retained-state reset covering cyclic color, scale, rotation, secondary-matrix, and source-rectangle timing. It disables the four modeled looping channels, clears the complete native raw timing block for drop-in persistence, and preserves base/current transforms, cyclic targets, and one-shot channels."
 summary = "(handle) — get or create a retained gfx object, clear its cyclic-animation active flag, and zero all five looping-channel start/period pairs without changing current/base transforms."
 noop_headless = false
 source = "investigation"

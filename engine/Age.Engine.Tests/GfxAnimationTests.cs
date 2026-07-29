@@ -394,6 +394,85 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void ResetCyclicAnimationChannels_StopsEveryLoopAndPreservesBaseAndOneShotState()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 5, -1);
+        g.BindDraw(7, 1, 0, 0, 64, 64, 12, 34);
+        var o = g.TryGet(7)!;
+        o.V18 = (10, 20, 30);
+        o.V24 = (12, 34, 56);
+        o.V16c = (7, 8, 9);
+        o.ScaleCurrent = (1.25, 0.75, 2);
+        o.TranslationCurrent = (4, 5, 6);
+        o.RotationCurrent = (0, 0, 1, 15);
+        o.ScaleEnabled = true;
+        o.ScaleDurationMs = 200;
+        o.OneShotStartMs = 123;
+        o.NativePersistenceRecord = Enumerable.Repeat((byte)0x7f, 0x2d4).ToArray();
+
+        g.SetColorAnim(7, 400, GfxState.PackColor(0x80, 0xff0000));
+        g.SetScaleCycle(7, 600, (150, 75, 100));
+        g.SetRotationCycle(7, 800, (0, 0, 1));
+        g.SetSrcRect(7, frameCount: 8, columns: 4, cell: 3, period: 100);
+
+        g.ResetCyclicAnimationChannels(7);
+
+        Assert.False(o.ColorAnim);
+        Assert.False(o.ScaleCycleEnabled);
+        Assert.False(o.RotationEnabled);
+        Assert.False(o.SrcAnim);
+        Assert.Equal((0L, 0L, 0L, 0L), (o.ColorPeriod, o.ScaleCyclePeriodMs, o.RotationPeriodMs, o.SrcPeriod));
+        Assert.Equal((-1L, -1L, -1L, -1L), (o.ColorStart, o.ScaleCycleStartMs, o.RotationStartMs, o.SrcStart));
+        Assert.Equal((10L, 20L, 30L), o.V18);
+        Assert.Equal((12L, 34L, 56L), o.V24);
+        Assert.Equal((7L, 8L, 9L), o.V16c);
+        Assert.Equal((1.25, 0.75, 2.0), o.ScaleCurrent);
+        Assert.Equal((4.0, 5.0, 6.0), o.TranslationCurrent);
+        Assert.Equal((0.0, 0.0, 1.0, 15.0), o.RotationCurrent);
+        Assert.True(o.ScaleEnabled);
+        Assert.Equal(200, o.ScaleDurationMs);
+        Assert.Equal(123, o.OneShotStartMs);
+        Assert.Equal((1.5, 0.75, 1.0), o.ScaleCycleTarget);
+        Assert.Equal((0L, 0L, 1L), o.RotationAxis);
+        Assert.Equal((8L, 4L, 3L), (o.SrcFrameCount, o.SrcColumns, o.SrcCell));
+        Assert.Equal(0, o.NativePersistenceRecord[0] & 4);
+        Assert.All(o.NativePersistenceRecord.Skip(0x20c).Take(0x28), value => Assert.Equal(0, value));
+    }
+
+    [Fact]
+    public void Op0x230_DispatchGetsOrCreatesObjectAndRemovesContinuousPresentation()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "RESET_CYCLES", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000),
+            (0x230, new[] { G(1) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Gfx.SetSurface(1, 5, -1);
+        vm.Gfx.BindDraw(0x1000, 1, 0, 0, 64, 64, 0, 0);
+        vm.Gfx.SetColorAnim(0x1000, 400, GfxState.PackColor(0x80, 0xff0000));
+        vm.Gfx.SetScaleCycle(0x1000, 600, (150, 75, 100));
+        vm.Gfx.SetRotationCycle(0x1000, 800, (0, 0, 1));
+        vm.Gfx.SetSrcRect(0x1000, frameCount: 8, columns: 4, cell: 0, period: 100);
+        Assert.True(vm.Gfx.HasActiveVisualPresentation(1000));
+
+        vm.Run();
+
+        Assert.NotNull(vm.Gfx.TryGet(0x1000));
+        Assert.False(vm.Gfx.HasActiveVisualPresentation(1000));
+        Assert.Equal(
+            GfxPresentationReason.RetainedMutation,
+            vm.Gfx.ConsumePresentationReasons(1000));
+
+        var createOnly = new VirtualMachine(scene, t, new RecordingHost());
+        createOnly.Run();
+        Assert.NotNull(createOnly.Gfx.TryGet(0x1000));
+    }
+
+    [Fact]
     public void CurrentTranslationSetter_ReplacesTheLiveMatrixImmediately()
     {
         var t = T();

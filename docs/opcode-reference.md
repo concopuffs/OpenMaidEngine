@@ -942,6 +942,8 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x230_reset_gfx_cyclic_animations@0x423ba0 fetches the handle and calls gfx_object_reset_cyclic_animation_channels@0x47ee60. The worker clears object flag bit 2 and zeroes starts obj+0x20c/+0x210/+0x214/+0x218/+0x21c plus periods obj+0x220/+0x224/+0x228/+0x22c/+0x230, covering looping color, scale, rotation, the second cyclic matrix, and source-rectangle channels. Corpus: five DEBUGADV effect demonstrations plus one FIELD movement setup before 0x239.
 
+Port status (2026-07-29): implemented as one retained-state reset covering cyclic color, scale, rotation, secondary-matrix, and source-rectangle timing. It disables the four modeled looping channels, clears the complete native raw timing block for drop-in persistence, and preserves base/current transforms, cyclic targets, and one-shot channels.
+
 ### 0x231 `animate-gfx-srcrect-loop` (u00421EA0, argc 4)
 - **summary:** (handle)(frame_period_ms)(frame_count)(column_count) — loop row-major through the spritesheet. Every sample preserves draw-texture's source-rectangle width/height; frame=floor((shared_frame_time-object_start)/frame_period)%frame_count, src offset=(frame%columns*width, frame/columns*height). All objects use the retained manager's shared current/previous millisecond timestamps but retain their own start and period. The native consumer raises redraw dirty only when the current and previous samples select different cells. Worker gfx_worker_anim_srcrect @0x47eec0; consumer gfx_object_anim_interpolate @0x473ed0.
 - **grounding:** source=investigation, confidence=high

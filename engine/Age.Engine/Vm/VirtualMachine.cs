@@ -2556,6 +2556,9 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
+            case "reset-gfx-cyclic-animations": // 0x230: stop all five retained looping channels
+            case "u00421E70":
+                Gfx.ResetCyclicAnimationChannels(Read(a[0])); return pc + 1;
             case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[2]), Read(a[3]), 0, Read(a[1])); return pc + 1;
             case "u00421EF0":   // 0x232 cyclic packed ARGB; negative alpha/RGB preserve static obj color

@@ -1371,7 +1371,10 @@ active flag bit 2, and zeroes five start/period pairs:
 It does not change the object's current/base transforms. Five DEBUGADV calls reset an effect object before
 demonstrating a new looping asset; FIELD's sole ordinary call resets the temporary moving-unit handle
 between its one-shot translation setup and `0x239` source-cell animation. This is a bounded retained-state
-operation and is the recommended follow-up after the black-fade pair below.
+operation. The port now exposes the same get-or-create reset on `GfxState`: it disables cyclic color,
+scale, rotation, and source-rectangle sampling; clears all ten native timing dwords in the preserved
+numbered-save record, including the unmodeled second cyclic matrix; and leaves base/current transforms,
+cyclic targets, and finite one-shot channels intact.
 
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
