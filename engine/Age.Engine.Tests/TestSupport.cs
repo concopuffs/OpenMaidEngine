@@ -63,6 +63,8 @@ internal class RecordingHost : IHost
     public readonly List<string> Warnings = new();
     public readonly List<DiagnosticMessage> Diagnostics = new();
     public System.Action<DiagnosticMessage>? OnDiagnosticMessage;
+    public readonly List<FullwidthTextEditRequest> FullwidthTextEdits = new();
+    public System.Func<FullwidthTextEditRequest, FullwidthTextEditResult>? OnFullwidthTextEdit;
     public readonly List<long> CursorResources = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
@@ -75,6 +77,11 @@ internal class RecordingHost : IHost
     {
         Diagnostics.Add(message);
         OnDiagnosticMessage?.Invoke(message);
+    }
+    public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
+    {
+        FullwidthTextEdits.Add(request);
+        return OnFullwidthTextEdit?.Invoke(request) ?? new(false, request.CurrentText);
     }
     public void ShowText(int offset, string text) => Lines.Add((offset, text));
     public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)

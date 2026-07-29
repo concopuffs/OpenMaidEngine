@@ -930,6 +930,23 @@ gaps and 3 of 11 instructions; no persistence or save-format work is involved.
 **NEXT:** implement and test `0x144`/`0x2c6`/`0x2c8` together, including CP932 mixed-width helper cases,
 the native 16-byte/full-width acceptance rules, accept/cancel behavior, and INPUTNAME's split/rejoin shape.
 
+**INPUTNAME string/input slice implemented (2026-07-29):** the VM now dispatches all three opcodes.
+`0x2c6` counts CP932 characters rather than UTF-16 units or bytes, and `0x2c8` slices encoded character
+spans with native end clamping. A shared validator applies command 10's 16-byte limit first and then
+requires every accepted cell to be a valid CP932 lead/trail pair.
+
+`0x144` uses an explicit synchronous host result, preserving operand 1 on cancel and operand 2 in both
+paths. Godot parks the VM worker while a main-thread modal editor owns input; invalid submissions leave
+the editor open with AGERC's original error text. Headless hosts cancel safely by default. Focused
+regressions cover mixed-width count/slicing, end clamping, valid and invalid names, accept replacement,
+cancel preservation, and operand-2 preservation. The slice removes three gaps and three instructions,
+leaving 6 effectful opcodes / 8 instructions. Validation passes 493/493 engine tests, opcode and
+EngineCtx lint, a zero-warning Godot build, clean diff checking, and the Himegari-targeted threaded
+`SELFTEST OK`.
+
+**NEXT:** rerank the remaining six gaps; begin with the two-site `0x24d` and check whether adjacent
+`0x248` belongs to the same native subsystem before choosing the next implementation boundary.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

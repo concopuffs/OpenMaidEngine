@@ -27,6 +27,9 @@ public sealed class GodotAdvHost : IHost
     private readonly ScriptPresentationBarrier _presentationBarrier = new();
     private readonly AutoResetEvent _presentationRequestConsumed = new(false);
     private readonly AutoResetEvent _diagnosticMessageCompleted = new(false);
+    private readonly AutoResetEvent _fullwidthTextEditCompleted = new(false);
+    private readonly object _fullwidthTextEditLock = new();
+    private FullwidthTextEditResult _fullwidthTextEditResult;
     private readonly bool _synchronizeExplicitPresentation;
     private long _explicitPresentationRequestGeneration;
     private long _consumedPresentationRequestGeneration;
@@ -131,6 +134,28 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void CompleteDiagnosticMessage() => _diagnosticMessageCompleted.Set();
+
+    public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
+    {
+        if (_stopping) return new(false, request.CurrentText);
+        lock (_fullwidthTextEditLock)
+            _fullwidthTextEditResult = new(false, request.CurrentText);
+        _timeline?.Event("fullwidth-text-edit", new()
+        {
+            ["current"] = request.CurrentText,
+            ["initial"] = request.InitialText,
+        });
+        _main.CallDeferred("ShowAgeFullwidthTextEditor", request.InitialText);
+        while (!_stopping && !_fullwidthTextEditCompleted.WaitOne(50)) { }
+        lock (_fullwidthTextEditLock) return _fullwidthTextEditResult;
+    }
+
+    public void CompleteFullwidthTextEdit(bool accepted, string text)
+    {
+        lock (_fullwidthTextEditLock)
+            _fullwidthTextEditResult = new(accepted, text);
+        _fullwidthTextEditCompleted.Set();
+    }
 
     private string CurrentScene
     {
@@ -966,6 +991,7 @@ public sealed class GodotAdvHost : IHost
         _inputCallbackSignal.Set();
         _frameSignal.Set();
         _diagnosticMessageCompleted.Set();
+        _fullwidthTextEditCompleted.Set();
     }
 
     public void ResetSceneContext()

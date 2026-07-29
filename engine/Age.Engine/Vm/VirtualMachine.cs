@@ -2,6 +2,7 @@ using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Persistence;
+using Age.Engine.Sys4;
 using System.Text;
 namespace Age.Engine.Vm;
 
@@ -1236,6 +1237,25 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
                 Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
+                return pc + 1;
+            case "edit-fullwidth-string-dialog": // 0x144: blocking AGERc command-10 editor
+            {
+                string current = ReadStr(a[0]);
+                string initial = ReadStr(a[1]);
+                FullwidthTextEditResult result =
+                    _host.EditFullwidthString(new(current, initial));
+                if (result.Accepted) WriteStr(a[0], result.Text);
+                return pc + 1;
+            }
+            case "cp932-character-length": // 0x2c6: Japanese-locale _mbstrlen
+                Write(a[0], Cp932Text.CharacterLength(ReadStr(a[1]), _nativeStringEncoding));
+                return pc + 1;
+            case "cp932-substring": // 0x2c8: multibyte-character interval [start,start+count)
+                WriteStr(a[0], Cp932Text.Substring(
+                    ReadStr(a[1]),
+                    unchecked((int)Read(a[2])),
+                    unchecked((int)Read(a[3])),
+                    _nativeStringEncoding));
                 return pc + 1;
             case "u00425790": // upstream ABI label
             case "append-diagnostic-value": // 0x1b2: generic operand text -> EngineCtx accumulator

@@ -31,6 +31,10 @@ public readonly record struct SurfaceRectCopy(
 /// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
 public readonly record struct DiagnosticMessage(string Caption, string Text);
 
+/// <summary>AGERc command 10's synchronous full-width text edit request and result.</summary>
+public readonly record struct FullwidthTextEditRequest(string CurrentText, string InitialText);
+public readonly record struct FullwidthTextEditResult(bool Accepted, string Text);
+
 public enum SurfaceBlackFadeDirection
 {
     FromBlack,
@@ -44,6 +48,9 @@ public interface IHost
     /// <summary>Present a modal diagnostic and return only after the user dismisses it.</summary>
     void ShowDiagnosticMessage(DiagnosticMessage message)
         => System.Console.Error.WriteLine($"{message.Caption}: {message.Text}");
+    /// <summary>Present AGERc's modal full-width editor. Cancel preserves CurrentText.</summary>
+    FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
+        => new(false, request.CurrentText);
     // Script context is retained for diagnostics/page location; resource operands are universal packed ids.
     void EnterScriptContext(string scriptName) { }
     void ExitScriptContext() { }

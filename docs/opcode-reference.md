@@ -423,14 +423,14 @@ This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all
 - **grounding:** source=investigation, confidence=high
 - **evidence:** The real /v2 dispatch slot registers op_0x2c6_cp932_character_length@0x42a6d0. The handler sets LC_ALL to `japanese`, resolves operand 2, calls MSVC _mbstrlen, and writes the result to operand 1. INPUTNAME's sole site at 0x1002 uses this count as the loop bound before slicing each character with opcode 0x2c8.
 
-This is character count rather than .NET UTF-16 length or raw CP932 byte length. The implementation should use VmOptions.NativeStringCodePage and preserve valid CP932 multibyte boundaries.
+This is character count rather than .NET UTF-16 length or raw CP932 byte length. Port status (2026-07-29): implemented by encoding the C-string prefix through VmOptions.NativeStringCodePage and counting valid CP932 lead/trail pairs as one character; focused tests cover mixed single-byte and double-byte characters.
 
 ### 0x2c8 `cp932-substring` (cp932-substring, argc 4)
 - **summary:** (out)(string)(start)(count) - copy a CP932 substring selected by multibyte-character index and count without splitting valid lead/trail pairs.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** The real /v2 dispatch slot registers op_0x2c8_cp932_substring@0x42c420. It copies operand 2 into a 256-byte buffer, sets LC_ALL to `japanese`, obtains _mbstrlen, reads start and count, clamps end=start+count to the character length when end is below 1 or beyond that length, and walks bytes with _mbbtype so CP932 lead/trail pairs are copied together. It writes the selected byte interval back through operand 1. INPUTNAME's sole site at 0x1021 loops substring(name,index,1) into its eight local character cells.
 
-The release call uses nonnegative in-range indices and count 1. A compatible general implementation should reproduce native end clamping (`end = length` when start+count < 1 or > length) and select the half-open character interval [start,end).
+The release call uses nonnegative in-range indices and count 1. Port status (2026-07-29): implemented over encoded byte spans, preserving every valid lead/trail pair and reproducing native end clamping (`end = length` when start+count < 1 or > length) before selecting the half-open character interval [start,end).
 
 ## control
 
@@ -1255,6 +1255,11 @@ This is INPUTNAME's optional native keyboard-entry button, not the surrounding s
 character palette. The VM can use a synchronous host seam like the existing diagnostic dialog because
 the Godot host runs script execution on its worker thread while the main thread owns the modal UI.
 Compatibility requires the native full-width-only and 16-CP932-byte limits before accepting the result.
+
+Port status (2026-07-29): implemented. The VM issues an explicit accept/cancel request through IHost;
+headless hosts preserve the inout value by default. Godot parks the VM worker, opens a main-thread modal
+LineEdit, keeps it open on either native validation error, and resumes the worker only after valid accept
+or cancel. Accept replaces operand 1 and cancel leaves it untouched; operand 2 is never modified.
 
 
 ### 0x19a `get-message-skip` (u00414E50, argc 1)

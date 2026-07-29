@@ -69,6 +69,7 @@ public partial class Main : Godot.Control
     private Sys4RegIniStore? _sys4RegIniStore;
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
+    private FullwidthTextEditorDialog? _fullwidthTextEditor;
     private Sys4ScriptProvider? _scripts;
     private DebugSceneLauncher? _debugSceneLauncher;
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
@@ -926,6 +927,26 @@ public partial class Main : Godot.Control
         {
             _host?.CompleteDiagnosticMessage();
         }
+    }
+
+    public void ShowAgeFullwidthTextEditor(string initialText)
+    {
+        if (_fullwidthTextEditor != null)
+        {
+            GD.PushWarning("[inputname] replaced an already-open full-width text editor");
+            _fullwidthTextEditor.QueueFree();
+        }
+
+        var editor = new FullwidthTextEditorDialog();
+        _fullwidthTextEditor = editor;
+        editor.EditCompleted += (accepted, text) =>
+        {
+            if (_fullwidthTextEditor == editor) _fullwidthTextEditor = null;
+            _host?.CompleteFullwidthTextEdit(accepted, text);
+            editor.QueueFree();
+        };
+        AddChild(editor);
+        editor.Open(initialText);
     }
 
     public override void _ExitTree()

@@ -2891,6 +2891,13 @@ character cells, copies that text into both `0x144` operands, then calls `0x2c6`
 the VM worker blocks while Godot's main thread presents a LineEdit dialog, validates the CP932 byte limit
 and full-width-only rule, and signals the worker on accept or cancel. No save/profile format is involved.
 
+**Port implementation (2026-07-29).** `Cp932Text` now owns the byte-level character count, substring,
+and AGERC acceptance rules. The VM dispatches all three handlers and exposes the modal as an explicit
+accept/cancel `IHost` exchange, so cancellation cannot overwrite operand 1. Godot uses a main-thread
+`FullwidthTextEditorDialog` while its VM worker waits; over-16-byte and non-double-byte submissions retain
+focus and show AGERC's exact Japanese errors. The helper operates on the C-string prefix and encodes through
+the configured native code page, avoiding both UTF-16 indexing and accidental splitting of CP932 pairs.
+
 `0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
 and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
 durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
