@@ -213,12 +213,13 @@ and pending movie records include `first_frame_source_pts_ms`; the ordinary `mov
 the same source PTS alongside the render frame, which distinguishes encoded stream lead-in from decode/presentation
 latency.
 
-If the interactive VM reaches its `STEP-LIMIT` safety cap, Godot now captures the same diagnostic
-automatically as `user://diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path to the
-clipboard. Before nested frames unwind, the trace sink preserves the deepest active script stack. The console
-also prints the exact final script/offset/opcode, that frame chain, the hottest sites in the bounded final
-128-instruction window, and the final 16-instruction sequence. This makes the last ADV locator unnecessary for
-identifying a post-dialogue loop; send either the `step-limit` console block or the generated JSON.
+Normal interactive Godot sessions have no cumulative instruction ceiling. Bounded Godot diagnostic runs retain
+`STEP-LIMIT`; if one fires, Godot captures the same diagnostic automatically as
+`user://diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path to the clipboard. Before nested
+frames unwind, the trace sink preserves the deepest active script stack. The console also prints the exact final
+script/offset/opcode, that frame chain, the hottest sites in the bounded final 128-instruction window, and the
+final 16-instruction sequence. This makes the last ADV locator unnecessary for identifying a post-dialogue loop;
+send either the `step-limit` console block or the generated JSON.
 
 ## Native FFmpeg movie shim (Windows x64)
 

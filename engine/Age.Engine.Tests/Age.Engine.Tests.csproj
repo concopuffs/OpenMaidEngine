@@ -31,6 +31,7 @@
     <Compile Include="..\..\godot\GodotTimelineLog.cs" Link="GodotTimelineLog.cs" />
     <Compile Include="..\..\godot\GodotTraceSink.cs" Link="GodotTraceSink.cs" />
     <Compile Include="..\..\godot\StepLimitDiagnosticFormatter.cs" Link="StepLimitDiagnosticFormatter.cs" />
+    <Compile Include="..\..\godot\GodotVmOptions.cs" Link="GodotVmOptions.cs" />
     <Compile Include="..\..\godot\PerformanceFrameLog.cs" Link="PerformanceFrameLog.cs" />
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
     <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
