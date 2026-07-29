@@ -3054,23 +3054,24 @@ observed_types = ["l-str"]
 
 [[opcode]]
 op = 0x149
-label = "u0041FCE0"
+label = "set-system-menu-show-delay"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041FCE0"
-category = "unknown"
-summary = ""
+name = "set-system-menu-show-delay"
+category = "input"
+summary = "(milliseconds) - replace the unsigned dwell threshold before pointer hover at the top two client rows reveals AGERC's modeless system-menu strip. Scene reset defaults to 0; SYSTEM4 sets 1000."
+details = "Port status (2026-07-29): implemented as unsigned scene-context state. The setter preserves all 32 operand bits, root scene reload restores zero, and the current Godot frontend deliberately adds no host effect because it has no AGERC application-menu strip."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x149_set_system_menu_show_delay@0x422050 directly stores operand 1 at EngineCtx+0x5511c; scene_context_init_reset writes 0 and paired op_0x148_get_system_menu_show_delay@0x429c70 reads it. system_menu_top_edge_dwell_timer_tick@0x486280 compares the field unsigned against timeGetTime elapsed while WM_MOUSEMOVE is in client y=0..1, then requires no left/right button, windowed ScreenMode, and g_pfnAgercHostCallback(-1)==0 before system_menu_strip_show@0x407bd0 invokes AGERC command 4. The handler uses the complete dword. SYSTEM4's sole site sets 1000 immediately before the unrelated tiled-surface edge setting."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "unsigned top-edge system-menu dwell threshold in milliseconds"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -8831,20 +8832,25 @@ evidence = "Not observed in Himegari's script corpus; ABI label/argc come from K
 
 [[opcode]]
 op = 0x148
-label = "u004160A0"
+label = "get-system-menu-show-delay"
 argc = 1
 observed_in_himegari = false
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u004160A0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-system-menu-show-delay"
+category = "input"
+summary = "(out) - return the current unsigned TIMER_SHOWMENU top-edge dwell threshold paired with opcode 0x149."
+details = "Port status (2026-07-29): implemented with opcode 0x149. The getter writes the retained dword through the VM's signed integer-cell representation so high-bit values preserve the same native 32 bits."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "Ghidra /v2: op_0x148_get_system_menu_show_delay@0x429c70 writes EngineCtx+0x5511c to operand 1. Scene reset initializes the field to 0, opcode 0x149 replaces it, and the windowed top-edge TIMER_SHOWMENU path consumes it as an unsigned millisecond threshold. This getter is not observed in Himegari's corpus."
+
+[[opcode.semantics.args]]
+i = 1
+role = "out: unsigned top-edge system-menu dwell threshold in milliseconds"
 
 [[opcode]]
 op = 0x14a

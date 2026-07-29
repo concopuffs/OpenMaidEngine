@@ -1011,6 +1011,40 @@ zero-warning Godot build, clean diff checking, and the Himegari-targeted threade
 **NEXT:** rerank the final four gaps and investigate SYSTEM4's singleton `0x149`; keep developer-only
 `0x24d` for its dedicated movie-mask compositor slice.
 
+**SYSTEM-MENU SHOW DELAY `0x149` INVESTIGATION COMPLETE (2026-07-29):** the opcode replaces the unsigned
+millisecond threshold at `EngineCtx.system_menu_show_delay_ms`; scene reset defaults it to zero and
+SYSTEM4's sole call sets 1000. The exact, unobserved paired getter is opcode `0x148`.
+
+AGE's Win32 window procedure starts a 100-millisecond timer while the pointer dwells in the top two client
+rows. Once unsigned elapsed time is strictly greater than the configured threshold, with no mouse button
+held, windowed ScreenMode, and no active AGERC host UI, it reveals AGERC's modeless full-width system-menu
+strip. Alt reveals the same strip immediately and bypasses the threshold. This is the same settings/save
+menu whose actions opcode `0x142` guards against CONFIG reentrancy, but it is unrelated to the adjacent
+`0x248` graphics configuration.
+
+The current Godot frontend has no equivalent application-menu strip. The bounded implementation is exact
+state parity: retain the full unsigned dword, reset it to zero with scene context, implement the paired
+getter, and expose it for a future host strip without changing game input, the script-authored right-click
+menu, or persistence. This investigation changes metadata only, so the inventory remains 4 opcodes /
+5 instructions. The `/v2` and `/support/AGERC.DLL` handlers, reveal/timer/dialog paths, typed EngineCtx
+field, and key globals are annotated and saved.
+
+**NEXT:** implement the exact `0x148`/`0x149` state pair. Afterwards rerank `0x137`, `0x241`, and the two
+developer-only `0x24d` sites.
+
+**SYSTEM-MENU SHOW DELAY `0x148`/`0x149` IMPLEMENTED (2026-07-29):** the VM now retains the complete
+unsigned threshold, returns the same native dword through signed script integer cells, and restores zero
+on root scene-context reload. SYSTEM4's 1000-millisecond setup is handled without inventing an `IHost`
+effect for an AGERC strip the Godot frontend does not have.
+
+Three focused regressions cover the exact SYSTEM4 setter/getter sequence, high-bit dword preservation, and
+root-reload lifetime. The shipped setter site is closed; the unobserved getter is also available for
+broader AGE compatibility. The remaining effectful inventory is 3 opcodes / 4 instructions. Validation
+passes 501/501 engine tests, opcode and EngineCtx build/lint, a zero-warning Godot build, clean diff
+checking, and the Himegari-targeted threaded `SELFTEST OK`.
+
+**NEXT:** rerank `0x137`, `0x241`, and developer-only `0x24d` ×2 before choosing the next slice.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

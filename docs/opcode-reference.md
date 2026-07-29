@@ -1281,6 +1281,20 @@ LineEdit, keeps it open on either native validation error, and resumes the worke
 or cancel. Accept replaces operand 1 and cancel leaves it untouched; operand 2 is never modified.
 
 
+### 0x148 `get-system-menu-show-delay` (get-system-menu-show-delay, argc 1)
+- **summary:** (out) - return the current unsigned TIMER_SHOWMENU top-edge dwell threshold paired with opcode 0x149.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x148_get_system_menu_show_delay@0x429c70 writes EngineCtx+0x5511c to operand 1. Scene reset initializes the field to 0, opcode 0x149 replaces it, and the windowed top-edge TIMER_SHOWMENU path consumes it as an unsigned millisecond threshold. This getter is not observed in Himegari's corpus.
+
+Port status (2026-07-29): implemented with opcode 0x149. The getter writes the retained dword through the VM's signed integer-cell representation so high-bit values preserve the same native 32 bits.
+
+### 0x149 `set-system-menu-show-delay` (set-system-menu-show-delay, argc 1)
+- **summary:** (milliseconds) - replace the unsigned dwell threshold before pointer hover at the top two client rows reveals AGERC's modeless system-menu strip. Scene reset defaults to 0; SYSTEM4 sets 1000.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x149_set_system_menu_show_delay@0x422050 directly stores operand 1 at EngineCtx+0x5511c; scene_context_init_reset writes 0 and paired op_0x148_get_system_menu_show_delay@0x429c70 reads it. system_menu_top_edge_dwell_timer_tick@0x486280 compares the field unsigned against timeGetTime elapsed while WM_MOUSEMOVE is in client y=0..1, then requires no left/right button, windowed ScreenMode, and g_pfnAgercHostCallback(-1)==0 before system_menu_strip_show@0x407bd0 invokes AGERC command 4. The handler uses the complete dword. SYSTEM4's sole site sets 1000 immediately before the unrelated tiled-surface edge setting.
+
+Port status (2026-07-29): implemented as unsigned scene-context state. The setter preserves all 32 operand bits, root scene reload restores zero, and the current Godot frontend deliberately adds no host effect because it has no AGERC application-menu strip.
+
 ### 0x19a `get-message-skip` (u00414E50, argc 1)
 - **summary:** (out) - return the current all-message skip state set by op 0x88.
 - **grounding:** source=investigation, confidence=high
@@ -1997,15 +2011,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x148 `u004160A0` (u004160A0, argc 1)
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
-
-### 0x149 `u0041FCE0` (u0041FCE0, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
 
 ### 0x14a `u0041FD10` (u0041FD10, argc 7)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.

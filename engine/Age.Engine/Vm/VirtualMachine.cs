@@ -91,6 +91,9 @@ public sealed class VirtualMachine
     // EngineCtx +0xa0d10: AGERC queries this through IAGEService to gray its native
     // settings/save menu actions while CONFIG owns the scripted settings screen.
     private int _systemMenuActionsEnabled = 1;
+    // EngineCtx +0x5511c: unsigned TIMER_SHOWMENU dwell threshold. Native op 0x148
+    // returns the same dword through the VM's signed integer-cell representation.
+    private uint _systemMenuShowDelayMilliseconds;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Native EngineCtx owns 11 lazily allocated integer FIFOs at +0x55130. ATSEEK/MVSEEK use
     // slot zero as their packed-coordinate flood-fill worklist; op 0x132 replaces a slot.
@@ -115,6 +118,7 @@ public sealed class VirtualMachine
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
     public int SystemMenuActionsEnabled => _systemMenuActionsEnabled;
+    public uint SystemMenuShowDelayMilliseconds => _systemMenuShowDelayMilliseconds;
     public string PendingDiagnosticText => _diagnosticOutput.PendingText;
     /// <summary>
     /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
@@ -786,6 +790,7 @@ public sealed class VirtualMachine
         _advReadSkipState = false;
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
+        _systemMenuShowDelayMilliseconds = 0;
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
         _host.SetPhysicalMessageSkipActive(false);
@@ -2342,6 +2347,14 @@ public sealed class VirtualMachine
             case "set-system-menu-enabled": // 0x142: native AGERC menu reentrancy guard
             case "u0041FB10": // pre-reference compatibility
                 _systemMenuActionsEnabled = unchecked((int)Read(a[0]));
+                return pc + 1;
+            case "get-system-menu-show-delay": // 0x148: paired TIMER_SHOWMENU getter
+            case "u004160A0": // pre-reference compatibility
+                Write(a[0], unchecked((int)_systemMenuShowDelayMilliseconds));
+                return pc + 1;
+            case "set-system-menu-show-delay": // 0x149: top-edge dwell threshold in milliseconds
+            case "u0041FCE0": // pre-reference compatibility
+                _systemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
                 return pc + 1;
             case "get-message-glyph-delay": // 0x7f
             case "u00414C60":

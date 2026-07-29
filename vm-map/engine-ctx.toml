@@ -283,6 +283,11 @@ name = "text_history_recording_suppressed"
 type = "uint"
 note = "high bit suppresses ADV retained-history index/text/metadata/voice recording; op 0x1bb writes 0x80000000 or zero, and HISTORY.BIN brackets itself with disable/enable"
 [[field]]
+offset = 0x5511c
+name = "system_menu_show_delay_ms"
+type = "uint"
+note = "op 0x149 replaces the TIMER_SHOWMENU top-edge dwell threshold; reset defaults to 0 and SYSTEM4 sets 1000; op 0x148 reads it"
+[[field]]
 offset = 0x55120
 name = "anti_tamper_a"
 type = "int"

@@ -933,6 +933,47 @@ an `IHost` service: the Godot frontend has no AGERC/native application menu to g
 as a game-input or persistence switch would broaden its native effect. `SystemMenuActionsEnabled` exposes
 the retained value for a future equivalent frontend menu.
 
+### System-menu top-edge reveal delay — opcodes `0x148` / `0x149` (2026-07-29)
+
+`op_0x149_set_system_menu_show_delay@0x422050` replaces the complete dword at
+`EngineCtx.system_menu_show_delay_ms` (`ctx+0x5511c`); the paired
+`op_0x148_get_system_menu_show_delay@0x429c70` writes it to its output operand. Scene reset initializes
+the field to zero. Himegari never calls the getter and has one setter site: SYSTEM4 writes 1000
+milliseconds immediately before the unrelated `0x248(128)` tiled-surface configuration.
+
+The only non-opcode consumer is `system_menu_top_edge_dwell_timer_tick@0x486280`, reached from the main
+Win32 window procedure's `WM_TIMER` id 1 and repeated top-edge `WM_MOUSEMOVE` path. A pointer at client
+y=0 or y=1 starts a 100-millisecond polling timer and captures `timeGetTime`; leaving those two rows
+clears the timestamp and kills the timer. The tick reveals the menu only when:
+
+- unsigned elapsed time is strictly greater than `system_menu_show_delay_ms`;
+- neither the left nor right mouse button is held;
+- `display:ScreenMode` is windowed; and
+- AGERC host command `-1` reports no active host UI.
+
+The unsigned comparison preserves the setter's complete dword: a negative script value becomes a very
+long effective delay rather than being clamped. The independent Alt-key path calls the same reveal worker
+immediately and does not consult this field.
+
+`system_menu_strip_show@0x407bd0` prepares/suspends presentation, marks `TIMER_SHOWMENU` active, and calls
+AGERC host command 4. In the shipped DLL, `agerc_system_menu_strip_dialog_proc@0x10003c20` owns that
+modeless top strip: it copies the AGE window's title and icon, sizes itself to the screen width and one
+menu-bar height, refreshes the settings/save action state described for opcode `0x142`, and dispatches its
+menu commands. `agerc_system_menu_strip_hide@0x10002a40` hides the retained window and clears AGERC bit
+`0x10`, allowing a later dwell to reveal it again.
+
+The port has no equivalent host application-menu strip, so this is an isolated scene-context state slice:
+retain the unsigned value, reset it to zero on root scene reload, expose the exact getter, and leave game
+input, the script-owned right-click menu, and settings persistence unchanged. The handlers, timer/reveal
+workers, EngineCtx field, AGERC dispatcher/dialog/hide workers, and key globals are named/commented in the
+saved Ghidra programs.
+
+The VM implementation retains the field as a `uint`, sign-extends the getter's dword into the existing
+script integer-cell representation, and restores zero in the opcode-`0x9` scene reset. It exposes
+`SystemMenuShowDelayMilliseconds` for a future frontend consumer but deliberately makes no `IHost` call.
+Focused coverage includes SYSTEM4's 1000-millisecond setting/getter pair, a high-bit dword round trip, and
+root-reload lifetime.
+
 The same route exposed an independent publication-atomicity requirement. Each tile step reaches
 `FIELD@0x4eb2 -> 0x9225`, which calls `DRAWMAP`, `DRAWOBJ`, and `DRAWMINIMAP`. `DRAWMAP` first erases its
 old terrain handle ranges and then rebuilds them; `DRAWMINIMAP` recreates mutable surfaces `0x42..0x44`

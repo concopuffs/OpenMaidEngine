@@ -61,6 +61,7 @@ Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-
 | `0x55100` | `adv_skip_service_enabled` | `int` | ADV presentation lifecycle gate: op 0x19b clears it while preserving the persistent Skip toggle; op 0x19c sets it before recomputing active message/read skip |
 | `0x55104` | `auto_message_enabled` | `int` | ADV Auto mode flag; op 0x1b6 reads, op 0x1b7 writes, adv_input_service_poll consumes |
 | `0x55110` | `text_history_recording_suppressed` | `uint` | high bit suppresses ADV retained-history index/text/metadata/voice recording; op 0x1bb writes 0x80000000 or zero, and HISTORY.BIN brackets itself with disable/enable |
+| `0x5511c` | `system_menu_show_delay_ms` | `uint` | op 0x149 replaces the TIMER_SHOWMENU top-edge dwell threshold; reset defaults to 0 and SYSTEM4 sets 1000; op 0x148 reads it |
 | `0x55120` | `anti_tamper_a` | `int` | anti-tamper checksum operand |
 | `0x55124` | `anti_tamper_b` | `int` | anti-tamper checksum operand |
 | `0x5512c` | `anti_tamper_fp` | `int` | anti-tamper (import fn ptr / result) |
