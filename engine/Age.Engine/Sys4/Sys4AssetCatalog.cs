@@ -40,9 +40,12 @@ public sealed class Sys4AssetCatalog
     public IReadOnlyList<AssetEntry> RawSlots { get; }
     public IReadOnlyList<AssetEntry> Files { get; }
     public IReadOnlyDictionary<int, Sys4AssetCatalog> AppendPacks => _appendPacks;
+    public Sys4StartupSettings StartupSettings { get; }
+    public Sys4LogicalCanvas LogicalCanvas { get; }
 
     private Sys4AssetCatalog(string magic, string title, int packId,
-                             List<string> archives, List<AssetEntry> rawSlots)
+                             List<string> archives, List<AssetEntry> rawSlots,
+                             Sys4StartupSettings startupSettings)
     {
         Magic = magic;
         Title = title;
@@ -52,6 +55,8 @@ public sealed class Sys4AssetCatalog
         Files = rawSlots.Where(r => !r.IsPlaceholder).ToArray();
         _byName = Files.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
         _sceneRanges = BuildSceneRanges(Files);
+        StartupSettings = startupSettings;
+        LogicalCanvas = Sys4LogicalCanvas.FromSettings(startupSettings);
     }
 
     public static Sys4AssetCatalog Load(string path)
@@ -130,7 +135,10 @@ public sealed class Sys4AssetCatalog
 
         string magic = ReadCString(data.AsSpan(0, Math.Min(8, data.Length)));
         string title = ReadCString(data.AsSpan(8, Math.Min(256, data.Length - 8)));
-        return new Sys4AssetCatalog(magic, title, packId, archives, slots);
+        Sys4StartupSettings startupSettings = isBase
+            ? Sys4StartupSettings.ParseTrailer(blob, ref p, name)
+            : Sys4StartupSettings.Empty;
+        return new Sys4AssetCatalog(magic, title, packId, archives, slots, startupSettings);
     }
 
     /// <summary>Mount an append catalog by its native header selector. A later mount of the same

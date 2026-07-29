@@ -14,16 +14,16 @@ using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
 public partial class Main : Godot.Control
 {
-    private const int ScreenWidth = 800;
-    private const int ScreenHeight = 600;
     // Provisional approximation only: AGE asks GDI to synthesize LOGFONT weight 700, grid-fit a
     // GGO_GRAY4 mask, and composites that mask itself. Godot instead applies FreeType embolden plus
     // spacing. Do not retune these values from screenshots; replace this approximation from the decoded
     // native glyph-mask contract. See docs/engine-re.md.
     private const float NativeBoldEmbolden = 0.53f;
     private const int NativeBoldGlyphSpacing = 1;
+    private int _screenWidth = Sys4LogicalCanvas.DefaultWidth;
+    private int _screenHeight = Sys4LogicalCanvas.DefaultHeight;
     private TextureRect _screenView = null!;              // shows the composited screen backbuffer
-    private Image _screen = null!;                        // 800x600 immediate-mode canvas
+    private Image _screen = null!;                        // SYS4INI-sized immediate-mode canvas
     private ImageTexture _screenTex = null!;
     private GpuRetainedRenderer _gpuRenderer = null!;
     private bool _useGpuBackend = true;
@@ -34,7 +34,7 @@ public partial class Main : Godot.Control
     private int _waitIndicatorAssetId = -1;
     // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
     // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
-    private readonly byte[] _screenPixels = new byte[ScreenWidth * ScreenHeight * 4];
+    private byte[] _screenPixels = [];
     private Label _text = null!;
     private Label _speaker = null!;
     private readonly System.Collections.Generic.List<Label> _advTextLabels = new();
@@ -108,8 +108,24 @@ public partial class Main : Godot.Control
 
     public override void _Ready()
     {
-        // Screen backbuffer: one 800x600 canvas that draw-texture blits into, shown behind the dialogue.
-        _screen = Image.CreateEmpty(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8);
+        // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
+        // instance is reused for scripts and assets later in startup.
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var logicalCanvas = catalog.LogicalCanvas;
+        _screenWidth = logicalCanvas.Width;
+        _screenHeight = logicalCanvas.Height;
+        _screenPixels = new byte[logicalCanvas.RgbaByteCount];
+        Window rootWindow = GetTree().Root;
+        rootWindow.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
+        rootWindow.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
+        rootWindow.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight);
+        if (rootWindow.Mode == Window.ModeEnum.Windowed)
+            rootWindow.Size = new Vector2I(_screenWidth, _screenHeight);
+        GD.Print($"[profile] SYS4INI logical canvas={_screenWidth}x{_screenHeight} " +
+                 $"window={rootWindow.Size.X}x{rootWindow.Size.Y}");
+
+        // One logical canvas that draw-texture blits into, shown behind the dialogue.
+        _screen = Image.CreateEmpty(_screenWidth, _screenHeight, false, Image.Format.Rgba8);
         _screenTex = ImageTexture.CreateFromImage(_screen);
         _screenView = new TextureRect
         {
@@ -123,7 +139,7 @@ public partial class Main : Godot.Control
         _gpuRenderer = new GpuRetainedRenderer(this);
 
         // Native ADV wait marker: a tiny independently animated atlas region. Keeping it separate from the
-        // 800x600 software backbuffer avoids recompositing the entire retained scene throughout static waits.
+        // logical software backbuffer avoids recompositing the entire retained scene throughout static waits.
         _waitIndicator = new TextureRect
         {
             Visible = false,
@@ -264,7 +280,6 @@ public partial class Main : Godot.Control
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else
         {
-            var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
             sharedProfile.ConfigureCatalogUnlockSlots(
                 catalog.RawSlots.Count,
                 catalog.AppendPacks.Select(pair =>
@@ -288,7 +303,7 @@ public partial class Main : Godot.Control
             ? new ResourceMap(scripts.Catalog, trackedAssetStore)
             : ResourceMap.Load();
         _host = new GodotAdvHost(
-            this, resources, scene, _clock, _locator, _timeline,
+            this, resources, scene, _clock, _locator, logicalCanvas, _timeline,
             synchronizeExplicitPresentation: !_selftest)
         {
             SleepScale = sleepScale,
@@ -805,10 +820,12 @@ public partial class Main : Godot.Control
 
     private (int X, int Y) ToNativeScreen(Vector2 position)
     {
-        Vector2 size = GetViewportRect().Size;
+        // Godot reports input in viewport coordinates after content scaling. This ratio is therefore
+        // normally identity, while remaining correct for any viewport expansion policy.
+        Vector2 size = GetViewport().GetVisibleRect().Size;
         if (size.X <= 0 || size.Y <= 0) return (0, 0);
-        return ((int)System.Math.Floor(position.X * ScreenWidth / size.X),
-                (int)System.Math.Floor(position.Y * ScreenHeight / size.Y));
+        return ((int)System.Math.Floor(position.X * _screenWidth / size.X),
+                (int)System.Math.Floor(position.Y * _screenHeight / size.Y));
     }
 
     public void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY)
@@ -968,14 +985,14 @@ public partial class Main : Godot.Control
             {
                 if (v.Blend != BlendKind.Opaque)
                 {
-                    int width = v.W > 0 ? v.W : ScreenWidth;
-                    int height = v.H > 0 ? v.H : ScreenHeight;
+                    int width = v.W > 0 ? v.W : _screenWidth;
+                    int height = v.H > 0 ? v.H : _screenHeight;
                     float fillOpacity = v.MultiplyTint
                         ? opacity
                         : opacity * v.TintStrength / 255f;
                     _perf?.RecordFillLayer();
                     if (_gpuRenderer.DrawFill(width, height, affine, v.Tint, fillOpacity))
-                        _perf?.RecordGpuLayer(width, height, affine, ScreenWidth, ScreenHeight,
+                        _perf?.RecordGpuLayer(width, height, affine, _screenWidth, _screenHeight,
                                               dynamic: false, BlendKind.Alpha);
                 }
                 else _perf?.RecordSkippedLayer();
@@ -997,7 +1014,7 @@ public partial class Main : Godot.Control
                         opacity, v.MultiplyTint, resolved.IsDynamic,
                         rawObject?.SourceSlot ?? v.Handle, v.Blend);
                     if (drawn)
-                        _perf?.RecordGpuLayer(v.W, v.H, affine, ScreenWidth, ScreenHeight,
+                        _perf?.RecordGpuLayer(v.W, v.H, affine, _screenWidth, _screenHeight,
                                               resolved.IsDynamic, v.Blend);
                 }
             }
@@ -1060,13 +1077,13 @@ public partial class Main : Godot.Control
                     _perf?.RecordSkippedLayer();
                     continue;
                 }
-                int width = source.W > 0 ? source.W : ScreenWidth;
-                int height = source.H > 0 ? source.H : ScreenHeight;
+                int width = source.W > 0 ? source.W : _screenWidth;
+                int height = source.H > 0 ? source.H : _screenHeight;
                 _perf?.RecordFillLayer();
                 if (_gpuRenderer.DrawFill(width, height, affine, source.Tint,
                     opacity * source.TintStrength / 255f))
                 {
-                    _perf?.RecordGpuLayer(width, height, affine, ScreenWidth, ScreenHeight,
+                    _perf?.RecordGpuLayer(width, height, affine, _screenWidth, _screenHeight,
                                           dynamic: false, BlendKind.Alpha);
                     drawn++;
                 }
@@ -1090,7 +1107,7 @@ public partial class Main : Godot.Control
                 opacity, source.MultiplyTint, resolved.IsDynamic,
                 rawObject?.SourceSlot ?? source.Handle, source.Blend))
             {
-                _perf?.RecordGpuLayer(source.W, source.H, affine, ScreenWidth, ScreenHeight,
+                _perf?.RecordGpuLayer(source.W, source.H, affine, _screenWidth, _screenHeight,
                                       resolved.IsDynamic, source.Blend);
                 drawn++;
             }
@@ -1125,7 +1142,7 @@ public partial class Main : Godot.Control
             // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
             // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
             CompositeVisibleObjects(transition.Source, 1f, ref surfaceTextLabelIndex, decisions, false);
-            FillQuad(0, 0, ScreenWidth, ScreenHeight, 0, (float)transition.Progress);
+            FillQuad(0, 0, _screenWidth, _screenHeight, 0, (float)transition.Progress);
             CompositeVisibleObjects(transition.Target, (float)transition.Progress,
                                     ref surfaceTextLabelIndex, decisions, false);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
@@ -1145,7 +1162,7 @@ public partial class Main : Godot.Control
         }
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        _screen.SetData(ScreenWidth, ScreenHeight, false, Image.Format.Rgba8, _screenPixels);
+        _screen.SetData(_screenWidth, _screenHeight, false, Image.Format.Rgba8, _screenPixels);
         _perf?.RecordSetDataAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         _perf?.RecordSetData(PerformanceFrameLog.Timestamp() - phase);
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
@@ -1200,7 +1217,8 @@ public partial class Main : Godot.Control
                 // objects are render targets — still skipped (slice C).
                 if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
                 {
-                    int baseW = v.W > 0 ? v.W : 800, baseH = v.H > 0 ? v.H : 600;
+                    int baseW = v.W > 0 ? v.W : _screenWidth;
+                    int baseH = v.H > 0 ? v.H : _screenHeight;
                     // One-shot/mode-1 packed color supplies opacity directly. Static mode-0 fills retain
                     // the tint-strength convention used by the existing effect objects.
                     float fillA = v.MultiplyTint ? opacity : opacity * strength;
@@ -1558,7 +1576,8 @@ public partial class Main : Godot.Control
                     _perf?.RecordSkippedLayer();
                     continue;
                 }
-                int w = source.W > 0 ? source.W : 800, h = source.H > 0 ? source.H : 600;
+                int w = source.W > 0 ? source.W : _screenWidth;
+                int h = source.H > 0 ? source.H : _screenHeight;
                 _perf?.RecordFillLayer();
                 FillAffineQuad(w, h, affine, source.Tint, opacity * source.TintStrength / 255f);
             }
@@ -1671,9 +1690,9 @@ public partial class Main : Godot.Control
         if (sw <= 0 || sh <= 0) return;
         long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
-            _screenPixels, ScreenWidth, ScreenHeight, sourcePixels, sourceWidth, sourceHeight,
+            _screenPixels, _screenWidth, _screenHeight, sourcePixels, sourceWidth, sourceHeight,
             srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint, blend);
-        _perf?.RecordRaster(sw, sh, localToDest, ScreenWidth, ScreenHeight, dynamic, blend,
+        _perf?.RecordRaster(sw, sh, localToDest, _screenWidth, _screenHeight, dynamic, blend,
                             PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
@@ -1681,8 +1700,8 @@ public partial class Main : Godot.Control
     {
         long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         Age.Engine.Model.SoftwareAffineRasterizer.FillRgba(
-            _screenPixels, ScreenWidth, ScreenHeight, w, h, localToDest, tint, alpha);
-        _perf?.RecordRaster(w, h, localToDest, ScreenWidth, ScreenHeight, false, BlendKind.Alpha,
+            _screenPixels, _screenWidth, _screenHeight, w, h, localToDest, tint, alpha);
+        _perf?.RecordRaster(w, h, localToDest, _screenWidth, _screenHeight, false, BlendKind.Alpha,
                             PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
@@ -1694,7 +1713,7 @@ public partial class Main : Godot.Control
         long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
         byte[] dst = _screenPixels;
-        int dw = ScreenWidth, dh = ScreenHeight;
+        int dw = _screenWidth, dh = _screenHeight;
         int x0 = System.Math.Max(0, -dstX), x1 = System.Math.Min(w, dw - dstX);
         int y0 = System.Math.Max(0, -dstY), y1 = System.Math.Min(h, dh - dstY);
         if (x1 <= x0 || y1 <= y0) return;
@@ -1710,7 +1729,7 @@ public partial class Main : Godot.Control
             }
         _perf?.RecordFillLayer();
         _perf?.RecordRaster(w, h, new Affine2D(1, 0, 0, 1, dstX, dstY),
-                            ScreenWidth, ScreenHeight, false, BlendKind.Alpha,
+                            _screenWidth, _screenHeight, false, BlendKind.Alpha,
                             PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
@@ -2133,18 +2152,28 @@ public partial class Main : Godot.Control
                                  && textEffectSmoke.GetThemeConstant("line_spacing")
                                     == CalibratedLineSpacing(
                                         8, 24, calibratedBold.GetHeight(24));
+        Window rootWindow = GetTree().Root;
+        bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
+                               && _screen.GetWidth() == _screenWidth
+                               && _screen.GetHeight() == _screenHeight
+                               && _screenPixels.Length == checked(_screenWidth * _screenHeight * 4)
+                               && rootWindow.ContentScaleSize
+                                  == new Vector2I(_screenWidth, _screenHeight);
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
-              && bgmReplacementCancelsFade && textEffectModesOk && fontCalibrationOk;
+              && bgmReplacementCancelsFade && textEffectModesOk && fontCalibrationOk
+              && logicalCanvasOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
-                         $"bgm-fade-replacement=ok; text-effect-modes=ok; font-calibration=ok");
+                         $"bgm-fade-replacement=ok; text-effect-modes=ok; font-calibration=ok; " +
+                         $"logical-canvas={_screenWidth}x{_screenHeight}");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
-                      $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}");
+                      $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
+                      $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight})");
         GetTree().Quit(ok ? 0 : 1);
     }
 

@@ -38,9 +38,11 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     private readonly MovieSurfaceRegistry _movieSurfaces = new();
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
-    // slot -> dimensions of the currently allocated surface. Slot 0 begins as the engine's 800x600
-    // primary surface, but op 0x1fa releases it like any other slot; subsequent size queries must return 0x0.
-    private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
+    // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's
+    // logical canvas, but op 0x1fa releases it like any other slot; subsequent queries return 0x0.
+    private readonly Dictionary<int, (int W, int H)> _slotDims = new();
+    private readonly int _screenWidth;
+    private readonly int _screenHeight;
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly AutoResetEvent _inputCallbackSignal = new(false);
     private readonly Age.Engine.Hosting.FrameClock _clock;
@@ -99,13 +101,19 @@ public sealed class GodotAdvHost : IHost
     public readonly List<(int Offset, string Text)> Captured = new();
 
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
-                        PageLocatorState locator, GodotTimelineLog? timeline = null,
+                        PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
+                        GodotTimelineLog? timeline = null,
                         bool synchronizeExplicitPresentation = true)
     {
         _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
+        _screenWidth = logicalCanvas.Width;
+        _screenHeight = logicalCanvas.Height;
+        _slotDims[0] = (_screenWidth, _screenHeight);
         _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
     }
+
+    public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
 
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
 
@@ -170,7 +178,8 @@ public sealed class GodotAdvHost : IHost
         lock (_textLock)
         {
             layout = new AdvTextLayoutSnapshot(
-                _currentAdvLayout, 800, 600, 0, 0, _advTextX, _advTextY, 800, 600);
+                _currentAdvLayout, _screenWidth, _screenHeight, 0, 0,
+                _advTextX, _advTextY, _screenWidth, _screenHeight);
             delay = _messageGlyphDelayMilliseconds;
         }
         ShowText(new AdvLiveTextRun(
@@ -1276,7 +1285,8 @@ public sealed class GodotAdvHost : IHost
             _surfaceImages.Remove(surfaceSlot);
             _surfaceColorKeys.Remove(surfaceSlot);
         }
-        _slotDims[surfaceSlot] = (800, 600); // SC0000 creates this native-sized surface immediately beforehand.
+        // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
+        _slotDims[surfaceSlot] = (_screenWidth, _screenHeight);
         try
         {
             var movie = _res.ReadMovie(asset);

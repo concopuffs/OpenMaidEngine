@@ -21,7 +21,7 @@ per format.
 `SYS4INI.BIN` is not only the asset catalog. Its `S4IC` LZSS stream begins with the archive names and
 80-byte file records documented in `asset-resolution-re.md`, then continues with VM-bank metadata and a
 NUL-delimited per-game engine-settings trailer. `tools/parse_sys4ini.py` currently consumes only the
-directory prefix.
+directory prefix; the C# runtime catalog continues through the trailer and exposes the ordered pairs.
 
 After the directory prefix, Himegari's decompressed stream has this tail:
 
@@ -89,6 +89,13 @@ that are inert under Himegari's selected renderer, and current port coverage are
 that the authored logical canvas is per-game data. Fullscreen/display-mode settings are separate from
 these logical dimensions. `USEAPPDATAFOLDER` and `SAVEPATH` select the native Windows save root; fixed
 save filenames remain AGE policy rather than trailer or script strings.
+
+`Sys4AssetCatalog` now parses this bounded trailer for base `S4IC` catalogs. It preserves ordered unknown
+pairs for diagnostics and offers case-insensitive, last-value-wins lookup; this is intentionally more
+permissive than AGE's fixed registry so unimplemented keys in another profile remain inspectable.
+`Sys4LogicalCanvas` is the first semantic projection: `SCREENX` and `SCREENY` fall back independently to
+AGE's registered `640x480` defaults when absent or nonpositive/nonnumeric, while unsafe RGBA allocations
+are rejected before presentation construction. Append `S4AC` catalogs do not own startup settings.
 
 ## Native persistence files — Himegari 3.10
 

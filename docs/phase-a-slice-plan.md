@@ -3521,6 +3521,30 @@ SYS4INI-sized logical canvas into that window using the aspect-preserving/letter
 partial overrides, minimum sizes, fullscreen interaction, integer scaling, and alternate stretch/crop
 policies belongs to that second slice's configuration design.
 
+### Result (implemented 2026-07-28)
+
+The first slice is complete. `Sys4AssetCatalog` now consumes the bounded base-S4IC trailer after its
+existing directory parse and exposes ordered `Sys4StartupSettings`; lookup is case-insensitive and
+last-value-wins while unknown keys remain available for future profiles. `Sys4LogicalCanvas` projects
+`SCREENX`/`SCREENY` with independent `640x480` fallbacks and rejects dimensions above the bounded
+dimension/pixel allocation policy.
+
+Godot loads the catalog before presentation allocation and reuses that instance for normal script/asset
+startup. The selected canvas owns the root content-scale base, initial windowed client request,
+backbuffer/pixel allocation, GPU and software destination bounds, whole-screen fills, primary and movie
+surface fallbacks, fallback ADV layout, and pointer coordinates. `GodotAdvHost` receives the validated
+size explicitly, and the platform-neutral retained-surface fill now derives its zero-size fallback from
+the destination image. `project.godot` retains only AGE's generic `640x480` bootstrap fallback. No
+runtime production literal `800`/`600` remains; authored Himegari data and unrelated regression fixtures
+were left unchanged.
+
+Verification passed with 443 engine tests, including installed 36-pair/`800x600`, synthetic
+`1024x576`, independent fallback, duplicate/unknown, malformed/unsafe, and non-800 retained-fill cases.
+The Godot C# project builds with zero warnings, and the threaded headless selftest reports
+`logical-canvas=800x600`. Its synthetic headless physical window is not a client-size oracle; ordinary
+windowed startup directly requests the same validated dimensions. Physical window overrides remain the
+second slice described above.
+
 ## ADV requested-face selection implemented (2026-07-28)
 
 Opcode `0x1a5` is no longer a presentation no-op. The VM retains its requested face in

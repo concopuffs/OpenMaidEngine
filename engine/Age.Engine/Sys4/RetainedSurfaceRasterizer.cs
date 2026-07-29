@@ -38,8 +38,8 @@ public static class RetainedSurfaceRasterizer
             if (source == null)
             {
                 if (item.SurfaceResId != 0 || item.Blend == BlendKind.Opaque) continue;
-                int width = item.W > 0 ? item.W : 800;
-                int height = item.H > 0 ? item.H : 600;
+                int width = item.W > 0 ? item.W : destination.Width;
+                int height = item.H > 0 ? item.H : destination.Height;
                 float fillOpacity = item.MultiplyTint ? opacity : opacity * tintStrength;
                 SoftwareAffineRasterizer.FillRgba(
                     destination.Pixels, destination.Width, destination.Height,

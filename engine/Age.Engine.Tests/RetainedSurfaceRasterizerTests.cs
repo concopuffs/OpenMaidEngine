@@ -38,4 +38,34 @@ public class RetainedSurfaceRasterizerTests
             Assert.Equal(0xff, destination.Pixels[index + 3]);
         }
     }
+
+    [Fact]
+    public void SurfacelessZeroSizedFillUsesDestinationCanvasRatherThanLegacyProfileSize()
+    {
+        var fill = new RenderObject(
+            Handle: 100, SurfaceResId: 0, ColorKey: 0,
+            SrcX: 0, SrcY: 0, W: 0, H: 0, DstX: 0, DstY: 0,
+            Transform: new TransformState(1, 1, 1, 0, 0, 0, 0, 0, 0),
+            Rotation: new RotationCycleState(false, 0, 0, 0, 0),
+            Alpha: 255, Tint: 0x336699, TintStrength: 0,
+            Blend: BlendKind.Alpha, MultiplyTint: true);
+        var destination = new RgbaImage(1024, 576, new byte[1024 * 576 * 4]);
+
+        int rendered = RetainedSurfaceRasterizer.CompositeRange(
+            destination, [fill], 100, 1, _ => null);
+
+        Assert.Equal(1, rendered);
+        AssertPixel(destination, 0, 0, 0x33, 0x66, 0x99, 0xff);
+        AssertPixel(destination, 1023, 575, 0x33, 0x66, 0x99, 0xff);
+    }
+
+    private static void AssertPixel(
+        RgbaImage image, int x, int y, byte red, byte green, byte blue, byte alpha)
+    {
+        int offset = (y * image.Width + x) * 4;
+        Assert.Equal(red, image.Pixels[offset]);
+        Assert.Equal(green, image.Pixels[offset + 1]);
+        Assert.Equal(blue, image.Pixels[offset + 2]);
+        Assert.Equal(alpha, image.Pixels[offset + 3]);
+    }
 }

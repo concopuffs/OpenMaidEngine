@@ -5,8 +5,8 @@ config/name="Open Maid Engine"
 run/main_scene="res://Main.tscn"
 
 [display]
-window/size/viewport_width=800
-window/size/viewport_height=600
+window/size/viewport_width=640
+window/size/viewport_height=480
 
 [dotnet]
 project/assembly_name="Himegari"

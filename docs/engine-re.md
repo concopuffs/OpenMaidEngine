@@ -201,7 +201,7 @@ The meaningful consumer catalog is:
 | Setting group | Native Himegari effect | Classification |
 |---|---|---|
 | `CREATEOBJECT`, `DRAWMODE` | `CreateObject=2` selects only the retained D3D/object backend; `DrawMode=1` selects its matching draw/text path. Startup verifies that bit `1 << DrawMode` exists in the backend mask. | Active renderer selection |
-| `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. | Active core profile |
+| `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. The port now parses and applies these dimensions to its logical canvas and default windowed client size. | Active core profile; implemented |
 | `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
 | `DEPENDMOVIESOUND` | Supplies the default movie-audio dependency/routing policy when movie opcode flags do not force another route. | Active media policy |
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
@@ -222,17 +222,19 @@ The meaningful consumer catalog is:
 | `REGKEY` | A nonzero value activates `registration_validate_key_file@0x46fc80`, which opens `SYS4RK.BIN`, validates its header/transformed payload and both CRC variants, and publishes the registration result. | Native registration/key validation |
 | `COPYRIGHT`, `RCVERSION` | Both are imported; no later direct consumer of the exact registry keys was found in this image. | Loaded product metadata |
 
-This is intentionally a native-behavior catalog, not a mandate to reproduce every Win32-era switch. The
-current port already preserves the shipped result of several settings through profile-specific constants:
-the `800x600` canvas, requested Mincho/Gothic faces, save version 3.10, and movie/audio behavior. It
-deliberately redirects the native AppData path to Godot `user://SAVE`, and it should not reproduce legacy
-DirectDraw selection or native registration/key validation.
+This is intentionally a native-behavior catalog, not a mandate to reproduce every Win32-era switch.
+`Sys4AssetCatalog` now parses the ordered trailer once, retaining unknown pairs for diagnostics, and projects
+`SCREENX`/`SCREENY` into one validated engine-owned logical canvas. Godot uses that value for its content-scale
+base, default windowed client, backbuffer/compositor bounds, primary surface, movie/layout fallbacks, and input
+coordinates. AGE's independent `640x480` defaults apply for missing or invalid dimensions. The port still
+preserves requested Mincho/Gothic faces, save version 3.10, and movie/audio behavior through their existing
+paths; those keys have not yet been migrated to the parsed registry.
 
-The actionable generic-profile gap is that `Sys4AssetCatalog` still parses only the directory and the frontend
-hard-codes the important results. A future configuration/profile slice should expose the typed trailer values
-once and let the runtime apply only cross-platform semantic settings. In particular, click-cancel, Auto/Skip
-coexistence, cursor policy, redraw policy, and wheel action ids must be decided from this evidence instead of
-AGE's compiled defaults. No runtime behavior changes were made as part of this investigation.
+The remaining generic-profile gap is semantic application of further portable settings. In particular,
+click-cancel, Auto/Skip coexistence, cursor policy, redraw policy, and wheel action ids must be decided from
+this evidence instead of AGE's compiled defaults. The port deliberately redirects the native AppData path to
+Godot `user://SAVE`, and it should not reproduce legacy DirectDraw selection or native registration/key
+validation.
 
 ### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
 

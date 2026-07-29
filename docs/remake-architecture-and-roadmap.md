@@ -681,12 +681,12 @@ scaling, and other game-specific defaults therefore belong in the selected game 
 surface state rather than in a forked frontend. The source is now known: after its asset directory and
 VM-bank metadata, SYS4INI carries a typed per-game startup-settings record. Himegari uses it for the
 canvas, text face/raster mode, ADV input/skip policy, save ABI/path, audio initialization, and native
-Windows compatibility metadata. A future generic profile loader should parse that record once, preserve
-unknown/profile-specific data for diagnostics, apply cross-platform semantic settings through explicit
-runtime seams, and classify legacy renderer/registration switches rather than blindly emulating them.
-The current frontend's scattered Himegari constants are acceptable while gameplay is the priority, but
-they are not the multi-profile architecture. The first bounded implementation slice will source the
-logical canvas from `SCREENX`/`SCREENY` and use it as the default windowed size; a second slice will add
+Windows compatibility metadata. The runtime now parses that record once and preserves unknown/profile-
+specific data for diagnostics; semantic settings are applied through explicit cross-platform seams while
+legacy renderer/registration switches remain classified rather than blindly emulated. The first bounded
+application slice is complete: `SCREENX`/`SCREENY` select the validated logical canvas, all presentation
+allocations and primary bounds consume it, and it is the default windowed size. Other settings remain on
+their existing paths while gameplay is the priority. A second slice will add
 independent physical `--window-width`/`--window-height` overrides without changing VM coordinates or
 surface geometry. The executable task plan and gates live in `phase-a-slice-plan.md`. This experiment was
 diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
