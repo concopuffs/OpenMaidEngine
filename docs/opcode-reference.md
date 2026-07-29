@@ -230,20 +230,28 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xc5_get_audio_volume@0x428470 selects sound:Volume0..Volume4 for operand 1 values 0..4, queries the engine settings registry, and writes the result to operand 2. CONFIG.BIN uses the results to draw and adjust four visible category sliders; its initialization also sets Volume0..Volume3 to 10000/6500/5000/8000.
 
+Port status (2026-07-29): implemented against the profile-lifetime AudioMixerSettings registry. The native -1 unconfigured sentinel is preserved; CONFIG reads receive the exact stored basis-point value.
+
 ### 0xc6 `set-audio-volume` (set-audio-volume, argc 2)
 - **summary:** (category)(basis_points) — update the configured 0..10000 audio volume and apply it immediately: 0=master, 1=music, 2=SFX, 3=voice, 4=movie.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xc6_set_audio_volume@0x4206d0 writes sound:Volume0..Volume4 through the settings registry and dispatches selectors 0..4 to the live master/music/SFX/voice/movie volume workers. The master worker reapplies dependent volume to active movies and sound buffers; category workers update active BGM, ten SFX channels, voice channel 12, or the movie basis respectively.
+
+Port status (2026-07-29): implemented with native SYS4REG.INI [sound] persistence and live Godot Master/Music/SFX/Voice/Movie bus gain changes. The CP932 preserving writer retains unrelated options; master and category buses compose multiplicatively like native basis-point application.
 
 ### 0xc7 `get-audio-route-enabled` (get-audio-route-enabled, argc 2)
 - **summary:** (category)(out_enabled) — query whether an audio route is enabled: 1=music, 2=SFX, 3=voice, 4=movie. Writes boolean 0 or 1.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0xc7_get_audio_route_enabled@0x4285a0 queries sound:Music/SE/Voice/Movie for selectors 1..4 and writes boolean 0/1 to operand 2. CONFIG.BIN's only site loops selectors 1..3 to choose enabled/disabled presentation.
 
+Port status (2026-07-29): implemented as the read half of the shared audio-route registry loaded from native SYS4REG.INI.
+
 ### 0x1ba `set-audio-route-enabled` (set-audio-route-enabled, argc 2)
 - **summary:** (category)(enabled) — enable or disable an audio route and persist the setting: 1=music, 2=SFX, 3=voice, 4=movie.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1ba_set_audio_route_enabled@0x420860 dispatches selectors 1..4 to the music/SFX/voice/movie enable workers. Those workers update the live route, stop active playback when disabling where applicable, write sound:Music/SE/Voice/Movie through the settings registry, and reject selectors outside 1..4. All 15 CONFIG.BIN sites pass literal 0/1.
+
+Port status (2026-07-29): implemented with native SYS4REG.INI route persistence and live bus muting. AGE's raw music value band is preserved (Himegari 2 enabled toggles to -1 disabled); music changes restart/stop the retained stream, disabling SFX or voice stops active playback, and movie changes remain non-destructive.
 
 ### 0x1bd `play-history-voice` (u0041D910, argc 1)
 - **summary:** Replay a voice id selected from retained ADV text history using native playback/history variant 1, preserving normal Skip and Auto-voice state behavior.

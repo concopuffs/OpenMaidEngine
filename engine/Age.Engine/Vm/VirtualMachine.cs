@@ -40,6 +40,7 @@ public sealed class VirtualMachine
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
+    private readonly AudioMixerSettings _audioMixerSettings;
     private readonly INativeDatStore? _nativeDatStore;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
@@ -149,13 +150,15 @@ public sealed class VirtualMachine
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
-                          INativeDatStore? nativeDatStore = null)
+                          INativeDatStore? nativeDatStore = null,
+                          AudioMixerSettings? audioMixerSettings = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
+        _audioMixerSettings = audioMixerSettings ?? new AudioMixerSettings();
         _nativeDatStore = nativeDatStore;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
@@ -2417,6 +2420,46 @@ public sealed class VirtualMachine
                 int targetPercent = (int)Read(a[0]);
                 _host.FadeBgm(targetPercent, Read(a[1]));
                 if (targetPercent == 0) _currentBgmTrackId = 0;
+                return pc + 1;
+            }
+            case "get-audio-volume": // 0xc5 (category)(out basis points)
+            {
+                int category = unchecked((int)Read(a[0]));
+                if (_audioMixerSettings.TryGetVolume(category, out int basisPoints))
+                    Write(a[1], basisPoints);
+                else
+                    _host.ReportWarning($"audio volume category out of range: {category}");
+                return pc + 1;
+            }
+            case "set-audio-volume": // 0xc6 (category)(basis points)
+            {
+                int category = unchecked((int)Read(a[0]));
+                long basisPoints = Read(a[1]);
+                if (_audioMixerSettings.TrySetVolume(category, basisPoints))
+                    _host.ApplyAudioVolume(category, checked((int)basisPoints));
+                else
+                    _host.ReportWarning($"audio volume category out of range: {category}");
+                return pc + 1;
+            }
+            case "get-audio-route-enabled": // 0xc7 (category)(out boolean)
+            {
+                int category = unchecked((int)Read(a[0]));
+                if (_audioMixerSettings.TryGetRouteEnabled(category, out bool enabled))
+                    Write(a[1], enabled ? 1 : 0);
+                else
+                    _host.ReportWarning($"audio route category out of range: {category}");
+                return pc + 1;
+            }
+            case "set-audio-route-enabled": // 0x1ba (category)(enabled)
+            {
+                int category = unchecked((int)Read(a[0]));
+                bool enabled = Read(a[1]) != 0;
+                if (_audioMixerSettings.TrySetRouteEnabled(category, enabled, out bool changed))
+                {
+                    if (changed) _host.ApplyAudioRouteEnabled(category, enabled);
+                }
+                else
+                    _host.ReportWarning($"audio route category out of range: {category}");
                 return pc + 1;
             }
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000

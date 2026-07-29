@@ -814,11 +814,28 @@ effectful fallthrough inventory from 23 to 22 distinct opcodes. Focused tests co
 odd/even period timing, continuous-presentation classification, and matrix order; the full engine suite,
 warning-free Godot build, and Himegari-targeted threaded selftest pass (468 engine tests).
 
-**NEXT:** implement CONFIG's mixer ABI as one four-opcode tranche rather than piecemeal:
-`0xc5` gets master/music/SFX/voice/movie volume, `0xc6` sets and applies it, `0x1ba` enables/disables the
-four non-master routes, and `0xc7` queries route state. Those 37 CONFIG sites require shared persistent
-settings plus live Godot-bus application; implementing only a setter or getter would leave the menu
-internally inconsistent. Low-frequency developer-only calls remain behind these two tranches.
+**CONFIG mixer tranche implemented (2026-07-29).** `0xc5`/`0xc6` now get/set master, music, SFX,
+voice, and movie volume in native basis points; `0x1ba`/`0xc7` set/get the four non-master route flags.
+The registry is shared across fresh scene VMs and persisted in AGE's native CP932 `SYS4REG.INI`. A shared
+path resolver models SYS4INI's independent `SAVEPATH`/`REGFILEPATH` choices; Godot redirects Himegari's
+related profile root to `user://`, yielding `user://SAVE` and `user://SYS4REG.INI`. The compatibility
+writer updates only the nine audio keys and preserves every unrelated option. Raw music state retains
+native `2 ↔ -1` band toggling. Godot applies
+gains through its nested audio buses, so master and category volume compose, and route changes immediately
+stop/mute active playback according to the native worker distinctions. All 37 CONFIG sites now dispatch,
+reducing the effectful fallthrough inventory from 22 to 18 distinct opcodes. Seven focused tests cover
+native defaults, category isolation, getter/setter round trips, idempotent routes, cross-VM state, invalid
+selectors, path resolution, CP932 INI preservation, and persistence. All 475 engine tests, the
+warning-free Godot build, opcode lint, and the Himegari-targeted threaded selftest pass.
+
+**Post-tranche rerank:** a fresh 481-script aggregate confirms exactly 18 effectful gaps totaling only
+39 instructions. The widest are unknown `0x22` (eight sites across seven scripts), unknown `0x230`
+(six sites across two scripts), then `0x21` and `0x1b2` (three sites each); every other gap has at most two
+sites. CONFIG itself is now 1659/1665 instructions implemented, with four unrelated calls remaining
+(`0x142` twice, `0xb7`, and `0xb8`).
+
+**NEXT:** investigate `0x22` as the widest remaining independent opcode, with `0x230` as the next
+candidate if `0x22` proves to own a larger subsystem.
 
 ## Later Phase B breadth
 

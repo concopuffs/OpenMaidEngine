@@ -215,8 +215,8 @@ The meaningful consumer catalog is:
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. | Active ADV toggle behavior; currently missing from port |
 | `REDRAWTEXTONKEY` | Value 0 disables the wheel/key path that traverses and republishes the current text-history view through `CALLBACK_TEXT.BIN`. | Active ADV history-input policy; port uses its script callback path instead |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. `adv_input_service_poll@0x411230` uses them for ADV wheel-key/history handling; raw `WM_MOUSEWHEEL` accumulation for op `0x10d` remains a separate channel. | Active ADV input binding; port does not source these values |
-| `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; intentionally redirected by port |
-| `REGFILEPATH` | Supplies the Eushully/product-relative Windows registration-file path used by the native registration integration. | Windows integration only |
+| `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
+| `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
 | `SAVEVERSION` | Selects numbered-save layout 3.10 and enables the matching append-catalog persistence structures. | Active persistence ABI |
 | `GAMEVERSION`, `VERREGPOS` | Seeds display/registration version `1.00`, then permits the GUID-selected Windows registry `CLASS00` value to replace it. | Windows version/registration metadata |
 | `REGKEY` | A nonzero value activates `registration_validate_key_file@0x46fc80`, which opens `SYS4RK.BIN`, validates its header/transformed payload and both CRC variants, and publishes the registration result. | Native registration/key validation |
@@ -234,9 +234,10 @@ paths; those keys have not yet been migrated to the parsed registry.
 
 The remaining generic-profile gap is semantic application of further portable settings. In particular,
 click-cancel, Auto/Skip coexistence, cursor policy, redraw policy, and wheel action ids must be decided from
-this evidence instead of AGE's compiled defaults. The port deliberately redirects the native AppData path to
-Godot `user://SAVE`, and it should not reproduce legacy DirectDraw selection or native registration/key
-validation.
+this evidence instead of AGE's compiled defaults. The port deliberately redirects the native profile to
+Godot `user://`: save payloads remain under `user://SAVE`, while engine options retain AGE's native
+`SYS4REG.INI` filename and format at `user://SYS4REG.INI`.
+It should not reproduce legacy DirectDraw selection or native registration/key validation.
 
 ### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
 
@@ -1851,10 +1852,11 @@ Save paths are native engine policy, not script-provided strings. Every numbered
 `SAVE%2.2d.STH`, `SAVE.DAT`, `SAVE.BAK`, `RT.DAT`, and their `$$` temporary names) under that root.
 The script operands select the operation and numbered slot only.
 
-The port preserves that ownership boundary while intercepting the root: Godot supplies `user://SAVE`, and
-`DirectoryNativeDatStore` owns the fixed native names beneath it. This isolates authored port saves from the
-original installation while retaining compatible file structure; another root can be injected without
-changing script semantics.
+The port preserves that ownership boundary while intercepting the enclosing profile root. For Himegari,
+`Sys4PersistencePaths` validates that `SAVEPATH` is beneath `REGFILEPATH`, maps their relative `SAVE` tail
+under Godot `user://`, and supplies `user://SAVE` to `DirectoryNativeDatStore`. This isolates authored port
+saves from the original installation while retaining compatible file structure; another profile root can
+be injected without changing script semantics.
 
 The resolver reads two per-game settings from the SYS4INI-backed settings registry:
 `set:UseAppDataFolder` and `set:SavePath`. When `UseAppDataFolder == 1`, the modern-Windows branch
@@ -1939,7 +1941,7 @@ global pointers. `RT.DAT` is now implemented as the separate S3RT layer describe
 validates its distinct compatibility id, queries metadata without decoding payloads, and performs exact
 paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
 dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
-frame marker) are wired. Godot injects the store at `user://SAVE`.
+frame marker) are wired. Godot's shared profile-path resolver injects the store at `user://SAVE`.
 `NativeNumberedSaveCodec`, `NativeTextHistoryCodec`, and `NativeGfxPersistenceCodec` own the complete
 layout-3 numbered body, global/frame/gfx state, and appended history tail. The VM wires `0x19e`,
 data-only `0x19f`, full load
@@ -2794,8 +2796,8 @@ sound. The port now forwards the native start mode through its host seam and set
 Godot's WAV loop mode before playback; `0xb5` explicitly supplies mode 0 and `0xba` supplies mode 1. The
 focused VM regression covers both modes, and the renamed/commented `/v2` handler is saved.
 
-**CONFIG mixer ABI reconnaissance (2026-07-28).** Four remaining opcodes form one internally dependent
-settings surface and should be implemented together:
+**CONFIG mixer ABI implemented (mapped 2026-07-28; landed 2026-07-29).** Four opcodes form one
+internally dependent settings surface:
 
 - `0xc5 get-audio-volume(category, out)` reads `sound:Volume0..Volume4`; selectors `0..4` mean
   master/music/SFX/voice/movie and values are basis points (`0..10000`).
@@ -2809,10 +2811,39 @@ settings surface and should be implemented together:
 
 CONFIG contains all 37 sites: nine volume reads, twelve volume writes, fifteen route writes, and one
 route-query loop. Skipping `0xc5` leaves its output operand stale, so the visual slider calculation can be
-wrong even before the user changes anything; skipping the setters makes its controls inert. The `/v2`
-handlers, route helpers, and live volume-apply workers are named/commented and saved. Port implementation
-should provide one shared mixer/settings state to the VM and Godot audio buses rather than treating the four
-opcodes as isolated host calls.
+wrong even before the user changes anything; skipping the setters makes its controls inert.
+
+The native default registry initializes `sound:Volume0..Volume4` to `-1`. During audio startup, each
+nonnegative entry is applied and `-1` deliberately leaves the hardware-default gain unchanged. Himegari's
+CONFIG reset action later writes `10000/6500/5000/8000` for master/music/SFX/voice. Route defaults are
+enabled after `NOSETMUSIC=3` transforms music to enabled state 2 and the generic SE/Voice/Movie flags begin
+at one. The saved `/v2` image now records these defaults plus the exact route side effects:
+`sound_set_music_route_enabled@0x407f80` rebuilds the current music route, disabling SFX calls its
+active-channel stop helper, disabling voice stops channel 12, and movie enablement changes routing without
+stopping the movie.
+
+The port now owns one `AudioMixerSettings` instance across fresh scene VMs. `0xc5`/`0xc7` query it and
+`0xc6`/`0x1ba` update it before calling the host's live-application seam. Godot maps selectors 0..4 to its
+Master/Music/SFX/Voice/Movie buses; the parent Master bus and category bus multiply naturally, and route
+changes mute immediately while preserving the native stop/restart distinctions above.
+
+Persistence uses AGE's CP932 `SYS4REG.INI`, not a port-owned format.
+`engine_resolve_sys4reg_ini_path@0x46b150` selects the fixed filename under the SYS4INI
+`REGFILEPATH`; Himegari therefore uses
+`%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`.
+`engine_settings_load_sys4reg_ini@0x46b6e0` registers and imports the `[display]`, `[sound]`,
+`[message]`, and `[system]` projections, including all nine audio keys. `Sys4RegIniStore` reads and
+updates only `Music`, `SE`, `Voice`, `Movie`, and `Volume0..4`, preserving all unrelated lines, sections,
+key spelling/order, CP932 text, and newline style. Missing keys use native defaults. Music retains AGE's
+signed value band: Himegari's enabled state `2` disables to `-1` and re-enables to `2`, rather than being
+silently normalized to `1`. Writes use a sibling temporary file followed by replacement.
+
+AGE resolves save and settings locations independently, but Himegari makes `SAVEPATH` the `SAVE`
+descendant of `REGFILEPATH`. `Sys4PersistencePaths` models both native resolutions together. Godot's
+current profile override replaces the resolved `REGFILEPATH` directory with `user://`, preserving the
+relative `SAVE` tail and yielding `user://SYS4REG.INI` plus `user://SAVE`. If a future profile supplies
+unrelated paths, a single-root override is rejected instead of guessing; native resolution remains
+available as the exact `USEAPPDATAFOLDER` plus independent-path policy.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 

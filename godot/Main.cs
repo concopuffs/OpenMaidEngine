@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -63,6 +65,8 @@ public partial class Main : Godot.Control
     private float _voiceBgmDuckRestoreDb;
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
     private readonly int[] _sfxGenerations = new int[10];
+    private AudioMixerSettings _audioMixerSettings = null!;
+    private Sys4RegIniStore? _sys4RegIniStore;
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private Sys4ScriptProvider? _scripts;
@@ -304,16 +308,37 @@ public partial class Main : Godot.Control
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        // Persistence opcodes retain AGE's native filenames and binary formats, but the port owns the
-        // root interception point. Keep authored saves isolated from the original installation under
-        // Godot's per-application user directory.
+        // Persistence retains AGE's native filenames and formats, but the port owns one profile-root
+        // interception point. Himegari's SYS4INI makes SAVEPATH the SAVE child of REGFILEPATH, so both
+        // save payloads and SYS4REG.INI remain isolated together under Godot's user directory.
+        Sys4PersistencePaths persistencePaths = Sys4PersistencePaths.ResolveProfileOverride(
+            catalog.StartupSettings,
+            ProjectSettings.GlobalizePath("user://"));
         var nativeSaveStore = new DirectoryNativeDatStore(
-            ProjectSettings.GlobalizePath("user://SAVE"),
+            persistencePaths.SaveDirectory,
             new NativeSaveIdentity(
                 NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
                 SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
         var sharedProfile = new SharedProfile();
         if (!_selftest) sharedProfile.Load(nativeSaveStore);
+        _audioMixerSettings = new AudioMixerSettings();
+        if (!_selftest)
+        {
+            try
+            {
+                _sys4RegIniStore = Sys4RegIniStore.ForPath(
+                    catalog.StartupSettings, persistencePaths.Sys4RegIniPath);
+                _audioMixerSettings = _sys4RegIniStore.Load();
+                GD.Print($"[settings] native engine options={_sys4RegIniStore.FilePath}");
+            }
+            catch (Exception error) when (
+                error is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                GD.PushWarning($"[settings] audio mixer load failed; using native defaults: {error.Message}");
+            }
+            _audioMixerSettings.Changed += PersistAudioMixerSettings;
+        }
+        ApplyAudioMixerSnapshot(_audioMixerSettings.Snapshot());
 
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
         // runs a SYNTHESIZED scene (not a real scene in a crippled mode) so its output is deterministic.
@@ -369,7 +394,8 @@ public partial class Main : Godot.Control
                 NoSaveDat: _selftest),
             provider, sink,
             sharedProfile: sharedProfile,
-            nativeDatStore: nativeSaveStore);
+            nativeDatStore: nativeSaveStore,
+            audioMixerSettings: _audioMixerSettings);
         if (scripts != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -1802,6 +1828,85 @@ public partial class Main : Godot.Control
         _bgm.Stream = stream;
         _bgm.Play();
     }
+
+    private void PersistAudioMixerSettings(AudioMixerSettingsSnapshot snapshot)
+    {
+        try
+        {
+            _sys4RegIniStore?.Save(snapshot);
+        }
+        catch (Exception error) when (
+            error is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            System.Console.Error.WriteLine(
+                $"[settings] audio mixer save failed; runtime setting remains active: {error.Message}");
+        }
+    }
+
+    private void ApplyAudioMixerSnapshot(AudioMixerSettingsSnapshot snapshot)
+    {
+        for (int category = 0; category < AudioMixerSettings.CategoryCount; category++)
+            ApplyAudioVolume(category, snapshot.Volumes[category]);
+        for (int category = (int)AudioMixerCategory.Music;
+             category < AudioMixerSettings.CategoryCount;
+             category++)
+            SetAudioBusMuted(category, !snapshot.Routes[category]);
+    }
+
+    public void ApplyAudioVolume(int category, int basisPoints)
+    {
+        string? busName = AudioBusName(category);
+        if (busName == null) return;
+        int bus = AudioServer.GetBusIndex(busName);
+        if (bus < 0) return;
+        int effectiveBasisPoints = basisPoints < 0
+            ? AudioMixerSettings.MaximumVolume
+            : System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume);
+        float linear = effectiveBasisPoints / (float)AudioMixerSettings.MaximumVolume;
+        AudioServer.SetBusVolumeDb(bus, linear <= 0 ? -80.0f : Mathf.LinearToDb(linear));
+    }
+
+    public void ApplyAudioRouteEnabled(int category, bool enabled)
+    {
+        if (category == (int)AudioMixerCategory.Music)
+        {
+            RestoreVoiceBgmDuck();
+            CancelBgmFade();
+            if (enabled)
+            {
+                if (_bgm.Stream != null) _bgm.Play();
+            }
+            else
+                _bgm.Stop();
+        }
+        else if (!enabled && category == (int)AudioMixerCategory.SoundEffect)
+        {
+            CancelScheduledSoundEffectStarts();
+            foreach (AudioStreamPlayer player in _sfx) player.Stop();
+        }
+        else if (!enabled && category == (int)AudioMixerCategory.Voice)
+            StopVoiceForMessageSkip();
+
+        SetAudioBusMuted(category, !enabled);
+    }
+
+    private static void SetAudioBusMuted(int category, bool muted)
+    {
+        string? busName = AudioBusName(category);
+        if (busName == null) return;
+        int bus = AudioServer.GetBusIndex(busName);
+        if (bus >= 0) AudioServer.SetBusMute(bus, muted);
+    }
+
+    private static string? AudioBusName(int category) => category switch
+    {
+        (int)AudioMixerCategory.Master => "Master",
+        (int)AudioMixerCategory.Music => "Music",
+        (int)AudioMixerCategory.SoundEffect => "SFX",
+        (int)AudioMixerCategory.Voice => "Voice",
+        (int)AudioMixerCategory.Movie => "Movie",
+        _ => null,
+    };
 
     public int QueueVoicePlayback()
         => System.Threading.Interlocked.Increment(ref _voiceQueuedGeneration);

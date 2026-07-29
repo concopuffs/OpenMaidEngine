@@ -97,6 +97,42 @@ permissive than AGE's fixed registry so unimplemented keys in another profile re
 AGE's registered `640x480` defaults when absent or nonpositive/nonnumeric, while unsafe RGBA allocations
 are rejected before presentation construction. Append `S4AC` catalogs do not own startup settings.
 
+### Native `SYS4REG.INI` engine options — CONFIRMED
+
+`REGFILEPATH` selects the directory for AGE's fixed `SYS4REG.INI` filename. Himegari combines
+`USEAPPDATAFOLDER=1` with `REGFILEPATH=Eushully\姫狩りダンジョンマイスター`, producing:
+
+```text
+%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI
+```
+
+The file is an ordinary BOM-less CP932 INI with CRLF line endings in the installed profile. Its native
+sections are `[display]`, `[sound]`, `[message]`, and `[system]`. The CONFIG mixer opcodes own these
+`[sound]` integer keys:
+
+```ini
+Music=2
+SE=1
+Voice=1
+Movie=1
+Volume0=5500
+Volume1=2500
+Volume2=3500
+Volume3=3500
+Volume4=-1
+```
+
+The shown values are the installed profile's current values, not compiled defaults. `Volume0..4` mean
+master/music/SFX/voice/movie. Music uses signed bands rather than a normalized boolean: nonnegative is
+enabled, negative is disabled, and the native setter moves between bands by adding or subtracting three.
+SE/Voice/Movie use zero/nonzero. The file is engine-option persistence, separate from `SAVE.DAT`,
+`RT.DAT`, and numbered saves.
+
+`SAVEPATH` and `REGFILEPATH` are independent native settings rather than one serialized profile-root
+field. Himegari deliberately relates them: `SAVEPATH` is the `SAVE` descendant of `REGFILEPATH`.
+The port's shared profile override preserves that relative layout, producing `user://SAVE` and
+`user://SYS4REG.INI`; the file contents and names remain native-compatible.
+
 ## Native persistence files — Himegari 3.10
 
 This section is the canonical binary-format specification for the persistence files used by Himegari.
@@ -105,7 +141,7 @@ Native function provenance, opcode behavior, filesystem policy, and restore cont
 `global-reference.md`.
 
 Unless noted otherwise, offsets are byte offsets, integers are little-endian DWORDs, and strings are
-NUL-terminated CP932. Himegari separates four physical domains:
+NUL-terminated CP932. Himegari's save/profile subsystem separates four physical domains:
 
 | File | Scope | Structural owner | Semantic owner |
 |---|---|---|---|

@@ -28,13 +28,17 @@ public sealed class GameSession
     public SharedProfile SharedProfile { get; }
     /// <summary>Native shared/numbered save directory service used by persistence opcodes.</summary>
     public INativeDatStore? NativeDatStore { get; }
+    /// <summary>AGE's profile-lifetime sound:* settings registry, independent of SAVE.DAT.</summary>
+    public AudioMixerSettings AudioMixerSettings { get; }
     /// <summary>The live retained ADV backlog shared by every VM run in this session.</summary>
     public AdvTextHistory TextHistory { get; } = new();
 
-    public GameSession(SharedProfile? sharedProfile = null, INativeDatStore? nativeDatStore = null)
+    public GameSession(SharedProfile? sharedProfile = null, INativeDatStore? nativeDatStore = null,
+                       AudioMixerSettings? audioMixerSettings = null)
     {
         SharedProfile = sharedProfile ?? new SharedProfile();
         NativeDatStore = nativeDatStore;
+        AudioMixerSettings = audioMixerSettings ?? new AudioMixerSettings();
     }
 
     public void Seed(int addr, long value) => Globals[addr] = value;
@@ -46,7 +50,8 @@ public sealed class GameSession
                                 ITraceSink? sink = null)
     {
         var vm = new VirtualMachine(
-            script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore);
+            script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
+            AudioMixerSettings);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

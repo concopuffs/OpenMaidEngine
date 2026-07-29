@@ -1672,6 +1672,26 @@ public sealed class GodotAdvHost : IHost
         }
         _timeline?.State("running", new() { ["bgm_fade_complete"] = true });
     }
+
+    public void ApplyAudioVolume(int category, int basisPoints)
+    {
+        _timeline?.State("audio-volume", new()
+        {
+            ["category"] = category,
+            ["basis_points"] = basisPoints,
+        });
+        _main.CallDeferred("ApplyAudioVolume", category, basisPoints);
+    }
+
+    public void ApplyAudioRouteEnabled(int category, bool enabled)
+    {
+        _timeline?.State("audio-route", new()
+        {
+            ["category"] = category,
+            ["enabled"] = enabled,
+        });
+        _main.CallDeferred("ApplyAudioRouteEnabled", category, enabled);
+    }
 }
 
 public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);

@@ -44,6 +44,8 @@ internal class RecordingHost : IHost
     public readonly List<int> SfxReleases = new();
     public readonly List<long> BgmTracks = new();
     public readonly List<(int Target, long Duration)> BgmFades = new();
+    public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
+    public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public System.Action? OnPlayMovie;
     public long? MovieStopTimeMs;
@@ -182,6 +184,10 @@ internal class RecordingHost : IHost
         => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
+    public void ApplyAudioVolume(int category, int basisPoints)
+        => AudioVolumeChanges.Add((category, basisPoints));
+    public void ApplyAudioRouteEnabled(int category, bool enabled)
+        => AudioRouteChanges.Add((category, enabled));
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
