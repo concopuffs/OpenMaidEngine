@@ -934,38 +934,41 @@ public sealed class GfxState
                         (o.RotationEnabled && o.RotationPeriodMs > 0)));
     }
 
-    /// <summary>Force the finite retained presentation serviced by native run-state bit 0x400 to its
-    /// endpoint. This is the EffectSkipOnClick path: type-0 surface commands and ordinary finite object
-    /// channels complete together, while movie masks, ambient cycles, and op-0x242-detached channels remain
-    /// active. Op 0x24e bit 0 disables click skipping; bit 1 suppresses the shared force-complete request.</summary>
-    public int CompleteClickSkippableTimedPresentation(long nowMs)
+    /// <summary>Consume the native run-state-0x400 EffectSkipOnClick action and, when permitted, force its
+    /// finite retained presentation to the endpoint. Bit 0 of op 0x24e rejects the action entirely. Bit 1
+    /// still allows the service wait to end but suppresses the shared force-complete request. Movie masks,
+    /// ambient cycles, and op-0x242-detached channels continue asynchronously after the service resumes.</summary>
+    public bool TryCompleteClickSkippableTimedPresentation(long nowMs, out int completed)
     {
         lock (_lock)
         {
-            if ((AnimationServiceFlags & 3) != 0) return 0;
+            completed = 0;
+            if ((AnimationServiceFlags & 1) != 0) return false;
 
-            int completed = 0;
-            foreach (var t in _surfaceTransitions.Values)
+            if ((AnimationServiceFlags & 2) == 0)
             {
-                if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
-                t.Forced = true;
-                completed++;
-            }
+                foreach (var t in _surfaceTransitions.Values)
+                {
+                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+                    t.Forced = true;
+                    completed++;
+                }
 
-            completed += CountOneShotChannels(_rangeTransform);
-            foreach (var o in _objects.Values)
-            {
-                if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
-                completed += CountOneShotChannels(o);
-            }
-            ForceCompleteOneShotChannels();
+                completed += CountOneShotChannels(_rangeTransform);
+                foreach (var o in _objects.Values)
+                {
+                    if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
+                    completed += CountOneShotChannels(o);
+                }
+                ForceCompleteOneShotChannels();
 
-            if (AnimClockDurationTicks != 0) completed++;
-            AnimClockDurationTicks = 0;
-            AnimClockGeneration++;
+                if (AnimClockDurationTicks != 0) completed++;
+                AnimClockDurationTicks = 0;
+                AnimClockGeneration++;
+            }
 
             if (completed > 0) MarkRetainedMutation();
-            return completed;
+            return true;
         }
     }
 

@@ -85,7 +85,7 @@ public class InputBindingTests
             Sys4ScriptProvider.Load(Table).RequireByName("SYSTEM4.BIN"), vm.InputBindings);
 
         vm.UpdateKeyboardVirtualKeyState(virtualKey, true);
-        Assert.False(host.PhysicalMessageSkip); // ADV lifecycle is not active yet.
+        Assert.True(host.PhysicalMessageSkip);
 
         vm.Run();
 
@@ -96,6 +96,29 @@ public class InputBindingTests
 
         Assert.False(host.PhysicalMessageSkip);
         Assert.False(host.MessageSkip);
+    }
+
+    [Fact]
+    public void HeldLogicalActionSixSurvivesPersistentSkipLifecycleSuspension()
+    {
+        var script = ScriptAssembler.Assemble(Table, "HELD_SKIP_LIFECYCLE", new List<(int, Operand[])>
+        {
+            (0x19c, Array.Empty<Operand>()),
+            (0x19b, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x140) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host);
+        InputBindingBootstrap.Apply(
+            Sys4ScriptProvider.Load(Table).RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+
+        vm.UpdateKeyboardVirtualKeyState(0x11, true);
+        vm.Run();
+
+        Assert.True(host.PhysicalMessageSkip);
+        Assert.True(host.MessageSkip);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x140));
     }
 
     [Fact]

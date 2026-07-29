@@ -265,6 +265,7 @@ public partial class Main : Godot.Control
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
         long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
+        bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 for diagnostics
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         string? pageMapPath = null;                      // --page-map <jsonl>: override default build/page-map-SCxxxx.jsonl
         for (int i = 0; i < userArgs.Length; i++)
@@ -289,6 +290,7 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
             if (userArgs[i] == "--transition-click-ms" && i + 1 < userArgs.Length) long.TryParse(userArgs[i + 1], out transitionClickMs);
+            if (userArgs[i] == "--hold-message-skip") holdMessageSkip = true;
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--page-map" && i + 1 < userArgs.Length) pageMapPath = userArgs[i + 1];
             if (userArgs[i] == "--locator-hud") _locatorHudVisible = true;
@@ -457,6 +459,8 @@ public partial class Main : Godot.Control
         if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
             _vm.ExternalGlobals[0x6242d] = 4;
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
+        if (holdMessageSkip)
+            _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.
         _vmTask = Task.Run(() =>
         {
             try { _vm.Run(); }

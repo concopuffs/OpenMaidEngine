@@ -111,7 +111,8 @@ public class ForegroundTransitionTests
         gfx.QueueMovieMaskTransition(new MovieMaskTransitionRequest(
             11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000));
 
-        Assert.Equal(3, gfx.CompleteClickSkippableTimedPresentation(200));
+        Assert.True(gfx.TryCompleteClickSkippableTimedPresentation(200, out int completed));
+        Assert.Equal(3, completed);
 
         Assert.Equal(1.0, gfx.SnapshotForegroundTransitions(200).Single().Progress);
         Assert.False(gfx.TryGet(100)!.OneShotColorEnabled);
@@ -123,9 +124,8 @@ public class ForegroundTransitionTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(2)]
     [InlineData(3)]
-    public void AnimationServiceFlagsSuppressClickCompletion(long flags)
+    public void AnimationServiceFlagBit0RejectsClickCompletion(long flags)
     {
         var gfx = new GfxState();
         gfx.SetSurface(4, 0x25, -1);
@@ -133,7 +133,35 @@ public class ForegroundTransitionTests
         gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
         gfx.SetAnimationServiceFlags(flags);
 
-        Assert.Equal(0, gfx.CompleteClickSkippableTimedPresentation(100));
+        Assert.False(gfx.TryCompleteClickSkippableTimedPresentation(100, out int completed));
+        Assert.Equal(0, completed);
         Assert.True(gfx.TryGet(100)!.OneShotColorEnabled);
+    }
+
+    [Fact]
+    public void AnimationServiceFlagBit1AcceptsWaitBypassWithoutForcingEndpoint()
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
+        gfx.SetAnimationServiceFlags(2);
+
+        Assert.True(gfx.TryCompleteClickSkippableTimedPresentation(100, out int completed));
+        Assert.Equal(0, completed);
+        Assert.True(gfx.TryGet(100)!.OneShotColorEnabled);
+    }
+
+    [Fact]
+    public void MovieMaskAcceptsWaitBypassAndContinuesAsynchronously()
+    {
+        var gfx = new GfxState();
+        gfx.QueueMovieMaskTransition(new MovieMaskTransitionRequest(
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000));
+
+        Assert.True(gfx.TryCompleteClickSkippableTimedPresentation(100, out int completed));
+        Assert.Equal(0, completed);
+        Assert.True(gfx.HasActiveTimedPresentation(100));
+        Assert.False(gfx.SnapshotMovieMaskTransitions().Single().Completed);
     }
 }

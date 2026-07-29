@@ -362,6 +362,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   and `colorProgress`, synchronized with the same frame/clock in `--timeline-log`. Parent directories are
   created automatically.
 - `--transition-click-ms <n>` — diagnostic-only input injector: after a foreground transition has been active for `n` virtual milliseconds, send one click through the real input lifecycle. The click completes/consumes the transition and does not advance a stable page. Use with `--timeline-log`, `--gfx-log`, and windowed `--shot-sequence`; omit for normal play.
+- `--hold-message-skip` — diagnostic-only held-input injector: hold Ctrl through the VM's real keyboard
+  binding path, producing native logical action 6 continuously. Use it to compare persistent fast-forward
+  against `--transition-click-ms` at the same page without relying on synthetic host state.
 - `--timeline-log <jsonl>` — diagnostic-only synchronized event stream for a real Godot run. Records every
   executed script byte offset/opcode, script-frame entry/exit with depth/cause/outcome, resolved call-script
   ids/names, unknown-fallback `stub` events, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,

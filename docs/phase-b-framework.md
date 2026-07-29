@@ -874,6 +874,42 @@ activating Ctrl/Skip during the wait uses the same endpoint path. Ambient loops,
 and movie masks remain unaffected. Focused exclusions and endpoint regressions pass in the 523-test engine
 suite, and the Godot build is warning-free.
 
+**Retained transition wait ownership corrected (2026-07-29):** playthrough testing with Skip held exposed
+that endpoint completion alone was insufficient. Skip could force an ordinary fade invisible, yet the host
+continued waiting on the broad presentation predicate until a movie-backed/protected channel or the original
+duration ended. Native clears run-state `0x400` before requesting endpoint completion, so interpreter resume
+is independent of whether excluded presentation remains active. The host now records that explicit service
+bypass, exits the transition wait immediately when the action is accepted, and reapplies an already-active
+Skip state at every new retained-transition boundary. Focused coverage distinguishes service-flags bit 0
+(reject the click) from bit 1 (accept resume but suppress endpoint forcing) and proves movie masks continue
+asynchronously after wait bypass. A direct `SC0000@0xc01` runtime trace—the page before the ritual CG
+sequence—shows its four click-skipped retained waits completing in 14, 14, 14, and 34 ms despite scripted
+durations of 150/890/300 ms; the later 1.587-second interval is the next page's ordinary glyph reveal at
+`SC0000@0xe04`, not an invisible transition wait.
+
+**Held-Skip pacing corrected (2026-07-29):** comparing held logical action 6 against the click trace at
+`SC0000@0xc01` exposed a separate delay outside the transition service. The Godot host was waiting for one
+rendered-frame pulse after every VM opcode while Skip was active, stretching hundreds of burst-fast CG
+setup/cleanup instructions into an invisible multi-second hold. Native live evidence instead measures roughly
+7,738 operand fetches/sec under Ctrl, and Ghidra shows the physical action-6 mask polled independently of the
+`0x19b`/`0x19c` persistent-Skip lifecycle. Per-op Skip pacing is removed, and a held Ctrl/C/Backspace channel
+now survives `0x19b`; presentation, sleep, and input boundaries remain the only wall-clock owners. The
+post-fix held-action trace reaches page 14 from `SC0000@0xc01` in 83 ms and takes the native
+`0x243`+`0x20c` endpoint branch at every intervening transition. The engine suite passes 525/525.
+
+**Nested ADV input ownership corrected (2026-07-29):** the first-dungeon boss event reaches ordinary
+dialogue at `SC0600@0x2343` and parks at `wait-for-input@0x234b`, but FIELD's registered timed mouse
+callback remains stored in its suspended parent script frame. The frontend incorrectly treated any stored
+raw callback as current modal input ownership. It consequently hid the wait indicator and withheld normal
+mouse/keyboard/joy advance signals from the nested SC0600 page, producing a softlock immediately before
+combat.
+
+Raw callback ownership is now frame-relative: it is active only while its owning script frame is the
+currently executing frame. The dormant FIELD registration survives the nested call and becomes active
+again when FIELD resumes, while SC0600 retains its ordinary ADV marker and input path. A synthetic
+parent-callback → child-dialogue regression preserves both halves of that lifetime. The engine suite passes
+526/526, the Godot build has zero warnings, and the Himegari-targeted threaded selftest passes.
+
 **Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
 disables the four looping channels represented by the compositor, and clears the complete native
 start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.

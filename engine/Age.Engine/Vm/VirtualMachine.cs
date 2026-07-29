@@ -83,7 +83,6 @@ public sealed class VirtualMachine
     private bool _sharedProfileShutdownHandled;
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
-    private volatile bool _advSkipServiceEnabled;
     private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private int _messageWindowAlphaSetting;
@@ -138,10 +137,18 @@ public sealed class VirtualMachine
             }
         }
     }
-    /// <summary>True while a script-owned timed mouse/input callback loop (HISTORY/HIDEWIN family) owns input.</summary>
+    /// <summary>True while the currently executing script frame owns a timed raw mouse/input callback
+    /// loop (HISTORY/HIDEWIN/FIELD family). A registered callback in a suspended parent frame is dormant
+    /// while a nested ADV scene owns the VM and must not suppress that child's ordinary page input.</summary>
     public bool IsRawInputCallbackActive
     {
-        get { lock (_interactiveLock) return _rawInputFrame != null; }
+        get
+        {
+            ExecFrame? rawInputFrame;
+            lock (_interactiveLock) rawInputFrame = _rawInputFrame;
+            if (rawInputFrame == null) return false;
+            lock (_debugControlLock) return ReferenceEquals(rawInputFrame, _debugActiveFrame);
+        }
     }
     public string? RawInputCallbackScriptName
     {
@@ -357,13 +364,13 @@ public sealed class VirtualMachine
         } while (Interlocked.CompareExchange(ref field, after, before) != before);
     }
 
-    /// <summary>Mirror adv_interpreter_tick's bit-0x40 path. The bit is logical action 6 from the
+    /// <summary>Mirror adv_interpreter_tick's live bit-0x40 poll. The bit is logical action 6 from the
     /// process-owned binding map, not a hardcoded Ctrl test; Himegari also binds C and retains the
-    /// engine's default Backspace binding. The presentation lifecycle gate prevents a held action
-    /// from leaking into non-ADV script execution.</summary>
+    /// engine's default Backspace binding. Native polls this physical channel independently of the
+    /// op-0x19b/0x19c lifecycle used by persistent/read-message Skip.</summary>
     private void RefreshPhysicalMessageSkipState()
     {
-        bool active = _advSkipServiceEnabled && (InputBindings.PollActionMask() & 0x40) != 0;
+        bool active = (InputBindings.PollActionMask() & 0x40) != 0;
         _host.SetPhysicalMessageSkipActive(active);
     }
 
@@ -790,7 +797,6 @@ public sealed class VirtualMachine
         _autoVoicePending = false;
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
-        _advSkipServiceEnabled = false;
         _advReadSkipState = false;
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
@@ -799,6 +805,7 @@ public sealed class VirtualMachine
         _host.SetMessageSkipActive(false);
         _host.SetPhysicalMessageSkipActive(false);
         _host.ResetSceneContext();
+        RefreshPhysicalMessageSkipState();
     }
 
     private static Stack<int>[] CreateIntegerStacks()
@@ -2276,22 +2283,19 @@ public sealed class VirtualMachine
                 Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
             case "u00414E80":
             case "suspend-adv-skip-service": // 0x19b: preserve the toggle while leaving ADV presentation
-                _advSkipServiceEnabled = false;
                 _messageSkipServiceActive = false;
                 _host.SetMessageSkipActive(false);
-                _host.SetPhysicalMessageSkipActive(false);
                 return pc + 1;
             case "u00414EC0":
             case "resume-adv-skip-service": // 0x19c: recompute active fast-forward on ADV entry
-                _advSkipServiceEnabled = true;
                 _messageSkipServiceActive =
                     _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
                 _host.SetMessageSkipActive(_messageSkipServiceActive);
                 RefreshPhysicalMessageSkipState();
                 return pc + 1;
             case "get-message-skip": // 0x1c7: persistent Skip or host-supplied Ctrl fast-forward
-                // The native per-op tick continually re-arms the transient run-state bit while the
-                // ADV service is enabled. The host channel also carries physical fast-forward input.
+                // Native persistent state and the independently polled physical action-6 channel both
+                // re-arm the transient run-state bit consumed by this query.
                 Write(a[0], _messageSkipServiceActive || _host.IsMessageSkipActive ? 1 : 0); return pc + 1;
             case "get-adv-read-skip-state": // 0x1cc: per-message read/click skip service state
             case "get-adv-service-state":   // compatibility with pre-recovery generated tables

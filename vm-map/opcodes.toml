@@ -3350,12 +3350,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "suspend-adv-skip-service"
 category = "input"
-summary = "() - suspend active ADV fast-forward while preserving the user's persistent all-message Skip toggle."
+summary = "() - suspend persistent/read-driven ADV fast-forward while preserving the user's all-message Skip toggle; physically held logical action 6 is independent."
+details = "This lifecycle operation affects persistent/read-driven active Skip only. Physical logical action 6 is process input polled independently by adv_interpreter_tick and remains active while held."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. Corpus comments call it `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation."
+evidence = "Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. It does not mutate the input manager; adv_interpreter_tick@0x410fb0 polls logical action 6 (mask bit 0x40) independently of ctx+0x55100. Corpus comments call the opcode `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation."
 
 [[opcode]]
 op = 0x19c
@@ -3366,7 +3367,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "resume-adv-skip-service"
 category = "input"
-summary = "() - enable the ADV skip service and recompute active fast-forward from persistent all-message Skip or the live read-skip channel."
+summary = "() - enable the persistent/read ADV skip service and recompute active fast-forward from all-message Skip or the live read-skip channel; physical action 6 remains independent."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5588,7 +5589,7 @@ abi_source = "kelebek+decode-validated"
 name = "mark-frame-yield"
 category = "control"
 summary = "Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary."
-details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 clears the service wait, requests the same forced completion as 0x243, renders the terminal retained frame, and consumes the trigger. That request completes ordinary finite color/scale/rotation/translation channels and type-0 surface commands together; op-0x242-detached channels, ambient cycles, and movie masks are excluded. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here."
+details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 is consumed and run-state 0x400 is cleared before the engine requests the same forced completion as 0x243 and renders once. Wait release is independent of endpoint completion: service-flags bit 1 can suppress the force worker, while op-0x242-detached channels, ambient cycles, and movie-backed presentation can continue asynchronously after interpreter resume. With ordinary flags, the request completes finite color/scale/rotation/translation channels and type-0 surface commands together. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here."
 noop_headless = false
 source = "investigation"
 confidence = "high"

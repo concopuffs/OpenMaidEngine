@@ -94,6 +94,7 @@ public sealed class GodotAdvHost : IHost
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
     private GfxState? _foregroundGfx;
+    private volatile bool _foregroundTransitionWaitBypassed;
     private readonly object _screenTransitionLock = new();
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
     private readonly object _backbufferRangeLock = new();
@@ -662,13 +663,16 @@ public sealed class GodotAdvHost : IHost
     {
         if (IsTransitionWaiting && _foregroundGfx != null)
         {
-            int completed = _foregroundGfx.CompleteClickSkippableTimedPresentation(_clock.NowMs);
-            if (completed > 0)
+            bool accepted = _foregroundGfx.TryCompleteClickSkippableTimedPresentation(
+                _clock.NowMs, out int completed);
+            if (accepted)
             {
-                _timeline?.State("transition-forced-complete", new()
+                _foregroundTransitionWaitBypassed = true;
+                _timeline?.State("transition-skip-accepted", new()
                 {
-                    ["count"] = completed,
+                    ["endpoints_completed"] = completed,
                     ["source"] = source,
+                    ["wait_bypassed"] = true,
                 });
                 _frameSignal.Set();
                 return true;
@@ -781,6 +785,7 @@ public sealed class GodotAdvHost : IHost
 
     public void WaitForForegroundTransition(GfxState gfx)
     {
+        _foregroundTransitionWaitBypassed = false;
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
         bool hasActivePresentation =
             gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation();
@@ -790,6 +795,10 @@ public sealed class GodotAdvHost : IHost
             System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
             IsTransitionWaiting = true;
             _timeline?.State("transition-start", new() { ["count"] = started });
+            // Skip may already have been active before this service boundary. Native ADV script usually
+            // selects 0x243+0x20c in that case, but applying it here also covers transition helpers that
+            // enter run-state 0x400 without repeating the script-side query.
+            if (_messageSkipActive) TryForceActiveTransition("message-skip");
         }
         bool scriptSuspended = SuspendScriptForPresentation();
         try
@@ -797,7 +806,9 @@ public sealed class GodotAdvHost : IHost
             RequestSynchronizedPresentation();
             if (!hasActivePresentation) return;
             int lastBucket = -1;
-            while ((gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation()) && !_stopping)
+            while (!_foregroundTransitionWaitBypassed
+                   && (gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation())
+                   && !_stopping)
             {
                 var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
                 int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
@@ -812,8 +823,8 @@ public sealed class GodotAdvHost : IHost
                 }
                 _frameSignal.WaitOne(50);
             }
-            // The active query becomes false at the exact transition/movie endpoint. Publish that terminal sample
-            // once so the last visible frame cannot remain fractionally incomplete.
+            // Publish the natural terminal sample or the forced service-resume sample once before the
+            // following script burst mutates/releases its retained inputs.
             RequestSynchronizedPresentation();
         }
         finally
@@ -821,6 +832,7 @@ public sealed class GodotAdvHost : IHost
             ResumeScriptAfterPresentation(scriptSuspended);
         }
         IsTransitionWaiting = false;
+        _foregroundTransitionWaitBypassed = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         _foregroundGfx = null;
         _timeline?.State("running", new() { ["transition_complete"] = true });
@@ -1102,13 +1114,10 @@ public sealed class GodotAdvHost : IHost
         _frameSignal.Set();
     }
 
-    // Ordinary opcode bursts run to the next service boundary without frame pacing. Persistent message
-    // Skip removes most of those boundaries, but native adv_interpreter_tick still executes one opcode per
-    // engine tick; retain that cadence here so Skip advances quickly instead of free-running whole scenes.
-    public void FrameYield()
-    {
-        if (_messageSkipActive && !_stopping) _frameSignal.WaitOne(50);
-    }
+    // Native dispatch remains burst-fast between explicit presentation/sleep/input services even when
+    // message Skip removes those services. Per-op frame pacing turns ordinary skipped setup/cleanup bursts
+    // into multi-second invisible stalls.
+    public void FrameYield() { }
 
     // op 0xc8: block the VM background thread while the main-thread compositor keeps presenting retained state.
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;

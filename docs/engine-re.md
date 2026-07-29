@@ -2013,15 +2013,13 @@ creating a synthetic pointer click. Focused tests cover `0x88` enable/disable, `
 `0x101`, retained host state, and the actual x=728 callback. The new EngineCtx fields are applied to `/v2`;
 the affected handlers, interpreter tick, and settings-default initializer are named/commented and saved.
 
-**Manual pacing correction.** The first port build released skipped text/waits correctly but then let the
-background VM free-run to the next non-skipped service boundary. That produced whole-scene bursts separated
-by explicit sleeps: visibly an immediate jump, a slow point, then another immediate jump. Native
-`adv_interpreter_tick` still dispatches exactly one opcode per engine tick while persistent Skip removes the
-ordinary waits. `GodotAdvHost.FrameYield` now consumes one rendered-frame pulse per opcode only while
-message Skip is active. Normal opcode bursts retain the existing run-to-service-boundary model; Skip gains
-the missing native governor and remains fast without teleporting between blocking points. A regression proves
-op `0x88` state reaches the host before the following cadence yields. Validation is engine 168/168,
-zero-warning Godot build, and threaded `SELFTEST OK`.
+**Skip pacing regression corrected (2026-07-29).** A later port change incorrectly treated
+`adv_interpreter_tick`'s one-op dispatch as one rendered frame per opcode only while Skip was active.
+That contradicted the synchronized native trace above: the outer service calls the dispatcher in fast bursts,
+and Ctrl measured about 7,738 operand fetches/sec rather than one per display frame. The artificial
+`GodotAdvHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
+the fades themselves correctly jumped to their endpoints. `FrameYield` is nonblocking again; only explicit
+presentation, sleep, and input services own wall-clock time.
 
 **ADV entry/exit lifecycle.** The script comments `savemesskip` and `loadmesskip` describe a temporary
 suspension boundary, not a second saved preference. `op_0x19b_suspend_adv_skip_service@0x416560` clears
@@ -3454,6 +3452,13 @@ before `gfx_render_frame`. This is the generalized native CG-fade click path. It
 color/alpha and matrix channels serviced by `0x21c`, as well as queued type-0 surface commands; it is separate
 from the legacy run-state-bit-8 fade service.
 
+The ordering is a lifecycle contract, not incidental: native clears run-state `0x400` before calling
+`gfx_request_force_complete_and_reset_anim_clock`. Service-flags bit 1 can make that worker a no-op, and
+detached or movie-backed presentation can remain active, but none of those states re-park the interpreter.
+The port must therefore track “the `0x400` wait was bypassed” separately from “all timed presentation is
+inactive.” Deriving the wait solely from the latter produces an invisible-duration stall: ordinary fade
+channels reach their endpoint, while an excluded movie/protected channel keeps the VM blocked.
+
 Corpus evidence is unusually sharp: all 303 calls pass an immediate flag, with zero used 302 times and one
 used once. SC0000's two CG-loader sites (`0x12723`, `0x13310`) write zero. `BTL.BIN@0x2b4d` writes one on an
 animated battle object after its texture/movie or sprite-cell setup, matching the nonblocking background
@@ -3679,10 +3684,12 @@ uses callback slot `count` only for an empty mask. Godot translates layout-indep
 native Win32 VK namespace and sends physical mouse/standard joy events through the service; it no longer
 assigns Godot's `ui_*` actions directly to AGE indices. Direct-scene diagnostics replay the same 16 immediate
 SYSTEM4 configuration calls through `InputBindingBootstrap`, while natural boot executes the real opcodes.
-The live action-6 state now also feeds the ADV fast-forward host channel while the ADV lifecycle service is
-enabled. That transient channel is kept separate from persistent op-`0x88` Skip, so releasing the held key
-cannot clear the user's toggle; both channels share the existing text completion, wait advance, voice
-deferral, and skip cadence. This needs no profile storage, boot seed, or game-specific conditional.
+The live action-6 state now also feeds the ADV fast-forward host channel independently of the
+op-`0x19b`/`0x19c` lifecycle gate. Ghidra shows `adv_interpreter_tick` polling the physical action mask before
+dispatch on every tick and testing bit `0x40` without consulting `adv_skip_service_enabled`; `0x19b` clears
+persistent/read-driven active Skip but cannot release a physically held key. The transient physical channel
+remains separate from persistent op-`0x88` Skip, so releasing the key cannot clear the user's toggle. Both
+channels share text completion, wait advance, and voice deferral.
 
 ### ADV right-click/X system-menu path (2026-07-21)
 
