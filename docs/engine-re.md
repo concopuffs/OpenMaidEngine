@@ -1337,6 +1337,20 @@ annotated in Ghidra, saved.
 | `0x228` | `gfx_op_0x228_query_position` → `gfx_object_query_translation_target` (`0x47cdd0`) | **query** the decomposed target-translation matrix (x,y,z), `obj+0x1ac/+0x1b0/+0x1b4`, → operand slots 3/4/5; success is 0 and missing is 1 |
 | `0x23f` | `op_0x23f_query_surface_stop_time_ms` (`0x42a520`) | **query loaded-surface DirectShow stop position in integer milliseconds** → operand slot 1, or -1 for an empty movie surface. Implemented with an explicit warning/-1 safety path when host timing metadata is unavailable. |
 
+**Opcode-hardening follow-up (2026-07-28):** `0x233` is the missing cyclic-scale sibling between
+`0x232` color and `0x234` rotation. `op_0x233_set_scale_cycle@0x423cf0` accepts
+`(handle, period_ms, scale_x_percent, scale_y_percent, scale_z_percent)`, divides the three scale operands
+by 100, and calls `gfx_object_set_scale_cycle@0x47efd0`. The worker clears start timestamp `obj+0x210`,
+stores period `obj+0x224`, builds the target scale matrix at `obj+0x250`, and raises retained redraw dirty.
+
+`gfx_object_anim_interpolate@0x473ed0` samples
+`phase = 2 * min(elapsed % period, period - elapsed % period) / period` and linearly blends the identity
+matrix to the target. The first half-cycle therefore grows/shrinks identity to target and the second returns
+target to identity. This matrix lives in the separately anchored cyclic-animation product, independent of
+the immediate/current and delayed one-shot scale matrices. Himegari has 31 sites in nine scripts: nineteen
+in DEBUGADV and twelve across eight ordinary ADV scenes. The port still skips the opcode; its existing
+cyclic-channel sampling and affine compositor make this the smallest high-reach next implementation.
+
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts
 a type-0 command-map record keyed by arg 1: start `+4`, delay/duration `+8/+0xc`, target surface slot `+0x10`,
@@ -2776,6 +2790,26 @@ scripts, and every site immediately follows `0xb4` with the same literal channel
 sound. The port now forwards the native start mode through its host seam and sets
 Godot's WAV loop mode before playback; `0xb5` explicitly supplies mode 0 and `0xba` supplies mode 1. The
 focused VM regression covers both modes, and the renamed/commented `/v2` handler is saved.
+
+**CONFIG mixer ABI reconnaissance (2026-07-28).** Four remaining opcodes form one internally dependent
+settings surface and should be implemented together:
+
+- `0xc5 get-audio-volume(category, out)` reads `sound:Volume0..Volume4`; selectors `0..4` mean
+  master/music/SFX/voice/movie and values are basis points (`0..10000`).
+- `0xc6 set-audio-volume(category, basis_points)` writes the same registry cell and immediately reapplies
+  the live master/music/SFX/voice/movie volume. Master changes propagate through active movies and sound
+  buffers; category changes reach active BGM, ten SFX channels, voice channel 12, or the movie basis.
+- `0x1ba set-audio-route-enabled(category, enabled)` accepts selectors `1..4` for music/SFX/voice/movie,
+  updates the live route, stops active playback when the route-specific worker requires it, and persists
+  `sound:Music/SE/Voice/Movie`.
+- `0xc7 get-audio-route-enabled(category, out)` queries those four settings and writes boolean `0/1`.
+
+CONFIG contains all 37 sites: nine volume reads, twelve volume writes, fifteen route writes, and one
+route-query loop. Skipping `0xc5` leaves its output operand stale, so the visual slider calculation can be
+wrong even before the user changes anything; skipping the setters makes its controls inert. The `/v2`
+handlers, route helpers, and live volume-apply workers are named/commented and saved. Port implementation
+should provide one shared mixer/settings state to the VM and Godot audio buses rather than treating the four
+opcodes as isolated host calls.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 

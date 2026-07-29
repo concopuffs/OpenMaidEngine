@@ -803,10 +803,19 @@ inventory has only 25 distinct effectful gaps. The first tranche closes the two 
 Together these handlers close 521 formerly skipped instructions and reduce the corpus-wide effectful
 fallthrough inventory from 25 to 23 distinct opcodes. Focused regressions distinguish one-shot/looping SFX
 starts and prove immediate rotation does not arm the delayed `0x21f` channel. The opcode registry and
-generated references are current, and the native `/v2` image is annotated and saved. **NEXT OPCODE STEP:**
-rank the remaining 23 by systemic state risk, beginning with the 31-site retained-animation opcode `0x233`
-and the CONFIG audio/settings cluster (`0xc5`, `0xc6`, `0x1ba`), rather than treating low-frequency
-developer-only calls as equally urgent.
+generated references are current, and the native `/v2` image is annotated and saved.
+
+**Next-opcode reconnaissance:** `0x233` is the recommended next implementation. Native proves a
+self-contained cyclic scale channel: identity→target over the first half-period and target→identity over
+the second. Its 31 calls cover eight ordinary ADV scenes plus DEBUGADV, and the retained model already has
+the sibling color/rotation cycles and affine sampling machinery. It therefore has broader runtime reach and
+lower ownership risk than the next alternative.
+
+After `0x233`, implement CONFIG's mixer ABI as one four-opcode tranche rather than piecemeal:
+`0xc5` gets master/music/SFX/voice/movie volume, `0xc6` sets and applies it, `0x1ba` enables/disables the
+four non-master routes, and `0xc7` queries route state. Those 37 CONFIG sites require shared persistent
+settings plus live Godot-bus application; implementing only a setter or getter would leave the menu
+internally inconsistent. Low-frequency developer-only calls remain behind these two tranches.
 
 ## Later Phase B breadth
 

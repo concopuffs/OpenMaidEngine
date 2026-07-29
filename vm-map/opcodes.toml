@@ -1970,80 +1970,80 @@ observed_types = ["imm", "l-int", "l-ptr"]
 
 [[opcode]]
 op = 0xc5
-label = "u0041D4A0"
+label = "get-audio-volume"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D4A0"
-category = "unknown"
-summary = ""
+name = "get-audio-volume"
+category = "audio"
+summary = "(category)(out_basis_points) — read the configured audio volume: 0=master, 1=music, 2=SFX, 3=voice, 4=movie. Native values use 0..10000 basis points."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xc5_get_audio_volume@0x428470 selects sound:Volume0..Volume4 for operand 1 values 0..4, queries the engine settings registry, and writes the result to operand 2. CONFIG.BIN uses the results to draw and adjust four visible category sliders; its initialization also sets Volume0..Volume3 to 10000/6500/5000/8000."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "category: 0=master, 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "out volume basis points"
 observed_types = ["l-int"]
 
 [[opcode]]
 op = 0xc6
-label = "u0041D5D0"
+label = "set-audio-volume"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D5D0"
-category = "unknown"
-summary = ""
+name = "set-audio-volume"
+category = "audio"
+summary = "(category)(basis_points) — update the configured 0..10000 audio volume and apply it immediately: 0=master, 1=music, 2=SFX, 3=voice, 4=movie."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xc6_set_audio_volume@0x4206d0 writes sound:Volume0..Volume4 through the settings registry and dispatches selectors 0..4 to the live master/music/SFX/voice/movie volume workers. The master worker reapplies dependent volume to active movies and sound buffers; category workers update active BGM, ten SFX channels, voice channel 12, or the movie basis respectively."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "category: 0=master, 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "volume basis points"
 observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0xc7
-label = "u0041D760"
+label = "get-audio-route-enabled"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D760"
-category = "unknown"
-summary = ""
+name = "get-audio-route-enabled"
+category = "audio"
+summary = "(category)(out_enabled) — query whether an audio route is enabled: 1=music, 2=SFX, 3=voice, 4=movie. Writes boolean 0 or 1."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xc7_get_audio_route_enabled@0x4285a0 queries sound:Music/SE/Voice/Movie for selectors 1..4 and writes boolean 0/1 to operand 2. CONFIG.BIN's only site loops selectors 1..3 to choose enabled/disabled presentation."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "category: 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "out enabled"
 observed_types = ["l-int"]
 
 [[opcode]]
@@ -4062,28 +4062,28 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x1ba
-label = "u0041D850"
+label = "set-audio-route-enabled"
 argc = 2
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D850"
-category = "unknown"
-summary = ""
+name = "set-audio-route-enabled"
+category = "audio"
+summary = "(category)(enabled) — enable or disable an audio route and persist the setting: 1=music, 2=SFX, 3=voice, 4=movie."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x1ba_set_audio_route_enabled@0x420860 dispatches selectors 1..4 to the music/SFX/voice/movie enable workers. Those workers update the live route, stop active playback when disabling where applicable, write sound:Music/SE/Voice/Movie through the settings registry, and reject selectors outside 1..4. All 15 CONFIG.BIN sites pass literal 0/1."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "category: 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "enabled"
 observed_types = ["imm"]
 
 [[opcode]]
@@ -6156,43 +6156,43 @@ observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x233
-label = "u00421FB0"
+label = "set-scale-cycle"
 argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421FB0"
-category = "unknown"
-summary = ""
+name = "set-scale-cycle"
+category = "draw"
+summary = "(handle)(period_ms)(scale_x_percent)(scale_y_percent)(scale_z_percent) — configure a cyclic ping-pong scale matrix that moves identity→target over the first half-period and target→identity over the second."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x233_set_scale_cycle@0x423cf0 divides operands 3..5 by 100 and calls gfx_object_set_scale_cycle@0x47efd0. The worker stores start=0 at obj+0x210, period at +0x224, and the target scale matrix at +0x250. gfx_object_anim_interpolate@0x473ed0 samples a triangular phase 2*min(elapsed%period,period-elapsed%period)/period, linearly blends identity to target, and multiplies the result into the separately anchored cyclic-animation product. Corpus: 31 sites in nine scripts, including eight ordinary ADV scenes."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "retained object handle"
 observed_types = ["g-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "period milliseconds"
 observed_types = ["imm"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "target scale X percent"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "target scale Y percent"
 observed_types = ["l-int"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "target scale Z percent"
 observed_types = ["imm"]
 
 [[opcode]]

@@ -225,6 +225,26 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **grounding:** source=investigation, confidence=high
 - **evidence:** By-ear confirmed (2026-07-06): SC0000 prologue voices play on their lines via Godot AudioStreamPlayer. Ghidra /v2 op_0xc4_handler@0x420610 passes operand 1 unchanged to voice_play_indexed_asset@0x488330, which passes it unchanged to asset_open_indexed_entry@0x44f390. That opener directly indexes the flat base table for a zero high byte or selects mounted_aai[high_byte] and low24 for append resources; it has no executing-scene input or section-base branch. SC0010 is decisive beyond base-zero SC0000: play-voice 0x120 is raw SYS4INI entry LILA1414.OGG, also SC0010 file_number 2; applying SC0010 base 0x11e again is wrong. ROOM's 0x3365 similarly resolves directly to EUA0016.OGG. While Skip is active the handler stores the latest id/zero variant at ctx+0x6dbf4/+0x6dbf8; adv_interpreter_tick starts and clears it when Skip/read-skip input ends. Lily's lines remain correctly form-gated.
 
+### 0xc5 `get-audio-volume` (get-audio-volume, argc 2)
+- **summary:** (category)(out_basis_points) — read the configured audio volume: 0=master, 1=music, 2=SFX, 3=voice, 4=movie. Native values use 0..10000 basis points.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xc5_get_audio_volume@0x428470 selects sound:Volume0..Volume4 for operand 1 values 0..4, queries the engine settings registry, and writes the result to operand 2. CONFIG.BIN uses the results to draw and adjust four visible category sliders; its initialization also sets Volume0..Volume3 to 10000/6500/5000/8000.
+
+### 0xc6 `set-audio-volume` (set-audio-volume, argc 2)
+- **summary:** (category)(basis_points) — update the configured 0..10000 audio volume and apply it immediately: 0=master, 1=music, 2=SFX, 3=voice, 4=movie.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xc6_set_audio_volume@0x4206d0 writes sound:Volume0..Volume4 through the settings registry and dispatches selectors 0..4 to the live master/music/SFX/voice/movie volume workers. The master worker reapplies dependent volume to active movies and sound buffers; category workers update active BGM, ten SFX channels, voice channel 12, or the movie basis respectively.
+
+### 0xc7 `get-audio-route-enabled` (get-audio-route-enabled, argc 2)
+- **summary:** (category)(out_enabled) — query whether an audio route is enabled: 1=music, 2=SFX, 3=voice, 4=movie. Writes boolean 0 or 1.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0xc7_get_audio_route_enabled@0x4285a0 queries sound:Music/SE/Voice/Movie for selectors 1..4 and writes boolean 0/1 to operand 2. CONFIG.BIN's only site loops selectors 1..3 to choose enabled/disabled presentation.
+
+### 0x1ba `set-audio-route-enabled` (set-audio-route-enabled, argc 2)
+- **summary:** (category)(enabled) — enable or disable an audio route and persist the setting: 1=music, 2=SFX, 3=voice, 4=movie.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x1ba_set_audio_route_enabled@0x420860 dispatches selectors 1..4 to the music/SFX/voice/movie enable workers. Those workers update the live route, stop active playback when disabling where applicable, write sound:Music/SE/Voice/Movie through the settings registry, and reject selectors outside 1..4. All 15 CONFIG.BIN sites pass literal 0/1.
+
 ### 0x1bd `play-history-voice` (u0041D910, argc 1)
 - **summary:** Replay a voice id selected from retained ADV text history using native playback/history variant 1, preserving normal Skip and Auto-voice state behavior.
 - **grounding:** source=investigation, confidence=high
@@ -890,6 +910,11 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **summary:** 0x232 anim-color (handle)(period)(alpha)(color): ping-pong the temporary packed ARGB passed to the normal object blit. Handler resolves negative alpha/RGB from static color obj+0x60 and clamps alpha above 255. Blend selector obj+0x30 is unchanged: mode 0 keeps default blending (animated alpha is inert; RGB is vertex modulation), while mode 1 uses sampled ARGB alpha as the SRCALPHA scale for additive composition. Fresh static color is 0xffffffff. The C# VM resolves sentinels and consumes sampled ARGB through the unchanged mode-specific path. See docs/engine-re.md §SC0000 anim cluster.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: gfx_op_0x232_anim_color@0x423c30 resolves sentinels then calls gfx_worker_anim_color@0x47ef50; gfx_object_anim_interpolate@0x473ed0 samples static obj+0x60 toward target obj+0x240 into a temporary packed color; gfx_object_composite@0x47f650 passes that color plus unchanged selector obj+0x30 to gfx_object_blit_d3d9@0x4774c0. Blit mode 0 leaves the default path and passes RGB as modulation; mode 1 sets SRCALPHA/ONE additive composition. gfx_object_init_default@0x472810 initializes obj+0x60=0xffffffff. SC0000 0x1a0e (handle,1200,224,-1) is therefore 0xffffffff<->0xe0ffffff with inert alpha and identity RGB in mode 0: no visible pulse. C# regressions cover exact AE001H visual invariance, negative-RGB preservation, mode-0 RGB modulation, and mode-1 additive scaling.
+
+### 0x233 `set-scale-cycle` (set-scale-cycle, argc 5)
+- **summary:** (handle)(period_ms)(scale_x_percent)(scale_y_percent)(scale_z_percent) — configure a cyclic ping-pong scale matrix that moves identity→target over the first half-period and target→identity over the second.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** Ghidra /v2: op_0x233_set_scale_cycle@0x423cf0 divides operands 3..5 by 100 and calls gfx_object_set_scale_cycle@0x47efd0. The worker stores start=0 at obj+0x210, period at +0x224, and the target scale matrix at +0x250. gfx_object_anim_interpolate@0x473ed0 samples a triangular phase 2*min(elapsed%period,period-elapsed%period)/period, linearly blends identity to target, and multiplies the result into the separately anchored cyclic-animation product. Corpus: 31 sites in nine scripts, including eight ordinary ADV scenes.
 
 ### 0x234 `anim-start` (anim-start, argc 5)
 - **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure cyclic rotation. Worker stores period obj+0x228, start obj+0x214=0, and float axis obj+0x244; each frame uses integer degrees floor(((now-start)%period)*360/period). gfx_object_composite right-multiplies this separately anchored transform after the one-shot scale/rotation/translation product, so cyclic rotation also rotates the translation vector.
@@ -1695,18 +1720,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
-### 0xc5 `u0041D4A0` (u0041D4A0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xc6 `u0041D5D0` (u0041D5D0, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xc7 `u0041D760` (u0041D760, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0xc9 `u00415770` (u00415770, argc 0)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
@@ -1945,10 +1958,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
-### 0x1ba `u0041D850` (u0041D850, argc 2)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
 ### 0x1be `u0041D9D0` (u0041D9D0, argc 2)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
@@ -2085,10 +2094,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **evidence:** Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table.
 
 ### 0x230 `u00421E70` (u00421E70, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0x233 `u00421FB0` (u00421FB0, argc 5)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 
