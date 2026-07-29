@@ -1009,7 +1009,8 @@ public partial class Main : Godot.Control
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
-            var affine = Transform2DMath.Build(v.Transform, v.Rotation).FromLocalOrigin(v.DstX, v.DstY);
+            var affine = Transform2DMath.Build(v.Transform, v.Rotation, v.ScaleCycle)
+                .FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
             float opacity = v.Alpha / 255f;
             var rawObject = _vm.Gfx.TryGet(v.Handle);
@@ -1102,7 +1103,7 @@ public partial class Main : Godot.Control
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var affine = Transform2DMath.Build(source.Transform, source.Rotation)
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
@@ -1226,7 +1227,7 @@ public partial class Main : Godot.Control
         {
             _perf?.RecordObject(v.TimeVarying);
             var t = v.Transform;
-            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation);
+            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform)
                 localToDest = localToDest.Then(rangeTransform);
@@ -1602,7 +1603,8 @@ public partial class Main : Godot.Control
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var affine = Transform2DMath.Build(source.Transform, source.Rotation).FromLocalOrigin(source.DstX, source.DstY);
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+                .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;

@@ -2517,6 +2517,9 @@ public sealed class VirtualMachine
                 Gfx.SetSrcRect(Read(a[0]), Read(a[2]), Read(a[3]), 0, Read(a[1])); return pc + 1;
             case "u00421EF0":   // 0x232 cyclic packed ARGB; negative alpha/RGB preserve static obj color
                 Gfx.SetColorAnimResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3])); return pc + 1;
+            case "set-scale-cycle": // 0x233 (handle)(period ms)(target scale x/y/z percent)
+                Gfx.SetScaleCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+                return pc + 1;
             case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- target translation matrix
             {
                 if (Gfx.TryQueryTranslationTarget(Read(a[1]), out var v))

@@ -14,6 +14,9 @@ public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
                                                  double AxisX, double AxisY, double AxisZ,
                                                  double AngleDegrees = 0);
 
+public readonly record struct ScaleCycleState(bool Enabled, long PeriodMs,
+                                              double ScaleX, double ScaleY, double ScaleZ);
+
 [System.Flags]
 public enum GfxPresentationReason
 {
@@ -82,7 +85,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            SurfaceTransitionState? SurfaceTransition = null,
                                            ColorTransitionState? ColorTransition = null,
                                            Affine2D? RangeTransform = null,
-                                           bool TimeVarying = false);
+                                           bool TimeVarying = false,
+                                           ScaleCycleState ScaleCycle = default);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)
@@ -172,6 +176,12 @@ public sealed class GfxState
         public (long X, long Y, long Z) RotationAxis;
         public bool RotationEnabled;
         public long RotationStartMs = -1;
+
+        // Op 0x233 is a separate cyclic scale channel (period obj+0x224, target matrix obj+0x250).
+        public long ScaleCyclePeriodMs;
+        public (double X, double Y, double Z) ScaleCycleTarget = (1, 1, 1);
+        public bool ScaleCycleEnabled;
+        public long ScaleCycleStartMs = -1;
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
@@ -487,6 +497,8 @@ public sealed class GfxState
             OneShotStartMs = s.OneShotStartMs,
             RotationPeriodMs = s.RotationPeriodMs, RotationAxis = s.RotationAxis,
             RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
+            ScaleCyclePeriodMs = s.ScaleCyclePeriodMs, ScaleCycleTarget = s.ScaleCycleTarget,
+            ScaleCycleEnabled = s.ScaleCycleEnabled, ScaleCycleStartMs = s.ScaleCycleStartMs,
         };
 
     private readonly object _lock = new();
@@ -851,6 +863,7 @@ public sealed class GfxState
                         o.TranslationEnabled ||
                         (o.SrcAnim && o.SrcPeriod > 0) ||
                         (o.ColorAnim && o.ColorPeriod > 0) ||
+                        (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                         (o.RotationEnabled && o.RotationPeriodMs > 0)));
     }
 
@@ -1071,6 +1084,19 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x233: cyclic identity-to-target scale, sampled with a triangular ping-pong phase.</summary>
+    public void SetScaleCycle(long handle, long periodMs, (long X, long Y, long Z) percent)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.ScaleCyclePeriodMs = periodMs;
+            o.ScaleCycleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+            o.ScaleCycleEnabled = periodMs > 0;
+            o.ScaleCycleStartMs = -1;
+        }
+    }
+
     /// <summary>Op 0x238: set its separate global animation-service duration and reset marker.</summary>
     public void SetAnimClock(long durationTicks)
     {
@@ -1138,6 +1164,7 @@ public sealed class GfxState
                     (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
                      o.TranslationEnabled ||
                      (o.ColorAnim && o.ColorPeriod > 0) ||
+                     (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                      (o.RotationEnabled && o.RotationPeriodMs > 0))))
                 reasons |= GfxPresentationReason.ContinuousChannel;
 
@@ -1328,6 +1355,15 @@ public sealed class GfxState
                 }
 
                 double cycleAngle = 0;
+                double cycleScaleX = 1, cycleScaleY = 1, cycleScaleZ = 1;
+                if (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0)
+                {
+                    if (o.ScaleCycleStartMs < 0) o.ScaleCycleStartMs = nowMs;
+                    double weight = ScaleCycleWeight(nowMs, o.ScaleCycleStartMs, o.ScaleCyclePeriodMs);
+                    cycleScaleX += (o.ScaleCycleTarget.X - 1) * weight;
+                    cycleScaleY += (o.ScaleCycleTarget.Y - 1) * weight;
+                    cycleScaleZ += (o.ScaleCycleTarget.Z - 1) * weight;
+                }
                 if (o.RotationEnabled && o.RotationPeriodMs > 0)
                 {
                     if (o.RotationStartMs < 0) o.RotationStartMs = nowMs;
@@ -1345,6 +1381,7 @@ public sealed class GfxState
                     o.TranslationEnabled ||
                     (o.SrcAnim && o.SrcPeriod > 0) ||
                     (o.ColorAnim && o.ColorPeriod > 0) ||
+                    (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
                     transition is { Progress: < 1.0 } ||
                     (objectRangeTransform != null && rangeTimeVarying);
@@ -1358,7 +1395,9 @@ public sealed class GfxState
                                                                  o.RotationAxis.X, o.RotationAxis.Y,
                                                                  o.RotationAxis.Z, cycleAngle),
                                           alpha, tint, strength, blend, multiplyTint, transition,
-                                          colorTransition, objectRangeTransform, timeVarying));
+                                          colorTransition, objectRangeTransform, timeVarying,
+                                          new ScaleCycleState(o.ScaleCycleEnabled, o.ScaleCyclePeriodMs,
+                                                              cycleScaleX, cycleScaleY, cycleScaleZ)));
             }
         }
     }
@@ -1456,6 +1495,14 @@ public sealed class GfxState
         if (period <= 0) return 0;
         long half = period / 2; if (half <= 0) return 0;
         return (double)BlendMath.PingPong(now, start, period) / half;
+    }
+
+    private static double ScaleCycleWeight(long now, long start, long period)
+    {
+        if (period <= 0) return 0;
+        long elapsed = System.Math.Max(0, now - start);
+        long position = elapsed % period;
+        return 2.0 * System.Math.Min(position, period - position) / period;
     }
 
     /// <summary>Pack (alpha, rgb) → 0xAARRGGBB, matching op 0x202/0x203's handler bit-manipulation for the

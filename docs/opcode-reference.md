@@ -916,6 +916,8 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x233_set_scale_cycle@0x423cf0 divides operands 3..5 by 100 and calls gfx_object_set_scale_cycle@0x47efd0. The worker stores start=0 at obj+0x210, period at +0x224, and the target scale matrix at +0x250. gfx_object_anim_interpolate@0x473ed0 samples a triangular phase 2*min(elapsed%period,period-elapsed%period)/period, linearly blends identity to target, and multiplies the result into the separately anchored cyclic-animation product. Corpus: 31 sites in nine scripts, including eight ordinary ADV scenes.
 
+Port status (2026-07-28): implemented as an independent retained-object scale cycle. The compositor samples the exact triangular phase, keeps the channel frame-driven during waits, and composes it after one-shot translation but before the sibling cyclic rotation.
+
 ### 0x234 `anim-start` (anim-start, argc 5)
 - **summary:** (handle)(period_ms)(axis_x)(axis_y)(axis_z) — configure cyclic rotation. Worker stores period obj+0x228, start obj+0x214=0, and float axis obj+0x244; each frame uses integer degrees floor(((now-start)%period)*360/period). gfx_object_composite right-multiplies this separately anchored transform after the one-shot scale/rotation/translation product, so cyclic rotation also rotates the translation vector.
 - **grounding:** source=investigation, confidence=high

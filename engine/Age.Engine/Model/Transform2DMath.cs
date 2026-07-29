@@ -48,25 +48,29 @@ public readonly record struct Affine2D(double XX, double XY, double YX, double Y
 }
 
 /// <summary>Exact 2D projection of AGE's row-vector retained-object matrix. Native call order is anchored
-/// scale, one-shot axis-angle rotation, translation, then separately anchored cyclic rotation. The adjacent
-/// anchor translations cancel, yielding T(-a)*S*R1*T*Rcycle*T(+a). Z is projected away only afterward.</summary>
+/// one-shot scale/axis-angle rotation/translation, then separately anchored cyclic scale and cyclic rotation.
+/// The adjacent anchor translations cancel, yielding T(-a)*S*R1*T*Scycle*Rcycle*T(+a). Z is projected away
+/// only afterward.</summary>
 public static class Transform2DMath
 {
-    public static Affine2D Build(TransformState t, RotationCycleState cycle = default)
+    public static Affine2D Build(TransformState t, RotationCycleState cycle = default,
+                                 ScaleCycleState scaleCycle = default)
     {
         Matrix3D m = Identity();
         m = Mul(m, Translation(-t.AnchorX, -t.AnchorY, -t.AnchorZ));
         m = Mul(m, Scale(t.ScaleX, t.ScaleY, t.ScaleZ));
         m = Mul(m, AxisAngle(t.RotationAxisX, t.RotationAxisY, t.RotationAxisZ, t.RotationAngleDegrees));
         m = Mul(m, Translation(t.TranslateX, t.TranslateY, t.TranslateZ));
+        if (scaleCycle.Enabled) m = Mul(m, Scale(scaleCycle.ScaleX, scaleCycle.ScaleY, scaleCycle.ScaleZ));
         if (cycle.Enabled) m = Mul(m, AxisAngle(cycle.AxisX, cycle.AxisY, cycle.AxisZ, cycle.AngleDegrees));
         m = Mul(m, Translation(t.AnchorX, t.AnchorY, t.AnchorZ));
         return new(m.M11, m.M12, m.M21, m.M22, m.TX, m.TY);
     }
 
     public static (double X, double Y) Apply(double x, double y, TransformState transform,
-                                             RotationCycleState cycle = default)
-        => Build(transform, cycle).Apply(x, y);
+                                             RotationCycleState cycle = default,
+                                             ScaleCycleState scaleCycle = default)
+        => Build(transform, cycle, scaleCycle).Apply(x, y);
 
     // AGE composes affine 4x4 row-vector matrices, whose last column is always (0,0,0,1). Carry only
     // the 3x3 linear part and translation row as a value type: the old double[16] implementation allocated

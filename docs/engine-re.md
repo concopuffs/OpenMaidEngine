@@ -1348,8 +1348,11 @@ stores period `obj+0x224`, builds the target scale matrix at `obj+0x250`, and ra
 matrix to the target. The first half-cycle therefore grows/shrinks identity to target and the second returns
 target to identity. This matrix lives in the separately anchored cyclic-animation product, independent of
 the immediate/current and delayed one-shot scale matrices. Himegari has 31 sites in nine scripts: nineteen
-in DEBUGADV and twelve across eight ordinary ADV scenes. The port still skips the opcode; its existing
-cyclic-channel sampling and affine compositor make this the smallest high-reach next implementation.
+in DEBUGADV and twelve across eight ordinary ADV scenes. The port now models this as its own retained
+channel, samples the exact triangular phase on the shared frame clock, and composes
+`T(-anchor) * one-shot-scale * one-shot-rotation * translation * cyclic-scale * cyclic-rotation *
+T(anchor)`. It remains frame-driven while visible and survives native-style object cloning independently
+of the immediate and delayed one-shot scale fields.
 
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
 affine rasterization. `0x223` is **not affine**: `gfx_queue_surface_alpha_transition` (`0x47f440`) inserts

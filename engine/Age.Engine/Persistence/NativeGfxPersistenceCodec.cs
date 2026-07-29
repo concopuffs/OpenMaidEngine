@@ -73,7 +73,7 @@ internal static class NativeGfxPersistenceCodec
             || value.RotationChannelEnabled || value.TranslationEnabled
             ? flags | 2
             : flags & ~2;
-        flags = value.RotationEnabled || value.SrcAnim || value.ColorAnim
+        flags = value.ScaleCycleEnabled || value.RotationEnabled || value.SrcAnim || value.ColorAnim
             ? flags | 4
             : flags & ~4;
         WriteInt(raw, 0, flags);
@@ -111,8 +111,10 @@ internal static class NativeGfxPersistenceCodec
         WriteFloat(raw, 0x204, value.RotationCurrent.Angle);
         WriteFloat(raw, 0x208, value.RotationTarget.Angle);
         WriteInt(raw, 0x20c, EncodeNativeStart(value.ColorStart));
+        WriteInt(raw, 0x210, EncodeNativeStart(value.ScaleCycleStartMs));
         WriteInt(raw, 0x214, EncodeNativeStart(value.RotationStartMs));
         WriteInt(raw, 0x220, unchecked((int)value.ColorPeriod));
+        WriteInt(raw, 0x224, unchecked((int)value.ScaleCyclePeriodMs));
         WriteInt(raw, 0x228, unchecked((int)value.RotationPeriodMs));
         WriteInt(raw, 0x230, unchecked((int)value.SrcPeriod));
         WriteInt(raw, 0x234, unchecked((int)value.SrcCell));
@@ -121,6 +123,7 @@ internal static class NativeGfxPersistenceCodec
         if (value.ColorAnim)
             WriteInt(raw, 0x240, unchecked((int)value.ColorTarget));
         WriteVector(raw, 0x244, value.RotationAxis);
+        WriteScaleMatrix(raw, 0x250, value.ScaleCycleTarget);
         WriteInt(raw, 0x2d0, unchecked((int)value.OneShotAnimationControlFlags));
         return raw;
     }
@@ -167,8 +170,10 @@ internal static class NativeGfxPersistenceCodec
                 ReadFloat(raw, 0x1f8), ReadFloat(raw, 0x1fc), ReadFloat(raw, 0x200),
                 ReadFloat(raw, 0x208)),
             ColorStart = DecodeNativeStart(ReadInt(raw, 0x20c)),
+            ScaleCycleStartMs = DecodeNativeStart(ReadInt(raw, 0x210)),
             RotationStartMs = DecodeNativeStart(ReadInt(raw, 0x214)),
             ColorPeriod = ReadInt(raw, 0x220),
+            ScaleCyclePeriodMs = ReadInt(raw, 0x224),
             RotationPeriodMs = ReadInt(raw, 0x228),
             SrcPeriod = ReadInt(raw, 0x230),
             SrcCell = ReadInt(raw, 0x234),
@@ -176,7 +181,9 @@ internal static class NativeGfxPersistenceCodec
             SrcColumns = Math.Max(1, ReadInt(raw, 0x23c)),
             ColorTarget = unchecked((uint)ReadInt(raw, 0x240)),
             RotationAxis = ReadLongVector(raw, 0x244),
+            ScaleCycleTarget = ReadScale(raw, 0x250),
             OneShotAnimationControlFlags = unchecked((uint)ReadInt(raw, 0x2d0)),
+            ScaleCycleEnabled = (flags & 4) != 0 && ReadInt(raw, 0x224) > 0,
             RotationEnabled = (flags & 4) != 0 && ReadInt(raw, 0x228) > 0,
             SrcAnim = (flags & 4) != 0 && ReadInt(raw, 0x238) > 1,
             ColorAnim = (flags & 4) != 0 && ReadInt(raw, 0x220) > 0,

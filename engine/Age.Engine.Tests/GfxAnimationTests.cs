@@ -129,6 +129,11 @@ public class GfxAnimationTests
         rotation.SetRotationCycle(7, 1000, (0, 0, 1));
         Assert.True(rotation.HasActiveVisualPresentation(1000));
         Assert.True(rotation.SnapshotVisibleObjects(1000).Single().TimeVarying);
+
+        var scale = VisibleObject();
+        scale.SetScaleCycle(7, 1000, (150, 75, 100));
+        Assert.True(scale.HasActiveVisualPresentation(1000));
+        Assert.True(scale.SnapshotVisibleObjects(1000).Single().TimeVarying);
     }
 
     [Fact]
@@ -368,6 +373,27 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void Op0x233_ConfiguresAnIndependentCyclicScaleChannel()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "SCALE_CYCLE", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 1200), MovGI(3, 80), MovGI(4, 120), MovGI(5, 100),
+            (0x233, new[] { G(1), G(2), G(3), G(4), G(5) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+
+        vm.Run();
+
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.Equal(1200, o.ScaleCyclePeriodMs);
+        Assert.Equal((0.8, 1.2, 1.0), o.ScaleCycleTarget);
+        Assert.True(o.ScaleCycleEnabled);
+        Assert.Equal((1.0, 1.0, 1.0), o.ScaleCurrent);
+    }
+
+    [Fact]
     public void CurrentTranslationSetter_ReplacesTheLiveMatrixImmediately()
     {
         var t = T();
@@ -457,6 +483,50 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void SnapshotSamplesScaleCycleWithNativeTriangularPhase()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 5, -1);
+        g.BindDraw(7, 1, 0, 0, 64, 64, 0, 0);
+        g.SetScaleCycle(7, 1200, (200, 50, 100));
+
+        var start = g.SnapshotVisibleObjects(1000).Single().ScaleCycle;
+        var quarter = g.SnapshotVisibleObjects(1300).Single().ScaleCycle;
+        var midpoint = g.SnapshotVisibleObjects(1600).Single().ScaleCycle;
+        var threeQuarter = g.SnapshotVisibleObjects(1900).Single().ScaleCycle;
+        var wrapped = g.SnapshotVisibleObjects(2200).Single().ScaleCycle;
+
+        Assert.Equal((1.0, 1.0, 1.0), (start.ScaleX, start.ScaleY, start.ScaleZ));
+        Assert.Equal((1.5, 0.75, 1.0), (quarter.ScaleX, quarter.ScaleY, quarter.ScaleZ));
+        Assert.Equal((2.0, 0.5, 1.0), (midpoint.ScaleX, midpoint.ScaleY, midpoint.ScaleZ));
+        Assert.Equal((1.5, 0.75, 1.0), (threeQuarter.ScaleX, threeQuarter.ScaleY, threeQuarter.ScaleZ));
+        Assert.Equal((1.0, 1.0, 1.0), (wrapped.ScaleX, wrapped.ScaleY, wrapped.ScaleZ));
+
+        g.SetScaleCycle(7, 5, (200, 100, 100));
+        _ = g.SnapshotVisibleObjects(3000);
+        var oddPeriod = g.SnapshotVisibleObjects(3002).Single().ScaleCycle;
+        Assert.Equal(1.8, oddPeriod.ScaleX, 10);
+    }
+
+    [Fact]
+    public void ScaleCycleClonePreservesTargetAndSharedPhase()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 5, -1);
+        g.BindDraw(7, 1, 0, 0, 64, 64, 0, 0);
+        g.SetScaleCycle(7, 1000, (160, 80, 100));
+        _ = g.SnapshotVisibleObjects(2000);
+
+        Assert.True(g.CloneObject(7, 8));
+        var samples = g.SnapshotVisibleObjects(2250);
+        var source = samples.Single(x => x.Handle == 7).ScaleCycle;
+        var clone = samples.Single(x => x.Handle == 8).ScaleCycle;
+
+        Assert.Equal(source, clone);
+        Assert.Equal((1.3, 0.9, 1.0), (clone.ScaleX, clone.ScaleY, clone.ScaleZ));
+    }
+
+    [Fact]
     public void Transform2D_UsesNativeAnchoredRowVectorOrder_AndDirectProjection()
     {
         var t = new TransformState(2, 3, 99, 10, -7, 1234, 100, 50, 888);
@@ -490,5 +560,18 @@ public class GfxAnimationTests
         var p = Transform2DMath.Apply(120, 50, t, cycle);
         Assert.Equal(100.0, p.X, 10);
         Assert.Equal(100.0, p.Y, 10);
+    }
+
+    [Fact]
+    public void Transform2D_CyclicScaleOccursAfterTranslationAndBeforeCyclicRotation()
+    {
+        var t = new TransformState(2, 1, 1, 10, 0, 0, 100, 50, 0);
+        var scale = new ScaleCycleState(true, 1000, 3, 1, 1);
+        var rotation = new RotationCycleState(true, 1000, 0, 0, 1, 90);
+
+        var p = Transform2DMath.Apply(120, 50, t, rotation, scale);
+
+        Assert.Equal(100.0, p.X, 10);
+        Assert.Equal(200.0, p.Y, 10);
     }
 }

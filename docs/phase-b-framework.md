@@ -805,13 +805,16 @@ fallthrough inventory from 25 to 23 distinct opcodes. Focused regressions distin
 starts and prove immediate rotation does not arm the delayed `0x21f` channel. The opcode registry and
 generated references are current, and the native `/v2` image is annotated and saved.
 
-**Next-opcode reconnaissance:** `0x233` is the recommended next implementation. Native proves a
-self-contained cyclic scale channel: identity→target over the first half-period and target→identity over
-the second. Its 31 calls cover eight ordinary ADV scenes plus DEBUGADV, and the retained model already has
-the sibling color/rotation cycles and affine sampling machinery. It therefore has broader runtime reach and
-lower ownership risk than the next alternative.
+**Cyclic scale `0x233` implemented (2026-07-28).** The retained model now owns the native channel
+independently of immediate and delayed one-shot scale. It samples the exact triangular
+identity-to-target-to-identity phase, remains frame-driven during visible waits, survives object cloning,
+and enters the separately anchored cyclic product after one-shot translation and before cyclic rotation.
+The VM handler closes all 31 skipped sites across DEBUGADV and eight ordinary ADV scenes, reducing the
+effectful fallthrough inventory from 23 to 22 distinct opcodes. Focused tests cover dispatch, percentages,
+odd/even period timing, continuous-presentation classification, and matrix order; the full engine suite,
+warning-free Godot build, and Himegari-targeted threaded selftest pass (468 engine tests).
 
-After `0x233`, implement CONFIG's mixer ABI as one four-opcode tranche rather than piecemeal:
+**NEXT:** implement CONFIG's mixer ABI as one four-opcode tranche rather than piecemeal:
 `0xc5` gets master/music/SFX/voice/movie volume, `0xc6` sets and applies it, `0x1ba` enables/disables the
 four non-master routes, and `0xc7` queries route state. Those 37 CONFIG sites require shared persistent
 settings plus live Godot-bus application; implementing only a setter or getter would leave the menu

@@ -1438,7 +1438,8 @@ public sealed class GodotAdvHost : IHost
             if (source == null) continue;
 
             Affine2D localToTarget =
-                Transform2DMath.Build(item.Transform, item.Rotation).FromLocalOrigin(item.DstX, item.DstY);
+                Transform2DMath.Build(item.Transform, item.Rotation, item.ScaleCycle)
+                    .FromLocalOrigin(item.DstX, item.DstY);
             if (item.RangeTransform is { } rangeTransform)
                 localToTarget = localToTarget.Then(rangeTransform);
             foreach (SurfaceTextDraw draw in source)
