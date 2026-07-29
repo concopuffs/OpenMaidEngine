@@ -39,6 +39,7 @@ internal class RecordingHost : IHost
     public readonly List<(long Id, int PlaybackVariant, long DelayMs)> ScheduledVoiceRequests = new();
     public readonly List<long> VoiceBgmDuckControls = new();
     public readonly List<int> SfxStarts = new();
+    public readonly List<(int Channel, int StartMode)> SfxStartRequests = new();
     public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
     public readonly List<int> SfxReleases = new();
     public readonly List<long> BgmTracks = new();
@@ -171,7 +172,12 @@ internal class RecordingHost : IHost
     public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
         => ScheduledVoiceRequests.Add((id, playbackVariant, delayMs));
     public void LoadSoundEffect(long resourceId, int channel) => SfxLoads.Add((resourceId, channel));
-    public void StartSoundEffect(int channel) => SfxStarts.Add(channel);
+    public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
+    public void StartSoundEffect(int channel, int startMode)
+    {
+        SfxStarts.Add(channel);
+        SfxStartRequests.Add((channel, startMode));
+    }
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
         => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);

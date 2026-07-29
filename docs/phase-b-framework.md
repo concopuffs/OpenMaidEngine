@@ -788,6 +788,26 @@ Linux/macOS FFmpeg builds and packaging smoke gates when work returns to cross-p
 Post-cleanup validation passes all 405 engine tests, the warning-free Godot build, threaded selftest, opcode
 lint/tooling, and the 213/213 installed video/audio corpus gate.
 
+**CORPUS-WIDE OPCODE HARDENING PASS STARTED (2026-07-28).**
+With numbered-save implementation complete and further live save testing explicitly deferred, the active
+breadth pass now ranks every Himegari-observed VM fallthrough across all 481 decoded scripts. The starting
+inventory has only 25 distinct effectful gaps. The first tranche closes the two widest independent holes:
+
+- `0xba` occurs 334 times in 100 scripts. Native `op_0xba_sfx_start_loop@0x420290` calls the same retained
+  SFX start worker as one-shot `0xb5`, but with logical loop mode 1. The host seam now preserves that mode
+  and Godot rewinds the WAV stream at EOF.
+- `0x1fe` occurs 187 times in 47 scripts. Native
+  `op_0x1fe_set_rotation_current@0x422700` immediately replaces the retained object's current axis-angle
+  rotation. The existing compositor already sampled that field; the VM now writes it directly.
+
+Together these handlers close 521 formerly skipped instructions and reduce the corpus-wide effectful
+fallthrough inventory from 25 to 23 distinct opcodes. Focused regressions distinguish one-shot/looping SFX
+starts and prove immediate rotation does not arm the delayed `0x21f` channel. The opcode registry and
+generated references are current, and the native `/v2` image is annotated and saved. **NEXT OPCODE STEP:**
+rank the remaining 23 by systemic state risk, beginning with the 31-site retained-animation opcode `0x233`
+and the CONFIG audio/settings cluster (`0xc5`, `0xc6`, `0x1ba`), rather than treating low-frequency
+developer-only calls as equally urgent.
+
 ## Later Phase B breadth
 
 **INIT data-semantics side track started (2026-07-22).** Before naming more gameplay state, the static

@@ -1890,10 +1890,16 @@ public partial class Main : Godot.Control
         _sfx[channel].Stream = stream;
     }
 
-    public void StartSoundEffect(int channel)
+    public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
+
+    public void StartSoundEffect(int channel, int startMode)
     {
-        if ((uint)channel < (uint)_sfx.Length && _sfx[channel].Stream != null)
-            _sfx[channel].Play();
+        if ((uint)channel >= (uint)_sfx.Length || _sfx[channel].Stream == null) return;
+        if (_sfx[channel].Stream is AudioStreamWav wav)
+            wav.LoopMode = startMode == 0
+                ? AudioStreamWav.LoopModeEnum.Disabled
+                : AudioStreamWav.LoopModeEnum.Forward;
+        _sfx[channel].Play();
     }
 
     public void ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)

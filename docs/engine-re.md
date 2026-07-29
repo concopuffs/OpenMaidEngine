@@ -2672,9 +2672,9 @@ atlas cell. Frame selection now treats the terminal value as the exclusive frame
 Keeping this 30x27 overlay outside the software backbuffer preserves the static-wait compositor optimization.
 Full SYSTEM4 replay remains Phase-B work; the shortcut carries the same state in the meantime.
 
-### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xc2`/`0xd9` (2026-07-11)
+### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xba`/`0xc2`/`0xd9` (2026-07-11)
 
-The three SFX opcodes are a retained channel lifecycle, not immediate fire-and-forget calls. Handler
+The four SFX opcodes are a retained channel lifecycle, not immediate fire-and-forget calls. Handler
 resolution and the saved `/v2` names are:
 
 - `0xb4` `op_0xb4_sfx_load@0x4201d0` -> `sfx_channel_load@0x482500`: `(packed_raw_resource_id, channel)`
@@ -2682,10 +2682,13 @@ resolution and the saved `/v2` names are:
   when it is nonzero, then replaces the channel decoder/buffer without starting it. The manager supports
   13 slots (`0..12`); SC0000 deliberately resets and uses the `0..9` subset.
 - `0xb5` `op_0xb5_sfx_start_once@0x420210` -> `sfx_channel_start@0x4825d0`: starts the loaded channel with
-  logical loop mode 0. Adjacent op `0xba`, not this slice, passes mode 1.
+  logical loop mode 0.
 - `0xb6` `op_0xb6_sfx_release@0x420250` -> `sfx_channel_release@0x482600` ->
   `sound_buffer_destroy@0x4831a0`: stop/release and clear the retained resource/decoder; empty release is
   safe. SC0000's `0x62b..0x646` and `0x120d..0x1228` are ten-channel reset sweeps.
+- `0xba` `op_0xba_sfx_start_loop@0x420290` -> the same `sfx_channel_start@0x4825d0`: starts the loaded
+  channel with logical loop mode 1. `sound_stream_fill_quarter` rewinds the decoder at EOF until a later
+  load or release replaces the channel. It is not an alias of the one-shot `0xb5`.
 
 `sound_decode_channel@0x483360` selects the decoder by file signature, constructs a DirectSound buffer, and
 installs four quarter-buffer notifications. `sound_buffer_start@0x484270` primes the ring and synchronously
@@ -2767,6 +2770,12 @@ the deferred Godot tween is created, so `BGM005` could start during the tween's 
 overwritten to `-80 dB`; a later voice temporarily wrote the audible 50-percent duck level and restored
 the erroneous silent level afterward. This introduces no profile record, boot seed, or persistence backend.
 A future unified settings backend can replace the registered defaults without changing the opcode/host seam.
+
+**Loop-start closeout (2026-07-28).** A complete Himegari-corpus scan found `0xba` at 334 sites in 100
+scripts, and every site immediately follows `0xb4` with the same literal channel 9 for persistent UI/ambient
+sound. The port now forwards the native start mode through its host seam and sets
+Godot's WAV loop mode before playback; `0xb5` explicitly supplies mode 0 and `0xba` supplies mode 1. The
+focused VM regression covers both modes, and the renamed/commented `/v2` handler is saved.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)
 

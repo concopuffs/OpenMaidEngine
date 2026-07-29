@@ -41,6 +41,8 @@ public class SfxOpsTests
             {
                 (0xb4, new[] { new Operand(0, 0x28), new Operand(0, 0) }),
                 (0xb5, new[] { new Operand(0, 0) }),
+                (0xb4, new[] { new Operand(0, 0x2aea), new Operand(0, 9) }),
+                (0xba, new[] { new Operand(0, 9) }),
                 (0x1cf, new[] { new Operand(0, 1) }),
                 (0x2bf, new[] { new Operand(0, 4), new Operand(0, 0), new Operand(0, 100) }),
                 (0xb6, new[] { new Operand(0, 0) }),
@@ -54,8 +56,9 @@ public class SfxOpsTests
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal((0x28L, 0), Assert.Single(host.SfxLoads));
-        Assert.Equal(0, Assert.Single(host.SfxStarts));
+        Assert.Equal([(0x28L, 0), (0x2aeaL, 9)], host.SfxLoads);
+        Assert.Equal([0, 9], host.SfxStarts);
+        Assert.Equal([(0, 0), (9, 1)], host.SfxStartRequests);
         Assert.Equal(1, Assert.Single(host.VoiceBgmDuckControls));
         Assert.Equal((4, 0, 100L), Assert.Single(host.ScheduledSfxStarts));
         Assert.Equal(0, Assert.Single(host.SfxReleases));

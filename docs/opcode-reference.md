@@ -201,6 +201,10 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> sound_buffer_destroy@0x4831a0, which releases the per-channel object under its critical section and clears the slot. Native trace captured SC0000's channels 0..9 release sweep in consecutive calls.
 
+### 0xba `sfx-start-loop` (sfx-start-loop, argc 1)
+- **summary:** (channel) — start the already-loaded sound-effect channel with logical loop mode 1; the streaming decoder rewinds at EOF until the channel is replaced or released.
+- **grounding:** source=investigation, confidence=high
+
 ### 0xbf `play-bgm` (play-bgm, argc 1)
 - **summary:** Play background music by id. BGM is addressed by DIRECT LITERAL NAME: id -> BGM{id:03d}.OGG (in DATA3), unlike ordinary resource operands, which are universal packed SYS4INI/AAI ids. E.g. play-bgm 5 -> BGM005. Reasserting the facade's current track id is idempotent and preserves playback position; a different id starts the new track, while fade-to-zero clears the current id so a later request can start it again.
 - **grounding:** source=investigation, confidence=high
@@ -702,7 +706,7 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches operands 2..4, divides each by the 100.0 constant, and calls gfx_object_set_scale_current@0x47e6b0. The worker gets/creates the object, marks obj+0x68, and calls matrix4_make_scale on obj+0x6c. SC0000 sets AE001D handles to 210/210/100 and 240/240/100; without this setter their 800x800 alpha circles remain below the viewport. Both functions annotated and /v2 saved 2026-07-11.
 
-### 0x1fe `set-current-rotation-axis-angle` (u004206C0, argc 5)
+### 0x1fe `set-current-rotation-axis-angle` (set-current-rotation-axis-angle, argc 5)
 - **summary:** (handle)(axis_x)(axis_y)(axis_z)(angle_degrees) — immediately replace the retained object's current axis-angle rotation matrix. This is the direct-current companion to op 0x21f's delayed one-shot rotation target.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x1fe_set_rotation_current@0x422700 converts operands 2..5 to float and calls gfx_object_set_rotation_current@0x47e720. The worker gets/creates the handle, marks transform state at obj+0x68, stores current axis obj+0x1ec..0x1f4 and angle degrees obj+0x204, converts degrees to radians with pi/180, builds the current matrix at obj+0xec through matrix4_make_axis_angle, and sets retained-gfx redraw dirty owner+0xb558 (EngineCtx+0x51b6c). The finite-channel consumer composes this current matrix between scale and translation. Corpus: 186/187 calls use Z axis (0,0,1); the lone DEBUG call uses Y axis (0,1,0).
@@ -1203,6 +1207,7 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 ### 0x2 `exit` (exit, argc 0)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
+- **evidence:** Ghidra /v2: op_0xba_sfx_start_loop@0x420290 records a 3-dword instruction, fetches channel operand 1, and calls sfx_channel_start@0x4825d0 with logical loop mode 1. The same worker receives mode 0 from op 0xb5. sound_stream_fill_quarter@0x483b70 rewinds the decoder at EOF only for mode 1. All 334 Himegari sites pass literal channel 9 immediately after op 0xb4 loads that channel.
 
 ### 0x4 `u00417E30` (u00417E30, argc 2)
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
@@ -1657,10 +1662,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 
 ### 0xb9 `u0041D140` (u0041D140, argc 1)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=low
-
-### 0xba `u0041D0B0` (u0041D0B0, argc 1)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=low
 

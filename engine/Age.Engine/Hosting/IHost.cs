@@ -133,6 +133,9 @@ public interface IHost
     void SetVoiceBgmDuckControl(long flags) { }
     void LoadSoundEffect(long resourceId, int channel) { }
     void StartSoundEffect(int channel) { }
+    // Ops 0xb5/0xba share the native channel-start worker. Mode 0 plays once; mode 1
+    // rewinds the decoder at EOF. The one-argument seam remains for simple hosts.
+    void StartSoundEffect(int channel, int startMode) => StartSoundEffect(channel);
     // Native SetDelay (op 0x2bf) starts an already-loaded channel after delayMs.
     // startMode is forwarded to the same worker used by immediate SFX starts.
     void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }

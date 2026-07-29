@@ -67,7 +67,7 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xba_sfx_start_loop@0x420290 records a 3-dword instruction, fetches channel operand 1, and calls sfx_channel_start@0x4825d0 with logical loop mode 1. The same worker receives mode 0 from op 0xb5. sound_stream_fill_quarter@0x483b70 rewinds the decoder at EOF only for mode 1. All 334 Himegari sites pass literal channel 9 immediately after op 0xb4 loads that channel."
 
 [[opcode]]
 op = 0x3
@@ -1860,17 +1860,17 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0xba
-label = "u0041D0B0"
+label = "sfx-start-loop"
 argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041D0B0"
-category = "unknown"
-summary = ""
+name = "sfx-start-loop"
+category = "audio"
+summary = "(channel) — start the already-loaded sound-effect channel with logical loop mode 1; the streaming decoder rewinds at EOF until the channel is replaced or released."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
 evidence = ""
 
@@ -4794,7 +4794,7 @@ observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1fe
-label = "u004206C0"
+label = "set-current-rotation-axis-angle"
 argc = 5
 abi_source = "kelebek+decode-validated"
 

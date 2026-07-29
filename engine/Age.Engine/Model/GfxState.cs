@@ -979,6 +979,17 @@ public sealed class GfxState
         }
     }
 
+    /// <summary>Op 0x1fe: immediately replace the object's current axis-angle rotation matrix at
+    /// obj+0xec. Axis components and angle are retained as native floating-point values.</summary>
+    public void SetCurrentRotation(long handle, (long X, long Y, long Z) axis, long angleDegrees)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.RotationCurrent = (axis.X, axis.Y, axis.Z, angleDegrees);
+        }
+    }
+
     /// <summary>Op 0x1ff: immediately replace the object's current translation matrix at obj+0x16c.</summary>
     public void SetCurrentTranslation(long handle, (long X, long Y, long Z) translation)
     {

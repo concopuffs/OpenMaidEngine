@@ -2398,8 +2398,10 @@ public sealed class VirtualMachine
                 _host.LoadSoundEffect(resourceId, channel);
                 return pc + 1;
             }
-            case "u0041D050":           // 0xb5 / semantics: sfx-start
-                _host.StartSoundEffect((int)Read(a[0])); return pc + 1;
+            case "u0041D050":           // 0xb5 / semantics: sfx-start-once
+                _host.StartSoundEffect((int)Read(a[0]), 0); return pc + 1;
+            case "sfx-start-loop":       // 0xba / same worker, logical decoder rewind at EOF
+                _host.StartSoundEffect((int)Read(a[0]), 1); return pc + 1;
             case "u0041D080":           // 0xb6 / semantics: sfx-release
             {
                 int channel = (int)Read(a[0]);
@@ -2554,6 +2556,9 @@ public sealed class VirtualMachine
             case "u00420620":             // upstream ABI label
             case "gfx-set-scale-current": // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
                 Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
+            case "set-current-rotation-axis-angle": // 0x1fe (handle)(axis x/y/z)(angle degrees)
+                Gfx.SetCurrentRotation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3])), Read(a[4]));
+                return pc + 1;
             case "set-adv-wait-indicator-handle":   // 0x212 (layout)(retained handle)
             {
                 TextHistory.SetWaitIndicatorObjectHandle((int)Read(a[0]), Read(a[1]));

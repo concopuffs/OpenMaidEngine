@@ -385,6 +385,25 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void CurrentRotationSetter_ReplacesTheLiveAxisAngleImmediately()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "CURRENTROTATION", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xcb20), MovGI(2, 0), MovGI(3, 1), MovGI(4, 0), MovGI(5, 180),
+            (0x1fe, new[] { G(1), G(2), G(3), G(4), G(5) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+
+        vm.Run();
+
+        var o = vm.Gfx.TryGet(0xcb20)!;
+        Assert.Equal((0.0, 1.0, 0.0, 180.0), o.RotationCurrent);
+        Assert.False(o.RotationChannelEnabled);
+    }
+
+    [Fact]
     public void ResetAnimClock_DispatchClearsGlobalServiceClock()
     {
         var t = T();

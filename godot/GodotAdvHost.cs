@@ -1608,12 +1608,14 @@ public sealed class GodotAdvHost : IHost
         if (audio != null) _main.CallDeferred("LoadSoundEffect", audio.Bytes, audio.Name, channel);
     }
 
-    public void StartSoundEffect(int channel)
+    public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
+
+    public void StartSoundEffect(int channel, int startMode)
     {
         if ((uint)channel >= (uint)_sfxNames.Length || _sfxNames[channel] == null) return;
         _timeline?.Event("sfx-start", new() { ["channel"] = channel,
-            ["file"] = _sfxNames[channel] });
-        _main.CallDeferred("StartSoundEffect", channel);
+            ["start_mode"] = startMode, ["file"] = _sfxNames[channel] });
+        _main.CallDeferred("StartSoundEffect", channel, startMode);
     }
 
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
