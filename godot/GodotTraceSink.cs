@@ -15,6 +15,7 @@ public sealed class GodotTraceSink : ITraceSink
     private readonly Stack<string> _scripts = new();
     private readonly Queue<GodotTraceStepSnapshot> _recentSteps = new();
     private GodotTraceStepSnapshot? _latestStep;
+    private GodotTraceSnapshot? _haltSnapshot;
     public GodotTraceSink(PageLocatorState locator, GodotTimelineLog? timeline = null)
     { _locator = locator; _timeline = timeline; }
     // The page locator needs the exact script/offset even when the heavier timeline log is disabled.
@@ -54,6 +55,8 @@ public sealed class GodotTraceSink : ITraceSink
             string[] callStack;
             lock (_snapshotLock)
             {
+                if (e.Text == "Halted" && _haltSnapshot == null)
+                    _haltSnapshot = SnapshotLocked();
                 if (_scripts.Count > 0) _scripts.Pop();
                 callStack = CurrentCallStackLocked();
             }
@@ -84,17 +87,13 @@ public sealed class GodotTraceSink : ITraceSink
 
     public GodotTraceSnapshot Snapshot()
     {
-        lock (_snapshotLock)
-        {
-            GodotTraceStepSnapshot? current = _latestStep;
-            return new GodotTraceSnapshot(
-                current?.Script ?? (_scripts.Count > 0 ? _scripts.Peek() : "<unknown>"),
-                current?.Offset ?? -1,
-                current?.Opcode ?? -1,
-                current?.Depth ?? System.Math.Max(0, _scripts.Count - 1),
-                CurrentCallStackLocked(),
-                _recentSteps.ToArray());
-        }
+        lock (_snapshotLock) return SnapshotLocked();
+    }
+
+    /// <summary>The deepest still-active script stack captured before a halted frame unwinds.</summary>
+    public GodotTraceSnapshot? HaltSnapshot
+    {
+        get { lock (_snapshotLock) return _haltSnapshot; }
     }
 
     /// <summary>Allocation-free current coordinate for once-per-frame diagnostics.</summary>
@@ -108,6 +107,18 @@ public sealed class GodotTraceSink : ITraceSink
         var stack = _scripts.ToArray();
         System.Array.Reverse(stack);
         return stack;
+    }
+
+    private GodotTraceSnapshot SnapshotLocked()
+    {
+        GodotTraceStepSnapshot? current = _latestStep;
+        return new GodotTraceSnapshot(
+            current?.Script ?? (_scripts.Count > 0 ? _scripts.Peek() : "<unknown>"),
+            current?.Offset ?? -1,
+            current?.Opcode ?? -1,
+            current?.Depth ?? System.Math.Max(0, _scripts.Count - 1),
+            CurrentCallStackLocked(),
+            _recentSteps.ToArray());
     }
 }
 

@@ -928,6 +928,19 @@ installed-A1215 regressions prove the exact prefix and unchanged PCM payload. Va
 tests, a zero-warning Godot build, and the Himegari-targeted threaded selftest, which loads the real A1215
 buffer through Godot and reports `first-riff-boundary=ok` without seek spam.
 
+**Stage 01-01 STEP-LIMIT diagnostics added (2026-07-29):** after a reveal-zone event, the persistent
+SYSTEM4 run reached its artificial 20,000,000-instruction cap. `SYSTEM4 P592` correctly identifies the last
+ADV boundary (`SC0600@0x33fd`, followed by cleanup and return), but the page map cannot identify code that
+runs after that page. The final page was recorded about 29 seconds before the halt, so the existing report
+cannot distinguish an SC0600 cleanup loop from resumed FIELD processing.
+
+Godot now retains the deepest frame chain before a halted frame unwinds and automatically emits a bounded
+STEP-LIMIT report: exact script/offset/opcode, nested frame chain, hottest sites in the final 128 instructions,
+and the final 16-instruction sequence. It also writes the ordinary full stall snapshot as
+`user://diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path. Focused formatter/stack
+regressions and all 530 engine tests pass; the Godot build is warning-free and the Himegari-targeted threaded
+selftest passes. No loop behavior or safety limit has been changed pending one instrumented reproduction.
+
 **Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
 disables the four looping channels represented by the compositor, and clears the complete native
 start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.

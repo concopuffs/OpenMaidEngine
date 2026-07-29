@@ -580,6 +580,12 @@ public partial class Main : Godot.Control
                 GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
                 ReportSubroutines();
                 ShowEnd();
+                if (_vm.HaltReason == "STEP-LIMIT")
+                {
+                    GodotTraceSnapshot haltTrace = _trace.HaltSnapshot ?? _trace.Snapshot();
+                    GD.Print(StepLimitDiagnosticFormatter.Format(haltTrace, _table!));
+                    CaptureStallDiagnostic(haltTrace, "step-limit");
+                }
                 if (_selftest) RunSelfTest();
             }
         }
@@ -742,12 +748,13 @@ public partial class Main : Godot.Control
     private static bool IsAdvanceAction(int action) => action is 4 or 5;
     private static bool HasAdvanceAction(int mask) => (mask & ((1 << 4) | (1 << 5))) != 0;
 
-    private void CaptureStallDiagnostic()
+    private void CaptureStallDiagnostic(GodotTraceSnapshot? traceOverride = null,
+                                        string snapshotKind = "stall")
     {
         try
         {
             long nowMs = _clock.NowMs;
-            GodotTraceSnapshot trace = _trace.Snapshot();
+            GodotTraceSnapshot trace = traceOverride ?? _trace.Snapshot();
             var activeMovies = _movies
                 .OrderBy(pair => pair.Key)
                 .Select(pair =>
@@ -815,7 +822,7 @@ public partial class Main : Godot.Control
             string directory = ProjectSettings.GlobalizePath("user://diagnostics");
             System.IO.Directory.CreateDirectory(directory);
             string path = System.IO.Path.Combine(directory,
-                $"stall-{System.DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.json");
+                $"{snapshotKind}-{System.DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.json");
             var jsonOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
@@ -825,10 +832,10 @@ public partial class Main : Godot.Control
             string coordinate = trace.CurrentOffset >= 0
                 ? $"{System.IO.Path.GetFileNameWithoutExtension(trace.CurrentScript).ToUpperInvariant()}@0x{trace.CurrentOffset:x}"
                 : trace.CurrentScript;
-            string clipboard = $"{coordinate} · stall snapshot {path}";
+            string clipboard = $"{coordinate} · {snapshotKind} snapshot {path}";
             DisplayServer.ClipboardSet(clipboard);
             _status.Text = $"Diagnostic saved: {coordinate} (path copied)";
-            GD.Print($"[diagnostic] stall snapshot {coordinate} -> {path}");
+            GD.Print($"[diagnostic] {snapshotKind} snapshot {coordinate} -> {path}");
         }
         catch (System.Exception exception)
         {
