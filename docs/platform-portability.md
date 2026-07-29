@@ -164,6 +164,10 @@ start. Builds use shared libraries, `$ORIGIN`/`@loader_path`-style local lookup 
 hashes and configure arguments, and no committed original-game data. Packaging automation is part of completing
 the backend, not a prerequisite for the first native decode spike.
 
+The current movie ABI is version 3. Its position-seek entry point resets both independent demux/decoder
+pipelines before managed keyframe/audio preroll, so opcode `0x241` has the same bounded, synchronized behavior
+on every future native target rather than relying on a Windows-only DirectShow cursor.
+
 The Windows-x64 spike is now complete. `bootstrap-win64.ps1` verifies the immutable archive SHA before
 extraction, and `build-win64.ps1` builds the shim with MSVC and places the DLL, import artifacts, required LGPL
 shared libraries, and license under disposable `build/native/win-x64`. The managed resolver accepts
@@ -184,7 +188,7 @@ display sizes (120x120 through 800x600), independently matched sequence-header d
 duration and frame-rate metadata, verified tightly packed RGBA size and nondecreasing timestamps, observed
 changing imagery in every asset, and closed every session. The set includes all 184 video-only and 29 audio-bearing
 streams; at that video-only milestone audio presence was detected but PCM remained intentionally undelivered.
-The later ABI-v2 gate above supersedes that limitation. The 263-second `ED.AGF` was the
+The later audio-delivery gate above supersedes that limitation. The 263-second `ED.AGF` was the
 slowest decode at 4.4 seconds in the deliberately unpaced gate, so its prior 30-second failure was test-harness
 whole-frame hashing overhead rather than a decoder incompatibility. The disposable machine report is
 `build/movie-corpus-ffmpeg.json`; invocation and report semantics are canonical in `docs/tools-reference.md`.

@@ -176,6 +176,11 @@ public interface IHost
     /// when the host could not obtain usable timing metadata. Native op 0x23f queries this state
     /// immediately after 0x236 returns.</returns>
     long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) => null;
+    // Native op 0x241 uses the same graph/surface lifecycle as 0x236, but seeks the graph before
+    // playback configuration. Hosts without positioned decoding may fall back to ordinary playback.
+    long? PlayMovieToSurfaceAtPosition(
+        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
+        => PlayMovieToSurface(resourceId, surfaceSlot, movieFlags, syncMask);
     bool IsMovieSurfaceActive(int surfaceSlot) => false;
     // Native op 0x20f uses a universal packed id and parks script execution until the movie
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host

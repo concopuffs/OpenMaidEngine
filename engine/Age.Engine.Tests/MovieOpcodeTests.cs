@@ -12,6 +12,7 @@ public class MovieOpcodeTests
     private sealed class FakeMovieDecoder : IMovieDecoder
     {
         public long? StopTimeMs { get; init; }
+        public long InitialPositionMs { get; init; }
         public bool IsCompleted { get; set; }
         public string? Failure { get; set; }
         public bool Disposed { get; private set; }
@@ -31,9 +32,11 @@ public class MovieOpcodeTests
     private sealed class FakeMovieDecoderFactory(FakeMovieDecoder decoder) : IMovieDecoderFactory
     {
         public MoviePayload? OpenedPayload { get; private set; }
-        public IMovieDecoder Open(MoviePayload movie)
+        public long OpenedInitialPositionMs { get; private set; }
+        public IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0)
         {
             OpenedPayload = movie;
+            OpenedInitialPositionMs = initialPositionMs;
             return decoder;
         }
     }
@@ -47,7 +50,10 @@ public class MovieOpcodeTests
         public FfmpegMovieInfo Info { get; } = info;
         public int FailOnDecodeCall { get; init; } = -1;
         public int DecodeCalls => Volatile.Read(ref _decodeCalls);
+        public long? SeekPositionMs { get; private set; }
         public bool Disposed { get; private set; }
+
+        public void Seek(long positionMs) => SeekPositionMs = positionMs;
 
         public bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame)
         {
@@ -112,14 +118,32 @@ public class MovieOpcodeTests
         var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123, payload, factory);
 
         Assert.Same(payload, factory.OpenedPayload);
+        Assert.Equal(0, factory.OpenedInitialPositionMs);
         Assert.Same(decoder, runtime.Decoder);
         Assert.Equal(0x123, runtime.ResourceId);
+        Assert.Equal(0, runtime.InitialPositionMs);
         Assert.Equal(1876, runtime.Decoder.StopTimeMs);
         Assert.Equal(5000, runtime.WatchdogMs);
         Assert.True(runtime.Decoder.TryTakeFrame(out var frame));
         Assert.Equal(new byte[] { 1, 2, 3, 4 }, frame.Pixels);
         runtime.Decoder.Dispose();
         Assert.True(decoder.Disposed);
+    }
+
+    [Fact]
+    public void MovieRuntimePassesInitialPositionAndBasesWatchdogOnRemainingDuration()
+    {
+        var decoder = new FakeMovieDecoder { StopTimeMs = 10000, InitialPositionMs = 9000 };
+        var factory = new FakeMovieDecoderFactory(decoder);
+
+        var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123,
+            new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba }),
+            factory, initialPositionMs: 9000);
+
+        Assert.Equal(9000, factory.OpenedInitialPositionMs);
+        Assert.Equal(9000, runtime.InitialPositionMs);
+        Assert.Equal(5000, runtime.WatchdogMs);
+        runtime.Decoder.Dispose();
     }
 
     [Theory]
@@ -235,6 +259,106 @@ public class MovieOpcodeTests
         Assert.True(clock.WaitForDeadline(100));
         clock.AdvanceTo(100);
         Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+    }
+
+    [Fact]
+    public void FfmpegPositionedDecoderPublishesFrameActiveAtSeekThenContinuesPacing()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 120, 25, 1, false),
+            SyntheticMovieFrame(1, 0),
+            SyntheticMovieFrame(2, 40),
+            SyntheticMovieFrame(3, 80));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock, initialPositionMs: 60);
+
+        Assert.Equal(60, source.SeekPositionMs);
+        Assert.Equal(60, decoder.InitialPositionMs);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.Equal(40, decoder.FirstFramePresentationTimeMs);
+        Assert.True(clock.WaitForDeadline(40));
+        clock.AdvanceTo(39);
+        Assert.False(decoder.TryTakeFrame(out _));
+        clock.AdvanceTo(40);
+        RgbaImage? next = null;
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            if (!decoder.TryTakeFrame(out var frame)) return false;
+            next = frame;
+            return true;
+        }, 1000));
+        Assert.Equal((byte)3, next!.Pixels[0]);
+    }
+
+    [Fact]
+    public void FfmpegPositionedDecoderRetainsTerminalFrameAtStopTimeMinusOne()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 120, 25, 1, false),
+            SyntheticMovieFrame(1, 0),
+            SyntheticMovieFrame(2, 40),
+            SyntheticMovieFrame(3, 80));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock, initialPositionMs: 119);
+
+        RgbaImage? terminal = null;
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            if (!decoder.TryTakeFrame(out var frame)) return false;
+            terminal = frame;
+            return true;
+        }, 1000));
+
+        Assert.Equal((byte)3, terminal!.Pixels[0]);
+        Assert.Equal(80, decoder.FirstFramePresentationTimeMs);
+        Assert.True(clock.WaitForDeadline(40));
+    }
+
+    [Fact]
+    public void FfmpegPositionedDecoderClampsInitialPositionToGraphBounds()
+    {
+        var belowStart = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 120, 25, 1, false),
+            SyntheticMovieFrame(1, 0));
+        using (var decoder = new FfmpegMovieDecoder(belowStart, null, initialPositionMs: -50))
+        {
+            Assert.Equal(0, decoder.InitialPositionMs);
+            Assert.Null(belowStart.SeekPositionMs);
+        }
+
+        var beyondStop = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 120, 25, 1, false),
+            SyntheticMovieFrame(1, 80));
+        using (var decoder = new FfmpegMovieDecoder(beyondStop, null, initialPositionMs: 500))
+        {
+            Assert.Equal(119, decoder.InitialPositionMs);
+            Assert.Equal(119, beyondStop.SeekPositionMs);
+        }
+    }
+
+    [Fact]
+    public void FfmpegPositionedDecoderTrimsAndRebasesAudioAtTheSamePosition()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 150, 10, 1, true, 1000, 2, 50),
+            SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 100));
+        source.EnqueueAudio(
+            new FfmpegAudioChunk(Enumerable.Range(0, 100).Select(value => (float)value).ToArray(),
+                                 50, 50),
+            new FfmpegAudioChunk(Enumerable.Repeat(0.25f, 100).ToArray(), 50, 100));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock, initialPositionMs: 75);
+
+        var chunks = new List<MovieAudioChunk>();
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            while (decoder.TryTakeAudioChunk(out var chunk)) chunks.Add(chunk);
+            return decoder.AudioDecodingCompleted && chunks.Count == 2;
+        }, 1000));
+
+        Assert.Equal(new[] { 25, 50 }, chunks.Select(chunk => chunk.FrameCount));
+        Assert.Equal(new long[] { 0, 25 }, chunks.Select(chunk => chunk.PresentationTimeMs));
+        Assert.Equal(50f, chunks[0].InterleavedStereo[0]);
     }
 
     [Fact]
@@ -452,6 +576,33 @@ public class MovieOpcodeTests
         var visible = vm.Gfx.SnapshotVisibleObjects().Single();
         Assert.Equal(0, visible.SurfaceResId);
         Assert.Equal(-1, visible.ColorKey);
+    }
+
+    [Fact]
+    public void PositionedMovieDispatchesExactOperandsAndRetainsGraphStopTime()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "POSITIONED-MOVIE",
+        [
+            (0x241,
+            [
+                new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2),
+                new Operand(0, 0), new Operand(0, 1875),
+            ]),
+            (0x23f, [new Operand(3, 0x1234), new Operand(0, 5)]),
+            (0x55, [new Operand(3, 0x1235), new Operand(0, 0x5678)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var host = new RecordingHost { MovieStopTimeMs = 1876 };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(new[] { (0x33L, 5, 2L, 0L, 1875L) }, host.PositionedMovies);
+        Assert.Empty(host.Movies);
+        Assert.Equal(1876, vm.Globals[0x1234]);
+        Assert.Equal(0x5678, vm.Globals[0x1235]);
     }
 
     [Fact]
@@ -681,6 +832,37 @@ public class MovieOpcodeTests
             heardSignal = later.InterleavedStereo.Any(sample => Math.Abs(sample) > 0.00001f);
         }
         Assert.True(heardSignal, $"{expectedName} should contain non-silent MPEG audio");
+    }
+
+    [Fact]
+    public void FfmpegShimSeeksBothVideoAndAudioNearRequestedPosition()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        ConfigureFfmpegNativeProbe();
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var resources = new ResourceMap(catalog, new Sys4AssetStore(catalog, Paths.GameDir));
+        var payload = resources.ReadMovie(resources.ResolveMovie(0x33)!); // CHAPTER.AGF
+        const long targetMs = 11000;
+
+        using var movie = new FfmpegMovieSession(payload);
+        movie.Seek(targetMs);
+
+        long videoTimestamp = -1;
+        for (int frame = 0; frame < 120 && videoTimestamp < targetMs; frame++)
+        {
+            Assert.True(movie.TryDecodeNextVideoFrame(out var decoded));
+            videoTimestamp = decoded.PresentationTimeMs;
+        }
+        Assert.InRange(videoTimestamp, targetMs, movie.Info.StopTimeMs);
+
+        long audioEndTimestamp = -1;
+        for (int chunk = 0; chunk < 100 && audioEndTimestamp < targetMs; chunk++)
+        {
+            Assert.True(movie.TryDecodeNextAudioChunk(out var decoded));
+            audioEndTimestamp = decoded.PresentationTimeMs
+                                + decoded.FrameCount * 1000L / movie.Info.AudioSampleRate;
+        }
+        Assert.InRange(audioEndTimestamp, targetMs, movie.Info.StopTimeMs + 100);
     }
 
     [Fact]

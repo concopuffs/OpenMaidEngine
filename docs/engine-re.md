@@ -1705,12 +1705,14 @@ The sole call, `CALLBACK_LOAD@0x189`, clarifies its purpose. Ordinary ADV movie 
 after `0x236`; the load callback passes that value minus one to `0x241`. This is terminal-frame
 reconstruction after a numbered load, not restoration of a separately sampled live playback cursor.
 
-The current FFmpeg backend has no initial-position seam. A faithful implementation should add a synchronous
-pre-play seek for both video and audio, discard keyframe preroll until the requested timestamp, then rebase
-the existing decoder pacing/completion timeline at that point. Simply decoding from zero until
-`stop_time_ms-1` would make load latency proportional to the movie length; seeking video without matching
-audio would replay stale audio during restoration. Once that bounded decoder primitive exists, the rest of
-`0x241` can delegate to the existing `0x236` host/surface lifecycle.
+The portable implementation delegates graph/surface ownership to the existing `0x236` lifecycle and adds
+one synchronous initial-position boundary before decoder workers start. FFmpeg ABI v3 seeks the independent
+video and audio demuxers to their preceding indexed packet. Managed video preroll retains the latest frame
+at or before the requested position and queues the first later frame, which is essential for
+`stop_time_ms-1` to restore the terminal image rather than run off EOF. Audio preroll drops complete earlier
+blocks, trims a straddling block at sample precision, and rebases its remaining timestamps with video
+pacing/completion to zero. A real archived `CHAPTER.AGF` regression proves both demuxers seek near 11 seconds;
+synthetic regressions pin active-frame selection, terminal-frame retention, audio trimming, and pacing.
 
 ### Movie-mask transition `0x24d` and tiled-surface edge `0x248` (2026-07-29)
 

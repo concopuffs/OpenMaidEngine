@@ -754,12 +754,17 @@ gate on the one-player-attack acceptance path.
 
 ### MPEG movie audio implemented; audible acceptance in progress (2026-07-25)
 
-The FFmpeg shim ABI is now version 2. Each in-memory MPEG payload feeds independent seekable video and audio
+The FFmpeg shim ABI is now version 3. Each in-memory MPEG payload feeds independent seekable video and audio
 demuxers, preserving concurrent decode without temporary files, and exposes timestamped interleaved stereo
 float PCM resampled at the source rate. Video and audio timestamps share the same normalized media origin.
 The managed decoder owns bounded video and PCM queues plus separate workers; audio-bearing movies use the
 Godot audio-device clock as the presentation master, while video-only movies retain monotonic stopwatch pacing.
 Completion waits for the final video interval and for decoded PCM to be submitted.
+
+ABI v3 adds a synchronous dual-demuxer initial seek used by opcode `0x241`. Native seek lands on preceding
+indexed packets; managed preroll selects the video frame active at the requested position, sample-trims audio
+to the same boundary, and rebases remaining pacing and completion. This preserves CALLBACK_LOAD's terminal
+frame restoration without decode-from-zero latency or stale pre-seek audio.
 
 Godot creates a per-playback `AudioStreamGenerator`, compensates for output latency, handles timestamp gaps and
 overlaps, and tears it down with the corresponding playback instance. Native movie flags route sound to the
@@ -776,7 +781,7 @@ unselected but in-tree until that live gate.
 
 The first normal windowed LOGO/OP run confirmed that audio reaches the intended output, but it sounded
 crackly/warbled. Corpus endpoints showed continuous decoded PCM; the fault was presentation alignment.
-Audio PTS crosses ABI v2 in whole milliseconds, losing up to 44 samples of precision at 44.1 kHz, while the
+Audio PTS crosses the ABI in whole milliseconds, losing up to 44 samples of precision at 44.1 kHz, while the
 initial sink inserted or dropped that tiny discrepancy at every MPEG block boundary. Established timelines
 now tolerate 2 ms of timestamp quantization and remain sample-contiguous, while initial offsets and material
 later gaps/overlaps still insert silence or trim PCM. A regression simulates all 4,093 OP blocks without a
@@ -1091,6 +1096,25 @@ Godot build, clean diff checking, and the Himegari-targeted threaded `SELFTEST O
 
 **NEXT:** implement positioned movie playback `0x241` with synchronized FFmpeg initial seek, then finish
 the DEBUG-only `0x24d` green-channel movie-mask compositor.
+
+**POSITIONED MOVIE `0x241` IMPLEMENTED (2026-07-29):** the opcode now uses the existing nonmodal
+movie-to-surface ownership and stop-time metadata path while passing its fifth operand through a dedicated
+initial-position host seam. FFmpeg ABI v3 seeks the independent video and audio format/decoder pipelines
+before worker start. Video keyframe preroll selects the frame active at the requested position and retains a
+later decoded frame for normal pacing; EOF after preroll therefore publishes the terminal frame for
+CALLBACK_LOAD's native `stop_time_ms-1` call. Audio preroll drops earlier blocks, sample-trims a block that
+straddles the position, and rebases the remaining timestamps to the same playback-zero origin.
+
+Focused regressions cover exact opcode/host dispatch and retained graph stop time, runtime initial-position
+and watchdog propagation, active-frame selection, subsequent pacing, terminal-frame retention, synchronized
+audio trim/rebase, and a real VFS `CHAPTER.AGF` seek proving both native demuxers reach the requested
+11-second neighborhood. Ordinary `0x236` and modal `0x20f` continue to open at position zero. The remaining
+effectful inventory is one opcode / two DEBUG-only instructions: `0x24d`.
+Validation passes 511/511 engine tests, the complete 213/213 installed-movie corpus gate, opcode/global/
+EngineCtx build and lint suites, the zero-warning Godot build, clean diff checking, and the
+Himegari-targeted threaded `SELFTEST OK`.
+
+**NEXT:** implement the DEBUG-only `0x24d` green-channel movie-mask compositor.
 
 ## Later Phase B breadth
 

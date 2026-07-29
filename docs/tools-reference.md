@@ -230,6 +230,10 @@ movie is copied into the repository or native output. When `build/native/win-x64
 `dotnet build godot/Himegari.csproj` also stages the shim, its five DLL dependencies, and `FFmpeg-LICENSE.txt`
 beside `Himegari.dll` for development playback.
 
+The current native movie ABI is version 3. In addition to sequential video/audio decode, it exposes a
+synchronous position seek for both independent demuxers; exact video-frame selection and audio trimming are
+performed by the managed decoder's preroll before normal paced delivery.
+
 The corpus gate intentionally bypasses presentation waits: it validates video/audio decode compatibility and
 lifecycle, not wall-clock playback pacing or audible output. `--expected-count` makes additions, omissions, or profile changes explicit;
 changing the pinned FFmpeg dependency requires rerunning this gate.

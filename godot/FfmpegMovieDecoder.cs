@@ -88,6 +88,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private readonly Queue<MovieAudioChunk> _audioChunks = new();
     private readonly AutoResetEvent _audioSpace = new(false);
     private readonly int _maximumQueuedAudioFrames;
+    private readonly long _initialPositionMs;
     private RgbaImage? _latestFrame;
     private volatile bool _completed;
     private volatile bool _videoTimelineCompleted;
@@ -101,6 +102,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private long _firstFramePresentationTimeMs = -1;
 
     public long? StopTimeMs => _source.Info.StopTimeMs;
+    public long InitialPositionMs => _initialPositionMs;
     public bool IsCompleted => _completed;
     public string? Failure => Volatile.Read(ref _failure);
     public long? FirstFramePresentationTimeMs
@@ -114,12 +116,27 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     public MovieAudioInfo? AudioInfo { get; }
     public bool AudioDecodingCompleted => _audioDecodingCompleted;
 
-    public FfmpegMovieDecoder(MoviePayload movie)
-        : this(new FfmpegMovieSession(movie), null) { }
+    public FfmpegMovieDecoder(MoviePayload movie, long initialPositionMs = 0)
+        : this(new FfmpegMovieSession(movie), null, initialPositionMs) { }
 
-    internal FfmpegMovieDecoder(IFfmpegFrameSource source, IMoviePacingClock? clock)
+    internal FfmpegMovieDecoder(IFfmpegFrameSource source, IMoviePacingClock? clock,
+                                long initialPositionMs = 0)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
+        _initialPositionMs = Math.Clamp(
+            initialPositionMs,
+            0,
+            Math.Max(0, source.Info.StopTimeMs - 1));
+        try
+        {
+            if (_initialPositionMs > 0)
+                source.Seek(_initialPositionMs);
+        }
+        catch
+        {
+            source.Dispose();
+            throw;
+        }
         _clock = clock ?? (source.Info.HasAudio
             ? new ExternallyAdvancedMoviePacingClock()
             : new StopwatchMoviePacingClock());
@@ -216,9 +233,24 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
             long lastTimestamp = -1;
             long decodedFrames = 0;
             long firstTimestamp = -1;
+            FfmpegVideoFrame? selectedSeekFrame = null;
+            FfmpegVideoFrame? pendingAfterSeek = null;
+            if (_initialPositionMs > 0)
+                selectedSeekFrame = SelectFrameAtInitialPosition(out pendingAfterSeek);
             while (!_cancel.WaitOne(0))
             {
-                if (!_source.TryDecodeNextVideoFrame(out var frame))
+                FfmpegVideoFrame frame;
+                if (selectedSeekFrame != null)
+                {
+                    frame = selectedSeekFrame;
+                    selectedSeekFrame = null;
+                }
+                else if (pendingAfterSeek != null)
+                {
+                    frame = pendingAfterSeek;
+                    pendingAfterSeek = null;
+                }
+                else if (!_source.TryDecodeNextVideoFrame(out frame))
                 {
                     if (decodedFrames == 0)
                         throw new InvalidDataException("FFmpeg stream ended before producing a video frame");
@@ -265,11 +297,37 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         }
     }
 
+    private FfmpegVideoFrame? SelectFrameAtInitialPosition(out FfmpegVideoFrame? pending)
+    {
+        pending = null;
+        FfmpegVideoFrame? candidate = null;
+        long priorTimestamp = -1;
+        while (!_cancel.WaitOne(0) && _source.TryDecodeNextVideoFrame(out FfmpegVideoFrame frame))
+        {
+            if (frame.PresentationTimeMs < 0 || frame.PresentationTimeMs < priorTimestamp)
+                throw new InvalidDataException(
+                    $"FFmpeg returned non-monotonic video timestamp {frame.PresentationTimeMs} " +
+                    $"after {priorTimestamp} during seek preroll");
+            priorTimestamp = frame.PresentationTimeMs;
+            if (frame.PresentationTimeMs <= _initialPositionMs)
+            {
+                candidate = frame;
+                continue;
+            }
+            if (candidate == null)
+                return frame;
+            pending = frame;
+            return candidate;
+        }
+        return candidate;
+    }
+
     private void AudioDecodeThread()
     {
         try
         {
-            long priorTimestamp = -1;
+            long priorSourceTimestamp = -1;
+            long priorRebasedTimestamp = -1;
             while (!_cancel.WaitOne(0))
             {
                 while (Volatile.Read(ref _queuedAudioFrames) >= _maximumQueuedAudioFrames)
@@ -286,18 +344,23 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                 if (decoded.FrameCount <= 0
                     || decoded.InterleavedStereo.Length != checked(decoded.FrameCount * 2)
                     || decoded.PresentationTimeMs < 0
-                    || decoded.PresentationTimeMs < priorTimestamp)
+                    || decoded.PresentationTimeMs < priorSourceTimestamp)
                     throw new InvalidDataException(
                         $"FFmpeg returned invalid audio block {decoded.FrameCount}f " +
-                        $"at {decoded.PresentationTimeMs} ms after {priorTimestamp} ms");
-                var chunk = new MovieAudioChunk(decoded.InterleavedStereo, decoded.FrameCount,
-                                                decoded.PresentationTimeMs);
+                        $"at {decoded.PresentationTimeMs} ms after {priorSourceTimestamp} ms");
+                priorSourceTimestamp = decoded.PresentationTimeMs;
+                MovieAudioChunk? chunk = RebaseAudioChunk(decoded);
+                if (chunk == null) continue;
+                if (chunk.PresentationTimeMs < priorRebasedTimestamp)
+                    throw new InvalidDataException(
+                        $"FFmpeg seek produced non-monotonic rebased audio timestamp " +
+                        $"{chunk.PresentationTimeMs} after {priorRebasedTimestamp} ms");
                 lock (_audioLock)
                 {
                     _audioChunks.Enqueue(chunk);
                     _queuedAudioFrames += chunk.FrameCount;
                 }
-                priorTimestamp = decoded.PresentationTimeMs;
+                priorRebasedTimestamp = chunk.PresentationTimeMs;
             }
         }
         catch (Exception error)
@@ -308,6 +371,32 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         {
             WorkerCompleted();
         }
+    }
+
+    private MovieAudioChunk? RebaseAudioChunk(FfmpegAudioChunk decoded)
+    {
+        int trimFrames = 0;
+        if (_initialPositionMs > decoded.PresentationTimeMs)
+        {
+            long deltaMs = _initialPositionMs - decoded.PresentationTimeMs;
+            long required = checked(
+                (deltaMs * (long)_source.Info.AudioSampleRate + 999) / 1000);
+            trimFrames = checked((int)Math.Min(decoded.FrameCount, required));
+        }
+        if (trimFrames >= decoded.FrameCount) return null;
+
+        float[] samples = decoded.InterleavedStereo;
+        int frameCount = decoded.FrameCount - trimFrames;
+        if (trimFrames > 0)
+        {
+            var trimmed = new float[checked(frameCount * 2)];
+            Array.Copy(samples, checked(trimFrames * 2), trimmed, 0, trimmed.Length);
+            samples = trimmed;
+        }
+        long trimmedTimestamp = decoded.PresentationTimeMs
+                                + trimFrames * 1000L / _source.Info.AudioSampleRate;
+        long rebasedTimestamp = Math.Max(0, trimmedTimestamp - _initialPositionMs);
+        return new MovieAudioChunk(samples, frameCount, rebasedTimestamp);
     }
 
     private void Fail(Exception error)
@@ -365,5 +454,6 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
 
 internal sealed class FfmpegMovieDecoderFactory : IMovieDecoderFactory
 {
-    public IMovieDecoder Open(MoviePayload movie) => new FfmpegMovieDecoder(movie);
+    public IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0)
+        => new FfmpegMovieDecoder(movie, initialPositionMs);
 }

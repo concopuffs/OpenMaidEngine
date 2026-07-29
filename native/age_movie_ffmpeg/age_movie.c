@@ -16,7 +16,7 @@
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 
-#define AGE_MOVIE_ABI_VERSION 2u
+#define AGE_MOVIE_ABI_VERSION 3u
 #define AGE_MOVIE_IO_BUFFER_SIZE 32768
 #define AGE_MOVIE_ERROR_SIZE 512
 
@@ -42,7 +42,9 @@ struct age_movie {
     int video_input_eof;
     int video_decoder_draining;
     int video_decoder_eof;
+    int video_seek_preroll;
     int64_t decoded_video_frame_count;
+    int64_t video_fallback_origin_ms;
 
     age_movie_io_state audio_io_state;
     AVIOContext *audio_io;
@@ -57,10 +59,13 @@ struct age_movie {
     int audio_decoder_draining;
     int audio_decoder_eof;
     int audio_frame_pending;
+    int audio_seek_preroll;
     int64_t decoded_audio_sample_count;
+    int64_t audio_fallback_origin_ms;
     int audio_sample_rate;
 
     int64_t timeline_origin_ms;
+    int64_t stop_time_ms;
     int width;
     int height;
     char error[AGE_MOVIE_ERROR_SIZE];
@@ -285,6 +290,62 @@ static int rewind_audio_for_decode(age_movie *movie, AVStream *stream) {
     return result;
 }
 
+static int64_t stream_timestamp_for_position(
+    int64_t timeline_origin_ms, int64_t position_ms, AVRational time_base) {
+    int64_t absolute_ms = timeline_origin_ms;
+    if (position_ms > 0 && absolute_ms <= INT64_MAX - position_ms)
+        absolute_ms += position_ms;
+    return av_rescale_q_rnd(absolute_ms, (AVRational){1, 1000}, time_base,
+        AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
+}
+
+static int seek_video_for_decode(age_movie *movie, int64_t position_ms) {
+    int64_t target = stream_timestamp_for_position(
+        movie->timeline_origin_ms, position_ms, movie->video_time_base);
+    int result = av_seek_frame(
+        movie->video_format, movie->video_stream_index, target, AVSEEK_FLAG_BACKWARD);
+    if (result < 0)
+        result = avformat_seek_file(movie->video_format, movie->video_stream_index,
+            INT64_MIN, target, INT64_MAX, AVSEEK_FLAG_BACKWARD);
+    if (result < 0) return result;
+
+    avcodec_flush_buffers(movie->video_codec);
+    if (movie->video_packet != NULL) av_packet_unref(movie->video_packet);
+    if (movie->video_frame != NULL) av_frame_unref(movie->video_frame);
+    movie->video_input_eof = 0;
+    movie->video_decoder_draining = 0;
+    movie->video_decoder_eof = 0;
+    movie->video_seek_preroll = position_ms > 0;
+    movie->decoded_video_frame_count = 0;
+    movie->video_fallback_origin_ms = position_ms;
+    return 0;
+}
+
+static int seek_audio_for_decode(age_movie *movie, int64_t position_ms) {
+    if (movie->audio_stream_index < 0) return 0;
+    int64_t target = stream_timestamp_for_position(
+        movie->timeline_origin_ms, position_ms, movie->audio_time_base);
+    int result = av_seek_frame(
+        movie->audio_format, movie->audio_stream_index, target, AVSEEK_FLAG_BACKWARD);
+    if (result < 0)
+        result = avformat_seek_file(movie->audio_format, movie->audio_stream_index,
+            INT64_MIN, target, INT64_MAX, AVSEEK_FLAG_BACKWARD);
+    if (result < 0) return result;
+
+    avcodec_flush_buffers(movie->audio_codec);
+    if (movie->audio_packet != NULL) av_packet_unref(movie->audio_packet);
+    if (movie->audio_frame != NULL) av_frame_unref(movie->audio_frame);
+    movie->audio_input_eof = 0;
+    movie->audio_decoder_draining = 0;
+    movie->audio_decoder_eof = 0;
+    movie->audio_frame_pending = 0;
+    movie->audio_seek_preroll = position_ms > 0;
+    movie->decoded_audio_sample_count = 0;
+    movie->audio_fallback_origin_ms = position_ms;
+    swr_close(movie->swr);
+    return swr_init(movie->swr);
+}
+
 static void destroy_movie(age_movie *movie) {
     if (movie == NULL) return;
     swr_free(&movie->swr);
@@ -361,6 +422,10 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
     movie->video_stream_index = result;
     AVStream *stream = movie->video_format->streams[movie->video_stream_index];
     movie->video_time_base = stream->time_base;
+    movie->video_fallback_origin_ms =
+        stream->start_time == AV_NOPTS_VALUE ? 0
+        : rescale_ms_down(stream->start_time, movie->video_time_base)
+          - movie->timeline_origin_ms;
 
     movie->video_codec = avcodec_alloc_context3(video_decoder);
     if (movie->video_codec == NULL) {
@@ -399,6 +464,7 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
         set_error(movie, "determine video duration", result);
         goto failure;
     }
+    movie->stop_time_ms = duration_ms;
     result = rewind_for_decode(movie, stream);
     if (result < 0) {
         set_error(movie, "rewind MPEG stream", result);
@@ -440,6 +506,10 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
         movie->audio_stream_index = result;
         AVStream *audio_stream = movie->audio_format->streams[movie->audio_stream_index];
         movie->audio_time_base = audio_stream->time_base;
+        movie->audio_fallback_origin_ms =
+            audio_stream->start_time == AV_NOPTS_VALUE ? 0
+            : rescale_ms_down(audio_stream->start_time, movie->audio_time_base)
+              - movie->timeline_origin_ms;
         movie->audio_codec = avcodec_alloc_context3(audio_decoder);
         if (movie->audio_codec == NULL) {
             snprintf(movie->error, sizeof(movie->error), "audio decoder allocation failed");
@@ -512,6 +582,24 @@ failure:
     return AGE_MOVIE_ERROR;
 }
 
+int32_t AGE_MOVIE_CALL age_movie_seek(age_movie *movie, int64_t position_ms) {
+    if (movie == NULL || position_ms < 0) return AGE_MOVIE_INVALID_ARGUMENT;
+    if (movie->stop_time_ms > 0 && position_ms >= movie->stop_time_ms)
+        position_ms = movie->stop_time_ms - 1;
+
+    int result = seek_video_for_decode(movie, position_ms);
+    if (result < 0) {
+        set_error(movie, "seek MPEG video stream", result);
+        return AGE_MOVIE_ERROR;
+    }
+    result = seek_audio_for_decode(movie, position_ms);
+    if (result < 0) {
+        set_error(movie, "seek MPEG audio stream", result);
+        return AGE_MOVIE_ERROR;
+    }
+    return 0;
+}
+
 int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
     uint8_t *rgba, size_t rgba_size, int64_t *out_pts_ms) {
     if (movie == NULL || rgba == NULL || out_pts_ms == NULL) return AGE_MOVIE_INVALID_ARGUMENT;
@@ -522,6 +610,7 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
     for (;;) {
         int result = avcodec_receive_frame(movie->video_codec, movie->video_frame);
         if (result == 0) {
+            movie->video_seek_preroll = 0;
             movie->sws = sws_getCachedContext(movie->sws,
                 movie->video_frame->width, movie->video_frame->height,
                 (enum AVPixelFormat)movie->video_frame->format,
@@ -561,10 +650,8 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
                     snprintf(movie->error, sizeof(movie->error), "decoded frame has no timestamp or frame rate");
                     return AGE_MOVIE_ERROR;
                 }
-                int64_t stream_start = movie->video_format->streams[movie->video_stream_index]->start_time;
-                int64_t start_ms = stream_start == AV_NOPTS_VALUE ? 0
-                    : rescale_ms_down(stream_start, movie->video_time_base) - movie->timeline_origin_ms;
-                *out_pts_ms = start_ms + av_rescale_q_rnd(movie->decoded_video_frame_count, av_inv_q(rate),
+                *out_pts_ms = movie->video_fallback_origin_ms
+                    + av_rescale_q_rnd(movie->decoded_video_frame_count, av_inv_q(rate),
                     (AVRational){1, 1000}, AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
             } else {
                 *out_pts_ms = rescale_ms_down(timestamp, movie->video_time_base)
@@ -618,6 +705,8 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
         if (movie->video_input_eof) continue;
         result = avcodec_send_packet(movie->video_codec, movie->video_packet);
         av_packet_unref(movie->video_packet);
+        if (result == AVERROR_INVALIDDATA && movie->video_seek_preroll)
+            continue;
         if (result < 0) {
             set_error(movie, "send MPEG video packet", result);
             return AGE_MOVIE_ERROR;
@@ -647,12 +736,8 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
             int64_t timestamp = movie->audio_frame->best_effort_timestamp;
             if (timestamp == AV_NOPTS_VALUE) timestamp = movie->audio_frame->pts;
             if (timestamp == AV_NOPTS_VALUE) {
-                AVStream *audio_stream = movie->audio_format->streams[movie->audio_stream_index];
-                int64_t stream_start = audio_stream->start_time;
-                int64_t start_ms = stream_start == AV_NOPTS_VALUE ? 0
-                    : rescale_ms_down(stream_start, movie->audio_time_base)
-                      - movie->timeline_origin_ms;
-                *out_pts_ms = start_ms + av_rescale_q_rnd(movie->decoded_audio_sample_count,
+                *out_pts_ms = movie->audio_fallback_origin_ms
+                    + av_rescale_q_rnd(movie->decoded_audio_sample_count,
                     (AVRational){1, movie->audio_sample_rate}, (AVRational){1, 1000},
                     AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
             } else {
@@ -678,6 +763,7 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
 
         int result = avcodec_receive_frame(movie->audio_codec, movie->audio_frame);
         if (result == 0) {
+            movie->audio_seek_preroll = 0;
             movie->audio_frame_pending = 1;
             continue;
         }
@@ -724,6 +810,8 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
         if (movie->audio_input_eof) continue;
         result = avcodec_send_packet(movie->audio_codec, movie->audio_packet);
         av_packet_unref(movie->audio_packet);
+        if (result == AVERROR_INVALIDDATA && movie->audio_seek_preroll)
+            continue;
         if (result < 0) {
             set_error(movie, "send MPEG audio packet", result);
             return AGE_MOVIE_ERROR;

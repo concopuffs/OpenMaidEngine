@@ -21,6 +21,11 @@ internal sealed record FfmpegAudioChunk(float[] InterleavedStereo, int FrameCoun
 internal interface IFfmpegFrameSource : IDisposable
 {
     FfmpegMovieInfo Info { get; }
+    void Seek(long positionMs)
+    {
+        if (positionMs != 0)
+            throw new NotSupportedException("movie source does not support positioned playback");
+    }
     bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame);
     bool TryDecodeNextAudioChunk(out FfmpegAudioChunk chunk)
     {
@@ -39,7 +44,7 @@ internal sealed class FfmpegMovieSession : IFfmpegFrameSource
     public FfmpegMovieSession(MoviePayload movie)
     {
         ArgumentNullException.ThrowIfNull(movie);
-        if (FfmpegMovieNative.AbiVersion() != 2)
+        if (FfmpegMovieNative.AbiVersion() != 3)
             throw new InvalidOperationException("unsupported age_movie_ffmpeg ABI version");
 
         byte[] error = new byte[1024];
@@ -68,6 +73,20 @@ internal sealed class FfmpegMovieSession : IFfmpegFrameSource
                 $"FFmpeg returned invalid audio metadata for {movie.Name}: " +
                 $"{Info.AudioSampleRate} Hz, {Info.AudioChannels} channels, {Info.AudioFrameSamples} frames");
         }
+    }
+
+    public void Seek(long positionMs)
+    {
+        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
+        int result;
+        string? error = null;
+        lock (_decodeLock)
+        {
+            result = FfmpegMovieNative.Seek(_handle, Math.Max(0, positionMs));
+            if (result != 0) error = FfmpegMovieNative.LastError(_handle);
+        }
+        if (result != 0)
+            throw new InvalidDataException($"FFmpeg movie seek failed: {error}");
     }
 
     public bool TryDecodeNextVideoFrame(out FfmpegVideoFrame frame)
@@ -239,6 +258,11 @@ internal static class FfmpegMovieNative
         [Out] byte[] rgba,
         nuint rgbaSize,
         out long presentationTimeMs);
+
+    [DllImport(LibraryName, EntryPoint = "age_movie_seek", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int Seek(
+        FfmpegMovieHandle movie,
+        long positionMs);
 
     [DllImport(LibraryName, EntryPoint = "age_movie_decode_audio", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int DecodeAudio(

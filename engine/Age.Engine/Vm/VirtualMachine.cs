@@ -2688,6 +2688,17 @@ public sealed class VirtualMachine
                 Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs ?? 0);
                 return pc + 1; // native cmd size 9 resumes at the next instruction; playback is asynchronous
             }
+            case "u00422B80": // pre-reference compatibility
+            case "play-movie-to-surface-at-position": // 0x241 (+ initial position ms)
+            {
+                long resourceId = Read(a[0]);
+                int surfaceSlot = unchecked((int)Read(a[1]));
+                long? stopTimeMs = _host.PlayMovieToSurfaceAtPosition(
+                    resourceId, surfaceSlot, Read(a[2]), Read(a[3]), Read(a[4]));
+                // As with 0x236, seeking changes decoder position but not the graph's stop metadata.
+                Gfx.SetMovieStopTime(surfaceSlot, stopTimeMs ?? 0);
+                return pc + 1;
+            }
             // ---- gfx command-buffer ops (VM-internal GfxState; docs/engine-re.md op-contract table) ----
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
                 if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)

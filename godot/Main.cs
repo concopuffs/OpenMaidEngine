@@ -738,6 +738,7 @@ public partial class Main : Godot.Control
                         name = pair.Value.Name,
                         asset_id = pair.Value.AssetId,
                         stop_time_ms = pair.Value.Decoder.StopTimeMs,
+                        initial_position_ms = pair.Value.InitialPositionMs,
                         decoder_completed = pair.Value.Decoder.IsCompleted,
                         decoder_failure = pair.Value.Decoder.Failure,
                         first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
@@ -764,6 +765,7 @@ public partial class Main : Godot.Control
                     name = pair.Value.Name,
                     asset_id = pair.Value.AssetId,
                     stop_time_ms = pair.Value.Decoder.StopTimeMs,
+                    initial_position_ms = pair.Value.InitialPositionMs,
                     decoder_completed = pair.Value.Decoder.IsCompleted,
                     decoder_failure = pair.Value.Decoder.Failure,
                     first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
@@ -2127,6 +2129,7 @@ public partial class Main : Godot.Control
 
     public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId,
                              long resourceId, int assetId, long movieFlags,
+                             long initialPositionMs,
                              out long? stopTimeMs)
     {
         stopTimeMs = null;
@@ -2134,7 +2137,8 @@ public partial class Main : Godot.Control
         {
             var payload = new Age.Engine.Sys4.MoviePayload(assetName, mpegBytes);
             var runtime = MovieRuntime.Open(
-                assetName, assetId, resourceId, payload, _movieDecoderFactory, movieFlags);
+                assetName, assetId, resourceId, payload, _movieDecoderFactory, movieFlags,
+                initialPositionMs);
             stopTimeMs = runtime.Decoder.StopTimeMs;
             while (!_pendingMovies.TryAdd(playbackId, runtime))
                 if (_pendingMovies.TryRemove(playbackId, out var prior)) prior.Decoder.Dispose();
@@ -2164,6 +2168,7 @@ public partial class Main : Godot.Control
             _movieCompletionNotified.Remove(playbackId);
             GD.Print($"movie started {movie.Name} playback={playbackId} " +
                      $"({movie.Decoder.StopTimeMs?.ToString() ?? "unknown"} ms from VFS" +
+                     (movie.InitialPositionMs > 0 ? $", start={movie.InitialPositionMs}ms" : "") +
                      (movie.Decoder.AudioInfo is { } audio
                          ? $", audio={audio.SampleRate}Hz stereo route={MovieAudioRouteFromFlags(movie.MovieFlags)}"
                          : "") + ")");

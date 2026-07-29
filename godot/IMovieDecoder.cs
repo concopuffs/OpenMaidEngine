@@ -11,6 +11,7 @@ internal sealed record MovieAudioChunk(float[] InterleavedStereo, int FrameCount
 internal interface IMovieDecoder : IDisposable
 {
     long? StopTimeMs { get; }
+    long InitialPositionMs => 0;
     bool IsCompleted { get; }
     string? Failure { get; }
     long? FirstFramePresentationTimeMs => null;
@@ -28,5 +29,5 @@ internal interface IMovieDecoder : IDisposable
 
 internal interface IMovieDecoderFactory
 {
-    IMovieDecoder Open(MoviePayload movie);
+    IMovieDecoder Open(MoviePayload movie, long initialPositionMs = 0);
 }

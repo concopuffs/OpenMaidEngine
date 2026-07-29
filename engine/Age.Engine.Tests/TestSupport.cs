@@ -49,6 +49,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
     public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
+    public readonly List<(long Resource, int Surface, long Flags, long SyncMask, long PositionMs)>
+        PositionedMovies = new();
     public System.Action? OnPlayMovie;
     public long? MovieStopTimeMs;
     public readonly HashSet<int> ActiveMovieSurfaces = new();
@@ -213,6 +215,13 @@ internal class RecordingHost : IHost
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
     {
         Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+        OnPlayMovie?.Invoke();
+        return MovieStopTimeMs;
+    }
+    public long? PlayMovieToSurfaceAtPosition(
+        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
+    {
+        PositionedMovies.Add((resourceId, surfaceSlot, movieFlags, syncMask, positionMs));
         OnPlayMovie?.Invoke();
         return MovieStopTimeMs;
     }

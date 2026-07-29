@@ -49,6 +49,14 @@ AGE_MOVIE_API int32_t AGE_MOVIE_CALL age_movie_open(
     char *error_buffer,
     size_t error_buffer_size);
 
+/*
+ * Seeks both the video and audio demux/decoder pipelines to the keyframe at or before
+ * position_ms. The caller performs decoded-sample preroll to the exact requested position.
+ */
+AGE_MOVIE_API int32_t AGE_MOVIE_CALL age_movie_seek(
+    age_movie *movie,
+    int64_t position_ms);
+
 /* Writes one tightly packed top-down RGBA8 frame and its zero-based presentation timestamp. */
 AGE_MOVIE_API int32_t AGE_MOVIE_CALL age_movie_decode_video(
     age_movie *movie,

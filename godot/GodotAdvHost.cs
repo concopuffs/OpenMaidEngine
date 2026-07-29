@@ -1273,7 +1273,18 @@ public sealed class GodotAdvHost : IHost
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   out long? stopTimeMs, out _);
+                   initialPositionMs: 0, out long? stopTimeMs, out _);
+        return stopTimeMs ?? 0;
+    }
+
+    public long? PlayMovieToSurfaceAtPosition(
+        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
+    {
+        string scene = CurrentScene;
+        var asset = _res.ResolveMovie(resourceId);
+        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
+        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
+                   initialPositionMs: positionMs, out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
     }
 
@@ -1316,6 +1327,7 @@ public sealed class GodotAdvHost : IHost
         try
         {
             if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
+                            initialPositionMs: 0,
                             out _, out long playbackId)) return;
             _timeline?.State("modal-movie-wait", new()
             {
@@ -1349,7 +1361,8 @@ public sealed class GodotAdvHost : IHost
     }
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            long syncMask, bool modal, out long? stopTimeMs, out long playbackId)
+                            long syncMask, bool modal, long initialPositionMs,
+                            out long? stopTimeMs, out long playbackId)
     {
         stopTimeMs = null;
         // A playback is a surface-owned instance, not the shared resource id. BTL can schedule the same
@@ -1372,10 +1385,11 @@ public sealed class GodotAdvHost : IHost
                 ["resource"] = resourceId, ["playback"] = playbackId,
                 ["surface"] = surfaceSlot, ["file"] = movie.Name,
                 ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
+                ["initial_position_ms"] = Math.Max(0, initialPositionMs),
             });
             bool started = _main.TryPlayMovie(
                 movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId, movieFlags,
-                out stopTimeMs);
+                initialPositionMs, out stopTimeMs);
             if (!started)
             {
                 stopTimeMs = 0;
