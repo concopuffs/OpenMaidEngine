@@ -497,6 +497,10 @@ map from the unchanged slot; interactive slot-006 confirmation passed. The share
 also closed: accepted frontend shutdown stops and joins the VM worker before writing `SAVE.DAT` plus
 `RT.DAT`, honors native `NoSaveDat=0` shutdown policy without suppressing numbered-save flushes, preserves
 loaded accumulated playtime, and handles repeated teardown and I/O failure safely.
+Repeated live saving and loading through the early dungeon playthrough is now user-accepted: numbered saves
+restore into active gameplay and remain usable across repeated cycles without a newly observed persistence
+failure. Treat native-layout gameplay save/load as confirmed for the current Phase-B slice; future concrete
+edge cases can reopen it without retaining a generic acceptance blocker.
 JSON inspection/export,
 namespaced mod data, and migrations remain additive extended-mode work rather than 1.0 compatibility
 requirements.

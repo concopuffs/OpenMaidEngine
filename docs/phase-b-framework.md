@@ -949,6 +949,14 @@ ceiling. Selftest and CLI/corpus paths keep their bounded diagnostic budgets, an
 remains available for bounded Godot modes. The focused policy regression and all 531 engine tests pass; the
 Godot build is warning-free and the Himegari-targeted threaded selftest passes.
 
+**Numbered save/load playthrough acceptance confirmed (2026-07-29):** following the native-layout
+restoration, retained-gfx, frame-continuation, script-prologue, and shared-profile lifecycle fixes, the user
+has exercised repeated saving and loading throughout the live early-dungeon playthrough without another
+persistence failure. This closes the generic “richer dungeon save stress” acceptance item for the current
+slice. Native-layout gameplay save/load is provisionally accepted; future failures should be tracked as
+specific edge cases rather than leaving the entire persistence effort unconfirmed. Extended JSON
+inspection/export, mod-data namespacing, migrations, and broader platform packaging remain separate work.
+
 **Cyclic reset implemented (2026-07-29):** `0x230(handle)` now gets or creates the retained object,
 disables the four looping channels represented by the compositor, and clears the complete native
 start/period block—including the preserved raw state for the currently unmodeled second cyclic matrix.
