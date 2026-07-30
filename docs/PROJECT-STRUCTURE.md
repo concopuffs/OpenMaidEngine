@@ -115,8 +115,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows dependency manifest,
     │                                       and bootstrap/build scripts (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
-    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine),
-                                            including the TITLE-only F4 debug scene launcher
+    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
+                                            plus the optional exact Windows text adapter), including the
+                                            TITLE-only F4 debug scene launcher
 ```
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by normal Godot runs and map runtime ADV

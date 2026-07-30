@@ -5,6 +5,7 @@ using System.Threading;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
+using Age.Engine.Text;
 
 [Flags]
 public enum HostPresentationReason
@@ -65,6 +66,11 @@ public sealed class GodotAdvHost : IHost
     private volatile bool _stopping;
     private readonly object _textLock = new();
     private readonly Dictionary<int, List<SurfaceTextDraw>> _surfaceText = new();
+    private readonly CachedGlyphMaskRasterizer? _surfaceTextMaskCache;
+    private readonly ImmediateSurfaceTextRenderer? _surfaceTextPixelRenderer;
+    private readonly GlyphRasterizerBackendInfo? _surfaceTextBackendInfo;
+    private string _surfaceTextFallbackReason;
+    private bool _surfaceTextFallbackWarningReported;
     private readonly Dictionary<int, AdvTextHistoryRenderBatch> _historyText = new();
     private sealed class LiveTextState
     {
@@ -119,7 +125,9 @@ public sealed class GodotAdvHost : IHost
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         GodotTimelineLog? timeline = null,
-                        bool synchronizeExplicitPresentation = true)
+                        bool synchronizeExplicitPresentation = true,
+                        IGlyphMaskRasterizer? surfaceTextRasterizer = null,
+                        string? surfaceTextFallbackReason = null)
     {
         _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
@@ -127,9 +135,33 @@ public sealed class GodotAdvHost : IHost
         _screenHeight = logicalCanvas.Height;
         _slotDims[0] = (_screenWidth, _screenHeight);
         _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
+        _surfaceTextBackendInfo =
+            (surfaceTextRasterizer as IIdentifiedGlyphMaskRasterizer)?.BackendInfo;
+        if (surfaceTextRasterizer != null)
+        {
+            _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(
+                surfaceTextRasterizer, capacity: 2048);
+            _surfaceTextPixelRenderer =
+                new ImmediateSurfaceTextRenderer(_surfaceTextMaskCache);
+        }
+        _surfaceTextFallbackReason = surfaceTextFallbackReason
+            ?? (surfaceTextRasterizer == null
+                ? "No glyph-mask rasterizer was selected."
+                : "");
     }
 
     public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
+    public bool UsesSurfaceTextPixels => _surfaceTextPixelRenderer != null;
+    public GlyphRasterizerBackendInfo? SurfaceTextBackendInfo => _surfaceTextBackendInfo;
+    public string SurfaceTextFallbackReason => _surfaceTextFallbackReason;
+    public (int Count, int Capacity, long Hits, long Misses) SurfaceTextMaskCacheStats
+        => _surfaceTextMaskCache == null
+            ? (0, 0, 0, 0)
+            : (
+                _surfaceTextMaskCache.Count,
+                _surfaceTextMaskCache.Capacity,
+                _surfaceTextMaskCache.Hits,
+                _surfaceTextMaskCache.Misses);
 
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
 
@@ -314,6 +346,27 @@ public sealed class GodotAdvHost : IHost
 
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
     {
+        if (_surfaceTextPixelRenderer != null
+            && TryDrawStringPixels(surfaceSlot, x, y, text, style))
+        {
+            lock (_textLock)
+                if (_surfaceText.TryGetValue(surfaceSlot, out var fallbackDraws))
+                {
+                    fallbackDraws.RemoveAll(draw => draw.X == x && draw.Y == y);
+                    if (fallbackDraws.Count == 0) _surfaceText.Remove(surfaceSlot);
+                }
+            _timeline?.Event("draw-string", new()
+            {
+                ["surface"] = surfaceSlot,
+                ["x"] = x,
+                ["y"] = y,
+                ["text"] = text,
+                ["presentation"] = "rgba-glyph-mask",
+                ["backend"] = _surfaceTextBackendInfo?.Id ?? "unidentified",
+            });
+            return;
+        }
+
         lock (_textLock)
         {
             if (!_surfaceText.TryGetValue(surfaceSlot, out var draws))
@@ -321,7 +374,63 @@ public sealed class GodotAdvHost : IHost
             draws.RemoveAll(draw => draw.X == x && draw.Y == y);
             draws.Add(new SurfaceTextDraw(x, y, text, style));
         }
-        _timeline?.Event("draw-string", new() { ["surface"] = surfaceSlot, ["x"] = x, ["y"] = y, ["text"] = text });
+        _timeline?.Event("draw-string", new()
+        {
+            ["surface"] = surfaceSlot,
+            ["x"] = x,
+            ["y"] = y,
+            ["text"] = text,
+            ["presentation"] = "label-fallback",
+            ["reason"] = _surfaceTextFallbackReason,
+        });
+    }
+
+    private bool TryDrawStringPixels(
+        int surfaceSlot, int x, int y, string text, AdvTextStyle style)
+    {
+        RgbaImage? destination = ResolveSurfacePixels(surfaceSlot);
+        if (destination == null
+            && _slotDims.TryGetValue(surfaceSlot, out var dimensions)
+            && dimensions.W > 0
+            && dimensions.H > 0)
+            destination = new RgbaImage(
+                dimensions.W, dimensions.H,
+                new byte[checked(dimensions.W * dimensions.H * 4)]);
+        if (destination == null || destination.Width <= 0 || destination.Height <= 0)
+        {
+            ReportSurfaceTextFallback(
+                $"Surface {surfaceSlot} has no rasterizable pixel allocation.");
+            return false;
+        }
+
+        var updated = new RgbaImage(
+            destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
+        try
+        {
+            _surfaceTextPixelRenderer!.Render(updated, x, y, text, style);
+        }
+        catch (Exception error) when (
+            error is ArgumentException
+            or InvalidOperationException
+            or PlatformNotSupportedException
+            or System.ComponentModel.Win32Exception)
+        {
+            ReportSurfaceTextFallback(
+                $"{error.GetType().Name}: {error.Message}");
+            return false;
+        }
+
+        lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
+        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        return true;
+    }
+
+    private void ReportSurfaceTextFallback(string reason)
+    {
+        _surfaceTextFallbackReason = reason;
+        if (_surfaceTextFallbackWarningReported) return;
+        _surfaceTextFallbackWarningReported = true;
+        ReportWarning($"surface text fell back to Label metadata: {reason}");
     }
 
     public (string Text, int X, int Y, int VisibleGlyphs, bool Revealing) SnapshotAdvText()

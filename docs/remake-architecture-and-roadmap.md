@@ -601,11 +601,17 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    representative regular/bold Mincho and bold Gothic requests byte-match an independent Unicode GDI oracle
    for coverage, stride, `GLYPHMETRICS`, extent, and advance. This reference backend remains opt-in and is not
    yet connected to live presentation; the existing Label path therefore remains the current fallback.
-4. **Move immediate surface strings first.** Make ops `0x204`/`0x205` rasterize directly into the numbered
-   RGBA surface instead of appending `SurfaceTextDraw` metadata. Remove the separate surface-label projection
-   only after GPU and software paths prove that ordinary handle order, object alpha/tint, affine transforms,
-   source clipping, offscreen `0x222` captures, fills/copies, and backbuffer preservation all consume the same
-   pixels. This is the smallest integration slice and directly fixes the reported surface-fade defect.
+4. **Move immediate surface strings first.** Completed 2026-07-30 for the exact Windows path. Ops
+   `0x204`/`0x205` now convert the complete Unicode string to explicit CP932 glyph identities before changing
+   any pixels, derive AGE's rebuilt negative height/half-width and weight, and composite the exact masks into
+   a cloned numbered `RgbaImage` snapshot. Successful draws publish no `SurfaceTextDraw`, so both retained
+   renderers consume the same pixels in ordinary handle order and naturally apply object alpha/tint, affine
+   transforms, source clipping, capture, fill/copy, and backbuffer preservation. Synthetic integration tests
+   pin later-handle occlusion, source clipping, scale/translation, static alpha/tint, animated fade, capture,
+   copy, and clear. The Godot self-test additionally exercises the GDI backend, 2,048-entry mask-cache bound,
+   dynamic GPU upload, and surface mutation path. Backend absence, an unrepresentable glyph, or an unresolved
+   surface falls back atomically to the prior metadata/Label projection with an explicit diagnostic; that
+   projection remains only for this temporary unavailable-backend case until the portable backend lands.
 5. **Materialize live ADV glyphs as ordinary retained objects.** Extend the transient layout-presentation
    binding with its source surface, first handle, and capacity without changing the persisted History record
    ABI. Build the complete line before reveal, update the canonical live cursor from measured metrics, then

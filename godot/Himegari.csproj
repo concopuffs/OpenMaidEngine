@@ -4,8 +4,14 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);AGE_WINDOWS_GDI</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ProjectReference Include="..\engine\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
   </ItemGroup>
   <ItemGroup Condition="Exists('..\build\native\win-x64\age_movie_ffmpeg.dll')">
     <None Include="..\build\native\win-x64\*.dll"

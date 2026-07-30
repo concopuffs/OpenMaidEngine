@@ -11,6 +11,10 @@ using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Persistence;
 using Age.Engine.Sys4;
+using Age.Engine.Text;
+#if AGE_WINDOWS_GDI
+using Age.Engine.Text.Windows;
+#endif
 using Age.Engine.Vm;
 using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
@@ -69,6 +73,9 @@ public partial class Main : Godot.Control
     private Sys4RegIniStore? _sys4RegIniStore;
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
+#if AGE_WINDOWS_GDI
+    private WindowsGdiGlyphMaskRasterizer? _exactGlyphRasterizer;
+#endif
     private FullwidthTextEditorDialog? _fullwidthTextEditor;
     private Sys4ScriptProvider? _scripts;
     private DebugSceneLauncher? _debugSceneLauncher;
@@ -374,9 +381,44 @@ public partial class Main : Godot.Control
         var resources = scripts != null
             ? new ResourceMap(scripts.Catalog, trackedAssetStore)
             : new ResourceMap(catalog, _assetStore);
+        IGlyphMaskRasterizer? surfaceTextRasterizer = null;
+        string surfaceTextFallbackReason;
+#if AGE_WINDOWS_GDI
+        if (WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out string availability))
+        {
+            try
+            {
+                _exactGlyphRasterizer = new WindowsGdiGlyphMaskRasterizer();
+                surfaceTextRasterizer = _exactGlyphRasterizer;
+                surfaceTextFallbackReason = "";
+                GD.Print(
+                    $"[text] immediate surface strings use {_exactGlyphRasterizer.BackendInfo.Id}: " +
+                    _exactGlyphRasterizer.BackendInfo.Detail);
+            }
+            catch (Exception error)
+            {
+                surfaceTextFallbackReason =
+                    $"Exact Windows GDI glyph backend failed to initialize: {error.Message}";
+                GD.PushWarning($"[text] {surfaceTextFallbackReason}");
+            }
+        }
+        else
+        {
+            surfaceTextFallbackReason = availability;
+            GD.PushWarning(
+                $"[text] immediate surface strings retain the Label fallback: {availability}");
+        }
+#else
+        surfaceTextFallbackReason =
+            "The exact Windows GDI glyph adapter is not part of this platform build.";
+        GD.PushWarning(
+            $"[text] immediate surface strings retain the Label fallback: {surfaceTextFallbackReason}");
+#endif
         _host = new GodotAdvHost(
             this, resources, scene, _clock, _locator, logicalCanvas, _timeline,
-            synchronizeExplicitPresentation: !_selftest)
+            synchronizeExplicitPresentation: !_selftest,
+            surfaceTextRasterizer: surfaceTextRasterizer,
+            surfaceTextFallbackReason: surfaceTextFallbackReason)
         {
             SleepScale = sleepScale,
             TraceOps = _gfxLogPath != null,
@@ -1013,6 +1055,10 @@ public partial class Main : Godot.Control
 
         DumpHistogram(); _timeline?.Dispose(); _locator?.Dispose();
         _gpuRenderer?.Dispose();
+#if AGE_WINDOWS_GDI
+        _exactGlyphRasterizer?.Dispose();
+        _exactGlyphRasterizer = null;
+#endif
         if (_perf != null)
         {
             _perf.Dispose();
@@ -2426,6 +2472,75 @@ public partial class Main : Godot.Control
                                  && textEffectSmoke.GetThemeConstant("line_spacing")
                                     == CalibratedLineSpacing(
                                         8, 24, calibratedBold.GetHeight(24));
+        bool immediateSurfaceTextOk;
+        string immediateSurfaceTextMode;
+        _host.CreateTexture(997, 32, 24);
+        var immediateStyle = AdvTextStyle.Default with
+        {
+            PrimaryFontSize = 16,
+            TextColor = 0xffffff,
+            FontFace = ImmediateSurfaceTextRenderer.DefaultFontFace,
+        };
+        _host.DrawStringToSurface(997, 1, 1, "A", immediateStyle);
+        if (_host.UsesSurfaceTextPixels)
+        {
+            RgbaImage? pixels = _host.CaptureSurfacePixels(997);
+            GlyphRasterizerBackendInfo? backend = _host.SurfaceTextBackendInfo;
+            var cache = _host.SurfaceTextMaskCacheStats;
+            bool pixelsPresent = pixels != null
+                                 && pixels.Pixels.Where((_, index) => index % 4 == 3)
+                                     .Any(alpha => alpha != 0);
+            bool gpuAccepted = false;
+            if (pixels != null)
+            {
+                _gpuRenderer.BeginFrame(false);
+                gpuAccepted = _gpuRenderer.DrawTexture(
+                    pixels, int.MinValue + 997, -1,
+                    0, 0, pixels.Width, pixels.Height,
+                    new Affine2D(1, 0, 0, 1, 2, 3),
+                    0xff8080, 255, 0.5f, true,
+                    dynamic: true, dynamicKey: 997, BlendKind.Alpha);
+                GpuRetainedRenderer.FrameStats stats = _gpuRenderer.EndFrame();
+                gpuAccepted &= stats.DrawItems == 1 && stats.TextureUploads == 1;
+            }
+
+            _host.CreateTexture(996, 32, 24);
+            _host.CopySurfaceRect(new SurfaceRectCopy(
+                997, 996, 0, 0, 32, 24, 0, 0));
+            RgbaImage? copied = _host.CaptureSurfacePixels(996);
+            bool copiedPixels = pixels != null
+                                && copied != null
+                                && pixels.Pixels.SequenceEqual(copied.Pixels);
+            _host.FillSurfaceRect(new SurfaceRectFill(
+                996, 0, 0, 32, 24, 0, 0));
+            RgbaImage? cleared = _host.CaptureSurfacePixels(996);
+            bool clearedPixels = cleared != null && cleared.Pixels.All(value => value == 0);
+            immediateSurfaceTextOk =
+                pixelsPresent
+                && _host.SnapshotSurfaceText(997).Count == 0
+                && backend is
+                {
+                    Id: "windows-gdi-gray4",
+                    Policy: GlyphRasterPolicy.NativeCp932Gray4,
+                    NativePixelExact: true,
+                }
+                && cache.Count is > 0 and <= 2048
+                && cache.Capacity == 2048
+                && gpuAccepted
+                && copiedPixels
+                && clearedPixels;
+            immediateSurfaceTextMode = "exact-rgba";
+        }
+        else
+        {
+            immediateSurfaceTextOk =
+                _host.CaptureSurfacePixels(997)?.Pixels.All(value => value == 0) == true
+                && _host.SnapshotSurfaceText(997).Count == 1
+                && !string.IsNullOrWhiteSpace(_host.SurfaceTextFallbackReason);
+            immediateSurfaceTextMode = "label-fallback";
+        }
+        _host.ReleaseSurface(996);
+        _host.ReleaseSurface(997);
         Window rootWindow = GetTree().Root;
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
@@ -2464,6 +2579,7 @@ public partial class Main : Godot.Control
               && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
               && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
+              && immediateSurfaceTextOk
               && logicalCanvasOk && backbufferPreservationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
@@ -2471,6 +2587,7 @@ public partial class Main : Godot.Control
                          $"first-riff-boundary=ok; " +
                          $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
                          $"text-effect-modes=ok; font-calibration=ok; " +
+                         $"immediate-surface-text={immediateSurfaceTextMode}; " +
                          $"backbuffer-preservation=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
@@ -2482,6 +2599,7 @@ public partial class Main : Godot.Control
                       $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
                       $"bgm-stop-release={bgmStopReleaseOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
+                      $"immediate-surface-text={immediateSurfaceTextOk}({immediateSurfaceTextMode}); " +
                       $"backbuffer-preservation={backbufferPreservationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");

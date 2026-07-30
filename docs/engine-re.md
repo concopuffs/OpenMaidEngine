@@ -2961,14 +2961,14 @@ pixels differ. The screenshot is useful evidence that the difference is visible,
 behavioral source.
 
 The fidelity correction is consequently a decoded glyph-mask backend, not screenshot-driven embolden
-calibration. A Windows reference implementation can call the same GDI APIs with the decoded `LOGFONTA`
-and reproduce AGE's integer compositor. A portable backend must expose the same mask/metrics/compositing
-contract while explicitly defining its font-substitution and rasterizer policy; FreeType output should
-be treated as that backend's result, not claimed to be GDI-equivalent. Godot's one-pixel line-box
-compensation remains independently supported by the matching viewport placement. Portable configurable
-face substitutions/defaults remain deferred to the broader runtime configuration design. Implementation
-is explicitly backlogged until gameplay settles; the scoped architecture and acceptance gates live in
-`docs/remake-architecture-and-roadmap.md` under “AGE-exact glyph-mask text renderer.”
+calibration. The Windows implementation calls the same GDI APIs with the decoded `LOGFONTA` and reproduces
+AGE's integer compositor. A portable backend must expose the same mask/metrics/compositing contract while
+explicitly defining its font-substitution and rasterizer policy; FreeType output should be treated as that
+backend's result, not claimed to be GDI-equivalent. Godot's one-pixel line-box compensation remains
+independently supported by the matching viewport placement. Portable configurable face
+substitutions/defaults remain deferred to the broader runtime configuration design. The scoped architecture
+and acceptance gates live in `docs/remake-architecture-and-roadmap.md` under “AGE-exact glyph-mask text
+renderer.”
 
 The platform-neutral half of that correction landed on 2026-07-30 under `Age.Engine.Text`.
 `GlyphRasterRequest` carries face, positive pixel height, native requested width, weight, Unicode scalar,
@@ -2982,8 +2982,8 @@ and returns the five-dword edge records plus final cursor, observed overflow, wr
 state. It preserves native horizontal precedence: vertical-only overflow stops before compositing, while a
 simultaneous horizontal overflow follows the wrap/kinsoku path. A reusable bounded LRU provides eviction
 callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies the same bound to masks. This
-core is not yet connected to ops `0x204`/`0x205`, live ADV, History, or Godot, so the Label backend and
-visible behavior remain unchanged until the later integration steps.
+core is not yet connected to live ADV or History; those paths still use Labels pending their retained-glyph
+materialization steps.
 
 The independent Windows reference backend landed alongside, but outside, the neutral engine as
 `Age.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
@@ -2998,7 +2998,24 @@ code-page incompatibility and the constructor refuses to masquerade as exact whe
 On the reference installation, three test requests—24px regular Mincho `あ`, 24px weight-700 Mincho `姫`,
 and 16px weight-700 Gothic `ア`—match an independently created Unicode GDI font/DC call byte-for-byte in
 coverage and exactly in black box, aligned stride, glyph origin, cell extent, and advance. The backend is
-not wired into Godot yet, so this gate validates mask provenance without changing visible rendering.
+now selected by Godot for immediate surface strings when `TryGetAvailability` confirms Windows ACP 932.
+
+`ImmediateSurfaceTextRenderer` builds the complete CP932 request list before touching the destination,
+making an unsupported character an atomic fallback rather than a partially rasterized string. It applies
+the decoded LOGFONT rebuild rules (default 24px Mincho, odd heights rounded down, 32/33 mapped to 31,
+negative half-width, and weight 700 only for bold), then advances from GDI's returned cell metrics while
+the shared compositor writes into a cloned `RgbaImage`. `GodotAdvHost.DrawStringToSurface` publishes that
+snapshot for ops `0x204` and `0x205`; successful exact draws add no `SurfaceTextDraw` metadata. Text on a
+bound surface is therefore ordinary texture data in both software and GPU retained renderers: later handles
+can occlude it, and the owning object's alpha/tint, animated fade, affine transform, source rectangle,
+offscreen capture, fill/copy, and preservation behavior apply without a detached overlay. A bounded
+2,048-mask cache sits above the already bounded GDI font cache.
+
+If the exact backend is unavailable, string conversion fails, or the target surface cannot be resolved,
+the host records one explicit diagnostic and retains the old metadata/Label projection for that draw. The
+fallback is constructed before surface publication, so it cannot mix a partial new raster with the Label.
+Live ADV, History, and the wait indicator remain on their existing presentation paths for the later staged
+migration.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
