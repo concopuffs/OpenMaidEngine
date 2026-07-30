@@ -73,6 +73,7 @@ public sealed class GodotAdvHost : IHost
     private string _surfaceTextFallbackReason;
     private bool _surfaceTextFallbackWarningReported;
     private readonly Dictionary<int, AdvTextHistoryRenderBatch> _historyText = new();
+    private readonly HashSet<int> _retainedHistoryLayouts = new();
     private sealed class LiveTextState
     {
         public required AdvLiveTextRun Run;
@@ -96,6 +97,11 @@ public sealed class GodotAdvHost : IHost
     private volatile int _messageWindowAlphaSetting;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
+    private readonly Dictionary<int, (
+        AdvTextLayoutPresentationBinding Binding,
+        AdvTextLayoutSnapshot Layout)> _waitIndicatorBindings = new();
+    private readonly Dictionary<int, RetainedAdvWaitIndicatorPresentation>
+        _retainedWaitIndicators = new();
     private readonly object _messageSkipLock = new();
     private bool _scriptMessageSkipActive;
     private bool _physicalMessageSkipActive;
@@ -728,6 +734,7 @@ public sealed class GodotAdvHost : IHost
         lock (_textLock)
         {
             _historyText.Remove(binding.LayoutSlot);
+            _retainedHistoryLayouts.Remove(binding.LayoutSlot);
             _retainedTextLayouts.Remove(binding.LayoutSlot);
             _liveText.RemoveAll(
                 state => state.Run.Layout.Slot == binding.LayoutSlot);
@@ -775,15 +782,110 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
+    public bool RenderTextHistory(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextHistoryRenderBatch batch)
+    {
+        var run = new AdvLiveTextRun(
+            batch.FirstRecordIndex,
+            batch.Layout,
+            batch.Style,
+            batch.Text,
+            Array.Empty<string>());
+        if (_retainedGlyphLayoutEngine == null
+            || binding.LayoutSlot != batch.LayoutSlot
+            || binding.FirstObjectHandle < 0
+            || binding.ObjectCapacity <= 0
+            || !TryPrepareRetainedTextRun(
+                gfx, binding, run,
+                out RetainedAdvTextLayoutPresentation? presentation,
+                out AdvRetainedTextRunResult result))
+        {
+            RenderTextHistory(batch);
+            return false;
+        }
+
+        presentation.PublishThrough(
+            gfx,
+            checked(result.FirstGlyphIndex + result.GlyphCount));
+        lock (_textLock)
+        {
+            _historyText.Remove(batch.LayoutSlot);
+            _retainedHistoryLayouts.Add(batch.LayoutSlot);
+        }
+        Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("history-render", new()
+        {
+            ["layout"] = batch.LayoutSlot,
+            ["record"] = batch.FirstRecordIndex,
+            ["x"] = batch.Layout.OriginX + batch.Layout.CursorX,
+            ["y"] = batch.Layout.OriginY + batch.Layout.CursorY,
+            ["text"] = batch.Text,
+            ["glyphs"] = result.GlyphCount,
+            ["presentation"] = "retained-glyphs",
+        });
+        return true;
+    }
+
     public void EndTextHistoryPresentation()
     {
-        lock (_textLock) _historyText.Clear();
+        lock (_textLock)
+        {
+            _historyText.Clear();
+            _retainedHistoryLayouts.Clear();
+        }
         _timeline?.Event("history-presentation-end");
+    }
+
+    public void EndTextHistoryPresentation(GfxState gfx)
+    {
+        RetainedAdvTextLayoutPresentation[] retained;
+        int[] surfaceSlots;
+        lock (_textLock)
+        {
+            retained = _retainedHistoryLayouts
+                .Select(slot => _retainedTextLayouts.GetValueOrDefault(slot))
+                .Where(presentation => presentation != null)
+                .Cast<RetainedAdvTextLayoutPresentation>()
+                .ToArray();
+            surfaceSlots = retained
+                .Select(presentation => presentation.Binding.SourceSurfaceSlot)
+                .Distinct()
+                .ToArray();
+            foreach (int slot in _retainedHistoryLayouts)
+                _retainedTextLayouts.Remove(slot);
+            _retainedHistoryLayouts.Clear();
+            _historyText.Clear();
+        }
+
+        foreach (RetainedAdvTextLayoutPresentation presentation in retained)
+            presentation.ErasePublished(gfx);
+        foreach (int surfaceSlot in surfaceSlots)
+            ClearAllocatedSurfacePixels(surfaceSlot);
+        Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("history-presentation-end", new()
+        {
+            ["retained_layouts"] = retained.Length,
+        });
     }
 
     public IReadOnlyList<AdvTextHistoryRenderBatch> SnapshotRenderedTextHistory()
     {
         lock (_textLock) return _historyText.Values.OrderBy(batch => batch.LayoutSlot).ToArray();
+    }
+
+    private void ClearAllocatedSurfacePixels(int surfaceSlot)
+    {
+        if (!_slotDims.TryGetValue(surfaceSlot, out var dimensions)
+            || dimensions.W <= 0
+            || dimensions.H <= 0)
+            return;
+        lock (_imageLock)
+            _surfaceImages[surfaceSlot] = new RgbaImage(
+                dimensions.W,
+                dimensions.H,
+                new byte[checked(dimensions.W * dimensions.H * 4)]);
     }
 
     public int MessageWindowAlphaSetting => _messageWindowAlphaSetting;
@@ -890,7 +992,11 @@ public sealed class GodotAdvHost : IHost
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
     {
-        lock (_textLock) _waitIndicators[config.LayoutSlot] = config;
+        lock (_textLock)
+        {
+            _waitIndicators[config.LayoutSlot] = config;
+            RebuildRetainedWaitIndicator(config.LayoutSlot);
+        }
         _timeline?.Event("wait-indicator-config", new()
         {
             ["layout"] = config.LayoutSlot, ["x"] = config.X, ["y"] = config.Y,
@@ -900,6 +1006,44 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
+    public void BindAdvWaitIndicator(
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextLayoutSnapshot layout)
+    {
+        lock (_textLock)
+        {
+            _waitIndicatorBindings[binding.LayoutSlot] = (binding, layout);
+            RebuildRetainedWaitIndicator(binding.LayoutSlot);
+        }
+        _timeline?.Event("wait-indicator-bind", new()
+        {
+            ["layout"] = binding.LayoutSlot,
+            ["handle"] = binding.WaitIndicatorObjectHandle,
+            ["origin_x"] = layout.OriginX,
+            ["origin_y"] = layout.OriginY,
+        });
+    }
+
+    private void RebuildRetainedWaitIndicator(int layoutSlot)
+    {
+        if (!_waitIndicators.TryGetValue(layoutSlot, out AdvWaitIndicatorConfig config)
+            || !_waitIndicatorBindings.TryGetValue(
+                layoutSlot,
+                out (AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout) retained)
+            || retained.Binding.WaitIndicatorObjectHandle < 0)
+        {
+            _retainedWaitIndicators.Remove(layoutSlot);
+            return;
+        }
+
+        _retainedWaitIndicators[layoutSlot] =
+            new RetainedAdvWaitIndicatorPresentation(
+                config,
+                retained.Binding,
+                retained.Layout.OriginX,
+                retained.Layout.OriginY);
+    }
+
     public void SetAdvWaitIndicatorEnabled(bool enabled)
     {
         lock (_textLock)
@@ -907,6 +1051,7 @@ public sealed class GodotAdvHost : IHost
             if (enabled && !_waitIndicatorEnabled) _waitIndicatorStartedMs = _clock.NowMs;
             _waitIndicatorEnabled = enabled;
         }
+        Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.Event("wait-indicator-enabled", new() { ["enabled"] = enabled });
     }
 
@@ -920,29 +1065,39 @@ public sealed class GodotAdvHost : IHost
         GfxState gfx, AdvTextLayoutPresentationBinding binding)
     {
         lock (_textLock)
+        {
             if (_retainedTextLayouts.TryGetValue(
                     binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation)
                 && presentation.Binding == binding)
                 presentation.Republish(gfx);
+            if (_retainedWaitIndicators.TryGetValue(
+                    binding.LayoutSlot,
+                    out RetainedAdvWaitIndicatorPresentation? indicator))
+                indicator.Republish(
+                    gfx,
+                    _clock.NowMs - _waitIndicatorStartedMs,
+                    WaitIndicatorShouldBeVisible(binding.LayoutSlot));
+        }
         PublishAdvTextLayout(binding.LayoutSlot);
     }
 
-    public AdvWaitIndicatorSnapshot? SnapshotAdvWaitIndicator()
+    private bool WaitIndicatorShouldBeVisible(int layoutSlot)
+        => IsWaiting
+           && !_advPagePresentationSuspended
+           && _waitIndicatorEnabled
+           && _activeWaitLayout == layoutSlot;
+
+    private void UpdateRetainedWaitIndicator(GfxState gfx)
     {
-        if (!IsWaiting || _advPagePresentationSuspended) return null;
-        AdvWaitIndicatorConfig config;
-        long resourceId;
         lock (_textLock)
         {
-            if (!_waitIndicatorEnabled) return null;
-            if (!_waitIndicators.TryGetValue(_activeWaitLayout, out config)) return null;
-            if (!_surfaceResources.TryGetValue(config.SurfaceSlot, out resourceId)) return null;
+            foreach ((int layoutSlot, RetainedAdvWaitIndicatorPresentation presentation)
+                     in _retainedWaitIndicators)
+                presentation.Update(
+                    gfx,
+                    _clock.NowMs - _waitIndicatorStartedMs,
+                    WaitIndicatorShouldBeVisible(layoutSlot));
         }
-        var asset = _res.ResolveTexture(resourceId);
-        var image = asset != null ? Decode(asset) : null;
-        if (asset == null || image == null || config.CellWidth <= 0 || config.CellHeight <= 0) return null;
-        int frame = config.FrameAt(_clock.NowMs - _waitIndicatorStartedMs);
-        return new AdvWaitIndicatorSnapshot(image, asset.Name, asset.PackedId, config, frame);
     }
 
     public volatile int Pages;   // VM-thread page counter (incremented before IsWaiting so shot-gating can't race)
@@ -1029,6 +1184,7 @@ public sealed class GodotAdvHost : IHost
         }
         IsWaiting = false;
         lock (_textLock) _waitIndicatorEnabled = false;
+        Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.State("running", new()
         {
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
@@ -1166,10 +1322,13 @@ public sealed class GodotAdvHost : IHost
                     : _currentAdvLayout;
                 if (_retainedTextLayouts.TryGetValue(
                         slot, out RetainedAdvTextLayoutPresentation? presentation))
-                {
                     presentation.ErasePublished(gfx);
+                if (_retainedWaitIndicators.TryGetValue(
+                        slot, out RetainedAdvWaitIndicatorPresentation? indicator))
+                    indicator.Erase(gfx);
+                if (_retainedTextLayouts.ContainsKey(slot)
+                    || _retainedWaitIndicators.ContainsKey(slot))
                     _suspendedRetainedTextLayoutSlot = slot;
-                }
             }
             else if (_suspendedRetainedTextLayoutSlot != 0)
             {
@@ -1177,6 +1336,15 @@ public sealed class GodotAdvHost : IHost
                         _suspendedRetainedTextLayoutSlot,
                         out RetainedAdvTextLayoutPresentation? presentation))
                     presentation.Republish(gfx);
+                if (_retainedWaitIndicators.TryGetValue(
+                        _suspendedRetainedTextLayoutSlot,
+                        out RetainedAdvWaitIndicatorPresentation? indicator))
+                    indicator.Republish(
+                        gfx,
+                        _clock.NowMs - _waitIndicatorStartedMs,
+                        IsWaiting
+                        && _waitIndicatorEnabled
+                        && _activeWaitLayout == _suspendedRetainedTextLayoutSlot);
                 _suspendedRetainedTextLayoutSlot = 0;
             }
         }
@@ -1436,10 +1604,11 @@ public sealed class GodotAdvHost : IHost
     }
 
     // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
-    // once, then continue only while the sampled retained scene can actually change. Text reveal is a separate
-    // Godot Label; waiting/sleeping alone do not alter background pixels.
+    // once, then continue only while the sampled retained scene can actually change. The wait atlas advances
+    // its ordinary retained source cell here so it contributes only when the frame actually changes.
     public HostPresentationReason ConsumePresentationReasons(GfxState gfx)
     {
+        UpdateRetainedWaitIndicator(gfx);
         bool screenTransitionActive;
         lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
         var reasons = HostPresentationReason.None;
@@ -1489,6 +1658,7 @@ public sealed class GodotAdvHost : IHost
             _surfaceText.Clear();
             _surfaceResources.Clear();
             _historyText.Clear();
+            _retainedHistoryLayouts.Clear();
             _liveText.Clear();
             _retainedTextLayouts.Clear();
             _activeLiveText = null;
@@ -1498,6 +1668,8 @@ public sealed class GodotAdvHost : IHost
             _advTextY = 47;
             _advTextForceComplete = false;
             _waitIndicators.Clear();
+            _waitIndicatorBindings.Clear();
+            _retainedWaitIndicators.Clear();
             _activeWaitLayout = 0;
             _waitIndicatorEnabled = false;
         }
@@ -1681,6 +1853,14 @@ public sealed class GodotAdvHost : IHost
         {
             _surfaceText.Remove(slot);
             _surfaceResources.Remove(slot);
+            foreach (int layoutSlot in _retainedTextLayouts
+                         .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
+                         .Select(pair => pair.Key)
+                         .ToArray())
+            {
+                _retainedTextLayouts.Remove(layoutSlot);
+                _retainedHistoryLayouts.Remove(layoutSlot);
+            }
         }
         _slotDims[slot] = (image.Width, image.Height);
         return true;
@@ -1974,6 +2154,14 @@ public sealed class GodotAdvHost : IHost
         {
             _surfaceText.Remove(slot);
             _surfaceResources.Remove(slot);
+            foreach (int layoutSlot in _retainedTextLayouts
+                         .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
+                         .Select(pair => pair.Key)
+                         .ToArray())
+            {
+                _retainedTextLayouts.Remove(layoutSlot);
+                _retainedHistoryLayouts.Remove(layoutSlot);
+            }
         }
         _slotDims.Remove(slot);
         if (movieRelease.Kind == MovieSurfaceReleaseKind.Released)
@@ -2138,6 +2326,8 @@ public sealed class GodotAdvHost : IHost
                          .Select(pair => pair.Key)
                          .ToArray())
                 _retainedTextLayouts.Remove(layoutSlot);
+            _retainedHistoryLayouts.RemoveWhere(layoutSlot =>
+                !_retainedTextLayouts.ContainsKey(layoutSlot));
         }
         foreach (MovieSurfaceBinding binding in stoppedMovies)
         {
@@ -2493,6 +2683,3 @@ internal sealed class LegacyScreenTransition
         DurationMs = durationMs;
     }
 }
-
-public readonly record struct AdvWaitIndicatorSnapshot(
-    RgbaImage Image, string Name, int AssetId, AdvWaitIndicatorConfig Config, int Frame);

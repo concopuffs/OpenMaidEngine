@@ -86,15 +86,28 @@ public interface IHost
         GfxState gfx, AdvTextLayoutPresentationBinding binding)
         => ClearRenderedAdvTextLayout(binding.LayoutSlot);
     void RenderTextHistory(AdvTextHistoryRenderBatch batch) { }
+    bool RenderTextHistory(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextHistoryRenderBatch batch)
+    {
+        RenderTextHistory(batch);
+        return false;
+    }
     // History render batches are transient bindings, unlike the retained backlog itself. HISTORY.BIN's
     // recording re-enable at exit ends that presentation and drops every bound target layout.
     void EndTextHistoryPresentation() { }
+    void EndTextHistoryPresentation(GfxState gfx) => EndTextHistoryPresentation();
     int MessageWindowAlphaSetting => 0;
     void SetMessageWindowAlphaSetting(int value) { }
     void FillSurfaceRect(SurfaceRectFill fill) { }
     void CopySurfaceRect(SurfaceRectCopy copy) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
+    // Op 0x212 supplies the ordinary retained handle used to publish the configured atlas cell.
+    void BindAdvWaitIndicator(
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextLayoutSnapshot layout) { }
     // Op 0x1ce explicitly starts/stops the same animated marker that op 0x72 starts for an ADV wait.
     void SetAdvWaitIndicatorEnabled(bool enabled) { }
     // Op 0x20a republishes one retained ADV text layout and includes the current marker frame when active.

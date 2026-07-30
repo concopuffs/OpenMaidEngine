@@ -45,6 +45,10 @@ public class HistoryPresentationOpsTests
         Assert.Equal((24, 0xffffffL, 0x606060L, 8, "ＭＳ 明朝"),
             (render.Style.PrimaryFontSize, render.Style.TextColor, render.Style.EffectColor,
              render.Style.LineSpacing, render.Style.FontFace));
+        var retained = Assert.Single(host.RetainedHistoryRenders);
+        Assert.Equal(4, retained.Binding.LayoutSlot);
+        Assert.Equal(0x18, retained.Binding.SourceSurfaceSlot);
+        Assert.Same(render, retained.Batch);
     }
 
     [Fact]

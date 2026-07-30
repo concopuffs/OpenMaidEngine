@@ -2546,8 +2546,13 @@ Op `0x1d1` asks `AdvTextHistory` to select one retained group, skip metadata/voi
 host-facing render batch using the target layout configured by `0x70/0x71`, positioned by `0x198`, and
 seeded by `0x7a`. `HISTORY.BIN` passes zero for flags and both color overrides, so this is its exact ordinary
 binding path; the native flag-4 raster-without-binding and flag-8 side-effect modes remain outside the live
-game call site. Godot owns only replaceable labels keyed by target layout, applies the retained font/color/
-effect snapshot, and clears stale labels whenever `0x71` resets that layout.
+game call site. The initial port used replaceable labels keyed by target layout. The retained-glyph migration
+now passes the target's transient surface/handle binding with the batch, rasterizes its text through the
+shared glyph-mask service, and publishes one ordinary object per edge record. Exact rows therefore inherit
+native z-order, alpha/tint/fade, clipping, transforms, capture, and range erasure. `0x71` resets the row's
+surface and records; HISTORY's broad exit erase plus recording re-enable remove all transient row bindings
+without touching the persisted backlog. The layout-keyed Label remains only as the explicit
+unavailable-rasterizer fallback.
 
 The same slice implements the support calls at their natural seams. Op `0x131` reads a host configuration
 property (currently defaulting to zero; choosing a profile/config persistence backend remains deferred),
@@ -2982,8 +2987,7 @@ and returns the five-dword edge records plus final cursor, observed overflow, wr
 state. It preserves native horizontal precedence: vertical-only overflow stops before compositing, while a
 simultaneous horizontal overflow follows the wrap/kinsoku path. A reusable bounded LRU provides eviction
 callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies the same bound to masks. This
-core now drives immediate surface strings and live ADV; retained History remains on its Label pending the
-next migration step.
+core now drives immediate surface strings, live ADV, and retained History.
 
 The independent Windows reference backend landed alongside, but outside, the neutral engine as
 `Age.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
@@ -3014,7 +3018,8 @@ offscreen capture, fill/copy, and preservation behavior apply without a detached
 If the exact backend is unavailable, string conversion fails, or the target surface cannot be resolved,
 the host records one explicit diagnostic and retains the old metadata/Label projection for that draw. The
 fallback is constructed before surface publication, so it cannot mix a partial new raster with the Label.
-History and the wait indicator remain on their existing presentation paths for the later staged migration.
+This fallback now covers immediate, live, and History text; the non-glyph wait indicator is always an
+ordinary retained atlas object when its script binding is valid.
 
 Live ADV now uses the same exact surface pixels through ordinary retained objects.
 `AdvTextLayoutPresentationBinding` is transient engine state: it carries the layout surface (`slot+0x14`),
@@ -3059,13 +3064,20 @@ the following click releases the wait.
 
 **Port implementation:** the single-scene harness now injects SYSTEM4's exact SO000 surface-12 and op-`0x73`
 configuration alongside its existing SO001 shortcut. The VM forwards all ten operands through the host ABI;
-`GodotAdvHost` retains configurations by layout and resolves slot 0 to the active Phase-A layout. A separate
-Godot atlas overlay advances on the 48 ms host clock only while `IsWaiting`, then hides immediately when
-input releases the wait. A 2026-07-27 polish fix removed the port's erroneous `TerminalFrame + 1`
+`GodotAdvHost` retains configurations by layout and pairs them with op `0x212`'s script-owned handle and
+layout origin. `RetainedAdvWaitIndicatorPresentation` binds the current atlas cell as an ordinary
+`GfxState` object, mutating it only when the 48 ms frame boundary changes. Op `0x20a` recreates an erased
+current frame; HIDEWIN suspension and wait-service shutdown erase the handle. The former Godot
+`TextureRect` overlay and raw-callback visibility exception are removed, so normal handle order, source
+color key, capture, and surface/scene composition apply. A real Vulkan SC0000 page-one capture places the
+retained bat at `(385,570)`.
+
+A 2026-07-27 polish fix removed the port's erroneous `TerminalFrame + 1`
 interpretation, which had selected nonexistent frame `12` once per cycle and made Godot render one empty
 atlas cell. Frame selection now treats the terminal value as the exclusive frame count and loops `0..11`.
-Keeping this 30x27 overlay outside the software backbuffer preserves the static-wait compositor optimization.
-Full SYSTEM4 replay remains Phase-B work; the shortcut carries the same state in the meantime.
+The retained presenter requests a new frame only when that source cell changes, preserving the static-wait
+compositor optimization. Full SYSTEM4 replay remains Phase-B work; the shortcut carries the same state in
+the meantime.
 
 ### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xba`/`0xc2`/`0xd9` (2026-07-11)
 

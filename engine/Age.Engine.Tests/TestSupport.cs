@@ -21,6 +21,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Slot, int X, int Y)> TextCursors = new();
     public readonly List<(int Surface, int X, int Y, string Text)> SurfaceStrings = new();
     public readonly List<AdvTextHistoryRenderBatch> HistoryRenders = new();
+    public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextHistoryRenderBatch Batch)>
+        RetainedHistoryRenders = new();
     public readonly Dictionary<int, AdvTextHistoryRenderBatch> ActiveHistoryRenders = new();
     public int HistoryPresentationEnds;
     public readonly List<int> ClearedTextLayouts = new();
@@ -30,6 +32,8 @@ internal class RecordingHost : IHost
     public readonly List<(int Slot, int SourceX, int SourceY, int Width, int Height, int X, int Y)>
         TextureDraws = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
+    public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout)>
+        WaitIndicatorBindings = new();
     public readonly List<bool> WaitIndicatorEnabledChanges = new();
     public readonly List<int> PublishedAdvTextLayouts = new();
     public readonly List<long> SleptDurations = new();
@@ -129,11 +133,21 @@ internal class RecordingHost : IHost
         HistoryRenders.Add(batch);
         ActiveHistoryRenders[batch.LayoutSlot] = batch;
     }
+    public bool RenderTextHistory(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextHistoryRenderBatch batch)
+    {
+        RetainedHistoryRenders.Add((binding, batch));
+        RenderTextHistory(batch);
+        return false;
+    }
     public void EndTextHistoryPresentation()
     {
         HistoryPresentationEnds++;
         ActiveHistoryRenders.Clear();
     }
+    public void EndTextHistoryPresentation(GfxState gfx) => EndTextHistoryPresentation();
     public int MessageWindowAlphaSetting { get; set; }
     public void SetMessageWindowAlphaSetting(int value) => MessageWindowAlphaSetting = value;
     public void FillSurfaceRect(SurfaceRectFill fill) => SurfaceFills.Add(fill);
@@ -141,6 +155,10 @@ internal class RecordingHost : IHost
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
+    public void BindAdvWaitIndicator(
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextLayoutSnapshot layout)
+        => WaitIndicatorBindings.Add((binding, layout));
     public void SetAdvWaitIndicatorEnabled(bool enabled) => WaitIndicatorEnabledChanges.Add(enabled);
     public void PublishAdvTextLayout(int layoutSlot) => PublishedAdvTextLayouts.Add(layoutSlot);
     public void SetAdvPagePresentationSuspended(bool suspended)

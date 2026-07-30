@@ -2347,7 +2347,7 @@ public sealed class VirtualMachine
                 {
                     bool enabled = Read(a[0]) == 1;
                     TextHistory.SetRecordingEnabled(enabled);
-                    if (enabled) _host.EndTextHistoryPresentation();
+                    if (enabled) _host.EndTextHistoryPresentation(Gfx);
                 }
                 return pc + 1;
             case "append-text-history-metadata": // 0x1d2: (metadata type, value)
@@ -2370,11 +2370,17 @@ public sealed class VirtualMachine
                 int flags = (int)Read(a[2]);
                 if ((flags & 4) == 0 && TextHistory.TryBuildRenderBatch(
                         (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), out var batch))
-                    _host.RenderTextHistory(batch with
+                {
+                    batch = batch with
                     {
                         // Native History uses the text manager's current leading, not a retained-record field.
                         Style = batch.Style with { LineSpacing = _advTextStyle.LineSpacing }
-                    });
+                    };
+                    _host.RenderTextHistory(
+                        Gfx,
+                        TextHistory.GetPresentationBinding(batch.LayoutSlot),
+                        batch);
+                }
                 return pc + 1;
             }
             case "u0041BB90":
@@ -2820,7 +2826,13 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "set-adv-wait-indicator-handle":   // 0x212 (layout)(retained handle)
             {
-                TextHistory.SetWaitIndicatorObjectHandle((int)Read(a[0]), Read(a[1]));
+                int requestedSlot = (int)Read(a[0]);
+                TextHistory.SetWaitIndicatorObjectHandle(requestedSlot, Read(a[1]));
+                AdvTextLayoutSnapshot layout =
+                    TextHistory.GetLayoutSnapshot(requestedSlot);
+                _host.BindAdvWaitIndicator(
+                    TextHistory.GetPresentationBinding(layout.Slot),
+                    layout);
                 return pc + 1;
             }
             case "set-adv-text-object-range":       // 0x213 (layout)(first handle)(count)

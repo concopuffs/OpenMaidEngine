@@ -207,8 +207,8 @@ public sealed class AdvTextHistory
 
     /// <summary>
     /// Resolve layouts whose complete native retained-glyph handle interval is covered by one op-0x1f7
-    /// erase. The Label backend collapses those glyph objects into live text runs, so full native range
-    /// teardown removes the corresponding detached presentation atomically.
+    /// erase. Hosts use this notification to discard fallback metadata or preserve exact transient records
+    /// for a following native op-0x20a republication, according to the active presentation path.
     /// </summary>
     public IReadOnlyList<int> LayoutsCoveredByTextObjectErase(long firstHandle, long count)
     {

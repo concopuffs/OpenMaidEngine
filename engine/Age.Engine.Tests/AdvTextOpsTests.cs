@@ -389,6 +389,34 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void WaitIndicatorHandlePublishesItsResolvedLayoutBindingToHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        var script = ScriptAssembler.Assemble(table, "WAITMARK_BINDING",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { I(1), I(800), I(160), I(0), I(430) }),
+                (0x79, new[] { I(1), I(100), I(47) }),
+                (0x213, new[] { I(1), I(0xd6d8), I(500) }),
+                (0x212, new[] { I(1), I(0xd674) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        var retained = Assert.Single(host.WaitIndicatorBindings);
+        Assert.Equal(
+            new AdvTextLayoutPresentationBinding(
+                1, 21, 0xd6d8, 500, 0xd674, 100, 47),
+            retained.Binding);
+        Assert.Equal(
+            new AdvTextLayoutSnapshot(1, 800, 160, 0, 430, 0, 0, 800, 160),
+            retained.Layout);
+    }
+
+    [Fact]
     public void WaitIndicatorTerminalFrameIsExclusive()
     {
         var config = new AdvWaitIndicatorConfig(

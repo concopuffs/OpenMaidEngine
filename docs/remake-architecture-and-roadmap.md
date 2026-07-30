@@ -628,11 +628,17 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    reconstruction. The synthesized Godot VM self-test exercises timed exact reveal and reports
    `live-adv-text=retained-glyphs`; real GPU captures of SC0000 pages 1 and 7 confirm ordinary and voiced
    dialogue placement/wrapping alongside the immediate speaker-name surface.
-6. **Migrate History and the ADV wait indicator through the same retained path.** Op `0x1d1` rasterizes and
-   binds into its target layout instead of creating a layout-keyed Label. Bind the configured wait atlas at
-   the op-`0x212` handle so it follows native z-order and source-cell animation. Once SC0000, HISTORY,
-   STUDY/MAMES, HIDEWIN, and BUNKI pass, delete the game-text Label pools and the modal/raw-callback visibility
-   exceptions whose only purpose was compensating for detached overlays.
+6. **Migrate History and the ADV wait indicator through the same retained path. — Completed
+   2026-07-30.** Op `0x1d1` now rasterizes each HISTORY row into its target layout surface and publishes its
+   native glyph interval through ordinary `GfxState` bindings. Row reset, wheel redraw, the broad native exit
+   erase, recording re-enable, and surface release all remove the transient presentation without changing
+   the persisted backlog. The configured wait atlas now binds at op `0x212`'s handle, advances source cells
+   only on the configured frame boundary, participates in op-`0x20a` republication and HIDEWIN suspension,
+   and disappears when the wait service stops. The standalone Godot wait `TextureRect` and its raw-callback
+   visibility exception are gone. Exact History no longer enters the layout-keyed Label pool; that code and
+   the live/immediate Label pools remain solely as the explicit unavailable-rasterizer fallback until step 7
+   supplies the portable glyph backend. Focused lifecycle tests, all 579 engine tests, the exact History
+   Godot self-test, and a real SC0000 Vulkan capture cover the retained path.
 7. **Complete and select the portable backend.** Spike the smallest maintainable way to obtain portable
    font masks/metrics (Godot/TextServer offscreen extraction versus a bounded FreeType-compatible adapter)
    before choosing a dependency. Define face substitution and raster policy as profile/configuration data,

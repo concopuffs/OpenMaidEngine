@@ -37,10 +37,6 @@ public partial class Main : Godot.Control
     private GpuRetainedRenderer _gpuRenderer = null!;
     private bool _useGpuBackend = true;
     private ImageTexture? _ageCursorTexture;
-    private TextureRect _waitIndicator = null!;
-    private ImageTexture? _waitIndicatorSheet;
-    private AtlasTexture? _waitIndicatorAtlas;
-    private int _waitIndicatorAssetId = -1;
     // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
     // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
     private byte[] _screenPixels = [];
@@ -194,17 +190,6 @@ public partial class Main : Godot.Control
         AddChild(_screenView);   // added first -> draws behind the text/status labels
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _gpuRenderer = new GpuRetainedRenderer(this);
-
-        // Native ADV wait marker: a tiny independently animated atlas region. Keeping it separate from the
-        // logical software backbuffer avoids recompositing the entire retained scene throughout static waits.
-        _waitIndicator = new TextureRect
-        {
-            Visible = false,
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.Keep,
-            MouseFilter = MouseFilterEnum.Ignore,
-        };
-        AddChild(_waitIndicator);
 
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
         AddChild(_text);
@@ -471,6 +456,11 @@ public partial class Main : Godot.Control
             _vm.Gfx.SetSurface(0x0c, waitIndicator.PackedId, 0xff00);
             _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
                 1, 385, 140, 0x0c, 0, 0, 30, 27, 12, 48));
+            AdvTextLayoutSnapshot waitLayout =
+                _vm.TextHistory.GetLayoutSnapshot(1);
+            _host.BindAdvWaitIndicator(
+                _vm.TextHistory.GetPresentationBinding(1),
+                waitLayout);
         }
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
@@ -580,7 +570,6 @@ public partial class Main : Godot.Control
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
             allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             if (!_selftest && _host != null) UpdateAdvTextPresentation();
-            if (!_selftest && _host != null) UpdateAdvWaitIndicatorPresentation();
             if (!_selftest && _host != null) UpdateHistoryTextPresentation();
             perf?.RecordUiAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
             perf?.RecordUi(PerformanceFrameLog.Timestamp() - phase);
@@ -1706,40 +1695,6 @@ public partial class Main : Godot.Control
         return new Color(((rgb >> 16) & 0xff) / 255f, ((rgb >> 8) & 0xff) / 255f, (rgb & 0xff) / 255f, 1);
     }
 
-    private void UpdateAdvWaitIndicatorPresentation()
-    {
-        // As with the ordinary dialogue Label, the enclosing page's separately animated marker must sit
-        // out while HISTORY/HIDEWIN owns raw input; native retained composition naturally covers it.
-        if (_vm.IsRawInputCallbackActive)
-        {
-            _waitIndicator.Visible = false;
-            return;
-        }
-        var snapshot = _host.SnapshotAdvWaitIndicator();
-        if (snapshot == null)
-        {
-            _waitIndicator.Visible = false;
-            return;
-        }
-
-        var s = snapshot.Value;
-        if (_waitIndicatorAssetId != s.AssetId)
-        {
-            var image = Image.CreateFromData(s.Image.Width, s.Image.Height, false, Image.Format.Rgba8, s.Image.Pixels);
-            _waitIndicatorSheet = ImageTexture.CreateFromImage(image);
-            _waitIndicatorAtlas = new AtlasTexture { Atlas = _waitIndicatorSheet };
-            _waitIndicator.Texture = _waitIndicatorAtlas;
-            _waitIndicatorAssetId = s.AssetId;
-        }
-
-        var c = s.Config;
-        _waitIndicatorAtlas!.Region = new Rect2(
-            c.SourceX + s.Frame * c.CellWidth, c.SourceY, c.CellWidth, c.CellHeight);
-        _waitIndicator.Position = new Vector2(c.X, 430 + c.Y);
-        _waitIndicator.Size = new Vector2(c.CellWidth, c.CellHeight);
-        _waitIndicator.Visible = true;
-    }
-
     private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)
         => state is { } c
             ? $" color=0x{c.Current:x8}->0x{c.Target:x8} colorProgress={c.Progress:0.000}"
@@ -2610,6 +2565,69 @@ public partial class Main : Godot.Control
                 && !string.IsNullOrWhiteSpace(_host.SurfaceTextFallbackReason);
             liveRetainedTextMode = "label-fallback";
         }
+        _vm.TextHistory.DefineLayout(2, 256, 64, 10, 100);
+        _vm.TextHistory.SetResetCursor(2, 1, 1);
+        _vm.TextHistory.SetBounds(2, 255, 63);
+        _vm.TextHistory.SetTextObjectRange(2, 710000, 64);
+        _vm.TextHistory.ResetLayout(2);
+        AdvTextLayoutSnapshot historyLayout =
+            _vm.TextHistory.GetLayoutSnapshot(2);
+        AdvTextLayoutPresentationBinding historyBinding =
+            _vm.TextHistory.GetPresentationBinding(2);
+        _host.ResetRenderedAdvTextLayout(_vm.Gfx, historyBinding);
+        var historyBatch = new AdvTextHistoryRenderBatch(
+            2,
+            0,
+            0,
+            historyLayout,
+            "History",
+            immediateStyle);
+        bool historyUsedRetained =
+            _host.RenderTextHistory(
+                _vm.Gfx,
+                historyBinding,
+                historyBatch);
+        bool historyRetainedTextOk;
+        string historyRetainedTextMode;
+        if (_host.UsesSurfaceTextPixels)
+        {
+            RgbaImage? historySurface =
+                _host.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot);
+            historyRetainedTextOk =
+                historyUsedRetained
+                && _vm.Gfx.SnapshotVisibleObjects()
+                    .Count(item =>
+                        item.Handle >= historyBinding.FirstObjectHandle
+                        && item.Handle - historyBinding.FirstObjectHandle
+                           < historyBinding.ObjectCapacity)
+                   == historyBatch.Text.Length
+                && historySurface != null
+                && historySurface.Pixels.Where((_, index) => index % 4 == 3)
+                    .Any(alpha => alpha != 0)
+                && _host.SnapshotRenderedTextHistory().Count == 0;
+            _vm.Gfx.EraseRange(
+                historyBinding.FirstObjectHandle,
+                historyBinding.ObjectCapacity);
+            _host.ClearRenderedAdvTextLayout(historyBinding.LayoutSlot);
+            _host.EndTextHistoryPresentation(_vm.Gfx);
+            historyRetainedTextOk &=
+                !_vm.Gfx.SnapshotVisibleObjects()
+                    .Any(item =>
+                        item.Handle >= historyBinding.FirstObjectHandle
+                        && item.Handle - historyBinding.FirstObjectHandle
+                           < historyBinding.ObjectCapacity)
+                && _host.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot)
+                    ?.Pixels.All(value => value == 0) == true;
+            historyRetainedTextMode = "retained-glyphs";
+        }
+        else
+        {
+            historyRetainedTextOk =
+                !historyUsedRetained
+                && _host.SnapshotRenderedTextHistory().Count == 1;
+            _host.EndTextHistoryPresentation(_vm.Gfx);
+            historyRetainedTextMode = "label-fallback";
+        }
         Window rootWindow = GetTree().Root;
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
@@ -2650,6 +2668,7 @@ public partial class Main : Godot.Control
               && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
               && immediateSurfaceTextOk
               && liveRetainedTextOk
+              && historyRetainedTextOk
               && logicalCanvasOk && backbufferPreservationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
@@ -2659,6 +2678,7 @@ public partial class Main : Godot.Control
                          $"text-effect-modes=ok; font-calibration=ok; " +
                          $"immediate-surface-text={immediateSurfaceTextMode}; " +
                          $"live-adv-text={liveRetainedTextMode}; " +
+                         $"history-text={historyRetainedTextMode}; " +
                          $"backbuffer-preservation=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
@@ -2672,6 +2692,7 @@ public partial class Main : Godot.Control
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
                       $"immediate-surface-text={immediateSurfaceTextOk}({immediateSurfaceTextMode}); " +
                       $"live-adv-text={liveRetainedTextOk}({liveRetainedTextMode}); " +
+                      $"history-text={historyRetainedTextOk}({historyRetainedTextMode}); " +
                       $"backbuffer-preservation={backbufferPreservationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
