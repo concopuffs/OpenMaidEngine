@@ -2260,7 +2260,7 @@ public sealed class VirtualMachine
                 long elapsedMs = _host.InputClockMilliseconds - _cur.TimedCallbackStartedAtMs.Value;
                 if (elapsedMs < callback.DeadlineMs)
                 {
-                    _host.Sleep(callback.DeadlineMs - elapsedMs);
+                    _host.WaitForTimedCallbackDeadline(callback.DeadlineMs - elapsedMs);
                     elapsedMs = _host.InputClockMilliseconds - _cur.TimedCallbackStartedAtMs.Value;
                 }
 

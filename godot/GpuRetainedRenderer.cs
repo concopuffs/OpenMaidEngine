@@ -64,9 +64,9 @@ internal sealed class GpuRetainedRenderer : IDisposable
         };
     }
 
-    public void BeginFrame()
+    public void BeginFrame(bool preserveExistingLayers)
     {
-        _used = 0;
+        if (!preserveExistingLayers) _used = 0;
         _textureUploads = 0;
         _textureUploadTicks = 0;
     }

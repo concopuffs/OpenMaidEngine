@@ -22,6 +22,21 @@ public class TimedCallbackOpsTests
         }
     }
 
+    private sealed class NonPresentingClockHost : RecordingHost
+    {
+        private long _now;
+        public override long InputClockMilliseconds => _now;
+
+        public override void Sleep(long duration)
+            => throw new InvalidOperationException("Timed callback pacing used presentation-capable sleep.");
+
+        public override void WaitForTimedCallbackDeadline(long duration)
+        {
+            TimedCallbackWaitDurations.Add(duration);
+            _now += duration;
+        }
+    }
+
     private static Script BuildTwoEventSequence()
         => ScriptAssembler.Assemble(Table, "TIMED_CALLBACKS",
             new List<(int, Operand[])>
@@ -48,6 +63,7 @@ public class TimedCallbackOpsTests
         Assert.Equal(2, vm.Globals[0x100]);
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x101));
         Assert.Equal(new long[] { 10, 10 }, host.SleptDurations);
+        Assert.Equal(new long[] { 10, 10 }, host.TimedCallbackWaitDurations);
     }
 
     [Fact]
@@ -62,5 +78,19 @@ public class TimedCallbackOpsTests
         Assert.Equal(1, vm.Globals[0x100]);
         Assert.Equal(1, vm.Globals[0x101]);
         Assert.Equal(new long[] { 10 }, host.SleptDurations);
+        Assert.Equal(new long[] { 10 }, host.TimedCallbackWaitDurations);
+    }
+
+    [Fact]
+    public void SequencePacingDoesNotUsePresentationCapableScriptSleep()
+    {
+        var host = new NonPresentingClockHost();
+        var vm = new VirtualMachine(BuildTwoEventSequence(), Table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(new long[] { 10, 10 }, host.TimedCallbackWaitDurations);
+        Assert.Empty(host.SleptDurations);
     }
 }

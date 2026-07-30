@@ -574,7 +574,9 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 ### 0xd5 `run-timed-callback-sequence` (u004262C0, argc 1)
 - **summary:** Start or service the frame-local timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. Operand 1 is an optional abort/fallback PC; HISTORY passes 0xffffffff.
+- **evidence:** Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. engine_main_tick_with_exception_policy@0x411840 bypasses its ordinary gfx_render_frame path while only run-state bit 0x40 owns the wait. Operand 1 is an optional abort/fallback PC; HISTORY and BUNKIMOVE pass 0xffffffff.
+
+Run-state bit 0x40 suppresses the outer loop's ordinary retained-frame renderer while the timed service sleeps. A scheduled callback becomes visible only through its own explicit presentation opcode; the pacing wait is not itself a retained-state publication boundary.
 
 ### 0xd9 `clear-run-state-0x1000` (u00415880, argc 0)
 - **summary:** Clear native run/service bit 0x1000; if the secondary context is active, clear the same bit there. SC0000 executes it once after the initial SFX-channel reset, with no VM-visible result.

@@ -3849,17 +3849,51 @@ timed callbacks. Each transition frame publishes `[0,60000)`, deliberately inclu
 while excluding BUNKI's stable objects. On open, BUNKI publishes the stable menu only after BUNKIMOVE
 returns; on close, it removes the stable range after the reverse animation.
 
-The port previously treated a backbuffer `0x222` as a generic repaint request and reconstructed every
+The port originally treated a backbuffer `0x222` as a generic repaint request and reconstructed every
 visible retained object. It therefore drew handles `60000+` at full size above handle `59999`, making the
 real popup appear immediately while its opening animation ran behind it; closing had the symmetric error.
-Godot now retains zero-based backbuffer publication ranges and filters reconstruction to the active range.
-Nonzero ranges remain incremental overlays over a full reconstruction because the port does not preserve
-native D3D backbuffer pixels between publications.
+The first correction retained zero-based publication ranges and filtered reconstruction to the active
+range, which removed the stable-popup overlay but still rebuilt each selected range from black rather than
+preserving native D3D backbuffer pixels.
+
+The native lifecycle was refined on 2026-07-30 while diagnosing two remaining endpoint flashes.
+`gfx_present_object_range@0x482230` never clears the selected target: it begins a D3D scene through
+`d3d_begin_scene_nested@0x4709d0`, draws the selected retained objects, ends the scene through
+`d3d_end_scene_nested@0x470a10`, and, for target `-1`, immediately reaches
+`d3d_present_backbuffer@0x4713b0` through its default wrapper. `IDirect3DDevice9::Present` is therefore
+part of each backbuffer `0x222`, while black clearing remains the separate explicit opcode `0x20e`.
+Backbuffer ranges are incremental draws over preserved native pixels rather than complete scenes rebuilt
+from black.
+
+Timed-callback pacing is not an implicit publication boundary in native AGE. Op `0xd5` enables run-state
+bit `0x40`; that bit bypasses the outer loop's automatic `gfx_render_frame` path, and
+`timed_callback_sequence_tick@0x408170` only sleeps and redirects the script PC. BUNKIMOVE's first visible
+frame is consequently the first callback's scale mutation followed by explicit `0x222`. At the other
+endpoint, close sets global `0x2` to one and BUNKIMOVE explicitly publishes `[0,59999)`, excluding capture
+handle `59999`, before cleanup and BUNKI's final `0x20c`.
+
+The port now gives op `0xd5` a dedicated non-presenting deadline wait which keeps the script presentation
+barrier held, while backbuffer `0x222` suspends that barrier and synchronously snapshots the exact callback
+state before returning. Incremental range publications preserve the preceding backbuffer: the software
+backend skips its black clear and the GPU backend appends the new draw layers over its retained stage.
+An explicit backbuffer `0x20e` disables preservation for the following publication, and ordinary `0x20c`
+continues to replace the retained stage as a full reconstruction. This removes the pre-animation
+full-popup frame and supplies the preserved pixels needed by the `[0,59999)` close endpoint without
+special-casing BUNKI handles. A one-frame black flicker is still visible at the end of close, however, so
+some later publication or retained-stage reset remains to be reconciled.
 
 Surface text also remains modeled metadata rather than pixels. Selected-target publication now projects
 that metadata into the destination surface, and the final Godot labels inherit the retained object's
 projected scale and rotation. Consequently BUNKIMOVE's captured labels follow the same transform as its
-panel instead of escaping as full-size Control overlays.
+panel instead of escaping as full-size Control overlays. Because those labels are live metadata overlays
+rather than pixels in the preserved backbuffer, each incremental publication replaces the preceding label
+projection from index zero. Retaining old labels would accumulate every intermediate transform as visible
+text trails even though preserving the underlying software pixels or GPU draw layers is correct.
+
+Focused timed-callback boundary coverage passes with the complete 532-test engine suite. The Godot build
+is warning-free and the Himegari-targeted threaded frontend selftest passes. User testing confirmed the
+premature opening frame and accumulated text trails are gone. The close-only black frame remains the visual
+acceptance gap.
 
 ### Formatted integers on text surfaces — opcode `0x205` (2026-07-21)
 

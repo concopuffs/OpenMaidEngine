@@ -99,6 +99,8 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
     private readonly object _backbufferRangeLock = new();
     private GfxHandleRange _backbufferRange = GfxHandleRange.All;
+    private bool _backbufferPublicationIsIncremental;
+    private bool _backbufferClearPending;
     private LegacyScreenTransition? _screenTransition;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
@@ -472,26 +474,41 @@ public sealed class GodotAdvHost : IHost
             PublishObjectRangeToSurface(gfx, firstHandle, count);
             return;
         }
-        // The software/GPU port reconstructs the backbuffer instead of preserving native D3D pixels.
-        // Zero-based ranges therefore define the complete published scene. A nonzero range is an
-        // incremental overlay in native code, so retain the full reconstruction for those call sites.
         lock (_backbufferRangeLock)
-            _backbufferRange = firstHandle == 0
-                ? new GfxHandleRange(firstHandle, count)
-                : GfxHandleRange.All;
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        {
+            _backbufferRange = new GfxHandleRange(firstHandle, count);
+            _backbufferPublicationIsIncremental = true;
+        }
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
+        // Native backbuffer 0x222 ends its D3D scene and calls Present before returning. Snapshot this
+        // exact retained state before its callback can mutate or release the capture surface.
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            RequestSynchronizedPresentation();
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+        }
     }
 
-    public void SnapshotBackbufferObjects(GfxState gfx, long nowMs, List<RenderObject> snapshot)
+    public bool SnapshotBackbufferObjects(GfxState gfx, long nowMs, List<RenderObject> snapshot)
     {
         gfx.SnapshotVisibleObjects(nowMs, snapshot);
         GfxHandleRange range;
-        lock (_backbufferRangeLock) range = _backbufferRange;
+        bool preserveExistingPixels;
+        lock (_backbufferRangeLock)
+        {
+            range = _backbufferRange;
+            preserveExistingPixels = _backbufferPublicationIsIncremental && !_backbufferClearPending;
+            _backbufferClearPending = false;
+        }
         int write = 0;
         for (int read = 0; read < snapshot.Count; read++)
             if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
         if (write < snapshot.Count) snapshot.RemoveRange(write, snapshot.Count - write);
+        return preserveExistingPixels;
     }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
@@ -852,7 +869,11 @@ public sealed class GodotAdvHost : IHost
             });
             return;
         }
-        lock (_backbufferRangeLock) _backbufferRange = GfxHandleRange.All;
+        lock (_backbufferRangeLock)
+        {
+            _backbufferRange = GfxHandleRange.All;
+            _backbufferPublicationIsIncremental = false;
+        }
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
         int completed = gfx.CompleteForegroundTransitions(_clock.NowMs);
         if (started > 0 || completed > 0)
@@ -1038,7 +1059,12 @@ public sealed class GodotAdvHost : IHost
         // scene_context_init_reset releases ordinary surface/movie bindings but keeps decoded asset
         // caches and process-owned audio/configuration available to the reloaded SYSTEM4 root.
         ReleaseSurfaceRange(0, 1000);
-        lock (_backbufferRangeLock) _backbufferRange = GfxHandleRange.All;
+        lock (_backbufferRangeLock)
+        {
+            _backbufferRange = GfxHandleRange.All;
+            _backbufferPublicationIsIncremental = false;
+            _backbufferClearPending = false;
+        }
         lock (_textLock)
         {
             _surfaceText.Clear();
@@ -1153,6 +1179,19 @@ public sealed class GodotAdvHost : IHost
         }
         IsSleeping = false;
         _timeline?.State("running", new() { ["sleep_complete"] = true });
+    }
+
+    public void WaitForTimedCallbackDeadline(long duration)
+    {
+        long ms = NormalizeSleepMilliseconds(duration, 1.0);
+        long deadline = _clock.NowMs + ms;
+        _timeline?.State("timed-callback-wait",
+            new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
+        // Keep the script-side presentation barrier held. Native run-state 0x40 advances the timer
+        // and message pump but suppresses ordinary retained rendering until the callback's explicit 0x222.
+        while (_clock.NowMs < deadline && !_stopping)
+            _frameSignal.WaitOne(50);
+        _timeline?.State("running", new() { ["timed_callback_due"] = true });
     }
 
     // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
@@ -1533,11 +1572,14 @@ public sealed class GodotAdvHost : IHost
 
     public void ClearRenderTarget(int surfaceSlot)
     {
-        // The retained compositor rebuilds the backbuffer from black at the next publication boundary.
-        // For an offscreen target, discard separately retained text draws so its modeled pixel contents
-        // observe the native D3D clear as well.
-        if (surfaceSlot >= 0)
+        if (surfaceSlot < 0)
         {
+            lock (_backbufferRangeLock) _backbufferClearPending = true;
+        }
+        else
+        {
+            // For an offscreen target, discard separately retained text draws so its modeled pixel
+            // contents observe the native D3D clear as well.
             lock (_textLock) _surfaceText.Remove(surfaceSlot);
             lock (_imageLock)
             {

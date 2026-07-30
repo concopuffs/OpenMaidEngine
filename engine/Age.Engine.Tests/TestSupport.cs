@@ -33,6 +33,7 @@ internal class RecordingHost : IHost
     public readonly List<bool> WaitIndicatorEnabledChanges = new();
     public readonly List<int> PublishedAdvTextLayouts = new();
     public readonly List<long> SleptDurations = new();
+    public readonly List<long> TimedCallbackWaitDurations = new();
     public readonly List<(long Resource, int Channel)> SfxLoads = new();
     public readonly List<long> Voices = new();
     public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
@@ -148,6 +149,11 @@ internal class RecordingHost : IHost
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
     public void ClearCursorResource() => CursorClearCount++;
     public virtual void Sleep(long duration) => SleptDurations.Add(duration);
+    public virtual void WaitForTimedCallbackDeadline(long duration)
+    {
+        TimedCallbackWaitDurations.Add(duration);
+        Sleep(duration);
+    }
     public virtual void FrameYield() { }
     public void ResetSceneContext() => SceneContextResets++;
     public bool IsMessageSkipActive => MessageSkip;

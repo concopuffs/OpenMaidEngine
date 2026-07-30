@@ -1057,15 +1057,19 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         bool gpuSnapshotCaptured = false;
-        if (_useGpuBackend && TryRecompositeGpu(out gpuSnapshotCaptured)) return;
+        bool preserveExistingPixels = false;
+        if (_useGpuBackend &&
+            TryRecompositeGpu(out gpuSnapshotCaptured, out preserveExistingPixels)) return;
         _gpuRenderer.Visible = false;
         _screenView.Visible = true;
-        RecompositeSoftware(gpuSnapshotCaptured ? _visibleSnapshot : null);
+        RecompositeSoftware(
+            gpuSnapshotCaptured ? _visibleSnapshot : null, preserveExistingPixels);
     }
 
-    private bool TryRecompositeGpu(out bool snapshotCaptured)
+    private bool TryRecompositeGpu(out bool snapshotCaptured, out bool preserveExistingPixels)
     {
         snapshotCaptured = false;
+        preserveExistingPixels = false;
         // Preserve the existing high-volume object/timeline diagnostics exactly. They are debugging tools,
         // not performance workloads, and their software decision strings remain the canonical evidence.
         if (_gfxLogPath != null || _timeline != null) return false;
@@ -1073,7 +1077,8 @@ public partial class Main : Godot.Control
         long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         if (_host.TrySnapshotScreenTransition(out _)) return false; // P4: whole-screen offscreen targets
-        _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
+        preserveExistingPixels =
+            _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
         snapshotCaptured = true;
         _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
@@ -1096,7 +1101,7 @@ public partial class Main : Godot.Control
         _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
 
         int surfaceTextLabelIndex = 0;
-        _gpuRenderer.BeginFrame();
+        _gpuRenderer.BeginFrame(preserveExistingPixels);
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
@@ -1251,7 +1256,9 @@ public partial class Main : Godot.Control
         return drawn;
     }
 
-    private void RecompositeSoftware(IReadOnlyList<RenderObject>? sampledVisible = null)
+    private void RecompositeSoftware(
+        IReadOnlyList<RenderObject>? sampledVisible = null,
+        bool preserveExistingPixels = false)
     {
         if (_perf != null)
         {
@@ -1264,10 +1271,24 @@ public partial class Main : Godot.Control
         bool hasScreenTransition = _host.TrySnapshotScreenTransition(out var transition);
         _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
+        if (!hasScreenTransition && sampledVisible == null)
+        {
+            phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            preserveExistingPixels =
+                _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
+            _perf?.RecordSnapshotAllocation(
+                PerformanceFrameLog.AllocatedBytes() - allocationPhase);
+            _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
+        }
+        if (hasScreenTransition) preserveExistingPixels = false;
         _perf?.BeginRecomposite(hasScreenTransition);
 
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        System.Array.Clear(_screenPixels);
+        if (!preserveExistingPixels)
+        {
+            System.Array.Clear(_screenPixels);
+        }
         foreach (var label in _surfaceTextLabels) label.Visible = false;
         _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
         int surfaceTextLabelIndex = 0;
@@ -1285,13 +1306,6 @@ public partial class Main : Godot.Control
         }
         else
         {
-            phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            if (sampledVisible == null)
-                _host.SnapshotBackbufferObjects(
-                    _vm.Gfx, _clock.NowMs, _visibleSnapshot); // synchronized objects + publication range
-            _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-            _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             CompositeVisibleObjects(sampledVisible ?? _visibleSnapshot, 1f, ref surfaceTextLabelIndex, decisions, true);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
