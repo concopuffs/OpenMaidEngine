@@ -1809,7 +1809,7 @@ public sealed class VirtualMachine
                 {
                     _cur.CoroutineResumePc = pc + 1;
                     _cur.CoroutineYieldActive = true;
-                    _host.SetAdvPagePresentationSuspended(true);
+                    _host.SetAdvPagePresentationSuspended(Gfx, true);
                     targetOffset = _cur.CoroutineYieldHandlerA;
                 }
                 else targetOffset = _cur.CoroutineYieldHandlerB;
@@ -1824,7 +1824,7 @@ public sealed class VirtualMachine
                 {
                     _cur.CoroutineResumePc = null;
                     _cur.CoroutineYieldActive = false;
-                    _host.SetAdvPagePresentationSuspended(false);
+                    _host.SetAdvPagePresentationSuspended(Gfx, false);
                     return resumePc;
                 }
                 return pc + 1;                       // cold bounded scene-entry path
@@ -1991,7 +1991,13 @@ public sealed class VirtualMachine
                     var liveRun = new AdvLiveTextRun(
                         off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack);
                     TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
-                    _host.ShowText(liveRun, _messageGlyphDelayMilliseconds);
+                    AdvTextLayoutPresentationBinding binding =
+                        TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
+                    AdvRetainedTextRunResult? retained = _host.ShowText(
+                        Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+                    if (retained is { } result)
+                        TextHistory.SetCursor(
+                            result.LayoutSlot, result.CursorX, result.CursorY);
                 }
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
@@ -2003,8 +2009,12 @@ public sealed class VirtualMachine
                 int requestedSlot = (int)Read(a[0]);
                 TextHistory.ResetLayout(requestedSlot);
                 var layout = TextHistory.GetLayoutSnapshot(requestedSlot);
+                AdvTextLayoutPresentationBinding binding =
+                    TextHistory.GetPresentationBinding(layout.Slot);
+                if (binding.FirstObjectHandle >= 0 && binding.ObjectCapacity > 0)
+                    Gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
                 _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
-                _host.ClearRenderedAdvTextLayout(layout.Slot);
+                _host.ResetRenderedAdvTextLayout(Gfx, binding);
                 _cur.ReadMessageOffset = ins.Offset;
                 _sharedProfile.ReadText.CommitPending();
                 RefreshAdvReadSkipState();
@@ -2031,8 +2041,13 @@ public sealed class VirtualMachine
                 return pc + 1;
             case "u00420CE0":
             case "publish-adv-text-layout": // 0x20a: publish layout and current marker frame if active
-                _host.PublishAdvTextLayout((int)Read(a[0]));
+            {
+                int requestedSlot = (int)Read(a[0]);
+                AdvTextLayoutPresentationBinding binding =
+                    TextHistory.GetPresentationBinding(requestedSlot);
+                _host.PublishAdvTextLayout(Gfx, binding);
                 return pc + 1;
+            }
             case "draw-string": // 0x204 (surface slot, x, y, string)
                 _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]),
                                           _advTextStyle);

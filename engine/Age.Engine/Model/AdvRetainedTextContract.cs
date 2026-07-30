@@ -30,7 +30,21 @@ public readonly record struct AdvTextLayoutPresentationBinding(
     int SourceSurfaceSlot,
     long FirstObjectHandle,
     long ObjectCapacity,
-    long WaitIndicatorObjectHandle);
+    long WaitIndicatorObjectHandle,
+    int ResetCursorX,
+    int ResetCursorY);
+
+public readonly record struct AdvRetainedGlyphPlacement(
+    AdvRetainedGlyphRecord Record,
+    int LayoutOriginX,
+    int LayoutOriginY);
+
+public readonly record struct AdvRetainedTextRunResult(
+    int LayoutSlot,
+    int FirstGlyphIndex,
+    int GlyphCount,
+    int CursorX,
+    int CursorY);
 
 /// <summary>Platform-neutral rules established from AGE's native retained-glyph workers.</summary>
 public static class AdvRetainedTextContract

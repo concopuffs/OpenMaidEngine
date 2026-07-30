@@ -201,7 +201,8 @@ public sealed class AdvTextHistory
         var layout = GetOrCreateLayout(slot);
         return new AdvTextLayoutPresentationBinding(
             slot, checked(slot + 0x14), layout.TextObjectRangeFirst,
-            layout.TextObjectRangeCount, layout.WaitIndicatorObjectHandle);
+            layout.TextObjectRangeCount, layout.WaitIndicatorObjectHandle,
+            layout.ResetCursorX, layout.ResetCursorY);
     }
 
     /// <summary>

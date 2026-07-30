@@ -64,6 +64,15 @@ public interface IHost
     void ShowText(int offset, string text);
     void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
         => ShowText(run.SourceOffset, run.Text);
+    AdvRetainedTextRunResult? ShowText(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvLiveTextRun run,
+        int glyphDelayMilliseconds)
+    {
+        ShowText(run, glyphDelayMilliseconds);
+        return null;
+    }
     int MessageGlyphDelayMilliseconds => 50;
     void SetMessageGlyphDelayMilliseconds(int milliseconds) { }
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
@@ -73,6 +82,9 @@ public interface IHost
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
         => DrawStringToSurface(surfaceSlot, x, y, text);
     void ClearRenderedAdvTextLayout(int layoutSlot) { }
+    void ResetRenderedAdvTextLayout(
+        GfxState gfx, AdvTextLayoutPresentationBinding binding)
+        => ClearRenderedAdvTextLayout(binding.LayoutSlot);
     void RenderTextHistory(AdvTextHistoryRenderBatch batch) { }
     // History render batches are transient bindings, unlike the retained backlog itself. HISTORY.BIN's
     // recording re-enable at exit ends that presentation and drops every bound target layout.
@@ -87,10 +99,15 @@ public interface IHost
     void SetAdvWaitIndicatorEnabled(bool enabled) { }
     // Op 0x20a republishes one retained ADV text layout and includes the current marker frame when active.
     void PublishAdvTextLayout(int layoutSlot) { }
+    void PublishAdvTextLayout(
+        GfxState gfx, AdvTextLayoutPresentationBinding binding)
+        => PublishAdvTextLayout(binding.LayoutSlot);
     // Op 0x199 temporarily yields the active ADV page into its registered hide-window coroutine.
     // The retained scene continues to render, but the text layout and its wait marker are suspended
     // until op 0x7c restores the saved page PC.
     void SetAdvPagePresentationSuspended(bool suspended) { }
+    void SetAdvPagePresentationSuspended(GfxState gfx, bool suspended)
+        => SetAdvPagePresentationSuspended(suspended);
     void WaitForInput();
     void WaitForInput(int layoutSlot) => WaitForInput();
     // Interactive hosts service script callbacks on the VM thread while the enclosing ADV page remains

@@ -95,6 +95,16 @@ internal class RecordingHost : IHost
         Lines.Add((run.SourceOffset, run.Text));
         LiveTextRuns.Add((run, glyphDelayMilliseconds));
     }
+    public Func<AdvLiveTextRun, AdvRetainedTextRunResult?>? OnRetainedText;
+    public virtual AdvRetainedTextRunResult? ShowText(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvLiveTextRun run,
+        int glyphDelayMilliseconds)
+    {
+        ShowText(run, glyphDelayMilliseconds);
+        return OnRetainedText?.Invoke(run);
+    }
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
         => MessageGlyphDelayMilliseconds = milliseconds;
     public RgbaImage? CaptureSurfacePixels(int slot)

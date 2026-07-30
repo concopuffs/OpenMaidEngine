@@ -2541,6 +2541,75 @@ public partial class Main : Godot.Control
         }
         _host.ReleaseSurface(996);
         _host.ReleaseSurface(997);
+        bool liveRetainedTextOk;
+        string liveRetainedTextMode;
+        AdvTextLayoutPresentationBinding liveBinding =
+            _vm.TextHistory.GetPresentationBinding(1);
+        if (_host.UsesSurfaceTextPixels)
+        {
+            static bool InLiveRange(
+                RenderObject item, AdvTextLayoutPresentationBinding binding)
+                => item.Handle >= binding.FirstObjectHandle
+                   && item.Handle - binding.FirstObjectHandle < binding.ObjectCapacity;
+            IReadOnlyList<RenderObject> liveObjects = _vm.Gfx.SnapshotVisibleObjects()
+                .Where(item => InLiveRange(item, liveBinding))
+                .ToArray();
+            RgbaImage? liveSurface =
+                _host.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
+            bool builtCompleteLine =
+                liveObjects.Count == "HelloWorldSub".Length
+                && liveObjects.Select(item => item.Handle)
+                    .SequenceEqual(Enumerable.Range(0, liveObjects.Count)
+                        .Select(index => liveBinding.FirstObjectHandle + index))
+                && liveSurface != null
+                && liveSurface.Pixels.Where((_, index) => index % 4 == 3)
+                    .Any(alpha => alpha != 0)
+                && _host.SnapshotLiveAdvText().Count == 0
+                && _vm.TextHistory.GetLayoutSnapshot(1).CursorX
+                   > liveBinding.ResetCursorX;
+
+            _vm.Gfx.EraseRange(liveBinding.FirstObjectHandle + 1, 1);
+            _host.PublishAdvTextLayout(_vm.Gfx, liveBinding);
+            bool republishedPartialErase =
+                _vm.Gfx.SnapshotVisibleObjects()
+                    .Count(item => InLiveRange(item, liveBinding))
+                == liveObjects.Count;
+
+            _host.SetAdvPagePresentationSuspended(_vm.Gfx, true);
+            bool suspended =
+                !_vm.Gfx.SnapshotVisibleObjects()
+                    .Any(item => InLiveRange(item, liveBinding));
+            _host.SetAdvPagePresentationSuspended(_vm.Gfx, false);
+            bool restored =
+                _vm.Gfx.SnapshotVisibleObjects()
+                    .Count(item => InLiveRange(item, liveBinding))
+                == liveObjects.Count;
+
+            _vm.Gfx.EraseRange(
+                liveBinding.FirstObjectHandle, liveBinding.ObjectCapacity);
+            _host.ResetRenderedAdvTextLayout(_vm.Gfx, liveBinding);
+            RgbaImage? resetSurface =
+                _host.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
+            bool reset =
+                resetSurface != null
+                && resetSurface.Pixels.All(value => value == 0)
+                && !_vm.Gfx.SnapshotVisibleObjects()
+                    .Any(item => InLiveRange(item, liveBinding));
+            liveRetainedTextOk =
+                builtCompleteLine
+                && republishedPartialErase
+                && suspended
+                && restored
+                && reset;
+            liveRetainedTextMode = "retained-glyphs";
+        }
+        else
+        {
+            liveRetainedTextOk =
+                _host.SnapshotLiveAdvText().Count == 3
+                && !string.IsNullOrWhiteSpace(_host.SurfaceTextFallbackReason);
+            liveRetainedTextMode = "label-fallback";
+        }
         Window rootWindow = GetTree().Root;
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
@@ -2580,6 +2649,7 @@ public partial class Main : Godot.Control
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
               && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
               && immediateSurfaceTextOk
+              && liveRetainedTextOk
               && logicalCanvasOk && backbufferPreservationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
@@ -2588,6 +2658,7 @@ public partial class Main : Godot.Control
                          $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
                          $"text-effect-modes=ok; font-calibration=ok; " +
                          $"immediate-surface-text={immediateSurfaceTextMode}; " +
+                         $"live-adv-text={liveRetainedTextMode}; " +
                          $"backbuffer-preservation=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
@@ -2600,6 +2671,7 @@ public partial class Main : Godot.Control
                       $"bgm-stop-release={bgmStopReleaseOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
                       $"immediate-surface-text={immediateSurfaceTextOk}({immediateSurfaceTextMode}); " +
+                      $"live-adv-text={liveRetainedTextOk}({liveRetainedTextMode}); " +
                       $"backbuffer-preservation={backbufferPreservationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
@@ -2610,7 +2682,7 @@ public partial class Main : Godot.Control
     // nested call-script into a synthetic subroutine (exercises call-script handling), shared globals.
     private static (Script, IScriptProvider) BuildSelfTestScene(OpcodeTable table)
     {
-        (int, Operand[]) ShowText(int s) => (0x6e, new[] { new Operand(2, s), new Operand(0, 0) });
+        (int, Operand[]) ShowText(int s) => (0x6e, new[] { new Operand(0, 0), new Operand(2, s) });
         (int, Operand[]) Wait() => (0x72, new[] { new Operand(0, 0) });
         (int, Operand[]) CallScript(long id) => (0x3, new[] { new Operand(0, id) });
         (int, Operand[]) MovGG(int d, int s) => (0x55, new[] { new Operand(3, d), new Operand(3, s) });
@@ -2620,7 +2692,33 @@ public partial class Main : Godot.Control
         var callee = ScriptAssembler.Assemble(table, "SUBSCENE",
             new List<(int, Operand[])> { ShowText(0), MovGI(0x31, 42), Exit() }, new[] { "Sub" });
         var caller = ScriptAssembler.Assemble(table, "SELFTEST",
-            new List<(int, Operand[])> { ShowText(0), Wait(), ShowText(1), CallScript(5), MovGG(0x30, 0x31), Exit() },
+            new List<(int, Operand[])>
+            {
+                (0x70, new[]
+                {
+                    new Operand(0, 1), new Operand(0, 512), new Operand(0, 64),
+                    new Operand(0, 0), new Operand(0, 0),
+                }),
+                (0x79, new[]
+                {
+                    new Operand(0, 1), new Operand(0, 1), new Operand(0, 1),
+                }),
+                (0x71, new[] { new Operand(0, 1) }),
+                (0x1c1, new[]
+                {
+                    new Operand(0, 1), new Operand(0, 511), new Operand(0, 63),
+                }),
+                (0x213, new[]
+                {
+                    new Operand(0, 1), new Operand(0, 700000), new Operand(0, 64),
+                }),
+                ShowText(0),
+                Wait(),
+                ShowText(1),
+                CallScript(5),
+                MovGG(0x30, 0x31),
+                Exit(),
+            },
             new[] { "Hello", "World" });
         return (caller, new SelfTestProvider(callee));
     }

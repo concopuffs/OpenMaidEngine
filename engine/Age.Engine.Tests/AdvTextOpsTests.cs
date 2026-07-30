@@ -217,6 +217,48 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void RetainedGlyphMetricsAdvanceCanonicalCursorBetweenRuns()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        static Operand S(int index) => new(2, index);
+        var script = ScriptAssembler.Assemble(table, "RETAINED_CURSOR",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { I(1), I(100), I(50), I(10), I(20) }),
+                (0x79, new[] { I(1), I(2), I(3) }),
+                (0x71, new[] { I(1) }),
+                (0x213, new[] { I(1), I(100), I(10) }),
+                (0x6e, new[] { I(0), S(0) }),
+                (0x6e, new[] { I(0), S(1) }),
+                (0x2, Array.Empty<Operand>()),
+            },
+            new[] { "A", "BC" });
+        var host = new RecordingHost
+        {
+            OnRetainedText = run => new AdvRetainedTextRunResult(
+                run.Layout.Slot,
+                FirstGlyphIndex: 0,
+                GlyphCount: run.Text.Length,
+                CursorX: run.Layout.CursorX + run.Text.Length * 4,
+                CursorY: run.Layout.CursorY),
+        };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { (2, 3), (6, 3) },
+            host.LiveTextRuns.Select(run =>
+                (run.Run.Layout.CursorX, run.Run.Layout.CursorY)));
+        Assert.Equal(new[] { (2, 3), (6, 3) },
+            vm.TextHistory.Records.Select(record =>
+                (record.Layout.CursorX, record.Layout.CursorY)));
+        Assert.Equal((14, 3),
+            (vm.TextHistory.GetLayoutSnapshot(1).CursorX,
+             vm.TextHistory.GetLayoutSnapshot(1).CursorY));
+    }
+
+    [Fact]
     public void RealMamesResearchDescriptionUsesImmediateRetainedTextPath()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

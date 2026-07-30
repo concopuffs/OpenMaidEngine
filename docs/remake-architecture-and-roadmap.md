@@ -612,13 +612,22 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    dynamic GPU upload, and surface mutation path. Backend absence, an unrepresentable glyph, or an unresolved
    surface falls back atomically to the prior metadata/Label projection with an explicit diagnostic; that
    projection remains only for this temporary unavailable-backend case until the portable backend lands.
-5. **Materialize live ADV glyphs as ordinary retained objects.** Extend the transient layout-presentation
-   binding with its source surface, first handle, and capacity without changing the persisted History record
-   ABI. Build the complete line before reveal, update the canonical live cursor from measured metrics, then
-   bind one normal `GfxState` object per revealed record. Click/Skip publishes the remaining records and keeps
-   the existing consumed-click boundary. Layout reset erases its range and clears its surface; partial
-   `0x1f7` erases work per handle naturally; `0x20a` republishes from retained records. Consecutive
-   literal/dynamic runs advance by returned metrics rather than relying on Label concatenation.
+5. **Materialize live ADV glyphs as ordinary retained objects.** Completed 2026-07-30 for the exact Windows
+   path. The VM passes `GfxState` plus the transient layout binding into presentation and accepts the measured
+   final cursor in return; the persisted History ABI is unchanged. `RetainedAdvTextLayoutPresentation`
+   retains each native edge record with the layout origin active for that run, builds the complete line into
+   the layout surface once, and binds `first_handle + glyph_index` in reveal order. Consecutive
+   literal/dynamic runs therefore begin at GDI's returned cursor instead of relying on Label concatenation.
+   Timed reveal stops at capacity, while click/Skip publishes the remaining available handles through the
+   existing consumed-click branch. Partial `0x1f7` erases ordinary handles; `0x20a` recreates all records
+   through the current reveal count. HIDEWIN suspension erases that range and restoration republishes it.
+   Layout reset erases the interval, clears its RGBA surface and transient records, and saved-frame-style
+   reconstruction deterministically rebuilds the same bindings. Exact runs are excluded from the live Label
+   snapshot; unavailable-backend runs retain it unchanged. Focused tests cover handle order/capacity,
+   per-run origins, partial erase/republication, suspension, measured cursor handoff, reset, and
+   reconstruction. The synthesized Godot VM self-test exercises timed exact reveal and reports
+   `live-adv-text=retained-glyphs`; real GPU captures of SC0000 pages 1 and 7 confirm ordinary and voiced
+   dialogue placement/wrapping alongside the immediate speaker-name surface.
 6. **Migrate History and the ADV wait indicator through the same retained path.** Op `0x1d1` rasterizes and
    binds into its target layout instead of creating a layout-keyed Label. Bind the configured wait atlas at
    the op-`0x212` handle so it follows native z-order and source-cell animation. Once SC0000, HISTORY,

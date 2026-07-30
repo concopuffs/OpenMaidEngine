@@ -2982,8 +2982,8 @@ and returns the five-dword edge records plus final cursor, observed overflow, wr
 state. It preserves native horizontal precedence: vertical-only overflow stops before compositing, while a
 simultaneous horizontal overflow follows the wrap/kinsoku path. A reusable bounded LRU provides eviction
 callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies the same bound to masks. This
-core is not yet connected to live ADV or History; those paths still use Labels pending their retained-glyph
-materialization steps.
+core now drives immediate surface strings and live ADV; retained History remains on its Label pending the
+next migration step.
 
 The independent Windows reference backend landed alongside, but outside, the neutral engine as
 `Age.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
@@ -3014,8 +3014,31 @@ offscreen capture, fill/copy, and preservation behavior apply without a detached
 If the exact backend is unavailable, string conversion fails, or the target surface cannot be resolved,
 the host records one explicit diagnostic and retains the old metadata/Label projection for that draw. The
 fallback is constructed before surface publication, so it cannot mix a partial new raster with the Label.
-Live ADV, History, and the wait indicator remain on their existing presentation paths for the later staged
-migration.
+History and the wait indicator remain on their existing presentation paths for the later staged migration.
+
+Live ADV now uses the same exact surface pixels through ordinary retained objects.
+`AdvTextLayoutPresentationBinding` is transient engine state: it carries the layout surface (`slot+0x14`),
+first object handle, capacity, wait-indicator handle, and reset cursor without changing the persisted
+History record layout. The VM passes that binding and its `GfxState` to the host for each `show-text` run,
+then writes the returned GDI-measured cursor into the canonical live layout before processing another
+literal/dynamic run.
+
+`RetainedAdvTextLayoutPresentation` stores each five-dword record together with the layout origin active
+when that run was built. Publication binds `first_handle+index` from the record's source edges to
+`run_origin+(left,top)`, so MAMES-style origin changes do not move earlier glyphs. The complete run is
+rasterized once into the layout RGBA surface; timed reveal only adds another `GfxState` binding and never
+rerasterizes or reuploads the complete line. The configured capacity bounds timed publication. Click or
+Skip sets the existing force-complete flag, binds every remaining publishable record, synchronizes that
+endpoint, and returns without releasing the subsequent stable input wait.
+
+Because these are normal handles, a partial `0x1f7` removes only the selected glyph. Op `0x20a` walks the
+retained records through the current reveal count and recreates missing bindings. HIDEWIN suspension erases
+the active page's published range and restore republishes it; layout reset erases the configured interval,
+drops transient records, and zeroes the source surface. Whole scene reset/release drops the transient layout
+state. Numbered History serialization still owns none of these pixels or records: the saved-frame script
+path reconstructs them, and a reconstruction test proves identical handle/source/destination bindings.
+Exact runs are omitted from `SnapshotLiveAdvText`, eliminating the detached always-on-top Label while the
+unavailable-backend fallback continues to use that snapshot.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 

@@ -68,6 +68,7 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, List<SurfaceTextDraw>> _surfaceText = new();
     private readonly CachedGlyphMaskRasterizer? _surfaceTextMaskCache;
     private readonly ImmediateSurfaceTextRenderer? _surfaceTextPixelRenderer;
+    private readonly RetainedGlyphLayoutEngine? _retainedGlyphLayoutEngine;
     private readonly GlyphRasterizerBackendInfo? _surfaceTextBackendInfo;
     private string _surfaceTextFallbackReason;
     private bool _surfaceTextFallbackWarningReported;
@@ -77,9 +78,15 @@ public sealed class GodotAdvHost : IHost
         public required AdvLiveTextRun Run;
         public required long StartedMs;
         public required int GlyphDelayMilliseconds;
+        public bool RetainedPixels;
+        public int FirstGlyphIndex;
+        public int GlyphCount;
     }
     private readonly List<LiveTextState> _liveText = new();
+    private readonly Dictionary<int, RetainedAdvTextLayoutPresentation>
+        _retainedTextLayouts = new();
     private LiveTextState? _activeLiveText;
+    private int _suspendedRetainedTextLayoutSlot;
     private string _advText = "";
     private int _advTextX = 100, _advTextY = 47;
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
@@ -143,6 +150,8 @@ public sealed class GodotAdvHost : IHost
                 surfaceTextRasterizer, capacity: 2048);
             _surfaceTextPixelRenderer =
                 new ImmediateSurfaceTextRenderer(_surfaceTextMaskCache);
+            _retainedGlyphLayoutEngine =
+                new RetainedGlyphLayoutEngine(_surfaceTextMaskCache);
         }
         _surfaceTextFallbackReason = surfaceTextFallbackReason
             ?? (surfaceTextRasterizer == null
@@ -330,6 +339,205 @@ public sealed class GodotAdvHost : IHost
         _timeline?.State("running", new() { ["text_reveal_complete"] = true });
     }
 
+    public AdvRetainedTextRunResult? ShowText(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvLiveTextRun run,
+        int glyphDelayMilliseconds)
+    {
+        if (_retainedGlyphLayoutEngine == null
+            || binding.LayoutSlot != run.Layout.Slot
+            || binding.FirstObjectHandle < 0
+            || binding.ObjectCapacity <= 0
+            || !TryPrepareRetainedTextRun(
+                gfx, binding, run,
+                out RetainedAdvTextLayoutPresentation? presentation,
+                out AdvRetainedTextRunResult result))
+        {
+            ShowText(run, glyphDelayMilliseconds);
+            return null;
+        }
+
+        Captured.Add((run.SourceOffset, run.Text));
+        _locator.Text(run.SourceOffset, run.Text);
+        int delay = System.Math.Max(0, glyphDelayMilliseconds);
+        int revealGlyphCount = System.Math.Max(
+            0, System.Math.Min(
+                result.GlyphCount,
+                presentation.PublishableGlyphCount - result.FirstGlyphIndex));
+        var state = new LiveTextState
+        {
+            Run = run,
+            StartedMs = _clock.NowMs,
+            GlyphDelayMilliseconds = delay,
+            RetainedPixels = true,
+            FirstGlyphIndex = result.FirstGlyphIndex,
+            GlyphCount = revealGlyphCount,
+        };
+        lock (_textLock)
+        {
+            _liveText.Add(state);
+            _activeLiveText = state;
+            _advText = run.Text;
+            _advTextX = run.Layout.CursorX;
+            _advTextY = run.Layout.CursorY;
+            _currentAdvLayout = run.Layout.Slot;
+            _advTextStartedMs = state.StartedMs;
+            _activeGlyphDelayMilliseconds = delay;
+            _advTextForceComplete = _messageSkipActive;
+            IsTextRevealing =
+                revealGlyphCount > 0 && delay > 0 && !_messageSkipActive;
+        }
+        _timeline?.State("text-reveal", new()
+        {
+            ["offset"] = $"0x{run.SourceOffset:x}",
+            ["layout"] = run.Layout.Slot,
+            ["x"] = run.Layout.OriginX + run.Layout.CursorX,
+            ["y"] = run.Layout.OriginY + run.Layout.CursorY,
+            ["glyphs"] = revealGlyphCount,
+            ["records"] = result.GlyphCount,
+            ["delay_ms"] = delay,
+            ["presentation"] = "retained-glyphs",
+        });
+
+        int initiallyVisible = IsTextRevealing ? 1 : revealGlyphCount;
+        presentation.PublishThrough(
+            gfx, checked(result.FirstGlyphIndex + initiallyVisible));
+        Interlocked.Exchange(ref _presentRequested, 1);
+        if (!IsTextRevealing)
+        {
+            _timeline?.State("running", new() { ["text_reveal_complete"] = true });
+            return result;
+        }
+
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            RequestSynchronizedPresentation();
+            while (IsTextRevealing && !_stopping)
+            {
+                int visible;
+                lock (_textLock)
+                {
+                    visible = _advTextForceComplete
+                        ? revealGlyphCount
+                        : (int)System.Math.Clamp(
+                            (_clock.NowMs - state.StartedMs) / delay + 1,
+                            0, revealGlyphCount);
+                    if (visible >= revealGlyphCount) IsTextRevealing = false;
+                }
+                int before = presentation.PublishedGlyphCount;
+                presentation.PublishThrough(
+                    gfx, checked(result.FirstGlyphIndex + visible));
+                if (presentation.PublishedGlyphCount != before)
+                {
+                    Interlocked.Exchange(ref _presentRequested, 1);
+                    RequestSynchronizedPresentation();
+                }
+                if (IsTextRevealing) _frameSignal.WaitOne(50);
+            }
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+        }
+        _timeline?.State("running", new() { ["text_reveal_complete"] = true });
+        return result;
+    }
+
+    private bool TryPrepareRetainedTextRun(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvLiveTextRun run,
+        out RetainedAdvTextLayoutPresentation presentation,
+        out AdvRetainedTextRunResult result)
+    {
+        presentation = null!;
+        result = default;
+        if (run.Layout.Width <= 0 || run.Layout.Height <= 0)
+        {
+            ReportSurfaceTextFallback(
+                $"ADV layout {run.Layout.Slot} has invalid dimensions " +
+                $"{run.Layout.Width}x{run.Layout.Height}.");
+            return false;
+        }
+
+        RgbaImage destination = ResolveSurfacePixels(binding.SourceSurfaceSlot)
+            ?? new RgbaImage(
+                run.Layout.Width,
+                run.Layout.Height,
+                new byte[checked(run.Layout.Width * run.Layout.Height * 4)]);
+        if (destination.Width != run.Layout.Width
+            || destination.Height != run.Layout.Height)
+        {
+            ReportSurfaceTextFallback(
+                $"ADV layout {run.Layout.Slot} surface {binding.SourceSurfaceSlot} is " +
+                $"{destination.Width}x{destination.Height}; expected " +
+                $"{run.Layout.Width}x{run.Layout.Height}.");
+            return false;
+        }
+
+        var updated = new RgbaImage(
+            destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
+        GlyphTextLayoutResult rendered;
+        try
+        {
+            IReadOnlyList<GlyphRasterRequest> requests =
+                ImmediateSurfaceTextRenderer.CreateRequests(run.Text, run.Style);
+            rendered = _retainedGlyphLayoutEngine!.Render(
+                updated,
+                new GlyphTextLayoutOptions(
+                    run.Layout.CursorX,
+                    run.Layout.CursorY,
+                    binding.ResetCursorX,
+                    run.Layout.Right,
+                    run.Layout.Bottom,
+                    WrapHorizontally: true,
+                    run.Style),
+                requests);
+        }
+        catch (Exception error) when (
+            error is ArgumentException
+            or InvalidOperationException
+            or PlatformNotSupportedException
+            or System.ComponentModel.Win32Exception)
+        {
+            ReportSurfaceTextFallback(
+                $"{error.GetType().Name}: {error.Message}");
+            return false;
+        }
+
+        lock (_textLock)
+        {
+            if (!_retainedTextLayouts.TryGetValue(
+                    binding.LayoutSlot, out presentation!))
+            {
+                presentation = new RetainedAdvTextLayoutPresentation(binding);
+                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
+            }
+            else if (presentation.Binding != binding)
+            {
+                ReportSurfaceTextFallback(
+                    $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
+                return false;
+            }
+            int first = presentation.Append(
+                rendered.Records, run.Layout.OriginX, run.Layout.OriginY);
+            result = new AdvRetainedTextRunResult(
+                binding.LayoutSlot,
+                first,
+                rendered.ConsumedGlyphs,
+                rendered.CursorX,
+                rendered.CursorY);
+        }
+
+        lock (_imageLock)
+            _surfaceImages[binding.SourceSurfaceSlot] = updated;
+        _slotDims[binding.SourceSurfaceSlot] = (updated.Width, updated.Height);
+        gfx.CreateSurface(binding.SourceSurfaceSlot);
+        return true;
+    }
+
     public void SetAdvTextCursor(int layoutSlot, int x, int y)
     {
         lock (_textLock)
@@ -450,17 +658,17 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_textLock)
         {
-            var snapshot = new LiveAdvTextSnapshot[_liveText.Count];
-            for (int i = 0; i < _liveText.Count; i++)
+            var snapshot = new List<LiveAdvTextSnapshot>(_liveText.Count);
+            foreach (LiveTextState state in _liveText)
             {
-                var state = _liveText[i];
+                if (state.RetainedPixels) continue;
                 bool revealing = ReferenceEquals(state, _activeLiveText) && IsTextRevealing;
                 int visible = !revealing || _advTextForceComplete || state.GlyphDelayMilliseconds == 0
                     ? state.Run.Text.Length
                     : (int)System.Math.Clamp(
                         (_clock.NowMs - state.StartedMs) / state.GlyphDelayMilliseconds + 1,
                         0, state.Run.Text.Length);
-                snapshot[i] = new LiveAdvTextSnapshot(state.Run, visible, revealing);
+                snapshot.Add(new LiveAdvTextSnapshot(state.Run, visible, revealing));
             }
             return snapshot;
         }
@@ -502,6 +710,7 @@ public sealed class GodotAdvHost : IHost
         {
             int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
             _historyText.Remove(slot);
+            if (_retainedTextLayouts.ContainsKey(slot)) return;
             _liveText.RemoveAll(state => state.Run.Layout.Slot == slot);
             if (_activeLiveText?.Run.Layout.Slot == slot)
             {
@@ -511,6 +720,47 @@ public sealed class GodotAdvHost : IHost
                 IsTextRevealing = false;
             }
         }
+    }
+
+    public void ResetRenderedAdvTextLayout(
+        GfxState gfx, AdvTextLayoutPresentationBinding binding)
+    {
+        lock (_textLock)
+        {
+            _historyText.Remove(binding.LayoutSlot);
+            _retainedTextLayouts.Remove(binding.LayoutSlot);
+            _liveText.RemoveAll(
+                state => state.Run.Layout.Slot == binding.LayoutSlot);
+            if (_activeLiveText?.Run.Layout.Slot == binding.LayoutSlot)
+            {
+                _activeLiveText = null;
+                _advText = "";
+                _advTextForceComplete = false;
+                IsTextRevealing = false;
+            }
+            if (_suspendedRetainedTextLayoutSlot == binding.LayoutSlot)
+                _suspendedRetainedTextLayoutSlot = 0;
+        }
+
+        if (_slotDims.TryGetValue(
+                binding.SourceSurfaceSlot, out var dimensions)
+            && dimensions.W > 0
+            && dimensions.H > 0)
+        {
+            lock (_imageLock)
+                _surfaceImages[binding.SourceSurfaceSlot] = new RgbaImage(
+                    dimensions.W,
+                    dimensions.H,
+                    new byte[checked(dimensions.W * dimensions.H * 4)]);
+        }
+        Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("adv-text-layout-reset", new()
+        {
+            ["layout"] = binding.LayoutSlot,
+            ["surface"] = binding.SourceSurfaceSlot,
+            ["first_handle"] = binding.FirstObjectHandle,
+            ["capacity"] = binding.ObjectCapacity,
+        });
     }
 
     public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
@@ -664,6 +914,17 @@ public sealed class GodotAdvHost : IHost
     {
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.Event("adv-text-layout-publish", new() { ["layout"] = layoutSlot });
+    }
+
+    public void PublishAdvTextLayout(
+        GfxState gfx, AdvTextLayoutPresentationBinding binding)
+    {
+        lock (_textLock)
+            if (_retainedTextLayouts.TryGetValue(
+                    binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation)
+                && presentation.Binding == binding)
+                presentation.Republish(gfx);
+        PublishAdvTextLayout(binding.LayoutSlot);
     }
 
     public AdvWaitIndicatorSnapshot? SnapshotAdvWaitIndicator()
@@ -892,6 +1153,35 @@ public sealed class GodotAdvHost : IHost
     {
         _advPagePresentationSuspended = suspended;
         _timeline?.State(suspended ? "adv-page-suspended" : "adv-page-restored", new());
+    }
+
+    public void SetAdvPagePresentationSuspended(GfxState gfx, bool suspended)
+    {
+        lock (_textLock)
+        {
+            if (suspended)
+            {
+                int slot = IsWaiting && _activeWaitLayout != 0
+                    ? _activeWaitLayout
+                    : _currentAdvLayout;
+                if (_retainedTextLayouts.TryGetValue(
+                        slot, out RetainedAdvTextLayoutPresentation? presentation))
+                {
+                    presentation.ErasePublished(gfx);
+                    _suspendedRetainedTextLayoutSlot = slot;
+                }
+            }
+            else if (_suspendedRetainedTextLayoutSlot != 0)
+            {
+                if (_retainedTextLayouts.TryGetValue(
+                        _suspendedRetainedTextLayoutSlot,
+                        out RetainedAdvTextLayoutPresentation? presentation))
+                    presentation.Republish(gfx);
+                _suspendedRetainedTextLayoutSlot = 0;
+            }
+        }
+        Interlocked.Exchange(ref _presentRequested, 1);
+        SetAdvPagePresentationSuspended(suspended);
     }
 
     public void InputCallbackCompleted(GfxState gfx)
@@ -1200,7 +1490,9 @@ public sealed class GodotAdvHost : IHost
             _surfaceResources.Clear();
             _historyText.Clear();
             _liveText.Clear();
+            _retainedTextLayouts.Clear();
             _activeLiveText = null;
+            _suspendedRetainedTextLayoutSlot = 0;
             _advText = "";
             _advTextX = 100;
             _advTextY = 47;
@@ -1839,6 +2131,13 @@ public sealed class GodotAdvHost : IHost
                 _surfaceText.Remove(slot);
                 _surfaceResources.Remove(slot);
             }
+            foreach (int layoutSlot in _retainedTextLayouts
+                         .Where(pair =>
+                             pair.Value.Binding.SourceSurfaceSlot >= firstSlot
+                             && pair.Value.Binding.SourceSurfaceSlot < end)
+                         .Select(pair => pair.Key)
+                         .ToArray())
+                _retainedTextLayouts.Remove(layoutSlot);
         }
         foreach (MovieSurfaceBinding binding in stoppedMovies)
         {

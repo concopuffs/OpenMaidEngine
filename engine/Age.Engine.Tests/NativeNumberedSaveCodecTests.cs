@@ -116,7 +116,7 @@ public class NativeNumberedSaveCodecTests
             new AdvTextLayoutSnapshot(3, 320, 90, 20, 400, 0, 0, 300, 80),
             liveHistory.GetLayoutSnapshot(3));
         Assert.Equal(
-            new AdvTextLayoutPresentationBinding(3, 0x17, 0x2000, 500, 0x1234),
+            new AdvTextLayoutPresentationBinding(3, 0x17, 0x2000, 500, 0x1234, 45, 42),
             liveHistory.GetPresentationBinding(3));
     }
 
