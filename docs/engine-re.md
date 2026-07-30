@@ -2763,6 +2763,14 @@ record with `gfx_object_bind_draw`. Native SC0000 records `ctx+0x14e9c = 50 ms`:
 at `0x834`, then publishes them one at a time before reaching wait `0x83c`. A click during reveal completes
 the remaining records and is consumed; the next click releases the stable wait.
 
+The record layout is `{publication-chain flag, x, y, width, height}` as five dwords. The publisher binds
+handle `layout+0x68 + reveal_index` from source surface `layout_slot+0x14`, uses `(x,y,width,height)` as
+the source rectangle, and places it at `(layout_origin_x+x, layout_origin_y+y)`. A set first dword makes the
+service publish the following record in the same tick; otherwise the configured glyph delay controls the
+next publication. This gives the port a direct path to ordinary `GfxState` objects: rasterize the complete
+layout surface first, then materialize these exact bounded records in handle order rather than adding a
+second overlay compositor.
+
 The port retains the SC0000-visible contract without exposing thousands of individual host glyph objects:
 surface strings remain associated with blank surface slots for later retained-object binding, while ADV
 lines retain cursor/origin, start time, visible-glyph count, and completion state. The compositor renders

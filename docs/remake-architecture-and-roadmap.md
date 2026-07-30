@@ -522,14 +522,17 @@ requirements.
 - Enhancements the VM unlocks: higher/wide resolution, faster text, QoL, save-anywhere, new-content
   mods. Modding docs + tools. Save/UX polish.
 
-#### Deferred backlog — AGE-exact glyph-mask text renderer
+#### Planned polish slice — AGE-exact retained glyph-mask text renderer
 
-**Scheduling:** defer this effort until the natural gameplay spine, first dungeon loop, and combat/system
-presentation are settled. The current Godot `Label` backend is readable, respects the script-requested
-Mincho/Gothic family when available, and matches SC0000's placement and effective line width. Its remaining
-weight, hinting, and outline-pixel differences do not block gameplay work. Resume this backlog early only if
-the approximation causes a legibility, layout, input, or gameplay-presentation defect rather than a cosmetic
-native-parity difference.
+**Scheduling (2026-07-30):** resume this as the next bounded presentation-polish subsystem, while still
+allowing urgent playthrough blockers to preempt it. The original deferral gate has been met: the natural
+gameplay spine and first-dungeon loop are playable, numbered save/load is provisionally accepted, the shipped
+corpus has no remaining decoded effectful-opcode gaps, and representative system/menu presentation is live.
+More importantly, the detached `Label` representation now causes behavioral defects rather than only
+cosmetic native-parity differences: labels sit above the complete retained canvas, surface-drawn text does
+not inherit its object's alpha/tint, and modal/publication paths need explicit visibility and replacement
+exceptions. The current backend remains the migration fallback, not a target for further screenshot-driven
+font tuning.
 
 **Behavioral source:** implement the native contract decoded in `docs/engine-re.md`; screenshots are
 integration/regression evidence, not tuning inputs. AGE selects an exact `LOGFONTA` into a
@@ -557,17 +560,66 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    through one cached glyph service. Retain the existing `Label` path as a temporary portable fallback until
    that integration is complete, then remove synthetic embolden/glyph-spacing constants from the exact path.
 
+**Execution sequence:**
+
+1. **Close the retained-record contract and pin baselines.** Before changing presentation, record the
+   current semantic coordinates and native-backed checks for SC0000 voiced/unvoiced pages, STUDY/MAMES,
+   HISTORY, BUNKI, and save/load restoration. Confirm the remaining implementation-sensitive native details:
+   overflow/kinsoku behavior, object-range exhaustion, layout reset/republication, and restoration of live
+   layout surfaces. The known 20-byte glyph record is `{publication-chain flag, x, y, width, height}`;
+   publication binds `layout_first_handle + reveal_index` from surface `layout_slot + 0x14`, using `(x,y,w,h)`
+   as the source rectangle and `layout_origin + (x,y)` as the destination.
+2. **Land the backend-neutral mask and compositor core.** Add request/result records and an
+   `IGlyphMaskRasterizer`-style seam outside the VM. Keep CP932 byte identity available for native-compatible
+   requests while permitting an explicit Unicode-capable portable policy for mods. Implement AGE's coverage
+   conversion, modes 0–3, clipping, alpha/RGB integer blend, metrics, wrapping, final-cursor result, and
+   bounded font/glyph caches in managed code. Synthetic masks, not OS fonts, are the unit-test oracle.
+3. **Add the independent Windows GDI reference backend.** Keep the P/Invoke adapter outside the
+   platform-neutral `Age.Engine` project so the VM continues to call no OS APIs. Reproduce the decoded display
+   IC, LOGFONT, measurement, and `GGO_GRAY4_BITMAP` request, and compare masks/`GLYPHMETRICS`/advances directly
+   on Windows. Backend selection must be explicit and diagnostic; an unavailable exact backend falls back
+   rather than silently claiming parity.
+4. **Move immediate surface strings first.** Make ops `0x204`/`0x205` rasterize directly into the numbered
+   RGBA surface instead of appending `SurfaceTextDraw` metadata. Remove the separate surface-label projection
+   only after GPU and software paths prove that ordinary handle order, object alpha/tint, affine transforms,
+   source clipping, offscreen `0x222` captures, fills/copies, and backbuffer preservation all consume the same
+   pixels. This is the smallest integration slice and directly fixes the reported surface-fade defect.
+5. **Materialize live ADV glyphs as ordinary retained objects.** Extend the transient layout-presentation
+   binding with its source surface, first handle, and capacity without changing the persisted History record
+   ABI. Build the complete line before reveal, update the canonical live cursor from measured metrics, then
+   bind one normal `GfxState` object per revealed record. Click/Skip publishes the remaining records and keeps
+   the existing consumed-click boundary. Layout reset erases its range and clears its surface; partial
+   `0x1f7` erases work per handle naturally; `0x20a` republishes from retained records. Consecutive
+   literal/dynamic runs advance by returned metrics rather than relying on Label concatenation.
+6. **Migrate History and the ADV wait indicator through the same retained path.** Op `0x1d1` rasterizes and
+   binds into its target layout instead of creating a layout-keyed Label. Bind the configured wait atlas at
+   the op-`0x212` handle so it follows native z-order and source-cell animation. Once SC0000, HISTORY,
+   STUDY/MAMES, HIDEWIN, and BUNKI pass, delete the game-text Label pools and the modal/raw-callback visibility
+   exceptions whose only purpose was compensating for detached overlays.
+7. **Complete and select the portable backend.** Spike the smallest maintainable way to obtain portable
+   font masks/metrics (Godot/TextServer offscreen extraction versus a bounded FreeType-compatible adapter)
+   before choosing a dependency. Define face substitution and raster policy as profile/configuration data,
+   keep its output explicitly non-identical to GDI, and run the same layout/compositor tests. Retain a
+   development-only backend switch through acceptance; remove the old Label fallback only when both exact
+   Windows and portable startup/legibility gates pass.
+
 **Acceptance gates:**
 
 - Fixed synthetic-mask tests byte-match AGE's decoded 16-/32-bit compositor, including overlapping mode-3
   neighbors, clipping, alpha, and RGB integer rounding.
 - On Windows, representative CP932 glyph masks, `GLYPHMETRICS`, and advances match a direct invocation of
   the decoded GDI request; tests compare returned data, not screenshot histograms.
-- SC0000 and menu/history checks retain current placement, wrapping, line advance, reveal timing, colors,
-  effects, and retained-object lifetime after the backend swap.
+- Surface-string tests prove text is occluded by later handles and inherits the bound object's alpha, tint,
+  affine transform, source clipping, offscreen capture, and transition behavior in both render backends.
+- Retained-layout tests prove per-glyph handle order, capacity bounds, partial/full erase, reset/republication,
+  final cursor, reveal/Skip click consumption, and save/load reconstruction without Label visibility shims.
+- SC0000, STUDY/MAMES, HISTORY, HIDEWIN, BUNKI, and save/load checks retain placement, wrapping, line advance,
+  reveal timing, colors, effects, publication behavior, and native-backed lifetime after the backend swap.
 - The portable backend starts without Windows fonts or GDI, reports/uses its selected substitution policy,
   and passes layout/legibility tests without being labeled pixel-identical to native AGE.
-- Glyph/font caches remain bounded and reveal-time rendering does not introduce visible frame stalls.
+- Glyph/font caches and retained node/surface pools remain bounded. A complete line is rasterized once before
+  reveal, so revealing another glyph does not rerasterize or upload the whole text surface and introduces no
+  visible frame stalls.
 
 ---
 
