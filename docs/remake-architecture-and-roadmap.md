@@ -591,11 +591,16 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    synthetic-mask tests, independent of OS fonts, pin coverage rounding, bearings/clipping, mode-1 displacement,
    mode-2 quarter coverage, mode-3 sampling/overlap, wrapping, punctuation, vertical overflow, cursor results,
    and cache eviction.
-3. **Add the independent Windows GDI reference backend.** Keep the P/Invoke adapter outside the
-   platform-neutral `Age.Engine` project so the VM continues to call no OS APIs. Reproduce the decoded display
-   IC, LOGFONT, measurement, and `GGO_GRAY4_BITMAP` request, and compare masks/`GLYPHMETRICS`/advances directly
-   on Windows. Backend selection must be explicit and diagnostic; an unavailable exact backend falls back
-   rather than silently claiming parity.
+3. **Add the independent Windows GDI reference backend.** Completed 2026-07-30 as the separate
+   `Age.Engine.Text.Windows` library; the VM and platform-neutral `Age.Engine` still call no OS APIs.
+   `WindowsGdiGlyphMaskRasterizer` owns a `CreateICA("DISPLAY")` information context, bounded/safely disposed
+   `CreateFontIndirectA` handles, CP932 `GetTextExtentPoint32A`, identity `MAT2`, and
+   `GetGlyphOutlineA(GGO_GRAY4_BITMAP)`. It accepts only explicit native-CP932 requests and reports backend id,
+   policy, exactness, and call-chain detail through `GlyphRasterizerBackendInfo`. Availability requires Windows
+   system ACP 932; another OS/ACP reports a diagnostic reason instead of silently claiming parity. Three
+   representative regular/bold Mincho and bold Gothic requests byte-match an independent Unicode GDI oracle
+   for coverage, stride, `GLYPHMETRICS`, extent, and advance. This reference backend remains opt-in and is not
+   yet connected to live presentation; the existing Label path therefore remains the current fallback.
 4. **Move immediate surface strings first.** Make ops `0x204`/`0x205` rasterize directly into the numbered
    RGBA surface instead of appending `SurfaceTextDraw` metadata. Remove the separate surface-label projection
    only after GPU and software paths prove that ordinary handle order, object alpha/tint, affine transforms,

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Cli", "Age.Cli\Age.Cli.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Tests", "Age.Engine.Tests\Age.Engine.Tests.csproj", "{2ED171C8-DA87-40FD-A6FB-3B3F6501029F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Text.Windows", "Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj", "{74F3B4B8-5F8D-45F4-AA6B-7C2C1A54CB90}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{2ED171C8-DA87-40FD-A6FB-3B3F6501029F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2ED171C8-DA87-40FD-A6FB-3B3F6501029F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2ED171C8-DA87-40FD-A6FB-3B3F6501029F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74F3B4B8-5F8D-45F4-AA6B-7C2C1A54CB90}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74F3B4B8-5F8D-45F4-AA6B-7C2C1A54CB90}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74F3B4B8-5F8D-45F4-AA6B-7C2C1A54CB90}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74F3B4B8-5F8D-45F4-AA6B-7C2C1A54CB90}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

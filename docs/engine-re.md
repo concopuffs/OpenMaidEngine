@@ -2985,6 +2985,21 @@ callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies th
 core is not yet connected to ops `0x204`/`0x205`, live ADV, History, or Godot, so the Label backend and
 visible behavior remain unchanged until the later integration steps.
 
+The independent Windows reference backend landed alongside, but outside, the neutral engine as
+`Age.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
+context and selects bounded, safely disposed `CreateFontIndirectA` objects carrying the requested negative
+height/width, weight, `DEFAULT_CHARSET`, and raw CP932 face bytes. Each request preserves the original one-
+or two-byte CP932 code for `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` and `GetTextExtentPoint32A`; returned masks
+flow through the same normalized `GlyphMask` contract without another pixel conversion.
+
+This exact ANSI reference requires Windows system ACP 932. `TryGetAvailability` reports the active-platform/
+code-page incompatibility and the constructor refuses to masquerade as exact when unavailable.
+`GlyphRasterizerBackendInfo` identifies the backend as `windows-gdi-gray4`, native-CP932, and pixel-exact.
+On the reference installation, three test requests—24px regular Mincho `あ`, 24px weight-700 Mincho `姫`,
+and 16px weight-700 Gothic `ア`—match an independently created Unicode GDI font/DC call byte-for-byte in
+coverage and exactly in black box, aligned stride, glyph origin, cell extent, and advance. The backend is
+not wired into Godot yet, so this gate validates mask provenance without changing visible rendering.
+
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
 The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`

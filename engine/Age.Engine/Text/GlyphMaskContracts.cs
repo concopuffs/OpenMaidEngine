@@ -110,3 +110,15 @@ public interface IGlyphMaskRasterizer
 {
     GlyphMask Rasterize(GlyphRasterRequest request);
 }
+
+public sealed record GlyphRasterizerBackendInfo(
+    string Id,
+    string DisplayName,
+    GlyphRasterPolicy Policy,
+    bool NativePixelExact,
+    string Detail);
+
+public interface IIdentifiedGlyphMaskRasterizer : IGlyphMaskRasterizer
+{
+    GlyphRasterizerBackendInfo BackendInfo { get; }
+}

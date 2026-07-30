@@ -106,9 +106,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                       and resource facade
     │   ├── Age.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       text compositor/layout, and bounded font/glyph cache primitives
-    │   └── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
+    │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state
+    │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
+    │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows dependency manifest,
     │                                       and bootstrap/build scripts (outputs stay under disposable build/)
