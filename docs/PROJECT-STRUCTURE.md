@@ -118,7 +118,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
                                             plus the optional exact Windows text adapter), including the
-                                            TITLE-only F4 debug scene launcher
+                                            portable TextServer glyph adapter, per-profile font-substitution
+                                            configuration, and TITLE-only F4 debug scene launcher
 ```
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by normal Godot runs and map runtime ADV

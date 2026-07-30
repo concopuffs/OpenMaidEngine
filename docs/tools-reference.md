@@ -346,6 +346,11 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   are current-working-directory-relative. This is the stable handoff for future game-profile launchers.
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
+- `--text-backend auto|gdi|portable` — select gameplay glyph-mask rasterization. `auto` (default) uses the
+  exact GDI gray-4 backend only when the Windows ACP-932 gate passes, otherwise the explicitly non-identical
+  Godot TextServer Unicode policy. `gdi` fails startup when exact selection is unavailable; `portable`
+  never initializes GDI and is the cross-platform acceptance/debug mode. The selected backend and portable
+  policy id are printed at startup.
 - `--window-width <pixels>` / `--window-height <pixels>` — override only the physical windowed client
   dimensions; each omitted dimension defaults independently to the SYS4INI logical canvas. Godot keeps
   that logical canvas and aspect-preserving letterboxing, so these options do not change VM coordinates,

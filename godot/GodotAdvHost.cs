@@ -65,21 +65,16 @@ public sealed class GodotAdvHost : IHost
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
     private volatile bool _stopping;
     private readonly object _textLock = new();
-    private readonly Dictionary<int, List<SurfaceTextDraw>> _surfaceText = new();
-    private readonly CachedGlyphMaskRasterizer? _surfaceTextMaskCache;
-    private readonly ImmediateSurfaceTextRenderer? _surfaceTextPixelRenderer;
-    private readonly RetainedGlyphLayoutEngine? _retainedGlyphLayoutEngine;
-    private readonly GlyphRasterizerBackendInfo? _surfaceTextBackendInfo;
-    private string _surfaceTextFallbackReason;
-    private bool _surfaceTextFallbackWarningReported;
-    private readonly Dictionary<int, AdvTextHistoryRenderBatch> _historyText = new();
+    private readonly CachedGlyphMaskRasterizer _surfaceTextMaskCache;
+    private readonly ImmediateSurfaceTextRenderer _surfaceTextPixelRenderer;
+    private readonly RetainedGlyphLayoutEngine _retainedGlyphLayoutEngine;
+    private readonly GlyphRasterizerBackendInfo _surfaceTextBackendInfo;
     private readonly HashSet<int> _retainedHistoryLayouts = new();
     private sealed class LiveTextState
     {
         public required AdvLiveTextRun Run;
         public required long StartedMs;
         public required int GlyphDelayMilliseconds;
-        public bool RetainedPixels;
         public int FirstGlyphIndex;
         public int GlyphCount;
     }
@@ -137,10 +132,10 @@ public sealed class GodotAdvHost : IHost
 
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
+                        IGlyphMaskRasterizer surfaceTextRasterizer,
                         GodotTimelineLog? timeline = null,
                         bool synchronizeExplicitPresentation = true,
-                        IGlyphMaskRasterizer? surfaceTextRasterizer = null,
-                        string? surfaceTextFallbackReason = null)
+                        int surfaceTextMaskCacheCapacity = 2048)
     {
         _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
@@ -148,35 +143,30 @@ public sealed class GodotAdvHost : IHost
         _screenHeight = logicalCanvas.Height;
         _slotDims[0] = (_screenWidth, _screenHeight);
         _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
+        ArgumentNullException.ThrowIfNull(surfaceTextRasterizer);
         _surfaceTextBackendInfo =
-            (surfaceTextRasterizer as IIdentifiedGlyphMaskRasterizer)?.BackendInfo;
-        if (surfaceTextRasterizer != null)
-        {
-            _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(
-                surfaceTextRasterizer, capacity: 2048);
-            _surfaceTextPixelRenderer =
-                new ImmediateSurfaceTextRenderer(_surfaceTextMaskCache);
-            _retainedGlyphLayoutEngine =
-                new RetainedGlyphLayoutEngine(_surfaceTextMaskCache);
-        }
-        _surfaceTextFallbackReason = surfaceTextFallbackReason
-            ?? (surfaceTextRasterizer == null
-                ? "No glyph-mask rasterizer was selected."
-                : "");
+            (surfaceTextRasterizer as IIdentifiedGlyphMaskRasterizer)?.BackendInfo
+            ?? throw new ArgumentException(
+                "Gameplay glyph rasterizers must identify their policy.",
+                nameof(surfaceTextRasterizer));
+        _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(
+            surfaceTextRasterizer, capacity: surfaceTextMaskCacheCapacity);
+        _surfaceTextPixelRenderer =
+            new ImmediateSurfaceTextRenderer(
+                _surfaceTextMaskCache, _surfaceTextBackendInfo.Policy);
+        _retainedGlyphLayoutEngine =
+            new RetainedGlyphLayoutEngine(_surfaceTextMaskCache);
     }
 
     public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
-    public bool UsesSurfaceTextPixels => _surfaceTextPixelRenderer != null;
-    public GlyphRasterizerBackendInfo? SurfaceTextBackendInfo => _surfaceTextBackendInfo;
-    public string SurfaceTextFallbackReason => _surfaceTextFallbackReason;
+    public bool UsesSurfaceTextPixels => true;
+    public GlyphRasterizerBackendInfo SurfaceTextBackendInfo => _surfaceTextBackendInfo;
     public (int Count, int Capacity, long Hits, long Misses) SurfaceTextMaskCacheStats
-        => _surfaceTextMaskCache == null
-            ? (0, 0, 0, 0)
-            : (
-                _surfaceTextMaskCache.Count,
-                _surfaceTextMaskCache.Capacity,
-                _surfaceTextMaskCache.Hits,
-                _surfaceTextMaskCache.Misses);
+        => (
+            _surfaceTextMaskCache.Count,
+            _surfaceTextMaskCache.Capacity,
+            _surfaceTextMaskCache.Hits,
+            _surfaceTextMaskCache.Misses);
 
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
 
@@ -271,79 +261,12 @@ public sealed class GodotAdvHost : IHost
     }
 
     public void ShowText(int offset, string text)
-    {
-        AdvTextLayoutSnapshot layout;
-        int delay;
-        lock (_textLock)
-        {
-            layout = new AdvTextLayoutSnapshot(
-                _currentAdvLayout, _screenWidth, _screenHeight, 0, 0,
-                _advTextX, _advTextY, _screenWidth, _screenHeight);
-            delay = _messageGlyphDelayMilliseconds;
-        }
-        ShowText(new AdvLiveTextRun(
-            offset, layout, AdvTextStyle.Default, text, Array.Empty<string>()), delay);
-    }
+        => throw new NotSupportedException(
+            "Godot gameplay text requires a retained layout binding.");
 
     public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
-    {
-        Captured.Add((run.SourceOffset, run.Text));
-        _locator.Text(run.SourceOffset, run.Text);
-        int delay = System.Math.Max(0, glyphDelayMilliseconds);
-        var state = new LiveTextState
-        {
-            Run = run,
-            StartedMs = _clock.NowMs,
-            GlyphDelayMilliseconds = delay,
-        };
-        lock (_textLock)
-        {
-            _liveText.Add(state);
-            _activeLiveText = state;
-            _advText = run.Text;
-            _advTextX = run.Layout.CursorX;
-            _advTextY = run.Layout.CursorY;
-            _currentAdvLayout = run.Layout.Slot;
-            _advTextStartedMs = state.StartedMs;
-            _activeGlyphDelayMilliseconds = delay;
-            _advTextForceComplete = _messageSkipActive;
-            IsTextRevealing = run.Text.Length > 0 && delay > 0 && !_messageSkipActive;
-        }
-        _timeline?.State("text-reveal", new()
-        {
-            ["offset"] = $"0x{run.SourceOffset:x}",
-            ["layout"] = run.Layout.Slot,
-            ["x"] = run.Layout.OriginX + run.Layout.CursorX,
-            ["y"] = run.Layout.OriginY + run.Layout.CursorY,
-            ["glyphs"] = run.Text.Length, ["delay_ms"] = delay,
-        });
-        if (!IsTextRevealing)
-        {
-            Interlocked.Exchange(ref _presentRequested, 1);
-            _timeline?.State("running", new() { ["text_reveal_complete"] = true });
-            return;
-        }
-        bool scriptSuspended = SuspendScriptForPresentation();
-        try
-        {
-            RequestSynchronizedPresentation();
-            while (IsTextRevealing && !_stopping)
-            {
-                lock (_textLock)
-                {
-                    if (_advTextForceComplete
-                        || _clock.NowMs - _advTextStartedMs >= run.Text.Length * (long)delay)
-                        IsTextRevealing = false;
-                }
-                if (IsTextRevealing) _frameSignal.WaitOne(50);
-            }
-        }
-        finally
-        {
-            ResumeScriptAfterPresentation(scriptSuspended);
-        }
-        _timeline?.State("running", new() { ["text_reveal_complete"] = true });
-    }
+        => throw new NotSupportedException(
+            "Godot gameplay text requires a retained layout binding.");
 
     public AdvRetainedTextRunResult? ShowText(
         GfxState gfx,
@@ -351,18 +274,15 @@ public sealed class GodotAdvHost : IHost
         AdvLiveTextRun run,
         int glyphDelayMilliseconds)
     {
-        if (_retainedGlyphLayoutEngine == null
-            || binding.LayoutSlot != run.Layout.Slot
+        if (binding.LayoutSlot != run.Layout.Slot
             || binding.FirstObjectHandle < 0
-            || binding.ObjectCapacity <= 0
-            || !TryPrepareRetainedTextRun(
-                gfx, binding, run,
-                out RetainedAdvTextLayoutPresentation? presentation,
-                out AdvRetainedTextRunResult result))
-        {
-            ShowText(run, glyphDelayMilliseconds);
-            return null;
-        }
+            || binding.ObjectCapacity <= 0)
+            throw new InvalidOperationException(
+                $"ADV layout {run.Layout.Slot} has no retained presentation binding.");
+        PrepareRetainedTextRun(
+            gfx, binding, run,
+            out RetainedAdvTextLayoutPresentation? presentation,
+            out AdvRetainedTextRunResult result);
 
         Captured.Add((run.SourceOffset, run.Text));
         _locator.Text(run.SourceOffset, run.Text);
@@ -376,7 +296,6 @@ public sealed class GodotAdvHost : IHost
             Run = run,
             StartedMs = _clock.NowMs,
             GlyphDelayMilliseconds = delay,
-            RetainedPixels = true,
             FirstGlyphIndex = result.FirstGlyphIndex,
             GlyphCount = revealGlyphCount,
         };
@@ -451,7 +370,7 @@ public sealed class GodotAdvHost : IHost
         return result;
     }
 
-    private bool TryPrepareRetainedTextRun(
+    private void PrepareRetainedTextRun(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
         AdvLiveTextRun run,
@@ -461,12 +380,9 @@ public sealed class GodotAdvHost : IHost
         presentation = null!;
         result = default;
         if (run.Layout.Width <= 0 || run.Layout.Height <= 0)
-        {
-            ReportSurfaceTextFallback(
+            throw new InvalidOperationException(
                 $"ADV layout {run.Layout.Slot} has invalid dimensions " +
                 $"{run.Layout.Width}x{run.Layout.Height}.");
-            return false;
-        }
 
         RgbaImage destination = ResolveSurfacePixels(binding.SourceSurfaceSlot)
             ?? new RgbaImage(
@@ -475,43 +391,27 @@ public sealed class GodotAdvHost : IHost
                 new byte[checked(run.Layout.Width * run.Layout.Height * 4)]);
         if (destination.Width != run.Layout.Width
             || destination.Height != run.Layout.Height)
-        {
-            ReportSurfaceTextFallback(
+            throw new InvalidOperationException(
                 $"ADV layout {run.Layout.Slot} surface {binding.SourceSurfaceSlot} is " +
                 $"{destination.Width}x{destination.Height}; expected " +
                 $"{run.Layout.Width}x{run.Layout.Height}.");
-            return false;
-        }
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        GlyphTextLayoutResult rendered;
-        try
-        {
-            IReadOnlyList<GlyphRasterRequest> requests =
-                ImmediateSurfaceTextRenderer.CreateRequests(run.Text, run.Style);
-            rendered = _retainedGlyphLayoutEngine!.Render(
-                updated,
-                new GlyphTextLayoutOptions(
-                    run.Layout.CursorX,
-                    run.Layout.CursorY,
-                    binding.ResetCursorX,
-                    run.Layout.Right,
-                    run.Layout.Bottom,
-                    WrapHorizontally: true,
-                    run.Style),
-                requests);
-        }
-        catch (Exception error) when (
-            error is ArgumentException
-            or InvalidOperationException
-            or PlatformNotSupportedException
-            or System.ComponentModel.Win32Exception)
-        {
-            ReportSurfaceTextFallback(
-                $"{error.GetType().Name}: {error.Message}");
-            return false;
-        }
+        IReadOnlyList<GlyphRasterRequest> requests =
+            ImmediateSurfaceTextRenderer.CreateRequests(
+                run.Text, run.Style, _surfaceTextBackendInfo.Policy);
+        GlyphTextLayoutResult rendered = _retainedGlyphLayoutEngine.Render(
+            updated,
+            new GlyphTextLayoutOptions(
+                run.Layout.CursorX,
+                run.Layout.CursorY,
+                binding.ResetCursorX,
+                run.Layout.Right,
+                run.Layout.Bottom,
+                WrapHorizontally: true,
+                run.Style),
+            requests);
 
         lock (_textLock)
         {
@@ -522,11 +422,8 @@ public sealed class GodotAdvHost : IHost
                 _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
             }
             else if (presentation.Binding != binding)
-            {
-                ReportSurfaceTextFallback(
+                throw new InvalidOperationException(
                     $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
-                return false;
-            }
             int first = presentation.Append(
                 rendered.Records, run.Layout.OriginX, run.Layout.OriginY);
             result = new AdvRetainedTextRunResult(
@@ -541,7 +438,6 @@ public sealed class GodotAdvHost : IHost
             _surfaceImages[binding.SourceSurfaceSlot] = updated;
         _slotDims[binding.SourceSurfaceSlot] = (updated.Width, updated.Height);
         gfx.CreateSurface(binding.SourceSurfaceSlot);
-        return true;
     }
 
     public void SetAdvTextCursor(int layoutSlot, int x, int y)
@@ -560,46 +456,19 @@ public sealed class GodotAdvHost : IHost
 
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
     {
-        if (_surfaceTextPixelRenderer != null
-            && TryDrawStringPixels(surfaceSlot, x, y, text, style))
-        {
-            lock (_textLock)
-                if (_surfaceText.TryGetValue(surfaceSlot, out var fallbackDraws))
-                {
-                    fallbackDraws.RemoveAll(draw => draw.X == x && draw.Y == y);
-                    if (fallbackDraws.Count == 0) _surfaceText.Remove(surfaceSlot);
-                }
-            _timeline?.Event("draw-string", new()
-            {
-                ["surface"] = surfaceSlot,
-                ["x"] = x,
-                ["y"] = y,
-                ["text"] = text,
-                ["presentation"] = "rgba-glyph-mask",
-                ["backend"] = _surfaceTextBackendInfo?.Id ?? "unidentified",
-            });
-            return;
-        }
-
-        lock (_textLock)
-        {
-            if (!_surfaceText.TryGetValue(surfaceSlot, out var draws))
-                _surfaceText[surfaceSlot] = draws = new List<SurfaceTextDraw>();
-            draws.RemoveAll(draw => draw.X == x && draw.Y == y);
-            draws.Add(new SurfaceTextDraw(x, y, text, style));
-        }
+        DrawStringPixels(surfaceSlot, x, y, text, style);
         _timeline?.Event("draw-string", new()
         {
             ["surface"] = surfaceSlot,
             ["x"] = x,
             ["y"] = y,
             ["text"] = text,
-            ["presentation"] = "label-fallback",
-            ["reason"] = _surfaceTextFallbackReason,
+            ["presentation"] = "rgba-glyph-mask",
+            ["backend"] = _surfaceTextBackendInfo.Id,
         });
     }
 
-    private bool TryDrawStringPixels(
+    private void DrawStringPixels(
         int surfaceSlot, int x, int y, string text, AdvTextStyle style)
     {
         RgbaImage? destination = ResolveSurfacePixels(surfaceSlot);
@@ -611,40 +480,15 @@ public sealed class GodotAdvHost : IHost
                 dimensions.W, dimensions.H,
                 new byte[checked(dimensions.W * dimensions.H * 4)]);
         if (destination == null || destination.Width <= 0 || destination.Height <= 0)
-        {
-            ReportSurfaceTextFallback(
+            throw new InvalidOperationException(
                 $"Surface {surfaceSlot} has no rasterizable pixel allocation.");
-            return false;
-        }
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        try
-        {
-            _surfaceTextPixelRenderer!.Render(updated, x, y, text, style);
-        }
-        catch (Exception error) when (
-            error is ArgumentException
-            or InvalidOperationException
-            or PlatformNotSupportedException
-            or System.ComponentModel.Win32Exception)
-        {
-            ReportSurfaceTextFallback(
-                $"{error.GetType().Name}: {error.Message}");
-            return false;
-        }
+        _surfaceTextPixelRenderer.Render(updated, x, y, text, style);
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-        return true;
-    }
-
-    private void ReportSurfaceTextFallback(string reason)
-    {
-        _surfaceTextFallbackReason = reason;
-        if (_surfaceTextFallbackWarningReported) return;
-        _surfaceTextFallbackWarningReported = true;
-        ReportWarning($"surface text fell back to Label metadata: {reason}");
     }
 
     public (string Text, int X, int Y, int VisibleGlyphs, bool Revealing) SnapshotAdvText()
@@ -660,30 +504,10 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
-    public IReadOnlyList<LiveAdvTextSnapshot> SnapshotLiveAdvText()
-    {
-        lock (_textLock)
-        {
-            var snapshot = new List<LiveAdvTextSnapshot>(_liveText.Count);
-            foreach (LiveTextState state in _liveText)
-            {
-                if (state.RetainedPixels) continue;
-                bool revealing = ReferenceEquals(state, _activeLiveText) && IsTextRevealing;
-                int visible = !revealing || _advTextForceComplete || state.GlyphDelayMilliseconds == 0
-                    ? state.Run.Text.Length
-                    : (int)System.Math.Clamp(
-                        (_clock.NowMs - state.StartedMs) / state.GlyphDelayMilliseconds + 1,
-                        0, state.Run.Text.Length);
-                snapshot.Add(new LiveAdvTextSnapshot(state.Run, visible, revealing));
-            }
-            return snapshot;
-        }
-    }
-
     /// <summary>
-    /// Layout that owns the ordinary ADV overlay. Nested callback scripts such as HISTORY can select and
-    /// mutate other layouts while the parent wait remains parked; those transient selections must not move
-    /// the parent page when its overlay becomes visible again.
+    /// Layout that owns the ordinary retained ADV page. Nested callback scripts such as HISTORY can select
+    /// and mutate other layouts while the parent wait remains parked; those transient selections must not
+    /// move the parent page when its retained range is restored.
     /// </summary>
     public int AdvPageLayoutSlot
     {
@@ -694,28 +518,11 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
-    public IReadOnlyList<SurfaceTextDraw> SnapshotSurfaceText(int surfaceSlot)
-    {
-        lock (_textLock)
-            return _surfaceText.TryGetValue(surfaceSlot, out var draws) ? draws.ToArray() : Array.Empty<SurfaceTextDraw>();
-    }
-
-    public void SnapshotSurfaceText(int surfaceSlot, List<SurfaceTextDraw> snapshot)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        lock (_textLock)
-        {
-            snapshot.Clear();
-            if (_surfaceText.TryGetValue(surfaceSlot, out var draws)) snapshot.AddRange(draws);
-        }
-    }
-
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
         lock (_textLock)
         {
             int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-            _historyText.Remove(slot);
             if (_retainedTextLayouts.ContainsKey(slot)) return;
             _liveText.RemoveAll(state => state.Run.Layout.Slot == slot);
             if (_activeLiveText?.Run.Layout.Slot == slot)
@@ -733,7 +540,6 @@ public sealed class GodotAdvHost : IHost
     {
         lock (_textLock)
         {
-            _historyText.Remove(binding.LayoutSlot);
             _retainedHistoryLayouts.Remove(binding.LayoutSlot);
             _retainedTextLayouts.Remove(binding.LayoutSlot);
             _liveText.RemoveAll(
@@ -770,18 +576,6 @@ public sealed class GodotAdvHost : IHost
         });
     }
 
-    public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
-    {
-        lock (_textLock) _historyText[batch.LayoutSlot] = batch;
-        _timeline?.Event("history-render", new()
-        {
-            ["layout"] = batch.LayoutSlot, ["record"] = batch.FirstRecordIndex,
-            ["x"] = batch.Layout.OriginX + batch.Layout.CursorX,
-            ["y"] = batch.Layout.OriginY + batch.Layout.CursorY,
-            ["text"] = batch.Text,
-        });
-    }
-
     public bool RenderTextHistory(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
@@ -793,25 +587,21 @@ public sealed class GodotAdvHost : IHost
             batch.Style,
             batch.Text,
             Array.Empty<string>());
-        if (_retainedGlyphLayoutEngine == null
-            || binding.LayoutSlot != batch.LayoutSlot
+        if (binding.LayoutSlot != batch.LayoutSlot
             || binding.FirstObjectHandle < 0
-            || binding.ObjectCapacity <= 0
-            || !TryPrepareRetainedTextRun(
-                gfx, binding, run,
-                out RetainedAdvTextLayoutPresentation? presentation,
-                out AdvRetainedTextRunResult result))
-        {
-            RenderTextHistory(batch);
-            return false;
-        }
+            || binding.ObjectCapacity <= 0)
+            throw new InvalidOperationException(
+                $"History layout {batch.LayoutSlot} has no retained presentation binding.");
+        PrepareRetainedTextRun(
+            gfx, binding, run,
+            out RetainedAdvTextLayoutPresentation? presentation,
+            out AdvRetainedTextRunResult result);
 
         presentation.PublishThrough(
             gfx,
             checked(result.FirstGlyphIndex + result.GlyphCount));
         lock (_textLock)
         {
-            _historyText.Remove(batch.LayoutSlot);
             _retainedHistoryLayouts.Add(batch.LayoutSlot);
         }
         Interlocked.Exchange(ref _presentRequested, 1);
@@ -826,16 +616,6 @@ public sealed class GodotAdvHost : IHost
             ["presentation"] = "retained-glyphs",
         });
         return true;
-    }
-
-    public void EndTextHistoryPresentation()
-    {
-        lock (_textLock)
-        {
-            _historyText.Clear();
-            _retainedHistoryLayouts.Clear();
-        }
-        _timeline?.Event("history-presentation-end");
     }
 
     public void EndTextHistoryPresentation(GfxState gfx)
@@ -856,7 +636,6 @@ public sealed class GodotAdvHost : IHost
             foreach (int slot in _retainedHistoryLayouts)
                 _retainedTextLayouts.Remove(slot);
             _retainedHistoryLayouts.Clear();
-            _historyText.Clear();
         }
 
         foreach (RetainedAdvTextLayoutPresentation presentation in retained)
@@ -868,11 +647,6 @@ public sealed class GodotAdvHost : IHost
         {
             ["retained_layouts"] = retained.Length,
         });
-    }
-
-    public IReadOnlyList<AdvTextHistoryRenderBatch> SnapshotRenderedTextHistory()
-    {
-        lock (_textLock) return _historyText.Values.OrderBy(batch => batch.LayoutSlot).ToArray();
     }
 
     private void ClearAllocatedSurfacePixels(int surfaceSlot)
@@ -898,17 +672,6 @@ public sealed class GodotAdvHost : IHost
 
     public void FillSurfaceRect(SurfaceRectFill fill)
     {
-        lock (_textLock)
-        {
-            if (_surfaceText.TryGetValue(fill.SurfaceSlot, out var draws))
-            {
-                long right = (long)fill.X + System.Math.Max(0, fill.Width);
-                long bottom = (long)fill.Y + System.Math.Max(0, fill.Height);
-                draws.RemoveAll(draw => draw.X >= fill.X && draw.X < right
-                    && draw.Y >= fill.Y && draw.Y < bottom);
-            }
-        }
-
         RgbaImage? destination = ResolveSurfacePixels(fill.SurfaceSlot);
         if (destination == null && _slotDims.TryGetValue(fill.SurfaceSlot, out var dimensions)
             && dimensions.W >= 0 && dimensions.H >= 0)
@@ -1655,9 +1418,7 @@ public sealed class GodotAdvHost : IHost
         }
         lock (_textLock)
         {
-            _surfaceText.Clear();
             _surfaceResources.Clear();
-            _historyText.Clear();
             _retainedHistoryLayouts.Clear();
             _liveText.Clear();
             _retainedTextLayouts.Clear();
@@ -1792,7 +1553,6 @@ public sealed class GodotAdvHost : IHost
 
     public void CreateTexture(int slot, int width, int height)
     {
-        lock (_textLock) _surfaceText.Remove(slot);
         lock (_textLock) _surfaceResources.Remove(slot);
         int safeWidth = System.Math.Max(0, width);
         int safeHeight = System.Math.Max(0, height);
@@ -1817,7 +1577,6 @@ public sealed class GodotAdvHost : IHost
         }
         lock (_textLock)
         {
-            _surfaceText.Remove(slot);
             _surfaceResources[slot] = resourceId;
         }
         var asset = _res.ResolveTexture(resourceId);
@@ -1851,7 +1610,6 @@ public sealed class GodotAdvHost : IHost
         }
         lock (_textLock)
         {
-            _surfaceText.Remove(slot);
             _surfaceResources.Remove(slot);
             foreach (int layoutSlot in _retainedTextLayouts
                          .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
@@ -2152,7 +1910,6 @@ public sealed class GodotAdvHost : IHost
         }
         lock (_textLock)
         {
-            _surfaceText.Remove(slot);
             _surfaceResources.Remove(slot);
             foreach (int layoutSlot in _retainedTextLayouts
                          .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
@@ -2187,9 +1944,6 @@ public sealed class GodotAdvHost : IHost
         }
         else
         {
-            // For an offscreen target, discard separately retained text draws so its modeled pixel
-            // contents observe the native D3D clear as well.
-            lock (_textLock) _surfaceText.Remove(surfaceSlot);
             lock (_imageLock)
             {
                 if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
@@ -2235,8 +1989,6 @@ public sealed class GodotAdvHost : IHost
             });
 
         lock (_imageLock) _surfaceImages[targetSlot] = destination;
-        PublishSurfaceTextRangeToSurface(
-            gfx, visible, firstHandle, count, targetSlot, dimensions.W, dimensions.H);
         IReadOnlyList<RenderObject> retained = visible
             .Where(item => item.Handle >= firstHandle && item.Handle - firstHandle < count)
             .ToArray();
@@ -2249,52 +2001,6 @@ public sealed class GodotAdvHost : IHost
             ["objects"] = retained.Count,
             ["rendered"] = rendered,
         });
-    }
-
-    private void PublishSurfaceTextRangeToSurface(
-        GfxState gfx, IReadOnlyList<RenderObject> visible, long firstHandle, long count,
-        int targetSlot, int targetWidth, int targetHeight)
-    {
-        List<SurfaceTextDraw> projected;
-        lock (_textLock)
-            projected = _surfaceText.TryGetValue(targetSlot, out var retained)
-                ? new List<SurfaceTextDraw>(retained)
-                : new List<SurfaceTextDraw>();
-
-        foreach (RenderObject item in visible)
-        {
-            if (item.Handle < firstHandle || item.Handle - firstHandle >= count) continue;
-            var raw = gfx.TryGet(item.Handle);
-            if (raw == null) continue;
-            List<SurfaceTextDraw>? source;
-            lock (_textLock)
-                source = _surfaceText.TryGetValue(raw.SourceSlot, out var draws)
-                    ? new List<SurfaceTextDraw>(draws)
-                    : null;
-            if (source == null) continue;
-
-            Affine2D localToTarget =
-                Transform2DMath.Build(item.Transform, item.Rotation, item.ScaleCycle)
-                    .FromLocalOrigin(item.DstX, item.DstY);
-            if (item.RangeTransform is { } rangeTransform)
-                localToTarget = localToTarget.Then(rangeTransform);
-            foreach (SurfaceTextDraw draw in source)
-            {
-                if (draw.X < item.SrcX || draw.X >= item.SrcX + item.W ||
-                    draw.Y < item.SrcY || draw.Y >= item.SrcY + item.H) continue;
-                var position = localToTarget.Apply(draw.X - item.SrcX, draw.Y - item.SrcY);
-                int x = (int)System.Math.Round(position.X);
-                int y = (int)System.Math.Round(position.Y);
-                if (x < 0 || x >= targetWidth || y < 0 || y >= targetHeight) continue;
-                projected.Add(new SurfaceTextDraw(x, y, draw.Text, draw.Style));
-            }
-        }
-
-        lock (_textLock)
-        {
-            if (projected.Count == 0) _surfaceText.Remove(targetSlot);
-            else _surfaceText[targetSlot] = projected;
-        }
     }
 
     public void ReleaseSurfaceRange(int firstSlot, int count)
@@ -2316,7 +2022,6 @@ public sealed class GodotAdvHost : IHost
         {
             for (int slot = firstSlot; slot < end; slot++)
             {
-                _surfaceText.Remove(slot);
                 _surfaceResources.Remove(slot);
             }
             foreach (int layoutSlot in _retainedTextLayouts
@@ -2655,9 +2360,6 @@ public sealed class GodotAdvHost : IHost
     }
 }
 
-public readonly record struct SurfaceTextDraw(int X, int Y, string Text, AdvTextStyle Style);
-public readonly record struct LiveAdvTextSnapshot(
-    AdvLiveTextRun Run, int VisibleGlyphs, bool Revealing);
 public sealed record GodotHostDiagnosticSnapshot(
     string CurrentScene, bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
     bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,

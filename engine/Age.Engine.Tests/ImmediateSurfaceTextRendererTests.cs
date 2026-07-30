@@ -64,6 +64,30 @@ public class ImmediateSurfaceTextRendererTests
         Assert.All(destination.Pixels, value => Assert.Equal(0, value));
     }
 
+    [Fact]
+    public void PortableRequestsPreserveUnicodeOutsideCp932()
+    {
+        IReadOnlyList<GlyphRasterRequest> requests =
+            ImmediateSurfaceTextRenderer.CreateRequests(
+                "A😀",
+                Style(),
+                GlyphRasterPolicy.PortableUnicode);
+
+        Assert.Collection(
+            requests,
+            request =>
+            {
+                Assert.Equal(GlyphRasterPolicy.PortableUnicode, request.Policy);
+                Assert.Equal((ushort)0x41, request.Cp932Code);
+            },
+            request =>
+            {
+                Assert.Equal(GlyphRasterPolicy.PortableUnicode, request.Policy);
+                Assert.Equal(0x1f600, request.UnicodeScalar);
+                Assert.Null(request.Cp932Code);
+            });
+    }
+
     [Theory]
     [InlineData(24, 24)]
     [InlineData(25, 24)]

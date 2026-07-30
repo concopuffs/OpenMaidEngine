@@ -20,12 +20,6 @@ using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
 
 public partial class Main : Godot.Control
 {
-    // Provisional approximation only: AGE asks GDI to synthesize LOGFONT weight 700, grid-fit a
-    // GGO_GRAY4 mask, and composites that mask itself. Godot instead applies FreeType embolden plus
-    // spacing. Do not retune these values from screenshots; replace this approximation from the decoded
-    // native glyph-mask contract. See docs/engine-re.md.
-    private const float NativeBoldEmbolden = 0.53f;
-    private const int NativeBoldGlyphSpacing = 1;
     private int _screenWidth = Sys4LogicalCanvas.DefaultWidth;
     private int _screenHeight = Sys4LogicalCanvas.DefaultHeight;
     private WindowLaunchOptions _windowOptions;
@@ -40,18 +34,6 @@ public partial class Main : Godot.Control
     // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
     // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
     private byte[] _screenPixels = [];
-    private Label _text = null!;
-    private Label _speaker = null!;
-    private readonly System.Collections.Generic.List<Label> _advTextLabels = new();
-    private readonly System.Collections.Generic.List<Label> _surfaceTextLabels = new();
-    private readonly System.Collections.Generic.Dictionary<int, Label> _historyTextLabels = new();
-    private Font? _presentationFallbackFont;
-    private readonly Dictionary<string, Font> _presentationFaceFonts =
-        new(System.StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, FontVariation> _presentationBoldFonts =
-        new(System.StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _unavailablePresentationFaces =
-        new(System.StringComparer.OrdinalIgnoreCase);
     private Label _status = null!;
     private Label _locatorHud = null!;
     private AudioStreamPlayer _bgm = null!;                // looping background music
@@ -69,9 +51,7 @@ public partial class Main : Godot.Control
     private Sys4RegIniStore? _sys4RegIniStore;
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
-#if AGE_WINDOWS_GDI
-    private WindowsGdiGlyphMaskRasterizer? _exactGlyphRasterizer;
-#endif
+    private IDisposable? _glyphRasterizerOwner;
     private FullwidthTextEditorDialog? _fullwidthTextEditor;
     private Sys4ScriptProvider? _scripts;
     private DebugSceneLauncher? _debugSceneLauncher;
@@ -191,14 +171,6 @@ public partial class Main : Godot.Control
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _gpuRenderer = new GpuRetainedRenderer(this);
 
-        _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
-        AddChild(_text);
-        _text.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _advTextLabels.Add(_text);
-        _speaker = new Label { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
-        AddChild(_speaker);
-        _speaker.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _surfaceTextLabels.Add(_speaker);
         _status = new Label();
         AddChild(_status);
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
@@ -207,7 +179,7 @@ public partial class Main : Godot.Control
         _locatorHud.Position = new Vector2(8, 8);
         AddChild(_locatorHud);
 
-        // Best-effort CJK font so the visual isn't tofu (headless self-test doesn't depend on it).
+        // Best-effort CJK font for diagnostic/status UI. Gameplay text is always surface pixels.
         foreach (var fp in new[] { "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/YuGothM.ttc",
                                    "C:/Windows/Fonts/YuGothR.ttc", "C:/Windows/Fonts/meiryo.ttc" })
         {
@@ -215,18 +187,8 @@ public partial class Main : Godot.Control
             try
             {
                 var ff = new FontFile { Data = System.IO.File.ReadAllBytes(fp) };
-                _presentationFallbackFont = ff;
-                _text.AddThemeFontOverride("font", ff);
-                _speaker.AddThemeFontOverride("font", ff);
                 _status.AddThemeFontOverride("font", ff);
                 _locatorHud.AddThemeFontOverride("font", ff);
-                _text.AddThemeFontSizeOverride("font_size", 25);
-                _speaker.AddThemeFontSizeOverride("font_size", 25);
-                _text.AddThemeConstantOverride("outline_size", 1);
-                _speaker.AddThemeConstantOverride("outline_size", 1);
-                var outline = new Color(0x60 / 255f, 0x60 / 255f, 0x60 / 255f, 1);
-                _text.AddThemeColorOverride("font_outline_color", outline);
-                _speaker.AddThemeColorOverride("font_outline_color", outline);
                 break;
             }
             catch { /* fall back to the default font */ }
@@ -258,6 +220,7 @@ public partial class Main : Godot.Control
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
         long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
         bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 for diagnostics
+        string textBackend = "auto";                     // --text-backend auto|gdi|portable
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         string? pageMapPath = null;                      // --page-map <jsonl>: override default build/page-map-SCxxxx.jsonl
         for (int i = 0; i < userArgs.Length; i++)
@@ -283,6 +246,8 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
             if (userArgs[i] == "--transition-click-ms" && i + 1 < userArgs.Length) long.TryParse(userArgs[i + 1], out transitionClickMs);
             if (userArgs[i] == "--hold-message-skip") holdMessageSkip = true;
+            if (userArgs[i] == "--text-backend" && i + 1 < userArgs.Length)
+                textBackend = userArgs[i + 1].ToLowerInvariant();
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--page-map" && i + 1 < userArgs.Length) pageMapPath = userArgs[i + 1];
             if (userArgs[i] == "--locator-hud") _locatorHudVisible = true;
@@ -299,6 +264,14 @@ public partial class Main : Godot.Control
         }
 
         if (!double.IsFinite(speed) || speed <= 0) speed = 1.0;
+        if (textBackend is not ("auto" or "gdi" or "portable"))
+        {
+            GD.PushError(
+                $"[startup] unknown --text-backend '{textBackend}'; " +
+                "expected auto, gdi, or portable");
+            GetTree().Quit(2);
+            return;
+        }
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
@@ -367,43 +340,68 @@ public partial class Main : Godot.Control
             ? new ResourceMap(scripts.Catalog, trackedAssetStore)
             : new ResourceMap(catalog, _assetStore);
         IGlyphMaskRasterizer? surfaceTextRasterizer = null;
-        string surfaceTextFallbackReason;
+        PortableTextRenderingPolicy? portableTextPolicy = null;
+        string? exactUnavailable = null;
+        try
+        {
 #if AGE_WINDOWS_GDI
-        if (WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out string availability))
-        {
-            try
+            if (textBackend != "portable")
             {
-                _exactGlyphRasterizer = new WindowsGdiGlyphMaskRasterizer();
-                surfaceTextRasterizer = _exactGlyphRasterizer;
-                surfaceTextFallbackReason = "";
-                GD.Print(
-                    $"[text] immediate surface strings use {_exactGlyphRasterizer.BackendInfo.Id}: " +
-                    _exactGlyphRasterizer.BackendInfo.Detail);
+                if (WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out string availability))
+                {
+                    try
+                    {
+                        var exact = new WindowsGdiGlyphMaskRasterizer();
+                        surfaceTextRasterizer = exact;
+                        _glyphRasterizerOwner = exact;
+                    }
+                    catch (Exception error) when (textBackend == "auto")
+                    {
+                        exactUnavailable =
+                            $"Exact Windows GDI glyph backend failed to initialize: {error.Message}";
+                    }
+                }
+                else exactUnavailable = availability;
             }
-            catch (Exception error)
-            {
-                surfaceTextFallbackReason =
-                    $"Exact Windows GDI glyph backend failed to initialize: {error.Message}";
-                GD.PushWarning($"[text] {surfaceTextFallbackReason}");
-            }
-        }
-        else
-        {
-            surfaceTextFallbackReason = availability;
-            GD.PushWarning(
-                $"[text] immediate surface strings retain the Label fallback: {availability}");
-        }
 #else
-        surfaceTextFallbackReason =
-            "The exact Windows GDI glyph adapter is not part of this platform build.";
-        GD.PushWarning(
-            $"[text] immediate surface strings retain the Label fallback: {surfaceTextFallbackReason}");
+            if (textBackend == "gdi")
+                exactUnavailable =
+                    "The exact Windows GDI glyph adapter is not part of this platform build.";
 #endif
+            if (surfaceTextRasterizer == null)
+            {
+                if (textBackend == "gdi")
+                    throw new PlatformNotSupportedException(
+                        exactUnavailable ?? "Exact Windows GDI text is unavailable.");
+                portableTextPolicy = PortableTextRenderingPolicy.Load();
+                var portable =
+                    new GodotTextServerGlyphMaskRasterizer(portableTextPolicy);
+                surfaceTextRasterizer = portable;
+                _glyphRasterizerOwner = portable;
+            }
+        }
+        catch (Exception error)
+        {
+            GD.PushError($"[startup] text backend selection failed: {error.Message}");
+            GetTree().Quit(2);
+            return;
+        }
+        var selectedTextBackend =
+            (surfaceTextRasterizer as IIdentifiedGlyphMaskRasterizer)?.BackendInfo
+            ?? throw new InvalidOperationException(
+                "Selected text backend does not report its policy.");
+        GD.Print(
+            $"[text] gameplay strings use {selectedTextBackend.Id}: " +
+            selectedTextBackend.Detail);
+        if (textBackend == "auto" && exactUnavailable != null)
+            GD.Print($"[text] exact backend unavailable; selected portable: {exactUnavailable}");
         _host = new GodotAdvHost(
-            this, resources, scene, _clock, _locator, logicalCanvas, _timeline,
+            this, resources, scene, _clock, _locator, logicalCanvas,
+            surfaceTextRasterizer,
+            timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
-            surfaceTextRasterizer: surfaceTextRasterizer,
-            surfaceTextFallbackReason: surfaceTextFallbackReason)
+            surfaceTextMaskCacheCapacity:
+                portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048)
         {
             SleepScale = sleepScale,
             TraceOps = _gfxLogPath != null,
@@ -566,13 +564,6 @@ public partial class Main : Godot.Control
                 if (presentationEntered) _host!.ExitPresentation();
             }
             perf?.RecordRecomposeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-
-            phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            if (!_selftest && _host != null) UpdateAdvTextPresentation();
-            if (!_selftest && _host != null) UpdateHistoryTextPresentation();
-            perf?.RecordUiAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-            perf?.RecordUi(PerformanceFrameLog.Timestamp() - phase);
 
             // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
             // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
@@ -1044,10 +1035,8 @@ public partial class Main : Godot.Control
 
         DumpHistogram(); _timeline?.Dispose(); _locator?.Dispose();
         _gpuRenderer?.Dispose();
-#if AGE_WINDOWS_GDI
-        _exactGlyphRasterizer?.Dispose();
-        _exactGlyphRasterizer = null;
-#endif
+        _glyphRasterizerOwner?.Dispose();
+        _glyphRasterizerOwner = null;
         if (_perf != null)
         {
             _perf.Dispose();
@@ -1087,7 +1076,6 @@ public partial class Main : Godot.Control
     private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
     private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
     private readonly System.Collections.Generic.List<RenderObject> _visibleSnapshot = new(1024);
-    private readonly System.Collections.Generic.List<SurfaceTextDraw> _surfaceTextSnapshot = new();
 
     private void Recomposite()
     {
@@ -1134,11 +1122,6 @@ public partial class Main : Godot.Control
                                                presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
         }
         _perf?.BeginRecomposite(screenTransition: false);
-        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        foreach (var label in _surfaceTextLabels) label.Visible = false;
-        _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
-
-        int surfaceTextLabelIndex = 0;
         _gpuRenderer.BeginFrame(publicationPolicy.AppendGpuLayers);
         foreach (var v in _visibleSnapshot)
         {
@@ -1195,24 +1178,6 @@ public partial class Main : Godot.Control
                     if (drawn)
                         _perf?.RecordGpuLayer(v.W, v.H, affine, _screenWidth, _screenHeight,
                                               resolved.IsDynamic, v.Blend);
-                }
-            }
-
-            if (rawObject != null)
-            {
-                _host.SnapshotSurfaceText(rawObject.SourceSlot, _surfaceTextSnapshot);
-                foreach (var surfaceText in _surfaceTextSnapshot)
-                {
-                    if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
-                        surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
-                    var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
-                    ApplySurfaceTextTransform(
-                        label, affine, surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
-                    label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
-                                             System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
-                    label.Text = surfaceText.Text;
-                    ApplyAdvTextStyle(label, surfaceText.Style);
-                    label.Visible = true;
                 }
             }
         }
@@ -1327,25 +1292,22 @@ public partial class Main : Godot.Control
         {
             System.Array.Clear(_screenPixels);
         }
-        foreach (var label in _surfaceTextLabels) label.Visible = false;
         _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
-        int surfaceTextLabelIndex = 0;
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
         if (hasScreenTransition)
         {
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
             // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
-            CompositeVisibleObjects(transition.Source, 1f, ref surfaceTextLabelIndex, decisions, false);
+            CompositeVisibleObjects(transition.Source, 1f, decisions);
             FillQuad(0, 0, _screenWidth, _screenHeight, 0, (float)transition.Progress);
-            CompositeVisibleObjects(transition.Target, (float)transition.Progress,
-                                    ref surfaceTextLabelIndex, decisions, false);
+            CompositeVisibleObjects(transition.Target, (float)transition.Progress, decisions);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
         else
         {
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            CompositeVisibleObjects(sampledVisible ?? _visibleSnapshot, 1f, ref surfaceTextLabelIndex, decisions, true);
+            CompositeVisibleObjects(sampledVisible ?? _visibleSnapshot, 1f, decisions);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
@@ -1360,10 +1322,10 @@ public partial class Main : Godot.Control
         _perf?.EndRecomposite();
     }
 
-    private void CompositeVisibleObjects(IReadOnlyList<RenderObject> visible, float globalOpacity,
-                                         ref int surfaceTextLabelIndex,
-                                         System.Collections.Generic.Dictionary<long, string>? decisions,
-                                         bool includeSurfaceText)
+    private void CompositeVisibleObjects(
+        IReadOnlyList<RenderObject> visible,
+        float globalOpacity,
+        System.Collections.Generic.Dictionary<long, string>? decisions)
     {
         int z = 0;
         foreach (var v in visible)   // interpolate at the retained-presentation clock
@@ -1454,245 +1416,8 @@ public partial class Main : Godot.Control
                 }
             }
             if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
-            if (includeSurfaceText && rawObject != null)
-            {
-                _host.SnapshotSurfaceText(rawObject.SourceSlot, _surfaceTextSnapshot);
-                foreach (var surfaceText in _surfaceTextSnapshot)
-                {
-                    if (surfaceText.X < v.SrcX || surfaceText.X >= v.SrcX + v.W ||
-                        surfaceText.Y < v.SrcY || surfaceText.Y >= v.SrcY + v.H) continue;
-                    var label = GetSurfaceTextLabel(surfaceTextLabelIndex++);
-                    ApplySurfaceTextTransform(
-                        label, localToDest, surfaceText.X - v.SrcX, surfaceText.Y - v.SrcY);
-                    label.Size = new Vector2(System.Math.Max(1, v.W - (surfaceText.X - v.SrcX)),
-                                             System.Math.Max(1, v.H - (surfaceText.Y - v.SrcY)));
-                    label.Text = surfaceText.Text;
-                    ApplyAdvTextStyle(label, surfaceText.Style);
-                    label.Visible = true;
-                }
-            }
             z++;
         }
-    }
-
-    private void UpdateAdvTextPresentation()
-    {
-        // Modal callback scripts composite their own full-screen UI while the enclosing ADV wait remains
-        // parked. Live layout text is a Godot overlay rather than part of the retained surface. During a
-        // raw-input callback, keep runs owned by that callback's script stack (STUDY -> MAMES) while hiding
-        // enclosing ADV runs that would otherwise leak above a nested screen such as HISTORY. Native
-        // retained-glyph erases remove ordinary live runs through the host before this presentation pass.
-        foreach (var label in _advTextLabels) label.Visible = false;
-        if (_host.IsAdvPagePresentationSuspended) return;
-
-        int labelIndex = 0;
-        string? rawInputOwner = _vm.RawInputCallbackScriptName;
-        var snapshots = _host.SnapshotLiveAdvText();
-        for (int i = 0; i < snapshots.Count; i++)
-        {
-            var snapshot = snapshots[i];
-            var run = snapshot.Run;
-            if (run.Text.Length == 0 || !ShouldShow(run)) continue;
-            var visibleText = new System.Text.StringBuilder();
-            AppendVisible(snapshot);
-            while (i + 1 < snapshots.Count
-                   && snapshots[i + 1].Run.Layout == run.Layout
-                   && snapshots[i + 1].Run.Style == run.Style
-                   && ShouldShow(snapshots[i + 1].Run))
-            {
-                i++;
-                AppendVisible(snapshots[i]);
-            }
-
-            var label = GetAdvTextLabel(labelIndex++);
-            var layout = run.Layout;
-            label.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
-            label.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
-                                     System.Math.Max(1, layout.Bottom - layout.CursorY));
-            label.Text = visibleText.ToString();
-            ApplyAdvTextStyle(label, run.Style);
-            label.Visible = true;
-
-            void AppendVisible(LiveAdvTextSnapshot item)
-            {
-                int count = System.Math.Clamp(item.VisibleGlyphs, 0, item.Run.Text.Length);
-                if (count != 0) visibleText.Append(item.Run.Text, 0, count);
-            }
-
-            bool ShouldShow(AdvLiveTextRun item)
-                => rawInputOwner == null || item.BelongsToScript(rawInputOwner);
-        }
-    }
-
-    private void UpdateHistoryTextPresentation()
-    {
-        foreach (var label in _historyTextLabels.Values) label.Visible = false;
-        foreach (var batch in _host.SnapshotRenderedTextHistory())
-        {
-            if (batch.Text.Length == 0) continue;
-            if (!_historyTextLabels.TryGetValue(batch.LayoutSlot, out var label))
-            {
-                label = CreateAdvPresentationLabel();
-                _historyTextLabels.Add(batch.LayoutSlot, label);
-            }
-            var layout = batch.Layout;
-            label.Position = new Vector2(layout.OriginX + layout.CursorX, layout.OriginY + layout.CursorY);
-            label.Size = new Vector2(System.Math.Max(1, layout.Right - layout.CursorX),
-                                     System.Math.Max(1, layout.Bottom - layout.CursorY));
-            label.Text = batch.Text;
-            ApplyAdvTextStyle(label, batch.Style);
-            label.Visible = true;
-        }
-    }
-
-    private Label GetSurfaceTextLabel(int index)
-    {
-        while (_surfaceTextLabels.Count <= index) _surfaceTextLabels.Add(CreateAdvPresentationLabel());
-        return _surfaceTextLabels[index];
-    }
-
-    private Label GetAdvTextLabel(int index)
-    {
-        while (_advTextLabels.Count <= index) _advTextLabels.Add(CreateAdvPresentationLabel());
-        return _advTextLabels[index];
-    }
-
-    private static void ApplySurfaceTextTransform(Label label, Affine2D localToDestination,
-                                                  int localX, int localY)
-    {
-        var position = localToDestination.Apply(localX, localY);
-        var (rotation, scaleX, scaleY) = localToDestination.DecomposeCanvasAxes();
-        label.Position = new Vector2((float)position.X, (float)position.Y);
-        label.PivotOffset = Vector2.Zero;
-        label.Rotation = (float)rotation;
-        label.Scale = new Vector2((float)scaleX, (float)scaleY);
-    }
-
-    private Label CreateAdvPresentationLabel()
-    {
-        var label = new Label
-        {
-            MouseFilter = MouseFilterEnum.Ignore,
-            Visible = false,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            ClipText = true,
-        };
-        label.AddThemeFontOverride("font", _text.GetThemeFont("font"));
-        AddChild(label);
-        return label;
-    }
-
-    private void ApplyAdvTextStyle(Label label, AdvTextStyle style)
-    {
-        int fontSize = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
-        Font regularFont = ResolvePresentationFont(style.FontFace, out string fontKey);
-        Font presentationFont = regularFont;
-        if (style.Bold)
-        {
-            if (!_presentationBoldFonts.TryGetValue(fontKey, out FontVariation? boldFont))
-            {
-                boldFont = new FontVariation
-                {
-                    BaseFont = regularFont,
-                    VariationEmbolden = NativeBoldEmbolden,
-                    SpacingGlyph = NativeBoldGlyphSpacing,
-                };
-                _presentationBoldFonts.Add(fontKey, boldFont);
-            }
-            presentationFont = boldFont;
-        }
-        label.AddThemeFontOverride("font", presentationFont);
-        label.AddThemeFontSizeOverride("font_size", fontSize);
-        label.AddThemeColorOverride("font_color", RgbColor(style.TextColor, Colors.White));
-        Color effectColor = RgbColor(style.EffectColor, new Color(0.38f, 0.38f, 0.38f));
-        AdvTextEffectTheme effect = ResolveAdvTextEffectTheme(style);
-        label.AddThemeColorOverride("font_outline_color", effectColor);
-        label.AddThemeColorOverride("font_shadow_color", effect.ShadowEnabled ? effectColor : Colors.Transparent);
-        label.AddThemeConstantOverride("line_spacing",
-            CalibratedLineSpacing(style.LineSpacing, fontSize, presentationFont.GetHeight(fontSize)));
-        label.AddThemeConstantOverride("outline_size", effect.OutlineSize);
-        label.AddThemeConstantOverride("shadow_offset_x", effect.ShadowOffsetX);
-        label.AddThemeConstantOverride("shadow_offset_y", effect.ShadowOffsetY);
-        label.AddThemeConstantOverride("shadow_outline_size", 0);
-    }
-
-    private static int CalibratedLineSpacing(int nativeSpacing, int nativeFontHeight, float backendFontHeight)
-        => nativeSpacing + nativeFontHeight - System.Math.Max(1, (int)System.MathF.Round(backendFontHeight));
-
-    private readonly record struct AdvTextEffectTheme(
-        int OutlineSize,
-        bool ShadowEnabled,
-        int ShadowOffsetX,
-        int ShadowOffsetY);
-
-    private static AdvTextEffectTheme ResolveAdvTextEffectTheme(AdvTextStyle style)
-        => style.RenderMode switch
-        {
-            // AGE mode 1 draws one effect-color glyph at (+x,+y), then the primary glyph.
-            1 => new(0, true, style.EffectOffsetX, style.EffectOffsetY),
-            // AGE mode 3 samples an ellipse. Himegari always uses equal (1,1) radii, for which
-            // Godot's symmetric outline is the closest backend-native presentation.
-            3 => new(System.Math.Max(System.Math.Abs(style.EffectOffsetX),
-                                     System.Math.Abs(style.EffectOffsetY)),
-                     false, 0, 0),
-            _ => new(0, false, 0, 0),
-        };
-
-    private Font ResolvePresentationFont(string requestedFace, out string fontKey)
-    {
-        _presentationFallbackFont ??= _text.GetThemeFont("font");
-        string face = requestedFace?.Trim() ?? "";
-        if (face.Length == 0)
-        {
-            fontKey = "";
-            return _presentationFallbackFont;
-        }
-        if (_presentationFaceFonts.TryGetValue(face, out Font? cached))
-        {
-            fontKey = face;
-            return cached;
-        }
-        if (!_unavailablePresentationFaces.Contains(face))
-        {
-            foreach (string path in PresentationFontPaths(face))
-            {
-                if (!System.IO.File.Exists(path)) continue;
-                try
-                {
-                    var loaded = new FontFile { Data = System.IO.File.ReadAllBytes(path) };
-                    _presentationFaceFonts.Add(face, loaded);
-                    fontKey = face;
-                    return loaded;
-                }
-                catch
-                {
-                    // Try the next known file before falling back to the presentation default.
-                }
-            }
-            _unavailablePresentationFaces.Add(face);
-        }
-        fontKey = "";
-        return _presentationFallbackFont;
-    }
-
-    private static IEnumerable<string> PresentationFontPaths(string face)
-    {
-        if (face.Equals("ＭＳ 明朝", System.StringComparison.OrdinalIgnoreCase)
-            || face.Equals("MS Mincho", System.StringComparison.OrdinalIgnoreCase))
-        {
-            yield return "C:/Windows/Fonts/msmincho.ttc";
-        }
-        else if (face.Equals("ＭＳ ゴシック", System.StringComparison.OrdinalIgnoreCase)
-                 || face.Equals("MS Gothic", System.StringComparison.OrdinalIgnoreCase))
-        {
-            yield return "C:/Windows/Fonts/msgothic.ttc";
-        }
-    }
-
-    private static Color RgbColor(long rgb, Color fallback)
-    {
-        if ((rgb & 0x00ff_ffff) == 0) return fallback;
-        return new Color(((rgb >> 16) & 0xff) / 255f, ((rgb >> 8) & 0xff) / 255f, (rgb & 0xff) / 255f, 1);
     }
 
     private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)
@@ -2289,7 +2014,6 @@ public partial class Main : Godot.Control
         }
     }
 
-    public void AppendLine(string text) => _text.Text += text + "\n";
     public void PageBreak()
     {
         _pageCount++;
@@ -2298,7 +2022,6 @@ public partial class Main : Godot.Control
     }
     public void ClearPage()
     {
-        foreach (var label in _advTextLabels) label.Text = "";
         _status.Text = "";
     }
     public void ShowEnd() => _status.Text = "— end —";
@@ -2372,71 +2095,29 @@ public partial class Main : Godot.Control
                                 && !_bgm.Playing
                                 && _bgmFadeTween == null
                                 && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
-        AdvTextEffectTheme mode1 = ResolveAdvTextEffectTheme(AdvTextStyle.Default with
-        {
-            RenderMode = 1,
-            EffectOffsetX = 0,
-            EffectOffsetY = 0,
-        });
-        AdvTextEffectTheme mode3 = ResolveAdvTextEffectTheme(AdvTextStyle.Default with
-        {
-            RenderMode = 3,
-            EffectOffsetX = 1,
-            EffectOffsetY = 1,
-        });
-        AdvTextEffectTheme mode0 = ResolveAdvTextEffectTheme(AdvTextStyle.Default);
-        bool textEffectModesOk = mode1 == new AdvTextEffectTheme(0, true, 0, 0)
-                                 && mode3 == new AdvTextEffectTheme(1, false, 0, 0)
-                                 && mode0 == new AdvTextEffectTheme(0, false, 0, 0);
-        var textEffectSmoke = new Label();
-        AddChild(textEffectSmoke);
-        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
-        {
-            RenderMode = 1,
-            EffectColor = 0x123456,
-            EffectOffsetX = 2,
-            EffectOffsetY = -1,
-        });
-        textEffectModesOk &= textEffectSmoke.GetThemeConstant("outline_size") == 0
-                             && textEffectSmoke.GetThemeConstant("shadow_offset_x") == 2
-                             && textEffectSmoke.GetThemeConstant("shadow_offset_y") == -1
-                             && textEffectSmoke.GetThemeColor("font_shadow_color").A > 0.99f;
-        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
-        {
-            RenderMode = 3,
-            EffectColor = 0x123456,
-            EffectOffsetX = 1,
-            EffectOffsetY = 1,
-        });
-        textEffectModesOk &= textEffectSmoke.GetThemeConstant("outline_size") == 1
-                             && textEffectSmoke.GetThemeColor("font_shadow_color").A < 0.01f;
-        ApplyAdvTextStyle(textEffectSmoke, AdvTextStyle.Default with
-        {
-            PrimaryFontSize = 24,
-            Bold = true,
-            FontFace = "ＭＳ 明朝",
-            LineSpacing = 8,
-        });
-        var calibratedBold = textEffectSmoke.GetThemeFont("font") as FontVariation;
-        bool fontCalibrationOk = calibratedBold != null
-                                 && System.Math.Abs(calibratedBold.VariationEmbolden
-                                                    - NativeBoldEmbolden) < 0.001f
-                                 && calibratedBold.SpacingGlyph == NativeBoldGlyphSpacing
-                                 && CalibratedLineSpacing(8, 24, 25) == 7
-                                 && CalibratedLineSpacing(9, 16, 17) == 8
-                                 && textEffectSmoke.GetThemeConstant("line_spacing")
-                                    == CalibratedLineSpacing(
-                                        8, 24, calibratedBold.GetHeight(24));
+        IReadOnlyList<(int X, int Y)> outline =
+            AgeGlyphMaskCompositor.GetMode3OutlineOffsets(1, 1);
+        bool textEffectModesOk =
+            outline.Count == 12
+            && outline.Contains((1, 0))
+            && outline.Contains((-1, 0))
+            && outline.Contains((0, 1))
+            && outline.Contains((0, -1));
+        bool fontCalibrationOk =
+            ImmediateSurfaceTextRenderer.NativePixelHeight(24) == 24
+            && ImmediateSurfaceTextRenderer.NativePixelHeight(25) == 24
+            && ImmediateSurfaceTextRenderer.NativePixelHeight(32) == 31
+            && ImmediateSurfaceTextRenderer.NativePixelHeight(33) == 31;
         bool immediateSurfaceTextOk;
         string immediateSurfaceTextMode;
-        _host.CreateTexture(997, 32, 24);
+        _host.CreateTexture(997, 64, 24);
         var immediateStyle = AdvTextStyle.Default with
         {
             PrimaryFontSize = 16,
             TextColor = 0xffffff,
             FontFace = ImmediateSurfaceTextRenderer.DefaultFontFace,
         };
-        _host.DrawStringToSurface(997, 1, 1, "A", immediateStyle);
+        _host.DrawStringToSurface(997, 1, 1, "A姫", immediateStyle);
         if (_host.UsesSurfaceTextPixels)
         {
             RgbaImage? pixels = _host.CaptureSurfacePixels(997);
@@ -2459,40 +2140,44 @@ public partial class Main : Godot.Control
                 gpuAccepted &= stats.DrawItems == 1 && stats.TextureUploads == 1;
             }
 
-            _host.CreateTexture(996, 32, 24);
+            _host.CreateTexture(996, 64, 24);
             _host.CopySurfaceRect(new SurfaceRectCopy(
-                997, 996, 0, 0, 32, 24, 0, 0));
+                997, 996, 0, 0, 64, 24, 0, 0));
             RgbaImage? copied = _host.CaptureSurfacePixels(996);
             bool copiedPixels = pixels != null
                                 && copied != null
                                 && pixels.Pixels.SequenceEqual(copied.Pixels);
             _host.FillSurfaceRect(new SurfaceRectFill(
-                996, 0, 0, 32, 24, 0, 0));
+                996, 0, 0, 64, 24, 0, 0));
             RgbaImage? cleared = _host.CaptureSurfacePixels(996);
             bool clearedPixels = cleared != null && cleared.Pixels.All(value => value == 0);
             immediateSurfaceTextOk =
                 pixelsPresent
-                && _host.SnapshotSurfaceText(997).Count == 0
-                && backend is
-                {
-                    Id: "windows-gdi-gray4",
-                    Policy: GlyphRasterPolicy.NativeCp932Gray4,
-                    NativePixelExact: true,
-                }
+                && backend is not null
+                && (backend.Policy == GlyphRasterPolicy.NativeCp932Gray4
+                    ? backend is
+                    {
+                        Id: "windows-gdi-gray4",
+                        NativePixelExact: true,
+                    }
+                    : backend is
+                    {
+                        Id: "portable-godot-textserver",
+                        Policy: GlyphRasterPolicy.PortableUnicode,
+                        NativePixelExact: false,
+                    })
                 && cache.Count is > 0 and <= 2048
                 && cache.Capacity == 2048
                 && gpuAccepted
                 && copiedPixels
                 && clearedPixels;
-            immediateSurfaceTextMode = "exact-rgba";
+            immediateSurfaceTextMode =
+                $"rgba:{backend?.Id}";
         }
         else
         {
-            immediateSurfaceTextOk =
-                _host.CaptureSurfacePixels(997)?.Pixels.All(value => value == 0) == true
-                && _host.SnapshotSurfaceText(997).Count == 1
-                && !string.IsNullOrWhiteSpace(_host.SurfaceTextFallbackReason);
-            immediateSurfaceTextMode = "label-fallback";
+            immediateSurfaceTextOk = false;
+            immediateSurfaceTextMode = "unavailable";
         }
         _host.ReleaseSurface(996);
         _host.ReleaseSurface(997);
@@ -2519,7 +2204,6 @@ public partial class Main : Godot.Control
                 && liveSurface != null
                 && liveSurface.Pixels.Where((_, index) => index % 4 == 3)
                     .Any(alpha => alpha != 0)
-                && _host.SnapshotLiveAdvText().Count == 0
                 && _vm.TextHistory.GetLayoutSnapshot(1).CursorX
                    > liveBinding.ResetCursorX;
 
@@ -2556,14 +2240,15 @@ public partial class Main : Godot.Control
                 && suspended
                 && restored
                 && reset;
-            liveRetainedTextMode = "retained-glyphs";
+            liveRetainedTextMode =
+                $"retained-glyphs;built={builtCompleteLine};objects={liveObjects.Count};" +
+                $"republished={republishedPartialErase};suspended={suspended};" +
+                $"restored={restored};reset={reset}";
         }
         else
         {
-            liveRetainedTextOk =
-                _host.SnapshotLiveAdvText().Count == 3
-                && !string.IsNullOrWhiteSpace(_host.SurfaceTextFallbackReason);
-            liveRetainedTextMode = "label-fallback";
+            liveRetainedTextOk = false;
+            liveRetainedTextMode = "unavailable";
         }
         _vm.TextHistory.DefineLayout(2, 256, 64, 10, 100);
         _vm.TextHistory.SetResetCursor(2, 1, 1);
@@ -2603,8 +2288,7 @@ public partial class Main : Godot.Control
                    == historyBatch.Text.Length
                 && historySurface != null
                 && historySurface.Pixels.Where((_, index) => index % 4 == 3)
-                    .Any(alpha => alpha != 0)
-                && _host.SnapshotRenderedTextHistory().Count == 0;
+                    .Any(alpha => alpha != 0);
             _vm.Gfx.EraseRange(
                 historyBinding.FirstObjectHandle,
                 historyBinding.ObjectCapacity);
@@ -2618,15 +2302,14 @@ public partial class Main : Godot.Control
                            < historyBinding.ObjectCapacity)
                 && _host.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot)
                     ?.Pixels.All(value => value == 0) == true;
-            historyRetainedTextMode = "retained-glyphs";
+            historyRetainedTextMode =
+                $"retained-glyphs;used={historyUsedRetained}";
         }
         else
         {
-            historyRetainedTextOk =
-                !historyUsedRetained
-                && _host.SnapshotRenderedTextHistory().Count == 1;
+            historyRetainedTextOk = false;
             _host.EndTextHistoryPresentation(_vm.Gfx);
-            historyRetainedTextMode = "label-fallback";
+            historyRetainedTextMode = "unavailable";
         }
         Window rootWindow = GetTree().Root;
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
@@ -2661,7 +2344,6 @@ public partial class Main : Godot.Control
                 _vm.Gfx, _clock.NowMs, backbufferSnapshot);
         backbufferPreservationOk &=
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
-        textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk

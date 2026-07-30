@@ -635,16 +635,17 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    the persisted backlog. The configured wait atlas now binds at op `0x212`'s handle, advances source cells
    only on the configured frame boundary, participates in op-`0x20a` republication and HIDEWIN suspension,
    and disappears when the wait service stops. The standalone Godot wait `TextureRect` and its raw-callback
-   visibility exception are gone. Exact History no longer enters the layout-keyed Label pool; that code and
-   the live/immediate Label pools remain solely as the explicit unavailable-rasterizer fallback until step 7
-   supplies the portable glyph backend. Focused lifecycle tests, all 579 engine tests, the exact History
+   visibility exception are gone. At this checkpoint exact History no longer entered the layout-keyed Label
+   pool; step 7 subsequently supplied the portable backend and removed every remaining gameplay Label pool.
+   Focused lifecycle tests, all 579 engine tests, the exact History
    Godot self-test, and a real SC0000 Vulkan capture cover the retained path.
-7. **Complete and select the portable backend.** Spike the smallest maintainable way to obtain portable
-   font masks/metrics (Godot/TextServer offscreen extraction versus a bounded FreeType-compatible adapter)
-   before choosing a dependency. Define face substitution and raster policy as profile/configuration data,
-   keep its output explicitly non-identical to GDI, and run the same layout/compositor tests. Retain a
-   development-only backend switch through acceptance; remove the old Label fallback only when both exact
-   Windows and portable startup/legibility gates pass.
+7. **Complete and select the portable backend — completed 2026-07-30.** Godot's TextServer atlas is the
+   portable mask/metrics source, avoiding another native dependency. Profile data in
+   `godot/config/himegari-text-rendering.json` owns ordered Mincho/Gothic substitutions and bounded cache
+   sizes. `auto` selects exact GDI when its ACP-932 gate passes and otherwise selects the explicitly
+   non-pixel-exact Unicode backend; development runs can force either with `--text-backend`. Both modes pass
+   the same immediate/live/History retained-glyph self-test. Gameplay `Label` pools and surface-text overlay
+   projection are removed, so text always participates in the ordinary surface compositor.
 
 **Acceptance gates:**
 

@@ -10,8 +10,8 @@ public readonly record struct ImmediateSurfaceTextResult(
     int CursorY);
 
 /// <summary>
-/// Converts one native CP932 string into exact glyph requests and composites it directly into an
-/// AGE RGBA surface. Request construction completes before any pixels change, so an unsupported
+/// Converts one string into backend-policy glyph requests and composites it directly into an AGE
+/// RGBA surface. Request construction completes before any pixels change, so an unsupported
 /// character cannot leave a partially drawn string behind.
 /// </summary>
 public sealed class ImmediateSurfaceTextRenderer
@@ -20,9 +20,15 @@ public sealed class ImmediateSurfaceTextRenderer
 
     private static readonly Encoding Cp932 = CreateCp932();
     private readonly IGlyphMaskRasterizer _rasterizer;
+    private readonly GlyphRasterPolicy _policy;
 
-    public ImmediateSurfaceTextRenderer(IGlyphMaskRasterizer rasterizer)
-        => _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
+    public ImmediateSurfaceTextRenderer(
+        IGlyphMaskRasterizer rasterizer,
+        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4)
+    {
+        _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
+        _policy = policy;
+    }
 
     public ImmediateSurfaceTextResult Render(
         RgbaImage destination,
@@ -33,7 +39,7 @@ public sealed class ImmediateSurfaceTextRenderer
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(text);
-        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style);
+        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style, _policy);
         int cursorX = x;
         int cursorY = y;
         foreach (GlyphRasterRequest request in requests)
@@ -49,7 +55,8 @@ public sealed class ImmediateSurfaceTextRenderer
 
     public static IReadOnlyList<GlyphRasterRequest> CreateRequests(
         string text,
-        AdvTextStyle style)
+        AdvTextStyle style,
+        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4)
     {
         ArgumentNullException.ThrowIfNull(text);
         int requestedHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
@@ -63,26 +70,28 @@ public sealed class ImmediateSurfaceTextRenderer
 
         foreach (Rune rune in text.EnumerateRunes())
         {
-            byte[] encoded;
+            ushort? cp932Code = null;
             try
             {
-                encoded = Cp932.GetBytes(rune.ToString());
+                byte[] encoded = Cp932.GetBytes(rune.ToString());
+                if (encoded.Length is < 1 or > 2)
+                    throw new ArgumentException(
+                        $"U+{rune.Value:X4} encoded to unsupported CP932 length {encoded.Length}.",
+                        nameof(text));
+                cp932Code = encoded.Length == 1
+                    ? encoded[0]
+                    : (ushort)((encoded[0] << 8) | encoded[1]);
             }
             catch (EncoderFallbackException error)
             {
-                throw new ArgumentException(
-                    $"U+{rune.Value:X4} is not representable in native CP932 text.", nameof(text), error);
+                if (policy == GlyphRasterPolicy.NativeCp932Gray4)
+                    throw new ArgumentException(
+                        $"U+{rune.Value:X4} is not representable in native CP932 text.",
+                        nameof(text), error);
             }
-            if (encoded.Length is < 1 or > 2)
-                throw new ArgumentException(
-                    $"U+{rune.Value:X4} encoded to unsupported CP932 length {encoded.Length}.",
-                    nameof(text));
-            ushort cp932Code = encoded.Length == 1
-                ? encoded[0]
-                : (ushort)((encoded[0] << 8) | encoded[1]);
             requests.Add(new GlyphRasterRequest(
                 fontFace, pixelHeight, requestedWidth, weight,
-                rune.Value, cp932Code, GlyphRasterPolicy.NativeCp932Gray4));
+                rune.Value, cp932Code, policy));
         }
         return requests;
     }

@@ -1,0 +1,47 @@
+{
+  "id": "himegari-godot-system-font-v1",
+  "fontCacheCapacity": 8,
+  "glyphMaskCacheCapacity": 2048,
+  "raster": {
+    "antialiasing": "gray",
+    "hinting": "normal",
+    "subpixelPositioning": "disabled",
+    "allowSystemFallback": true,
+    "multichannelSignedDistanceField": false,
+    "regularWeight": 400,
+    "boldWeight": 700,
+    "boldThreshold": 700
+  },
+  "defaultSubstitutes": [
+    "Noto Sans CJK JP",
+    "Noto Sans JP",
+    "Yu Gothic",
+    "Hiragino Kaku Gothic ProN",
+    "IPAGothic",
+    "sans-serif"
+  ],
+  "families": [
+    {
+      "requested": [ "ＭＳ 明朝", "MS Mincho" ],
+      "substitutes": [
+        "Noto Serif CJK JP",
+        "Noto Serif JP",
+        "Yu Mincho",
+        "Hiragino Mincho ProN",
+        "IPAMincho",
+        "serif"
+      ]
+    },
+    {
+      "requested": [ "ＭＳ ゴシック", "MS Gothic" ],
+      "substitutes": [
+        "Noto Sans CJK JP",
+        "Noto Sans JP",
+        "Yu Gothic",
+        "Hiragino Kaku Gothic ProN",
+        "IPAGothic",
+        "sans-serif"
+      ]
+    }
+  ]
+}

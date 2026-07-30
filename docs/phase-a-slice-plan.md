@@ -3650,6 +3650,30 @@ The required fidelity follow-up is implementation of that decoded mask contract;
 validation evidence, not the source of rendering behavior. That work is deferred until gameplay settles
 and is scoped in `docs/remake-architecture-and-roadmap.md`; it is not the next Phase A/B slice.
 
+## ADV portable glyph backend and Label retirement (2026-07-30)
+
+Godot TextServer is now the portable glyph-mask source. It exposes rasterized atlas coverage plus glyph
+offset and horizontal advance without adding a second native font library; AGE's existing deterministic
+compositor still owns effects, integer blending, layout, surfaces, and retained publication. Portable
+requests use Unicode directly and carry CP932 only when representable so the existing Japanese wrap rules
+remain available. TextServer's second advance component is intentionally ignored because it describes
+vertical-layout advance rather than GDI's horizontal `gmCellIncY`.
+
+`godot/config/himegari-text-rendering.json` owns the policy id, bounded font/glyph cache capacities, and
+ordered Mincho/Gothic/default system-family substitutions. The backend reports itself as explicitly
+non-GDI-exact. Startup option `--text-backend auto|gdi|portable` retains the acceptance seam: `auto` chooses
+the exact ACP-932 GDI path when available and otherwise the portable policy, while forced `gdi` fails
+clearly instead of changing fidelity silently.
+
+After forced portable and forced exact modes both passed immediate-surface, live-layout, History,
+complete-line, bounded-cache, retained publication/reset, GPU-upload, surface-copy, and clear gates, the
+gameplay `Label` pools were deleted. Immediate, live, and History text no longer has a top-level overlay or
+metadata projection path; mask/backend failures are explicit, and all gameplay text inherits the bound
+surface's z-order, alpha, tint, fade, transform, clipping, capture, and lifetime.
+
+Validation: engine **580/580**, zero-warning Godot build, and threaded `SELFTEST OK` in both forced
+`portable-godot-textserver` and forced `windows-gdi-gray4` modes.
+
 ## Persistence native-format reconnaissance complete (2026-07-24)
 
 The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native
