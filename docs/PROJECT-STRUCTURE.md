@@ -104,6 +104,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
     │                                       ALF asset store, script provider, AGF/LZSS and Windows CUR decoders,
     │                                       and resource facade
+    │   ├── Age.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
+    │                                       text compositor/layout, and bounded font/glyph cache primitives
     │   └── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state

@@ -579,11 +579,18 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    decode and the ordinary saved-frame prologue/republication path reconstructs current-page presentation.
    `AdvRetainedTextContract` and focused engine tests pin the platform-neutral record, overflow, punctuation,
    capacity, SYSTEM4 binding, and restore boundaries before presentation changes.
-2. **Land the backend-neutral mask and compositor core.** Add request/result records and an
-   `IGlyphMaskRasterizer`-style seam outside the VM. Keep CP932 byte identity available for native-compatible
-   requests while permitting an explicit Unicode-capable portable policy for mods. Implement AGE's coverage
-   conversion, modes 0–3, clipping, alpha/RGB integer blend, metrics, wrapping, final-cursor result, and
-   bounded font/glyph caches in managed code. Synthetic masks, not OS fonts, are the unit-test oracle.
+2. **Land the backend-neutral mask and compositor core.** Completed 2026-07-30 without changing live
+   presentation. `Age.Engine.Text` now owns immutable `GlyphRasterRequest`/`GlyphMask` contracts and the
+   `IGlyphMaskRasterizer` seam outside the VM. Requests preserve Unicode scalar plus optional original CP932
+   code and explicitly select native-CP932 or portable-Unicode policy; results normalize every backend to
+   0..16 coverage, stride, GDI-style origin, cell extent, and cell advance. `AgeGlyphMaskCompositor`
+   implements AGE's coverage conversion, modes 0–3, clipping, transparent-destination rule, maximum-alpha
+   and integer RGB blend. `RetainedGlyphLayoutEngine` returns native-edge records, wrapping/kinsoku decisions,
+   overflow state, and final cursor while rasterizing into a backend-neutral RGBA surface. A generic bounded
+   LRU supports disposable backend font resources and `CachedGlyphMaskRasterizer` bounds masks. Fifteen
+   synthetic-mask tests, independent of OS fonts, pin coverage rounding, bearings/clipping, mode-1 displacement,
+   mode-2 quarter coverage, mode-3 sampling/overlap, wrapping, punctuation, vertical overflow, cursor results,
+   and cache eviction.
 3. **Add the independent Windows GDI reference backend.** Keep the P/Invoke adapter outside the
    platform-neutral `Age.Engine` project so the VM continues to call no OS APIs. Reproduce the decoded display
    IC, LOGFONT, measurement, and `GGO_GRAY4_BITMAP` request, and compare masks/`GLYPHMETRICS`/advances directly

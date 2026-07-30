@@ -2938,12 +2938,19 @@ different:
    `GGO_GRAY4_BITMAP`. It retains GDI's `GLYPHMETRICS`, uses `gmCellIncX` as the per-glyph advance, and
    consumes the returned 17-level coverage mask (`0..16`) directly.
 3. `text_blit_glyph_bitmap@0x458c80` converts coverage `c` to integer alpha `c*255/16`. On a 32-bit
-   surface it takes `max(destination alpha, glyph alpha)` and interpolates each RGB channel as
-   `(dst*(255-alpha)+src*alpha)/255`.
+   surface, an opaque glyph or a destination with alpha zero receives the source RGB and glyph alpha
+   directly. Otherwise destination alpha becomes `max(destination alpha, glyph alpha)` and each RGB
+   channel becomes `(dst*(255-alpha)+src*alpha)/255`, with integer truncation.
 4. Mode 3 does not invoke a font-renderer outline. Its step is
    `360/(sqrt(effect_x²+effect_y²)*8)`, with nearest-integer ellipse coordinates. Radius `(1,1)` makes
    twelve calls covering the eight neighboring offsets: each cardinal offset is visited twice and each
    diagonal once, followed by one primary-color glyph blit at the unshifted position.
+
+Mode 2 uses the same primary color for a second unshifted pass after the ordinary primary glyph, but shifts
+every cached coverage value right by two first. On a transparent destination this lower-coverage duplicate
+does not change the already-written source RGB/max alpha; on an existing colored pixel it performs a second
+integer interpolation toward the primary color. Himegari does not select mode 2, but the shared compositor
+still reproduces it.
 
 The port does none of those raster operations. It loads the same TTC into Godot/FreeType with grayscale
 antialiasing, light hinting, automatic subpixel positioning, embedded bitmaps disabled, and otherwise
@@ -2962,6 +2969,21 @@ compensation remains independently supported by the matching viewport placement.
 face substitutions/defaults remain deferred to the broader runtime configuration design. Implementation
 is explicitly backlogged until gameplay settles; the scoped architecture and acceptance gates live in
 `docs/remake-architecture-and-roadmap.md` under “AGE-exact glyph-mask text renderer.”
+
+The platform-neutral half of that correction landed on 2026-07-30 under `Age.Engine.Text`.
+`GlyphRasterRequest` carries face, positive pixel height, native requested width, weight, Unicode scalar,
+optional original CP932 code, and an explicit native/portable policy. `GlyphMask` owns normalized 0..16
+coverage plus stride, GDI-style origin, cell extent, and advance. `AgeGlyphMaskCompositor` implements the
+32-bit branch above without calling an OS or Godot API; its synthetic oracle includes transparent and
+existing-alpha pixels, negative bearings/clipping, all four effect modes, and overlapping mode-3 masks.
+
+`RetainedGlyphLayoutEngine` consumes any `IGlyphMaskRasterizer`, writes those masks into an `RgbaImage`,
+and returns the five-dword edge records plus final cursor, observed overflow, wrap count, and vertical-stop
+state. It preserves native horizontal precedence: vertical-only overflow stops before compositing, while a
+simultaneous horizontal overflow follows the wrap/kinsoku path. A reusable bounded LRU provides eviction
+callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies the same bound to masks. This
+core is not yet connected to ops `0x204`/`0x205`, live ADV, History, or Godot, so the Label backend and
+visible behavior remain unchanged until the later integration steps.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
