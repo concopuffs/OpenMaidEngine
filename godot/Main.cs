@@ -1057,19 +1057,22 @@ public partial class Main : Godot.Control
     private void Recomposite()
     {
         bool gpuSnapshotCaptured = false;
-        bool preserveExistingPixels = false;
+        BackbufferPublicationPolicy publicationPolicy = default;
         if (_useGpuBackend &&
-            TryRecompositeGpu(out gpuSnapshotCaptured, out preserveExistingPixels)) return;
+            TryRecompositeGpu(out gpuSnapshotCaptured, out publicationPolicy)) return;
         _gpuRenderer.Visible = false;
         _screenView.Visible = true;
         RecompositeSoftware(
-            gpuSnapshotCaptured ? _visibleSnapshot : null, preserveExistingPixels);
+            gpuSnapshotCaptured ? _visibleSnapshot : null,
+            publicationPolicy.PreserveExistingPixels);
     }
 
-    private bool TryRecompositeGpu(out bool snapshotCaptured, out bool preserveExistingPixels)
+    private bool TryRecompositeGpu(
+        out bool snapshotCaptured,
+        out BackbufferPublicationPolicy publicationPolicy)
     {
         snapshotCaptured = false;
-        preserveExistingPixels = false;
+        publicationPolicy = default;
         // Preserve the existing high-volume object/timeline diagnostics exactly. They are debugging tools,
         // not performance workloads, and their software decision strings remain the canonical evidence.
         if (_gfxLogPath != null || _timeline != null) return false;
@@ -1077,7 +1080,7 @@ public partial class Main : Godot.Control
         long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         if (_host.TrySnapshotScreenTransition(out _)) return false; // P4: whole-screen offscreen targets
-        preserveExistingPixels =
+        publicationPolicy =
             _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
         snapshotCaptured = true;
         _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
@@ -1101,7 +1104,7 @@ public partial class Main : Godot.Control
         _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
 
         int surfaceTextLabelIndex = 0;
-        _gpuRenderer.BeginFrame(preserveExistingPixels);
+        _gpuRenderer.BeginFrame(publicationPolicy.AppendGpuLayers);
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
@@ -1275,8 +1278,8 @@ public partial class Main : Godot.Control
         {
             phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            preserveExistingPixels =
-                _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
+            preserveExistingPixels = _host.SnapshotBackbufferObjects(
+                _vm.Gfx, _clock.NowMs, _visibleSnapshot).PreserveExistingPixels;
             _perf?.RecordSnapshotAllocation(
                 PerformanceFrameLog.AllocatedBytes() - allocationPhase);
             _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
@@ -2433,18 +2436,42 @@ public partial class Main : Godot.Control
                                && _windowOptions == WindowLaunchOptions.Resolve(
                                       OS.GetCmdlineUserArgs(),
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight));
+        var backbufferSnapshot = new List<RenderObject>();
+        _host.PresentFrame(_vm.Gfx);
+        BackbufferPublicationPolicy fullPolicy =
+            _host.SnapshotBackbufferObjects(
+                _vm.Gfx, _clock.NowMs, backbufferSnapshot);
+        bool backbufferPreservationOk =
+            fullPolicy
+                == new BackbufferPublicationPolicy(
+                    PreserveExistingPixels: true,
+                    AppendGpuLayers: backbufferSnapshot.Count == 0)
+            && GodotAdvHost.ResolveBackbufferPublicationPolicy(
+                true, GfxHandleRange.All, 1)
+                == new BackbufferPublicationPolicy(true, false)
+            && GodotAdvHost.ResolveBackbufferPublicationPolicy(
+                true, new GfxHandleRange(0, 60000), 1)
+                == new BackbufferPublicationPolicy(true, true);
+        _host.ClearRenderTarget(-1);
+        _host.PresentFrame(_vm.Gfx);
+        BackbufferPublicationPolicy clearedPolicy =
+            _host.SnapshotBackbufferObjects(
+                _vm.Gfx, _clock.NowMs, backbufferSnapshot);
+        backbufferPreservationOk &=
+            clearedPolicy == new BackbufferPublicationPolicy(false, false);
         textEffectSmoke.QueueFree();
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
               && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
-              && logicalCanvasOk;
+              && logicalCanvasOk && backbufferPreservationOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
                          $"first-riff-boundary=ok; " +
                          $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
                          $"text-effect-modes=ok; font-calibration=ok; " +
+                         $"backbuffer-preservation=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
@@ -2455,6 +2482,7 @@ public partial class Main : Godot.Control
                       $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
                       $"bgm-stop-release={bgmStopReleaseOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
+                      $"backbuffer-preservation={backbufferPreservationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         GetTree().Quit(ok ? 0 : 1);

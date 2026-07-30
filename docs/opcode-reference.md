@@ -896,13 +896,13 @@ The worker clips the paired source and destination rectangles against both surfa
 - **evidence:** Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to an exclusive rectangle, clamps alpha to 255, repacks RGB to native ARGB, and calls the surface manager's rectangle-fill path at 0x4790e0. HISTORY.BIN clears each 600x30 name strip on temporary surface 0xc1 before draw-string.
 
 ### 0x20c `present-frame` (present-frame, argc 0)
-- **summary:** Present the composited frame; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
+- **summary:** Draw every visible retained object over the selected target without implicitly clearing it, then present the composited backbuffer; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
 - **depended on by:** 0x21, 0x22, 0x23, 0x24, 0x25, 0x20d, 0x223
-- **evidence:** Ghidra: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. 2026-07-08.
+- **evidence:** Ghidra /v2: dispatch table FUN_00413860 param_1[0x26e9f]=gfx_op_0x20c_present_frame; 0x26e9f-0x26c93=0x20c. The handler calls gfx_render_frame@0x4820b0, which begins a D3D scene, consumes queued surface commands, draws all visible retained objects, ends the scene, and presents the backbuffer without calling d3d_clear_render_target_black; opcode 0x20e is the separate clear. Refined 2026-07-30.
 
-Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
+Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is an explicit retained-state publication boundary, not a continuously visible object-store mutation. The renderer does not clear its selected target: opcode 0x20e owns explicit black clearing, so full-frame publication preserves preceding target pixels beneath its redraw. The read/message-skip branch resets the animation service then presents; the port publishes and snaps pending 0x223 state here. Normal playback branches to 0x21c, which owns repeated render/wait/resume. Headless hosts remain non-blocking.
 
 ### 0x20d `select-render-target` (select-render-target, argc 1)
 - **summary:** Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000.

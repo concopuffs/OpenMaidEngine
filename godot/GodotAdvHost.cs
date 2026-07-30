@@ -17,6 +17,10 @@ public enum HostPresentationReason
     DiscreteSourceCell = 16,
 }
 
+public readonly record struct BackbufferPublicationPolicy(
+    bool PreserveExistingPixels,
+    bool AppendGpuLayers);
+
 public sealed class GodotAdvHost : IHost
 {
     private readonly Main _main;
@@ -99,7 +103,7 @@ public sealed class GodotAdvHost : IHost
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
     private readonly object _backbufferRangeLock = new();
     private GfxHandleRange _backbufferRange = GfxHandleRange.All;
-    private bool _backbufferPublicationIsIncremental;
+    private bool _backbufferPublicationPreservesExistingPixels;
     private bool _backbufferClearPending;
     private LegacyScreenTransition? _screenTransition;
     public volatile bool IsWaiting;
@@ -477,7 +481,7 @@ public sealed class GodotAdvHost : IHost
         lock (_backbufferRangeLock)
         {
             _backbufferRange = new GfxHandleRange(firstHandle, count);
-            _backbufferPublicationIsIncremental = true;
+            _backbufferPublicationPreservesExistingPixels = true;
         }
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
         // Native backbuffer 0x222 ends its D3D scene and calls Present before returning. Snapshot this
@@ -493,7 +497,8 @@ public sealed class GodotAdvHost : IHost
         }
     }
 
-    public bool SnapshotBackbufferObjects(GfxState gfx, long nowMs, List<RenderObject> snapshot)
+    public BackbufferPublicationPolicy SnapshotBackbufferObjects(
+        GfxState gfx, long nowMs, List<RenderObject> snapshot)
     {
         gfx.SnapshotVisibleObjects(nowMs, snapshot);
         GfxHandleRange range;
@@ -501,14 +506,27 @@ public sealed class GodotAdvHost : IHost
         lock (_backbufferRangeLock)
         {
             range = _backbufferRange;
-            preserveExistingPixels = _backbufferPublicationIsIncremental && !_backbufferClearPending;
+            preserveExistingPixels =
+                _backbufferPublicationPreservesExistingPixels && !_backbufferClearPending;
             _backbufferClearPending = false;
         }
         int write = 0;
         for (int read = 0; read < snapshot.Count; read++)
             if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
         if (write < snapshot.Count) snapshot.RemoveRange(write, snapshot.Count - write);
-        return preserveExistingPixels;
+        return ResolveBackbufferPublicationPolicy(
+            preserveExistingPixels, range, snapshot.Count);
+    }
+
+    internal static BackbufferPublicationPolicy ResolveBackbufferPublicationPolicy(
+        bool preserveExistingPixels, GfxHandleRange range, int visibleObjectCount)
+    {
+        // Native preservation is a pixel rule, not permission to retain an unbounded history of
+        // Godot Sprite2D nodes. Partial ranges must overlay. A nonempty full redraw compacts the GPU
+        // stage, while an empty full redraw leaves the preceding stage untouched.
+        bool appendGpuLayers = preserveExistingPixels
+                               && (range != GfxHandleRange.All || visibleObjectCount == 0);
+        return new BackbufferPublicationPolicy(preserveExistingPixels, appendGpuLayers);
     }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
@@ -872,7 +890,9 @@ public sealed class GodotAdvHost : IHost
         lock (_backbufferRangeLock)
         {
             _backbufferRange = GfxHandleRange.All;
-            _backbufferPublicationIsIncremental = false;
+            // Native gfx_render_frame draws every visible retained object over the current target.
+            // It does not clear first; backbuffer clearing is the separate explicit opcode 0x20e.
+            _backbufferPublicationPreservesExistingPixels = true;
         }
         int started = gfx.StartForegroundTransitions(_clock.NowMs);
         int completed = gfx.CompleteForegroundTransitions(_clock.NowMs);
@@ -1062,7 +1082,7 @@ public sealed class GodotAdvHost : IHost
         lock (_backbufferRangeLock)
         {
             _backbufferRange = GfxHandleRange.All;
-            _backbufferPublicationIsIncremental = false;
+            _backbufferPublicationPreservesExistingPixels = false;
             _backbufferClearPending = false;
         }
         lock (_textLock)

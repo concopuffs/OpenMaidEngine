@@ -3876,11 +3876,15 @@ The port now gives op `0xd5` a dedicated non-presenting deadline wait which keep
 barrier held, while backbuffer `0x222` suspends that barrier and synchronously snapshots the exact callback
 state before returning. Incremental range publications preserve the preceding backbuffer: the software
 backend skips its black clear and the GPU backend appends the new draw layers over its retained stage.
-An explicit backbuffer `0x20e` disables preservation for the following publication, and ordinary `0x20c`
-continues to replace the retained stage as a full reconstruction. This removes the pre-animation
-full-popup frame and supplies the preserved pixels needed by the `[0,59999)` close endpoint without
-special-casing BUNKI handles. A one-frame black flicker is still visible at the end of close, however, so
-some later publication or retained-stage reset remains to be reconciled.
+An explicit backbuffer `0x20e` disables preservation for the following publication. Native
+`gfx_render_frame@0x4820b0`, used by ordinary `0x20c`, likewise has no implicit clear: it draws all visible
+objects over the selected target and leaves clearing to `0x20e`. The software backend can apply that rule
+literally to its pixel buffer. Godot GPU nodes require a separate retention policy: partial ranges append
+over the retained stage, nonempty full publications replace/reuse the existing Sprite2D pool, and empty
+full publications leave the preceding stage untouched. Treating every full publication as an append caused
+unbounded draw-node accumulation and rapid slowdown. This split removes the pre-animation full-popup frame
+and prevents BUNKI's post-close empty `0x20c`—issued after releasing both the capture and stable menu
+objects—from reconstructing an empty selected set over black, without stacking complete scenes.
 
 Surface text also remains modeled metadata rather than pixels. Selected-target publication now projects
 that metadata into the destination surface, and the final Godot labels inherit the retained object's
@@ -3892,8 +3896,10 @@ text trails even though preserving the underlying software pixels or GPU draw la
 
 Focused timed-callback boundary coverage passes with the complete 532-test engine suite. The Godot build
 is warning-free and the Himegari-targeted threaded frontend selftest passes. User testing confirmed the
-premature opening frame and accumulated text trails are gone. The close-only black frame remains the visual
-acceptance gap.
+premature opening frame and accumulated text trails are gone. The close-only black frame was traced to the
+port's incorrect implicit clear on an empty full `0x20c`. The first preservation correction over-retained
+GPU draw nodes; the bounded full/partial/empty publication policy passes the frontend selftest. User
+retesting accepted both the restored performance and close behavior on 2026-07-30.
 
 ### Formatted integers on text surfaces — opcode `0x205` (2026-07-21)
 
