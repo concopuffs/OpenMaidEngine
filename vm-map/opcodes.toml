@@ -916,11 +916,12 @@ abi_source = "kelebek+decode-validated"
 name = "show-text"
 category = "adv"
 summary = "(layout_slot)(text) - build and publish a retained text run in the selected ADV layout, using the current glyph delay and raster style; slot zero selects the current layout."
+details = "The live 20-byte glyph record is {chain_flag,left,top,right,bottom}; rectangle members are edges. Overflow bits use strict bound<glyph-edge comparisons. With horizontal wrapping enabled, CP932 0x8141/0x8142/0x8176 (、/。/」) remain on the preceding line. Timed publication binds first_handle+reveal_index only while reveal_index is below the configured object capacity."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which snapshots the selected layout cursor and active font/color state, rasterizes one record per CP932 glyph, advances the live cursor, and publishes records through adv_text_publish_next_glyph@0x451220 using text-manager charDelay. Native SC0000 traces show a 50-ms ordinary delay and retained layout publication; MAMES/ITMES/SKMES/INFOMES set delay zero for immediate UI descriptions."
+evidence = "Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which snapshots the selected layout cursor and active font/color state, rasterizes one record per CP932 glyph, advances the live cursor, and publishes records through adv_text_publish_next_glyph@0x451220 using text-manager charDelay. adv_text_layout_check_overflow@0x45efc0 returns independent horizontal/vertical bits from strict right/bottom comparisons; the builder's wrap branch excludes CP932 0x8141/0x8142/0x8176. The publisher passes record edges directly to gfx_object_bind_draw@0x47e870 and stops at layout+0x6c capacity. Native SC0000 traces show a 50-ms ordinary delay and retained layout publication; MAMES/ITMES/SKMES/INFOMES set delay zero for immediate UI descriptions."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1004,12 +1005,12 @@ abi_source = "kelebek+decode-validated"
 name = "reset-adv-text-layout"
 category = "adv"
 summary = "(layout_slot) - clear/reset an ADV text layout, append a retained-history boundary when recording is enabled, snapshot the current code/text position, and commit pending ReadTextDB records. T1 entries target these structural reset sites."
-details = "Port status (2026-07-24): commits the profile-owned ReadTextDB queue, records the current T1 coordinate, and refreshes per-message read-skip state in addition to the retained-layout reset."
+details = "The reset recreates the initial {0,reset_x,reset_y,right,bottom} layout record, clears every pixel of source surface layout_slot+0x14, and erases the complete configured glyph-object range. Port status (2026-07-24): also commits the profile-owned ReadTextDB queue, records the current T1 coordinate, and refreshes per-message read-skip state."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; the worker clears the selected layout and appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20."
+evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; adv_text_layout_reset_cursor_and_bounds_record@0x455070 reconstructs the initial five-dword record, then reset zeroes the complete layout surface and calls gfx_object_erase_range(first,capacity). It appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5156,11 +5157,12 @@ abi_source = "kelebek+decode-validated"
 name = "publish-adv-text-layout"
 category = "adv"
 summary = "(layout_slot) - republish one ADV text layout and, while active, its current wait-indicator frame."
+details = "Republish snapshots the global reveal index, clamps only to the selected layout's record count, erases its configured retained-object interval, and rebinds records zero through the reveal index inclusive from surface layout_slot+0x14. Unlike timed reveal, native republish does not clamp to the configured object capacity; Himegari reserves 500 handles for every layout and shipped ordinary strings remain below that bound."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requested slot to adv_text_publish_layout@0x450c80, which rebinds the layout's retained text records. If ADV run-state bit 0x40000000 is active, it also calls adv_text_publish_wait_indicator_frame@0x453120 with ctx+0x5f72c. Slot zero resolves the text manager's current layout; the corpus always uses slot one, including HISTORY.BIN@0x13ab in its shared ADV redraw callback."
+evidence = "Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requested slot to adv_text_publish_layout@0x450c80. That worker reads manager+0x570, clamps against record count, erases layout+0x68/+0x6c, and binds each record's native edges through gfx_object_bind_draw without a capacity check. If ADV run-state bit 0x40000000 is active, the opcode also calls adv_text_publish_wait_indicator_frame@0x453120 with ctx+0x5f72c. Slot zero resolves the text manager's current layout; the corpus always uses slot one, including HISTORY.BIN@0x13ab in its shared ADV redraw callback."
 
 [[opcode.semantics.args]]
 i = 1

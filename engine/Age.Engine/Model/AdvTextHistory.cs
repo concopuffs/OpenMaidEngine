@@ -195,6 +195,15 @@ public sealed class AdvTextHistory
         layout.TextObjectRangeCount = count;
     }
 
+    public AdvTextLayoutPresentationBinding GetPresentationBinding(int requestedSlot)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        return new AdvTextLayoutPresentationBinding(
+            slot, checked(slot + 0x14), layout.TextObjectRangeFirst,
+            layout.TextObjectRangeCount, layout.WaitIndicatorObjectHandle);
+    }
+
     /// <summary>
     /// Resolve layouts whose complete native retained-glyph handle interval is covered by one op-0x1f7
     /// erase. The Label backend collapses those glyph objects into live text runs, so full native range
@@ -275,20 +284,9 @@ public sealed class AdvTextHistory
         _entries.Clear();
         _entries.AddRange(entries);
         _pendingGroupStarts.Clear();
-        _layouts.Clear();
-        foreach (AdvTextHistoryRecord record in records)
-        {
-            var layout = GetOrCreateLayout(record.Layout.Slot);
-            layout.Width = record.Layout.Width;
-            layout.Height = record.Layout.Height;
-            layout.OriginX = record.Layout.OriginX;
-            layout.OriginY = record.Layout.OriginY;
-            layout.CursorX = record.Layout.CursorX;
-            layout.CursorY = record.Layout.CursorY;
-            layout.Right = record.Layout.Right;
-            layout.Bottom = record.Layout.Bottom;
-        }
-        CurrentLayoutSlot = entries.Count > 0 ? entries[^1].LayoutSlot : 0;
+        // Native text_history_deserialize clears and reconstructs only the history entry/record vectors.
+        // Live layout definitions, selected layout, surfaces, and retained-object bindings remain owned by
+        // the initialized text manager and are rebuilt by the script restore path as needed.
         _navigationAnchorIndex = entries.Count - 1;
     }
 

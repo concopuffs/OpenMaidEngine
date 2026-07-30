@@ -289,6 +289,12 @@ public class AdvTextOpsTests
         Assert.Equal((10, 10, 250, 368), CursorAndBounds(history.GetLayoutSnapshot(9)));
         Assert.Equal(new[] { 1 }, history.LayoutsCoveredByTextObjectErase(0xd6d8, 0x1f4));
         Assert.Equal(new[] { 7 }, history.LayoutsCoveredByTextObjectErase(0x7d0, 0x1f4));
+        Assert.All(Enumerable.Range(1, 9), slot =>
+        {
+            AdvTextLayoutPresentationBinding binding = history.GetPresentationBinding(slot);
+            Assert.Equal(slot + 0x14, binding.SourceSurfaceSlot);
+            Assert.Equal(0x1f4, binding.ObjectCapacity);
+        });
 
         static (int X, int Y, int Right, int Bottom) CursorAndBounds(AdvTextLayoutSnapshot layout)
             => (layout.CursorX, layout.CursorY, layout.Right, layout.Bottom);

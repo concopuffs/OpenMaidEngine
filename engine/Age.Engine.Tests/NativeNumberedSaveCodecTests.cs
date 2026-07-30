@@ -93,6 +93,34 @@ public class NativeNumberedSaveCodecTests
     }
 
     [Fact]
+    public void HistoryTailRestorePreservesInitializedLiveLayoutBindings()
+    {
+        var savedHistory = new AdvTextHistory();
+        savedHistory.DefineLayout(1, 400, 120, 75, 340);
+        savedHistory.AppendText(1, 0x123, "保存履歴", AdvTextStyle.Default);
+
+        var liveHistory = new AdvTextHistory();
+        liveHistory.DefineLayout(3, 320, 90, 20, 400);
+        liveHistory.SetResetCursor(3, 45, 42);
+        liveHistory.SetBounds(3, 300, 80);
+        liveHistory.SetWaitIndicatorObjectHandle(3, 0x1234);
+        liveHistory.SetTextObjectRange(3, 0x2000, 500);
+
+        NativeTextHistoryCodec.DecodeInto(NativeTextHistoryCodec.Encode(savedHistory), liveHistory);
+
+        Assert.Equal(savedHistory.Entries, liveHistory.Entries);
+        Assert.Equal(savedHistory.Records.Select(record => record.Text),
+                     liveHistory.Records.Select(record => record.Text));
+        Assert.Equal(3, liveHistory.CurrentLayoutSlot);
+        Assert.Equal(
+            new AdvTextLayoutSnapshot(3, 320, 90, 20, 400, 0, 0, 300, 80),
+            liveHistory.GetLayoutSnapshot(3));
+        Assert.Equal(
+            new AdvTextLayoutPresentationBinding(3, 0x17, 0x2000, 500, 0x1234),
+            liveHistory.GetPresentationBinding(3));
+    }
+
+    [Fact]
     public void DirectoryStorePreservesHistoryTailAfterNativeContainer()
     {
         string root = Path.Combine(Path.GetTempPath(), "age-numbered-tail-" + Guid.NewGuid().ToString("N"));

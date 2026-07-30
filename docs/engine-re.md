@@ -2507,6 +2507,16 @@ serialization, and `text_history_deserialize@0x456130` restores them on the matc
 `NativeTextHistoryCodec` now implements that appended tail directly against the same live
 `AdvTextHistory` model; it remains independent of shared profile state and `RT.DAT`.
 
+That tail is specifically the History backlog, not the live ADV layout presentation.
+`text_history_deserialize` calls `text_history_clear`, reconstructs only the logical index and 0x48-byte
+History record/string vectors, and does not recreate or replace live layout definitions, layout glyph
+records, source-surface pixels, selected layout, wait-indicator handles, or glyph-object ranges. The main
+layout-3 container likewise reloads only flagged asset surfaces; created ADV layout surfaces have no
+serialized pixels. Full restoration runs the saved scripts from their ordinary entry prologues through
+`CALLBACK_LOAD.BIN`/`0xae`, so the current page is rebuilt and republished by script control flow.
+`AdvTextHistory.RestorePersistenceSnapshot` consequently replaces only backlog data and preserves any
+initialized live layout configuration/bindings. A focused native-tail regression pins that separation.
+
 History's display support consists of the ordinary presentation operations: primary/ruby font sizes
 (`0x75/0x197`), font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin
 (`0x198`), surface rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object presentation
@@ -2763,13 +2773,27 @@ record with `gfx_object_bind_draw`. Native SC0000 records `ctx+0x14e9c = 50 ms`:
 at `0x834`, then publishes them one at a time before reaching wait `0x83c`. A click during reveal completes
 the remaining records and is consumed; the next click releases the stable wait.
 
-The record layout is `{publication-chain flag, x, y, width, height}` as five dwords. The publisher binds
-handle `layout+0x68 + reveal_index` from source surface `layout_slot+0x14`, uses `(x,y,width,height)` as
-the source rectangle, and places it at `(layout_origin_x+x, layout_origin_y+y)`. A set first dword makes the
-service publish the following record in the same tick; otherwise the configured glyph delay controls the
-next publication. This gives the port a direct path to ordinary `GfxState` objects: rasterize the complete
-layout surface first, then materialize these exact bounded records in handle order rather than adding a
-second overlay compositor.
+The record layout is `{publication-chain flag, left, top, right, bottom}` as five dwords. These are native
+rectangle edges, not width/height: `gfx_object_bind_draw@0x47e870` copies them directly into its source-edge
+record. The publisher binds handle `layout+0x68 + reveal_index` from source surface `layout_slot+0x14` and
+places it at `(layout_origin_x+left, layout_origin_y+top)`. A first dword equal to one makes the service
+publish the following record in the same tick; otherwise the configured glyph delay controls the next
+publication. This gives the port a direct path to ordinary `GfxState` objects: rasterize the complete layout
+surface first, then materialize these exact bounded records in handle order rather than adding a second
+overlay compositor.
+
+`adv_text_layout_check_overflow@0x45efc0` sets bit 1 only when `right_bound < glyph_right` and bit 2 only
+when `bottom_bound < glyph_bottom`; equality fits. Vertical overflow terminates the builder. With horizontal
+wrapping enabled, right overflow inserts a line break before the current glyph except for CP932 `0x8141`,
+`0x8142`, and `0x8176` (`、`, `。`, `」`), which remain attached to the preceding line even beyond the
+bound. The line pitch is the positive primary font pixel height plus configured leading.
+
+Timed `adv_text_publish_next_glyph@0x451220` binds only while the reveal index is below layout `+0x6c`,
+the configured retained-object capacity; reaching the capacity ends the timed service even if more records
+exist. SYSTEM4 configures all nine Himegari layouts with `0x1f4` (500) handles. The decoded static dialogue
+corpus contains 30,057 rows, has a maximum individual show-text string length of 68, and contains no
+500-character string, so shipped ordinary text does not approach that limit. This is a corpus safety
+baseline, not permission for a mod-facing renderer to overrun the interval.
 
 The port retains the SC0000-visible contract without exposing thousands of individual host glyph objects:
 surface strings remain associated with blank surface slots for later retained-object binding, while ADV
@@ -3357,8 +3381,11 @@ concrete route relevant here.
 `op_0x20a_publish_adv_text_layout@0x422ce0` first calls
 `adv_text_publish_layout@0x450c80`. Slot zero selects the text manager's current layout; a nonzero operand
 selects that indexed layout. The worker erases the layout's old retained-object range, walks its 20-byte
-text records, and rebinds their draw objects. When run-state bit `0x40000000` is active, the opcode also
-calls `adv_text_publish_wait_indicator_frame@0x453120` with the current indicator frame. The latter worker
+text records, and rebinds their draw objects. It snapshots global reveal index manager `+0x570`, clamps it
+only to the layout's record count, and binds records zero through that index inclusive; unlike timed reveal,
+this path does not clamp to layout `+0x6c` capacity. Himegari's 500-handle ranges keep the shipped path within
+the configured interval. When run-state bit `0x40000000` is active, the opcode also calls
+`adv_text_publish_wait_indicator_frame@0x453120` with the current indicator frame. The latter worker
 uses frame `-1` to return/capture the terminal frame, `-2` to erase the indicator object, and a
 nonnegative frame to choose and bind the corresponding atlas cell. All corpus uses are `0x20a(1)`;
 `HISTORY.BIN@0x13ab` reaches it through the shared ADV redraw callback.
@@ -3645,9 +3672,15 @@ cursor record immediately.
 `op_0x1c1_set_adv_text_bounds@0x41f6c0` reads `(layout_slot, right, bottom)` and calls
 `adv_text_layout_set_bounds@0x44ff00`, which writes the pair to layout `+0x24/+0x28`. They are absolute
 layout-local overflow coordinates. `adv_text_layout_check_overflow@0x45efc0` compares glyph end x/y
-against those fields and returns horizontal/vertical overflow bits. When a layout resets,
+against those fields with strict `bound < glyph_edge` tests and returns horizontal/vertical overflow bits.
+When a layout resets,
 `adv_text_layout_reset_cursor_and_bounds_record@0x455070` replaces its retained state with a five-dword
 record `{0, reset_x, reset_y, right, bottom}` copied from all four configured fields.
+
+`adv_text_layout_reset@0x455210` then zeroes every pixel in surface `layout_slot+0x14` and erases the
+complete configured glyph-object interval at layout `+0x68/+0x6c`. History recording is a separate tail:
+unless suppression bit 31 is set, reset appends the logical boundary and arms the next History record's
+group-start flag.
 
 The corpus supplies a complete consistency check: all nine sites for each opcode are in SYSTEM4 and
 alternate after layouts 1–9 are defined and initially reset. Layout 1 configures cursor `(100,47)` and

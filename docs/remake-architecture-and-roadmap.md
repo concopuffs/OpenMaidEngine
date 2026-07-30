@@ -566,9 +566,19 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    current semantic coordinates and native-backed checks for SC0000 voiced/unvoiced pages, STUDY/MAMES,
    HISTORY, BUNKI, and save/load restoration. Confirm the remaining implementation-sensitive native details:
    overflow/kinsoku behavior, object-range exhaustion, layout reset/republication, and restoration of live
-   layout surfaces. The known 20-byte glyph record is `{publication-chain flag, x, y, width, height}`;
-   publication binds `layout_first_handle + reveal_index` from surface `layout_slot + 0x14`, using `(x,y,w,h)`
-   as the source rectangle and `layout_origin + (x,y)` as the destination.
+   layout surfaces. The 2026-07-30 baseline closes those questions: the 20-byte glyph record is
+   `{publication-chain flag, left, top, right, bottom}`; publication binds
+   `layout_first_handle + reveal_index` from surface `layout_slot + 0x14`, using those four edges as the
+   native source rectangle and `layout_origin + (left,top)` as the destination. Overflow compares glyph
+   right/bottom strictly against the configured bounds. Horizontal wrapping leaves CP932 `、`, `。`, and
+   `」` attached to the preceding line. Timed reveal stops at the configured handle capacity; all nine
+   Himegari layouts reserve 500 handles, while the largest individual static corpus string has 68 characters.
+   Reset clears the complete layout surface and handle interval. Op `0x20a` erases that interval and republishes
+   through the current reveal index, clamping to record count but not capacity. Numbered saves persist the
+   History backlog, not live layout surfaces or glyph records; initialized layout bindings survive history-tail
+   decode and the ordinary saved-frame prologue/republication path reconstructs current-page presentation.
+   `AdvRetainedTextContract` and focused engine tests pin the platform-neutral record, overflow, punctuation,
+   capacity, SYSTEM4 binding, and restore boundaries before presentation changes.
 2. **Land the backend-neutral mask and compositor core.** Add request/result records and an
    `IGlyphMaskRasterizer`-style seam outside the VM. Keep CP932 byte identity available for native-compatible
    requests while permitting an explicit Unicode-capable portable policy for mods. Implement AGE's coverage
