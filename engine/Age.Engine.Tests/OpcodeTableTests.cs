@@ -5,6 +5,21 @@ using Xunit;
 public class OpcodeTableTests
 {
     [Fact]
+    public void LoadsFromCallerOwnedStreamWithoutClosingIt()
+    {
+        using var source = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(
+            """
+            {"opcodes":[{"op":"0x55","label":"mov","argc":2}]}
+            """));
+
+        OpcodeTable table = OpcodeTableJson.Load(source);
+
+        Assert.True(source.CanRead);
+        Assert.Equal("mov", table.Label(0x55));
+        Assert.Equal(2, table.Argc(0x55));
+    }
+
+    [Fact]
     public void LoadsCompleteAgeCatalog()
     {
         var t = OpcodeTableJson.Load(Paths.OpcodesJson);

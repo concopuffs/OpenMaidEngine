@@ -117,13 +117,16 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                       and bootstrap/build scripts (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
-                                            plus the optional exact Windows text adapter), including the
-                                            portable TextServer glyph adapter, per-profile font-substitution
-                                            configuration, and TITLE-only F4 debug scene launcher
+                                            plus the optional exact Windows text adapter). Its assembly embeds
+                                            generated build/opcodes.json through HimegariRuntimeMetadata, so
+                                            exports do not need repository discovery. Also contains the portable
+                                            TextServer glyph adapter, per-profile font-substitution configuration,
+                                            and TITLE-only F4 debug scene launcher
 ```
 
-The disposable `build/page-map-<SCENE>.jsonl` files are produced by normal Godot runs and map runtime ADV
-page ordinals to their authoritative script offsets for `tools/locate_page.py`.
+The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
+runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
+have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.
 
 ## Conventions
 

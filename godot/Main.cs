@@ -275,7 +275,7 @@ public partial class Main : Godot.Control
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var table = HimegariRuntimeMetadata.LoadOpcodeTable();
         // Persistence retains AGE's native filenames and formats, but the port owns one profile-root
         // interception point. Himegari's SYS4INI makes SAVEPATH the SAVE child of REGFILEPATH, so both
         // save payloads and SYS4REG.INI remain isolated together under Godot's user directory.
@@ -333,7 +333,7 @@ public partial class Main : Godot.Control
             && !scene.Equals("SYSTEM4", System.StringComparison.OrdinalIgnoreCase);
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
-            pageMapPath = System.IO.Path.Combine(Paths.Build, $"page-map-{scene.ToUpperInvariant()}.jsonl");
+            pageMapPath = DefaultPageMapPath(scene);
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
@@ -2043,7 +2043,7 @@ public partial class Main : Godot.Control
 
     private void RunSelfTest()
     {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var table = HimegariRuntimeMetadata.LoadOpcodeTable();
         var (script, provider) = BuildSelfTestScene(table);
         var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider);
         headless.Run();
@@ -2379,6 +2379,20 @@ public partial class Main : Godot.Control
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         GetTree().Quit(ok ? 0 : 1);
+    }
+
+    private static string DefaultPageMapPath(string scene)
+    {
+        string fileName = $"page-map-{scene.ToUpperInvariant()}.jsonl";
+#if TOOLS
+        // Preserve the established workspace handoff for editor/development runs.
+        return System.IO.Path.Combine(Paths.Build, fileName);
+#else
+        // Exports have no repository and may be installed read-only. Keep diagnostics with the
+        // profile-owned Godot data instead of probing for an age-reimpl ancestor.
+        return System.IO.Path.Combine(
+            ProjectSettings.GlobalizePath("user://"), "diagnostics", "page-maps", fileName);
+#endif
     }
 
     // A deterministic synthesized scene: show-text, wait-for-input (exercises the suspend plumbing), a

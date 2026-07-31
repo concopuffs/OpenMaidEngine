@@ -5,7 +5,14 @@ public static class OpcodeTableJson
 {
     public static OpcodeTable Load(string path)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        using FileStream stream = File.OpenRead(path);
+        return Load(stream);
+    }
+
+    public static OpcodeTable Load(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        using var doc = JsonDocument.Parse(stream);
         var dict = new Dictionary<int, (string, int)>();
         foreach (var e in doc.RootElement.GetProperty("opcodes").EnumerateArray())
         {

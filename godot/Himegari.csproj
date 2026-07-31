@@ -9,6 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
+    <EmbeddedResource Include="..\build\opcodes.json"
+                      LogicalName="Himegari.Runtime.opcodes.json" />
   </ItemGroup>
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <ProjectReference Include="..\engine\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
@@ -21,4 +23,8 @@
           Link="FFmpeg-LICENSE.txt"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('..\build\opcodes.json')">
+    <Error Text="Missing generated runtime metadata '..\build\opcodes.json'. Run 'py -3.11 -X utf8 tools\opcodes_build.py --build' from age-reimpl before building Godot." />
+  </Target>
 </Project>

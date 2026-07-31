@@ -431,10 +431,12 @@ with the coordinator globals queued on the VM thread, then lets SYSTEM4 perform 
 call. F4 outside TITLE prints an unavailable reason and changes no state. Cancel or Escape closes the panel.
 The launcher does not seed story/profile state, jump to byte offsets, or force-switch an active child scene.
 
-**Godot page locator:** every normal run recreates `build/page-map-<SCENE>.jsonl`, adding one record per
-`wait-for-input` with the run-relative page, page-start location, canonical wait script/offset, last
-show-text instruction and string offsets, text, and nested call stack. Use `--page-map <jsonl>` to override
-the output. `--locator-hud` shows `SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
+**Godot page locator:** every editor/development run recreates `build/page-map-<SCENE>.jsonl`; a packaged
+export writes the same automatic map below `user://diagnostics/page-maps`. Each `wait-for-input` adds the
+run-relative page, page-start location, canonical wait script/offset, last show-text instruction and string
+offsets, text, and nested call stack. Use `--page-map <jsonl>` to override the output; pass that explicit path
+to `locate_page.py --map` when resolving a map copied from an export profile. `--locator-hud` shows
+`SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
 toggles it and **F3** copies the current locator to the clipboard. The offset remains authoritative because
 branching/state can shift page ordinals between runs. Resolve a reported page with
 `py -3.11 -X utf8 tools/locate_page.py SC0000 14`.
