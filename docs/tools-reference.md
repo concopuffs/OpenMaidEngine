@@ -321,6 +321,33 @@ resolved against the current working directory, and repeated overrides use the l
 Godot preserves the shell launch directory through inherited `PWD` because editor/project startup may
 change the process directory before managed code runs.
 
+**Linux x64 export** uses the committed `godot/export_presets.cfg` preset and `godot/Himegari.sln`:
+
+```powershell
+.\tools\export-linux-x64.ps1 -GodotConsole <path-to-Godot-4.7-.NET-console.exe>
+```
+
+Install the Godot 4.7 .NET export templates first and build the pinned native bundle under
+`build/native/linux-x64` with the commands in “Native FFmpeg movie shim” above. The script safely replaces
+only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, verifies the
+executable/PCK/self-contained managed payload plus all six project-owned FFmpeg files, and rejects the
+Windows GDI adapter and Windows FFmpeg DLLs. Output is `build/export/linux-x64/Himegari.x86_64` with its
+PCK and `data_Himegari_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
+items are one artifact.
+
+The portable font policy requires a Japanese-capable system font. A minimal Ubuntu install needs, for
+example, `sudo apt install fonts-noto-cjk`; absence is a startup failure rather than silent missing-glyph
+output. The exported headless smoke command is:
+
+```bash
+./build/export/linux-x64/Himegari.x86_64 --headless -- \
+  --selftest --game-root "/absolute/path/to/Himegari_Game" --text-backend portable
+```
+
+This validates the packaged .NET/Godot runtime, archive access, portable text realization, retained
+rendering logic, audio payload parsing, and teardown. It does not validate a desktop window, physical
+input, or audible output; run those gates on a real Linux desktop.
+
 With the exported executable placed in an AGE install, a no-argument launch therefore uses that install
 and starts the persistent `SYSTEM4.BIN` root naturally. Direct development runs are hosted by the Godot
 editor executable, so pass `--game-root <install>` after Godot's `--` separator; the local

@@ -74,12 +74,13 @@ public partial class DebugSceneLauncher : PopupPanel
         _launch.Pressed += RequestLaunch;
     }
 
-    public void Open(IReadOnlyList<DebugSceneEntry> entries, string currentContext)
+    public void Open(IReadOnlyList<DebugSceneEntry> entries, string currentContext, bool present = true)
     {
         _all = entries;
         _currentContext = currentContext;
         _status.Text = "";
         Refresh();
+        if (!present) return;
         PopupCentered(new Vector2I(700, 540));
         _search.GrabFocus();
     }

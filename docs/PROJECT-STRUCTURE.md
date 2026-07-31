@@ -124,6 +124,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
                                             and TITLE-only F4 debug scene launcher
 ```
 
+The Godot deliverable includes `Himegari.sln` because Godot's .NET exporter requires a solution,
+`export_presets.cfg` for the Linux x86_64 target, and `build/.gdignore` so disposable capture frames below
+the project do not enter its import or export scan. `tools/export-linux-x64.ps1` produces and validates the
+complete disposable artifact under `build/export/linux-x64/`.
+
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.

@@ -605,7 +605,7 @@ public partial class Main : Godot.Control
                     GD.Print(StepLimitDiagnosticFormatter.Format(haltTrace, _table!));
                     CaptureStallDiagnostic(haltTrace, "step-limit");
                 }
-                if (_selftest) RunSelfTest();
+                if (_selftest) RunSelfTestAndQuitOnFailure();
             }
         }
         finally { perf?.EndFrame(); }
@@ -2057,9 +2057,8 @@ public partial class Main : Godot.Control
                           && debugEntries.Select(entry => entry.PackedId).Distinct().Count() == debugEntries.Count;
         var launcherSmoke = new DebugSceneLauncher();
         AddChild(launcherSmoke);
-        launcherSmoke.Open(debugEntries, "SYSTEM4.BIN > TITLE.BIN");
-        launcherSmoke.Hide();
-        launcherSmoke.QueueFree();
+        launcherSmoke.Open(debugEntries, "SYSTEM4.BIN > TITLE.BIN", present: false);
+        launcherSmoke.Free();
         bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
                               && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
         bool inputTranslationOk = Win32VirtualKeyTranslator.TryTranslate(
@@ -2379,6 +2378,19 @@ public partial class Main : Godot.Control
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
                       $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         GetTree().Quit(ok ? 0 : 1);
+    }
+
+    private void RunSelfTestAndQuitOnFailure()
+    {
+        try
+        {
+            RunSelfTest();
+        }
+        catch (Exception exception)
+        {
+            GD.PushError($"SELFTEST FAILED: {exception}");
+            GetTree().Quit(1);
+        }
     }
 
     private static string DefaultPageMapPath(string scene)

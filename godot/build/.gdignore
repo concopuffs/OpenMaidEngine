@@ -1,0 +1,1 @@
+# Disposable runtime captures belong under build/, but Godot must not import or package them.
