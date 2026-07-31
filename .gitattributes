@@ -2,3 +2,4 @@ docs/opcode-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
 docs/global-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
 docs/engine-ctx-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
 tools/age_opcodes_himegari.py whitespace=trailing-space,space-before-tab,cr-at-eol
+*.sh text eol=lf

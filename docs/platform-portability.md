@@ -27,10 +27,11 @@ The VM and content pipeline are already mostly platform-neutral:
   The managed FFmpeg resolver derives reserved Windows, Linux, and macOS x64/arm64 RIDs from the actual
   process and rejects unreserved architectures instead of silently looking in the wrong directory.
 
-The sole movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API, but only a
-Windows-x64 native bundle is built and staged today. The accepted DirectShow fallback was deleted after the
-corpus and audible LOGO/OP/CHAPTER gates passed. There are also softer Windows assumptions that should be tested
-or replaced before claiming portable exports.
+The sole movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API. Reproducible
+Windows-x64 and Linux-x64 native bundles are built and staged; the Linux ABI and complete installed corpus pass
+under WSL, but an exported Linux Godot executable has not yet received window/audio/font/filesystem smoke tests.
+The accepted DirectShow fallback was deleted after the corpus and audible LOGO/OP/CHAPTER gates passed. There
+are also softer Windows assumptions that should be tested or replaced before claiming portable exports.
 
 ## Dependency inventory
 
@@ -38,8 +39,8 @@ or replaced before claiming portable exports.
 |---|---|---|---|
 | SYS4INI per-game startup profile | `Sys4AssetCatalog` parses and retains the bounded ordered startup trailer; `Sys4LogicalCanvas` applies `SCREENX`/`SCREENY` with AGE's independent `640x480` fallbacks. Native SYS4INI also carries text, ADV input/skip, save ABI/path, audio, legacy renderer, and Windows registration settings | Godot uses the selected canvas for content scaling, backbuffers/compositor bounds, primary surfaces, layout/input fallbacks, and the default windowed client. `--window-width`/`--window-height` vary only the physical client while preserving the canvas and letterbox policy. The port still does not source `CancelMesSkipOnClick`, `CoexistMesSkip`, cursor/redraw policy, or wheel action ids from the trailer | Validate the existing presentation policy on Linux/macOS window managers. Apply further semantic keys explicitly, translate save roots through the host, and classify DirectDraw/fullscreen-bit and registration/key settings as native compatibility metadata. Canonical inventory and consumers: `sys4-format-notes.md` and `engine-re.md` |
 | Retained graphics presentation | Backend-neutral `GfxState`; accepted default Godot `Sprite2D` GPU stage plus the retained software pixel oracle, using runtime `ImageTexture`, canvas transforms/materials, and no native graphics API | GPU backend caches static/color-key variants, updates dynamic surfaces, handles retained range transitions, and falls back whole-frame for the legacy host screen-transition path | Godot owns D3D/Vulkan/Metal/OpenGL selection; validate shader/blend/filter behavior per target rather than adding a platform renderer |
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED; `0x24d` movie masks) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/age_movie_ffmpeg` ABI | Windows-x64 passes the complete 213-payload installed video/audio corpus gate plus audible LOGO/OP/CHAPTER playback and real TEST.AGF green-mask decode | Add target-specific native builds and export packaging |
-| Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory; video-only streams use monotonic pacing while audio-bearing streams use the Godot output clock. Opcode `0x24d` redirects decoded green bytes through the platform-neutral retained rasterizer and exact managed packed-alpha mask helper | Concurrent/restarted uses of one asset have independent frame/audio/completion/teardown state. Ordinary and mask movies share VFS/FFmpeg ownership; the mask result is a backend-neutral dynamic RGBA surface consumed by either Godot renderer. Managed code is no longer Windows-annotated, while only the win-x64 native bundle exists today | Add Linux/macOS native builds and smoke gates |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED; `0x24d` movie masks) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/age_movie_ffmpeg` ABI | Windows-x64 and Linux-x64 both pass the complete 213-payload installed video/audio corpus gate; Windows also passes audible LOGO/OP/CHAPTER playback and real TEST.AGF green-mask decode | Add macOS native builds, distributable source-offer packaging, and Linux/macOS Godot runtime smoke gates |
+| Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory; video-only streams use monotonic pacing while audio-bearing streams use the Godot output clock. Opcode `0x24d` redirects decoded green bytes through the platform-neutral retained rasterizer and exact managed packed-alpha mask helper | Concurrent/restarted uses of one asset have independent frame/audio/completion/teardown state. Ordinary and mask movies share VFS/FFmpeg ownership; the mask result is a backend-neutral dynamic RGBA surface consumed by either Godot renderer. Managed code is no longer Windows-annotated, and target-aware builds stage either the win-x64 or Linux-x64 native bundle | Add macOS native builds and Linux/macOS in-engine smoke gates |
 | Movie audio | ABI v2 returns timestamped stereo float PCM; bounded managed buffering feeds a per-playback Godot `AudioStreamGenerator` and routes native movie flags to engine buses | All 29 installed audio-bearing streams decode with signal; synchronized LOGO/OP/CHAPTER playback is audibly accepted | Treat absent, distorted, or unsynchronized audio from an audio-bearing movie as a runtime bug |
 | ADV font discovery/raster fidelity | `Age.Engine.Text` remains OS-neutral. On compatible ACP-932 Windows, `auto` selects the separate exact `Age.Engine.Text.Windows` GDI gray-4 backend. Otherwise Godot TextServer supplies Unicode masks and metrics from ordered system-font substitutions in `godot/config/himegari-text-rendering.json`; this policy is explicitly not GDI pixel-exact. Immediate `0x204`/`0x205`, live ADV, retained History, and the wait atlas all enter ordinary RGBA surfaces/retained handles | Three Mincho/Gothic regular/bold samples byte-match an independent Unicode GDI oracle. Forced exact and forced portable self-tests cover immediate, live, and History rasterization, bounded caching, complete-line materialization, retained ordering, alpha/tint/fade, transforms, clipping, capture, HIDEWIN suspension, partial erase/republication, reset, and teardown. Gameplay `Label` pools and overlay projection are gone | Produce and smoke-test Linux/macOS exports, confirm installed family availability/fallback selection there, and keep the GDI project out of non-Windows deliverables |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
@@ -72,9 +73,9 @@ VM op 0x236 (non-modal) / op 0x20f (modal) / op 0x24d (green-mask transition)
 
 Everything before and after the selected decoder is portable. The replacement decision is an in-process
 FFmpeg backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. FFmpeg
-`n8.1.2-29-g703dcc25b9` is pinned by immutable release URL and SHA-256 in
-`native/age_movie_ffmpeg/dependency-win64.json`; changing that pin requires rerunning the full installed-movie
-gate. The shim dynamically links an LGPL build made without GPL or nonfree components and uses
+`n8.1.2-29-g703dcc25b9` is pinned by immutable release URL and SHA-256 in each target manifest under
+`native/age_movie_ffmpeg/`; changing either pin requires rerunning the full installed-movie gate. The shim
+dynamically links an LGPL build made without GPL or nonfree components and uses
 `libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `libswresample`. Release artifacts must carry
 the matching FFmpeg source/configuration and notices required by FFmpeg's
 [license checklist](https://ffmpeg.org/legal.html).
@@ -167,11 +168,10 @@ DirectShow renderer to the existing D3D target without assigning an RGB key. The
 DirectShow preroll/stream-origin inference are recorded in `docs/engine-re.md`.
 
 Native deliverables are RID-specific and bundled with the Godot export; the runtime must not discover an
-arbitrary system FFmpeg. The first implementation gate is Windows x64 because that is the current runnable
-target, but the C ABI and loader paths must reserve Windows x64, Linux x64, macOS x64, and macOS arm64 from the
-start. Builds use shared libraries, `$ORIGIN`/`@loader_path`-style local lookup on Unix targets, recorded source
-hashes and configure arguments, and no committed original-game data. Packaging automation is part of completing
-the backend, not a prerequisite for the first native decode spike.
+arbitrary system FFmpeg. Windows x64 and Linux x64 now have pinned builds; the C ABI and loader paths also reserve
+macOS x64 and macOS arm64. Builds use shared libraries, `$ORIGIN`/`@loader_path`-style local lookup on Unix
+targets, recorded source hashes and configure arguments, and no committed original-game data. Packaging
+automation is part of completing the backend, including the corresponding-source/configuration offer.
 
 The current movie ABI is version 3. Its position-seek entry point resets both independent demux/decoder
 pipelines before managed keyframe/audio preroll, so opcode `0x241` has the same bounded, synchronized behavior
@@ -188,8 +188,19 @@ packaging. `FfmpegMovieDecoder` now adds cancellable timestamp pacing and is the
 copies the shim, five required shared libraries, and FFmpeg license beside `Himegari.dll`; a natural SYSTEM4
 smoke completed 7288 ms `LOGO.AGF`, opened 106919 ms `OP.AGF`, and published frames from both without loading
 DirectShow; the user subsequently confirmed both opening movies work in normal windowed playback. DirectShow
-was deleted after the later synchronized-audio gate. Full
-export/source-offer packaging and non-Windows builds remain outstanding.
+was deleted after the later synchronized-audio gate. Full export/source-offer packaging, Linux Godot runtime
+smoke coverage, and macOS native builds remain outstanding.
+
+The Linux-x64 bundle landed on 2026-07-31 from the matching pinned BtbN LGPL shared build. Its bootstrap verifies
+the immutable archive hash and reported FFmpeg commit; its build emits an ELF64 x86-64 ABI v3 shim plus only the
+five required SONAME libraries and license under disposable `build/native/linux-x64`. The shim records
+`RUNPATH=$ORIGIN`, every FFmpeg dependency resolves beside it, and the bundle's newest required glibc symbol is
+2.28, matching the provider baseline enforced by the build script. A self-contained Linux corpus-gate executable
+under Ubuntu 20.04 decoded all 213 installed payloads with 0 failures in 10.696 seconds. A zero-warning
+`ExportRelease` Linux-target assembly build staged the shim, five libraries, and license beside `Himegari.dll`
+without the Windows GDI assembly or DLLs. These gates establish Linux loader/ABI/decoder and managed staging
+compatibility; they do not yet establish an exported Godot window, live audio timing, font realization, or
+case-sensitive install/profile behavior.
 
 The Windows-x64 installed-corpus gate passed on 2026-07-22 with the pinned dependency: all 213 signature-selected
 MPEG payloads opened and reached EOF under a 30-second per-item bound. It decoded all 15,788 frames across twelve

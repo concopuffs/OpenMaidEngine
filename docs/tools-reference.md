@@ -221,22 +221,25 @@ script/offset/opcode, that frame chain, the hottest sites in the bounded final 1
 final 16-instruction sequence. This makes the last ADV locator unnecessary for identifying a post-dialogue loop;
 send either the `step-limit` console block or the generated JSON.
 
-## Native FFmpeg movie shim (Windows x64)
+## Native FFmpeg movie shim (Windows and Linux x64)
 
-These PowerShell tools build the selected Windows-x64 live movie backend. The dependency manifest pins an
-immutable LGPL shared FFmpeg archive and SHA-256.
+The target-specific dependency manifests pin immutable LGPL shared FFmpeg archives and SHA-256 hashes. The
+Windows tools use PowerShell/MSVC; the Linux tools run in Bash with Python 3, curl, a C compiler, binutils, and
+the ordinary archive/core utilities available.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, hash-check, extract, and version-check the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-win64.ps1` | Discover the MSVC x64 toolchain, build `age_movie_ffmpeg.dll`, and stage its exact shared-library/license dependencies. | `.\\native\\age_movie_ffmpeg\\build-win64.ps1 -SdkRoot <bootstrap-output> [-OutputDirectory <dir>]` | C ABI source + FFmpeg SDK → disposable `build/native/win-x64/` by default |
+| `native/age_movie_ffmpeg/bootstrap-linux-x64.sh` | Download, SHA-256-check, extract, and version-check the pinned Linux x64 FFmpeg SDK. Prints the resolved SDK root. | `native/age_movie_ffmpeg/bootstrap-linux-x64.sh [destination]` | `dependency-linux-x64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
+| `native/age_movie_ffmpeg/build-linux-x64.sh` | Build the ELF64 x86-64 shim; stage the five exact FFmpeg SONAME libraries and license; reject stale `.so` files, unresolved/nonlocal FFmpeg dependencies, a missing `$ORIGIN` runpath, or a glibc requirement newer than the pinned 2.28 baseline. | `sdk_root="$(native/age_movie_ffmpeg/bootstrap-linux-x64.sh)"` then `native/age_movie_ffmpeg/build-linux-x64.sh "$sdk_root" [output-directory]` | C ABI source + FFmpeg SDK → disposable `build/native/linux-x64/` by default |
 | `tools/movie-corpus-gate` | Discover every MPEG program stream stored under an `.AGF` catalog entry; decode every video frame and, when present, every audio block through the unpaced FFmpeg session; validate independent sequence dimensions, metadata, RGBA size, stereo finite PCM, monotonic video/audio timestamps, EOF, timeout, and teardown; then emit a per-asset JSON report. Audio fields include sample rate/channels, block and PCM-frame counts, first/last PTS, signal presence, and decode time. Exit 0 means the expected corpus count and every asset passed; exit 1 is a gate failure; exit 2 means the native shim is absent. | `dotnet run --project tools/movie-corpus-gate -- --output build/movie-corpus-ffmpeg.json --expected-count 213 --max-item-ms 30000` · optional `--native-dir <dir>` | `SYS4INI.BIN` + loose/ALF VFS assets + staged FFmpeg shim → stdout progress + disposable `build/movie-corpus-ffmpeg.json` |
 
 The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
-`runtimes/win-x64/native` locations. Build the shim before running the `FfmpegShim*` tests; no original-game
-movie is copied into the repository or native output. When `build/native/win-x64/age_movie_ffmpeg.dll` exists,
-`dotnet build godot/Himegari.csproj` also stages the shim, its five DLL dependencies, and `FFmpeg-LICENSE.txt`
-beside `Himegari.dll` for development playback.
+`runtimes/<rid>/native` locations. Build the target shim before running the `FfmpegShim*` tests; no original-game
+movie is copied into the repository or native output. A target-aware `dotnet build godot/Himegari.csproj`
+stages the matching shim, five shared-library dependencies, and `FFmpeg-LICENSE.txt` beside `Himegari.dll`
+when the corresponding `build/native/win-x64/` or `build/native/linux-x64/` bundle exists.
 
 The current native movie ABI is version 3. In addition to sequential video/audio decode, it exposes a
 synchronous position seek for both independent demuxers; exact video-frame selection and audio trimming are

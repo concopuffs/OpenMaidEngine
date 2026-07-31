@@ -1,0 +1,12 @@
+{
+  "provider": "BtbN/FFmpeg-Builds",
+  "release_tag": "autobuild-2026-07-21-13-38",
+  "archive": "ffmpeg-n8.1.2-29-g703dcc25b9-linux64-lgpl-shared-8.1.tar.xz",
+  "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-21-13-38/ffmpeg-n8.1.2-29-g703dcc25b9-linux64-lgpl-shared-8.1.tar.xz",
+  "sha256": "d0026954f10d303d1fc6517ed6b2290c42323b3958f11baafb1b330dfc564b36",
+  "ffmpeg_version": "n8.1.2-29-g703dcc25b9-20260721",
+  "ffmpeg_commit": "703dcc25b9",
+  "variant": "linux64 LGPL shared 8.1",
+  "minimum_glibc": "2.28",
+  "minimum_linux_kernel": "4.18"
+}

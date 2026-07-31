@@ -113,8 +113,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
-    │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows dependency manifest,
-    │                                       and bootstrap/build scripts (outputs stay under disposable build/)
+    │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
+    │                                       and target bootstrap/build scripts (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
                                             plus the optional exact Windows text adapter). Its assembly embeds
