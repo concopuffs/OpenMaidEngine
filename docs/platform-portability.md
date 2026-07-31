@@ -21,6 +21,11 @@ The VM and content pipeline are already mostly platform-neutral:
 - The Himegari Godot assembly embeds generated `build/opcodes.json` as profile runtime metadata. Exported
   builds never search for an `age-reimpl` repository ancestor; their automatic page-map diagnostics live
   under `user://diagnostics/page-maps`, while editor/development runs retain the workspace `build/` handoff.
+- `GodotTargetPlatform`, not the build host OS, selects the optional Windows GDI adapter. `AgeNativeRid`
+  follows an explicit export `RuntimeIdentifier` and otherwise supplies the current x64 development default;
+  mutually exclusive `win-x64` DLL and `linux-x64` shared-object groups stage to build and publish output.
+  The managed FFmpeg resolver derives reserved Windows, Linux, and macOS x64/arm64 RIDs from the actual
+  process and rejects unreserved architectures instead of silently looking in the wrong directory.
 
 The sole movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API, but only a
 Windows-x64 native bundle is built and staged today. The accepted DirectShow fallback was deleted after the

@@ -209,9 +209,10 @@ internal static class FfmpegMovieNative
             ? "age_movie_ffmpeg.dll"
             : OperatingSystem.IsMacOS() ? "libage_movie_ffmpeg.dylib" : "libage_movie_ffmpeg.so";
         string? configured = Environment.GetEnvironmentVariable("AGE_FFMPEG_NATIVE_DIR");
-        string rid = OperatingSystem.IsWindows() ? "win-x64"
-            : OperatingSystem.IsMacOS() ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64")
-            : "linux-x64";
+        string rid = RuntimeIdentifierFor(
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsMacOS(),
+            RuntimeInformation.ProcessArchitecture);
         string[] candidates =
         {
             configured == null ? "" : Path.Combine(configured, fileName),
@@ -224,6 +225,23 @@ internal static class FfmpegMovieNative
         throw new DllNotFoundException(
             $"{fileName} was not found; set AGE_FFMPEG_NATIVE_DIR or package runtimes/{rid}/native");
     }
+
+    internal static string RuntimeIdentifierFor(
+        bool isWindows,
+        bool isMacOS,
+        Architecture architecture)
+        => (isWindows, isMacOS, architecture) switch
+        {
+            (true, _, Architecture.X64) => "win-x64",
+            (true, _, Architecture.Arm64) => "win-arm64",
+            (false, true, Architecture.X64) => "osx-x64",
+            (false, true, Architecture.Arm64) => "osx-arm64",
+            (false, false, Architecture.X64) => "linux-x64",
+            (false, false, Architecture.Arm64) => "linux-arm64",
+            _ => throw new PlatformNotSupportedException(
+                $"The FFmpeg movie backend has no reserved RID for " +
+                $"{(isWindows ? "Windows" : isMacOS ? "macOS" : "Linux")}/{architecture}."),
+        };
 
     internal static string DecodeUtf8(byte[] buffer)
     {

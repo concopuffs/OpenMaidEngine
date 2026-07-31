@@ -3,8 +3,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
+    <AgeNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</AgeNativeRid>
+    <AgeNativeRid Condition="'$(AgeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'windows'">win-x64</AgeNativeRid>
+    <AgeNativeRid Condition="'$(AgeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'linuxbsd'">linux-x64</AgeNativeRid>
+    <AgeNativeDirectory>..\build\native\$(AgeNativeRid)</AgeNativeDirectory>
   </PropertyGroup>
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+  <PropertyGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <DefineConstants>$(DefineConstants);AGE_WINDOWS_GDI</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
@@ -12,16 +16,28 @@
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="Himegari.Runtime.opcodes.json" />
   </ItemGroup>
-  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+  <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <ProjectReference Include="..\engine\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="Exists('..\build\native\win-x64\age_movie_ffmpeg.dll')">
-    <None Include="..\build\native\win-x64\*.dll"
+  <ItemGroup Condition="'$(AgeNativeRid)' == 'win-x64' and Exists('$(AgeNativeDirectory)\age_movie_ffmpeg.dll')">
+    <None Include="$(AgeNativeDirectory)\*.dll"
           Link="%(Filename)%(Extension)"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\build\native\win-x64\FFmpeg-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(AgeNativeDirectory)\FFmpeg-LICENSE.txt"
           Link="FFmpeg-LICENSE.txt"
-          CopyToOutputDirectory="PreserveNewest" />
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AgeNativeRid)' == 'linux-x64' and Exists('$(AgeNativeDirectory)\libage_movie_ffmpeg.so')">
+    <None Include="$(AgeNativeDirectory)\*.so*"
+          Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(AgeNativeDirectory)\FFmpeg-LICENSE.txt"
+          Link="FFmpeg-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
           Condition="!Exists('..\build\opcodes.json')">
