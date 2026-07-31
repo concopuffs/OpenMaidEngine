@@ -34,8 +34,23 @@ public readonly record struct AdvTextLayoutPresentationBinding(
     int ResetCursorX,
     int ResetCursorY);
 
+/// <summary>
+/// Transient publication crop. Native records retain measured cell edges, but a backend mask/effect can
+/// carry ink outside that cell. Keeping the expanded crop separate preserves the native layout ABI.
+/// </summary>
+public readonly record struct AdvRetainedGlyphPresentationRect(
+    int Left,
+    int Top,
+    int Right,
+    int Bottom)
+{
+    public int Width => Right - Left;
+    public int Height => Bottom - Top;
+}
+
 public readonly record struct AdvRetainedGlyphPlacement(
     AdvRetainedGlyphRecord Record,
+    AdvRetainedGlyphPresentationRect PresentationRect,
     int LayoutOriginX,
     int LayoutOriginY);
 

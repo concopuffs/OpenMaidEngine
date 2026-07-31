@@ -80,6 +80,29 @@ public class RetainedAdvTextLayoutPresentationTests
     }
 
     [Fact]
+    public void PublicationUsesInkSafeCropWithoutChangingNativeRecord()
+    {
+        var presentation = new RetainedAdvTextLayoutPresentation(
+            new AdvTextLayoutPresentationBinding(
+                1, 21, 100, 4, -1, 10, 20));
+        var record = new AdvRetainedGlyphRecord(0, 3, 4, 7, 10);
+        presentation.Append(
+            [record],
+            [new AdvRetainedGlyphPresentationRect(3, 3, 7, 12)],
+            layoutOriginX: 30,
+            layoutOriginY: 40);
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+
+        presentation.PublishThrough(gfx, 1);
+
+        RenderObject item = Assert.Single(gfx.SnapshotVisibleObjects());
+        Assert.Equal((3, 3, 4, 9, 33, 43),
+            (item.SrcX, item.SrcY, item.W, item.H, item.DstX, item.DstY));
+        Assert.Equal(record, Assert.Single(presentation.Glyphs).Record);
+    }
+
+    [Fact]
     public void SavedFrameStyleReconstructionRebuildsTheSameBindings()
     {
         RetainedAdvTextLayoutPresentation before = Presentation(capacity: 4);

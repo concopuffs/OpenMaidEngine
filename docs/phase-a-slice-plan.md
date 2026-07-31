@@ -3674,6 +3674,15 @@ surface's z-order, alpha, tint, fade, transform, clipping, capture, and lifetime
 Validation: engine **580/580**, zero-warning Godot build, and threaded `SELFTEST OK` in both forced
 `portable-godot-textserver` and forced `windows-gdi-gray4` modes.
 
+**Bottom-edge clipping follow-up (2026-07-30):** retained publication originally reused the native
+measured-cell rectangle as its exact source crop. Direct GDI probing confirmed that the glyph black-box
+bitmap, plus the mode-3 outline, can extend below that cell even though the pixels are present in the
+layout surface. The native `AdvRetainedGlyphRecord` remains unchanged for layout and reconstruction; each
+transient placement now carries a separate vertically ink-safe publication rectangle. Horizontal edges
+remain cell-bounded so timed reveal cannot expose a neighboring glyph. Synthetic compositor/publication
+regressions pass, the Godot build is clean, and forced exact and portable self-tests both report
+`SELFTEST OK`.
+
 ## Persistence native-format reconnaissance complete (2026-07-24)
 
 The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native

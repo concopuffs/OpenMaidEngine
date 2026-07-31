@@ -425,7 +425,10 @@ public sealed class GodotAdvHost : IHost
                 throw new InvalidOperationException(
                     $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
             int first = presentation.Append(
-                rendered.Records, run.Layout.OriginX, run.Layout.OriginY);
+                rendered.Records,
+                rendered.PresentationRects,
+                run.Layout.OriginX,
+                run.Layout.OriginY);
             result = new AdvRetainedTextRunResult(
                 binding.LayoutSlot,
                 first,

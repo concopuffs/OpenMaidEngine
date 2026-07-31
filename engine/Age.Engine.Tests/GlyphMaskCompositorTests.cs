@@ -194,6 +194,40 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
+    public void RetainedPresentationCropIncludesInkBelowTheNativeCell()
+    {
+        var mask = new GlyphMask(
+            width: 1, height: 4, stride: 1,
+            originX: 0, originY: 3,
+            cellAdvanceX: 4, cellAdvanceY: 0,
+            cellWidth: 4, cellHeight: 5,
+            coverage: [16, 16, 16, 16]);
+        var destination = Image(16, 16);
+        var engine = new RetainedGlyphLayoutEngine(
+            new CountingRasterizer(_ => mask));
+
+        GlyphTextLayoutResult result = engine.Render(
+            destination,
+            new GlyphTextLayoutOptions(
+                CursorX: 2, CursorY: 1, LineOriginX: 2,
+                RightBound: 16, BottomBound: 16, WrapHorizontally: true,
+                Style(renderMode: 3) with
+                {
+                    EffectOffsetX = 1,
+                    EffectOffsetY = 1,
+                }),
+            [NativeRequest(0x82a0, 0x3042)]);
+
+        Assert.Equal(
+            new AdvRetainedGlyphRecord(0, 2, 1, 6, 6),
+            Assert.Single(result.Records));
+        Assert.Equal(
+            new AdvRetainedGlyphPresentationRect(2, 1, 6, 8),
+            Assert.Single(result.PresentationRects));
+        Assert.NotEqual(0, Pixel(destination, 2, 7).A);
+    }
+
+    [Fact]
     public void ClosingPunctuationStaysOnOverflowingPrecedingLine()
     {
         var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => CellMask()));

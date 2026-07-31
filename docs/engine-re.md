@@ -2894,6 +2894,16 @@ The shipped effect profiles use only modes 1 and 3:
   `360 / (sqrt(effect_x²+effect_y²)*8)`, blits the effect-colored glyph at every rounded offset, then
   draws the primary glyph. All 164 paired sites use `(1,1)`, producing the normal one-pixel outline.
 
+**Measured cell versus raster ink (2026-07-30).** `adv_text_build_glyph_records@0x4576c0` stores
+the `GetTextExtentPoint32A` measured cell edges in each retained record, and
+`adv_text_publish_next_glyph@0x451220` uses those edges when it binds the native object.
+`text_raster_string_cached@0x45b600`, however, composites the complete `GetGlyphOutlineA` black-box
+bitmap and effect copies into the shared layout surface. Direct 24-pixel bold Mincho probes show several
+ordinary Japanese glyphs reaching below the 24-pixel measured cell even before the mode-3 `(1,1)` outline.
+Thus the record is a layout/publication cell, not a guaranteed ink bounding box. The port preserves that
+native record and derives a separate transient vertical publication crop from mask origin/height and effect
+offsets; its horizontal crop remains the measured cell to avoid exposing the next glyph during timed reveal.
+
 The ordinary ADV preset is therefore 24-pixel `ＭＳ 明朝`, weight 700, white fill, mode-3 `(1,1)` outline
 in `0x606060`, with 8 pixels of line leading. The small menu-description preset is 16-pixel
 `ＭＳ ゴシック`, weight 0, white fill, mode 1 with zero displacement, and 9 pixels of leading.

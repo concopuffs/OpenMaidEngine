@@ -38,7 +38,30 @@ public sealed class RetainedAdvTextLayoutPresentation
         int first = _glyphs.Count;
         foreach (AdvRetainedGlyphRecord record in records)
             _glyphs.Add(new AdvRetainedGlyphPlacement(
-                record, layoutOriginX, layoutOriginY));
+                record,
+                new AdvRetainedGlyphPresentationRect(
+                    record.Left, record.Top, record.Right, record.Bottom),
+                layoutOriginX,
+                layoutOriginY));
+        return first;
+    }
+
+    public int Append(
+        IReadOnlyList<AdvRetainedGlyphRecord> records,
+        IReadOnlyList<AdvRetainedGlyphPresentationRect> presentationRects,
+        int layoutOriginX,
+        int layoutOriginY)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(presentationRects);
+        if (presentationRects.Count != records.Count)
+            throw new ArgumentException(
+                "Every retained glyph record requires one presentation rectangle.",
+                nameof(presentationRects));
+        int first = _glyphs.Count;
+        for (int index = 0; index < records.Count; index++)
+            _glyphs.Add(new AdvRetainedGlyphPlacement(
+                records[index], presentationRects[index], layoutOriginX, layoutOriginY));
         return first;
     }
 
@@ -71,16 +94,16 @@ public sealed class RetainedAdvTextLayoutPresentation
     private void Bind(GfxState gfx, int index)
     {
         AdvRetainedGlyphPlacement placement = _glyphs[index];
-        AdvRetainedGlyphRecord record = placement.Record;
-        if (record.Width <= 0 || record.Height <= 0) return;
+        AdvRetainedGlyphPresentationRect rect = placement.PresentationRect;
+        if (rect.Width <= 0 || rect.Height <= 0) return;
         gfx.BindDraw(
             checked(Binding.FirstObjectHandle + index),
             Binding.SourceSurfaceSlot,
-            record.Left,
-            record.Top,
-            record.Width,
-            record.Height,
-            checked(placement.LayoutOriginX + record.Left),
-            checked(placement.LayoutOriginY + record.Top));
+            rect.Left,
+            rect.Top,
+            rect.Width,
+            rect.Height,
+            checked(placement.LayoutOriginX + rect.Left),
+            checked(placement.LayoutOriginY + rect.Top));
     }
 }
