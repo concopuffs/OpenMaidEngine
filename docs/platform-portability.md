@@ -30,9 +30,13 @@ The VM and content pipeline are already mostly platform-neutral:
 The sole movie path now uses the project-owned FFmpeg C ABI rather than a Windows multimedia API. Reproducible
 Windows-x64 and Linux-x64 native bundles are built and staged. A committed Godot 4.7 .NET Linux-x64 preset and
 guarded exporter produce a self-contained artifact whose headless self-test passes under Ubuntu/WSL with the
-portable TextServer backend and installed Noto CJK fonts. This establishes the packaged loader, archive, font,
-managed host, and teardown paths; a real Linux desktop must still validate window/input/audio behavior and a
-case-sensitive install/profile. The accepted DirectShow fallback was deleted after the corpus and audible
+portable TextServer backend and installed Noto CJK fonts. A subsequent WSLg interactive run created the Linux
+window, accepted title/menu input, rendered both opening movies with sound, and progressed naturally into SC0000.
+This establishes the packaged loader, archive, font, window/input, movie audio/presentation, managed host, and
+teardown paths. Slight A/V desynchronization also occurs on Windows and remains a shared runtime follow-up rather
+than a Linux-only portability blocker. A complete combined game/export installation copied to WSL ext4 passed
+hash verification plus headless and windowed executable-directory runs; mixed-case fixtures and fresh interactive
+profile/save behavior remain to validate. The accepted DirectShow fallback was deleted after the corpus and audible
 LOGO/OP/CHAPTER gates passed. There are also softer Windows assumptions that should be tested or replaced before
 claiming portable exports.
 
@@ -210,8 +214,20 @@ performs a bounded Godot shutdown, verifies the complete artifact, and rejects W
 x86-64 executable, PCK, self-contained .NET runtime, and local FFmpeg bundle passed `--selftest` under Ubuntu/WSL
 against an explicit installed-game path using the portable text backend, with a clean exit and no Godot errors or
 leaked-object warning. Minimal Ubuntu required `fonts-noto-cjk`; before installation the exact same artifact
-failed explicitly on Japanese glyph U+59EB. This gate does not establish a real Linux desktop window, physical
-input, audible output/timing, or case-sensitive install/profile behavior.
+failed explicitly on Japanese glyph U+59EB. After WSLg was enabled, the same artifact also opened windowed,
+accepted normal title/menu input, displayed both opening movies, and reached SC0000 through the natural startup
+path. Both movies produced audible output; the slight A/V desynchronization also reproduces on Windows and is
+tracked as a shared runtime follow-up rather than a Linux-only defect. This interactive acceptance establishes
+WSLg window/input/movie/audio presentation, but not native-desktop compositor/driver behavior or case-sensitive
+install/profile behavior.
+
+The ext4 installation gate copies the complete 67-file pristine game installation and the three-part Linux export
+into one combined directory. All source files SHA-256-match after copying, the destination reports ext4, and the
+packaged headless selftest discovers `SYS4INI.BIN` from the executable directory without `--game-root`, reads the
+installed archives, realizes portable Japanese text, and exits cleanly. This establishes exact-casing installed
+content and automatic root discovery on a case-sensitive filesystem. The same combined directory was subsequently
+accepted windowed by the user. Deliberately mixed-case synthetic roots and fresh interactive profile/save writes
+remain separate gates.
 
 The Windows-x64 installed-corpus gate passed on 2026-07-22 with the pinned dependency: all 213 signature-selected
 MPEG payloads opened and reached EOF under a 30-second per-item bound. It decoded all 15,788 frames across twelve
