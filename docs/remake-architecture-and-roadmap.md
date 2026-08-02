@@ -524,7 +524,7 @@ requirements.
 
 #### Planned maintenance slice — codebase consolidation
 
-**Status (2026-08-02): step 1 complete; step 2 is next.** The runtime and tooling now have enough independent
+**Status (2026-08-02): step 1 complete; step 2 underway.** The runtime and tooling now have enough independent
 regression coverage to support behavior-preserving cleanup: 590 engine tests, eleven directly runnable Python
 tool suites, the Godot build/self-test, and the installed-corpus gates. The project layout itself is sound,
 but a few files have become navigation and ownership bottlenecks: `VirtualMachine.cs`, `GfxState.cs`,
@@ -558,6 +558,10 @@ do not mix mechanical moves with semantic changes.
    replacing the proven dispatcher. Keep `tools/extract_init.py` as the documented CLI while moving its
    stage, battle, card, routine, gallery, and general table implementations plus tests into importable
    modules.
+
+   **Progress (2026-08-02):** the first bounded split moved `Main`'s synthetic scene builder and threaded
+   self-test harness into `godot/Main.SelfTest.cs`. The partial class retains the same node type and private
+   calls; runtime validation, including all 590 engine tests and the Godot threaded self-test, remains green.
 
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
@@ -928,8 +932,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Begin step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. Start with the embedded `Main` self-test surface,
-then move one existing domain at a time while preserving public types, commands, and generated output.
+Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
+by the tracked launcher and layered validation driver. With the embedded `Main` self-test surface isolated,
+move the `Main` audio control surface next, then one existing domain at a time while preserving public types,
+commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
