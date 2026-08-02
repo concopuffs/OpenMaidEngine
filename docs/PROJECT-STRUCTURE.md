@@ -148,6 +148,9 @@ full-width text entry.
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
 history presentation, message-window alpha, and retained wait-indicator configuration/publication.
+`godot/GodotAdvHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
+message-skip/input services, cursor and foreground waits, frame/backbuffer publication, transitions, and
+scene-context lifecycle coordination.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
