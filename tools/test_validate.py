@@ -90,11 +90,16 @@ class GatePlanTests(unittest.TestCase):
     def test_full_contains_every_phase(self) -> None:
         fake_godot = Path("godot")
         fake_root = Path("game")
-        keys = {gate.key for gate in validate.build_gate_plan("full", fake_godot, fake_root)}
+        state_root = Path("state")
+        plan = validate.build_gate_plan("full", fake_godot, fake_root, state_root)
+        keys = {gate.key for gate in plan}
         self.assertIn("sys4-corpus-validate", keys)
         self.assertIn("godot-selftest", keys)
         self.assertIn("age-cli-sweep", keys)
-        self.assertEqual("diff-check", validate.build_gate_plan("full", fake_godot, fake_root)[-1].key)
+        self.assertEqual("diff-check", plan[-1].key)
+        selftest = next(gate for gate in plan if gate.key == "godot-selftest")
+        self.assertIn(str(state_root / "godot.log"), selftest.command)
+        self.assertIn(("APPDATA", str(state_root / "appdata")), selftest.environment)
 
 
 if __name__ == "__main__":

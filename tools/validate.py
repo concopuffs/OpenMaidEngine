@@ -56,6 +56,7 @@ class Gate:
     label: str
     command: tuple[str, ...]
     timeout_seconds: int = 180
+    environment: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,7 @@ def build_gate_plan(
     level: str,
     godot: Path | None = None,
     game_root: Path | None = None,
+    runtime_state_root: Path | None = None,
 ) -> list[Gate]:
     phases = selected_phases(level)
     gates = [
@@ -185,6 +187,13 @@ def build_gate_plan(
     if "runtime" in phases:
         if godot is None or game_root is None:
             raise ValueError("runtime validation requires resolved Godot and game-root paths")
+        runtime_root = runtime_state_root or paths.BUILD / "validation" / "runtime-user"
+        runtime_environment = (
+            ("APPDATA", str(runtime_root / "appdata")),
+            ("LOCALAPPDATA", str(runtime_root / "local-appdata")),
+            ("XDG_DATA_HOME", str(runtime_root / "xdg-data")),
+            ("XDG_CONFIG_HOME", str(runtime_root / "xdg-config")),
+        )
         gates.extend((
             Gate(
                 "godot-build",
@@ -196,10 +205,12 @@ def build_gate_plan(
                 "godot-selftest",
                 "Godot threaded self-test",
                 (
-                    str(godot), "--headless", "--path", str(REPO / "godot"), "--",
+                    str(godot), "--headless", "--log-file", str(runtime_root / "godot.log"),
+                    "--path", str(REPO / "godot"), "--",
                     "--selftest", "--game-root", str(game_root), "--text-backend", "portable",
                 ),
-                180,
+                300,
+                runtime_environment,
             ),
         ))
 
@@ -274,6 +285,7 @@ def run_gate(gate: Gate, log_dir: Path, verbose: bool) -> GateResult:
         "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
         "DOTNET_NOLOGO": "1",
     })
+    environment.update(dict(gate.environment))
     popen_arguments = {
         "args": gate.command,
         "cwd": REPO,
@@ -401,7 +413,9 @@ def main(argv: list[str] | None = None) -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     initial_godot = snapshot_godot_processes()
     results: list[GateResult] = []
-    for gate in build_gate_plan(arguments.level, godot, game_root):
+    runtime_state_root = log_dir / "godot-user"
+    runtime_state_root.mkdir(parents=True, exist_ok=True)
+    for gate in build_gate_plan(arguments.level, godot, game_root, runtime_state_root):
         result = run_gate(gate, log_dir, arguments.verbose)
         results.append(result)
         if result.status == "FAIL" and arguments.fail_fast:
