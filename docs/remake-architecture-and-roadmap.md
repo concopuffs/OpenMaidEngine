@@ -559,13 +559,15 @@ do not mix mechanical moves with semantic changes.
    stage, battle, card, routine, gallery, and general table implementations plus tests into importable
    modules.
 
-   **Progress (2026-08-02):** the first four bounded splits moved `Main`'s synthetic scene builder/threaded
+   **Progress (2026-08-02):** five bounded splits completed the planned `Main` decomposition: its synthetic
+   scene builder/threaded
    self-test harness into `godot/Main.SelfTest.cs`, then its BGM, voice, sound-effect, mixer, and bus-control
    surface into `godot/Main.Audio.cs`, then decoder staging, movie frame/audio publication, completion, and
    teardown into `godot/Main.Movie.cs`, then retained GPU/software composition, texture caching, transitions,
-   raster helpers, and decision logging into `godot/Main.Compositor.cs`. The partial class retains the same
-   node type, fields, signatures, execution order, and call sites; runtime validation, including all 590
-   engine tests and the Godot threaded self-test, remains green after each move.
+   raster helpers, and decision logging into `godot/Main.Compositor.cs`, and finally input routing, locator/debug
+   hotkeys, debug-scene dispatch, cursor/dialog handling, and full-width text entry into `godot/Main.Input.cs`.
+   The partial class retains the same node type, fields, signatures, execution order, and call sites; runtime
+   validation, including all 590 engine tests and the Godot threaded self-test, remains green after each move.
 
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
@@ -937,8 +939,8 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. With the embedded `Main` self-test, audio, movie, and
-retained compositor surfaces isolated, move input/cursor/debug-launcher handling next, then continue one
-existing domain at a time while preserving public types, commands, and generated output.
+by the tracked launcher and layered validation driver. With the planned `Main` domains isolated, begin
+`GodotAdvHost` with its ADV-text surface, then continue one existing domain at a time while preserving public
+types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
