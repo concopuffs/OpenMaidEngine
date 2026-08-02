@@ -135,9 +135,10 @@ The Godot deliverable includes `Himegari.sln` because Godot's .NET exporter requ
 the project do not enter its import or export scan. `tools/export-linux-x64.ps1` produces and validates the
 complete disposable artifact under `build/export/linux-x64/`.
 
-`godot/Main.cs` retains the front-end's startup and runtime coordination. Its synthetic threaded/headless
-regression harness lives in the behavior-neutral partial-class companion `godot/Main.SelfTest.cs`, keeping
-the validation surface independently navigable without changing the Godot node type or invocation path.
+`godot/Main.cs` retains the front-end's startup and runtime coordination. Behavior-neutral partial-class
+companions keep cohesive surfaces independently navigable without changing the Godot node type or invocation
+paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression harness, while
+`godot/Main.Audio.cs` owns BGM, voice, sound-effect, mixer-routing/persistence, and audio-bus control.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
