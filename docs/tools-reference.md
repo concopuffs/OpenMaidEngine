@@ -311,7 +311,7 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
   steps / 493k sleeps). Dumped when the scene ends or the window closes. e.g.
   `godot --path godot -- --scene SC0000 --boot --shot out/p1.png --trace-histogram out/hist.txt`.
 
-**Godot frontend** (`S:/Godot/Godot_v4.7…`; project = `godot/`). Toolchain: `godot --headless --path godot
+**Godot frontend** (Godot 4.7 .NET; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
 Plays the real bytecode with call-script execution on (subroutines run live). The game root is selected
 before catalog loading: `--game-root <directory>` wins, otherwise the directory containing the running
@@ -350,9 +350,13 @@ input, or audible output; run those gates on a real Linux desktop.
 
 With the exported executable placed in an AGE install, a no-argument launch therefore uses that install
 and starts the persistent `SYSTEM4.BIN` root naturally. Direct development runs are hosted by the Godot
-editor executable, so pass `--game-root <install>` after Godot's `--` separator; the local
-`run-godot.ps1`/`.cmd` launchers pass the local script's directly configured `$gameRoot` value. Edit that
-one assignment when testing another installed game. Those launchers make the natural route explicit with
+editor executable, so pass `--game-root <install>` after Godot's `--` separator. The tracked
+`run-godot.ps1`/`.cmd` launchers resolve Godot and the game root without machine-specific tracked paths.
+Explicit `-GodotConsole`/`-GameRoot` values win, followed by `AGE_GODOT_CONSOLE`/`AGE_GAME_ROOT`; Godot
+then falls back to `godot4`, `godot`, or `godot-mono` on `PATH`, while the game root falls back to the
+conventional `../Himegari_Game` sibling only when it contains `SYS4INI.BIN`. `run-godot.ps1 -Doctor`
+prints the resolved repository, Godot, game-root, .NET, and Python prerequisites without building or
+launching. The launchers make the natural route explicit with
 `--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. Examples below focus on their
 feature-specific arguments and assume the game root is already selected this way. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes.
