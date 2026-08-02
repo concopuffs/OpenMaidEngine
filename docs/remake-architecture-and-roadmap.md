@@ -436,7 +436,7 @@ goal; none of the Tier-2 hook design depends on solving it.
 
 Each phase ends with something demonstrable. The documented side-tasks map into these phases (noted).
 
-### Phase A — Prove the VM (vertical slice)  ⟵ the immediate priority
+### Phase A — Prove the VM (vertical slice) — completed
 Goal: **run one ADV scene end-to-end** in the new runtime — background image + dialogue + a choice +
 a voice line — and match its `show-text` sequence to `build/text/dialogue.jsonl`.
 Forces, and thereby de-risks, every core unknown at once:
@@ -521,6 +521,70 @@ requirements.
 ### Phase E — Enhance, polish, productize
 - Enhancements the VM unlocks: higher/wide resolution, faster text, QoL, save-anywhere, new-content
   mods. Modding docs + tools. Save/UX polish.
+
+#### Planned maintenance slice — codebase consolidation
+
+**Status (2026-08-02): planned; step 1 is next.** The runtime and tooling now have enough independent
+regression coverage to support behavior-preserving cleanup: 590 engine tests, ten directly runnable Python
+tool suites, the Godot build/self-test, and the installed-corpus gates. The project layout itself is sound,
+but a few files have become navigation and ownership bottlenecks: `VirtualMachine.cs`, `GfxState.cs`,
+`Main.cs`, `GodotAdvHost.cs`, and `extract_init.py`. Repository entry points are also partly machine-local,
+and the test project recompiles frontend/tool sources by link instead of consuming one production assembly.
+
+This is a maintenance effort, not a runtime redesign. Preserve bytecode behavior, native-format
+compatibility, current command paths, generated-file ownership, and the one-engine/many-profiles direction.
+Each step should land in bounded commits with the full validation level appropriate to the touched boundary;
+do not mix mechanical moves with semantic changes.
+
+1. **Create a reproducible project front door.** Replace the locally excluded, machine-path-specific
+   `run-godot.ps1`/`.cmd` workflow with a tracked launcher whose explicit parameters and documented
+   environment fallbacks select Godot and the game root. Implement the already-listed one-command
+   validation driver from `docs/tools-reference.md`, with named levels that distinguish hermetic/core,
+   workspace-corpus, Godot runtime, and complete validation rather than silently skipping unavailable
+   prerequisites. Add a navigation-only repository README that links canonical references instead of
+   copying their facts. Keep personal defaults in ignored local state, never in the tracked launcher.
+
+   **Gate:** from a clean checkout, a developer can discover prerequisites, generate required runtime
+   metadata, build/test the engine, and launch or self-test Godot through tracked commands. Every validation
+   level exits nonzero on a required failure, summarizes pass/fail/skip with reasons, and detects leaked
+   child processes. No tracked script contains this workspace's absolute paths.
+
+2. **Perform behavior-neutral physical splits.** Keep public types, namespaces, commands, and dispatch
+   behavior stable while dividing the large runtime files by existing domains. Move `Main` self-test code
+   first, then Godot audio/movie/compositor/input sections; split `GodotAdvHost` into ADV text,
+   presentation/input, surfaces, movies, and audio; split `GfxState` contracts, surfaces, retained objects,
+   animation, and presentation; and thin `VirtualMachine.Step` through domain handler methods without
+   replacing the proven dispatcher. Keep `tools/extract_init.py` as the documented CLI while moving its
+   stage, battle, card, routine, gallery, and general table implementations plus tests into importable
+   modules.
+
+   **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
+   deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
+   each domain move.
+
+3. **Clarify runtime contracts.** Split the broad `IHost` surface into ADV, graphics, audio, movie, input,
+   diagnostics, and lifecycle contracts while retaining one aggregate host accepted by the VM. Move neutral
+   transport records such as RGBA images and movie/surface requests out of format-specific or host-specific
+   namespaces so `Model`, `Hosting`, and `Sys4` no longer form avoidable dependency cycles. Preserve explicit
+   headless defaults and diagnostics; interface cleanup must not turn intentionally unsupported presentation
+   into false success.
+
+4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
+   `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
+   code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
+   solution files because Godot export requires the frontend-local solution.
+
+5. **Close repository-policy and storage gaps.** Add an explicit project license, third-party notices and
+   checksums/provenance for committed binaries, consistent editor/build policy, a pinned .NET SDK, and a
+   CI entry point built on the same validation driver. Remove the empty workspace-root `.git` directory and
+   obsolete ignored output nests after separately verifying their exact contents; compact the real repository
+   only after active work is committed. Configure an off-machine remote or equivalent backup before relying
+   on local history as the sole recovery path.
+
+**Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
+`docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
+native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
+file count is minimized.
 
 #### Planned polish slice — AGE-exact retained glyph-mask text renderer
 
@@ -863,8 +927,8 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Start **Phase A, the vertical slice** — it converts all of the above from architecture into evidence
-and tells us fast whether option 3 is as feasible as it looks. Concretely: pick one small ADV scene,
-stand up the C# VM core + Godot ADV backend, resolve just-enough `call-script`, convert that scene's
-AGF art, and get its dialogue rendering and matching `build/text/dialogue.jsonl`. Everything else in
-this roadmap is sequenced behind that proof.
+Begin step 1 of the **codebase consolidation** maintenance slice: land the tracked parameterized Godot
+launcher, then the layered one-command validation driver, then the navigation-only repository README.
+The launcher and validator establish the reproducible safety boundary needed before physical file splits.
+Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
+not replace Phase B gameplay validation or the open cross-platform gates.
