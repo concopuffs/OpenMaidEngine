@@ -2904,9 +2904,11 @@ Thus the record is a layout/publication cell, not a guaranteed ink bounding box.
 native record and derives a separate transient vertical publication crop from mask origin/height and effect
 offsets; its horizontal crop remains the measured cell to avoid exposing the next glyph during timed reveal.
 
-The ordinary ADV preset is therefore 24-pixel `ＭＳ 明朝`, weight 700, white fill, mode-3 `(1,1)` outline
-in `0x606060`, with 8 pixels of line leading. The small menu-description preset is 16-pixel
-`ＭＳ ゴシック`, weight 0, white fill, mode 1 with zero displacement, and 9 pixels of leading.
+At the script/AGE request boundary, the ordinary ADV preset is therefore 24-pixel `ＭＳ 明朝`, weight
+700, white fill, mode-3 `(1,1)` outline in `0x606060`, with 8 pixels of line leading. The small
+menu-description preset is 16-pixel `ＭＳ ゴシック`, weight 0, white fill, mode 1 with zero displacement,
+and 9 pixels of leading. This describes AGE's logical `LOGFONTA`; the reference launcher's realized font
+is a separate boundary qualified below.
 
 The port now carries opcode `0x1a5` through `AdvTextStyle` into live, retained, History, and surface-text
 presentation. `godot/Main.cs` recognizes Himegari's two requested families and loads
@@ -2939,7 +2941,8 @@ same viewport-relative top (`y=478`) and bright horizontal bounds (`x=101..410`,
 placement and effective advance. Native nevertheless has 1,656 bright neutral pixels versus the port's
 1,145 (+45%), 1,296 near-white pixels versus 713 (+82%), a 23px rather than 22px bright box, and roughly
 twice the gray edge population. The port is materially underweight and softer despite requesting the
-correct Mincho face.
+authored Mincho face. The live qualification below shows that the wrapper-launched reference realizes that
+request as Gothic, so this is an input-family mismatch rather than a Mincho weight mismatch.
 
 The discrepancy is not an unknown value to tune. The native and port pipelines are behaviorally
 different:
@@ -2972,8 +2975,9 @@ antialiasing, light hinting, automatic subpixel positioning, embedded bitmaps di
 default `FontFile` policy. Bold is the unrelated `FontVariation.VariationEmbolden=0.53` operation plus
 one pixel of artificial glyph spacing; mode 3 is Godot `Label`'s `outline_size=1`. Thus the family,
 nominal size, placement, and total width can agree while stems, serifs, white-core coverage, and edge
-pixels differ. The screenshot is useful evidence that the difference is visible, but it is not the
-behavioral source.
+pixels differ. This explains why the statically reconstructed Mincho path differs from Godot, but the live
+qualification below supersedes it as the explanation for the user's native comparison: the patch-wrapper
+reference selects Gothic before rasterization.
 
 The fidelity correction is consequently a decoded glyph-mask backend, not screenshot-driven embolden
 calibration. The Windows implementation calls the same GDI APIs with the decoded `LOGFONTA` and reproduces
@@ -3013,6 +3017,39 @@ On the reference installation, three test requests—24px regular Mincho `あ`, 
 and 16px weight-700 Gothic `ア`—match an independently created Unicode GDI font/DC call byte-for-byte in
 coverage and exactly in black box, aligned stride, glyph origin, cell extent, and advance. The backend is
 now selected by Godot for immediate surface strings when `TryGetAvailability` confirms Windows ACP 932.
+
+**Live-output qualification (2026-07-30).** A same-line comparison at `SC0000@0x869`
+(`その地には、魔王と呼ばれる者がいた。`) first disproved the stronger claim that matching the
+reconstructed request already proves visible native parity. The native capture has 2,391 pixels at
+luminance 240+ inside the text crop; the forced `windows-gdi-gray4` port capture has 1,347, with nearly the
+same bounds. The user's port capture and a fresh forced-GDI capture have identical threshold counts at every
+measured level. Forced portable is substantially narrower, while forced-GDI GPU and software captures are
+effectively identical, ruling out portable substitution and retained GPU sampling. An independent
+offscreen `CreateICA`/24px `ＭＳ 明朝`/width -12/weight-700 Gray-4 request plus the decoded compositor
+reproduces the port capture with luminance MSE 2.68.
+
+A focused live Frida capture then established the missing boundary. At all 16 intercepted per-glyph raster
+entries for `SC0000@0x869`, the manager still carries height `-24`, width `-12`, weight `700`, AntiFont 1,
+version 3, and the UTF-8 bytes of the authored `ＭＳ 明朝` face. The `HFONT` actually selected in AGE's
+display IC is different: `GetObjectA` reports face `MS Gothic`, `SHIFTJIS_CHARSET` 128, height `-24`, width
+`-12`, and weight `700`; `GetTextMetricsA` reports height 24, ascent 21, descent 3, average width 13, and
+maximum width 48. The intercepted `GetGlyphOutlineA` format is 5 (`GGO_GRAY4_BITMAP`) with identity `MAT2`
+and 25-pixel Japanese cell increments.
+
+Thirteen uncached glyph masks from that line were saved at the call boundary. Replaying their CP932 codes
+through an independent `MS Gothic` request matches all 13 in black box, origin, cell increment, stride, and
+every 0..16 coverage byte. Both `MS Gothic` and `ＭＳ ゴシック` produce 13/13; `MS Mincho` and
+`ＭＳ 明朝` produce 0/13. This is the visible flourish/stroke-weight cause. It is not a compositor,
+coverage scaling, GPU, or weight problem.
+
+The distinction comes from the reference launch path, not the script preset. `AGE Patch.exe` loads
+`jprun.dll`; that DLL imports/detours `CreateFontIndirectA` (and related font APIs) and contains repeated
+hard-coded `MS Gothic` family strings. The comparison screenshots therefore show the patch-wrapper
+realization of AGE's Mincho request as bold MS Gothic, not true unwrapped native rendering.
+`windows-gdi-gray4` remains the correct native-default path because it reproduces AGE's authored Mincho
+request directly. A future launch/profile parameter may optionally override the realized face to reproduce
+wrapper-specific environments, but that is compatibility configuration rather than a native-fidelity
+correction and is not current work.
 
 `ImmediateSurfaceTextRenderer` builds the complete CP932 request list before touching the destination,
 making an unsupported character an atomic fallback rather than a partially rasterized string. It applies

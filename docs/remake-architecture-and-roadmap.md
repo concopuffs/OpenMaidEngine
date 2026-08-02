@@ -599,8 +599,14 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    policy, exactness, and call-chain detail through `GlyphRasterizerBackendInfo`. Availability requires Windows
    system ACP 932; another OS/ACP reports a diagnostic reason instead of silently claiming parity. Three
    representative regular/bold Mincho and bold Gothic requests byte-match an independent Unicode GDI oracle
-   for coverage, stride, `GLYPHMETRICS`, extent, and advance. This reference backend remains opt-in and is not
-   yet connected to live presentation; the existing Label path therefore remains the current fallback.
+   for coverage, stride, `GLYPHMETRICS`, extent, and advance. A later live capture resolved the apparent
+   lighter-weight discrepancy: the `AGE Patch.exe`/`jprun.dll` reference launch realizes AGE's authored
+   24px bold Mincho request as `MS Gothic`. Thirteen intercepted masks match an independent Gothic request
+   byte-for-byte and Mincho 0/13. That result is specific to the wrapper and does not supersede the true
+   native Mincho target; a realized-face override is optional launch-profile compatibility, not an
+   acceptance requirement for the exact backend.
+   This reference backend remains opt-in and is not yet connected to live presentation; the existing Label path
+   therefore remains the current fallback.
 4. **Move immediate surface strings first.** Completed 2026-07-30 for the exact Windows path. Ops
    `0x204`/`0x205` now convert the complete Unicode string to explicit CP932 glyph identities before changing
    any pixels, derive AGE's rebuilt negative height/half-width and weight, and composite the exact masks into
@@ -657,6 +663,9 @@ primitive, which cannot be made equivalent by choosing another embolden constant
   neighbors, clipping, alpha, and RGB integer rounding.
 - On Windows, representative CP932 glyph masks, `GLYPHMETRICS`, and advances match a direct invocation of
   the decoded GDI request; tests compare returned data, not screenshot histograms.
+- If wrapper compatibility is requested, a launch profile may override the realized face ahead of the
+  raster request. Himegari's `AGE Patch.exe`/`jprun.dll` path realizes 24px authored Mincho as MS Gothic,
+  but the true-native acceptance target remains the authored Mincho request.
 - Surface-string tests prove text is occluded by later handles and inherits the bound object's alpha, tint,
   affine transform, source clipping, offscreen capture, and transition behavior in both render backends.
 - Retained-layout tests prove per-glyph handle order, capacity bounds, partial/full erase, reset/republication,

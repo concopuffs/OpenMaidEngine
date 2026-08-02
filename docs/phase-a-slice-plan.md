@@ -3683,6 +3683,23 @@ remain cell-bounded so timed reveal cannot expose a neighboring glyph. Synthetic
 regressions pass, the Godot build is clean, and forced exact and portable self-tests both report
 `SELFTEST OK`.
 
+**Live native-face follow-up (2026-07-30; investigation only):** the user-reported delicate strokes and
+exposed Mincho flourishes are a family mismatch at the reference launch boundary. Their port capture is
+pixel-count identical to fresh forced `windows-gdi-gray4` Mincho output; forced portable is much narrower,
+forced-GDI GPU/software agree, and the port matches an independent offscreen weight-700 MS Mincho Gray-4
+request plus the decoded compositor. The native image still has 2,391 near-white text pixels versus 1,347
+in the port at `SC0000@0x869`.
+
+A focused live capture resolved the mismatch. AGE's manager carries the authored Mincho face bytes and
+`-24/-12/700`, but `GetObjectA` on its selected `HFONT` reports `MS Gothic`, Japanese charset 128, with
+24/21/3 height/ascent/descent. Thirteen uncached `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` masks match an
+independent bold MS Gothic request exactly in metrics and every coverage byte (13/13); Mincho matches 0/13.
+The shipped `AGE Patch.exe` loads `jprun.dll`, which detours `CreateFontIndirectA` and contains hard-coded
+`MS Gothic` family strings. This identifies the screenshot difference as a wrapper artifact rather than a
+true-native mismatch: the port's authored Mincho request remains the correct default. No
+runtime/configuration code changed. An optional future launch parameter could override the realized family
+for wrapper-specific compatibility, but no text correction is required for this finding.
+
 ## Persistence native-format reconnaissance complete (2026-07-24)
 
 The deferred save/profile ownership question now has a compatibility-mode answer. The remaining native
