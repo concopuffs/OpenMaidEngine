@@ -138,7 +138,8 @@ complete disposable artifact under `build/export/linux-x64/`.
 `godot/Main.cs` retains the front-end's startup and runtime coordination. Behavior-neutral partial-class
 companions keep cohesive surfaces independently navigable without changing the Godot node type or invocation
 paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression harness, while
-`godot/Main.Audio.cs` owns BGM, voice, sound-effect, mixer-routing/persistence, and audio-bus control.
+`godot/Main.Audio.cs` owns BGM, voice, sound-effect, mixer-routing/persistence, and audio-bus control, and
+`godot/Main.Movie.cs` owns decoder staging, movie frame/audio publication, completion, and teardown.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
