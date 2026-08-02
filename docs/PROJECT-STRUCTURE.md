@@ -35,6 +35,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── paths.py                           ★ central path anchor — the ONLY place that knows
     │   │                                        where the game / extracted / build dirs are. All
     │   │                                        tools import it; relocatable with no other edits.
+    │   ├── validate.py                        layered core/workspace/runtime/full validation driver
+    │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
     │   ├── age_opcodes.py                      548-entry Kelebek AGE opcode/arg-type table (PRISTINE; never edit)
     │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 4 artifacts below

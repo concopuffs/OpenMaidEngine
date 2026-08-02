@@ -22,6 +22,19 @@ whenever a tool's inputs/outputs change.**
 |---|---|---|
 | `paths.py` | ★ Single path anchor — derives all workspace dirs from its own location; `paths.scripts()` returns the override-aware `{NAME.BIN → path}` corpus map (loose game-folder patches shadow `extracted/DATA1`). | *Imported, not run.* |
 
+## Project validation
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `validate.py` | Layered project validation front door. `core` regenerates/runtime-checks opcode metadata, lints canonical registries, runs pure Python tooling tests and all .NET engine tests, checks generated opcode references, and runs `git diff --check`. `workspace` adds corpus-derived global generation, the real-data Python suites, full SYS4 decode, and Python RECOVER. `runtime` adds the Godot C# build and forced-portable threaded self-test. `full` combines all phases and adds the booted faithful-wait C# scene sweep. Selected prerequisites are strict: an unavailable game/corpus/Godot requirement fails before execution instead of becoming a green skip. Each gate has a timeout and UTF-8 log under `build/validation/validate-<timestamp>/`; the final table reports results/durations and a before/after Godot-process leak audit. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--godot <console>` · `--game-root <install>` · `--verbose` · `--fail-fast` | sources + selected toolchain/game/corpus prerequisites → console summary + ⚙ `build/validation/validate-*/<gate>.log` |
+| `test_validate.py` | Pure tests for launcher-equivalent explicit/environment/PATH/conventional resolution precedence, invalid-explicit hard failure, level composition, and final gate ordering. | `test_validate.py` | temporary files only |
+
+Levels are cumulative around `core`: `workspace` means core+workspace-corpus, `runtime` means core+Godot,
+and `full` means every phase. `workspace`/`full` intentionally require the disposable generated inputs named
+by a failed preflight; rebuild each through its owning tool in this reference. Runtime Godot resolution uses
+`--godot`, then `AGE_GODOT_CONSOLE`, then `godot4`/`godot`/`godot-mono` on `PATH`. Game-root resolution uses
+`--game-root`, then `AGE_GAME_ROOT`, then the conventional sibling install and always requires `SYS4INI.BIN`.
+
 ## Container parse / disassemble
 
 | Tool | Purpose | Run | Reads → Writes |
@@ -541,7 +554,7 @@ already exist. Prefer additions that produce reusable, offset-keyed evidence ove
 | P0 | **Scriptable 32-bit debugger** (x32dbg or WinDbg) | Breakpoints and memory snapshots for hot render/audio workers that are unsafe to hook densely with Frida. Keep Frida probes on known low-frequency handlers; never restore hot interpreter/glyph/render hooks merely for convenience. |
 | P1 | **Timestamped video capture** (ffmpeg desktop capture or command-controlled OBS) | Frame-by-frame native/port evidence for movie `0x236`, fades, and short animation boundaries without PNG-per-frame overhead. |
 | P1 | **WASAPI loopback/audio capture** | Objective SFX/BGM/voice start time, channel reuse, volume, stop, and waveform comparison. This is the main evidence upgrade for the pending SFX slice. |
-| P1 | **One-command validation driver** | Run engine tests with shared compilation disabled, sweep, Godot build/selftest, Python suites, generated-reference lints, decode/RECOVER checks, `git diff --check`, and report leaked child processes in one summarized result. |
+| DONE 2026-08-02 | **One-command validation driver** | Landed as `validate.py` with strict layered levels, per-gate logs/timeouts, generated-reference checks, Python/.NET/corpus/Godot gates, the faithful-wait sweep, whitespace checking, and a Godot-process leak audit. Canonical usage is under "Project validation" above. |
 | P1 | **Golden SC0000 checkpoint corpus** | Preserve the first 10-15 native pages as offset-keyed screenshots, click/wait events, retained-state summaries, and trace excerpts. Port regressions should be comparable without replaying the entire investigation. |
 | P2 | **Opcode dossier generator** | Combine corpus callsites/operands, native handler/worker addresses, runtime samples, Ghidra names, opcode provenance, and port coverage into a per-op investigation packet. |
 | P2 | **More typed Ghidra state** | Materialize retained-object, surface-slot, text-layout, and audio-channel structures so related handlers decompile against shared named fields. |
