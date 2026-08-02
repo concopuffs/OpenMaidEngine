@@ -145,6 +145,10 @@ surface-transition drawing, raster helpers, and compositor decision logging. `go
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry.
 
+`godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
+`godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
+history presentation, message-window alpha, and retained wait-indicator configuration/publication.
+
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.

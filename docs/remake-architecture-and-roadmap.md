@@ -569,6 +569,12 @@ do not mix mechanical moves with semantic changes.
    The partial class retains the same node type, fields, signatures, execution order, and call sites; runtime
    validation, including all 590 engine tests and the Godot threaded self-test, remains green after each move.
 
+   The first bounded `GodotAdvHost` split moved live/retained ADV text, surface glyph rasterization and cache
+   state, history presentation, message-window alpha, and retained wait-indicator publication into
+   `godot/GodotAdvHost.AdvText.cs`. The host remains a sealed `IHost` implementation, and presentation/input,
+   reset, and surface-lifecycle consumers retain direct partial-class access to the moved state. Runtime
+   validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -939,8 +945,8 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. With the planned `Main` domains isolated, begin
-`GodotAdvHost` with its ADV-text surface, then continue one existing domain at a time while preserving public
-types, commands, and generated output.
+by the tracked launcher and layered validation driver. With the planned `Main` domains and the first
+`GodotAdvHost` ADV-text surface isolated, move host presentation/input next, then continue one existing domain
+at a time while preserving public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
