@@ -28,6 +28,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 │
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
+    ├── README.md                             navigation-only repository front door; canonical facts stay in docs/
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install

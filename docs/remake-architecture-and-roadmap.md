@@ -524,8 +524,8 @@ requirements.
 
 #### Planned maintenance slice — codebase consolidation
 
-**Status (2026-08-02): planned; step 1 is next.** The runtime and tooling now have enough independent
-regression coverage to support behavior-preserving cleanup: 590 engine tests, ten directly runnable Python
+**Status (2026-08-02): step 1 complete; step 2 is next.** The runtime and tooling now have enough independent
+regression coverage to support behavior-preserving cleanup: 590 engine tests, eleven directly runnable Python
 tool suites, the Godot build/self-test, and the installed-corpus gates. The project layout itself is sound,
 but a few files have become navigation and ownership bottlenecks: `VirtualMachine.cs`, `GfxState.cs`,
 `Main.cs`, `GodotAdvHost.cs`, and `extract_init.py`. Repository entry points are also partly machine-local,
@@ -536,7 +536,8 @@ compatibility, current command paths, generated-file ownership, and the one-engi
 Each step should land in bounded commits with the full validation level appropriate to the touched boundary;
 do not mix mechanical moves with semantic changes.
 
-1. **Create a reproducible project front door.** Replace the locally excluded, machine-path-specific
+1. **Create a reproducible project front door — completed 2026-08-02.** Replace the locally excluded,
+   machine-path-specific
    `run-godot.ps1`/`.cmd` workflow with a tracked launcher whose explicit parameters and documented
    environment fallbacks select Godot and the game root. Implement the already-listed one-command
    validation driver from `docs/tools-reference.md`, with named levels that distinguish hermetic/core,
@@ -927,8 +928,8 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Begin step 1 of the **codebase consolidation** maintenance slice: land the tracked parameterized Godot
-launcher, then the layered one-command validation driver, then the navigation-only repository README.
-The launcher and validator establish the reproducible safety boundary needed before physical file splits.
+Begin step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
+by the tracked launcher and layered validation driver. Start with the embedded `Main` self-test surface,
+then move one existing domain at a time while preserving public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
