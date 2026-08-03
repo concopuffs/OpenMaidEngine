@@ -169,7 +169,9 @@ simple hosts. `engine/Age.Engine/Hosting/IMovieHost.cs` owns ordinary, positione
 and modal movie playback contracts. `IHost` inherits all four focused contracts; their required and default
 behavior is unchanged. `engine/Age.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces, retained-range/frame
 presentation, transitions, texture lifecycle, pixel capture/replace, draw, and size contracts; `IHost` also
-inherits this focused surface without changing existing hosts. The neutral
+inherits this focused surface without changing existing hosts. `engine/Age.Engine/Hosting/IInputHost.cs` owns
+modal fullwidth entry, ADV waits/callback servicing, input clock, cursor resources, and skip-state interaction;
+its required wait and overload/default chains remain unchanged. The neutral
 `engine/Age.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
 `engine/Age.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
