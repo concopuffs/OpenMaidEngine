@@ -195,6 +195,9 @@ retained history rendering, metadata/voice lookup, and history backlog clearing.
 `engine/Age.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
 settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
 and refresh helpers remain in the VM coordinator because live text and input paths also consume them.
+`engine/Age.Engine/Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
+resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling, and
+physical-input mapping; public host-thread input entry points and shared synchronization remain in the coordinator.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
