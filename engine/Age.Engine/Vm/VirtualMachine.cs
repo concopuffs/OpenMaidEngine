@@ -1208,10 +1208,8 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "script-entry":
-                Gfx.ClearSurfaceReloadPolicies(); return pc + 1;
             case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
-                Gfx.SetSurfaceReloadOnRestore(unchecked((int)Read(a[0])), (Read(a[1]) & 1) != 0);
-                return pc + 1;
+                return StepSurface(label, a, pc);
             case "add":
             case "sub":
             case "mul":
@@ -1511,10 +1509,8 @@ public sealed partial class VirtualMachine
             case "set-audio-route-enabled":
                 return StepAudio(label, a, pc);
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
-                return pc + 1;
             case "get-initial-root-run": // 0x130 (out)
-                Write(a[0], _initialRootRun ? 1 : 0);
-                return pc + 1;
+                return StepScriptLifecycle(label, a, pc);
             case "play-modal-movie-to-surface":
             case "u004221A0":
             case "play-movie-to-surface":
@@ -1568,7 +1564,7 @@ public sealed partial class VirtualMachine
             case "gfx-elem-erase":
                 return StepRetainedObject(label, a, pc);
             case "gfx-elem-release":    // 0x1fa (surface slot)
-                _host.ReleaseSurface((int)Read(a[0])); Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
+                return StepSurface(label, a, pc);
             case "clone-gfx-object":
                 return StepRetainedObject(label, a, pc);
             case "gfx-blit-color":

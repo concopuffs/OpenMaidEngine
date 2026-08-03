@@ -9,6 +9,11 @@ public sealed partial class VirtualMachine
     {
         switch (label)
         {
+            case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
+                return pc + 1;
+            case "get-initial-root-run": // 0x130 (out)
+                Write(a[0], _initialRootRun ? 1 : 0);
+                return pc + 1;
             case "throw-exit-request":
                 if (_o.IgnoreExitRequests) return pc + 1;
                 // Native op 0x1 throws Command_Exit_Exception through callbacks and nested script

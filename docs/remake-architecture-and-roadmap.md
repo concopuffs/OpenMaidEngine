@@ -741,6 +741,13 @@ do not mix mechanical moves with semantic changes.
    initialization, public menu-state accessors, and host state remain centralized. Runtime validation remains
    green.
 
+   The nineteenth bounded `VirtualMachine.Step` routing closeout moved the final five recognized inline bodies:
+   script-entry surface-policy reset, surface-persistence flags, individual surface release, native run-state
+   compatibility, and initial-root-run query. They now route through the existing guarded surface and
+   script-lifecycle handlers. `Step` contains only opcode-label grouping, domain-handler routing, and its proven
+   unknown-op trace/fallback; the planned behavior-neutral physical decomposition is complete. Runtime validation
+   remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1110,13 +1117,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
-domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text,
-text-history, ADV-service, input, timing, persistence, and memory/collection `VirtualMachine.Step` families routed
-through domain handlers, with control-flow/coroutine, process/root-exit/cross-script lifecycle, value,
-diagnostic, and runtime-setting dispatch now isolated as well, route the four remaining recognized opcode bodies
-for script entry/root state and surface reload policy into their existing domain handlers, leaving `Step` as the
-proven dispatcher and unknown-op fallback without changing public types, commands, and generated output.
+Begin step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
+behavior or the aggregate host accepted by the VM. Start with a bounded interface-only slice that introduces
+diagnostic and lifecycle host contracts beneath `IHost`, preserving current default implementations and existing
+host classes before separating the larger ADV, graphics, audio, movie, and input surfaces.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

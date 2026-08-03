@@ -172,15 +172,17 @@ the interpolation helpers consumed by retained-scene sampling. `engine/Age.Engin
 owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
 accounting, and visible retained-scene snapshots.
 
-`engine/Age.Engine/Vm/VirtualMachine.cs` retains VM lifecycle, cross-domain state, and the proven top-level
-opcode dispatcher. Its partial-class companion `engine/Age.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
+`engine/Age.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, and the proven
+top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, and the unknown-op fallback.
+Its partial-class companion `engine/Age.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
 routes that family into the handler. `engine/Age.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`
-likewise retains and routes the movie labels. `engine/Age.Engine/Vm/VirtualMachine.Surface.cs` owns surface
-allocation/loading, texture binding and sizing, mutable surface fill/copy, render-target control, and transient
-surface release; its labels remain at their existing dispatcher positions around the retained numeric-glyph and
-object cases. `engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
+likewise retains and routes the movie labels. `engine/Age.Engine/Vm/VirtualMachine.Surface.cs` owns per-script
+reload-policy reset/configuration, surface allocation/loading, texture binding and sizing, mutable surface
+fill/copy, render-target control, and individual/transient surface release; its labels remain at their existing
+dispatcher positions around the retained numeric-glyph and object cases.
+`engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
 default-slot and geometry mutation, direct and range transforms, clone, and erase dispatch; animation, surface,
 ADV-binding, and presentation labels remain in their respective dispatcher groups.
 `engine/Age.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
@@ -209,8 +211,9 @@ and native-style random-modulo dispatch; shared storage/address helpers remain i
 `engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
 ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
 lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
-exit, ordinary cross-script calls, mounted append autoruns, and preloaded script-slot load/call dispatch; frame
-execution, script-provider access, and shared lifecycle state remain in `VirtualMachine.cs`.
+exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
+and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
+remain in `VirtualMachine.cs`.
 `engine/Age.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
 string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and the host-backed
 fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.

@@ -9,6 +9,12 @@ public sealed partial class VirtualMachine
     {
         switch (label)
         {
+            case "script-entry":
+                Gfx.ClearSurfaceReloadPolicies();
+                return pc + 1;
+            case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
+                Gfx.SetSurfaceReloadOnRestore(unchecked((int)Read(a[0])), (Read(a[1]) & 1) != 0);
+                return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
                 _host.ReleaseSurface((int)Read(a[0]));
                 Gfx.CreateSurface((int)Read(a[0]));
@@ -68,6 +74,10 @@ public sealed partial class VirtualMachine
                 Gfx.SelectRenderTarget(Read(a[0])); return pc + 1;
             case "clear-render-target": // 0x20e: clear color to black and depth to one
                 _host.ClearRenderTarget(Gfx.CurrentRenderTargetSlot); return pc + 1;
+            case "gfx-elem-release":    // 0x1fa (surface slot)
+                _host.ReleaseSurface((int)Read(a[0]));
+                Gfx.ClearSurface((int)Read(a[0]));
+                return pc + 1;
             case "release-transient-surfaces": // 0x23d: native fixed range [42,1000)
                 Gfx.ReleaseSurfaceRange(42, 1000 - 42);
                 _host.ReleaseSurfaceRange(42, 1000 - 42); return pc + 1;
