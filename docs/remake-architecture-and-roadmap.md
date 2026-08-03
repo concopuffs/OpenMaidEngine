@@ -938,11 +938,14 @@ do not mix mechanical moves with semantic changes.
    is enabled; missing private data will not be converted into green skips.
 
    The unverified `bin/BinExtractALF.exe`, `bin/LzssCpp.dll`, and obsolete `bin/pe-sieve32.exe` are removed from
-   tracking and purged from every reachable commit before the first remote is added. A verified full bundle made
-   immediately before the rewrite is the recovery boundary. `bin/` now tracks policy only and ignores optional
-   machine-local extractor files; PE-sieve remains documented solely as a failed historical experiment. This
-   resolves the committed-binary portion of item 3, but Kelebek-derived source/data and the user-owned project
-   license choice remain unresolved for wider distribution.
+   tracking and purged from every reachable commit before the first remote is added. The rewritten tip is
+   `a4f029c`; `git fsck --full --strict` is clean, the three paths have no reachable object or path history, and
+   compaction leaves one 3.00 MiB pack with no loose or garbage objects. The complete pre-rewrite recovery bundle
+   is `../age-reimpl-pre-binary-purge-20260803.bundle` (8,824,649 bytes; SHA-256
+   `E157D7D2404DD2FC6E19FB4B65D08FB9784F415DAB1A2CFF6850121A5F305E5E`) and was verified again after the rewrite.
+   `bin/` now tracks policy only and ignores optional machine-local extractor files; PE-sieve remains documented
+   solely as a failed historical experiment. This resolves the committed-binary portion of item 3, but
+   Kelebek-derived source/data and the user-owned project license choice remain unresolved for wider distribution.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
