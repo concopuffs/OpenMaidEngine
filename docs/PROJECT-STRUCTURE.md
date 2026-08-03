@@ -190,6 +190,8 @@ publication, skip-aware blocking fades/crossfades, foreground-transition waits, 
 `engine/Age.Engine/Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
 text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and retained
 text/wait-object bindings; text history and input/skip/auto services remain separate.
+`engine/Age.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
+retained history rendering, metadata/voice lookup, and history backlog clearing.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

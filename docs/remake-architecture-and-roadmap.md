@@ -668,6 +668,12 @@ do not mix mechanical moves with semantic changes.
    `StepAdvText`; the complete instruction remains available for emission and layout-reset bytecode offsets.
    Text-history and input/skip/auto services remain outside the handler. Runtime validation remains green.
 
+   The eighth bounded `VirtualMachine.Step` extraction moved text-history recording control, metadata append and
+   navigation, retained history rendering, metadata/voice lookup, and backlog clearing into
+   `engine/Age.Engine/Vm/VirtualMachine.TextHistory.cs`. The top-level dispatcher retains all labels and aliases
+   at their existing positions and routes them through guarded `StepTextHistory`; live ADV text remains with
+   `StepAdvText`, while skip/auto-message services remain outside both handlers. Runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1039,9 +1045,9 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
-domains isolated and the audio, movie, surface/texture, retained-object, and animation `VirtualMachine.Step`
-families routed through domain handlers, with retained presentation/transition dispatch now isolated as well,
-and ADV text-layout/rendering dispatch isolated, extract the ADV text-history opcode family next without
-replacing the proven dispatcher or changing public types, commands, and generated output.
+domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text, and
+text-history `VirtualMachine.Step` families routed through domain handlers, extract the ADV skip/auto-message
+service opcode family next without replacing the proven dispatcher or changing public types, commands, and
+generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
