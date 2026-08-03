@@ -36,7 +36,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                         tracked source and generated references use canonical LF
     ├── .gitea/workflows/core-validation.yml  read-only Ubuntu source-only core gate for the private Gitea remote
     ├── .gitea/workflows/linux-release-build.yml
-    │                                       pinned Linux export/package/smoke artifact job; no release publication
+    │                                       pinned Linux export/package/smoke artifact job plus tag-only promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
@@ -48,12 +48,14 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
     │   ├── dotnet_publish_proxy.py            guarded low-memory Godot export-time publish staging
+    │   ├── publish_gitea_release.py           guarded/retry-safe native Gitea release promotion
     │   ├── bootstrap-godot-linux-x64.sh       repo-local Godot 4.7 Linux editor/template bootstrap
     │   ├── godot-linux-x64.json               immutable Godot editor/template source + SHA-256 manifest
     │   ├── install_godot_templates.py         selective HTTP-range installer for pinned template members
     │   ├── package_linux_x64.py               export verifier + notice/checksum/archive packager
     │   ├── test_install_godot_templates.py, test_package_linux_x64.py,
-    │   │   test_dotnet_publish_proxy.py        source-only bootstrap/package/publish regressions
+    │   │   test_dotnet_publish_proxy.py,
+    │   │   test_publish_gitea_release.py       source-only bootstrap/package/publish regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
     │   ├── age_opcodes.py                      GENERATED complete Python ABI view (do not hand-edit)
     │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 5 artifacts below

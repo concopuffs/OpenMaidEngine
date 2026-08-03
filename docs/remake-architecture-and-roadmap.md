@@ -1015,6 +1015,19 @@ do not mix mechanical moves with semantic changes.
    target Gitea runner. The next bounded slice can promote an already-verified tag artifact to a Gitea release
    without rebuilding it.
 
+   **Tag-only Gitea release promotion (2026-08-03):** the third CI/CD slice adds a dependent promotion job to
+   that accepted workflow. The Linux build/smoke job remains read-only and uploads one flat five-file artifact:
+   archive, external archive checksum, build metadata, payload checksum ledger, and smoke evidence.
+   Only a successful `v*` tag run creates the second job and its job-local `releases: write` token; develop and
+   manual runs never receive release authority. The promotion downloads the artifact from the completed build
+   rather than rebuilding, then uses Gitea 1.25's native release and attachment API with the built-in job token.
+   The project-owned helper verifies the tag/clean-build commit/release identity, archive checksum, accepted
+   smoke result, and fixed archive/evidence set after download. Retries may
+   complete missing attachments on a matching partial release, but mismatches and same-name/different-size
+   collisions fail without edit, deletion, or overwrite. Pure creation/resume/refusal regressions and workflow
+   lint pass locally. The immediate acceptance gate is a deliberately chosen first `v*` tag and inspection of
+   the resulting release/archive/evidence; no tag is created by this slice.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw

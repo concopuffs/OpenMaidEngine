@@ -66,9 +66,18 @@ servers disabled, lets the real Godot export consume a strictly validated one-as
 the complete external managed payload only after Godot exits. The complete revised path passes locally, including
 payload verification and the packaged opcode/FFmpeg smoke gate. The hosted retry at `400f431` then completed
 successfully on 2026-08-03, accepting the mitigation and the complete build/smoke/artifact-upload path on the
-target runner. The workflow reports both host memory and cgroup limits for future diagnostics. Release
-publication remains a separate tag-only promotion step; it should consume this already-verified artifact rather
-than rebuilding it.
+target runner. The workflow reports both host memory and cgroup limits for future diagnostics.
+
+Tag-only release promotion is now part of the same workflow without changing that build trust boundary. The
+build job always retains read-only contents permission and uploads one flat five-file artifact: the archive, its
+external SHA-256, build metadata, payload checksum ledger, and smoke log. A dependent job
+runs only after a successful `v*` tag build, downloads that exact artifact without rebuilding, and receives
+job-local `releases: write`. It uses the built-in Gitea job token with the native 1.25 release/attachment API;
+branch and manual runs never receive release authority, and no personal secret or third-party release action is
+introduced. Promotion rechecks the clean source commit, archive checksum, and accepted smoke result after
+artifact download. It is retry-safe but fail-closed: a matching partial release can receive missing assets,
+while mismatched release identity or a same-name/different-size asset is never edited, deleted, or overwritten.
+The next acceptance gate is a deliberate first version tag and inspection of its five release attachments.
 
 ## Dependency inventory
 

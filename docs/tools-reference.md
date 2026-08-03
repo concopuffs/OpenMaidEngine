@@ -48,14 +48,27 @@ its tree-equivalent rewritten commit is `524ea74`. The hosted gate also succeede
 `d673652` on 2026-08-03.
 
 The artifact wrapper is `.gitea/workflows/linux-release-build.yml`. It runs independently from the fast core
-gate on `develop` pushes, manual dispatch, and `v*` tag pushes. The job uses the same Python 3.11 and
+gate on `develop` pushes, manual dispatch, and `v*` tag pushes. The build job uses the same Python 3.11 and
 `global.json` .NET setup actions, then calls `./tools/build-linux-x64.sh` unchanged. `actions/cache@v4` retains
 only the two hash-verified dependency archives and the independently hash-verified Linux release template; its
 key is the combined Godot/FFmpeg manifest hash and deliberately has no prefix fallback. Successful runs upload
-the `.tar.gz`, unpacked `BUILD-INFO.json`/`SHA256SUMS`, and packaged-runtime smoke log for 30 days. Failed runs
-retain any smoke/validation evidence for seven days. The workflow has read-only repository permission, no
-secrets or private game corpus, and no release/package publication authority; a tag currently changes only the
-build trigger, not the artifact's destination.
+one flat artifact containing the `.tar.gz`, its external SHA-256 file, `BUILD-INFO.json`, `SHA256SUMS`, and packaged-runtime smoke log for
+30 days. Failed runs retain any smoke/validation evidence for seven days. The build job has read-only repository
+permission, no secrets or private game corpus, and no release/package publication authority.
+
+Only a successful `v*` tag run enables the dependent promotion job. It downloads that same workflow artifact
+rather than rebuilding, checks out only the release tool, and receives job-local `releases: write` plus
+`contents: read`; branch and manual runs skip the job and never receive release authority. The built-in
+`secrets.GITEA_TOKEN` calls the native Gitea API, so no personal token or third-party release action is required.
+`publish_gitea_release.py` validates the version-like tag, exact clean-build commit metadata, archive checksum,
+accepted package-smoke result, fixed five-file asset set, and any
+existing release/asset metadata. A retry resumes a matching partial release and uploads only missing files; it
+refuses mismatched releases or same-name/different-size assets instead of editing, deleting, or overwriting them.
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `publish_gitea_release.py` | Tag-only, retry-safe promotion of one verified Linux workflow artifact through Gitea's native release API. Requires `GITEA_TOKEN`; the token is passed to upload `curl` through standard input rather than its argument list. | `publish_gitea_release.py --server <url> --repository <owner/name> --tag <v...> --target <sha> --asset <path>` (exactly the five expected `--asset` names) | verified downloaded workflow artifact + tag context → matching Gitea release and five attachments |
+| `test_publish_gitea_release.py` | Pure synthetic creation, retry/resume, collision, and mismatch regressions. | `test_publish_gitea_release.py` | temporary files only |
 
 ## Optional local binary tools
 

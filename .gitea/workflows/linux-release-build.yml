@@ -66,15 +66,21 @@ jobs:
       - name: Build and smoke-test Linux package
         run: ./tools/build-linux-x64.sh
 
+      - name: Stage verified workflow artifact
+        run: |
+          mkdir -p build/workflow-artifact
+          cp build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz build/workflow-artifact/
+          cp build/package/staging/OpenMaidEngine-Himegari-linux-x64/BUILD-INFO.json build/workflow-artifact/
+          cp build/package/staging/OpenMaidEngine-Himegari-linux-x64/SHA256SUMS build/workflow-artifact/
+          cp build/package/package-smoke.log build/workflow-artifact/
+          cd build/workflow-artifact
+          sha256sum OpenMaidEngine-Himegari-linux-x64.tar.gz > OpenMaidEngine-Himegari-linux-x64.tar.gz.sha256
+
       - name: Upload verified Linux package
         uses: christopherhx/gitea-upload-artifact@v4
         with:
           name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
-          path: |
-            build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz
-            build/package/staging/OpenMaidEngine-Himegari-linux-x64/BUILD-INFO.json
-            build/package/staging/OpenMaidEngine-Himegari-linux-x64/SHA256SUMS
-            build/package/package-smoke.log
+          path: build/workflow-artifact/*
           if-no-files-found: error
           retention-days: 30
 
@@ -88,3 +94,46 @@ jobs:
             build/validation/**
           if-no-files-found: ignore
           retention-days: 7
+
+  publish-release:
+    name: Publish tagged Gitea release
+    if: startsWith(gitea.ref, 'refs/tags/v')
+    needs: linux-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Gitea 1.25 granular scope; GitHub-oriented actionlint does not model it.
+      releases: write
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          architecture: x64
+
+      - name: Download verified workflow artifact
+        uses: christopherhx/gitea-download-artifact@v4
+        with:
+          name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
+          path: build/release-assets
+
+      - name: Create or resume Gitea release
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          python -X utf8 tools/publish_gitea_release.py \
+            --server "${{ gitea.server_url }}" \
+            --repository "${{ gitea.repository }}" \
+            --tag "${{ gitea.ref_name }}" \
+            --target "${{ gitea.sha }}" \
+            --asset build/release-assets/OpenMaidEngine-Himegari-linux-x64.tar.gz \
+            --asset build/release-assets/OpenMaidEngine-Himegari-linux-x64.tar.gz.sha256 \
+            --asset build/release-assets/BUILD-INFO.json \
+            --asset build/release-assets/SHA256SUMS \
+            --asset build/release-assets/package-smoke.log
