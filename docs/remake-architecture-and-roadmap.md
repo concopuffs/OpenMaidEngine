@@ -661,6 +661,13 @@ do not mix mechanical moves with semantic changes.
    labels and aliases at their existing positions and routes them through guarded `StepPresentation`; movie-mask
    transition dispatch remains with the movie handler. Runtime validation remains green.
 
+   The seventh bounded `VirtualMachine.Step` extraction moved live ADV text emission, layout/cursor/wait-indicator
+   state, text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and
+   retained text/wait-object bindings into `engine/Age.Engine/Vm/VirtualMachine.AdvText.cs`. The top-level
+   dispatcher retains all labels at their existing positions and routes the separated groups through guarded
+   `StepAdvText`; the complete instruction remains available for emission and layout-reset bytecode offsets.
+   Text-history and input/skip/auto services remain outside the handler. Runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1034,7 +1041,7 @@ Continue step 2 of the **codebase consolidation** maintenance slice: behavior-ne
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, surface/texture, retained-object, and animation `VirtualMachine.Step`
 families routed through domain handlers, with retained presentation/transition dispatch now isolated as well,
-extract the ADV text-layout/rendering opcode family next without replacing the proven dispatcher or changing
-public types, commands, and generated output.
+and ADV text-layout/rendering dispatch isolated, extract the ADV text-history opcode family next without
+replacing the proven dispatcher or changing public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

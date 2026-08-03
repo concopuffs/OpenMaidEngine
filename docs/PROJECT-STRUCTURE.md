@@ -187,6 +187,9 @@ ADV-binding, and presentation labels remain in their respective dispatcher group
 transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
 `engine/Age.Engine/Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
 publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
+`engine/Age.Engine/Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
+text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and retained
+text/wait-object bindings; text history and input/skip/auto services remain separate.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
