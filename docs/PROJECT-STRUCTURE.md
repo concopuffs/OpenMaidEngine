@@ -183,6 +183,8 @@ surface release; its labels remain at their existing dispatcher positions around
 object cases. `engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
 default-slot and geometry mutation, direct and range transforms, clone, and erase dispatch; animation, surface,
 ADV-binding, and presentation labels remain in their respective dispatcher groups.
+`engine/Age.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
+transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
