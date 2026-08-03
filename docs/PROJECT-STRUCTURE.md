@@ -164,7 +164,9 @@ of that state through the sealed partial class.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
 animation, numeric-glyph, and handle-range contracts. `engine/Age.Engine/Model/GfxState.Surfaces.cs` owns surface
 resource/color-key state, created/reloadable classification, movie stop-time metadata, render-target/tile
-configuration, and surface lifecycle operations.
+configuration, and surface lifecycle operations. `engine/Age.Engine/Model/GfxState.RetainedObjects.cs` owns the
+retained-object record and registry/index, range-transform state, object creation/query/clone/erase and draw
+binding, plus numeric-glyph object generation.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

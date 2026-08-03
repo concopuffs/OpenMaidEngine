@@ -607,6 +607,11 @@ do not mix mechanical moves with semantic changes.
    `engine/Age.Engine/Model/GfxState.Surfaces.cs`. Reset, persistence, retained-object sampling, and transition
    teardown retain direct access through the partial class; runtime validation remains green.
 
+   The third bounded `GfxState` split moved the retained-object record and registry/index, range-transform
+   state and operations, object creation/query/clone/erase and draw binding, and numeric-glyph object generation
+   into `engine/Age.Engine/Model/GfxState.RetainedObjects.cs`. Cross-domain reset/persistence, animation, and
+   presentation sampling retain direct access through the sealed partial class; runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -978,7 +983,7 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main` and `GodotAdvHost` domains
-isolated and the first two `GfxState` domains separated, move retained-object ownership next, preserving public
-types, commands, and generated output.
+isolated and the first three `GfxState` domains separated, move animation ownership next, preserving public types,
+commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
