@@ -211,6 +211,9 @@ ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; pro
 lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, ordinary cross-script calls, mounted append autoruns, and preloaded script-slot load/call dispatch; frame
 execution, script-provider access, and shared lifecycle state remain in `VirtualMachine.cs`.
+`engine/Age.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
+string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and the host-backed
+fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
