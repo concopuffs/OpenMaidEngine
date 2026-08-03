@@ -827,6 +827,13 @@ do not mix mechanical moves with semantic changes.
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
    solution files because Godot export requires the frontend-local solution.
 
+   **Progress (2026-08-03):** the first bounded build-graph slice introduced the platform-neutral
+   `Age.Engine.Frontend` production project and added it to both existing solutions. Page locator, timeline/trace
+   and step-limit diagnostics, VM/window launch options, and performance-frame logging moved unchanged from
+   `godot/` into the new owner. Godot and `Age.Engine.Tests` now use project references, eliminating seven direct
+   test source links without changing public types, namespaces, behavior, or export configuration. Both solution
+   builds and runtime validation remain green.
+
 5. **Close repository-policy and storage gaps.** Add an explicit project license, third-party notices and
    checksums/provenance for committed binaries, consistent editor/build policy, a pinned .NET SDK, and a
    CI entry point built on the same validation driver. Remove the empty workspace-root `.git` directory and
@@ -1181,8 +1188,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Begin step 4 of the **codebase consolidation** maintenance slice: make the build graph express source ownership
-without changing behavior. Introduce the production project boundary for platform-neutral frontend helpers now
-linked directly from `godot/` into `Age.Engine.Tests`, starting with the diagnostic/options helper cluster. Replace
-source links with project references while retaining both existing solution files and Godot export behavior.
+without changing behavior. Move the platform-neutral movie abstractions and runtime support—decoder interfaces,
+movie/audio runtime state, movie-surface registry, and RIFF sanitization—from `godot/` into
+`Age.Engine.Frontend` next. Replace their test source links while preserving the intentionally internal API through
+explicit friend-assembly access; leave FFmpeg interop/decoder ownership for the following slice.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

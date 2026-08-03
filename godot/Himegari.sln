@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Himegari", "Himegari.csproj", "{5821B505-EBD3-4B50-A83A-7AFE22AA1528}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Frontend", "..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj", "{2B018D3E-4057-465E-89CB-4CC77FDD60E2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,5 +23,11 @@ Global
 		{5821B505-EBD3-4B50-A83A-7AFE22AA1528}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
 		{5821B505-EBD3-4B50-A83A-7AFE22AA1528}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
 		{5821B505-EBD3-4B50-A83A-7AFE22AA1528}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.ExportRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.ExportRelease|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

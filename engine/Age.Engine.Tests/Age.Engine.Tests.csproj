@@ -22,21 +22,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Age.Engine\Age.Engine.csproj" />
+    <ProjectReference Include="..\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
     <ProjectReference Include="..\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
     <Compile Include="..\..\godot\IMovieDecoder.cs" Link="IMovieDecoder.cs" />
     <Compile Include="..\..\godot\MovieRuntime.cs" Link="MovieRuntime.cs" />
     <Compile Include="..\..\godot\MovieAudioTimeline.cs" Link="MovieAudioTimeline.cs" />
     <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
     <Compile Include="..\..\godot\FfmpegMovieDecoder.cs" Link="FfmpegMovieDecoder.cs" />
-    <Compile Include="..\..\godot\PageLocatorState.cs" Link="PageLocatorState.cs" />
-    <Compile Include="..\..\godot\GodotTimelineLog.cs" Link="GodotTimelineLog.cs" />
-    <Compile Include="..\..\godot\GodotTraceSink.cs" Link="GodotTraceSink.cs" />
-    <Compile Include="..\..\godot\StepLimitDiagnosticFormatter.cs" Link="StepLimitDiagnosticFormatter.cs" />
-    <Compile Include="..\..\godot\GodotVmOptions.cs" Link="GodotVmOptions.cs" />
-    <Compile Include="..\..\godot\PerformanceFrameLog.cs" Link="PerformanceFrameLog.cs" />
     <Compile Include="..\..\godot\MovieSurfaceRegistry.cs" Link="MovieSurfaceRegistry.cs" />
     <Compile Include="..\..\godot\RiffWaveSanitizer.cs" Link="RiffWaveSanitizer.cs" />
-    <Compile Include="..\..\godot\WindowLaunchOptions.cs" Link="WindowLaunchOptions.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
   </ItemGroup>
 

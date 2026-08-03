@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine", "Age.Engine\Age.Engine.csproj", "{DD04FB21-F83D-4547-BBEC-97295F30623A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Frontend", "Age.Engine.Frontend\Age.Engine.Frontend.csproj", "{2B018D3E-4057-465E-89CB-4CC77FDD60E2}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Cli", "Age.Cli\Age.Cli.csproj", "{795573A0-A283-4A28-B26C-606C1AA5E1FE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Tests", "Age.Engine.Tests\Age.Engine.Tests.csproj", "{2ED171C8-DA87-40FD-A6FB-3B3F6501029F}"
@@ -24,6 +26,10 @@ Global
 		{DD04FB21-F83D-4547-BBEC-97295F30623A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD04FB21-F83D-4547-BBEC-97295F30623A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DD04FB21-F83D-4547-BBEC-97295F30623A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B018D3E-4057-465E-89CB-4CC77FDD60E2}.Release|Any CPU.Build.0 = Release|Any CPU
 		{795573A0-A283-4A28-B26C-606C1AA5E1FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{795573A0-A283-4A28-B26C-606C1AA5E1FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{795573A0-A283-4A28-B26C-606C1AA5E1FE}.Release|Any CPU.ActiveCfg = Release|Any CPU

@@ -106,7 +106,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── opcodes.json                        GENERATED from opcodes.toml (machine view for the C# VM)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
-    ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
+    ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (AgeEngine.sln)
     │   ├── Age.Engine/Model/                retained graphics state plus separately navigable public
     │                                       render, transition, diagnostic, and persistence contracts
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
@@ -118,6 +118,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state
+    │   ├── Age.Engine.Frontend/             platform-neutral frontend diagnostics/options project: page
+    │                                       locator, timeline/trace/step-limit diagnostics, VM/window launch
+    │                                       options, and performance-frame logging
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -146,6 +149,13 @@ paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression 
 surface-transition drawing, raster helpers, and compositor decision logging. `godot/Main.Input.cs` owns
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry.
+
+`engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
+Both `engine/AgeEngine.sln` and `godot/Himegari.sln` include the project; Godot and `Age.Engine.Tests` consume it
+through project references rather than compiling duplicate linked sources. The first owned cluster contains
+`PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
+`PerformanceFrameLog`, and `WindowLaunchOptions`. Movie runtime/decoder helpers remain under `godot/` until their
+separate ownership slices.
 
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,

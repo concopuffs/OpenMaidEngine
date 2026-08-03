@@ -13,6 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
+    <ProjectReference Include="..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="Himegari.Runtime.opcodes.json" />
   </ItemGroup>
