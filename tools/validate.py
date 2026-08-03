@@ -152,16 +152,27 @@ def build_gate_plan(
     gates.append(
         Gate(
             "engine-tests",
-            ".NET engine tests",
+            ".NET engine core tests",
             (
                 "dotnet", "test", "engine/AgeEngine.sln", "--nologo", "--verbosity", "minimal",
-                "-p:UseSharedCompilation=false",
+                "--filter", "Category!=Workspace", "-p:UseSharedCompilation=false",
             ),
             300,
         )
     )
 
     if "workspace" in phases:
+        gates.append(
+            Gate(
+                "engine-workspace-tests",
+                ".NET installed-data and native-oracle tests",
+                (
+                    "dotnet", "test", "engine/AgeEngine.sln", "--nologo", "--verbosity", "minimal",
+                    "--filter", "Category=Workspace", "-p:UseSharedCompilation=false",
+                ),
+                300,
+            )
+        )
         gates.append(
             Gate("globals-build", "Global registry build", _python_tool("globals_build.py", "--build"))
         )

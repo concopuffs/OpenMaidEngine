@@ -48,6 +48,7 @@ public class InputBindingTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void System4BootstrapReplaysAllSixteenInputConfigurationCalls()
     {
         var scripts = Sys4ScriptProvider.Load(Table);
@@ -72,6 +73,7 @@ public class InputBindingTests
     [InlineData(0x08)] // retained native Backspace default
     [InlineData(0x11)] // SYSTEM4 LeftCtrl binding
     [InlineData(0x43)] // SYSTEM4 C binding
+    [Trait("Category", "Workspace")]
     public void LogicalActionSixDrivesHeldAdvFastForward(int virtualKey)
     {
         var script = ScriptAssembler.Assemble(Table, "ADV_FAST_FORWARD", new List<(int, Operand[])>
@@ -99,6 +101,7 @@ public class InputBindingTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void HeldLogicalActionSixSurvivesPersistentSkipLifecycleSuspension()
     {
         var script = ScriptAssembler.Assemble(Table, "HELD_SKIP_LIFECYCLE", new List<(int, Operand[])>
@@ -122,6 +125,7 @@ public class InputBindingTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void ReleasingPhysicalFastForwardDoesNotClearPersistentSkip()
     {
         var script = ScriptAssembler.Assemble(Table, "ADV_PERSISTENT_AND_HELD_SKIP", new List<(int, Operand[])>

@@ -5,6 +5,7 @@ using Age.Engine.Sys4;
 public class Sys4StartupSettingsTests
 {
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledCatalogExposesOrderedStartupSettingsAndLogicalCanvas()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -100,7 +101,7 @@ public class Sys4StartupSettingsTests
         params (string Key, string Value)[] pairs)
         => WrapCatalog(BuildExpanded(pairs));
 
-    private static byte[] BuildCatalog(bool includeTrailer)
+    internal static byte[] BuildCatalog(bool includeTrailer)
         => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer));
 
     private static byte[] BuildExpanded(

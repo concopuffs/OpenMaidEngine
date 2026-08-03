@@ -3,6 +3,7 @@ using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
 
+[Trait("Category", "Workspace")]
 public class CallScriptIntegrationTests
 {
     private sealed class NullHost : IHost

@@ -26,7 +26,7 @@ whenever a tool's inputs/outputs change.**
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `validate.py` | Layered project validation front door. `core` regenerates/runtime-checks opcode metadata, lints canonical registries, runs pure Python tooling tests and all .NET engine tests, checks generated opcode references, and runs `git diff --check`. `workspace` adds corpus-derived global generation, the real-data Python suites, full SYS4 decode, and Python RECOVER. `runtime` adds the Godot C# build and forced-portable threaded self-test. `full` combines all phases and adds the booted faithful-wait C# scene sweep. Selected prerequisites are strict: an unavailable game/corpus/Godot requirement fails before execution instead of becoming a green skip. Each gate has a timeout and UTF-8 log under `build/validation/validate-<timestamp>/`; Godot receives an isolated validation-owned user-data/log root there so it cannot read or modify the developer's saves/settings. The final table reports results/durations and a before/after Godot-process leak audit. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--godot <console>` · `--game-root <install>` · `--verbose` · `--fail-fast` | sources + selected toolchain/game/corpus prerequisites → console summary + ⚙ `build/validation/validate-*/<gate>.log` |
+| `validate.py` | Layered project validation front door. `core` regenerates/runtime-checks opcode metadata, lints canonical registries, runs pure Python tooling tests and the 502 .NET cases without the `Workspace` trait, checks generated opcode references, and runs `git diff --check`. `workspace` adds the 88 explicitly traited installed-data/native-oracle cases, corpus-derived global generation, real-data Python suites, full SYS4 decode, and Python RECOVER. `runtime` adds the Godot C# build and forced-portable threaded self-test. `full` combines all phases and adds the booted faithful-wait C# scene sweep. Selected prerequisites are strict: an unavailable game/corpus/Godot requirement fails before execution instead of becoming a green skip. Each gate has a timeout and UTF-8 log under `build/validation/validate-<timestamp>/`; Godot receives an isolated validation-owned user-data/log root there so it cannot read or modify the developer's saves/settings. The final table reports results/durations and a before/after Godot-process leak audit. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--godot <console>` · `--game-root <install>` · `--verbose` · `--fail-fast` | sources + selected toolchain/game/corpus prerequisites → console summary + ⚙ `build/validation/validate-*/<gate>.log` |
 | `test_validate.py` | Pure tests for launcher-equivalent explicit/environment/PATH/conventional resolution precedence, invalid-explicit hard failure, level composition, and final gate ordering. | `test_validate.py` | temporary files only |
 
 Levels are cumulative around `core`: `workspace` means core+workspace-corpus, `runtime` means core+Godot,
@@ -35,14 +35,14 @@ by a failed preflight; rebuild each through its owning tool in this reference. R
 `--godot`, then `AGE_GODOT_CONSOLE`, then `godot4`/`godot`/`godot-mono` on `PATH`. Game-root resolution uses
 `--game-root`, then `AGE_GAME_ROOT`, then the conventional sibling install and always requires `SYS4INI.BIN`.
 
-The planned hosted wrapper is `.github/workflows/core-validation.yml`. A clean source-only checkout audit on
-2026-08-03 found that `--level core` still runs 89 installed-corpus/native-oracle engine cases and that
-`test_opcodes.py` bootstraps from the external script corpus. The workflow therefore remains dormant until those
-tests are explicitly separated from the hermetic core suite; missing data must not become a successful skip.
-The known-good configuration on the target Gitea server uses `ubuntu-latest`, `actions/checkout@v4`,
-`actions/setup-dotnet@v4`, and `christopherhx/gitea-upload-artifact@v4`. The future core workflow should match
-that runner/action baseline, provision Python 3.11, and keep private corpus, Godot runtime, packaging,
-deployment, and secrets outside the job.
+The hosted wrapper is `.gitea/workflows/core-validation.yml`. It matches the target server's demonstrated
+`ubuntu-latest`, `actions/checkout@v4`, `actions/setup-dotnet@v4`, and
+`christopherhx/gitea-upload-artifact@v4` baseline, adds Python 3.11, and runs only `--level core`. A standalone
+source-only repository under an arbitrary directory name passes that exact driver without sibling game or
+extracted data. Repository discovery uses tracked marker files rather than requiring the checkout directory to
+be named `age-reimpl`. The workflow has no secrets, private corpus, Godot runtime, cache, packaging, or deployment
+access; failure logs are retained for seven days. Its first actual Linux/Gitea execution remains pending until
+the rewritten repository is pushed.
 
 ## Optional local binary tools
 
@@ -68,7 +68,7 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 |---|---|---|---|
 | `opcodes_build.py` | Generator + linter for the opcode reference. `--bootstrap` appends entries observed in the Himegari corpus; `--bootstrap-age` appends every missing opcode from the pristine 548-entry AGE catalog as an unobserved compatibility stub. Catalog stubs retain Kelebek's ABI label/argument count so other AGE scripts decode past them, but remain `noop_headless=false`: the VM currently traces/skips them, while coverage continues to report them as unresolved rather than semantically safe. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` → ⚙ `tools/age_opcodes_himegari.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ `build/opcode-coverage.md` |
 | `opcodes_model.py` | In-memory model + loader + linter (dangling-ref / confidence-ceiling / vocabulary / dependents). | *Imported by `opcodes_build.py`.* | `vm-map/opcodes.toml` → — |
-| `test_opcodes.py` | Unit tests for the opcode tooling. | `test_opcodes.py` | — |
+| `test_opcodes.py` | Unit tests for the opcode tooling. Bootstrap coverage injects 248 synthetic observations derived from the canonical observed-opcode set; it does not read the private script corpus. Production `--bootstrap` still scans the real corpus by default. | `test_opcodes.py` | `vm-map/opcodes.toml` → temporary files only |
 | `opcode_context.py` | Read-only evidence gatherer for classifying unnamed opcodes (frequency, argc, operand-type signature, neighbours, disasm snippets, Kelebek comment). | `--top 20` · `opcode_context.py 0x1f4 0x71 …` | corpus → stdout |
 | `validate_opcode_table.py` | Definitive decode-coverage validator (replicates Kelebek's `data_array_end` code/data split). | `validate_opcode_table.py` | corpus → stdout |
 | `validate_opcode_table_naive.py` | Naïve variant of the above (baseline comparison). | `validate_opcode_table_naive.py` | corpus → stdout |

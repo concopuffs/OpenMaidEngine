@@ -2,6 +2,7 @@ using Age.Engine.Sys4;
 using Age.Engine.Diagnostics;
 using Xunit;
 
+[Trait("Category", "Workspace")]
 public class Sys4ScriptProviderTests
 {
     [Fact]

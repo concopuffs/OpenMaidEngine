@@ -259,6 +259,7 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealMamesResearchDescriptionUsesImmediateRetainedTextPath()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -310,6 +311,7 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void System4BootstrapReplaysAllResetCursorAndBoundsConfigurations()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

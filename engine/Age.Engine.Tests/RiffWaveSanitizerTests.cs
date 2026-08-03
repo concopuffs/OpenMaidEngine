@@ -48,6 +48,7 @@ public class RiffWaveSanitizerTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledSc0000GlowSoundDropsCp932InfoBlockWithoutChangingPcmData()
     {
         var resources = ResourceMap.Load();
@@ -63,6 +64,7 @@ public class RiffWaveSanitizerTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledFirstBossSoundStopsAtFirstDeclaredRiff()
     {
         var resources = ResourceMap.Load();

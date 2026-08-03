@@ -179,6 +179,7 @@ public class HistoryInteractionOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealHistoryWheelUpNavigatesToOlderRetainedRows()
     {
         var scripts = Sys4ScriptProvider.Load(Table);
@@ -196,6 +197,7 @@ public class HistoryInteractionOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealHistoryRendersMultipleRowsAfterSeveralSc0000Messages()
     {
         var scripts = Sys4ScriptProvider.Load(Table);
@@ -282,6 +284,7 @@ public class HistoryInteractionOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealSc0000HistoryButtonRendersAndClosesWithoutAdvancingThePageWait()
     {
         var scripts = Sys4ScriptProvider.Load(Table);
@@ -323,6 +326,7 @@ public class HistoryInteractionOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealHistoryVoicedRowDispatchesItsRetainedVoicePair()
     {
         var scripts = Sys4ScriptProvider.Load(Table);

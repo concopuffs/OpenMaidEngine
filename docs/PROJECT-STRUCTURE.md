@@ -32,7 +32,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
-    ├── .github/workflows/core-validation.yml planned Ubuntu-hosted core gate; source-only audit pending fix
+    ├── .gitea/workflows/core-validation.yml  read-only Ubuntu source-only core gate for the private Gitea remote
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install

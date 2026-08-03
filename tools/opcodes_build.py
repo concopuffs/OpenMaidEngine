@@ -100,8 +100,9 @@ def skeleton_toml(op: int, label: str, argc: int, argtypes_for_op: dict,
                   f"observed_types = [{obs}]"]
     return "\n".join(lines) + "\n"
 
-def bootstrap(toml_path: Path) -> None:
-    used, argtypes = scan_corpus()
+def bootstrap(toml_path: Path, *, corpus_scan=None) -> None:
+    """Append observed skeletons from a real scan or an injected synthetic scan fixture."""
+    used, argtypes = corpus_scan if corpus_scan is not None else scan_corpus()
     present = set(M.load(toml_path).opcodes) if toml_path.exists() else set()
     blocks = []
     for op in sorted(used):

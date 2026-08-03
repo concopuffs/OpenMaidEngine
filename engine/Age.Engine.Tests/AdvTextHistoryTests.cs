@@ -156,6 +156,7 @@ public class AdvTextHistoryTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealSc0000FirstPagePopulatesTheRetainedBacklogBeforeItsWait()
     {
         var scripts = Sys4ScriptProvider.Load(Table);

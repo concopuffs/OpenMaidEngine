@@ -255,6 +255,7 @@ public class HotspotInputTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000AdvChromeBootstrap_VisitsAllFiveVisibleButtonRegistrations()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -274,6 +275,7 @@ public class HotspotInputTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000FirstWait_DispatchesRealHistoryHoverCallback()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -436,6 +438,7 @@ public class HotspotInputTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000MessageSkipButton_EnablesPersistentServiceState()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -471,6 +474,7 @@ public class HotspotInputTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000HideWindowButton_RunsRealHidewinAndReturnsToAdvWait()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -497,6 +501,7 @@ public class HotspotInputTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000ActionSeven_EntersRealMenuAndRestoresParentAdvHotspots()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

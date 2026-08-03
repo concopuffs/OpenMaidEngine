@@ -8,6 +8,7 @@ using Xunit;
 public class Sys4AssetStoreTests
 {
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledAppendCatalogHasNativePackSelectionAndStableDirectory()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -40,6 +41,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void CompletePackedAssetEnumerationPreservesBaseThenAppendOrder()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -57,6 +59,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void CompleteAppendDirectoryAndPayloadsMatchBinExtractAlf()
     {
         string temp = Path.Combine(Path.GetTempPath(), "age-vfsb-oracle-" + Guid.NewGuid().ToString("N"));
@@ -105,6 +108,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RuntimeCatalogMatchesDiagnosticCatalogAndSceneViews()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -154,6 +158,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void EveryCatalogRangeFitsAndRepresentativePayloadsMatchExtractedData()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -186,6 +191,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000RoomAndTitleAudioPayloadsReadDirectlyFromTheirNativeAddressSpaces()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -222,6 +228,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0010LowOperandsAreAlreadyUniversalPackedIds()
     {
         var resources = ResourceMap.Load();
@@ -236,6 +243,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void TypedResourceResolutionPreservesAppendPackSelector()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -249,6 +257,7 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void AllInstalledLooseScriptOverridesShadowArchiveCopies()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -281,7 +290,7 @@ public class Sys4AssetStoreTests
         try
         {
             File.WriteAllBytes(Path.Combine(archives, "DATA1.ALF"), new byte[] { 9, 8, 1, 2, 3, 7 });
-            var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+            var catalog = Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog(includeTrailer: true));
             var entry = new AssetEntry("TEST.BIN", "DATA1.ALF", 2, 3);
             var store = new Sys4AssetStore(catalog, archives, loose);
 

@@ -19,10 +19,16 @@ public static class Paths
     private static string FindRepo()
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null && d.Name != "age-reimpl") d = d.Parent;
-        if (d == null) throw new DirectoryNotFoundException(
-            "age-reimpl root not found above " + AppContext.BaseDirectory);
-        return d.FullName;
+        while (d != null)
+        {
+            if (File.Exists(Path.Combine(d.FullName, "global.json"))
+                && File.Exists(Path.Combine(d.FullName, "engine", "AgeEngine.sln"))
+                && File.Exists(Path.Combine(d.FullName, "vm-map", "opcodes.toml")))
+                return d.FullName;
+            d = d.Parent;
+        }
+        throw new DirectoryNotFoundException(
+            "repository root not found above " + AppContext.BaseDirectory);
     }
 
     /// name(UPPER).BIN -> path; game-dir loose overrides shadow extracted/DATA1 (mirrors paths.scripts()).

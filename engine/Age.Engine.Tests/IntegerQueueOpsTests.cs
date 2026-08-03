@@ -87,6 +87,7 @@ public class IntegerQueueOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RegisteredRealMvseek_ExpandsMovementCostsThroughTheSystem4ServiceAbi()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -111,6 +112,7 @@ public class IntegerQueueOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealMvseek_ExpandsMovementCostsBeyondTheOrigin()
     {
         var vm = RealSearchVm("MVSEEK.BIN");
@@ -126,6 +128,7 @@ public class IntegerQueueOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealAtseek_ExpandsAttackDistancesBeyondTheOrigin()
     {
         var vm = RealSearchVm("ATSEEK.BIN");

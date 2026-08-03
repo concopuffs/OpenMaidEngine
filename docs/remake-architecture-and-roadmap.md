@@ -920,8 +920,8 @@ do not mix mechanical moves with semantic changes.
    validation remains green, and a Linux Git comparison reports no unstaged EOL drift. The first hosted CI job
    can therefore target Linux rather than carrying forward a Windows-runner dependency.
 
-   **Linux core workflow (2026-08-03):** item 2 is implemented as `.github/workflows/core-validation.yml`. One
-   read-only `ubuntu-24.04` job provisions Python 3.11 and the SDK selected by `global.json`, reports both resolved
+   **Initial Linux core workflow (2026-08-03, superseded below):** item 2 was first implemented as
+   `.github/workflows/core-validation.yml`. One read-only `ubuntu-24.04` job provisions Python 3.11 and the SDK selected by `global.json`, reports both resolved
    versions, and invokes the existing asset-independent core driver. Pull requests, `main` pushes, and manual
    dispatch share the job; branch-local concurrency cancels superseded runs, and seven-day validation-log upload
    occurs only after failure. The workflow has no cache, secrets, private corpus, Godot runtime, packaging, or
@@ -946,6 +946,19 @@ do not mix mechanical moves with semantic changes.
    `bin/` now tracks policy only and ignores optional machine-local extractor files; PE-sieve remains documented
    solely as a failed historical experiment. This resolves the committed-binary portion of item 3, but
    Kelebek-derived source/data and the user-owned project license choice remain unresolved for wider distribution.
+
+   **Hermetic Gitea core workflow (2026-08-03):** the correction is complete. The 590 engine cases are now
+   explicitly partitioned into 502 source-only cases and 88 `Workspace` installed-data/native-oracle cases;
+   both selections pass with zero skips in the populated workspace. The one accidentally coupled synthetic
+   asset-store test now builds its catalog fixture instead of being excluded. `test_opcodes.py` injects 248
+   synthetic observations derived from the canonical observed-opcode set, while production `--bootstrap` still
+   scans the real corpus by default. Development/test repository discovery uses tracked marker files rather than
+   the checkout directory name.
+
+   The workflow moved to `.gitea/workflows/core-validation.yml` and matches the same-server baseline:
+   `ubuntu-latest`, checkout/setup-dotnet v4, setup-python v6, and Gitea-specific artifact upload. A standalone
+   source-only repository under an arbitrary name passes the complete core driver without sibling game/extracted
+   data. The first actual Linux runner result remains pending until the user adds and pushes the selected remote.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
@@ -1293,10 +1306,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by making the Linux core gate genuinely
-source-only: classify the installed-corpus/native-oracle engine tests as an explicit workspace suite, inject a
-synthetic corpus seam into the opcode-bootstrap unit test, and align the workflow with the target Gitea server's
-known-good `ubuntu-latest` action baseline. Then make the user-owned project-license and Kelebek-derived-material
-decisions required before wider distribution. Do not infer a license choice or publish/configure a remote.
+Continue step 5 of the **codebase consolidation** maintenance slice by adding and pushing the user-selected
+private Gitea remote, then confirm the first hosted Linux core result. After that, make the user-owned project-
+license and Kelebek-derived-material decisions required before wider distribution. Do not infer a license choice
+or configure/publish a remote without the user's explicit direction.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

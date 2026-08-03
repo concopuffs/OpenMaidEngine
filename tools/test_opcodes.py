@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Standalone tests for the opcode reference tooling. Run: py -3.11 -X utf8 tools/test_opcodes.py"""
 import os, sys, tempfile
+from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import opcodes_model as M
 
@@ -120,14 +121,21 @@ def test_bootstrap():
     import opcodes_build as B
     from age_opcodes import OPCODES
     from pathlib import Path
+    canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
+    observed = sorted(op for op, entry in canonical.opcodes.items() if entry.observed_in_himegari)
+    synthetic_scan = (
+        Counter({op: 1 for op in observed}),
+        {op: {i: {0} for i in range(OPCODES[op][1])} for op in observed},
+    )
     fd, p = tempfile.mkstemp(suffix=".toml"); os.close(fd); os.remove(p)
     tp = Path(p)
-    B.bootstrap(tp)                      # first run: meta + all skeletons
+    B.bootstrap(tp, corpus_scan=synthetic_scan)  # first run: meta + synthetic observed skeletons
     m = M.load(tp)
-    check(len(m.opcodes) >= 240, f"bootstrap seeded ~248 opcodes (got {len(m.opcodes)})")
+    check(len(m.opcodes) == len(observed),
+          f"bootstrap seeded all {len(observed)} synthetic observations (got {len(m.opcodes)})")
     check(0x90 in m.opcodes and m.opcodes[0x90].argc == 7, "0x90 seeded with argc 7")
     n1 = len(m.opcodes)
-    B.bootstrap(tp)                      # idempotent: appends nothing new
+    B.bootstrap(tp, corpus_scan=synthetic_scan)  # idempotent: appends nothing new
     check(len(M.load(tp).opcodes) == n1, "second bootstrap adds no duplicates")
     e, w = M.lint(m)
     check(e == [], f"bootstrapped file lints clean (errors: {e[:3]})")

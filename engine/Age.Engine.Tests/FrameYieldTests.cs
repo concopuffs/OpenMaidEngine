@@ -22,6 +22,7 @@ public class FrameYieldTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void FrameYield_CalledOncePerStep()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

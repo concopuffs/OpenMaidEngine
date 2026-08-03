@@ -554,6 +554,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000ResumesImmediatelyAfterMovieOpcodeAtBytecodeOffset13d1()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -756,6 +757,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000MoviePayloadReadsFromArchiveVfsAndIsMpegProgramStream()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -771,6 +773,7 @@ public class MovieOpcodeTests
     [Theory]
     [InlineData(0x335f, "LOGO.AGF")]
     [InlineData(0x3364, "OP.AGF")]
+    [Trait("Category", "Workspace")]
     public void ModalMoviePayloadResolvesFromUniversalPackedCatalog(int resourceId, string expectedName)
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -783,6 +786,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void DebugTestMovieDecodesToExactGreenMaskDimensions()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -807,6 +811,7 @@ public class MovieOpcodeTests
     [Theory]
     [InlineData(0x335f, "LOGO.AGF")]
     [InlineData(0x3364, "OP.AGF")]
+    [Trait("Category", "Workspace")]
     public void ModalMovieOpeningFramesAreOpaqueAndHaveContinuousCadence(
         int resourceId, string expectedName)
     {
@@ -841,6 +846,7 @@ public class MovieOpcodeTests
     [InlineData(0x2b94, "MVB238.AGF", 280, 352, 866)]
     [InlineData(0x2bc2, "MVB908.AGF", 400, 400, 333)]
     [InlineData(0x33, "CHAPTER.AGF", 800, 600, 12016)]
+    [Trait("Category", "Workspace")]
     public void FfmpegShimDecodesRepresentativeVfsMovie(int resourceId, string expectedName,
                                                         int expectedWidth, int expectedHeight,
                                                         long expectedStopTimeMs)
@@ -879,6 +885,7 @@ public class MovieOpcodeTests
     [InlineData(0x33, "CHAPTER.AGF")]
     [InlineData(0x2bf1, "MVS001.AGF")]
     [InlineData(0x335f, "LOGO.AGF")]
+    [Trait("Category", "Workspace")]
     public void FfmpegShimDecodesRepresentativeMpegAudio(int resourceId, string expectedName)
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -912,6 +919,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void FfmpegShimSeeksBothVideoAndAudioNearRequestedPosition()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -943,6 +951,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void FfmpegShimRejectsTruncatedMovieWithBoundedDiagnostic()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -956,6 +965,7 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void FfmpegShimSupportsRepeatedOpenAndClose()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -974,6 +984,7 @@ public class MovieOpcodeTests
     [Theory]
     [InlineData(0x2be3, 280, 500, 450)]
     [InlineData(0x2bc2, 400, 333, 300)]
+    [Trait("Category", "Workspace")]
     public void FfmpegPacedDecoderKeepsRealMovieAliveThroughItsStopTime(
         int resourceId, int expectedWidth, long expectedStopTimeMs, long minimumElapsedMs)
     {

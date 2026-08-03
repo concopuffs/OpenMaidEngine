@@ -61,6 +61,7 @@ public class GameSessionTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void SC0000ViaSessionMatchesSingleRun()
     {
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);
@@ -77,6 +78,7 @@ public class GameSessionTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void BootingSkinitPopulatesDataTableGlobals()
     {
         // Running the SKINIT data script through the session populates the real skill table into the
@@ -103,6 +105,7 @@ public class GameSessionTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void BootedStateSurvivesSnapshot()
     {
         var s = new GameSession();
@@ -115,6 +118,7 @@ public class GameSessionTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void SeedingFormFlagChangesBehavior()
     {
         // Lily's lines are gated on form flags G[0xa57/8/9]; unseeded => all skipped (0 voices on her lines).

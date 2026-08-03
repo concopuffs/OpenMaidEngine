@@ -4,6 +4,7 @@ using Xunit;
 public class Sys4LoaderTests
 {
     [Fact]
+    [Trait("Category", "Workspace")]
     public void ParsesMenuBinLikeSys4load()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

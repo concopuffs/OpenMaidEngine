@@ -109,6 +109,7 @@ public class HistoryPresentationOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RealHistoryScriptBuildsVisibleRowsFromARealSc0000Page()
     {
         var scripts = Sys4ScriptProvider.Load(Table);

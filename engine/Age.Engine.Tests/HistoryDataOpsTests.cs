@@ -62,6 +62,7 @@ public class HistoryDataOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void LoaderRetainsRealHistoryFooterArraysForRuntimeCopy()
     {
         var history = Sys4Loader.Load(Paths.Scripts()["HISTORY.BIN"], Table);

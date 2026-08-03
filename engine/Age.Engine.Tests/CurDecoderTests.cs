@@ -6,6 +6,7 @@ using Xunit;
 public class CurDecoderTests
 {
     [Fact]
+    [Trait("Category", "Workspace")]
     public void HimegariCursor_DecodesPixelsAndHotspot()
     {
         var resources = ResourceMap.Load();
@@ -24,6 +25,7 @@ public class CurDecoderTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void HimegariPanCursor_DecodesFourBitPixelsAndHotspot()
     {
         var resources = ResourceMap.Load();

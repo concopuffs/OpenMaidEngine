@@ -75,13 +75,21 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn("sys4-corpus-validate", keys)
         self.assertNotIn("godot-selftest", keys)
         self.assertNotIn("age-cli-sweep", keys)
+        engine = next(gate for gate in validate.build_gate_plan("core") if gate.key == "engine-tests")
+        self.assertIn("Category!=Workspace", engine.command)
 
     def test_workspace_extends_core(self) -> None:
         core = {gate.key for gate in validate.build_gate_plan("core")}
         workspace = {gate.key for gate in validate.build_gate_plan("workspace")}
         self.assertLess(core, workspace)
         self.assertIn("sys4-corpus-validate", workspace)
+        self.assertIn("engine-workspace-tests", workspace)
         self.assertNotIn("godot-selftest", workspace)
+        installed = next(
+            gate for gate in validate.build_gate_plan("workspace")
+            if gate.key == "engine-workspace-tests"
+        )
+        self.assertIn("Category=Workspace", installed.command)
 
     def test_runtime_requires_resolved_paths(self) -> None:
         with self.assertRaisesRegex(ValueError, "resolved Godot"):

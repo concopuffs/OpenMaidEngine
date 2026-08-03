@@ -265,6 +265,7 @@ public class SharedProfileTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledSharedProfileUnlocksKnownCgAndHSceneResourcesWhenPresent()
     {
         string root = Path.Combine(

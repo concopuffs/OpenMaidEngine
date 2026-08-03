@@ -64,6 +64,7 @@ public class ReadTextDatabaseTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledNativeRtDatRoundTripsItsLogicalRecordsWhenPresent()
     {
         string path = Path.Combine(

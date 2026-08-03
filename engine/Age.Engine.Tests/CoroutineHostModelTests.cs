@@ -97,6 +97,7 @@ public class CoroutineHostModelTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void Sc0000EntryRunsSetupAndFillsDistinctTextureSlots()
     {
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);

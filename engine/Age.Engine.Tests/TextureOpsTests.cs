@@ -24,6 +24,7 @@ public class TextureOpsTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void SC0000FiresTextureOpsWithAssignedFullScreenSlot()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

@@ -71,6 +71,7 @@ public class AgfDecoderTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void InstalledSo001HasExpectedAlphaBearingDimensions()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -87,6 +88,7 @@ public class AgfDecoderTests
     [InlineData(0x32db, "SO007.AGF")]
     [InlineData(0x32dc, "SO008A.AGF")]
     [InlineData(0x32dd, "SO007A.AGF")]
+    [Trait("Category", "Workspace")]
     public void InstalledFieldMapSheetsResolveAndDecodeByRawCatalogIndex(int rawId, string name)
     {
         var resources = ResourceMap.Load();

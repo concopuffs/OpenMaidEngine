@@ -4,6 +4,7 @@ using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
 
+[Trait("Category", "Workspace")]
 public class NaturalBootIntegrationTests
 {
     private sealed class ReachedSc0000Exception : Exception { }

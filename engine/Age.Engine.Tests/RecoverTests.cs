@@ -9,6 +9,7 @@ public class RecoverTests
     private static long G(VirtualMachine vm, int k) => vm.Globals.TryGetValue(k, out var v) ? v : 0;
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void RecoverUnitTestPasses()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

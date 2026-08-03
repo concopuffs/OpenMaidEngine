@@ -160,6 +160,7 @@ public class AudioMixerOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void NativePersistencePathsComeFromIndependentSys4IniProfileValues()
     {
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
@@ -177,6 +178,7 @@ public class AudioMixerOpcodeTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void ProfileOverrideRedirectsSaveAndSettingsAsOneNativeLayout()
     {
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);

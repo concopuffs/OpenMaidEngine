@@ -85,6 +85,7 @@ public class RootReloadTests
     }
 
     [Fact]
+    [Trait("Category", "Workspace")]
     public void HimegariRawScriptZeroIsSystem4()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
