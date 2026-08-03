@@ -862,6 +862,47 @@ do not mix mechanical moves with semantic changes.
    only after active work is committed. Configure an off-machine remote or equivalent backup before relying
    on local history as the sole recovery path.
 
+   **Read-only audit (2026-08-03):**
+
+   - **License/provenance:** the repository has no project `LICENSE`, `NOTICE`, third-party notice, or artifact
+     manifest. The three committed binaries are unsigned and have no dedicated artifact records; audit hashes are
+     `BinExtractALF.exe` 0.8
+     (`46167cdf3da1f02733ce1e7f0da99d155e934ede0987ca79c8927f48feb25fe2`), metadata-free `LzssCpp.dll`
+     (`596b9ddb07ca5c29cee609e846f1512654edec56310a90d6c2a6951be1e39fe1`), and PE-sieve 0.4.1.1
+     (`ee684b34b37af24d1c1e9ca80ceeee6878cc80bb24c0c3793840c9acf905bd59`). PE-sieve's upstream is
+     [BSD-2-Clause](https://github.com/hasherezade/pe-sieve/blob/master/LICENSE), but that license is not carried
+     here; the extractor/DLL provenance and redistribution terms remain unverified. The two committed Kelebek
+     source snapshots and transcribed opcode data come from the
+     [upstream repository](https://github.com/Kelebek1/Eushully-Decompiler), where no license file was found, so
+     their redistribution status also remains unresolved. FFmpeg is the good model: Windows/Linux manifests pin
+     provider, release, URL, version, variant, and SHA-256, while build/export scripts stage its LGPL license.
+     NuGet/Godot dependencies are versioned in project files but have no consolidated notice inventory.
+   - **Editor/build/CI policy:** there is no `.editorconfig`, `global.json`, `Directory.Build.*`, package lock,
+     Python environment manifest, or CI configuration. `.gitattributes` only fixes LF for shell scripts and
+     whitespace exceptions for generated references. Projects target `net8.0`; the Godot SDK is pinned to 4.7.0
+     and NuGet versions are explicit. The locally validated tools are .NET SDK 8.0.408 and Python 3.11.4, but only
+     the Python 3.11 invocation is documented. `tools/validate.py --level core` is already the asset-independent
+     CI entry point; workspace/runtime/full levels deliberately require the private game corpus and/or Godot.
+   - **Repository/storage:** `age-reimpl/` is the sole real worktree. The workspace parent contains an empty
+     `.git` directory, and the repository has an empty `.godot/logs` nest plus an accidental ignored
+     `godot/godot/build` nest (3.7 MB). All inspected ignored outputs total 6.43 GiB across 12,190 files: 4.38 GB
+     under `build/`, 1.29 GB under `godot/.godot`, 1.12 GB under historical `godot/build`, and the remainder in
+     .NET/tool caches. The real `.git` holds 6,100 loose objects (71 MiB), no packs and no reported garbage; defer
+     compaction until backup and cleanup decisions are complete.
+   - **Recovery:** `main` is the only ref and has no remote, upstream, additional worktree, or repository/parent
+     bundle. An unrelated off-machine backup cannot be disproved from repository state, but none is configured or
+     evidenced here. Do not publish, delete ignored data, remove the empty parent `.git`, or run Git compaction
+     until the user chooses the corresponding legal, retention, and backup policy.
+
+   **Bounded execution order:** (1) add tracked SDK/editor/line-ending policy without reformatting existing files;
+   (2) add an asset-independent CI workflow that invokes the existing core validation driver; (3) obtain the
+   user's project-license choice and resolve, replace, or exclude every unverified third-party artifact before
+   adding the project license/notice/manifest set; (4) configure a user-selected private/off-machine backup or
+   remote; (5) after explicit retention approval, remove only the verified empty/obsolete ignored nests and any
+   selected regenerable caches; (6) compact the real repository only after a clean committed state and verified
+   backup. Public distribution remains blocked on item 3; destructive cleanup and compaction remain blocked on
+   item 4 plus explicit target approval.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1208,10 +1249,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Begin step 5 of the **codebase consolidation** maintenance slice with a non-destructive repository-policy and
-storage audit. Inventory current license/notice state, committed third-party binaries and provenance, editor/build
-policy, SDK pinning, CI entry points, repository roots/ignored output nests, and remote/backup configuration.
-Report exact gaps and a bounded implementation order before choosing a license, changing external state, deleting
-or compacting repositories, or removing any ignored output.
+Continue step 5 of the **codebase consolidation** maintenance slice with the first non-destructive policy change:
+add a repository `global.json`, `.editorconfig`, and complete text/line-ending attributes based on the validated
+.NET 8/Python 3.11 toolchain. Do not mechanically reformat existing files or change warning/runtime behavior;
+verify both solutions and the core validation driver under the tracked policy.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
