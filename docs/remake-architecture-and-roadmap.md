@@ -707,6 +707,13 @@ do not mix mechanical moves with semantic changes.
    aliases at their existing positions and routes them through guarded `StepMemoryCollection`; shared storage and
    address-resolution helpers remain in the coordinator. Runtime validation remains green.
 
+   The fourteenth bounded `VirtualMachine.Step` extraction moved local jumps/calls/returns, value-switch
+   construction, ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch into
+   `engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs`. The top-level dispatcher retains all labels and aliases
+   at their existing positions and routes them through guarded `StepControlFlow`; the complete instruction remains
+   available for labeled-yield opcode/offset diagnostics. Process/root exit and cross-script lifecycle remain in
+   the coordinator. Runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1080,7 +1087,8 @@ Continue step 2 of the **codebase consolidation** maintenance slice: behavior-ne
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text,
 text-history, ADV-service, input, timing, persistence, and memory/collection `VirtualMachine.Step` families routed
-through domain handlers, extract control-flow/coroutine dispatch next without replacing the proven dispatcher or
-changing public types, commands, and generated output.
+through domain handlers, with control-flow/coroutine dispatch now isolated as well, extract process/root-exit and
+cross-script lifecycle dispatch next without replacing the proven dispatcher or changing public types, commands,
+and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

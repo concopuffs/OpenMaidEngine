@@ -206,6 +206,9 @@ dispatch; capture/apply helpers and persistent coordinator state remain in `Virt
 `engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
 inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
 and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.
+`engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
+ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
+lifecycle remain in `VirtualMachine.cs`.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
