@@ -962,6 +962,16 @@ do not mix mechanical moves with semantic changes.
    branch; the workflow's push and pull-request filters target `develop`. The first actual hosted Linux core run
    succeeded on 2026-08-03 at `6ae75b3`, closing the CI execution gate.
 
+   **Kelebek source-redistribution boundary (2026-08-03):** the user selected a deliberately narrow policy:
+   retain useful factual opcode ABI data, established labels, and explicit per-entry provenance, while no longer
+   vendoring Kelebek's authored source snapshots or a separately maintained verbatim Python transcription. The
+   canonical `vm-map/opcodes.toml` registry now generates both Python opcode views as well as the JSON/reference
+   outputs; consumers and validators no longer parse the removed snapshots. `THIRD_PARTY_NOTICES.md` credits the
+   foundational Eushully-Decompiler research without claiming a formal clean-room process. This resolves the
+   source-tree redistribution concern at the current tip without gratuitous renaming or discarding independently
+   verified work. The removed files remain in existing Git history, so history sanitization is still required
+   before any future public publication; the project-license choice remains user-owned and unresolved.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1308,9 +1318,10 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by making the user-owned project-license and
-Kelebek-derived-material decisions required before wider distribution. The private remote, rewritten-history
-backup, and hosted Linux core gate are now established. Do not infer a license choice or change remote policy
+Continue step 5 of the **codebase consolidation** maintenance slice by sanitizing the removed Kelebek source
+snapshots/verbatim transcription from public-facing Git history before any public publication, then obtain the
+user-owned project-license choice. The private remote, rewritten-history backup, hosted Linux core gate, and
+source-tree redistribution boundary are now established. Do not infer a license choice or change remote policy
 without the user's explicit direction.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

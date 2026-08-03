@@ -119,13 +119,12 @@ def test_lint():
 
 def test_bootstrap():
     import opcodes_build as B
-    from age_opcodes import OPCODES
     from pathlib import Path
     canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
     observed = sorted(op for op, entry in canonical.opcodes.items() if entry.observed_in_himegari)
     synthetic_scan = (
         Counter({op: 1 for op in observed}),
-        {op: {i: {0} for i in range(OPCODES[op][1])} for op in observed},
+        {op: {i: {0} for i in range(canonical.opcodes[op].argc)} for op in observed},
     )
     fd, p = tempfile.mkstemp(suffix=".toml"); os.close(fd); os.remove(p)
     tp = Path(p)
@@ -139,9 +138,9 @@ def test_bootstrap():
     check(len(M.load(tp).opcodes) == n1, "second bootstrap adds no duplicates")
     e, w = M.lint(m)
     check(e == [], f"bootstrapped file lints clean (errors: {e[:3]})")
-    B.bootstrap_age(tp)
+    B.bootstrap_age(tp, catalog_model=canonical)
     full = M.load(tp)
-    check(len(full.opcodes) == len(OPCODES), "bootstrap-age seeds the complete AGE catalog")
+    check(len(full.opcodes) == len(canonical.opcodes), "bootstrap-age seeds the complete AGE catalog")
     check(sum(o.observed_in_himegari for o in full.opcodes.values()) == len(m.opcodes),
           "bootstrap-age marks only added catalog entries unobserved")
     check(all(not o.semantics.noop_headless for o in full.opcodes.values()
@@ -160,6 +159,22 @@ def test_emit_inferred():
     check(0x90 in inf and inf[0x90]["name"] == "hotspot-branch", "generated INFERRED[0x90]['name'] correct")
     check(0x1f4 in inf, "named marker 0x1f4 (name != label) included")
 
+def test_emit_runtime():
+    import opcodes_build as B
+    from pathlib import Path
+    canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
+    src = B.emit_runtime_py(canonical)
+    ns = {}
+    exec(compile(src, "<runtime-gen>", "exec"), ns)
+    check(len(ns["OPCODES"]) == len(canonical.opcodes), "runtime view contains the complete catalog")
+    check(ns["OPCODES"][0x90] == (canonical.opcodes[0x90].label, 7),
+          "runtime view preserves opcode label and argc")
+    check(ns["ARG_TYPES"][0] == "imm", "runtime view emits canonical argument labels")
+    check(ns["is_label_argument"](0x90, 4, 0x123), "runtime view recognizes hotspot target arg")
+    check(not ns["is_label_argument"](0x90, 3, 0x123), "runtime view rejects hotspot data arg")
+    check(not ns["is_label_argument"](0x90, 4, 0xffffffff), "fallthrough sentinel is not a target")
+    check(ns["ARRAY_OPCODE"] == 0x64, "runtime view emits the inline-array opcode")
+
 def test_emit_views():
     import opcodes_build as B, json as _json
     m = M.load(write_tmp(FIXTURE))
@@ -176,6 +191,7 @@ def main():
     test_lint()
     test_bootstrap()
     test_emit_inferred()
+    test_emit_runtime()
     test_emit_views()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

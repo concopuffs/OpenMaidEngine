@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Definitive test: replicate Kelebek's data_array_end shrinking (stop code at first
-string/array offset), then measure clean decode rate over all Himegari scripts."""
-import os, re, sys, collections
-from pathlib import Path
+"""Definitive raw-walker test for the canonical opcode registry and data boundary."""
+import os, sys, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import sys4load
+from age_opcodes import OPCODES
 
-CPP=paths.KELEBEK_CPP.read_text(encoding="utf-8")
-TABLE={}; LABEL={}
-for m in re.finditer(r'\{\s*(0x[0-9A-Fa-f]+)\s*,\s*"([^"]*)"\s*,\s*(0x[0-9A-Fa-f]+)\s*\}', CPP):
-    TABLE[int(m.group(1),16)]=int(m.group(3),16); LABEL[int(m.group(1),16)]=m.group(2)
+TABLE={op: entry[1] for op, entry in OPCODES.items()}
 
 files=paths.scripts()
 
@@ -48,7 +44,7 @@ for name,p in sorted(files.items()):
         if len(examples)<20 and reason: pass
 
 print(f"scripts: {len(files)}  parsefail(container): {parsefail}")
-print(f"CLEAN decode (Kelebek table + string-pool boundary): {clean}")
+print(f"CLEAN decode (canonical table + string-pool boundary): {clean}")
 print(f"DIRTY: {dirty}")
 print(f"total instructions decoded in clean files: {instr_total}")
 print(f"\nremaining small unknown opcodes (genuine gaps):")

@@ -36,6 +36,7 @@ selected requirement that is unavailable is an error, not a silent skip.
 - [Tools reference](docs/tools-reference.md) — exact commands, prerequisites, inputs, and outputs.
 - [Phase B framework](docs/phase-b-framework.md) — boot, menu, session, and gameplay execution order.
 - [Engine reverse engineering](docs/engine-re.md) — native AGE findings and provenance.
+- [Third-party notices](THIRD_PARTY_NOTICES.md) — incorporated-code licenses and research acknowledgments.
 
 Follow the repository's canonical-document map when recording new knowledge: extend the existing owner and
 cross-link it instead of duplicating facts here.

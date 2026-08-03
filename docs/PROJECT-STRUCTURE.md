@@ -29,6 +29,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
     ├── README.md                             navigation-only repository front door; canonical facts stay in docs/
+    ├── THIRD_PARTY_NOTICES.md                 incorporated-code licenses + prior-research acknowledgment
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
@@ -43,8 +44,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── validate.py                        layered core/workspace/runtime/full validation driver
     │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
-    │   ├── age_opcodes.py                      548-entry Kelebek AGE opcode/arg-type table (PRISTINE; never edit)
-    │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 4 artifacts below
+    │   ├── age_opcodes.py                      GENERATED complete Python ABI view (do not hand-edit)
+    │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 5 artifacts below
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
     │   ├── age_opcodes_himegari.py             GENERATED from opcodes.toml (do not hand-edit)
     │   ├── globals_build.py                    generator/linter: vm-map/globals.toml (+auto map) -> build/globals.json, docs/global-reference.md
@@ -69,7 +70,6 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   │                                        + provenance + depends_on). Single source of truth for opcodes.
     │   ├── globals.toml                        ★ CANONICAL global-variable registry (hand-edited: name + category
     │   │                                        + value_domain + provenance). Single source of truth for globals/story-flags.
-    │   ├── kelebek1-age-shared.cpp / -disassembler.cpp   upstream opcode-table source
     │   └── opcode-leads.json, small-script-listings.md
     │
     ├── docs/                                 all documentation
@@ -288,9 +288,10 @@ have no repository output tree and write their automatic maps below `user://diag
   extractor. `bin/README.md` records the optional local convention; no extractor binary is tracked.
   Safe to delete and rebuild; do not hand-edit.
 - **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (ABI + semantics + provenance +
-  `depends_on`). Run `tools/opcodes_build.py --build` to regenerate the shim (`tools/age_opcodes_himegari.py`),
-  machine JSON (`build/opcodes.json`), reference (`docs/opcode-reference.md`), and coverage. `--lint`
-  checks dangling deps / confidence-ceiling / vocabulary. Kelebek's `tools/age_opcodes.py` stays pristine.
+  `depends_on`). Run `tools/opcodes_build.py --build` to regenerate both Python views
+  (`tools/age_opcodes.py`, `tools/age_opcodes_himegari.py`), machine JSON (`build/opcodes.json`), reference
+  (`docs/opcode-reference.md`), and coverage. `--lint` checks dangling deps / confidence-ceiling / vocabulary.
+  Both Python modules are generated and must not be hand-edited.
 - **Global-variable knowledge is edited ONLY in `vm-map/globals.toml`** (name + category + value_domain +
   provenance). Run `tools/globals_build.py --build` to regenerate `build/globals.json` (sys4load labels) and
   `docs/global-reference.md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries

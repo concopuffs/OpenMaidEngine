@@ -5,9 +5,10 @@
 [meta]
 instruction_model = "code = seq of <opcode:u32> then argc*(<argtype:u32><value:u32>); len_dwords = 1 + 2*argc"
 opcodes_used_by_himegari = 248
+inline_array_opcode = 0x64
 
 [meta.arg_types]
-"0x0" = "immediate"
+"0x0" = "imm"
 "0x1" = "float"
 "0x2" = "string"
 "0x3" = "global-int"
@@ -21,6 +22,10 @@ opcodes_used_by_himegari = 248
 "0xc" = "local-ptr"
 "0xd" = "local-float-ptr"
 "0xe" = "local-string-ptr"
+"0x8003" = "type-0x8003"
+"0x8005" = "type-0x8005"
+"0x8009" = "type-0x8009"
+"0x800b" = "type-0x800B"
 
 [meta.header_fields]
 "F0" = "local_integer_1"
@@ -1256,6 +1261,7 @@ observed_types = ["imm", "l-int"]
 op = 0x7b
 label = "u0041ADB0"
 argc = 2
+code_target_args = [1, 2]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1435,6 +1441,7 @@ observed_types = ["imm"]
 op = 0x8c
 label = "jmp"
 argc = 1
+code_target_args = [1]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1456,6 +1463,7 @@ observed_types = ["imm"]
 op = 0x8f
 label = "call"
 argc = 1
+code_target_args = [1]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1478,6 +1486,7 @@ observed_types = ["imm", "g-int"]
 op = 0x90
 label = "u0041BEB0"
 argc = 7
+code_target_args = [5, 6, 7]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1623,6 +1632,7 @@ observed_types = ["imm"]
 op = 0xa0
 label = "jcc"
 argc = 3
+code_target_args = [2, 3]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2082,6 +2092,7 @@ observed_types = ["imm"]
 op = 0xcc
 label = "mouse_callback"
 argc = 2
+code_target_args = [2]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2161,6 +2172,7 @@ evidence = "Ghidra /v2: op_0xd3_handler@0x41a430 clears the 16-byte-entry vector
 op = 0xd4
 label = "u004266F0"
 argc = 4
+code_target_args = [3, 4]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2235,6 +2247,7 @@ evidence = "Ghidra op 0xd9 handler 0x416da0: ctx->run_state_flags &= ~0x1000; wh
 op = 0xfb
 label = "joy_callback"
 argc = 2
+code_target_args = [2]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]

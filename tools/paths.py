@@ -27,7 +27,6 @@ BUILD       = REPO / "build"                             # derived corpora (rege
 VM_MAP      = REPO / "vm-map"
 BIN         = REPO / "bin"                               # 3rd-party tools (BinExtractALF, ...)
 AGE_EXE     = GAME_DIR / "AGE.EXE"
-KELEBEK_CPP = VM_MAP / "kelebek1-age-shared.cpp"
 
 
 def add_self_to_syspath():

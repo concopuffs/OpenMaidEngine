@@ -3,7 +3,7 @@
 
 Executes one script's bytecode to validate the *execution model* before any C#/Godot work.
 Reuses tools/sys4load.py for all parsing/decoding. Effectful ops and call-script are STUBBED;
-show-text is captured. Named-op semantics come from Kelebek's table; the classified markers are
+show-text is captured. Named-op semantics come from the generated canonical registry; the classified markers are
 treated as no-ops (this run TESTS that assumption).
 
 Purpose (see docs/phase-a-slice-plan.md):

@@ -3,7 +3,7 @@
 
 For an opcode (or the top-N unnamed ones) prints: frequency + share + cumulative coverage,
 argc, operand-type signature histogram, most common predecessor/successor opcodes, a few
-real disassembly snippets, and Kelebek's inline comment (from the upstream cpp). Read-only.
+real disassembly snippets, and the canonical registry note. Read-only.
 
 Usage:
   py -3.11 -X utf8 tools/opcode_context.py --top 20        # ranked unnamed summary + coverage
@@ -16,14 +16,14 @@ import collections
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import paths
 import sys4load
 import age_opcodes as ao
+import opcodes_model as M
 
 CORPUS = paths.DATA1
-KELEBEK_CPP = ROOT / "vm-map" / "kelebek1-age-shared.cpp"
+REGISTRY = M.load(paths.VM_MAP / "opcodes.toml")
 
 
 def is_unnamed(op: int) -> bool:
@@ -35,13 +35,14 @@ def label(op: int) -> str:
     return ao.OPCODES.get(op, (f"?{op:x}", 0))[0]
 
 
-def kelebek_comments() -> dict[int, str]:
+def registry_notes() -> dict[int, str]:
     out = {}
-    if not KELEBEK_CPP.exists():
-        return out
-    for m in re.finditer(r"\{\s*(0x[0-9A-Fa-f]+)\s*,\s*\"[^\"]*\"\s*,\s*0x[0-9A-Fa-f]+\s*\}\s*,?\s*//\s*(.*)",
-                         KELEBEK_CPP.read_text(encoding="utf-8")):
-        out[int(m.group(1), 16)] = m.group(2).strip()
+    for op, entry in REGISTRY.opcodes.items():
+        note = entry.abi_note
+        if not note and entry.semantics:
+            note = entry.semantics.summary
+        if note:
+            out[op] = note
     return out
 
 
@@ -71,19 +72,19 @@ def main() -> int:
             freq[ins.opcode] += 1
             total += 1
     named_vol = sum(c for op, c in freq.items() if not is_unnamed(op))
-    comments = kelebek_comments()
+    notes = registry_notes()
 
     if args and args[0] == "--top":
         n = int(args[1]) if len(args) > 1 else 20
         unnamed = [(op, c) for op, c in freq.most_common() if is_unnamed(op)]
         print(f"corpus {len(scrs)} scripts, {total} instructions; "
               f"named coverage {100*named_vol/total:.2f}%; {len(unnamed)} distinct unnamed ops")
-        print(f"{'#':>3} {'op':<7}{'argc':>5}{'count':>9}{'share':>8}{'cum-cov':>9}  kelebek-comment")
+        print(f"{'#':>3} {'op':<7}{'argc':>5}{'count':>9}{'share':>8}{'cum-cov':>9}  registry-note")
         cum = named_vol
         for i, (op, c) in enumerate(unnamed[:n]):
             cum += c
             argc = ao.OPCODES.get(op, ("", 0))[1]
-            print(f"{i+1:>3} 0x{op:<5x}{argc:>5}{c:>9}{100*c/total:>7.2f}%{100*cum/total:>8.2f}%  {comments.get(op,'')[:48]}")
+            print(f"{i+1:>3} 0x{op:<5x}{argc:>5}{c:>9}{100*c/total:>7.2f}%{100*cum/total:>8.2f}%  {notes.get(op,'')[:48]}")
         return 0
 
     # detailed per-op evidence
@@ -111,8 +112,8 @@ def main() -> int:
         argc = ao.OPCODES.get(op, ("", 0))[1]
         print(f"\n{'='*72}\nopcode 0x{op:x}  label={label(op)}  argc={argc}  "
               f"count={c} ({100*c/total:.2f}% of instrs)")
-        if comments.get(op):
-            print(f"  kelebek-comment: {comments[op]}")
+        if notes.get(op):
+            print(f"  registry-note: {notes[op]}")
         print(f"  operand-type signatures: " +
               ", ".join(f"{'/'.join(s) if s else 'none'}×{n}" for s, n in sig[op].most_common(4)))
         print(f"  top predecessors: " + ", ".join(f"{k}×{v}" for k, v in pred[op].most_common(5)))

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generator + linter for the living opcode reference (vm-map/opcodes.toml).
   --bootstrap  seed skeletons for every used opcode (append-only; preserves hand edits)
-  --bootstrap-age  seed compatibility stubs for every opcode in the broader AGE catalog
-  --build      emit age_opcodes_himegari.py + build/opcodes.json + docs/opcode-reference.md + build/opcode-coverage.md
+  --bootstrap-age  seed compatibility stubs from the canonical broader AGE catalog
+  --build      emit age_opcodes.py + age_opcodes_himegari.py + JSON/Markdown views
   --lint       run the linter, print errors/warnings, exit nonzero on errors
 See docs/superpowers/specs/2026-07-06-opcode-reference-design.md."""
 from __future__ import annotations
@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import sys4load
 import opcodes_model as M
-from age_opcodes import OPCODES
 
 TOML_DEFAULT = paths.VM_MAP / "opcodes.toml"
 
@@ -100,15 +99,17 @@ def skeleton_toml(op: int, label: str, argc: int, argtypes_for_op: dict,
                   f"observed_types = [{obs}]"]
     return "\n".join(lines) + "\n"
 
-def bootstrap(toml_path: Path, *, corpus_scan=None) -> None:
+def bootstrap(toml_path: Path, *, corpus_scan=None, catalog_model: M.Model | None = None) -> None:
     """Append observed skeletons from a real scan or an injected synthetic scan fixture."""
     used, argtypes = corpus_scan if corpus_scan is not None else scan_corpus()
+    catalog = catalog_model or M.load(TOML_DEFAULT)
     present = set(M.load(toml_path).opcodes) if toml_path.exists() else set()
     blocks = []
     for op in sorted(used):
         if op in present:
             continue
-        label, argc = OPCODES.get(op, ("0x%x" % op, 0))
+        entry = catalog.opcodes.get(op)
+        label, argc = ((entry.label, entry.argc) if entry else ("0x%x" % op, 0))
         blocks.append(skeleton_toml(op, label, argc, argtypes[op]))
     if not toml_path.exists():
         toml_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,12 +118,13 @@ def bootstrap(toml_path: Path, *, corpus_scan=None) -> None:
         f.write("\n".join(blocks))
     print(f"bootstrap: {len(used)} used opcodes; appended {len(blocks)} new skeletons -> {toml_path}")
 
-def bootstrap_age(toml_path: Path) -> None:
+def bootstrap_age(toml_path: Path, *, catalog_model: M.Model | None = None) -> None:
     """Append compatibility stubs for catalog opcodes absent from the canonical map."""
+    catalog = catalog_model or M.load(TOML_DEFAULT)
     present = set(M.load(toml_path).opcodes) if toml_path.exists() else set()
     blocks = [
-        skeleton_toml(op, label, argc, {}, observed_in_himegari=False)
-        for op, (label, argc) in sorted(OPCODES.items())
+        skeleton_toml(op, entry.label, entry.argc, {}, observed_in_himegari=False)
+        for op, entry in sorted(catalog.opcodes.items())
         if op not in present
     ]
     if not toml_path.exists():
@@ -130,10 +132,57 @@ def bootstrap_age(toml_path: Path) -> None:
         toml_path.write_text(META_TOML + "\n", encoding="utf-8")
     with toml_path.open("a", encoding="utf-8") as f:
         f.write("\n".join(blocks))
-    print(f"bootstrap-age: {len(OPCODES)} catalog opcodes; "
+    print(f"bootstrap-age: {len(catalog.opcodes)} catalog opcodes; "
           f"appended {len(blocks)} compatibility stubs -> {toml_path}")
 
 GEN_HEADER = "# DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build\n"
+
+def emit_runtime_py(model: M.Model) -> str:
+    """Emit the Python disassembler/runtime ABI view from the canonical registry."""
+    arg_types = {
+        int(key, 0): value
+        for key, value in model.meta.get("arg_types", {}).items()
+    }
+    targets = {
+        op: tuple(oc.code_target_args)
+        for op, oc in model.opcodes.items()
+        if oc.code_target_args
+    }
+    lines = [
+        GEN_HEADER,
+        '"""AGE opcode framing and operand metadata (generated canonical view)."""',
+        "from __future__ import annotations",
+        "",
+        "# opcode -> (historical/canonical label, argument count)",
+        "OPCODES: dict[int, tuple[str, int]] = {",
+    ]
+    for op, oc in sorted(model.opcodes.items()):
+        lines.append(f"    0x{op:04x}: ({oc.label!r}, {oc.argc}),")
+    lines += ["}", "", "# argument type tag -> disassembly label", "ARG_TYPES: dict[int, str] = {"]
+    for tag, label in sorted(arg_types.items()):
+        lines.append(f"    0x{tag:04x}: {label!r},")
+    lines += [
+        "}",
+        "",
+        "# One-based operand indices whose raw values are code offsets.",
+        "CODE_TARGET_ARGS: dict[int, frozenset[int]] = {",
+    ]
+    for op, indices in sorted(targets.items()):
+        values = ", ".join(str(i) for i in indices)
+        if len(indices) == 1:
+            values += ","
+        lines.append(f"    0x{op:04x}: frozenset(({values})),")
+    lines += [
+        "}",
+        "CONTROL_FLOW = frozenset(CODE_TARGET_ARGS)",
+        f"ARRAY_OPCODE = 0x{int(model.meta['inline_array_opcode']):x}",
+        "",
+        "def is_label_argument(op: int, arg_index: int, raw_value: int) -> bool:",
+        '    """Return whether a zero-based operand is a non-fallthrough code target."""',
+        "    return (raw_value != 0xFFFFFFFF",
+        "            and arg_index + 1 in CODE_TARGET_ARGS.get(op, ()))",
+    ]
+    return "\n".join(lines) + "\n"
 
 def emit_inferred_py(model: M.Model) -> str:
     lines = [GEN_HEADER,
@@ -248,8 +297,9 @@ def main(argv=None):
             for m in errors:
                 print("error:", m)
             return 1
+        (paths.REPO / "tools" / "age_opcodes.py").write_text(emit_runtime_py(model), encoding="utf-8")
         (paths.REPO / "tools" / "age_opcodes_himegari.py").write_text(emit_inferred_py(model), encoding="utf-8")
-        print("build: wrote tools/age_opcodes_himegari.py")
+        print("build: wrote tools/age_opcodes.py, tools/age_opcodes_himegari.py")
         paths.BUILD.mkdir(parents=True, exist_ok=True)
         (paths.BUILD / "opcodes.json").write_text(emit_json(model), encoding="utf-8")
         (paths.REPO / "docs" / "opcode-reference.md").write_text(emit_reference_md(model), encoding="utf-8")

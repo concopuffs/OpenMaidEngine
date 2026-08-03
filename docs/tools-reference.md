@@ -58,7 +58,7 @@ are recorded in `bin/README.md`. PE-sieve is obsolete and is not retained; its h
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `sys4load.py` | Loader + opcode-decoding disassembler for SYS4 `.BIN` scripts (the container-format core every other tool builds on). Annotates global operands (`build/globals.json`) and **`call-script` targets by name** (`build/callscript-names.json`, e.g. `call-script 0x1ab =ADDITEM.BIN`). | `sys4load.py <file.BIN>` · `--summary` · `--strings` · `--json` · `sys4load.py <dir> --validate` (corpus check) | `.BIN` + `age_opcodes*.py` + `build/globals.json` + `build/callscript-names.json` → stdout listing, or `build/scripts-json/` with `--json` |
-| `age_opcodes.py` | 548-entry Kelebek AGE opcode/arg-type table. **PRISTINE upstream data — never edit.** | *Imported.* | — |
+| `age_opcodes.py` | ⚙ Generated Python ABI view: the complete opcode label/argument-count catalog, operand-type labels, control-flow target operands, and inline-array opcode. **Do not hand-edit.** | *Imported.* | `vm-map/opcodes.toml` → generated module |
 
 ## Opcode reference toolchain — single source of truth = `vm-map/opcodes.toml`
 
@@ -67,11 +67,11 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `opcodes_build.py` | Generator + linter for the opcode reference. `--bootstrap` appends entries observed in the Himegari corpus; `--bootstrap-age` appends every missing opcode from the pristine 548-entry AGE catalog as an unobserved compatibility stub. Catalog stubs retain Kelebek's ABI label/argument count so other AGE scripts decode past them, but remain `noop_headless=false`: the VM currently traces/skips them, while coverage continues to report them as unresolved rather than semantically safe. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` → ⚙ `tools/age_opcodes_himegari.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ `build/opcode-coverage.md` |
+| `opcodes_build.py` | Generator + linter for the opcode reference. `--bootstrap` appends corpus-observed entries to a new/alternate registry; `--bootstrap-age` copies every missing canonical catalog entry into one as an unobserved compatibility stub. Stubs retain the registry's ABI label/argument count so other AGE scripts decode past them, but remain `noop_headless=false`: the VM traces/skips them while coverage reports them as unresolved rather than semantically safe. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` → ⚙ `tools/age_opcodes.py`, ⚙ `tools/age_opcodes_himegari.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ `build/opcode-coverage.md` |
 | `opcodes_model.py` | In-memory model + loader + linter (dangling-ref / confidence-ceiling / vocabulary / dependents). | *Imported by `opcodes_build.py`.* | `vm-map/opcodes.toml` → — |
 | `test_opcodes.py` | Unit tests for the opcode tooling. Bootstrap coverage injects 248 synthetic observations derived from the canonical observed-opcode set; it does not read the private script corpus. Production `--bootstrap` still scans the real corpus by default. | `test_opcodes.py` | `vm-map/opcodes.toml` → temporary files only |
-| `opcode_context.py` | Read-only evidence gatherer for classifying unnamed opcodes (frequency, argc, operand-type signature, neighbours, disasm snippets, Kelebek comment). | `--top 20` · `opcode_context.py 0x1f4 0x71 …` | corpus → stdout |
-| `validate_opcode_table.py` | Definitive decode-coverage validator (replicates Kelebek's `data_array_end` code/data split). | `validate_opcode_table.py` | corpus → stdout |
+| `opcode_context.py` | Read-only evidence gatherer for classifying unnamed opcodes (frequency, argc, operand-type signature, neighbours, disassembly snippets, canonical registry note). | `--top 20` · `opcode_context.py 0x1f4 0x71 …` | `vm-map/opcodes.toml` + corpus → stdout |
+| `validate_opcode_table.py` | Definitive decode-coverage validator using the canonical registry's generated ABI and the SYS4 code/data boundary. | `validate_opcode_table.py` | corpus → stdout |
 | `validate_opcode_table_naive.py` | Naïve variant of the above (baseline comparison). | `validate_opcode_table_naive.py` | corpus → stdout |
 | `age_opcodes_himegari.py` | ⚙ Inferred Himegari opcode semantics — **generated; do not hand-edit.** | *Imported by `sys4load.py`.* | — |
 | `globals_build.py` | Merge curated `globals.toml` over the auto shape map, preserve optional machine-readable row-table `columns`, and generate the global registry + linter. | `--build` · `--lint` | `vm-map/globals.toml`, `build/global-var-map.json` → ⚙ `build/globals.json`, ⚙ `docs/global-reference.md` |

@@ -7,8 +7,8 @@ Parses the confirmed container format (see ../sys4-format-notes.md):
   * strings: XOR-0xFF cp932, NUL-terminated, referenced by a `0x02 <dword-off>` pair
 
 The container format is byte-verified across all 481 DATA1 scripts. Opcodes are now
-DECODED using the AGE opcode table (age_opcodes.py, transcribed from Kelebek1's
-decompiler and validated 476/476 clean on Himegari): the code section is a flat stream
+DECODED using the canonical AGE opcode registry (vm-map/opcodes.toml, generated into
+age_opcodes.py and validated 476/476 clean on Himegari): the code section is a flat stream
 of `<opcode:u32> + argc*(<argtype:u32><value:u32>)` instructions, length 1+2*argc dwords.
 Inline strings live after the code inside [0,F8), so decoding stops at the first string
 (type-2) or array (op 0x64) operand offset.
@@ -38,8 +38,8 @@ except ImportError:  # allow import from another cwd
     from age_opcodes import (OPCODES, ARG_TYPES, CONTROL_FLOW, ARRAY_OPCODE,
                              is_label_argument)
 
-# Himegari inference layer (optional): improves labels for unnamed opcodes. Keeps the
-# verbatim Kelebek table (age_opcodes) pristine; see age_opcodes_himegari.py.
+# Himegari inference layer (optional): improves labels for unnamed opcodes from the
+# canonical generated ABI view; see age_opcodes_himegari.py.
 try:
     from age_opcodes_himegari import INFERRED
 except ImportError:
@@ -96,7 +96,7 @@ CALLSCRIPT_OP = 0x03
 
 
 def display_label(op: int) -> str:
-    """Rendered mnemonic: Kelebek name if it has one, else the inferred name, else u00…."""
+    """Rendered mnemonic: canonical ABI label, else the inferred name, else u00…."""
     lbl = OPCODES.get(op, (f"?{op:x}", 0))[0]
     is_unnamed = (lbl.startswith(("u00", "dev_ukn")) or lbl.lower() == f"{op:x}")
     if is_unnamed and op in INFERRED:
@@ -422,10 +422,10 @@ def render_listing(scr: Sys4Script) -> str:
             continue
         ops = " ".join(_fmt_operand(ins.opcode, x, t, v, scr.strings)
                        for x, (t, v) in enumerate(ins.args))
-        mnem = display_label(ins.opcode)          # prefers Kelebek name, else inferred, else u00…
+        mnem = display_label(ins.opcode)          # prefers canonical label, else inferred, else u00…
         # annotate unnamed/inferred ops with their raw value for grep-ability
-        kelebek = ins.label
-        unnamed = kelebek.startswith(("u00", "dev_ukn")) or kelebek[:1].isdigit()
+        raw_label = ins.label
+        unnamed = raw_label.startswith(("u00", "dev_ukn")) or raw_label[:1].isdigit()
         raw = f"   ; op 0x{ins.opcode:x}" + (" inferred" if unnamed and ins.opcode in INFERRED else "") \
             if unnamed else ""
         out.append(f"  0x{ins.offset:05x}:  {mnem}{(' ' + ops) if ops else ''}{raw}")

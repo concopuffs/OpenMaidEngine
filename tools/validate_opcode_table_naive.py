@@ -1,27 +1,22 @@
 #!/usr/bin/env python3
-"""Validate Kelebek1's AGE opcode table against Himegari SYS4 scripts.
+"""Validate the canonical AGE opcode table against Himegari SYS4 scripts.
 
-Model (from Kelebek1 disassembler.cpp + age-shared.cpp):
+Model recorded in vm-map/opcodes.toml:
   code stream = sequence of instructions.
   each instruction = <opcode:u32> then argument_count * <arg>, where each arg = <type:u32><value:u32>.
   => instruction length in dwords = 1 + 2*argument_count  (uniform; type-2/0x64 args seek elsewhere, don't consume inline)
   arg type 2 = inline string (value = dword offset into body). types: 0 imm,1 float,3 g-int,9 l-int, etc.
 A clean decode consumes exactly code_len dwords with no unknown opcode and no arg overrun.
 """
-import os, re, sys, collections
-from pathlib import Path
+import os, sys, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import sys4load
+from age_opcodes import OPCODES
 
-CPP = paths.KELEBEK_CPP.read_text(encoding="utf-8")
-# parse {0x1F4, "label", 0x0},
-TABLE = {}
-LABEL = {}
-for m in re.finditer(r'\{\s*(0x[0-9A-Fa-f]+)\s*,\s*"([^"]*)"\s*,\s*(0x[0-9A-Fa-f]+)\s*\}', CPP):
-    op = int(m.group(1), 16); lbl = m.group(2); argc = int(m.group(3), 16)
-    TABLE[op] = argc; LABEL[op] = lbl
-print(f"parsed {len(TABLE)} opcode defs from Kelebek1 table (max op 0x{max(TABLE):x})")
+TABLE = {op: entry[1] for op, entry in OPCODES.items()}
+LABEL = {op: entry[0] for op, entry in OPCODES.items()}
+print(f"loaded {len(TABLE)} opcode defs from the canonical registry (max op 0x{max(TABLE):x})")
 
 files = paths.scripts()
 
