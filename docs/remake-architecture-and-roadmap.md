@@ -786,6 +786,13 @@ do not mix mechanical moves with semantic changes.
    the neutral image contract; image-only format imports were removed while genuine SYS4 consumers retained
    theirs. Decoder and image behavior remain unchanged, and runtime validation remains green.
 
+   The sixth bounded contract slice introduced `IGraphicsHost` for mutable surface fill/copy, retained-range and
+   frame presentation, transition waits/fades, texture lifecycle, pixel capture/replace, drawing, and size
+   queries. `IHost` inherits the focused contract; all seventeen members, required implementations, default
+   fallbacks, and existing host classes remain behaviorally unchanged. Surface request records and the fade
+   direction remain in their prior locations pending a separate transport cleanup. Runtime validation remains
+   green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1146,8 +1153,8 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
 behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
-established beneath `IHost` and shared movie/image transport now neutral, introduce the graphics host contract
-next. Preserve its surface, retained-range presentation, transition, texture, capture/replace, and headless-default
-behavior while leaving the remaining surface request records in place for a separate transport cleanup.
+established beneath `IHost`, shared movie/image transport neutral, and the graphics contract now separated, move
+the unchanged `SurfaceRectFill`, `SurfaceRectCopy`, and `SurfaceBlackFadeDirection` contracts from `Hosting` to
+`Model` next. Preserve all consumers and graphics behavior before separating the remaining ADV/input domains.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

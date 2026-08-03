@@ -167,8 +167,11 @@ timed-deadline waiting, frame yield, and scene reset. `engine/Age.Engine/Hosting
 SFX, fade, volume, and route-control contracts, including the compatibility overload/default chains used by
 simple hosts. `engine/Age.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
 and modal movie playback contracts. `IHost` inherits all four focused contracts; their required and default
-behavior is unchanged. The neutral `engine/Age.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie
-mask work between the VM, host, and retained graphics without making `Model` depend on `Hosting`.
+behavior is unchanged. `engine/Age.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces, retained-range/frame
+presentation, transitions, texture lifecycle, pixel capture/replace, draw, and size contracts; `IHost` also
+inherits this focused surface without changing existing hosts. The neutral
+`engine/Age.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
+retained graphics without making `Model` depend on `Hosting`.
 `engine/Age.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
 decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
 decoded pixels.
