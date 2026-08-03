@@ -192,6 +192,9 @@ text style and glyph-delay control, direct surface-string and retained numeric-g
 text/wait-object bindings; text history and input/skip/auto services remain separate.
 `engine/Age.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
 retained history rendering, metadata/voice lookup, and history backlog clearing.
+`engine/Age.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
+settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
+and refresh helpers remain in the VM coordinator because live text and input paths also consume them.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
