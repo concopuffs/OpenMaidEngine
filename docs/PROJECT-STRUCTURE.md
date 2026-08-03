@@ -214,6 +214,8 @@ execution, script-provider access, and shared lifecycle state remain in `Virtual
 `engine/Age.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
 string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and the host-backed
 fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.
+`engine/Age.Engine/Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
+show-and-clear opcode dispatch; shared diagnostic state and native-context formatting remain in the coordinator.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

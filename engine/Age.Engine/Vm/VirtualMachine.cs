@@ -1244,17 +1244,11 @@ public sealed partial class VirtualMachine
                 return StepValue(label, a, pc);
             case "u00425790": // upstream ABI label
             case "append-diagnostic-value": // 0x1b2: generic operand text -> EngineCtx accumulator
-                _diagnosticOutput.Append(FormatDiagnosticOperand(a[0]));
-                return pc + 1;
             case "u004257D0": // upstream ABI label
             case "append-diagnostic-newline": // 0x1b3: exact native CRLF bytes
-                _diagnosticOutput.Append("\r\n");
-                return pc + 1;
             case "u004237C0": // upstream ABI label
             case "show-and-clear-diagnostic": // 0x1b4: synchronous host prompt, then erase
-                _host.ShowDiagnosticMessage(BuildDiagnosticMessage(ins));
-                _diagnosticOutput.Clear();
-                return pc + 1;
+                return StepDiagnostic(label, ins, pc);
             case "is-catalog-resource-unlocked":
             case "save-numbered-slot": // 0x19e
             case "load-numbered-slot-data-only": // 0x19f
