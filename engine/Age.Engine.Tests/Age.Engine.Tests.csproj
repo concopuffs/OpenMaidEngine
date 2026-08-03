@@ -24,8 +24,6 @@
     <ProjectReference Include="..\Age.Engine\Age.Engine.csproj" />
     <ProjectReference Include="..\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
     <ProjectReference Include="..\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
-    <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
-    <Compile Include="..\..\godot\FfmpegMovieDecoder.cs" Link="FfmpegMovieDecoder.cs" />
     <Compile Include="..\..\tools\movie-corpus-gate\MovieCorpusGate.cs" Link="MovieCorpusGate.cs" />
   </ItemGroup>
 

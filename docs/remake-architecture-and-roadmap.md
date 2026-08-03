@@ -841,6 +841,13 @@ do not mix mechanical moves with semantic changes.
    in Godot while implementing the moved boundary through that friend access. Both solution builds and runtime
    validation remain green.
 
+   The third bounded build-graph slice moved the unchanged FFmpeg native interop and asynchronous/paced decoder
+   from `godot/` into `Age.Engine.Frontend`. The two remaining movie test source links and the corpus tool's native
+   source link were replaced by project references. Friend access now also names only the `Age.MovieCorpusGate`
+   assembly required by the native frame-source seam; native ABI resolution, decoder pacing, seek/audio behavior,
+   failure handling, and teardown remain unchanged. Engine, Godot, and corpus-gate builds plus runtime validation
+   remain green.
+
 5. **Close repository-policy and storage gaps.** Add an explicit project license, third-party notices and
    checksums/provenance for committed binaries, consistent editor/build policy, a pinned .NET SDK, and a
    CI entry point built on the same validation driver. Remove the empty workspace-root `.git` directory and
@@ -1195,9 +1202,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Begin step 4 of the **codebase consolidation** maintenance slice: make the build graph express source ownership
-without changing behavior. Move `FfmpegMovieNative.cs` and `FfmpegMovieDecoder.cs` from `godot/` into
-`Age.Engine.Frontend` next. Replace both test source links and the movie corpus gate's native-source link with
-project references, granting narrowly scoped friend access to the corpus-gate assembly while preserving native
-ABI, decoder pacing, failure, and teardown behavior.
+without changing behavior. Move the reusable `MovieCorpusGate.cs` implementation from
+`tools/movie-corpus-gate/` into `Age.Engine.Frontend` next. Leave the tool's `Program.cs` as its command-line entry
+point, remove the final test source link, preserve the internal friend boundary, and verify that no production
+`.cs` files are compiled through cross-project links.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

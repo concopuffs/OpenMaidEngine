@@ -119,7 +119,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
-    │                                       location, performance logging, movie decoder/runtime contracts,
+    │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, and WAV sanitization
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
@@ -156,8 +156,9 @@ through project references rather than compiling duplicate linked sources. The f
 `PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
 `PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie decoder boundary/runtime,
 audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the `Himegari` and
-`Age.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg interop and decoder
-implementation remain under `godot/` until their separate ownership slice.
+`Age.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
+asynchronous/paced decoder also live here; the `Age.MovieCorpusGate` tool receives friend access to the native
+frame-source seam and references this project rather than compiling an interop source link.
 
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,

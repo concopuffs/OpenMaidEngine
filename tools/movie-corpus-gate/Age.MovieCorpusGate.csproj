@@ -8,6 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\engine\Age.Engine\Age.Engine.csproj" />
-    <Compile Include="..\..\godot\FfmpegMovieNative.cs" Link="FfmpegMovieNative.cs" />
+    <ProjectReference Include="..\..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
   </ItemGroup>
 </Project>
