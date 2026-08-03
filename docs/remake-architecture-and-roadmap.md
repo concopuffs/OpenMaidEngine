@@ -765,6 +765,11 @@ do not mix mechanical moves with semantic changes.
    entry point; all required members, default implementations, existing hosts, and transport-record locations
    are unchanged. Runtime validation remains green.
 
+   The second bounded contract slice introduced `IAudioHost` for BGM, voice, sound-effect, fade, volume, and
+   route-control operations. `IHost` inherits the focused contract; all fifteen members, required implementations,
+   compatibility overloads/default chains, and existing host classes remain behaviorally unchanged. Runtime
+   validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1124,9 +1129,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
-behavior or the aggregate host accepted by the VM. With diagnostic and lifecycle contracts established beneath
-`IHost`, introduce the audio host contract next as the smallest remaining self-contained domain, preserving every
-required/default member and all existing host implementations before tackling interdependent ADV/input/graphics
-surfaces.
+behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, and audio contracts established
+beneath `IHost`, introduce the movie host contract next while leaving movie request/graphics transport records in
+their current locations for a separate dependency-cleanup slice; preserve every required/default member and all
+existing host implementations.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

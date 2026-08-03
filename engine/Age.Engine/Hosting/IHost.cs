@@ -48,7 +48,7 @@ public enum SurfaceBlackFadeDirection
     ToBlack,
 }
 
-public interface IHost : IDiagnosticHost, ILifecycleHost
+public interface IHost : IDiagnosticHost, ILifecycleHost, IAudioHost
 {
     /// <summary>Present AGERc's modal full-width editor. Cancel preserves CurrentText.</summary>
     FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
@@ -171,33 +171,6 @@ public interface IHost : IDiagnosticHost, ILifecycleHost
     }
     void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
     (int Width, int Height) GetTextureSize(int slot);
-    void PlayBgm(long id);
-    // Ordinary op 0xbf is VM-filtered so reasserting the current track is idempotent. Ops
-    // 0xb7/0xb9 deliberately bypass that guard and restart with logical loop/one-shot mode.
-    void RestartBgm(long id, int startMode) => PlayBgm(id);
-    // Op 0xb8 releases the current source rather than merely applying a zero-volume envelope.
-    void StopBgm() => FadeBgm(0, 0);
-    void PlayVoice(long id);
-    // Native voice playback retains a second start argument: ordinary dialogue passes 0,
-    // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.
-    void PlayVoice(long id, int playbackVariant) => PlayVoice(id);
-    void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs) { }
-    // Native op 0x1cf stores a transient control mask. Bit 0 suppresses the automatic
-    // BGM attenuation normally applied when a voice starts.
-    void SetVoiceBgmDuckControl(long flags) { }
-    void LoadSoundEffect(long resourceId, int channel) { }
-    void StartSoundEffect(int channel) { }
-    // Ops 0xb5/0xba share the native channel-start worker. Mode 0 plays once; mode 1
-    // rewinds the decoder at EOF. The one-argument seam remains for simple hosts.
-    void StartSoundEffect(int channel, int startMode) => StartSoundEffect(channel);
-    // Native SetDelay (op 0x2bf) starts an already-loaded channel after delayMs.
-    // startMode is forwarded to the same worker used by immediate SFX starts.
-    void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }
-    void ReleaseSoundEffect(int channel) { }
-    void FadeBgm(int targetPercent, long durationMs) { }
-    // AGE's sound:* settings registry is VM-owned; the host applies changes to active playback.
-    void ApplyAudioVolume(int category, int basisPoints) { }
-    void ApplyAudioRouteEnabled(int category, bool enabled) { }
     // Native op 0x236 binds a movie decoder to an existing retained texture surface.
     // Playback is non-modal: the VM advances to the following instruction while the host publishes frames.
     /// <returns>The initialized movie graph's stop position in truncated integer milliseconds, or null
