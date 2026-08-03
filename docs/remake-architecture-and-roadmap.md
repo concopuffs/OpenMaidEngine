@@ -793,6 +793,11 @@ do not mix mechanical moves with semantic changes.
    direction remain in their prior locations pending a separate transport cleanup. Runtime validation remains
    green.
 
+   The seventh bounded contract slice moved the unchanged `SurfaceRectFill`, `SurfaceRectCopy`, and
+   `SurfaceBlackFadeDirection` declarations from `Hosting` into `Model/SurfaceContracts.cs`. Every consumer already
+   imported `Model`, so no call sites changed; surface request shape, enum values, and graphics behavior remain
+   unchanged. Runtime validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1154,7 +1159,8 @@ layer's rendering diverges from ADV; save layout.
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
 behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
 established beneath `IHost`, shared movie/image transport neutral, and the graphics contract now separated, move
-the unchanged `SurfaceRectFill`, `SurfaceRectCopy`, and `SurfaceBlackFadeDirection` contracts from `Hosting` to
-`Model` next. Preserve all consumers and graphics behavior before separating the remaining ADV/input domains.
+the input host contract next: modal text entry, ADV waits and callback servicing, input clock, cursor resources,
+and skip-state interaction. Preserve the existing overload/default chains and aggregate `IHost` entry point before
+separating the remaining ADV text/presentation contract.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

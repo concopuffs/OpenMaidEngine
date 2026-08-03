@@ -20,25 +20,12 @@ public readonly record struct AdvWaitIndicatorConfig(
 public readonly record struct AdvAutoWaitState(
     bool Enabled, bool VoicePending, long PostVoiceDelayMs, long UnvoicedDelayMs);
 
-public readonly record struct SurfaceRectFill(
-    int SurfaceSlot, int X, int Y, int Width, int Height, int Alpha, long Rgb);
-
-public readonly record struct SurfaceRectCopy(
-    int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
-    int Width, int Height, int DestinationX, int DestinationY);
-
 /// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
 public readonly record struct DiagnosticMessage(string Caption, string Text);
 
 /// <summary>AGERc command 10's synchronous full-width text edit request and result.</summary>
 public readonly record struct FullwidthTextEditRequest(string CurrentText, string InitialText);
 public readonly record struct FullwidthTextEditResult(bool Accepted, string Text);
-
-public enum SurfaceBlackFadeDirection
-{
-    FromBlack,
-    ToBlack,
-}
 
 public interface IHost : IDiagnosticHost, ILifecycleHost, IAudioHost, IMovieHost, IGraphicsHost
 {
