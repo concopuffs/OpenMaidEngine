@@ -770,6 +770,12 @@ do not mix mechanical moves with semantic changes.
    compatibility overloads/default chains, and existing host classes remain behaviorally unchanged. Runtime
    validation remains green.
 
+   The third bounded contract slice introduced `IMovieHost` for ordinary, positioned, mask-transition, activity
+   queries for movie surfaces, and modal playback. `IHost` inherits the focused contract; all five default
+   members and existing host classes remain behaviorally unchanged. `GfxState` and
+   `MovieMaskTransitionRequest` remain in their prior locations pending a separate dependency-cleanup slice.
+   Runtime validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1129,9 +1135,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
-behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, and audio contracts established
-beneath `IHost`, introduce the movie host contract next while leaving movie request/graphics transport records in
-their current locations for a separate dependency-cleanup slice; preserve every required/default member and all
-existing host implementations.
+behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
+established beneath `IHost`, move the neutral `MovieMaskTransitionRequest` contract from `Hosting` to `Model` next
+to remove `GfxState`'s reverse dependency on the host namespace, preserving the record's public shape and every
+consumer before separating larger host domains.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

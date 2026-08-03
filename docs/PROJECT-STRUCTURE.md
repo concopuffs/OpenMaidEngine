@@ -165,7 +165,9 @@ implementations. `engine/Age.Engine/Hosting/IDiagnosticHost.cs` owns recoverable
 reporting contracts, while `engine/Age.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
 timed-deadline waiting, frame yield, and scene reset. `engine/Age.Engine/Hosting/IAudioHost.cs` owns BGM, voice,
 SFX, fade, volume, and route-control contracts, including the compatibility overload/default chains used by
-simple hosts. `IHost` inherits all three focused contracts; their required and default behavior is unchanged.
+simple hosts. `engine/Age.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
+and modal movie playback contracts. `IHost` inherits all four focused contracts; their required and default
+behavior is unchanged, and movie/graphics transport records remain in their existing locations for now.
 
 `engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
