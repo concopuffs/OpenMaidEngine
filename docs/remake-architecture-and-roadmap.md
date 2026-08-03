@@ -1025,8 +1025,10 @@ do not mix mechanical moves with semantic changes.
    smoke result, and fixed archive/evidence set after download. Retries may
    complete missing attachments on a matching partial release, but mismatches and same-name/different-size
    collisions fail without edit, deletion, or overwrite. Pure creation/resume/refusal regressions and workflow
-   lint pass locally. The immediate acceptance gate is a deliberately chosen first `v*` tag and inspection of
-   the resulting release/archive/evidence; no tag is created by this slice.
+   lint pass locally. The first hosted develop run containing this job completed successfully at `f0f5f12` on
+   2026-08-03 and the promotion job was skipped, accepting the non-tag permission boundary. The remaining gate
+   is a deliberately chosen first `v*` tag and inspection of the resulting release/archive/evidence; no tag is
+   created by this slice.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the

@@ -77,7 +77,9 @@ branch and manual runs never receive release authority, and no personal secret o
 introduced. Promotion rechecks the clean source commit, archive checksum, and accepted smoke result after
 artifact download. It is retry-safe but fail-closed: a matching partial release can receive missing assets,
 while mismatched release identity or a same-name/different-size asset is never edited, deleted, or overwritten.
-The next acceptance gate is a deliberate first version tag and inspection of its five release attachments.
+The first hosted develop run containing promotion completed successfully at `f0f5f12` on 2026-08-03 and Gitea
+reported the tag-only job as skipped, accepting the non-tag permission boundary. The remaining acceptance gate is
+a deliberate first version tag and inspection of its five release attachments.
 
 ## Dependency inventory
 
