@@ -160,6 +160,12 @@ transitions, diagnostic snapshots, frame/completion publication, and mask teardo
 control, and blocking BGM fades; presentation/input retains the message-skip, reset, and frame-pulse consumers
 of that state through the sealed partial class.
 
+`engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
+`engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
+animation, numeric-glyph, and handle-range contracts. `engine/Age.Engine/Model/GfxState.Surfaces.cs` owns surface
+resource/color-key state, created/reloadable classification, movie stop-time metadata, render-target/tile
+configuration, and surface lifecycle operations.
+
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.

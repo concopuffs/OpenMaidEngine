@@ -601,6 +601,12 @@ do not mix mechanical moves with semantic changes.
    `GfxState` remains the same sealed runtime type, and every moved declaration is textually unchanged; runtime
    validation remains green.
 
+   The second bounded `GfxState` split converted the sealed runtime type to a sealed partial class and moved
+   surface resource/color-key state, created/reloadable classification, movie stop-time metadata,
+   render-target/tile configuration, and surface lifecycle operations into
+   `engine/Age.Engine/Model/GfxState.Surfaces.cs`. Reset, persistence, retained-object sampling, and transition
+   teardown retain direct access through the partial class; runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -972,7 +978,7 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main` and `GodotAdvHost` domains
-isolated and the `GfxState` public contract layer separated, move `GfxState` surface ownership next, preserving
-public types, commands, and generated output.
+isolated and the first two `GfxState` domains separated, move retained-object ownership next, preserving public
+types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
