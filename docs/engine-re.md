@@ -34,7 +34,7 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   → `run_analysis`.
 - **Load sanity check (AGF-decoder landmark):** at VA `0x474f23`, `CMP word ptr [ESI + 0x4], 0x4d42`
   (the `BM`/BMP-magic check) confirms the image is correctly based + decoded.
-- IAT reconstruction — **tried, DOESN'T WORK on this binary (2026-07-09):** `bin/pe-sieve32.exe /pid
+- IAT reconstruction — **tried, DOESN'T WORK on this binary (2026-07-09):** a local PE-sieve 0.4.1.1 `/pid
   <PID> /imp 3 /dmode 3 /dir build/pe-sieve` (run from **PowerShell**, not Git Bash — it mangles
   `/flags`) ran fine but the game is packed with a **zeroed IAT** resolved via `GetProcAddress` at load,
   so there is no conventional import table to rebuild. Of 363 "imports" it emitted, only ~17 are genuine
@@ -46,7 +46,8 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   30×, `in_main:0`, non-terminated). ⇒ **do not graft pe-sieve output** — grafting the noise would inject
   wrong import names. The game's hot APIs (`ReadFile`/`CreateFileA`/`timeGetTime`/d3d9 device methods) are
   `GetProcAddress`-resolved into private pointer tables, invisible to a static IAT scan. Report/dump left
-  at `build/pe-sieve/process_<pid>/` (disposable).
+  at `build/pe-sieve/process_<pid>/` (disposable). The executable was removed from the repository and purged
+  from reachable history on 2026-08-03; it is obsolete and is not needed to reproduce the accepted workflow.
 
   **→ The Frida import-map approach — ✅ DONE 2026-07-09 (replaced pe-sieve).** Named the
   dynamically-resolved APIs at their call sites via the LIVE process. `tools/frida/map_imports.py`

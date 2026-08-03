@@ -930,6 +930,20 @@ do not mix mechanical moves with semantic changes.
    the tracked workflow is dormant and its first hosted Linux execution remains a publication-time confirmation,
    not a condition hidden by this commit.
 
+   **Private-repository preflight and binary purge (2026-08-03):** a clean source-only checkout disproved the
+   earlier asset-independent claim: after opcode generation, 501/590 engine cases pass while 89 installed-corpus
+   or native-oracle cases fail, and `test_opcodes.py` still scans the external script corpus. The target Gitea
+   server demonstrates a working `ubuntu-latest` runner with checkout/setup-dotnet v4 and Gitea-specific artifact
+   upload. CI must explicitly separate those workspace cases and inject a synthetic opcode fixture before Actions
+   is enabled; missing private data will not be converted into green skips.
+
+   The unverified `bin/BinExtractALF.exe`, `bin/LzssCpp.dll`, and obsolete `bin/pe-sieve32.exe` are removed from
+   tracking and purged from every reachable commit before the first remote is added. A verified full bundle made
+   immediately before the rewrite is the recovery boundary. `bin/` now tracks policy only and ignores optional
+   machine-local extractor files; PE-sieve remains documented solely as a failed historical experiment. This
+   resolves the committed-binary portion of item 3, but Kelebek-derived source/data and the user-owned project
+   license choice remain unresolved for wider distribution.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1276,10 +1290,10 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by making the user-owned project-license and
-third-party-artifact decisions required before distribution. Resolve, replace, or exclude the unverified
-BinExtractALF/LzssCpp and Kelebek-derived material before adding the canonical license, notice, and checksum/
-provenance manifest set. Do not infer a license choice, publish/configure a remote, or remove local artifacts as
-part of that decision.
+Continue step 5 of the **codebase consolidation** maintenance slice by making the Linux core gate genuinely
+source-only: classify the installed-corpus/native-oracle engine tests as an explicit workspace suite, inject a
+synthetic corpus seam into the opcode-bootstrap unit test, and align the workflow with the target Gitea server's
+known-good `ubuntu-latest` action baseline. Then make the user-owned project-license and Kelebek-derived-material
+decisions required before wider distribution. Do not infer a license choice or publish/configure a remote.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

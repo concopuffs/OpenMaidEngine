@@ -22,7 +22,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 │   └── *.exe (uninstallers), SAS0099.OGG …   other shipped files.
 │
 ├── extracted/                               ← DERIVED (game-side) — extracted ALF contents,
-│   │                                          ~3.9 GB, regenerable via age-reimpl/bin/BinExtractALF.
+│   │                                          ~3.9 GB, regenerable with a local archive extractor.
 │   └── DATA1/ … DATA5/                         DATA1 = 481 .BIN scripts (the corpus we parse)
 │                                               + AGF/BMP/WAV in the others.
 │
@@ -32,7 +32,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
-    ├── .github/workflows/core-validation.yml read-only Ubuntu-hosted asset-independent core gate
+    ├── .github/workflows/core-validation.yml planned Ubuntu-hosted core gate; source-only audit pending fix
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
@@ -60,10 +60,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
     │   └── probe_*.py                          format reverse-engineering probes (historical)
     │
-    ├── bin/                                  3rd-party binaries we use (not ours, not the game's)
-    │   ├── BinExtractALF.exe                   ALF archive extractor → produces extracted/
-    │   ├── LzssCpp.dll                         its LZSS codec dependency
-    │   └── pe-sieve32.exe                      (hollowsprocess) unpacked-PE dumper — engine-RE escalation (see docs/engine-re.md)
+    ├── bin/                                  ignored home for optional machine-local tools
+    │   ├── README.md / .gitignore              tracked policy; binaries never enter Git
+    │   └── BinExtractALF.exe + LzssCpp.dll     optional local archive oracle (unverified provenance)
     │
     ├── vm-map/                               VM / reverse-engineering reference artifacts
     │   ├── opcodes.toml                        ★ CANONICAL opcode reference (hand-edited: ABI + semantics
@@ -285,7 +284,8 @@ have no repository output tree and write their automatic maps below `user://diag
   and under `extracted/DATA1/`, the game-folder copy (patch v1.03) wins. `paths.scripts()` resolves
   this automatically (overrides win).
 - **`build/` and `extracted/` are disposable.** `build/` regenerates via `tools/extract_phase2.py`
-  (or `sys4load.py`); `extracted/` regenerates via `bin/BinExtractALF.exe` on the `.ALF` files.
+  (or `sys4load.py`); `extracted/` regenerates from the `.ALF` files with a separately obtained local
+  extractor. `bin/README.md` records the optional local convention; no extractor binary is tracked.
   Safe to delete and rebuild; do not hand-edit.
 - **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (ABI + semantics + provenance +
   `depends_on`). Run `tools/opcodes_build.py --build` to regenerate the shim (`tools/age_opcodes_himegari.py`),

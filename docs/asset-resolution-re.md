@@ -275,7 +275,7 @@ scene-local numeric addressing mode.
    LZSS-or-raw header section, 4/8/truecolor source pixels, LZSS-or-raw pixel section, bottom-up row/stride
    conversion, and optional `ACIF` LZSS alpha plane. Port only the algorithm and attribution into
    platform-neutral .NET code; do not carry GARbro's WPF/GameRes dependencies. Kelebek's extractor and the
-   on-disk `BinExtractALF.exe` are validation references; the Kelebek repository exposes no clear license,
+   separately obtained local `BinExtractALF.exe` is a validation reference; the Kelebek repository exposes no clear license,
    so its code should not be copied without clarification. The focused `LzssDecoder` is shared with
    `Sys4AssetCatalog`; raw and compressed information/pixel/ACIF sections use the same bounded primitive.
 4. **Runtime consumers (packed-id correction complete 2026-07-21).** Script loading, textures, voice,
@@ -461,7 +461,8 @@ VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expan
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
 records. All records carry selector 1 and literal `$1$` names. The full directory has stable SHA-256
 `23F0C104A45C099CEFB7D333362716EDE6F20B9EC53E4C3705A8E3A87063708E` over its ordered record fields.
-The integration gate runs `BinExtractALF.exe` into a disposable directory, compares all 81 names, validates
+The private installed-data integration gate can run a machine-local `bin/BinExtractALF.exe` into a disposable
+directory, compares all 81 names, validates
 every range and size, and byte-compares all 81 payloads. `Sys4ScriptProvider` resolves a real append script
 through `0x01xxxxxx`; direct base-name lookup deliberately does not see append records.
 

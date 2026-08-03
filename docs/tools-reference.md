@@ -35,13 +35,22 @@ by a failed preflight; rebuild each through its owning tool in this reference. R
 `--godot`, then `AGE_GODOT_CONSOLE`, then `godot4`/`godot`/`godot-mono` on `PATH`. Game-root resolution uses
 `--game-root`, then `AGE_GAME_ROOT`, then the conventional sibling install and always requires `SYS4INI.BIN`.
 
-The hosted wrapper is `.github/workflows/core-validation.yml`: a read-only `ubuntu-24.04` job provisions
-Python 3.11 and the SDK selected by `global.json`, then runs
-`python -X utf8 tools/validate.py --level core`. Pull requests, pushes to `main`, and manual dispatch select the
-same gate; superseded branch runs are cancelled, and `build/validation/**` is retained for seven days only when
-the job fails. It has no secrets, cache, game corpus, Godot runtime, packaging, or deployment access. Until a
-remote is configured and the commit is pushed, the tracked workflow is dormant and its first hosted result is
-still pending.
+The planned hosted wrapper is `.github/workflows/core-validation.yml`. A clean source-only checkout audit on
+2026-08-03 found that `--level core` still runs 89 installed-corpus/native-oracle engine cases and that
+`test_opcodes.py` bootstraps from the external script corpus. The workflow therefore remains dormant until those
+tests are explicitly separated from the hermetic core suite; missing data must not become a successful skip.
+The known-good configuration on the target Gitea server uses `ubuntu-latest`, `actions/checkout@v4`,
+`actions/setup-dotnet@v4`, and `christopherhx/gitea-upload-artifact@v4`. The future core workflow should match
+that runner/action baseline, provision Python 3.11, and keep private corpus, Godot runtime, packaging,
+deployment, and secrets outside the job.
+
+## Optional local binary tools
+
+`bin/` is an ignored machine-local tool directory, not a source or artifact distribution directory. A local
+`BinExtractALF.exe` plus its matching `LzssCpp.dll` may be used by the installed-data archive parity test and to
+regenerate `../extracted/`; neither is a runtime dependency. Their known local hashes and unverified provenance
+are recorded in `bin/README.md`. PE-sieve is obsolete and is not retained; its historical experiment remains in
+`docs/engine-re.md`.
 
 ## Container parse / disassemble
 
