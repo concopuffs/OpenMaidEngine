@@ -1,4 +1,5 @@
 using Age.Engine.Hosting;
+using Age.Engine.Model;
 using Xunit;
 
 public class AdvAutoAdvanceTimerTests

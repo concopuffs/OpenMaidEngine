@@ -804,6 +804,11 @@ do not mix mechanical moves with semantic changes.
    remain behaviorally unchanged. Input transport records remain in their prior locations pending a separate
    cleanup. Runtime validation remains green.
 
+   The ninth bounded contract slice moved the unchanged `FullwidthTextEditRequest`, `FullwidthTextEditResult`, and
+   `AdvAutoWaitState` declarations from `Hosting` into `Model/InputContracts.cs`. Only the auto-advance timer and
+   its focused tests required new imports; record shape, editor defaults, wait overloads, and all runtime behavior
+   remain unchanged. Runtime validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1165,7 +1170,7 @@ layer's rendering diverges from ADV; save layout.
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
 behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
 established beneath `IHost`, shared graphics transport neutral, and graphics/input contracts now separated, move
-the unchanged `FullwidthTextEditRequest`, `FullwidthTextEditResult`, and `AdvAutoWaitState` declarations from
-`Hosting` to `Model` next. Preserve all consumers before extracting the remaining ADV text/presentation contract.
+the remaining ADV text/history/layout/presentation members into `IAdvHost` next. Preserve all required/default
+members and existing hosts, leaving `IHost` as the unchanged aggregate runtime entry point.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

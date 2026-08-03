@@ -17,15 +17,8 @@ public readonly record struct AdvWaitIndicatorConfig(
     }
 }
 
-public readonly record struct AdvAutoWaitState(
-    bool Enabled, bool VoicePending, long PostVoiceDelayMs, long UnvoicedDelayMs);
-
 /// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
 public readonly record struct DiagnosticMessage(string Caption, string Text);
-
-/// <summary>AGERc command 10's synchronous full-width text edit request and result.</summary>
-public readonly record struct FullwidthTextEditRequest(string CurrentText, string InitialText);
-public readonly record struct FullwidthTextEditResult(bool Accepted, string Text);
 
 public interface IHost : IDiagnosticHost, ILifecycleHost, IAudioHost, IMovieHost, IGraphicsHost, IInputHost
 {

@@ -179,6 +179,8 @@ decoders, host surfaces, renderers, persistence, and tests; consumers do not dep
 decoded pixels.
 `engine/Age.Engine/Model/SurfaceContracts.cs` owns neutral surface fill/copy requests and the black-fade direction
 shared by VM presentation, graphics hosts, Godot, and tests.
+`engine/Age.Engine/Model/InputContracts.cs` owns neutral ADV auto-wait state and fullwidth text-edit request/result
+records shared by input hosts, timing policy, VM dispatch, Godot, and tests.
 
 `engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
