@@ -1005,9 +1005,14 @@ do not mix mechanical moves with semantic changes.
    template, calls the same locally accepted build command, and uploads the archive with its external build info,
    checksum ledger, and smoke log. Cache entries have no broad fallback and remain subject to the bootstrap's
    size/SHA checks. The workflow has no game corpus, secrets, registry login, or release-write authority; tags
-   still produce ordinary retained workflow artifacts. The immediate gate is the first hosted build on this
-   server. If it passes, the next bounded slice can promote an already-verified tag artifact to a Gitea release
-   without rebuilding it; if it fails, fix only the observed runner/action dependency before adding publication.
+   still produce ordinary retained workflow artifacts. The first hosted build reached Godot's managed publish
+   and was killed with status 137. Stage-level measurement found a 772,476 KiB Godot peak and a 223,764 KiB
+   isolated publish peak, explaining why the nested processes can exceed a roughly 1 GiB cgroup. The build now
+   runs the exact self-contained publish first, substitutes a tightly validated one-assembly publish while Godot
+   creates the real PCK/executable, and stages the full external managed payload after the editor exits. The
+   revised complete build, payload verification, and packaged smoke gate pass locally; a hosted retry is the
+   immediate acceptance gate. Once that succeeds, the next bounded slice can promote an already-verified tag
+   artifact to a Gitea release without rebuilding it.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the

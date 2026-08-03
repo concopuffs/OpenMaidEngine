@@ -380,7 +380,15 @@ member from Godot's all-platform archive; it does not download the complete 1.2 
 
 The build regenerates embedded opcode metadata, bootstraps/builds the pinned Linux FFmpeg bundle, performs
 the Godot release export, and delegates the shared required/forbidden payload checks to
-`package_linux_x64.py`. The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, a source/dependency
+`package_linux_x64.py`. To remain inside constrained CI memory cgroups, it first runs the exact self-contained
+`ExportRelease` publish with build/compiler servers and debug symbols disabled. Godot then performs its real
+PCK/executable export against a one-assembly staging payload supplied by `dotnet_publish_proxy.py`; the proxy
+refuses any project, configuration, runtime, self-contained flag, or output root other than the invocation
+reserved by the build driver. Because managed outputs are external to the PCK, the complete prepublished
+payload replaces that temporary staging directory only after Godot exits. The final payload verifier and
+packaged smoke test therefore validate the same complete runtime that is archived.
+
+The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, a source/dependency
 `BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
 modes, ordering, and timestamps using `SOURCE_DATE_EPOCH` or the source commit time. Outputs are the loose
 export under `build/export/linux-x64/`, the staged installation and `package-smoke.log` under
@@ -402,8 +410,8 @@ python3 -X utf8 tools/package_linux_x64.py package build/export/linux-x64
 ```
 
 The bootstrap prints the pinned editor path. The verifier prints the accepted export directory; the packager
-prints the staged root and archive path. Both Python components have source-only synthetic regressions in the
-core validation level.
+prints the staged root and archive path. Those Python components and the guarded publish proxy have source-only
+synthetic regressions in the core validation level.
 
 The older Windows-hosted cross-export remains available for local development:
 

@@ -47,12 +47,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── validate.py                        layered core/workspace/runtime/full validation driver
     │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
+    │   ├── dotnet_publish_proxy.py            guarded low-memory Godot export-time publish staging
     │   ├── bootstrap-godot-linux-x64.sh       repo-local Godot 4.7 Linux editor/template bootstrap
     │   ├── godot-linux-x64.json               immutable Godot editor/template source + SHA-256 manifest
     │   ├── install_godot_templates.py         selective HTTP-range installer for pinned template members
     │   ├── package_linux_x64.py               export verifier + notice/checksum/archive packager
-    │   ├── test_install_godot_templates.py, test_package_linux_x64.py
-    │   │                                       source-only bootstrap/package regressions
+    │   ├── test_install_godot_templates.py, test_package_linux_x64.py,
+    │   │   test_dotnet_publish_proxy.py        source-only bootstrap/package/publish regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
     │   ├── age_opcodes.py                      GENERATED complete Python ABI view (do not hand-edit)
     │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 5 artifacts below

@@ -58,8 +58,15 @@ fast integration gate. The cache key is derived from both immutable dependency m
 prefix; cached archives/templates are still size/hash checked by their owning bootstrap before use. A successful
 job retains the archive, external build/checksum manifests, and smoke log for 30 days. It has only read access to
 repository contents and does not use private data, secrets, registry credentials, or release-write permission.
-The first hosted execution remains the acceptance gate for runner image dependencies and cache/artifact action
-behavior; release publication is intentionally deferred until that artifact run succeeds.
+The first hosted execution reached Godot's managed publish but was killed with status 137. Local stage-level
+measurement reproduced the pressure: the resident Godot export peaks at 772,476 KiB and an isolated managed
+publish peaks at 223,764 KiB, so nesting the latter under the former can cross a roughly 1 GiB runner cgroup.
+The build now serializes those peaks: it creates the exact self-contained publish first with compiler/build
+servers disabled, lets the real Godot export consume a strictly validated one-assembly proxy publish, and stages
+the complete external managed payload only after Godot exits. The complete revised path passes locally, including
+payload verification and the packaged opcode/FFmpeg smoke gate. The hosted retry remains the acceptance gate for
+the mitigation plus cache/artifact action behavior; release publication is intentionally deferred until it
+succeeds. The workflow reports both host memory and cgroup limits to make any further runner constraint explicit.
 
 ## Dependency inventory
 

@@ -57,6 +57,11 @@ jobs:
           dotnet --version
           cc --version
           readelf --version
+          free -h
+          if [ -r /sys/fs/cgroup/memory.max ]; then
+            echo "cgroup memory.max=$(cat /sys/fs/cgroup/memory.max)"
+            echo "cgroup memory.current=$(cat /sys/fs/cgroup/memory.current)"
+          fi
 
       - name: Build and smoke-test Linux package
         run: ./tools/build-linux-x64.sh

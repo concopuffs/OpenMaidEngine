@@ -32,6 +32,7 @@ CORE_TESTS = (
     "test_validate.py",
     "test_install_godot_templates.py",
     "test_package_linux_x64.py",
+    "test_dotnet_publish_proxy.py",
     "test_diff_optrace.py",
     "test_engine_ctx.py",
     "test_ghidra_handler_map.py",
