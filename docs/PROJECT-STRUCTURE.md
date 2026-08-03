@@ -177,7 +177,10 @@ opcode dispatcher. Its partial-class companion `engine/Age.Engine/Vm/VirtualMach
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
 routes that family into the handler. `engine/Age.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`
-likewise retains and routes the movie labels.
+likewise retains and routes the movie labels. `engine/Age.Engine/Vm/VirtualMachine.Surface.cs` owns surface
+allocation/loading, texture binding and sizing, mutable surface fill/copy, render-target control, and transient
+surface release; its labels remain at their existing dispatcher positions around the retained numeric-glyph and
+object cases.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
