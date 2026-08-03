@@ -41,8 +41,9 @@ The hosted wrapper is `.gitea/workflows/core-validation.yml`. It matches the tar
 source-only repository under an arbitrary directory name passes that exact driver without sibling game or
 extracted data. Repository discovery uses tracked marker files rather than requiring the checkout directory to
 be named `age-reimpl`. The workflow has no secrets, private corpus, Godot runtime, cache, packaging, or deployment
-access; failure logs are retained for seven days. Its first actual Linux/Gitea execution remains pending until
-the rewritten repository is pushed.
+access; failure logs are retained for seven days. The private remote's default and tracked development branch is
+`develop`; pushes and pull requests targeting it select the gate. The rewritten repository is published there,
+and the first actual Linux/Gitea result remains to be confirmed in the server UI.
 
 ## Optional local binary tools
 
