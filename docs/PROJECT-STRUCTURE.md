@@ -198,6 +198,8 @@ and refresh helpers remain in the VM coordinator because live text and input pat
 `engine/Age.Engine/Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
 resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling, and
 physical-input mapping; public host-thread input entry points and shared synchronization remain in the coordinator.
+`engine/Age.Engine/Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
+schedule construction, deadline/catch-up selection, and callback resumption opcode handler.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
