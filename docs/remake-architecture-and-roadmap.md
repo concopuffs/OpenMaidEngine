@@ -700,6 +700,13 @@ do not mix mechanical moves with semantic changes.
    labels at their existing positions and routes them through guarded `StepPersistence`; capture/apply helpers
    and persistent coordinator state remain in `VirtualMachine.cs`. Runtime validation remains green.
 
+   The thirteenth bounded `VirtualMachine.Step` extraction moved string byte length, addressed lookup/copy,
+   inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
+   and native-style random-modulo dispatch into
+   `engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs`. The top-level dispatcher retains all labels and
+   aliases at their existing positions and routes them through guarded `StepMemoryCollection`; shared storage and
+   address-resolution helpers remain in the coordinator. Runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1072,9 +1079,8 @@ layer's rendering diverges from ADV; save layout.
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text,
-text-history, ADV-service, input, and timing `VirtualMachine.Step` families routed through domain handlers,
-with numbered-save/shared-profile persistence dispatch now isolated as well, extract the memory/collection utility
-opcode family next without replacing the proven dispatcher or changing public types, commands, and generated
-output.
+text-history, ADV-service, input, timing, persistence, and memory/collection `VirtualMachine.Step` families routed
+through domain handlers, extract control-flow/coroutine dispatch next without replacing the proven dispatcher or
+changing public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

@@ -203,6 +203,9 @@ schedule construction, deadline/catch-up selection, and callback resumption opco
 `engine/Age.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
 restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string opcode
 dispatch; capture/apply helpers and persistent coordinator state remain in `VirtualMachine.cs`.
+`engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
+inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
+and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
