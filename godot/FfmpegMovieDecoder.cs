@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using System.Threading;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 
 internal interface IMoviePacingClock

@@ -169,6 +169,9 @@ simple hosts. `engine/Age.Engine/Hosting/IMovieHost.cs` owns ordinary, positione
 and modal movie playback contracts. `IHost` inherits all four focused contracts; their required and default
 behavior is unchanged. The neutral `engine/Age.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie
 mask work between the VM, host, and retained graphics without making `Model` depend on `Hosting`.
+`engine/Age.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
+decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
+decoded pixels.
 
 `engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,

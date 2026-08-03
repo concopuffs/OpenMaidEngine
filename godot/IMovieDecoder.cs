@@ -1,4 +1,5 @@
 using System;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 
 internal readonly record struct MovieAudioInfo(int SampleRate, int Channels);

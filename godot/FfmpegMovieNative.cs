@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Microsoft.Win32.SafeHandles;
 

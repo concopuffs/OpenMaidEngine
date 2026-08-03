@@ -1,9 +1,7 @@
 using System.Buffers.Binary;
+using Age.Engine.Model;
 
 namespace Age.Engine.Sys4;
-
-/// <summary>A decoded, tightly packed, top-down RGBA8 image.</summary>
-public sealed record RgbaImage(int Width, int Height, byte[] Pixels);
 
 /// <summary>
 /// Platform-neutral Eushully AGF decoder. Format algorithm ported from GARbro's MIT-licensed

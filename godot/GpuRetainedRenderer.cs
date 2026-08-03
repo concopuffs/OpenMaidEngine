@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using Age.Engine.Model;
-using Age.Engine.Sys4;
 
 /// <summary>
 /// Godot-native presentation of AGE's sampled retained objects. Static decoded/color-key variants are

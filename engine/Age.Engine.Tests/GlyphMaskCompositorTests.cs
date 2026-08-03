@@ -1,5 +1,4 @@
 using Age.Engine.Model;
-using Age.Engine.Sys4;
 using Age.Engine.Text;
 
 public class GlyphMaskCompositorTests

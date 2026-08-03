@@ -1,3 +1,5 @@
+using Age.Engine.Model;
+
 namespace Age.Engine.Sys4;
 
 /// <summary>Platform-neutral mutation helpers for AGE's software-modeled RGBA surfaces.</summary>
