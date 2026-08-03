@@ -809,6 +809,12 @@ do not mix mechanical moves with semantic changes.
    its focused tests required new imports; record shape, editor defaults, wait overloads, and all runtime behavior
    remain unchanged. Runtime validation remains green.
 
+   The tenth bounded contract slice introduced `IAdvHost` for live and surface text, text-history presentation,
+   ADV layout publication, message presentation settings, wait-indicator control, and page-presentation
+   suspension. `IHost` now contains no members of its own and inherits all seven focused host contracts; all
+   twenty-three ADV members, required implementations, overload/default chains, existing hosts, and transport
+   record locations remain behaviorally unchanged. Runtime validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1169,8 +1175,8 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
 behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
-established beneath `IHost`, shared graphics transport neutral, and graphics/input contracts now separated, move
-the remaining ADV text/history/layout/presentation members into `IAdvHost` next. Preserve all required/default
-members and existing hosts, leaving `IHost` as the unchanged aggregate runtime entry point.
+established beneath `IHost`, shared graphics/input transport neutral, and graphics/input/ADV contracts now
+separated, move the unchanged `AdvWaitIndicatorConfig` and `DiagnosticMessage` declarations from `Hosting` to
+`Model` next. Preserve all consumers while removing the remaining transport declarations from interface files.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
