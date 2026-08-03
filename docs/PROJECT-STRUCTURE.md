@@ -154,6 +154,9 @@ scene-context lifecycle coordination. `godot/GodotAdvHost.Surfaces.cs` owns deco
 surface pixels/resources/dimensions, fill/copy/resolve operations, render-target publication, and surface/range
 teardown. `godot/GodotAdvHost.Movies.cs` owns movie surface bindings, ordinary and modal playback, movie-mask
 transitions, diagnostic snapshots, frame/completion publication, and mask teardown.
+`godot/GodotAdvHost.Audio.cs` owns BGM, voice and SFX resolution/dispatch, delayed voice state, volume/routing
+control, and blocking BGM fades; presentation/input retains the message-skip, reset, and frame-pulse consumers
+of that state through the sealed partial class.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
