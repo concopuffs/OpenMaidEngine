@@ -160,6 +160,12 @@ transitions, diagnostic snapshots, frame/completion publication, and mask teardo
 control, and blocking BGM fades; presentation/input retains the message-skip, reset, and frame-pulse consumers
 of that state through the sealed partial class.
 
+`engine/Age.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
+implementations. `engine/Age.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic
+reporting contracts, while `engine/Age.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
+timed-deadline waiting, frame yield, and scene reset. `IHost` inherits both focused contracts; their required and
+default behavior is unchanged.
+
 `engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
 animation, numeric-glyph, and handle-range contracts. `engine/Age.Engine/Model/GfxState.Surfaces.cs` owns surface

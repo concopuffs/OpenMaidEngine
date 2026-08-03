@@ -759,6 +759,12 @@ do not mix mechanical moves with semantic changes.
    headless defaults and diagnostics; interface cleanup must not turn intentionally unsupported presentation
    into false success.
 
+   **Progress (2026-08-03):** the first bounded contract slice introduced `IDiagnosticHost` for recoverable
+   warnings and modal diagnostic messages and `ILifecycleHost` for script-context entry/exit, sleep and timed
+   deadline waiting, frame yield, and scene reset. `IHost` inherits both contracts and remains the aggregate VM
+   entry point; all required members, default implementations, existing hosts, and transport-record locations
+   are unchanged. Runtime validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1117,9 +1123,10 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Begin step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
-behavior or the aggregate host accepted by the VM. Start with a bounded interface-only slice that introduces
-diagnostic and lifecycle host contracts beneath `IHost`, preserving current default implementations and existing
-host classes before separating the larger ADV, graphics, audio, movie, and input surfaces.
+Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
+behavior or the aggregate host accepted by the VM. With diagnostic and lifecycle contracts established beneath
+`IHost`, introduce the audio host contract next as the smallest remaining self-contained domain, preserving every
+required/default member and all existing host implementations before tackling interdependent ADV/input/graphics
+surfaces.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

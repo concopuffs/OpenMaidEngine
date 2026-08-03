@@ -48,19 +48,11 @@ public enum SurfaceBlackFadeDirection
     ToBlack,
 }
 
-public interface IHost
+public interface IHost : IDiagnosticHost, ILifecycleHost
 {
-    /// <summary>Report a recoverable runtime discrepancy while allowing script execution to continue.</summary>
-    void ReportWarning(string message) => System.Console.Error.WriteLine(message);
-    /// <summary>Present a modal diagnostic and return only after the user dismisses it.</summary>
-    void ShowDiagnosticMessage(DiagnosticMessage message)
-        => System.Console.Error.WriteLine($"{message.Caption}: {message.Text}");
     /// <summary>Present AGERc's modal full-width editor. Cancel preserves CurrentText.</summary>
     FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
         => new(false, request.CurrentText);
-    // Script context is retained for diagnostics/page location; resource operands are universal packed ids.
-    void EnterScriptContext(string scriptName) { }
-    void ExitScriptContext() { }
     void ShowText(int offset, string text);
     void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
         => ShowText(run.SourceOffset, run.Text);
@@ -140,14 +132,6 @@ public interface IHost
     long InputClockMilliseconds => Environment.TickCount64;
     void SetCursorResource(long resourceId) { }
     void ClearCursorResource() { }
-    void Sleep(long duration);
-    // Native op-0xd5 pacing sleeps inside run-state 0x40 without publishing retained gfx state.
-    // Interactive hosts must keep this distinct from presentation-capable script op-0xc8 sleep.
-    void WaitForTimedCallbackDeadline(long duration) => Sleep(duration);
-    void FrameYield();
-    // Native op 0x9 resets scene-owned host services before reloading root script resource 0.
-    // Global banks, engine configuration, decoded-asset caches, and persistent profile state survive.
-    void ResetSceneContext() { }
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
     // hosts default to normal playback; the Godot host supplies the live interactive values.
     void SetMessageSkipActive(bool active) { }
