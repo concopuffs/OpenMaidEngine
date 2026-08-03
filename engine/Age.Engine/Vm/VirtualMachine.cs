@@ -2490,8 +2490,8 @@ public sealed partial class VirtualMachine
             case "u00420D50":
             case "copy-surface-rect":
                 return StepSurface(label, a, pc);
-            case "clear-retained-gfx-objects": // 0x1f6: erase object records, but preserve surfaces
-                Gfx.ClearRetainedObjects(); return pc + 1;
+            case "clear-retained-gfx-objects":
+                return StepRetainedObject(label, a, pc);
             case "select-render-target":
             case "clear-render-target":
             case "release-transient-surfaces":
@@ -2528,51 +2528,27 @@ public sealed partial class VirtualMachine
             case "u00422B80":
             case "play-movie-to-surface-at-position":
                 return StepMovie(label, ins, pc);
-            case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
-                if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)
-                {
-                    long h = Read(a[1]);
-                    System.Console.Error.WriteLine($"[query] handle=0x{h:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
-                        $"-> QuerySlot={Gfx.QuerySlot(h)} objectPresent={Gfx.TryGet(h) != null}");
-                }
-                Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
-            case "query-gfx-field?":    // 0x216 (out)(idx)
-                Write(a[0], Gfx.QueryField(Read(a[1]))); return pc + 1;
-            case "get-gfx-geom3?":      // 0x218 (handle)(outA)(outB)(outC) <- V18
-            {
-                var v = Gfx.TryGet(Read(a[0]))?.V18 ?? default;
-                Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return pc + 1;
-            }
-            case "get-gfx-geom3-b?":    // 0x21a (handle)(outA)(outB)(outC) <- V24
-            {
-                var v = Gfx.TryGet(Read(a[0]))?.V24 ?? default;
-                Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return pc + 1;
-            }
-            case "set-gfx-geom3":       // 0x217 (handle)(a)(b)(c) -> V18
-                Gfx.SetObjectAnchor(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
-            case "set-gfx-geom3-b":     // 0x219 (handle)(a)(b)(c) -> V24
-                Gfx.SetObjectPosition(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
+            case "query-gfx-object?":
+            case "query-gfx-field?":
+            case "get-gfx-geom3?":
+            case "get-gfx-geom3-b?":
+            case "set-gfx-geom3":
+            case "set-gfx-geom3-b":
             case "u0041AF00":           // 0x80: default object slot substituted by native op 0x1d9
             case "set-default-gfx-object-slot":
-                Gfx.SetDefaultObjectSlot((int)Read(a[0])); return pc + 1;
+                return StepRetainedObject(label, a, pc);
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
             case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
-                Gfx.SetObjectPosition(Read(a[0]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "u004219E0":                  // pre-reference compatibility
             case "set-gfx-range-transform":   // 0x229 (first)(count)(anchor x/y/z)
-                Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
-                return pc + 1;
             case "u00421A90":                  // pre-reference compatibility
             case "set-gfx-range-scale-current": // 0x22a (sx%)(sy%)(sz%)
-                Gfx.SetRangeScaleCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return pc + 1;
             case "u00421BD0":                  // pre-reference compatibility
             case "set-gfx-range-translation-current": // 0x22c (tx)(ty)(tz)
-                Gfx.SetRangeTranslationCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return pc + 1;
             case "u00421C60":                  // pre-reference compatibility
             case "set-gfx-range-scale-target": // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
-                Gfx.SetRangeScaleChannel(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
-                return pc + 1;
+                return StepRetainedObject(label, a, pc);
             case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
                 Gfx.SetSrcRect(Read(a[0]), Read(a[3]), Read(a[4]), Read(a[5]), 0); return pc + 1;
             case "reset-gfx-cyclic-animations": // 0x230: stop all five retained looping channels
@@ -2586,29 +2562,18 @@ public sealed partial class VirtualMachine
                 Gfx.SetScaleCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
                 return pc + 1;
             case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- target translation matrix
-            {
-                if (Gfx.TryQueryTranslationTarget(Read(a[1]), out var v))
-                {
-                    Write(a[2], (long)v.X); Write(a[3], (long)v.Y); Write(a[4], (long)v.Z);
-                    Write(a[0], 0);
-                }
-                else Write(a[0], 1);   // native missing-object path leaves output operands untouched
-                return pc + 1;
-            }
+                return StepRetainedObject(label, a, pc);
             case "u00422930":
             case "query-surface-stop-time-ms":
             case "query-movie-surface-active":
                 return StepMovie(label, ins, pc);
             case "sample-frame-time": // 0x23c: previous <- current; current <- monotonic time
                 Gfx.SampleFrameTime(_host.InputClockMilliseconds); return pc + 1;
-            case "set-gfx-geom3-c":     // 0x1ff: set current translation matrix
-                Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
+            case "set-gfx-geom3-c":
             case "u00420620":             // upstream ABI label
             case "gfx-set-scale-current": // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
-                Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
-            case "set-current-rotation-axis-angle": // 0x1fe (handle)(axis x/y/z)(angle degrees)
-                Gfx.SetCurrentRotation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3])), Read(a[4]));
-                return pc + 1;
+            case "set-current-rotation-axis-angle":
+                return StepRetainedObject(label, a, pc);
             case "set-adv-wait-indicator-handle":   // 0x212 (layout)(retained handle)
             {
                 int requestedSlot = (int)Read(a[0]);
@@ -2625,18 +2590,12 @@ public sealed partial class VirtualMachine
                 TextHistory.SetTextObjectRange((int)Read(a[0]), Read(a[1]), Read(a[2]));
                 return pc + 1;
             }
-            case "gfx-elem-erase":      // 0x1f7 (handle)(count) — erase retained-object range
-            {
-                long first = Read(a[0]), count = Read(a[1]);
-                Gfx.EraseRange(first, count);
-                foreach (int layoutSlot in TextHistory.LayoutsCoveredByTextObjectErase(first, count))
-                    _host.ClearRenderedAdvTextLayout(layoutSlot);
-                return pc + 1;
-            }
+            case "gfx-elem-erase":
+                return StepRetainedObject(label, a, pc);
             case "gfx-elem-release":    // 0x1fa (surface slot)
                 _host.ReleaseSurface((int)Read(a[0])); Gfx.ClearSurface((int)Read(a[0])); return pc + 1;
-            case "clone-gfx-object":    // 0x21d (source handle)(destination handle)
-                Gfx.CloneObject(Read(a[0]), Read(a[1])); return pc + 1;
+            case "clone-gfx-object":
+                return StepRetainedObject(label, a, pc);
             case "gfx-blit-color":      // 0x202 (handle)(delay)(duration)(alpha)(color) — one-shot color
                 Gfx.SetAnimatedObjectColorResolved(Read(a[0]), Read(a[1]), Read(a[2]), Read(a[3]), Read(a[4]));
                 return pc + 1;

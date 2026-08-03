@@ -642,6 +642,13 @@ do not mix mechanical moves with semantic changes.
    existing positions, including the separate routing groups around numeric-glyph and retained-object cases;
    public VM behavior and case-body logic remain unchanged. Runtime validation remains green.
 
+   The fourth bounded `VirtualMachine.Step` extraction moved retained-object registry queries, default-slot and
+   geometry mutation, direct and embedded-range transforms, clone, and erase dispatch into
+   `engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs`. The top-level dispatcher retains all labels at their
+   existing positions and routes the separated groups through `StepRetainedObject`; timed/cyclic animation,
+   color, surface release, ADV binding, and presentation behavior remain outside this handler. Runtime validation
+   remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1014,7 +1021,8 @@ layer's rendering diverges from ADV; save layout.
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, and surface/texture `VirtualMachine.Step` families routed through domain
-handlers, extract the retained-object query/mutation and transform opcode family next without replacing the
-proven dispatcher or changing public types, commands, and generated output.
+handlers, with retained-object query/mutation and transform dispatch now isolated as well, extract the retained
+animation/color/spritesheet opcode family next without replacing the proven dispatcher or changing public types,
+commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

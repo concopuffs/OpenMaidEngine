@@ -180,7 +180,9 @@ positioned movie playback, movie surface metadata/activity queries, and movie-ma
 likewise retains and routes the movie labels. `engine/Age.Engine/Vm/VirtualMachine.Surface.cs` owns surface
 allocation/loading, texture binding and sizing, mutable surface fill/copy, render-target control, and transient
 surface release; its labels remain at their existing dispatcher positions around the retained numeric-glyph and
-object cases.
+object cases. `engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
+default-slot and geometry mutation, direct and range transforms, clone, and erase dispatch; animation, surface,
+ADV-binding, and presentation labels remain in their respective dispatcher groups.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
