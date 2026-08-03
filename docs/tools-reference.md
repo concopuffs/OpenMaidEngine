@@ -35,6 +35,14 @@ by a failed preflight; rebuild each through its owning tool in this reference. R
 `--godot`, then `AGE_GODOT_CONSOLE`, then `godot4`/`godot`/`godot-mono` on `PATH`. Game-root resolution uses
 `--game-root`, then `AGE_GAME_ROOT`, then the conventional sibling install and always requires `SYS4INI.BIN`.
 
+The hosted wrapper is `.github/workflows/core-validation.yml`: a read-only `ubuntu-24.04` job provisions
+Python 3.11 and the SDK selected by `global.json`, then runs
+`python -X utf8 tools/validate.py --level core`. Pull requests, pushes to `main`, and manual dispatch select the
+same gate; superseded branch runs are cancelled, and `build/validation/**` is retained for seven days only when
+the job fails. It has no secrets, cache, game corpus, Godot runtime, packaging, or deployment access. Until a
+remote is configured and the commit is pushed, the tracked workflow is dormant and its first hosted result is
+still pending.
+
 ## Container parse / disassemble
 
 | Tool | Purpose | Run | Reads → Writes |

@@ -920,6 +920,16 @@ do not mix mechanical moves with semantic changes.
    validation remains green, and a Linux Git comparison reports no unstaged EOL drift. The first hosted CI job
    can therefore target Linux rather than carrying forward a Windows-runner dependency.
 
+   **Linux core workflow (2026-08-03):** item 2 is implemented as `.github/workflows/core-validation.yml`. One
+   read-only `ubuntu-24.04` job provisions Python 3.11 and the SDK selected by `global.json`, reports both resolved
+   versions, and invokes the existing asset-independent core driver. Pull requests, `main` pushes, and manual
+   dispatch share the job; branch-local concurrency cancels superseded runs, and seven-day validation-log upload
+   occurs only after failure. The workflow has no cache, secrets, private corpus, Godot runtime, packaging, or
+   deployment access. All four official actions are pinned to full immutable release SHAs. `actionlint` accepts
+   the workflow and the underlying Python 3.11 core gate remains green locally. Because no remote is configured,
+   the tracked workflow is dormant and its first hosted Linux execution remains a publication-time confirmation,
+   not a condition hidden by this commit.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1266,10 +1276,10 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice with an asset-independent CI workflow that
-provisions Python 3.11 and the `global.json` .NET SDK on Linux, then invokes
-`python -X utf8 tools/validate.py --level core`. Keep the private game corpus and Godot runtime out of the
-hermetic CI job, preserve the validation driver's failure and POSIX child-process semantics, and avoid
-introducing a second build/test command path.
+Continue step 5 of the **codebase consolidation** maintenance slice by making the user-owned project-license and
+third-party-artifact decisions required before distribution. Resolve, replace, or exclude the unverified
+BinExtractALF/LzssCpp and Kelebek-derived material before adding the canonical license, notice, and checksum/
+provenance manifest set. Do not infer a license choice, publish/configure a remote, or remove local artifacts as
+part of that decision.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
