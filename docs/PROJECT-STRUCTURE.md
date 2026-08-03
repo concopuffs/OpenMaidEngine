@@ -118,9 +118,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       and profile-owned state
-    │   ├── Age.Engine.Frontend/             platform-neutral frontend diagnostics/options project: page
-    │                                       locator, timeline/trace/step-limit diagnostics, VM/window launch
-    │                                       options, and performance-frame logging
+    │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
+    │                                       location, performance logging, movie decoder/runtime contracts,
+    │                                       audio alignment, surface registry, and WAV sanitization
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -154,8 +154,10 @@ full-width text entry.
 Both `engine/AgeEngine.sln` and `godot/Himegari.sln` include the project; Godot and `Age.Engine.Tests` consume it
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
 `PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
-`PerformanceFrameLog`, and `WindowLaunchOptions`. Movie runtime/decoder helpers remain under `godot/` until their
-separate ownership slices.
+`PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie decoder boundary/runtime,
+audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the `Himegari` and
+`Age.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg interop and decoder
+implementation remain under `godot/` until their separate ownership slice.
 
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,

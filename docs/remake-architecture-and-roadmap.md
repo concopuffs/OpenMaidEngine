@@ -834,6 +834,13 @@ do not mix mechanical moves with semantic changes.
    test source links without changing public types, namespaces, behavior, or export configuration. Both solution
    builds and runtime validation remain green.
 
+   The second bounded build-graph slice moved the unchanged internal movie decoder boundary/runtime, audio
+   alignment policy, movie-surface registry, and RIFF/WAVE sanitizer from `godot/` into `Age.Engine.Frontend`.
+   Five more direct test source links are gone. Explicit friend access is limited to `Himegari` and
+   `Age.Engine.Tests`, so the move preserves the intentionally internal API instead of widening it; FFmpeg remains
+   in Godot while implementing the moved boundary through that friend access. Both solution builds and runtime
+   validation remain green.
+
 5. **Close repository-policy and storage gaps.** Add an explicit project license, third-party notices and
    checksums/provenance for committed binaries, consistent editor/build policy, a pinned .NET SDK, and a
    CI entry point built on the same validation driver. Remove the empty workspace-root `.git` directory and
@@ -1188,9 +1195,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Begin step 4 of the **codebase consolidation** maintenance slice: make the build graph express source ownership
-without changing behavior. Move the platform-neutral movie abstractions and runtime support—decoder interfaces,
-movie/audio runtime state, movie-surface registry, and RIFF sanitization—from `godot/` into
-`Age.Engine.Frontend` next. Replace their test source links while preserving the intentionally internal API through
-explicit friend-assembly access; leave FFmpeg interop/decoder ownership for the following slice.
+without changing behavior. Move `FfmpegMovieNative.cs` and `FfmpegMovieDecoder.cs` from `godot/` into
+`Age.Engine.Frontend` next. Replace both test source links and the movie corpus gate's native-source link with
+project references, granting narrowly scoped friend access to the corpus-gate assembly while preserving native
+ABI, decoder pacing, failure, and teardown behavior.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
