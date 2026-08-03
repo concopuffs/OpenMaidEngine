@@ -172,6 +172,11 @@ the interpolation helpers consumed by retained-scene sampling. `engine/Age.Engin
 owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
 accounting, and visible retained-scene snapshots.
 
+`engine/Age.Engine/Vm/VirtualMachine.cs` retains VM lifecycle, cross-domain state, and the proven top-level
+opcode dispatcher. Its partial-class companion `engine/Age.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
+state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
+routes that family into the handler.
+
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.

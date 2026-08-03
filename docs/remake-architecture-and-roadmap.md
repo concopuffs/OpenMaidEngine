@@ -624,6 +624,12 @@ do not mix mechanical moves with semantic changes.
    accounting, scene reset, persistence, and locking. The planned `GfxState` decomposition is complete; runtime
    validation remains green.
 
+   The first bounded `VirtualMachine.Step` extraction converted the sealed VM type to a sealed partial class and
+   moved VM-owned audio state, BGM restart semantics, and the existing BGM/voice/SFX/mixer case bodies into
+   `engine/Age.Engine/Vm/VirtualMachine.Audio.cs`. The top-level dispatcher retains the exact opcode labels and
+   routes only that family through `StepAudio`; public VM behavior and case-body logic remain unchanged. Runtime
+   validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -995,7 +1001,8 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
-domains isolated, begin thinning `VirtualMachine.Step` through existing domain handler methods without replacing
-the proven dispatcher or changing public types, commands, and generated output.
+domains isolated and the first `VirtualMachine.Step` family routed through a domain handler, extract the movie
+opcode family next without replacing the proven dispatcher or changing public types, commands, and generated
+output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

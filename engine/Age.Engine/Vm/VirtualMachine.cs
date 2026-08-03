@@ -22,7 +22,7 @@ public readonly record struct SharedProfileShutdownFlushResult(
     SharedProfileShutdownFlushOutcome Outcome,
     string? Error = null);
 
-public sealed class VirtualMachine
+public sealed partial class VirtualMachine
 {
     private const long NoJump = 0xFFFFFFFF;
     private const int HALT = int.MinValue;
@@ -42,7 +42,6 @@ public sealed class VirtualMachine
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
-    private readonly AudioMixerSettings _audioMixerSettings;
     private readonly DiagnosticOutputState _diagnosticOutput;
     private readonly INativeDatStore? _nativeDatStore;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("AGE_DIAG_SETTEX") == "1";
@@ -58,9 +57,6 @@ public sealed class VirtualMachine
     private NativeNumberedSaveState? _loadedNumberedState;
     private NativeNumberedSaveState? _retainedNativeNumberedState;
     private int _restoreFrameIndex = -1;
-    private long _currentBgmTrackId;
-    private readonly long[] _loadedSoundEffectResourceIds =
-        new long[NativeNumberedSaveState.SoundEffectChannelCount];
     private uint _accumulatedPlaySeconds;
     private readonly long _sessionStartTimestamp;
     private ExecFrame? _debugActiveFrame;
@@ -822,16 +818,6 @@ public sealed class VirtualMachine
             _intStacks[i] = new Stack<int>(0x100);
     }
 
-    private void RestartBgm(long requestedTrackId, int startMode)
-    {
-        if (requestedTrackId != 0)
-            _currentBgmTrackId = requestedTrackId;
-
-        if (_currentBgmTrackId == 0)
-            _host.StopBgm();
-        else
-            _host.RestartBgm(_currentBgmTrackId, startMode);
-    }
 
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
@@ -1218,7 +1204,8 @@ public sealed class VirtualMachine
     {
         int op = ins.Opcode;
         var a = ins.Args;
-        switch (_t.Label(op))
+        string label = _t.Label(op);
+        switch (label)
         {
             case "script-entry":
                 Gfx.ClearSurfaceReloadPolicies(); return pc + 1;
@@ -2555,118 +2542,26 @@ public sealed class VirtualMachine
                 Gfx.ReleaseSurfaceRange(42, 1000 - 42);
                 _host.ReleaseSurfaceRange(42, 1000 - 42); return pc + 1;
             case "play-bgm":
-            {
-                long requestedTrackId = Read(a[0]);
-                // Native scripts freely reassert the stage BGM after FIELD action/event cleanup.
-                // The music facade retains the current track id, so an identical request keeps the
-                // existing stream position instead of reopening the OGG from the beginning.
-                if (requestedTrackId != _currentBgmTrackId)
-                {
-                    _currentBgmTrackId = requestedTrackId;
-                    _host.PlayBgm(_currentBgmTrackId);
-                }
-                return pc + 1;
-            }
-            case "restart-bgm-loop": // 0xb7: force start, including current-track/zero alias
-                RestartBgm(Read(a[0]), 1);
-                return pc + 1;
-            case "stop-bgm": // 0xb8: release source and clear retained track
-                _currentBgmTrackId = 0;
-                _host.StopBgm();
-                return pc + 1;
-            case "restart-bgm-once": // 0xb9: force start without decoder rewind at EOF
-                RestartBgm(Read(a[0]), 0);
-                return pc + 1;
+            case "restart-bgm-loop":
+            case "stop-bgm":
+            case "restart-bgm-once":
             case "get-current-bgm-track":
-                Write(a[0], _currentBgmTrackId);
-                return pc + 1;
             case "play-voice":
-                _autoVoicePending = true;
-                TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
-                _host.PlayVoice(Read(a[0]), 0); return pc + 1;
-            case "play-history-voice": // 0x1bd: native voice start/history argument is one
+            case "play-history-voice":
             case "u0041D910":
-                _autoVoicePending = true;
-                TextHistory.AppendVoice(Read(a[0]), 1, _advTextStyle);
-                _host.PlayVoice(Read(a[0]), 1); return pc + 1;
-            case "set-voice-bgm-duck-control": // 0x1cf: bit 0 suppresses automatic voice ducking
-                _host.SetVoiceBgmDuckControl(Read(a[0])); return pc + 1;
-            case "schedule-voice-playback": // 0x2c0: replace the pending delayed combat voice request
-                _host.ScheduleVoicePlayback(Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
-            case "play-sound-effect":   // 0xb4 / semantics: sfx-load
-            {
-                long resourceId = Read(a[0]);
-                int channel = (int)Read(a[1]);
-                if ((uint)channel < (uint)_loadedSoundEffectResourceIds.Length)
-                    _loadedSoundEffectResourceIds[channel] = resourceId;
-                _host.LoadSoundEffect(resourceId, channel);
-                return pc + 1;
-            }
-            case "u0041D050":           // 0xb5 / semantics: sfx-start-once
-                _host.StartSoundEffect((int)Read(a[0]), 0); return pc + 1;
-            case "sfx-start-loop":       // 0xba / same worker, logical decoder rewind at EOF
-                _host.StartSoundEffect((int)Read(a[0]), 1); return pc + 1;
-            case "u0041D080":           // 0xb6 / semantics: sfx-release
-            {
-                int channel = (int)Read(a[0]);
-                if ((uint)channel < (uint)_loadedSoundEffectResourceIds.Length)
-                    _loadedSoundEffectResourceIds[channel] = 0;
-                _host.ReleaseSoundEffect(channel);
-                return pc + 1;
-            }
-            case "schedule-sfx-start":  // 0x2bf / native SetDelay(channel, start mode, delay ms)
-                _host.ScheduleSoundEffectStart((int)Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
-            case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
-            {
-                int targetPercent = (int)Read(a[0]);
-                _host.FadeBgm(targetPercent, Read(a[1]));
-                if (targetPercent == 0)
-                {
-                    _currentBgmTrackId = 0;
-                    _host.StopBgm();
-                }
-                return pc + 1;
-            }
-            case "get-audio-volume": // 0xc5 (category)(out basis points)
-            {
-                int category = unchecked((int)Read(a[0]));
-                if (_audioMixerSettings.TryGetVolume(category, out int basisPoints))
-                    Write(a[1], basisPoints);
-                else
-                    _host.ReportWarning($"audio volume category out of range: {category}");
-                return pc + 1;
-            }
-            case "set-audio-volume": // 0xc6 (category)(basis points)
-            {
-                int category = unchecked((int)Read(a[0]));
-                long basisPoints = Read(a[1]);
-                if (_audioMixerSettings.TrySetVolume(category, basisPoints))
-                    _host.ApplyAudioVolume(category, checked((int)basisPoints));
-                else
-                    _host.ReportWarning($"audio volume category out of range: {category}");
-                return pc + 1;
-            }
-            case "get-audio-route-enabled": // 0xc7 (category)(out boolean)
-            {
-                int category = unchecked((int)Read(a[0]));
-                if (_audioMixerSettings.TryGetRouteEnabled(category, out bool enabled))
-                    Write(a[1], enabled ? 1 : 0);
-                else
-                    _host.ReportWarning($"audio route category out of range: {category}");
-                return pc + 1;
-            }
-            case "set-audio-route-enabled": // 0x1ba (category)(enabled)
-            {
-                int category = unchecked((int)Read(a[0]));
-                bool enabled = Read(a[1]) != 0;
-                if (_audioMixerSettings.TrySetRouteEnabled(category, enabled, out bool changed))
-                {
-                    if (changed) _host.ApplyAudioRouteEnabled(category, enabled);
-                }
-                else
-                    _host.ReportWarning($"audio route category out of range: {category}");
-                return pc + 1;
-            }
+            case "set-voice-bgm-duck-control":
+            case "schedule-voice-playback":
+            case "play-sound-effect":
+            case "u0041D050":
+            case "sfx-start-loop":
+            case "u0041D080":
+            case "schedule-sfx-start":
+            case "u0041D2B0":
+            case "get-audio-volume":
+            case "set-audio-volume":
+            case "get-audio-route-enabled":
+            case "set-audio-route-enabled":
+                return StepAudio(label, a, pc);
             case "u00415880":           // 0xd9 / semantics: clear-run-state-0x1000
                 return pc + 1;
             case "get-initial-root-run": // 0x130 (out)
