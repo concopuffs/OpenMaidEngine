@@ -694,6 +694,12 @@ do not mix mechanical moves with semantic changes.
    their existing positions and routes the separated groups through guarded `StepTiming`; animation-frame
    sampling remains with `StepAnimation`. Runtime validation remains green.
 
+   The twelfth bounded `VirtualMachine.Step` extraction moved catalog-unlock lookup, numbered save/load and
+   nested restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string
+   dispatch into `engine/Age.Engine/Vm/VirtualMachine.Persistence.cs`. The top-level dispatcher retains all
+   labels at their existing positions and routes them through guarded `StepPersistence`; capture/apply helpers
+   and persistent coordinator state remain in `VirtualMachine.cs`. Runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1067,7 +1073,8 @@ Continue step 2 of the **codebase consolidation** maintenance slice: behavior-ne
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text,
 text-history, ADV-service, input, and timing `VirtualMachine.Step` families routed through domain handlers,
-extract numbered-save/shared-profile persistence dispatch next without replacing the proven dispatcher or
-changing public types, commands, and generated output.
+with numbered-save/shared-profile persistence dispatch now isolated as well, extract the memory/collection utility
+opcode family next without replacing the proven dispatcher or changing public types, commands, and generated
+output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

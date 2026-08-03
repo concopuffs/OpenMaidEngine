@@ -200,6 +200,9 @@ resources and virtual position, raw mouse/joystick callback registration and dis
 physical-input mapping; public host-thread input entry points and shared synchronization remain in the coordinator.
 `engine/Age.Engine/Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
 schedule construction, deadline/catch-up selection, and callback resumption opcode handler.
+`engine/Age.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
+restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string opcode
+dispatch; capture/apply helpers and persistent coordinator state remain in `VirtualMachine.cs`.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
