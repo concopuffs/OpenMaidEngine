@@ -912,6 +912,14 @@ do not mix mechanical moves with semantic changes.
    gate remain green under the tracked policy. Item 2, a CI workflow calling that same core gate, is the next
    safe slice.
 
+   **Linux CI preparation (2026-08-03):** the eight legacy text blobs that prevented a clean Linux checkout or
+   generated-reference comparison are now deliberately normalized to canonical LF: the engine solution, three
+   engine project files, three generated Markdown references, and the generated Himegari opcode module. The
+   generated files are once again ordinary text under the repository EOL policy; their existing whitespace
+   exceptions do not disable normalization. Regeneration through all three owning tools is clean, Windows core
+   validation remains green, and a Linux Git comparison reports no unstaged EOL drift. The first hosted CI job
+   can therefore target Linux rather than carrying forward a Windows-runner dependency.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1259,8 +1267,9 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 5 of the **codebase consolidation** maintenance slice with an asset-independent CI workflow that
-invokes `py -3.11 -X utf8 tools/validate.py --level core` on Windows using the tracked .NET SDK policy. Keep the
-private game corpus and Godot runtime out of the hermetic CI job, preserve the validation driver's failure and
-child-process semantics, and avoid introducing a second build/test command path.
+provisions Python 3.11 and the `global.json` .NET SDK on Linux, then invokes
+`python -X utf8 tools/validate.py --level core`. Keep the private game corpus and Godot runtime out of the
+hermetic CI job, preserve the validation driver's failure and POSIX child-process semantics, and avoid
+introducing a second build/test command path.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

@@ -31,7 +31,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── README.md                             navigation-only repository front door; canonical facts stay in docs/
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
-    │                                         generator-owned CRLF references retain their committed bytes
+    │                                         tracked source and generated references use canonical LF
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
