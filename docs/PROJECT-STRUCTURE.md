@@ -185,6 +185,8 @@ default-slot and geometry mutation, direct and range transforms, clone, and eras
 ADV-binding, and presentation labels remain in their respective dispatcher groups.
 `engine/Age.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
 transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
+`engine/Age.Engine/Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
+publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
