@@ -848,6 +848,13 @@ do not mix mechanical moves with semantic changes.
    failure handling, and teardown remain unchanged. Engine, Godot, and corpus-gate builds plus runtime validation
    remain green.
 
+   The fourth bounded build-graph slice moved the unchanged reusable movie-corpus discovery, decode-gate, and
+   report implementation from `tools/movie-corpus-gate/` into `Age.Engine.Frontend`. The tool retains only its
+   command-line entry point and consumes the internal gate through its existing friend/project boundary; tests use
+   the same production implementation through their project reference. The final cross-project production `.cs`
+   source link is gone, completing the planned build-graph ownership cleanup. Engine, Godot, and corpus-gate
+   builds plus runtime validation remain green.
+
 5. **Close repository-policy and storage gaps.** Add an explicit project license, third-party notices and
    checksums/provenance for committed binaries, consistent editor/build policy, a pinned .NET SDK, and a
    CI entry point built on the same validation driver. Remove the empty workspace-root `.git` directory and
@@ -1201,10 +1208,10 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Begin step 4 of the **codebase consolidation** maintenance slice: make the build graph express source ownership
-without changing behavior. Move the reusable `MovieCorpusGate.cs` implementation from
-`tools/movie-corpus-gate/` into `Age.Engine.Frontend` next. Leave the tool's `Program.cs` as its command-line entry
-point, remove the final test source link, preserve the internal friend boundary, and verify that no production
-`.cs` files are compiled through cross-project links.
+Begin step 5 of the **codebase consolidation** maintenance slice with a non-destructive repository-policy and
+storage audit. Inventory current license/notice state, committed third-party binaries and provenance, editor/build
+policy, SDK pinning, CI entry points, repository roots/ignored output nests, and remote/backup configuration.
+Report exact gaps and a bounded implementation order before choosing a license, changing external state, deleting
+or compacting repositories, or removing any ignored output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

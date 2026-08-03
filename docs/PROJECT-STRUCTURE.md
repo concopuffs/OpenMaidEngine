@@ -158,7 +158,9 @@ through project references rather than compiling duplicate linked sources. The f
 audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the `Himegari` and
 `Age.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
 asynchronous/paced decoder also live here; the `Age.MovieCorpusGate` tool receives friend access to the native
-frame-source seam and references this project rather than compiling an interop source link.
+frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
+decode-gate, and report contracts live here as well; `tools/movie-corpus-gate/Program.cs` remains only the
+command-line entry point and output writer.
 
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
