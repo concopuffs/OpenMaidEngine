@@ -59,6 +59,11 @@ public partial class Main : Godot.Control
     public override void _Ready()
     {
         var userArgs = OS.GetCmdlineUserArgs();
+        if (Array.IndexOf(userArgs, "--package-smoke") >= 0)
+        {
+            RunPackageSmoke();
+            return;
+        }
         GameRootSelection gameRoot;
         Sys4AssetCatalog catalog;
         try

@@ -40,6 +40,18 @@ profile/save behavior remain to validate. The accepted DirectShow fallback was d
 LOGO/OP/CHAPTER gates passed. There are also softer Windows assumptions that should be tested or replaced before
 claiming portable exports.
 
+The distributable Linux build path was completed on 2026-08-03. `tools/godot-linux-x64.json` pins the official
+Godot 4.7 .NET Linux editor and release template independently; the bootstrap range-fetches only the required
+73,591,000-byte template member instead of transferring the 1,200,753,503-byte all-platform archive. The single
+`tools/build-linux-x64.sh` entry point regenerates runtime metadata, builds the pinned FFmpeg bundle, performs a
+real release export, rejects incomplete/cross-target payloads, and creates a normalized `.tar.gz` carrying the
+project license, third-party notices, build provenance, and a complete SHA-256 ledger. The final staged runtime
+passes an asset-independent headless gate before packaging success is reported: the embedded 548-opcode table
+loads and the project-owned shim resolves its local FFmpeg libraries at ABI 3. This proves artifact assembly and
+native loading without weakening the separate installed-game/font/render/audio acceptance gates. A local Ubuntu
+20.04 WSL proof passed using isolated Python 3.11/.NET 8.0.408 toolchains; the eventual Gitea job can provide those
+through its existing setup actions.
+
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |

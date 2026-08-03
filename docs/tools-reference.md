@@ -356,15 +356,57 @@ change the process directory before managed code runs.
 
 **Linux x64 export** uses the committed `godot/export_presets.cfg` preset and `godot/Himegari.sln`:
 
+For the complete Linux-native release path, run from `age-reimpl/`:
+
+```bash
+./tools/build-linux-x64.sh
+```
+
+The command requires Python 3.11, the .NET SDK selected by `global.json`, a C compiler/binutils, `curl`,
+`tar`, and normal ELF loader tools. `tools/godot-linux-x64.json` pins the Godot 4.7 .NET Linux editor and
+Linux release template by URL, size, and SHA-256. `bootstrap-godot-linux-x64.sh` caches the editor below
+`build/toolchains/` and uses `install_godot_templates.py` to range-fetch only the selected Linux template
+member from Godot's all-platform archive; it does not download the complete 1.2 GB template set.
+
+The build regenerates embedded opcode metadata, bootstraps/builds the pinned Linux FFmpeg bundle, performs
+the Godot release export, and delegates the shared required/forbidden payload checks to
+`package_linux_x64.py`. The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, a source/dependency
+`BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
+modes, ordering, and timestamps using `SOURCE_DATE_EPOCH` or the source commit time. Outputs are the loose
+export under `build/export/linux-x64/`, the staged installation and `package-smoke.log` under
+`build/package/`, and `build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz`.
+
+Before reporting success, the command launches the staged executable as
+`Himegari.x86_64 --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
+and proves that the packaged managed assembly can read all 548 embedded opcode records and dynamically load
+the bundled native movie shim plus its local FFmpeg dependencies at ABI version 3. It does not exercise game
+archives, fonts, rendering, audio output, or a desktop window; retain the installed-game self-test below as a
+separate trusted/runtime gate.
+
+The focused component commands are:
+
+```bash
+./tools/bootstrap-godot-linux-x64.sh
+python3 -X utf8 tools/package_linux_x64.py verify build/export/linux-x64
+python3 -X utf8 tools/package_linux_x64.py package build/export/linux-x64
+```
+
+The bootstrap prints the pinned editor path. The verifier prints the accepted export directory; the packager
+prints the staged root and archive path. Both Python components have source-only synthetic regressions in the
+core validation level.
+
+The older Windows-hosted cross-export remains available for local development:
+
 ```powershell
 .\tools\export-linux-x64.ps1 -GodotConsole <path-to-Godot-4.7-.NET-console.exe>
 ```
 
 Install the Godot 4.7 .NET export templates first and build the pinned native bundle under
 `build/native/linux-x64` with the commands in “Native FFmpeg movie shim” above. The script safely replaces
-only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, verifies the
-executable/PCK/self-contained managed payload plus all six project-owned FFmpeg files, and rejects the
-Windows GDI adapter and Windows FFmpeg DLLs. Output is `build/export/linux-x64/Himegari.x86_64` with its
+only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, then calls the
+same Python payload verifier used by the Linux pipeline. The verifier checks the executable/PCK/self-contained
+managed payload plus all six project-owned FFmpeg files and rejects the Windows GDI adapter and Windows FFmpeg
+DLLs. Output is `build/export/linux-x64/Himegari.x86_64` with its
 PCK and `data_Himegari_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
 items are one artifact.
 

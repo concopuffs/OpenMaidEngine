@@ -987,6 +987,18 @@ do not mix mechanical moves with semantic changes.
    licensed third-party material. This closes the remaining repository-policy decision without attempting to
    relicense factual opcode provenance or prior research.
 
+   **Linux release-build foundation (2026-08-03):** the first CI/CD slice now has one Linux-native command,
+   `tools/build-linux-x64.sh`, for the complete release artifact. An immutable manifest pins the official Godot
+   4.7 .NET Linux editor and release template; the bootstrap mirrors Godot's selective range downloader so a
+   cold build transfers only the Linux template member rather than the 1.2 GB all-platform set. The command also
+   rebuilds the pinned Linux FFmpeg shim, performs the real Godot release export, verifies target purity and
+   payload completeness, stages license/notices plus source/dependency metadata and per-file hashes, and emits a
+   timestamp/ownership/order-normalized `.tar.gz`. A new pre-startup `--package-smoke` path validates embedded
+   opcode metadata and dynamic loading of the bundled FFmpeg ABI without private game files. The full path passes
+   under Ubuntu/WSL with pinned Python 3.11 and .NET 8.0.408. The next CI/CD slice is a Gitea build workflow that
+   calls this command on `develop`, manual dispatch, and release tags, caches immutable downloads/toolchains, and
+   uploads the archive; release publication remains a later, tag-only promotion step after hosted artifact proof.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw

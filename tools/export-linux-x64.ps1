@@ -37,32 +37,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Godot Linux x64 export failed with exit code $LASTEXITCODE. Install the Godot 4.7 .NET export templates and retry."
 }
 
-$managedDirectory = Join-Path $outputDirectory 'data_Himegari_linuxbsd_x86_64'
-foreach ($required in @(
-    $executable,
-    (Join-Path $outputDirectory 'Himegari.pck'),
-    (Join-Path $managedDirectory 'Himegari.dll'),
-    (Join-Path $managedDirectory 'Age.Engine.dll'),
-    (Join-Path $managedDirectory 'libage_movie_ffmpeg.so'),
-    (Join-Path $managedDirectory 'libavformat.so.62'),
-    (Join-Path $managedDirectory 'libavcodec.so.62'),
-    (Join-Path $managedDirectory 'libavutil.so.60'),
-    (Join-Path $managedDirectory 'libswscale.so.9'),
-    (Join-Path $managedDirectory 'libswresample.so.6'),
-    (Join-Path $managedDirectory 'FFmpeg-LICENSE.txt')
-)) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Linux export is incomplete; expected artifact was not found: $required"
-    }
-}
-foreach ($forbidden in @(
-    (Join-Path $managedDirectory 'Age.Engine.Text.Windows.dll'),
-    (Join-Path $managedDirectory 'age_movie_ffmpeg.dll'),
-    (Join-Path $managedDirectory 'avformat-62.dll')
-)) {
-    if (Test-Path -LiteralPath $forbidden) {
-        throw "Linux export contains a Windows-only artifact: $forbidden"
-    }
+py -3.11 -X utf8 (Join-Path $repoRoot 'tools\package_linux_x64.py') verify $outputDirectory
+if ($LASTEXITCODE -ne 0) {
+    throw "Linux export payload verification failed with exit code $LASTEXITCODE."
 }
 
 Write-Output "Linux x64 export: $outputDirectory"

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "godot_version": "4.7.stable.mono",
+  "release_tag": "4.7-stable",
+  "editor": {
+    "archive": "Godot_v4.7-stable_mono_linux_x86_64.zip",
+    "url": "https://github.com/godotengine/godot-builds/releases/download/4.7-stable/Godot_v4.7-stable_mono_linux_x86_64.zip",
+    "sha256": "69e855001e34b108eb8124ff1eae8445026b2a30a83b6e6314f705ae963d0fe1",
+    "size": 105506785,
+    "executable": "Godot_v4.7-stable_mono_linux.x86_64"
+  },
+  "templates": {
+    "archive": "Godot_v4.7-stable_mono_export_templates.tpz",
+    "url": "https://downloads.godotengine.org/?version=4.7&flavor=stable&slug=mono_export_templates.tpz&platform=templates",
+    "sha256": "4c02a0b99ad9c5bc243c2e79468628db3df89350d9db8fc995988f69d126e069",
+    "size": 1200753503,
+    "members": [
+      {
+        "archive_path": "templates/linux_release.x86_64",
+        "install_name": "linux_release.x86_64",
+        "sha256": "26b1b5d076b78c02f1476dab78e183218a6aa30c8e614653eac11a0dd198456a",
+        "size": 73591000,
+        "mode": "0755"
+      }
+    ]
+  }
+}
