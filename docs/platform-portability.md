@@ -64,9 +64,11 @@ publish peaks at 223,764 KiB, so nesting the latter under the former can cross a
 The build now serializes those peaks: it creates the exact self-contained publish first with compiler/build
 servers disabled, lets the real Godot export consume a strictly validated one-assembly proxy publish, and stages
 the complete external managed payload only after Godot exits. The complete revised path passes locally, including
-payload verification and the packaged opcode/FFmpeg smoke gate. The hosted retry remains the acceptance gate for
-the mitigation plus cache/artifact action behavior; release publication is intentionally deferred until it
-succeeds. The workflow reports both host memory and cgroup limits to make any further runner constraint explicit.
+payload verification and the packaged opcode/FFmpeg smoke gate. The hosted retry at `400f431` then completed
+successfully on 2026-08-03, accepting the mitigation and the complete build/smoke/artifact-upload path on the
+target runner. The workflow reports both host memory and cgroup limits for future diagnostics. Release
+publication remains a separate tag-only promotion step; it should consume this already-verified artifact rather
+than rebuilding it.
 
 ## Dependency inventory
 

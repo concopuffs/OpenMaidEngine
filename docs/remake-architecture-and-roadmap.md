@@ -1010,9 +1010,10 @@ do not mix mechanical moves with semantic changes.
    isolated publish peak, explaining why the nested processes can exceed a roughly 1 GiB cgroup. The build now
    runs the exact self-contained publish first, substitutes a tightly validated one-assembly publish while Godot
    creates the real PCK/executable, and stages the full external managed payload after the editor exits. The
-   revised complete build, payload verification, and packaged smoke gate pass locally; a hosted retry is the
-   immediate acceptance gate. Once that succeeds, the next bounded slice can promote an already-verified tag
-   artifact to a Gitea release without rebuilding it.
+   revised complete build, payload verification, and packaged smoke gate pass locally. The hosted retry at
+   `400f431` completed successfully on 2026-08-03, accepting the mitigation and full artifact-upload path on the
+   target Gitea runner. The next bounded slice can promote an already-verified tag artifact to a Gitea release
+   without rebuilding it.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
