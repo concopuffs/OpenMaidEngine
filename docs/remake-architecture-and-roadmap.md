@@ -944,8 +944,8 @@ do not mix mechanical moves with semantic changes.
    is `../age-reimpl-pre-binary-purge-20260803.bundle` (8,824,649 bytes; SHA-256
    `E157D7D2404DD2FC6E19FB4B65D08FB9784F415DAB1A2CFF6850121A5F305E5E`) and was verified again after the rewrite.
    `bin/` now tracks policy only and ignores optional machine-local extractor files; PE-sieve remains documented
-   solely as a failed historical experiment. This resolves the committed-binary portion of item 3, but
-   Kelebek-derived source/data and the user-owned project license choice remain unresolved for wider distribution.
+   solely as a failed historical experiment. This resolved the committed-binary portion of item 3; the later
+   source-history sanitation and project-license status below supersede the remaining concerns recorded here.
 
    **Hermetic Gitea core workflow (2026-08-03):** the correction is complete. The 590 engine cases are now
    explicitly partitioned into 502 source-only cases and 88 `Workspace` installed-data/native-oracle cases;
@@ -961,7 +961,8 @@ do not mix mechanical moves with semantic changes.
    data. The rewritten repository is now published to the selected private Gitea remote on its default `develop`
    branch; the workflow's push and pull-request filters target `develop`. The first actual hosted Linux core run
    succeeded on 2026-08-03 before the later source-history sanitation; its tree-equivalent rewritten commit is
-   `524ea74`, closing the CI execution gate.
+   `524ea74`, closing the original CI execution gate. The hosted gate also succeeded on the sanitized lineage at
+   `d673652` on 2026-08-03.
 
    **Kelebek source-redistribution boundary (2026-08-03):** the user selected a deliberately narrow policy:
    retain useful factual opcode ABI data, established labels, and explicit per-entry provenance, while no longer
@@ -979,7 +980,12 @@ do not mix mechanical moves with semantic changes.
    objects were pruned, and `git fsck --full --strict` plus explicit path/content-history searches pass. The
    private `develop` branch was force-replaced with this sanitized lineage. Existing outside clones or backups
    may retain the superseded private history and must not be used as a source for future public publication.
-   The project-license choice remains user-owned and unresolved.
+
+   **Project license (2026-08-03):** the user selected MIT for authored project work, with no named individual or
+   organization in the copyright notice. `LICENSE` carries the grant; `README.md` states its scope; and
+   `THIRD_PARTY_NOTICES.md` makes clear that it neither licenses Eushully game material nor overrides separately
+   licensed third-party material. This closes the remaining repository-policy decision without attempting to
+   relicense factual opcode provenance or prior research.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
@@ -1327,9 +1333,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by confirming the hosted Linux core gate on
-the sanitized lineage, then obtain the user-owned project-license choice. The private remote, rewritten-history
-backup, source/history redistribution boundary, and source-only CI flow are established. Do not infer a license
-choice or change remote policy without the user's explicit direction.
-Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
-not replace Phase B gameplay validation or the open cross-platform gates.
+The **codebase consolidation** maintenance slice is complete: ownership/layout cleanup, source-only Linux CI,
+private-remote backup, binary and Kelebek-source history sanitation, attribution, and the MIT project license are
+all established. Resume the planned **AGE-exact retained glyph-mask text renderer** polish slice, starting with
+the platform-neutral glyph request/result contract and shared coverage/compositing core. Concrete playthrough
+blockers may still preempt that work; do not change remote policy without the user's explicit direction.
+The completed consolidation effort does not replace Phase B gameplay validation or the open cross-platform gates.

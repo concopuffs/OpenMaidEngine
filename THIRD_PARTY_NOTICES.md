@@ -2,7 +2,8 @@
 
 This file records incorporated third-party code and prior public research that materially informed this
 project. It does not license Eushully game assets or code, and no original game files are distributed with
-this repository.
+this repository. The repository's MIT license covers authored project work only; material identified below
+remains subject to its own terms or is acknowledged as prior research rather than relicensed here.
 
 ## Eushully-Decompiler research
 

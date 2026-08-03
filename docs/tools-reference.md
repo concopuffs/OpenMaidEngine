@@ -44,7 +44,8 @@ be named `age-reimpl`. The workflow has no secrets, private corpus, Godot runtim
 access; failure logs are retained for seven days. The private remote's default and tracked development branch is
 `develop`; pushes and pull requests targeting it select the gate. The rewritten repository is published there,
 and the first actual Linux/Gitea core run succeeded on 2026-08-03 before the later source-history sanitation;
-its tree-equivalent rewritten commit is `524ea74`.
+its tree-equivalent rewritten commit is `524ea74`. The hosted gate also succeeded on the sanitized lineage at
+`d673652` on 2026-08-03.
 
 ## Optional local binary tools
 

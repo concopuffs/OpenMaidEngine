@@ -29,6 +29,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
     ├── README.md                             navigation-only repository front door; canonical facts stay in docs/
+    ├── LICENSE                               holder-neutral MIT grant for authored project work
     ├── THIRD_PARTY_NOTICES.md                 incorporated-code licenses + prior-research acknowledgment
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;

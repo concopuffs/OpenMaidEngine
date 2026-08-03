@@ -7,6 +7,9 @@ This repository contains only authored engine, tooling, native-boundary, test, a
 It does not contain the original game. Supply a legally obtained AGE installation separately; never copy
 original game data into this repository.
 
+The repository's authored work is available under the [MIT License](LICENSE). That grant does not cover
+Eushully game files or override the separate terms recorded for third-party material.
+
 ## Start here
 
 Prerequisites for the current Windows development workflow are Python 3.11, the .NET 8 SDK, Godot 4.7
