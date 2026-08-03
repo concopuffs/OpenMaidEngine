@@ -596,6 +596,11 @@ do not mix mechanical moves with semantic changes.
    scene reset, and frame-pulse consumers retain direct access through the sealed partial class. The planned
    host decomposition is complete; runtime validation remains green.
 
+   The first bounded `GfxState` split moved its public render, transition, diagnostic, persistence, animation,
+   numeric-glyph, and handle-range value contracts into `engine/Age.Engine/Model/GfxState.Contracts.cs`.
+   `GfxState` remains the same sealed runtime type, and every moved declaration is textually unchanged; runtime
+   validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -967,7 +972,7 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
 by the tracked launcher and layered validation driver. With the planned `Main` and `GodotAdvHost` domains
-isolated, begin the `GfxState` decomposition with one existing ownership domain at a time, preserving public
-types, commands, and generated output.
+isolated and the `GfxState` public contract layer separated, move `GfxState` surface ownership next, preserving
+public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

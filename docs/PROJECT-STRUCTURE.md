@@ -107,6 +107,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
     ├── engine/                              DELIVERABLE — the .NET VM core (AgeEngine.sln: Age.Engine / Age.Cli / tests)
+    │   ├── Age.Engine/Model/                retained graphics state plus separately navigable public
+    │                                       render, transition, diagnostic, and persistence contracts
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
     │                                       ALF asset store, script provider, AGF/LZSS and Windows CUR decoders,
     │                                       and resource facade
