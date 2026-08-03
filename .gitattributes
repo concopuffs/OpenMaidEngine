@@ -1,5 +1,73 @@
-docs/opcode-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
-docs/global-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
-docs/engine-ctx-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
-tools/age_opcodes_himegari.py whitespace=trailing-space,space-before-tab,cr-at-eol
+* text=auto
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gdignore text eol=lf
+.gitignore text eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.c text eol=lf
+*.cfg text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.config text eol=lf
+*.cpp text eol=lf
+*.gd text eol=lf
+*.godot text eol=lf
+*.h text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.md text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.ps1 text eol=lf
+*.py text eol=lf
 *.sh text eol=lf
+*.sln text eol=lf
+*.toml text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.uid text eol=lf
+*.xml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+*.7z binary
+*.a binary
+*.agf binary
+*.avi binary
+*.bin binary
+*.bmp binary
+*.cur binary
+*.dll binary
+*.dylib binary
+*.exe binary
+*.gif binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.lib binary
+*.mp3 binary
+*.mp4 binary
+*.mpeg binary
+*.mpg binary
+*.ogg binary
+*.otf binary
+*.pdb binary
+*.png binary
+*.rar binary
+*.so binary
+*.ttf binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+
+# These generated files currently have CRLF committed by generator contract.
+# Preserve their bytes while retaining textual diffs until the generators and
+# their committed output are deliberately migrated together.
+docs/opcode-reference.md -text -eol diff whitespace=trailing-space,space-before-tab,cr-at-eol
+docs/global-reference.md -text -eol diff whitespace=trailing-space,space-before-tab,cr-at-eol
+docs/engine-ctx-reference.md -text -eol diff whitespace=trailing-space,space-before-tab,cr-at-eol
+tools/age_opcodes_himegari.py -text -eol diff whitespace=trailing-space,space-before-tab,cr-at-eol

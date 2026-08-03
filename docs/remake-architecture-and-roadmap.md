@@ -903,6 +903,15 @@ do not mix mechanical moves with semantic changes.
    backup. Public distribution remains blocked on item 3; destructive cleanup and compaction remain blocked on
    item 4 plus explicit target approval.
 
+   **Policy baseline (2026-08-03):** item 1 is complete. `global.json` pins the validated .NET 8.0.408 feature
+   band to stable patch releases; `.editorconfig` establishes UTF-8, final-newline, trailing-whitespace, and
+   indentation defaults; and `.gitattributes` classifies repository text, Windows command wrappers, and binary
+   assets. Generator-owned references that already commit CRLF are explicit byte-preserving exceptions with
+   textual diffs, so rebuilding them does not create whole-file normalization churn. No existing source or
+   project file was reformatted or renormalized. Both solution builds and the asset-independent core validation
+   gate remain green under the tracked policy. Item 2, a CI workflow calling that same core gate, is the next
+   safe slice.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
@@ -1249,9 +1258,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice with the first non-destructive policy change:
-add a repository `global.json`, `.editorconfig`, and complete text/line-ending attributes based on the validated
-.NET 8/Python 3.11 toolchain. Do not mechanically reformat existing files or change warning/runtime behavior;
-verify both solutions and the core validation driver under the tracked policy.
+Continue step 5 of the **codebase consolidation** maintenance slice with an asset-independent CI workflow that
+invokes `py -3.11 -X utf8 tools/validate.py --level core` on Windows using the tracked .NET SDK policy. Keep the
+private game corpus and Godot runtime out of the hermetic CI job, preserve the validation driver's failure and
+child-process semantics, and avoid introducing a second build/test command path.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
