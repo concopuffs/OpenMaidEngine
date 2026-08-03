@@ -168,7 +168,9 @@ configuration, and surface lifecycle operations. `engine/Age.Engine/Model/GfxSta
 retained-object record and registry/index, range-transform state, object creation/query/clone/erase and draw
 binding, plus numeric-glyph object generation. `engine/Age.Engine/Model/GfxState.Animation.cs` owns the shared
 animation clock, object color/source-cell/matrix/cyclic channels, animation control and forced completion, and
-the interpolation helpers consumed by retained-scene sampling.
+the interpolation helpers consumed by retained-scene sampling. `engine/Age.Engine/Model/GfxState.Presentation.cs`
+owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
+accounting, and visible retained-scene snapshots.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

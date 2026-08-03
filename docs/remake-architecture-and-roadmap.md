@@ -618,6 +618,12 @@ do not mix mechanical moves with semantic changes.
    queues, and visible-scene sampling consume the moved state through the sealed partial class; runtime validation
    remains green.
 
+   The fifth bounded `GfxState` split moved surface/movie transition queues, presentation activity and click-skip
+   handling, presentation diagnostics and dirty-reason accounting, and visible retained-scene snapshots into
+   `engine/Age.Engine/Model/GfxState.Presentation.cs`. `GfxState.cs` now retains only cross-domain mutation
+   accounting, scene reset, persistence, and locking. The planned `GfxState` decomposition is complete; runtime
+   validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -988,8 +994,8 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. With the planned `Main` and `GodotAdvHost` domains
-isolated and the first four `GfxState` domains separated, move presentation ownership next, preserving public
-types, commands, and generated output.
+by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
+domains isolated, begin thinning `VirtualMachine.Step` through existing domain handler methods without replacing
+the proven dispatcher or changing public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
