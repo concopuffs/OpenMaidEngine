@@ -43,7 +43,8 @@ extracted data. Repository discovery uses tracked marker files rather than requi
 be named `age-reimpl`. The workflow has no secrets, private corpus, Godot runtime, cache, packaging, or deployment
 access; failure logs are retained for seven days. The private remote's default and tracked development branch is
 `develop`; pushes and pull requests targeting it select the gate. The rewritten repository is published there,
-and the first actual Linux/Gitea core run succeeded on 2026-08-03 at `6ae75b3`.
+and the first actual Linux/Gitea core run succeeded on 2026-08-03 before the later source-history sanitation;
+its tree-equivalent rewritten commit is `524ea74`.
 
 ## Optional local binary tools
 

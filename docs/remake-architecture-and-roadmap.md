@@ -939,7 +939,7 @@ do not mix mechanical moves with semantic changes.
 
    The unverified `bin/BinExtractALF.exe`, `bin/LzssCpp.dll`, and obsolete `bin/pe-sieve32.exe` are removed from
    tracking and purged from every reachable commit before the first remote is added. The rewritten tip is
-   `a4f029c`; `git fsck --full --strict` is clean, the three paths have no reachable object or path history, and
+   `9afdb84`; `git fsck --full --strict` is clean, the three paths have no reachable object or path history, and
    compaction leaves one 3.00 MiB pack with no loose or garbage objects. The complete pre-rewrite recovery bundle
    is `../age-reimpl-pre-binary-purge-20260803.bundle` (8,824,649 bytes; SHA-256
    `E157D7D2404DD2FC6E19FB4B65D08FB9784F415DAB1A2CFF6850121A5F305E5E`) and was verified again after the rewrite.
@@ -960,7 +960,8 @@ do not mix mechanical moves with semantic changes.
    source-only repository under an arbitrary name passes the complete core driver without sibling game/extracted
    data. The rewritten repository is now published to the selected private Gitea remote on its default `develop`
    branch; the workflow's push and pull-request filters target `develop`. The first actual hosted Linux core run
-   succeeded on 2026-08-03 at `6ae75b3`, closing the CI execution gate.
+   succeeded on 2026-08-03 before the later source-history sanitation; its tree-equivalent rewritten commit is
+   `524ea74`, closing the CI execution gate.
 
    **Kelebek source-redistribution boundary (2026-08-03):** the user selected a deliberately narrow policy:
    retain useful factual opcode ABI data, established labels, and explicit per-entry provenance, while no longer
@@ -969,8 +970,16 @@ do not mix mechanical moves with semantic changes.
    outputs; consumers and validators no longer parse the removed snapshots. `THIRD_PARTY_NOTICES.md` credits the
    foundational Eushully-Decompiler research without claiming a formal clean-room process. This resolves the
    source-tree redistribution concern at the current tip without gratuitous renaming or discarding independently
-   verified work. The removed files remain in existing Git history, so history sanitization is still required
-   before any future public publication; the project-license choice remains user-owned and unresolved.
+   verified work.
+
+   **Kelebek history sanitation (2026-08-03):** all 503 commits reachable from retained `develop`, legacy `main`,
+   and the private remote-tracking branch were rewritten. The two upstream C++ paths are absent from every
+   retained commit; every historical `tools/age_opcodes.py` entry resolves to the current generated canonical
+   view instead of the former transcription. Filter-branch backup refs and reflogs were removed, unreachable
+   objects were pruned, and `git fsck --full --strict` plus explicit path/content-history searches pass. The
+   private `develop` branch was force-replaced with this sanitized lineage. Existing outside clones or backups
+   may retain the superseded private history and must not be used as a source for future public publication.
+   The project-license choice remains user-owned and unresolved.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
@@ -1318,10 +1327,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by sanitizing the removed Kelebek source
-snapshots/verbatim transcription from public-facing Git history before any public publication, then obtain the
-user-owned project-license choice. The private remote, rewritten-history backup, hosted Linux core gate, and
-source-tree redistribution boundary are now established. Do not infer a license choice or change remote policy
-without the user's explicit direction.
+Continue step 5 of the **codebase consolidation** maintenance slice by confirming the hosted Linux core gate on
+the sanitized lineage, then obtain the user-owned project-license choice. The private remote, rewritten-history
+backup, source/history redistribution boundary, and source-only CI flow are established. Do not infer a license
+choice or change remote policy without the user's explicit direction.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
