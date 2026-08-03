@@ -47,6 +47,16 @@ and the first actual Linux/Gitea core run succeeded on 2026-08-03 before the lat
 its tree-equivalent rewritten commit is `524ea74`. The hosted gate also succeeded on the sanitized lineage at
 `d673652` on 2026-08-03.
 
+The artifact wrapper is `.gitea/workflows/linux-release-build.yml`. It runs independently from the fast core
+gate on `develop` pushes, manual dispatch, and `v*` tag pushes. The job uses the same Python 3.11 and
+`global.json` .NET setup actions, then calls `./tools/build-linux-x64.sh` unchanged. `actions/cache@v4` retains
+only the two hash-verified dependency archives and the independently hash-verified Linux release template; its
+key is the combined Godot/FFmpeg manifest hash and deliberately has no prefix fallback. Successful runs upload
+the `.tar.gz`, unpacked `BUILD-INFO.json`/`SHA256SUMS`, and packaged-runtime smoke log for 30 days. Failed runs
+retain any smoke/validation evidence for seven days. The workflow has read-only repository permission, no
+secrets or private game corpus, and no release/package publication authority; a tag currently changes only the
+build trigger, not the artifact's destination.
+
 ## Optional local binary tools
 
 `bin/` is an ignored machine-local tool directory, not a source or artifact distribution directory. A local

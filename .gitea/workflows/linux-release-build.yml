@@ -1,0 +1,85 @@
+name: Linux release build
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-release-${{ gitea.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-release:
+    name: Linux x64 artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+      NUGET_XMLDOC_MODE: skip
+      PYTHONUTF8: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          architecture: x64
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore immutable Linux inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/downloads/Godot_*_mono_linux_x86_64.zip
+            build/downloads/ffmpeg-*-linux64-lgpl-shared-*.tar.xz
+            build/toolchains/godot-*/xdg-data/godot/export_templates/*/linux_release.x86_64
+          key: linux-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/age_movie_ffmpeg/dependency-linux-x64.json') }}
+
+      - name: Report toolchain
+        run: |
+          python --version
+          dotnet --version
+          cc --version
+          readelf --version
+
+      - name: Build and smoke-test Linux package
+        run: ./tools/build-linux-x64.sh
+
+      - name: Upload verified Linux package
+        uses: christopherhx/gitea-upload-artifact@v4
+        with:
+          name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
+          path: |
+            build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz
+            build/package/staging/OpenMaidEngine-Himegari-linux-x64/BUILD-INFO.json
+            build/package/staging/OpenMaidEngine-Himegari-linux-x64/SHA256SUMS
+            build/package/package-smoke.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload failure logs
+        if: failure()
+        uses: christopherhx/gitea-upload-artifact@v4
+        with:
+          name: linux-release-failure-${{ gitea.run_id }}-${{ gitea.run_attempt }}
+          path: |
+            build/package/package-smoke.log
+            build/validation/**
+          if-no-files-found: ignore
+          retention-days: 7

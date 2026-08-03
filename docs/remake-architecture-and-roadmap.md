@@ -999,6 +999,16 @@ do not mix mechanical moves with semantic changes.
    calls this command on `develop`, manual dispatch, and release tags, caches immutable downloads/toolchains, and
    uploads the archive; release publication remains a later, tag-only promotion step after hosted artifact proof.
 
+   **Gitea Linux artifact workflow (2026-08-03):** the second CI/CD slice adds a separate read-only
+   `.gitea/workflows/linux-release-build.yml` job for `develop`, manual dispatch, and `v*` tags. It provisions
+   the pinned Python/.NET toolchain, restores only manifest-keyed Godot/FFmpeg archives plus the verified Linux
+   template, calls the same locally accepted build command, and uploads the archive with its external build info,
+   checksum ledger, and smoke log. Cache entries have no broad fallback and remain subject to the bootstrap's
+   size/SHA checks. The workflow has no game corpus, secrets, registry login, or release-write authority; tags
+   still produce ordinary retained workflow artifacts. The immediate gate is the first hosted build on this
+   server. If it passes, the next bounded slice can promote an already-verified tag artifact to a Gitea release
+   without rebuilding it; if it fails, fix only the observed runner/action dependency before adding publication.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw

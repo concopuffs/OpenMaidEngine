@@ -52,6 +52,15 @@ native loading without weakening the separate installed-game/font/render/audio a
 20.04 WSL proof passed using isolated Python 3.11/.NET 8.0.408 toolchains; the eventual Gitea job can provide those
 through its existing setup actions.
 
+The hosted artifact wrapper is now `.gitea/workflows/linux-release-build.yml`. It invokes that exact local
+command on `develop`, manual dispatch, and `v*` tags while the independent source-only core workflow remains the
+fast integration gate. The cache key is derived from both immutable dependency manifests and has no broad restore
+prefix; cached archives/templates are still size/hash checked by their owning bootstrap before use. A successful
+job retains the archive, external build/checksum manifests, and smoke log for 30 days. It has only read access to
+repository contents and does not use private data, secrets, registry credentials, or release-write permission.
+The first hosted execution remains the acceptance gate for runner image dependencies and cache/artifact action
+behavior; release publication is intentionally deferred until that artifact run succeeds.
+
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |

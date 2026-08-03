@@ -35,6 +35,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
     ├── .gitea/workflows/core-validation.yml  read-only Ubuntu source-only core gate for the private Gitea remote
+    ├── .gitea/workflows/linux-release-build.yml
+    │                                       pinned Linux export/package/smoke artifact job; no release publication
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
