@@ -216,6 +216,8 @@ string comparison/concatenation/conversion/move, native byte-length and CP932 op
 fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.
 `engine/Age.Engine/Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
 show-and-clear opcode dispatch; shared diagnostic state and native-context formatting remain in the coordinator.
+`engine/Age.Engine/Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
+delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

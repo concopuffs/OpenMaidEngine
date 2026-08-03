@@ -734,6 +734,13 @@ do not mix mechanical moves with semantic changes.
    instruction through guarded `StepDiagnostic`; shared accumulator state and native-context formatting remain
    in the coordinator. Runtime validation remains green.
 
+   The eighteenth bounded `VirtualMachine.Step` extraction moved message-window alpha get/set, system-menu
+   enable state, and system-menu show-delay get/set into
+   `engine/Age.Engine/Vm/VirtualMachine.RuntimeSettings.cs`. The top-level dispatcher retains all labels and
+   aliases at their existing positions and routes them through guarded `StepRuntimeSetting`; reset/default
+   initialization, public menu-state accessors, and host state remain centralized. Runtime validation remains
+   green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -1107,8 +1114,9 @@ Continue step 2 of the **codebase consolidation** maintenance slice: behavior-ne
 by the tracked launcher and layered validation driver. With the planned `Main`, `GodotAdvHost`, and `GfxState`
 domains isolated and the audio, movie, surface/texture, retained-object, animation, presentation, ADV-text,
 text-history, ADV-service, input, timing, persistence, and memory/collection `VirtualMachine.Step` families routed
-through domain handlers, with control-flow/coroutine, process/root-exit/cross-script lifecycle, value, and
-diagnostic dispatch now isolated as well, extract message-window and system-menu runtime settings
-next without replacing the proven dispatcher or changing public types, commands, and generated output.
+through domain handlers, with control-flow/coroutine, process/root-exit/cross-script lifecycle, value,
+diagnostic, and runtime-setting dispatch now isolated as well, route the four remaining recognized opcode bodies
+for script entry/root state and surface reload policy into their existing domain handlers, leaving `Step` as the
+proven dispatcher and unknown-op fallback without changing public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
