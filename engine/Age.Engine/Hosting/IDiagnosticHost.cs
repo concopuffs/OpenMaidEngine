@@ -1,3 +1,5 @@
+using Age.Engine.Model;
+
 namespace Age.Engine.Hosting;
 
 public interface IDiagnosticHost

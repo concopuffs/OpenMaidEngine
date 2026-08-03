@@ -815,6 +815,13 @@ do not mix mechanical moves with semantic changes.
    twenty-three ADV members, required implementations, overload/default chains, existing hosts, and transport
    record locations remain behaviorally unchanged. Runtime validation remains green.
 
+   The eleventh bounded contract slice moved the unchanged `AdvWaitIndicatorConfig` and `DiagnosticMessage`
+   declarations from `Hosting` into domain-specific `Model` contract files. The retained wait-indicator presenter
+   no longer imports `Hosting`; two host-local consumers gained `Model` imports, and one test dropped its obsolete
+   fully qualified hosting name. Record shape, frame selection, diagnostic presentation, and runtime behavior
+   remain unchanged. This completes the planned runtime-contract split and neutral transport cleanup. Runtime
+   validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1173,10 +1180,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
-behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
-established beneath `IHost`, shared graphics/input transport neutral, and graphics/input/ADV contracts now
-separated, move the unchanged `AdvWaitIndicatorConfig` and `DiagnosticMessage` declarations from `Hosting` to
-`Model` next. Preserve all consumers while removing the remaining transport declarations from interface files.
+Begin step 4 of the **codebase consolidation** maintenance slice: make the build graph express source ownership
+without changing behavior. Introduce the production project boundary for platform-neutral frontend helpers now
+linked directly from `godot/` into `Age.Engine.Tests`, starting with the diagnostic/options helper cluster. Replace
+source links with project references while retaining both existing solution files and Godot export behavior.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

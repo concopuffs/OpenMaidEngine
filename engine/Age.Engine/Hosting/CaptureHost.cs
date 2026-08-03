@@ -1,3 +1,5 @@
+using Age.Engine.Model;
+
 namespace Age.Engine.Hosting;
 public sealed class CaptureHost : IHost
 {

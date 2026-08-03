@@ -384,7 +384,7 @@ public class AdvTextOpsTests
 
         new VirtualMachine(script, table, host).Run();
 
-        Assert.Equal(new Age.Engine.Hosting.AdvWaitIndicatorConfig(1, 385, 140, 12, 0, 0, 30, 27, 12, 48),
+        Assert.Equal(new AdvWaitIndicatorConfig(1, 385, 140, 12, 0, 0, 30, 27, 12, 48),
                      Assert.Single(host.WaitIndicators));
     }
 

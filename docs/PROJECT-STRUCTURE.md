@@ -182,6 +182,9 @@ decoded pixels.
 shared by VM presentation, graphics hosts, Godot, and tests.
 `engine/Age.Engine/Model/InputContracts.cs` owns neutral ADV auto-wait state and fullwidth text-edit request/result
 records shared by input hosts, timing policy, VM dispatch, Godot, and tests.
+`engine/Age.Engine/Model/AdvPresentationContracts.cs` owns neutral ADV wait-indicator configuration shared by VM
+dispatch, retained presentation, hosts, Godot, and tests. `engine/Age.Engine/Model/DiagnosticContracts.cs` owns
+the neutral synchronous diagnostic message transported between VM dispatch, diagnostic hosts, Godot, and tests.
 
 `engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
