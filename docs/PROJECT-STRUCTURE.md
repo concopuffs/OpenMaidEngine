@@ -152,7 +152,8 @@ history presentation, message-window alpha, and retained wait-indicator configur
 message-skip/input services, cursor and foreground waits, frame/backbuffer publication, transitions, and
 scene-context lifecycle coordination. `godot/GodotAdvHost.Surfaces.cs` owns decoded-image caching, mutable
 surface pixels/resources/dimensions, fill/copy/resolve operations, render-target publication, and surface/range
-teardown.
+teardown. `godot/GodotAdvHost.Movies.cs` owns movie surface bindings, ordinary and modal playback, movie-mask
+transitions, diagnostic snapshots, frame/completion publication, and mask teardown.
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports

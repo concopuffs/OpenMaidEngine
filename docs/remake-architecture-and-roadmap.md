@@ -586,6 +586,11 @@ do not mix mechanical moves with semantic changes.
    and texture decode caching into `godot/GodotAdvHost.Surfaces.cs`. Movie publication and teardown retain direct
    access to the surface store through the sealed partial class; runtime validation remains green.
 
+   The fourth bounded `GodotAdvHost` split moved movie surface bindings, ordinary and modal playback,
+   movie-mask capture/publication and teardown, movie diagnostics, and frame/completion publication into
+   `godot/GodotAdvHost.Movies.cs`. Presentation waits and mutable surface storage retain direct access through
+   the sealed partial class; runtime validation remains green.
+
    **Gate:** no externally visible behavior or command changes; generated artifacts are byte-identical where
    deterministic, and the corresponding engine, Python, Godot, and corpus validations remain green after
    each domain move.
@@ -956,8 +961,8 @@ layer's rendering diverges from ADV; save layout.
 
 ## 8. Immediate next step
 Continue step 2 of the **codebase consolidation** maintenance slice: behavior-neutral physical splits backed
-by the tracked launcher and layered validation driver. With the planned `Main` domains and the first
-three `GodotAdvHost` domains isolated, move host movie playback/mask ownership next, then continue one existing
-domain at a time while preserving public types, commands, and generated output.
+by the tracked launcher and layered validation driver. With the planned `Main` domains and the first four
+`GodotAdvHost` domains isolated, move host audio ownership next, then continue one existing domain at a time
+while preserving public types, commands, and generated output.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
