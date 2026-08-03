@@ -776,6 +776,11 @@ do not mix mechanical moves with semantic changes.
    `MovieMaskTransitionRequest` remain in their prior locations pending a separate dependency-cleanup slice.
    Runtime validation remains green.
 
+   The fourth bounded contract slice moved the unchanged `MovieMaskTransitionRequest` record from `Hosting` to
+   `Model`. VM, Godot, tests, and the movie host contract already consumed `Model`, so no call sites changed;
+   removing the two now-unused imports eliminates `GfxState`'s reverse dependency on the host namespace. Runtime
+   validation remains green.
+
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
    `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
@@ -1136,8 +1141,8 @@ layer's rendering diverges from ADV; save layout.
 ## 8. Immediate next step
 Continue step 3 of the **codebase consolidation** maintenance slice: clarify runtime contracts without changing
 behavior or the aggregate host accepted by the VM. With diagnostic, lifecycle, audio, and movie contracts
-established beneath `IHost`, move the neutral `MovieMaskTransitionRequest` contract from `Hosting` to `Model` next
-to remove `GfxState`'s reverse dependency on the host namespace, preserving the record's public shape and every
-consumer before separating larger host domains.
+established beneath `IHost` and the movie-mask request now neutral, move the format-independent `RgbaImage` record
+from `Sys4` to `Model` next. Update its consumers without changing the record or decoder behavior, removing the
+aggregate host's image-only dependency on the format namespace before separating larger host domains.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.

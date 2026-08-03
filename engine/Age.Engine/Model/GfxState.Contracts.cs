@@ -1,5 +1,3 @@
-using Age.Engine.Hosting;
-
 namespace Age.Engine.Model;
 
 /// <summary>The sampled native one-shot channels carried to the compositor: op 0x21e scale, op 0x21f
