@@ -959,8 +959,8 @@ do not mix mechanical moves with semantic changes.
    `ubuntu-latest`, checkout/setup-dotnet v4, setup-python v6, and Gitea-specific artifact upload. A standalone
    source-only repository under an arbitrary name passes the complete core driver without sibling game/extracted
    data. The rewritten repository is now published to the selected private Gitea remote on its default `develop`
-   branch; the workflow's push and pull-request filters target `develop`. The first actual Linux runner result
-   remains to be confirmed in the server UI.
+   branch; the workflow's push and pull-request filters target `develop`. The first actual hosted Linux core run
+   succeeded on 2026-08-03 at `6ae75b3`, closing the CI execution gate.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
@@ -1308,9 +1308,9 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-Continue step 5 of the **codebase consolidation** maintenance slice by confirming the first hosted Linux core
-result on the private Gitea `develop` branch. After that, make the user-owned project-license and Kelebek-derived-
-material decisions required before wider distribution. Do not infer a license choice or change remote policy
+Continue step 5 of the **codebase consolidation** maintenance slice by making the user-owned project-license and
+Kelebek-derived-material decisions required before wider distribution. The private remote, rewritten-history
+backup, and hosted Linux core gate are now established. Do not infer a license choice or change remote policy
 without the user's explicit direction.
 Concrete playthrough blockers may still preempt this bounded maintenance work; the consolidation effort does
 not replace Phase B gameplay validation or the open cross-platform gates.
