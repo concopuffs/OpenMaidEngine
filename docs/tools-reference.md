@@ -71,8 +71,9 @@ archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import veri
 checksums. Detailed evidence remains inside each archive and in retained workflow artifacts. A retry resumes a
 matching partial release and uploads only missing files; it refuses mismatched releases, unexpected assets, or
 same-name/different-size collisions instead of editing, deleting, or overwriting them. The hosted develop run at
-`d657c63` completed both artifact jobs and skipped tag promotion as required on 2026-08-03. No new version tag
-was created as part of that proof.
+`d657c63` completed both artifact jobs and skipped tag promotion as required on 2026-08-03. The subsequent
+`v0.2.0` tag at `93d8236` completed both builds and published exactly the two archives plus
+`RELEASE-SHA256SUMS`, accepting the promotion route end to end.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|

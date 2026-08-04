@@ -156,8 +156,9 @@ Windows received structural cross-target verification only. Source-only paired c
 pass. The hosted develop run at `d657c63` completed both platform builds and correctly skipped tag promotion on
 2026-08-03, accepting the paired non-tag path. Its core job initially failed before checkout on a transient
 runner DNS lookup for GitHub, then passed unchanged on retry; this was infrastructure availability rather than a
-validation failure. The user must still select a future tag for the end-to-end release proof; `v0.1.0` remains
-unchanged.
+validation failure. The lightweight `v0.2.0` tag at `93d8236` then completed both platform jobs and promotion on
+2026-08-03. The resulting Gitea release exposes exactly the Linux archive, Windows archive, and
+`RELEASE-SHA256SUMS`, accepting the dual-platform CI/CD path end to end; `v0.1.0` remains unchanged.
 
 Code signing, an installer, Windows-on-Linux execution, and retroactively modifying the accepted Linux-only
 `v0.1.0` release are outside this effort. A future signing slice can use `osslsigncode` and protected credentials

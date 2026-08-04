@@ -1094,13 +1094,16 @@ do not mix mechanical moves with semantic changes.
    mismatches, and same-name/different-size collisions fail without mutation. Synthetic paired-artifact,
    creation/resume/refusal, and workflow-dependency tests pass. The hosted develop run at `d657c63` completed
    both platform builds and skipped promotion as required; core validation also passed unchanged after retrying
-   a transient pre-checkout runner DNS failure. The remaining gate is a future tag deliberately selected by the
-   user.
+   a transient pre-checkout runner DNS failure. The user then selected lightweight tag `v0.2.0` at `93d8236`;
+   both platform jobs and promotion completed successfully on 2026-08-03, and the resulting release exposes
+   exactly the Linux archive, Windows archive, and `RELEASE-SHA256SUMS`. This accepts the Windows CI/CD effort
+   end to end.
 
-   **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
-   Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
-   retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and neither platform job
-   receives release-write permission. Signing, installers, Wine, Windows runners, and mutation of `v0.1.0` remain
+   **Completion gate passed with `v0.2.0` on 2026-08-03:** one deliberately selected tag produced a single Gitea
+   release containing the Linux `.tar.gz`, Windows `.zip`, and combined archive checksums. Both archives bind to
+   the tag commit, Linux retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and
+   neither platform job receives release-write permission. Signing, installers, Wine, Windows runners, and
+   mutation of `v0.1.0` remain
    out of scope.
 
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
