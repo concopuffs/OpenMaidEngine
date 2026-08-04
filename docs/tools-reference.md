@@ -57,7 +57,8 @@ FFmpeg archive and selectively installed release template. Linux uploads its `.t
 `BUILD-INFO.json`, `SHA256SUMS`, and `WINDOWS-VERIFICATION.json`; it does not execute the EXE. Both artifacts are
 retained for 30 days and failures retain bounded evidence for seven days. Both build jobs inherit read-only
 repository permission and have no secrets, private game corpus, or release/package publication authority. The
-first hosted dual-job result remains pending until this workflow change reaches `develop`.
+first hosted dual-job develop run at `9d3ab30` succeeded on 2026-08-03: both platform artifacts completed and
+the tag-only promotion job was skipped. This accepts the Windows artifact job and its non-tag authority boundary.
 
 Only a successful `v*` tag run enables the dependent promotion job. It downloads that same workflow artifact
 rather than rebuilding, checks out only the release tool, and receives job-local `releases: write` plus

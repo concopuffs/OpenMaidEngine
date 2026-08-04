@@ -138,7 +138,9 @@ own manifest-keyed cache/workflow artifact. Windows installs Ubuntu MinGW-w64 GC
 and PE inspector, calls only `tools/build-windows-x64.sh`, and retains the ZIP plus its external hash, build
 metadata, payload ledger, and static verification report for 30 days. It has no secrets, Wine, EXE execution, or
 release authority. Source-only workflow regressions pin those rules and preserve the current Linux-only
-`publish-release` dependency; the first hosted dual-job develop result remains the acceptance gate.
+`publish-release` dependency. The first hosted dual-job develop run at `9d3ab30` succeeded on 2026-08-03: both
+platform artifact jobs completed and the tag-only promotion job was skipped. The Windows hosted artifact path is
+therefore accepted; dual-platform promotion is the remaining CI/CD slice.
 
 The next promotion slice will require both jobs, download both already-built archives, verify their commit/build
 evidence, and publish two distributable release assets:
