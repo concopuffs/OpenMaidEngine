@@ -124,17 +124,24 @@ bootstrap/hash-checks the pinned Windows FFmpeg SDK, cross-builds and inspects `
 exact self-contained `ExportRelease/win-x64` publish, and runs the real Godot Windows export. The accepted Linux
 path retains its target selection and dynamic package-smoke behavior.
 
-CI acceptance is structural because the produced executable will not run on the Linux host. The verifier must
-require the Windows executable/PCK/self-contained managed directory, `Age.Engine.Text.Windows.dll`, the project
-shim, all five pinned FFmpeg DLLs, and the FFmpeg license; reject Linux shared objects and incomplete/cross-target
-payloads; and inspect every project-owned PE image as AMD64. The portable ZIP will carry the project license,
+CI acceptance is structural because the produced executable does not run on the Linux host. The verifier
+requires the Windows executable/PCK/self-contained managed directory, `Age.Engine.Text.Windows.dll`, the project
+shim, all five pinned FFmpeg DLLs, and the FFmpeg license; rejects Linux shared objects and incomplete/cross-target
+payloads; and inspects the executable plus native DLLs as AMD64. The portable ZIP carries the project license,
 third-party notices, clean source/dependency metadata, and a complete payload checksum ledger. A manual packaged
 `--package-smoke` command remains available for real-Windows acceptance, but its result is not fabricated or
 reported as a hosted CI gate.
 
-Develop, manual, and tag events will run independent Linux and Windows build jobs, each with read-only repository
-permission and its own manifest-keyed cache/workflow artifact. Tag promotion will require both jobs, download
-both already-built archives, verify their commit/build evidence, and publish two distributable release assets:
+The hosted Windows artifact job was added on 2026-08-03 beside the accepted Linux job. Develop, manual, and tag
+events now run independent `ubuntu-latest` builds, each with inherited read-only repository permission and its
+own manifest-keyed cache/workflow artifact. Windows installs Ubuntu MinGW-w64 GCC/binutils, reports the compiler
+and PE inspector, calls only `tools/build-windows-x64.sh`, and retains the ZIP plus its external hash, build
+metadata, payload ledger, and static verification report for 30 days. It has no secrets, Wine, EXE execution, or
+release authority. Source-only workflow regressions pin those rules and preserve the current Linux-only
+`publish-release` dependency; the first hosted dual-job develop result remains the acceptance gate.
+
+The next promotion slice will require both jobs, download both already-built archives, verify their commit/build
+evidence, and publish two distributable release assets:
 `OpenMaidEngine-Himegari-linux-x64.tar.gz` and `OpenMaidEngine-Himegari-windows-x64.zip`. A third small
 `RELEASE-SHA256SUMS` attachment will authenticate both archives while keeping the release below Gitea's observed
 five-attachment boundary; detailed build metadata, payload ledgers, and logs remain inside each archive and in

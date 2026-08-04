@@ -36,7 +36,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                         tracked source and generated references use canonical LF
     ├── .gitea/workflows/core-validation.yml  read-only Ubuntu source-only core gate for the private Gitea remote
     ├── .gitea/workflows/linux-release-build.yml
-    │                                       pinned Linux export/package/smoke artifact job plus tag-only promotion
+    │                                       independent Linux/Windows x64 artifact jobs plus Linux-only tag promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
@@ -60,6 +60,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   │   test_package_windows_x64.py,
     │   │   test_dotnet_publish_proxy.py,
     │   │   test_publish_gitea_release.py,
+    │   │   test_release_workflow.py,
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
     │   ├── age_opcodes.py                      GENERATED complete Python ABI view (do not hand-edit)

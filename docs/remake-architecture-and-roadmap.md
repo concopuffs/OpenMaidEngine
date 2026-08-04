@@ -1073,6 +1073,16 @@ do not mix mechanical moves with semantic changes.
    stable, and an optional Windows-host run of the packaged EXE reported the 548-opcode/FFmpeg-ABI-3 smoke marker.
    Slice 3 is now active: add the read-only hosted Windows artifact job while retaining the accepted Linux job.
 
+   **Slice 3 implementation completed 2026-08-03; hosted acceptance pending:** the existing artifact workflow
+   now has independent `ubuntu-latest` Linux and Windows jobs under inherited read-only contents permission.
+   Windows provisions MinGW-w64 GCC/binutils, restores only its manifest-keyed editor/FFmpeg/template inputs,
+   calls the accepted `tools/build-windows-x64.sh`, and uploads the ZIP, external archive hash, build metadata,
+   payload ledger, and static verification report for 30 days. It has no secrets, Wine, EXE execution, or release
+   authority. A core-gated source-only workflow regression pins that boundary and deliberately proves that
+   `publish-release` still needs only `linux-release` during this slice. Acceptance requires the first hosted
+   develop run to leave promotion skipped and complete both platform jobs; slice 4 then replaces the Linux-only
+   promotion contract with dual-archive verification and publication.
+
    **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
    Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
    retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and neither platform job

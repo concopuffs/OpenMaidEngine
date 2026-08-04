@@ -48,13 +48,16 @@ its tree-equivalent rewritten commit is `524ea74`. The hosted gate also succeede
 `d673652` on 2026-08-03.
 
 The artifact wrapper is `.gitea/workflows/linux-release-build.yml`. It runs independently from the fast core
-gate on `develop` pushes, manual dispatch, and `v*` tag pushes. The build job uses the same Python 3.11 and
-`global.json` .NET setup actions, then calls `./tools/build-linux-x64.sh` unchanged. `actions/cache@v4` retains
-only the two hash-verified dependency archives and the independently hash-verified Linux release template; its
-key is the combined Godot/FFmpeg manifest hash and deliberately has no prefix fallback. Successful runs upload
-one flat artifact containing the `.tar.gz`, its external SHA-256 file, `BUILD-INFO.json`, `SHA256SUMS`, and packaged-runtime smoke log for
-30 days. Failed runs retain any smoke/validation evidence for seven days. The build job has read-only repository
-permission, no secrets or private game corpus, and no release/package publication authority.
+gate on `develop` pushes, manual dispatch, and `v*` tag pushes. Independent Linux and Windows jobs use the same
+Python 3.11 and `global.json` .NET setup actions and call their locally accepted build commands unchanged. The
+Windows job adds Ubuntu's MinGW-w64 GCC/binutils and never installs Wine. Each job has its own manifest-keyed
+`actions/cache@v4` entry with no prefix fallback: shared Linux Godot editor plus only that target's hash-verified
+FFmpeg archive and selectively installed release template. Linux uploads its `.tar.gz`, external SHA-256,
+`BUILD-INFO.json`, `SHA256SUMS`, and dynamic package-smoke log. Windows uploads its ZIP, external SHA-256,
+`BUILD-INFO.json`, `SHA256SUMS`, and `WINDOWS-VERIFICATION.json`; it does not execute the EXE. Both artifacts are
+retained for 30 days and failures retain bounded evidence for seven days. Both build jobs inherit read-only
+repository permission and have no secrets, private game corpus, or release/package publication authority. The
+first hosted dual-job result remains pending until this workflow change reaches `develop`.
 
 Only a successful `v*` tag run enables the dependent promotion job. It downloads that same workflow artifact
 rather than rebuilding, checks out only the release tool, and receives job-local `releases: write` plus
@@ -69,6 +72,7 @@ refuses mismatched releases or same-name/different-size assets instead of editin
 |---|---|---|---|
 | `publish_gitea_release.py` | Tag-only, retry-safe promotion of one verified Linux workflow artifact through Gitea's native release API. Requires `GITEA_TOKEN`; the token is passed to upload `curl` through standard input rather than its argument list. | `publish_gitea_release.py --server <url> --repository <owner/name> --tag <v...> --target <sha> --asset <path>` (exactly the five expected `--asset` names) | verified downloaded workflow artifact + tag context → matching Gitea release and five attachments |
 | `test_publish_gitea_release.py` | Pure synthetic creation, retry/resume, collision, and mismatch regressions. | `test_publish_gitea_release.py` | temporary files only |
+| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, and deliberately unchanged Linux-only tag promotion dependency during Windows CI/CD slice 3. | `test_release_workflow.py` | `.gitea/workflows/linux-release-build.yml` → assertions only |
 
 ## Optional local binary tools
 
