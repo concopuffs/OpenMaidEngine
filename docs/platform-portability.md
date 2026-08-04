@@ -93,6 +93,16 @@ SDK already carries the required headers, runtime DLLs, and MinGW `.dll.a` impor
 `Age.Engine.Text.Windows` project contains managed P/Invoke declarations and therefore compiles on Linux without
 loading GDI. Wine would add only an execution test, which is explicitly outside the requested CI gate.
 
+The MinGW native foundation was completed and locally accepted on 2026-08-03. The Bash bootstrap resolves the
+exact manifest-named SDK instead of an arbitrary previously extracted Windows archive; the matching build script
+uses MinGW-w64, suppresses the PE timestamp, statically links its GCC support, and stages only the shim, five
+pinned FFmpeg DLLs, and LGPL text. The source-only verifier checks all six images as AMD64 PE, requires the seven
+AGE movie ABI exports and five FFmpeg imports, and rejects extra DLLs plus Cygwin/MSYS imports without executing
+the result. Both the new MinGW output and the existing MSVC output pass that same contract. Two consecutive
+MinGW builds produced the identical shim SHA-256
+`9852680ca32bc37200d0b63ad89acb5453ad913bdcf4441a15c8ac9356d4da8c`. This is a compiler-independent contract
+comparison, not an expectation that MSVC and MinGW produce byte-identical binaries.
+
 The Windows build command will mirror the accepted Linux entry point while keeping target checks separate. It
 will regenerate opcode metadata, selectively install the Windows template from the existing pinned Godot TPZ,
 bootstrap/hash-check the pinned Windows FFmpeg SDK, cross-build and inspect `age_movie_ffmpeg.dll`, perform an
@@ -267,7 +277,9 @@ on every future native target rather than relying on a Windows-only DirectShow c
 
 The Windows-x64 spike is now complete. `bootstrap-win64.ps1` verifies the immutable archive SHA before
 extraction, and `build-win64.ps1` builds the shim with MSVC and places the DLL, import artifacts, required LGPL
-shared libraries, and license under disposable `build/native/win-x64`. The managed resolver accepts
+shared libraries, and license under disposable `build/native/win-x64`. The Linux-hosted
+`bootstrap-win64.sh`/`build-win64.sh` path builds the same exported ABI with MinGW and applies the shared static
+PE/bundle verifier. The managed resolver accepts
 `AGE_FFMPEG_NATIVE_DIR` for the isolated gate and otherwise reserves application-local and
 `runtimes/<rid>/native` lookup. Representative VFS results are `MVB961` 280x352/500 ms, `MVB238`
 280x352/866 ms, `MVB908` 400x400/333 ms, and `CHAPTER` 800x600/12016 ms, all with changing frames and

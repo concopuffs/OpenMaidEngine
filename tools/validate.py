@@ -34,6 +34,7 @@ CORE_TESTS = (
     "test_package_linux_x64.py",
     "test_dotnet_publish_proxy.py",
     "test_publish_gitea_release.py",
+    "test_verify_windows_native.py",
     "test_diff_optrace.py",
     "test_engine_ctx.py",
     "test_ghidra_handler_map.py",

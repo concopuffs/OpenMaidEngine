@@ -23,10 +23,10 @@ if ($actualHash -ne $manifest.sha256) {
 if (-not (Test-Path -LiteralPath $extractRoot)) {
     Expand-Archive -LiteralPath $archivePath -DestinationPath $Destination
 }
-$sdkRoot = Get-ChildItem -LiteralPath $Destination -Directory |
-    Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'include\libavformat\avformat.h') } |
-    Select-Object -First 1 -ExpandProperty FullName
-if (-not $sdkRoot) { throw "FFmpeg SDK was not found under $Destination" }
+$sdkRoot = $extractRoot
+if (-not (Test-Path -LiteralPath (Join-Path $sdkRoot 'include\libavformat\avformat.h'))) {
+    throw "Pinned FFmpeg SDK was not found at $sdkRoot"
+}
 $reported = & (Join-Path $sdkRoot 'bin\ffmpeg.exe') -version | Select-Object -First 1
 $expectedVersion = $manifest.ffmpeg_version -replace '-20260721$', ''
 if ($reported -notlike "*$expectedVersion*" ) {

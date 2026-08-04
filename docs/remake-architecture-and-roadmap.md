@@ -1055,6 +1055,14 @@ do not mix mechanical moves with semantic changes.
       missing-asset completion, collision refusal, and the existing Gitea attachment ceiling. No version tag is
       created until the user explicitly selects one after the hosted develop proof.
 
+   **Slice 1 completed 2026-08-03:** the Linux-hosted bootstrap and MinGW build now consume the exact pinned
+   Windows SDK and stage the six-file AMD64 native DLL set plus license. A source-only verifier pins PE machine,
+   seven AGE ABI exports, five FFmpeg imports, exact bundle membership, and the no-Cygwin/MSYS boundary. Its unit
+   tests are part of core validation. Both the MinGW bundle and the independent MSVC bundle pass the same
+   contract, and two timestamp-suppressed MinGW builds produced an identical shim hash. Slice 2 is now the active
+   next step: Windows Godot template/export, target-parameterized publish proxy, structural package contract, and
+   normalized ZIP.
+
    **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
    Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
    retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and neither platform job
