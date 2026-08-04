@@ -78,8 +78,11 @@ introduced. Promotion rechecks the clean source commit, archive checksum, and ac
 artifact download. It is retry-safe but fail-closed: a matching partial release can receive missing assets,
 while mismatched release identity or a same-name/different-size asset is never edited, deleted, or overwritten.
 The first hosted develop run containing promotion completed successfully at `f0f5f12` on 2026-08-03 and Gitea
-reported the tag-only job as skipped, accepting the non-tag permission boundary. The remaining acceptance gate is
-a deliberate first version tag and inspection of its five release attachments.
+reported the tag-only job as skipped, accepting the non-tag permission boundary. The remaining acceptance gate
+was a deliberate first version tag and inspection of its five release attachments. That gate passed with the
+lightweight `v0.1.0` tag at `5fe3cd6` on 2026-08-03: the tag build and promotion job completed successfully, and
+the Gitea release carries the archive, archive checksum, build metadata, payload ledger, and smoke log. The Linux
+CI/CD path is therefore accepted end to end.
 
 ## Dependency inventory
 
