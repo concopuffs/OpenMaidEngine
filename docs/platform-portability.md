@@ -84,6 +84,43 @@ lightweight `v0.1.0` tag at `5fe3cd6` on 2026-08-03: the tag build and promotion
 the Gitea release carries the archive, archive checksum, build metadata, payload ledger, and smoke log. The Linux
 CI/CD path is therefore accepted end to end.
 
+## Planned Windows x64 CI/CD artifact
+
+The Windows artifact will be cross-built on the existing Linux runner; neither a Windows runner nor Wine is part
+of its build contract. The .NET SDK publishes `win-x64`, the Linux Godot editor exports through the pinned Windows
+x86-64 template, and MinGW-w64 compiles the one project-owned native component. The pinned BtbN Windows FFmpeg
+SDK already carries the required headers, runtime DLLs, and MinGW `.dll.a` import libraries. The conditional
+`Age.Engine.Text.Windows` project contains managed P/Invoke declarations and therefore compiles on Linux without
+loading GDI. Wine would add only an execution test, which is explicitly outside the requested CI gate.
+
+The Windows build command will mirror the accepted Linux entry point while keeping target checks separate. It
+will regenerate opcode metadata, selectively install the Windows template from the existing pinned Godot TPZ,
+bootstrap/hash-check the pinned Windows FFmpeg SDK, cross-build and inspect `age_movie_ffmpeg.dll`, perform an
+exact self-contained `ExportRelease/win-x64` publish, and run the real Godot Windows export. The low-memory publish
+proxy will become target-parameterized rather than duplicating its fail-closed project/configuration/RID/output
+checks. The accepted Linux path must remain byte- and behavior-compatible throughout this extension.
+
+CI acceptance is structural because the produced executable will not run on the Linux host. The verifier must
+require the Windows executable/PCK/self-contained managed directory, `Age.Engine.Text.Windows.dll`, the project
+shim, all five pinned FFmpeg DLLs, and the FFmpeg license; reject Linux shared objects and incomplete/cross-target
+payloads; and inspect every project-owned PE image as AMD64. The portable ZIP will carry the project license,
+third-party notices, clean source/dependency metadata, and a complete payload checksum ledger. A manual packaged
+`--package-smoke` command remains available for real-Windows acceptance, but its result is not fabricated or
+reported as a hosted CI gate.
+
+Develop, manual, and tag events will run independent Linux and Windows build jobs, each with read-only repository
+permission and its own manifest-keyed cache/workflow artifact. Tag promotion will require both jobs, download
+both already-built archives, verify their commit/build evidence, and publish two distributable release assets:
+`OpenMaidEngine-Himegari-linux-x64.tar.gz` and `OpenMaidEngine-Himegari-windows-x64.zip`. A third small
+`RELEASE-SHA256SUMS` attachment will authenticate both archives while keeping the release below Gitea's observed
+five-attachment boundary; detailed build metadata, payload ledgers, and logs remain inside each archive and in
+the retained workflow artifacts. The release notes will state that Linux received the dynamic package smoke and
+Windows received structural cross-target verification only.
+
+Code signing, an installer, Windows-on-Linux execution, and retroactively modifying the accepted Linux-only
+`v0.1.0` release are outside this effort. A future signing slice can use `osslsigncode` and protected credentials
+without changing how the unsigned portable ZIP is assembled.
+
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |

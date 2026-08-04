@@ -1031,6 +1031,36 @@ do not mix mechanical moves with semantic changes.
    and the resulting Gitea release exposes all five expected archive/evidence attachments. This accepts the Linux
    CI/CD path end to end; future version tags use the same build-once/promote-on-success route.
 
+   **Planned Linux-hosted Windows release artifact (2026-08-03):** extend the accepted pipeline without a
+   Windows runner or Wine. The technical target and verification boundary live in `docs/platform-portability.md`.
+   The bounded execution order is:
+
+   1. **MinGW native foundation.** Add Linux-hosted bootstrap/build scripts over the existing pinned Windows
+      FFmpeg manifest and its `.dll.a` import libraries. Produce an AMD64 `age_movie_ffmpeg.dll`, copy the exact
+      five runtime DLLs/license, and verify PE architecture, exported ABI entry points, and FFmpeg imports. Keep
+      the existing MSVC path as the independent Windows-local builder.
+   2. **Cross-export and package contract.** Add the Windows x86-64 Godot preset and selectively pinned template;
+      parameterize the low-memory publish proxy for `win-x64`; generalize package smoke so the downloaded ZIP can
+      be tested manually on Windows; and add one Linux-hosted `build-windows-x64.sh` entry point. A new Windows
+      verifier/packager will reject Linux or incomplete payloads and emit a normalized, licensed, checksummed
+      `OpenMaidEngine-Himegari-windows-x64.zip`. Synthetic package/proxy regressions and a local WSL cross-export
+      are the slice gate; executing the `.exe` is not.
+   3. **Hosted Windows artifact job.** Add a read-only Windows-target job beside the existing Linux job on the
+      same `ubuntu-latest` runner. Provision/report MinGW, cache only hash-verified Godot/FFmpeg inputs, call the
+      accepted Windows build command, and retain the ZIP plus structural verification/build evidence. A develop
+      run must leave tag promotion skipped and keep the existing Linux job green.
+   4. **Dual-platform tag promotion.** Require both build jobs before promotion, download rather than rebuild
+      their outputs, refactor the release helper around two platform archives, and publish those two distributable
+      assets plus one combined archive-checksum attachment. Preserve job-local release authority, retry-safe
+      missing-asset completion, collision refusal, and the existing Gitea attachment ceiling. No version tag is
+      created until the user explicitly selects one after the hosted develop proof.
+
+   **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
+   Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
+   retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and neither platform job
+   receives release-write permission. Signing, installers, Wine, Windows runners, and mutation of `v0.1.0` remain
+   out of scope.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw
