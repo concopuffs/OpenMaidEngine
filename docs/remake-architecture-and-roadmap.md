@@ -1085,15 +1085,17 @@ do not mix mechanical moves with semantic changes.
    completed both platform artifact jobs and skipped tag-only promotion, accepting the runner/toolchain/cache/
    build/upload path and the non-tag authority boundary. Slice 4 is now active.
 
-   **Slice 4 implementation completed 2026-08-03; hosted acceptance pending:** tag promotion now requires both
+   **Slice 4 hosted path accepted 2026-08-03:** tag promotion now requires both
    successful platform jobs and downloads their already-built artifacts into separate directories. The helper
    binds both archives to the same clean tag commit/RID, verifies their external hashes, compares external build
    metadata and payload ledgers with the copies inside each archive, requires Linux's dynamic smoke and Windows's
    AMD64/ABI/import report, and generates combined release checksums. Creation and retry expose exactly three
    public assets—Linux archive, Windows archive, and `RELEASE-SHA256SUMS`—while unexpected assets, release
    mismatches, and same-name/different-size collisions fail without mutation. Synthetic paired-artifact,
-   creation/resume/refusal, and workflow-dependency tests pass. The next gate is a hosted develop run with both
-   builds green and promotion skipped; only after that proof may the user deliberately select a future tag.
+   creation/resume/refusal, and workflow-dependency tests pass. The hosted develop run at `d657c63` completed
+   both platform builds and skipped promotion as required; core validation also passed unchanged after retrying
+   a transient pre-checkout runner DNS failure. The remaining gate is a future tag deliberately selected by the
+   user.
 
    **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
    Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
