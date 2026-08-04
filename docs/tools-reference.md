@@ -60,20 +60,24 @@ repository permission and have no secrets, private game corpus, or release/packa
 first hosted dual-job develop run at `9d3ab30` succeeded on 2026-08-03: both platform artifacts completed and
 the tag-only promotion job was skipped. This accepts the Windows artifact job and its non-tag authority boundary.
 
-Only a successful `v*` tag run enables the dependent promotion job. It downloads that same workflow artifact
-rather than rebuilding, checks out only the release tool, and receives job-local `releases: write` plus
-`contents: read`; branch and manual runs skip the job and never receive release authority. The built-in
-`secrets.GITEA_TOKEN` calls the native Gitea API, so no personal token or third-party release action is required.
-`publish_gitea_release.py` validates the version-like tag, exact clean-build commit metadata, archive checksum,
-accepted package-smoke result, fixed five-file asset set, and any
-existing release/asset metadata. A retry resumes a matching partial release and uploads only missing files; it
-refuses mismatched releases or same-name/different-size assets instead of editing, deleting, or overwriting them.
+Only a successful `v*` tag run after both platform jobs enables the dependent promotion job. It downloads the
+two verified workflow artifacts into separate directories rather than rebuilding, checks out only the release
+tool, and receives job-local `releases: write` plus `contents: read`; branch and manual runs skip the job and
+never receive release authority. The built-in `secrets.GITEA_TOKEN` calls the native Gitea API, so no personal
+token or third-party release action is required. `publish_gitea_release.py` validates the version-like tag, both
+exact clean-build commit/target records, both external archive hashes, matching metadata/ledgers inside each
+archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import verification. It then generates one
+`RELEASE-SHA256SUMS` and publishes exactly three assets: the Linux `.tar.gz`, Windows `.zip`, and combined
+checksums. Detailed evidence remains inside each archive and in retained workflow artifacts. A retry resumes a
+matching partial release and uploads only missing files; it refuses mismatched releases, unexpected assets, or
+same-name/different-size collisions instead of editing, deleting, or overwriting them. The first hosted develop
+run of this paired promotion contract remains pending; no new version tag is created as part of that proof.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `publish_gitea_release.py` | Tag-only, retry-safe promotion of one verified Linux workflow artifact through Gitea's native release API. Requires `GITEA_TOKEN`; the token is passed to upload `curl` through standard input rather than its argument list. | `publish_gitea_release.py --server <url> --repository <owner/name> --tag <v...> --target <sha> --asset <path>` (exactly the five expected `--asset` names) | verified downloaded workflow artifact + tag context → matching Gitea release and five attachments |
-| `test_publish_gitea_release.py` | Pure synthetic creation, retry/resume, collision, and mismatch regressions. | `test_publish_gitea_release.py` | temporary files only |
-| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, and deliberately unchanged Linux-only tag promotion dependency during Windows CI/CD slice 3. | `test_release_workflow.py` | `.gitea/workflows/linux-release-build.yml` → assertions only |
+| `publish_gitea_release.py` | Tag-only, retry-safe promotion of paired verified Linux/Windows workflow artifacts through Gitea's native release API. Revalidates both archives/evidence sets, writes combined release checksums, and exposes exactly three public assets. Requires `GITEA_TOKEN`; the token is passed to upload `curl` through standard input rather than its argument list. | `publish_gitea_release.py --server <url> --repository <owner/name> --tag <v...> --target <sha> --linux-artifact-directory <dir> --windows-artifact-directory <dir> --output-directory <dir>` | two verified downloaded workflow artifacts + tag context → matching Gitea release with Linux archive, Windows archive, and `RELEASE-SHA256SUMS` |
+| `test_publish_gitea_release.py` | Pure synthetic paired-artifact/archive validation, three-asset creation, retry/resume, collision, unexpected-asset, and mismatch regressions. | `test_publish_gitea_release.py` | temporary files only |
+| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, and promotion's dependency/download of both successful artifacts. | `test_release_workflow.py` | `.gitea/workflows/linux-release-build.yml` → assertions only |
 
 ## Optional local binary tools
 

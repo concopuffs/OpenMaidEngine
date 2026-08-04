@@ -185,9 +185,11 @@ jobs:
   publish-release:
     name: Publish tagged Gitea release
     if: startsWith(gitea.ref, 'refs/tags/v')
-    needs: linux-release
+    needs:
+      - linux-release
+      - windows-release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       # Gitea 1.25 granular scope; GitHub-oriented actionlint does not model it.
@@ -204,11 +206,17 @@ jobs:
           python-version: "3.11"
           architecture: x64
 
-      - name: Download verified workflow artifact
+      - name: Download verified Linux artifact
         uses: christopherhx/gitea-download-artifact@v4
         with:
           name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
-          path: build/release-assets
+          path: build/release-assets/linux
+
+      - name: Download verified Windows artifact
+        uses: christopherhx/gitea-download-artifact@v4
+        with:
+          name: OpenMaidEngine-Himegari-windows-x64-${{ gitea.sha }}
+          path: build/release-assets/windows
 
       - name: Create or resume Gitea release
         env:
@@ -219,8 +227,6 @@ jobs:
             --repository "${{ gitea.repository }}" \
             --tag "${{ gitea.ref_name }}" \
             --target "${{ gitea.sha }}" \
-            --asset build/release-assets/OpenMaidEngine-Himegari-linux-x64.tar.gz \
-            --asset build/release-assets/OpenMaidEngine-Himegari-linux-x64.tar.gz.sha256 \
-            --asset build/release-assets/BUILD-INFO.json \
-            --asset build/release-assets/SHA256SUMS \
-            --asset build/release-assets/package-smoke.log
+            --linux-artifact-directory build/release-assets/linux \
+            --windows-artifact-directory build/release-assets/windows \
+            --output-directory build/release-assets/prepared

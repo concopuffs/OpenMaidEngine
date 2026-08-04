@@ -142,13 +142,19 @@ release authority. Source-only workflow regressions pin those rules and preserve
 platform artifact jobs completed and the tag-only promotion job was skipped. The Windows hosted artifact path is
 therefore accepted; dual-platform promotion is the remaining CI/CD slice.
 
-The next promotion slice will require both jobs, download both already-built archives, verify their commit/build
-evidence, and publish two distributable release assets:
+Dual-platform promotion was implemented on 2026-08-03. The tag-only job now requires both successful build jobs
+and downloads their retained artifacts into separate directories without rebuilding. The release helper rechecks
+both external archive hashes, exact clean tag-commit metadata and target RID, matching build metadata/payload
+ledgers inside each archive, Linux's accepted dynamic package smoke, and Windows's complete static AMD64/ABI/
+import report. It creates or resumes only a matching release, rejects unexpected or colliding assets, and exposes
+exactly two distributable archives:
 `OpenMaidEngine-Himegari-linux-x64.tar.gz` and `OpenMaidEngine-Himegari-windows-x64.zip`. A third small
 `RELEASE-SHA256SUMS` attachment will authenticate both archives while keeping the release below Gitea's observed
 five-attachment boundary; detailed build metadata, payload ledgers, and logs remain inside each archive and in
 the retained workflow artifacts. The release notes will state that Linux received the dynamic package smoke and
-Windows received structural cross-target verification only.
+Windows received structural cross-target verification only. Source-only paired creation/resume/refusal tests
+pass. The first hosted develop run must still prove both build jobs green and promotion skipped before the user
+selects a future tag; `v0.1.0` remains unchanged.
 
 Code signing, an installer, Windows-on-Linux execution, and retroactively modifying the accepted Linux-only
 `v0.1.0` release are outside this effort. A future signing slice can use `osslsigncode` and protected credentials

@@ -59,11 +59,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("if-no-files-found: error", self.windows)
         self.assertIn("retention-days: 30", self.windows)
 
-    def test_slice_three_keeps_linux_only_tag_promotion_boundary(self) -> None:
+    def test_tag_promotion_requires_and_downloads_both_platform_artifacts(self) -> None:
         self.assertIn("if: startsWith(gitea.ref, 'refs/tags/v')", self.publish)
-        self.assertRegex(self.publish, r"(?m)^    needs: linux-release$")
+        self.assertRegex(
+            self.publish,
+            r"(?m)^    needs:\n      - linux-release\n      - windows-release$",
+        )
         self.assertIn("releases: write", self.publish)
-        self.assertNotIn("windows-release", self.publish)
+        self.assertIn("OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}", self.publish)
+        self.assertIn("OpenMaidEngine-Himegari-windows-x64-${{ gitea.sha }}", self.publish)
+        self.assertIn("path: build/release-assets/linux", self.publish)
+        self.assertIn("path: build/release-assets/windows", self.publish)
+        self.assertIn("--linux-artifact-directory build/release-assets/linux", self.publish)
+        self.assertIn("--windows-artifact-directory build/release-assets/windows", self.publish)
+        self.assertIn("--output-directory build/release-assets/prepared", self.publish)
+        self.assertNotIn("--asset", self.publish)
 
 
 if __name__ == "__main__":
