@@ -27,9 +27,10 @@ py -3.11 -X utf8 tools\validate.py --level core
 .\run-godot.ps1 -GodotConsole <godot-console.exe> -GameRoot <Himegari-install>
 ```
 
-Linux release exports are asset-free build products: from a Linux host, `./tools/build-linux-x64.sh`
-bootstraps the pinned Godot/FFmpeg inputs, exports the runtime, runs its packaged smoke gate, and writes the
-archive under `build/package/`. See the tools reference for exact inputs and output contents.
+Linux and Windows release exports are asset-free build products. From a Linux host,
+`./tools/build-linux-x64.sh` builds, packages, and smoke-tests the Linux runtime, while
+`./tools/build-windows-x64.sh` cross-builds and structurally verifies the Windows runtime without Wine.
+Both write archives under `build/package/`; see the tools reference for exact inputs and output contents.
 
 `workspace` and `full` validation additionally require the extracted script corpus and disposable derived
 inputs described by the tools reference. `runtime` and `full` require Godot plus a valid game root. A

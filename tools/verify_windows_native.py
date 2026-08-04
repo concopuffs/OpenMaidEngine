@@ -59,7 +59,12 @@ def parse_objdump(output: str) -> tuple[set[str], set[str]]:
     return imports, exports
 
 
-def verify_bundle(bundle: Path, objdump: str) -> dict[str, Any]:
+def verify_bundle(
+    bundle: Path,
+    objdump: str,
+    *,
+    exact_dlls: bool = True,
+) -> dict[str, Any]:
     bundle = bundle.resolve()
     if not bundle.is_dir():
         raise ValueError(f"Windows native bundle directory was not found: {bundle}")
@@ -73,7 +78,7 @@ def verify_bundle(bundle: Path, objdump: str) -> dict[str, Any]:
         for path in bundle.iterdir()
         if path.is_file() and path.suffix.lower() == ".dll" and path.name.lower() not in expected_dlls
     )
-    if unexpected_dlls:
+    if exact_dlls and unexpected_dlls:
         raise ValueError("Windows native bundle has unexpected DLLs: " + ", ".join(unexpected_dlls))
 
     machines: dict[str, str] = {}

@@ -21,6 +21,13 @@
         "sha256": "26b1b5d076b78c02f1476dab78e183218a6aa30c8e614653eac11a0dd198456a",
         "size": 73591000,
         "mode": "0755"
+      },
+      {
+        "archive_path": "templates/windows_release_x86_64.exe",
+        "install_name": "windows_release_x86_64.exe",
+        "sha256": "00c72494d58536b74b95d5044fa13c4cc54f2349d687b87f3d8801897741fac0",
+        "size": 109405184,
+        "mode": "0755"
       }
     ]
   }

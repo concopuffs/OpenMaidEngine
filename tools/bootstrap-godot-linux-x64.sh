@@ -4,6 +4,7 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 manifest="$script_dir/godot-linux-x64.json"
+template_target="${1:-linux-x64}"
 toolchain_root="$repo_root/build/toolchains/godot-4.7-stable-mono-linux-x64"
 xdg_data_home="$toolchain_root/xdg-data"
 download_dir="$repo_root/build/downloads"
@@ -29,6 +30,15 @@ template_version="$(manifest_value godot_version)"
 archive_path="$download_dir/$archive"
 editor_root="$toolchain_root/editor"
 template_root="$xdg_data_home/godot/export_templates/$template_version"
+
+case "$template_target" in
+    linux-x64) template_name="linux_release.x86_64" ;;
+    windows-x64) template_name="windows_release_x86_64.exe" ;;
+    *)
+        echo "unsupported Godot template target: $template_target" >&2
+        exit 2
+        ;;
+esac
 
 mkdir -p -- "$download_dir" "$editor_root" "$template_root"
 if [[ ! -f "$archive_path" ]]; then
@@ -59,7 +69,7 @@ editor="${editors[0]}"
 chmod +x "$editor"
 
 python3 -X utf8 "$script_dir/install_godot_templates.py" \
-    --manifest "$manifest" --destination "$template_root" >&2
+    --manifest "$manifest" --destination "$template_root" --member "$template_name" >&2
 
 reported="$(XDG_DATA_HOME="$xdg_data_home" "$editor" --headless --version)"
 reported="${reported%%$'\n'*}"

@@ -84,7 +84,7 @@ lightweight `v0.1.0` tag at `5fe3cd6` on 2026-08-03: the tag build and promotion
 the Gitea release carries the archive, archive checksum, build metadata, payload ledger, and smoke log. The Linux
 CI/CD path is therefore accepted end to end.
 
-## Planned Windows x64 CI/CD artifact
+## Windows x64 CI/CD artifact
 
 The Windows artifact will be cross-built on the existing Linux runner; neither a Windows runner nor Wine is part
 of its build contract. The .NET SDK publishes `win-x64`, the Linux Godot editor exports through the pinned Windows
@@ -103,12 +103,26 @@ MinGW builds produced the identical shim SHA-256
 `9852680ca32bc37200d0b63ad89acb5453ad913bdcf4441a15c8ac9356d4da8c`. This is a compiler-independent contract
 comparison, not an expectation that MSVC and MinGW produce byte-identical binaries.
 
-The Windows build command will mirror the accepted Linux entry point while keeping target checks separate. It
-will regenerate opcode metadata, selectively install the Windows template from the existing pinned Godot TPZ,
-bootstrap/hash-check the pinned Windows FFmpeg SDK, cross-build and inspect `age_movie_ffmpeg.dll`, perform an
-exact self-contained `ExportRelease/win-x64` publish, and run the real Godot Windows export. The low-memory publish
-proxy will become target-parameterized rather than duplicating its fail-closed project/configuration/RID/output
-checks. The accepted Linux path must remain byte- and behavior-compatible throughout this extension.
+The cross-export/package contract was completed and locally accepted on 2026-08-03. The shared Godot manifest
+now pins both release-template members while each build range-fetches only its selected target; Windows adds the
+109,405,184-byte `windows_release_x86_64.exe` member with independently recorded SHA-256. The guarded publish
+proxy requires its driver-selected RID, so the same low-memory sequence produces exact self-contained
+`ExportRelease/linux-x64` and `ExportRelease/win-x64` payloads without weakening the project/configuration/RID/
+output-root checks. `tools/build-windows-x64.sh` composes the pinned editor/template, MinGW native bundle, .NET
+publish, real Godot export, static verifier, and normalized ZIP. Its verifier requires the executable/PCK,
+self-contained runtime, three project assemblies plus `Age.Engine.Text.Windows.dll`, native FFmpeg bundle and
+license; it rejects Linux shared objects and checks the Godot EXE plus all six native DLLs as AMD64 PE. The ZIP
+contains project notices, clean-source/dependency metadata, a complete payload checksum ledger, and the static
+verification report under one stable root. A WSL cross-build completed in 91.3 seconds and two package passes
+were byte-identical; the resulting packaged EXE also reported
+`PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3` when optionally run on the Windows host. CI remains structural and
+will not execute that EXE.
+
+The Windows build command mirrors the accepted Linux entry point while keeping target checks separate. It
+regenerates opcode metadata, selectively installs the Windows template from the existing pinned Godot TPZ,
+bootstrap/hash-checks the pinned Windows FFmpeg SDK, cross-builds and inspects `age_movie_ffmpeg.dll`, performs an
+exact self-contained `ExportRelease/win-x64` publish, and runs the real Godot Windows export. The accepted Linux
+path retains its target selection and dynamic package-smoke behavior.
 
 CI acceptance is structural because the produced executable will not run on the Linux host. The verifier must
 require the Windows executable/PCK/self-contained managed directory, `Age.Engine.Text.Windows.dll`, the project

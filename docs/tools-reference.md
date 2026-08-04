@@ -429,6 +429,41 @@ The bootstrap prints the pinned editor path. The verifier prints the accepted ex
 prints the staged root and archive path. Those Python components and the guarded publish proxy have source-only
 synthetic regressions in the core validation level.
 
+**Windows x64 cross-export** uses the same pinned Linux editor and low-memory publish boundary, with MinGW and
+the selectively installed Windows template:
+
+```bash
+./tools/build-windows-x64.sh
+```
+
+The command requires Python 3.11, the `global.json` .NET SDK, MinGW-w64 GCC/binutils, `curl`, and `sha256sum`.
+It regenerates runtime metadata, builds and statically verifies the pinned Windows FFmpeg bundle, publishes the
+exact self-contained `ExportRelease/win-x64` managed runtime, and performs the real Godot `Windows x86_64`
+release export. No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
+PCK, self-contained runtime, project assemblies including `Age.Engine.Text.Windows.dll`, and FFmpeg DLL/license
+set; it rejects Linux shared objects and embeds `BUILD-INFO.json`, `WINDOWS-VERIFICATION.json`, notices, and a
+complete `SHA256SUMS`. The normalized output is
+`build/package/windows-x64/OpenMaidEngine-Himegari-windows-x64.zip`.
+
+Focused commands are:
+
+```bash
+./tools/bootstrap-godot-linux-x64.sh windows-x64
+python3 -X utf8 tools/package_windows_x64.py verify build/export/windows-x64
+python3 -X utf8 tools/package_windows_x64.py package build/export/windows-x64
+```
+
+The bootstrap defaults to `linux-x64`; passing `windows-x64` changes only the selectively installed template.
+The package verifier needs `x86_64-w64-mingw32-objdump` unless `--objdump` names an equivalent tool. On a real
+Windows host, an extracted package can optionally run the same asset-independent dynamic gate as Linux:
+
+```powershell
+.\Himegari.exe --headless -- --package-smoke
+```
+
+That command proves the embedded 548-opcode table and local FFmpeg ABI 3 load. It is a manual acceptance aid,
+not part of Linux-hosted Windows CI.
+
 The older Windows-hosted cross-export remains available for local development:
 
 ```powershell

@@ -76,13 +76,14 @@ def stage_publish(request: PublishRequest, environ: dict[str, str]) -> Path:
     source = Path(environ["AGE_PREPUBLISHED_OUTPUT"]).resolve()
     output_root = Path(environ["AGE_PUBLISH_OUTPUT_ROOT"]).resolve()
     assembly = environ["AGE_PUBLISH_ASSEMBLY"]
+    expected_runtime = environ["AGE_PUBLISH_RUNTIME"]
     output = request.output.resolve()
 
     if request.project.resolve() != expected_project:
         raise ValueError(f"unexpected publish project: {request.project}")
     if request.configuration != "ExportRelease":
         raise ValueError(f"unexpected publish configuration: {request.configuration}")
-    if request.runtime != "linux-x64":
+    if request.runtime != expected_runtime:
         raise ValueError(f"unexpected publish runtime: {request.runtime}")
     if request.self_contained.lower() != "true":
         raise ValueError(f"publish is not self-contained: {request.self_contained}")

@@ -30,6 +30,7 @@ class DotnetPublishProxyTests(unittest.TestCase):
                 "AGE_PREPUBLISHED_OUTPUT": str(source),
                 "AGE_PUBLISH_OUTPUT_ROOT": str(output_root),
                 "AGE_PUBLISH_ASSEMBLY": "Himegari.dll",
+                "AGE_PUBLISH_RUNTIME": "linux-x64",
             })
             self.assertEqual(output.resolve(), staged)
             self.assertEqual(b"managed", (staged / "Himegari.dll").read_bytes())
@@ -48,6 +49,7 @@ class DotnetPublishProxyTests(unittest.TestCase):
                 "AGE_PREPUBLISHED_OUTPUT": str(source),
                 "AGE_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
                 "AGE_PUBLISH_ASSEMBLY": "Himegari.dll",
+                "AGE_PUBLISH_RUNTIME": "linux-x64",
             }
             wrong_runtime = dotnet_publish_proxy.PublishRequest(
                 project, "ExportRelease", "win-x64", "true", root / "reserved/output"
@@ -59,6 +61,27 @@ class DotnetPublishProxyTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "outside"):
                 dotnet_publish_proxy.stage_publish(escaped, environment)
+
+    def test_stages_windows_publish_when_explicitly_selected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "Himegari.csproj"
+            project.write_text("<Project />", encoding="utf-8")
+            source = root / "prepublished"
+            source.mkdir()
+            (source / "Himegari.dll").write_bytes(b"managed")
+            output = root / "reserved/123-ExportRelease-win-x64"
+            request = dotnet_publish_proxy.PublishRequest(
+                project, "ExportRelease", "win-x64", "true", output
+            )
+            staged = dotnet_publish_proxy.stage_publish(request, {
+                "AGE_PUBLISH_PROJECT": str(project),
+                "AGE_PREPUBLISHED_OUTPUT": str(source),
+                "AGE_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
+                "AGE_PUBLISH_ASSEMBLY": "Himegari.dll",
+                "AGE_PUBLISH_RUNTIME": "win-x64",
+            })
+            self.assertEqual(output.resolve(), staged)
 
 
 if __name__ == "__main__":

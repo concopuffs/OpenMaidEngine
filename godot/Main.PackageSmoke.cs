@@ -7,8 +7,9 @@ public partial class Main
     {
         try
         {
-            if (!OS.HasFeature("linux"))
-                throw new PlatformNotSupportedException("the packaged-runtime smoke gate requires Linux");
+            if (!OS.HasFeature("linux") && !OS.HasFeature("windows"))
+                throw new PlatformNotSupportedException(
+                    "the packaged-runtime smoke gate supports Linux and Windows x64");
             var table = HimegariRuntimeMetadata.LoadOpcodeTable();
             if (table.Count != 548)
                 throw new InvalidOperationException(

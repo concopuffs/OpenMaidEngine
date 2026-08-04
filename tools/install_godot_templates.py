@@ -160,11 +160,21 @@ def file_matches(path: Path, expected_size: int, expected_hash: str) -> bool:
     return digest.hexdigest() == expected_hash.lower()
 
 
-def install_members(manifest_path: Path, destination: Path) -> list[Path]:
+def install_members(
+    manifest_path: Path,
+    destination: Path,
+    selected_names: tuple[str, ...] | None = None,
+) -> list[Path]:
     with manifest_path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
     templates = manifest["templates"]
     members = templates["members"]
+    if selected_names:
+        by_name = {member["install_name"]: member for member in members}
+        unknown = [name for name in selected_names if name not in by_name]
+        if unknown:
+            raise ValueError("template members were not found in the manifest: " + ", ".join(unknown))
+        members = [by_name[name] for name in selected_names]
     destination.mkdir(parents=True, exist_ok=True)
 
     installed = [destination / member["install_name"] for member in members]
@@ -211,8 +221,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--member", action="append", dest="members")
     args = parser.parse_args()
-    for installed in install_members(args.manifest.resolve(), args.destination.resolve()):
+    selected = tuple(args.members) if args.members else None
+    for installed in install_members(args.manifest.resolve(), args.destination.resolve(), selected):
         print(installed)
     return 0
 

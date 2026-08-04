@@ -53,26 +53,51 @@ class RangeReaderTests(unittest.TestCase):
                 "templates": {
                     "url": "https://invalid.example/templates.tpz",
                     "size": len(archive_bytes),
-                    "members": [{
-                        "archive_path": "templates/linux_release.x86_64",
-                        "install_name": "linux_release.x86_64",
-                        "sha256": hashlib.sha256(release).hexdigest(),
-                        "size": len(release),
-                        "mode": "0755",
-                    }],
+                    "members": [
+                        {
+                            "archive_path": "templates/linux_release.x86_64",
+                            "install_name": "linux_release.x86_64",
+                            "sha256": hashlib.sha256(release).hexdigest(),
+                            "size": len(release),
+                            "mode": "0755",
+                        },
+                        {
+                            "archive_path": "templates/windows_release_x86_64.exe",
+                            "install_name": "windows_release_x86_64.exe",
+                            "sha256": hashlib.sha256(unused).hexdigest(),
+                            "size": len(unused),
+                            "mode": "0755",
+                        },
+                    ],
                 }
             }), encoding="utf-8")
             destination = root / "templates"
             with patch.object(install_godot_templates, "open_http_range_reader", return_value=reader()) as opened:
-                installed = install_godot_templates.install_members(manifest, destination)
+                installed = install_godot_templates.install_members(
+                    manifest, destination, ("linux_release.x86_64",)
+                )
                 opened.assert_called_once()
             self.assertEqual(release, installed[0].read_bytes())
             self.assertFalse((destination / "windows_release_x86_64.exe").exists())
 
             with patch.object(install_godot_templates, "open_http_range_reader") as opened:
-                reused = install_godot_templates.install_members(manifest, destination)
+                reused = install_godot_templates.install_members(
+                    manifest, destination, ("linux_release.x86_64",)
+                )
                 opened.assert_not_called()
             self.assertEqual(installed, reused)
+
+    def test_rejects_unknown_selected_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "templates": {"members": [], "url": "unused", "size": 1}
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "not found in the manifest"):
+                install_godot_templates.install_members(
+                    manifest, root / "templates", ("missing-template",)
+                )
 
 
 if __name__ == "__main__":

@@ -1063,6 +1063,16 @@ do not mix mechanical moves with semantic changes.
    next step: Windows Godot template/export, target-parameterized publish proxy, structural package contract, and
    normalized ZIP.
 
+   **Slice 2 completed 2026-08-03:** the shared Godot manifest now pins and selectively fetches either release
+   template, the guarded low-memory publish proxy requires the calling driver's exact Linux or Windows RID, and
+   the Windows preset includes the conditional exact-GDI assembly. `tools/build-windows-x64.sh` performs the
+   complete metadata/native/publish/Godot/export/verify/package sequence without Wine. Its packager rejects
+   incomplete or Linux-contaminated payloads, verifies the Godot EXE and six native DLLs as AMD64 PE, embeds
+   notices/build provenance/payload checksums/static verification, and emits one normalized ZIP. Synthetic
+   template/proxy/package tests pass; the 91.3-second WSL cross-export passed, repeated packaging was byte-for-byte
+   stable, and an optional Windows-host run of the packaged EXE reported the 548-opcode/FFmpeg-ABI-3 smoke marker.
+   Slice 3 is now active: add the read-only hosted Windows artifact job while retaining the accepted Linux job.
+
    **Completion gate:** one deliberately selected future tag produces a single Gitea release containing the
    Linux `.tar.gz`, Windows `.zip`, and combined archive checksums; both archives bind to the tag commit, Linux
    retains its dynamic packaged smoke, Windows passes all structural PE/payload gates, and neither platform job
