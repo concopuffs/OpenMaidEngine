@@ -260,11 +260,10 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                 {
                     if (decodedFrames == 0)
                         throw new InvalidDataException("FFmpeg stream ended before producing a video frame");
-                    long completionTime = _presentationDurationMs
-                        ?? PresentationDeadline(
-                            Math.Max(_source.Info.StopTimeMs,
-                                     lastTimestamp + FrameIntervalMilliseconds(_source.Info)),
-                            firstTimestamp);
+                    long sourceEndpoint = Math.Max(
+                        _source.Info.StopTimeMs,
+                        lastTimestamp + FrameIntervalMilliseconds(_source.Info));
+                    long completionTime = CompletionDeadline(sourceEndpoint, firstTimestamp);
                     if (_clock.WaitUntil(completionTime, _cancel))
                     {
                         _videoTimelineCompleted = true;
@@ -444,6 +443,19 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
             || _source.Info.StopTimeMs <= 0)
             return sourceElapsed;
         return checked(sourceElapsed * duration / _source.Info.StopTimeMs);
+    }
+
+    private long CompletionDeadline(long sourceEndpoint, long firstVideoTimestamp)
+    {
+        if (_presentationDurationMs is { } duration) return duration;
+        if (AudioInfo != null)
+        {
+            // The audio pin begins at the common mux origin even when the video stream declares
+            // a later start. Keep the terminal image while the audio-master clock drains through
+            // the full graph endpoint rather than completing at the last video sample.
+            return Math.Max(0, sourceEndpoint - _initialPositionMs);
+        }
+        return PresentationDeadline(sourceEndpoint, firstVideoTimestamp);
     }
 
     public void Dispose()

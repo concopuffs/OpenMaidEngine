@@ -1459,5 +1459,6 @@ opcode gap remains in the shipped 481-script corpus. Use the next reproducible n
 to choose the concrete gameplay slice instead of returning to opcode-coverage work.
 
 The open portability gates remain separate follow-ups: deliberately mixed-case synthetic roots, fresh-profile
-save/settings writes, native Linux desktop coverage, shared movie A/V synchronization, and a deliberate Linux
+save/settings writes, native Linux desktop coverage, a manual Windows/Linux recheck of the 2026-08-11 movie
+A/V opening-preroll fix, and a deliberate Linux
 font-bundling policy. Do not change remote or release policy without the user's explicit direction.

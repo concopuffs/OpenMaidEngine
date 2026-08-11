@@ -257,7 +257,12 @@ static int determine_duration(age_movie *movie, AVStream *stream, int64_t *out_d
 }
 
 static int rewind_for_decode(age_movie *movie, AVStream *stream) {
-    int64_t target = stream->start_time != AV_NOPTS_VALUE ? stream->start_time : 0;
+    /* MPEG video can contain decodable preroll before AVStream.start_time. DirectShow
+       presents those opening frames from graph time zero; seeking to the video pin's
+       later declared start skips them and advances picture relative to audio. */
+    int64_t target = av_rescale_q_rnd(movie->timeline_origin_ms,
+        (AVRational){1, 1000}, stream->time_base,
+        AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
     int result = av_seek_frame(movie->video_format, movie->video_stream_index, target, AVSEEK_FLAG_BACKWARD);
     if (result < 0) {
         movie->video_io_state.position = 0;
@@ -422,10 +427,7 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
     movie->video_stream_index = result;
     AVStream *stream = movie->video_format->streams[movie->video_stream_index];
     movie->video_time_base = stream->time_base;
-    movie->video_fallback_origin_ms =
-        stream->start_time == AV_NOPTS_VALUE ? 0
-        : rescale_ms_down(stream->start_time, movie->video_time_base)
-          - movie->timeline_origin_ms;
+    movie->video_fallback_origin_ms = 0;
 
     movie->video_codec = avcodec_alloc_context3(video_decoder);
     if (movie->video_codec == NULL) {

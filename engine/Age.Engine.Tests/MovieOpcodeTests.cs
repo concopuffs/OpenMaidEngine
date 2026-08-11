@@ -450,6 +450,28 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void FfmpegAudioBearingDecoderHoldsTerminalFrameUntilGraphAudioEndpoint()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 700, 30, 1, true, 1000, 2, 700),
+            SyntheticMovieFrame(1, 600), SyntheticMovieFrame(2, 634));
+        source.EnqueueAudio(new FfmpegAudioChunk(new float[1400], 700, 0));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeAudioChunk(out _), 1000));
+        Assert.True(SpinWait.SpinUntil(() => decoder.AudioDecodingCompleted, 1000));
+        decoder.MarkAudioSubmitted();
+
+        clock.AdvanceTo(699);
+        Assert.True(clock.WaitForDeadline(700));
+        Assert.False(decoder.IsCompleted);
+        clock.AdvanceTo(700);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+    }
+
+    [Fact]
     public void MovieAudioTimelineDoesNotSpliceContinuousMpegBlocksAtRoundedMillisecondTimestamps()
     {
         const int sampleRate = 44100;
@@ -801,11 +823,15 @@ public class MovieOpcodeTests
         Assert.Equal(600, movie.Info.Height);
         Assert.Equal(1000, movie.Info.StopTimeMs);
         Assert.False(movie.Info.HasAudio);
-        Assert.True(movie.TryDecodeNextVideoFrame(out var frame));
-
-        byte[] mask = MovieMaskSurface.ExtractGreen(frame.Image, 800, 600, 255);
-        Assert.Equal(800 * 600, mask.Length);
-        Assert.True(mask.Distinct().Skip(1).Any(), "TEST.AGF should publish a nonuniform green mask");
+        byte[]? mask = null;
+        for (int frameIndex = 0; frameIndex < 60 && movie.TryDecodeNextVideoFrame(out var frame); frameIndex++)
+        {
+            mask = MovieMaskSurface.ExtractGreen(frame.Image, 800, 600, 255);
+            Assert.Equal(800 * 600, mask.Length);
+            if (mask.Distinct().Skip(1).Any()) break;
+        }
+        Assert.NotNull(mask);
+        Assert.True(mask!.Distinct().Skip(1).Any(), "TEST.AGF should publish a nonuniform green mask");
     }
 
     [Theory]
@@ -832,6 +858,8 @@ public class MovieOpcodeTests
                 $"{expectedName} ended before opening frame {frameIndex}");
             if (priorTimestamp >= 0)
                 Assert.InRange(frame.PresentationTimeMs - priorTimestamp, 33, 34);
+            else
+                Assert.Equal(0, frame.PresentationTimeMs);
             priorTimestamp = frame.PresentationTimeMs;
             firstPixels ??= frame.Image.Pixels;
             openingChanged |= !firstPixels.AsSpan().SequenceEqual(frame.Image.Pixels);
@@ -868,7 +896,7 @@ public class MovieOpcodeTests
         Assert.True(first.PresentationTimeMs >= 0);
         bool changed = false;
         long priorTimestamp = first.PresentationTimeMs;
-        for (int frameIndex = 0; frameIndex < 30 && movie.TryDecodeNextVideoFrame(out var later); frameIndex++)
+        for (int frameIndex = 0; frameIndex < 120 && movie.TryDecodeNextVideoFrame(out var later); frameIndex++)
         {
             Assert.True(later.PresentationTimeMs >= priorTimestamp);
             priorTimestamp = later.PresentationTimeMs;

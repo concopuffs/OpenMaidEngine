@@ -33,8 +33,9 @@ guarded exporter produce a self-contained artifact whose headless self-test pass
 portable TextServer backend and installed Noto CJK fonts. A subsequent WSLg interactive run created the Linux
 window, accepted title/menu input, rendered both opening movies with sound, and progressed naturally into SC0000.
 This establishes the packaged loader, archive, font, window/input, movie audio/presentation, managed host, and
-teardown paths. Slight A/V desynchronization also occurs on Windows and remains a shared runtime follow-up rather
-than a Linux-only portability blocker. A complete combined game/export installation copied to WSL ext4 passed
+teardown paths. The shared Windows/Linux A/V follow-up identified skipped opening video preroll in the FFmpeg shim
+rather than a Linux-only clock defect; the fix now awaits a manual LOGO/OP recheck. A complete combined game/export
+installation copied to WSL ext4 passed
 hash verification plus headless and windowed executable-directory runs; mixed-case fixtures and fresh interactive
 profile/save behavior remain to validate. The accepted DirectShow fallback was deleted after the corpus and audible
 LOGO/OP/CHAPTER gates passed. There are also softer Windows assumptions that should be tested or replaced before
@@ -186,7 +187,7 @@ entry. The system-font-only policy remains supported until the bundled-font opti
 | Retained graphics presentation | Backend-neutral `GfxState`; accepted default Godot `Sprite2D` GPU stage plus the retained software pixel oracle, using runtime `ImageTexture`, canvas transforms/materials, and no native graphics API | GPU backend caches static/color-key variants, updates dynamic surfaces, handles retained range transitions, and falls back whole-frame for the legacy host screen-transition path | Godot owns D3D/Vulkan/Metal/OpenGL selection; validate shader/blend/filter behavior per target rather than adding a platform renderer |
 | AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED; `0x24d` movie masks) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/age_movie_ffmpeg` ABI | Windows-x64 and Linux-x64 both pass the complete 213-payload installed video/audio corpus gate. The Linux library bundle is present in a validated Godot export; Windows also passes audible LOGO/OP/CHAPTER playback and real TEST.AGF green-mask decode | Add macOS native builds, distributable source-offer packaging, and real Linux/macOS window/audio movie gates |
 | Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory; video-only streams use monotonic pacing while audio-bearing streams use the Godot output clock. Opcode `0x24d` redirects decoded green bytes through the platform-neutral retained rasterizer and exact managed packed-alpha mask helper | Concurrent/restarted uses of one asset have independent frame/audio/completion/teardown state. Ordinary and mask movies share VFS/FFmpeg ownership; the mask result is a backend-neutral dynamic RGBA surface consumed by either Godot renderer. Managed code is no longer Windows-annotated, and target-aware builds stage either the win-x64 or Linux-x64 native bundle | Add macOS native builds and Linux/macOS in-engine smoke gates |
-| Movie audio | ABI v2 returns timestamped stereo float PCM; bounded managed buffering feeds a per-playback Godot `AudioStreamGenerator` and routes native movie flags to engine buses | All 29 installed audio-bearing streams decode with signal; synchronized LOGO/OP/CHAPTER playback is audibly accepted | Treat absent, distorted, or unsynchronized audio from an audio-bearing movie as a runtime bug |
+| Movie audio | ABI v3 returns timestamped stereo float PCM; bounded managed buffering feeds a per-playback Godot `AudioStreamGenerator` and routes native movie flags to engine buses | All 29 installed audio-bearing streams decode with signal. Video follows the output-latency-compensated hardware clock; video and audio both retain the common zero-based media timeline, and completion holds the terminal image through the audibly drained graph endpoint | Manually recheck the 2026-08-11 LOGO/OP synchronization fix on Windows and Linux; treat any remaining absent, distorted, or unsynchronized audio as a runtime bug |
 | ADV font discovery/raster fidelity | `Age.Engine.Text` remains OS-neutral. On compatible ACP-932 Windows, `auto` selects the separate exact-to-request `Age.Engine.Text.Windows` GDI gray-4 backend. Otherwise Godot TextServer supplies Unicode masks and metrics from ordered system-font substitutions in `godot/config/himegari-text-rendering.json`; this policy is explicitly not GDI pixel-exact. Immediate `0x204`/`0x205`, live ADV, retained History, and the wait atlas all enter ordinary RGBA surfaces/retained handles | Three Mincho/Gothic regular/bold samples byte-match an independent Unicode GDI oracle. A live `SC0000@0x869` trace proves that the `AGE Patch.exe`/`jprun.dll` wrapper overrides authored Mincho to MS Gothic: 13 captured masks match Gothic byte-for-byte and Mincho 0/13. This is wrapper behavior, not the true-native default, and reproducing it is outside the compatibility target. Forced exact and forced portable self-tests cover immediate, live, and History rasterization, bounded caching, complete-line materialization, retained ordering, alpha/tint/fade, transforms, clipping, capture, HIDEWIN suspension, partial erase/republication, reset, and teardown. Gameplay `Label` pools and overlay projection are gone | Select and smoke-test a redistributable Linux font-bundling policy or retain the explicit system-font prerequisite; add macOS runtime coverage and keep the GDI project out of non-Windows deliverables |
 | Filesystem semantics | Several filename and containment comparisons use `OrdinalIgnoreCase`; installed assets are conventionally uppercase | Needs validation on case-sensitive filesystems; may hide casing or containment mistakes | Add Linux/macOS tests with mixed-case synthetic roots and use filesystem-appropriate containment rules |
 | Save/profile/settings storage | `Sys4PersistencePaths` models AGE's independent `SAVEPATH` and `REGFILEPATH` resolutions. Godot replaces Himegari's related profile directory with `user://`, yielding `user://SAVE` for native S3SD/S4SD/S3RT files and thumbnails plus `user://SYS4REG.INI` for the BOM-less CP932 options file; the preserving writer changes only its nine `[sound]` keys | Save payloads and engine options are isolated together without changing either native format. Native/drop-in resolution remains available through `USEAPPDATAFOLDER` plus both SYS4INI paths. A single-root override is rejected when `SAVEPATH` is not beneath `REGFILEPATH`, preventing cross-profile guesses | Expose explicit profile/native selection through the future launcher and allow independent overrides for profiles whose two native paths are unrelated. Validate CP932 availability, replace/flush, case, permissions, and interrupted-write behavior on each export target |
@@ -245,8 +246,9 @@ The boundary has two layers:
    Video-only movies use the monotonic playback origin. Audio-bearing movies feed a per-instance
    `AudioStreamGenerator`; the monotonic-clamped Godot sound-hardware position
    (`playback + time-since-mix - cached output latency`) advances due video frames. Completion requires video
-   stop time, audio decode EOF, and PCM submission. Disposal interrupts waits, joins both workers, and stops the
-   generator without depending on native default-device playback.
+   endpoint, audio decode EOF, PCM submission, and audio-clock arrival at the common presentation endpoint. Disposal
+   interrupts waits, joins both workers, and stops the generator without depending on native default-device
+   playback.
 
 `StopTimeMs` performs a bounded packet scan over the seekable in-memory payload and takes the longest usable
 FFmpeg format duration, video-stream duration, timestamp span, or constant-frame-rate packet-count duration. This
@@ -290,19 +292,21 @@ the first timestamp and material later gaps/overlaps. A 4,093-block OP regressio
 The clean audible recheck passed for LOGO/OP and CHAPTER. DirectShow and the managed Windows platform annotations
 were then deleted; missing, distorted, or unsynchronized audio on any of the 29 audio-bearing assets is now a bug.
 
-Movie startup was corrected on 2026-07-28 after a first-frame latch exposed a second, visible 600 ms freeze.
-`LOGO.AGF` and `OP.AGF` begin audio at 0 ms on the shim's shared mux timeline, while their first decoded video
-frames carry PTS 600 ms and 601 ms. Signal-bearing PCM in OP's first 600 ms initially looked like an intentional
-audio lead, but native OP advances video and audio immediately. A real-asset regression proves the decoder is not
-losing opening data: the first 20 LOGO/OP video frames are consecutive 33/34 ms samples, change within that window,
-and contain alpha 255 at every pixel. The mux offset is therefore not a presentation deadline.
+Movie startup was first corrected on 2026-07-28 after a first-frame latch exposed a visible 600 ms freeze. That
+pass correctly stopped pacing the first surviving frame against its raw PTS, but it misclassified the 600/601 ms
+LOGO/OP video start as a harmless mux offset. The shim's initial seek had already skipped the actual PTS-0 opening
+frames. The opacity portion of the old real-asset regression remains valid—returned frames are consecutive,
+changing, and alpha 255—but completeness now has its own PTS-0 assertion and native-content fingerprint evidence.
 
 The paced decoder still latches frame zero and Godot still waits to start its `AudioStreamGenerator` until that
-image has been published. It now schedules every later video frame from
-`source_video_pts - first_video_pts`, including audio-bearing movies, while submitting the complete audio stream
-from its own timestamp zero. This preserves every decoded sample and immediately advances frame cadence instead
-of freezing frame zero until the audio clock reaches the program-stream offset. Startup logs and F6 snapshots
-retain the raw first video PTS for diagnosis.
+image has been published. The defect was the native shim's initial video rewind: it sought to the video stream's
+declared 600/601 ms `start_time`, skipping valid opening packets while audio began at the common zero origin.
+LOGO consequently decoded 200 frames from PTS 600 and moved picture roughly 600 ms ahead. Rewinding video to the
+format's common media origin recovers 218 consecutive LOGO frames beginning at PTS 0. Native DirectShow traces
+show both output pins start at zero, native video fingerprints match FFmpeg at equal timestamps, and native PCM
+first becomes non-silent around 2,351 ms. The corrected asset relation places FFmpeg audio onset around 2,380 ms
+before the first `E` at video PTS 2,502 ms, rather than 478 ms after the prematurely displayed cue. Completion
+retains the full common endpoint. Startup logs and F6 snapshots retain the raw first video PTS for diagnosis.
 
 A separate compositor error amplified the symptom. MPEG-1 has no transparency and FFmpeg's RGBA conversion
 produces opaque pixels, but the VM had replaced the existing mutable movie target with an invented RGB color key
@@ -356,8 +360,9 @@ against an explicit installed-game path using the portable text backend, with a 
 leaked-object warning. Minimal Ubuntu required `fonts-noto-cjk`; before installation the exact same artifact
 failed explicitly on Japanese glyph U+59EB. After WSLg was enabled, the same artifact also opened windowed,
 accepted normal title/menu input, displayed both opening movies, and reached SC0000 through the natural startup
-path. Both movies produced audible output; the slight A/V desynchronization also reproduces on Windows and is
-tracked as a shared runtime follow-up rather than a Linux-only defect. This interactive acceptance establishes
+path. Both movies produced audible output; the slight A/V desynchronization also reproduced on Windows and was
+traced to skipped opening video preroll corrected on 2026-08-11. Manual confirmation of that correction
+remains a cross-platform follow-up. This interactive acceptance establishes
 WSLg window/input/movie/audio presentation, but not native-desktop compositor/driver behavior or case-sensitive
 install/profile behavior.
 

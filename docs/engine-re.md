@@ -455,25 +455,39 @@ contract.
 The custom `movie_texture_renderer_receive_sample@0x4628d0` copies that preroll sample into the D3D texture
 and sets renderer `+0x5b4`. `movie_consume_renderer_new_frame_flag@0x405120` clears the flag and makes the
 outer engine tick render the retained surface. Audio is cued during the same graph transition but begins only
-with the running reference clock. Native observation adds the decisive cadence constraint: OP's image advances
-immediately with its audio; it does not hold the preroll image for roughly 600 ms. AGE contains no later
-timestamp correction, so the DirectShow splitter/graph is necessarily presenting the video stream relative to
-its first sample rather than exposing FFmpeg's shared program-stream timestamp origin. This last mapping is an
-inference about DirectShow internals, but the visible native behavior is the parity oracle.
+with the running reference clock. A read-only `IMediaSample::GetTime` trace on 2026-08-11 replaced the earlier
+visual inference with direct evidence: native LOGO's video samples reach the inherited DirectShow base renderer
+at exactly 0, 33.3667, 66.7333 ms and continue at that cadence. A follow-up hook installed while `quartz.dll`
+loaded, before graph `Run`, proved that native audio also begins at graph time 0 with contiguous 26.1224 ms
+samples; its first non-silent PCM block begins at 2,351 ms. Native video-content fingerprints show real changing
+frames throughout 0--600 ms and match FFmpeg-decoded fingerprints at the same timestamps from 1,501 ms onward.
+AGE therefore preserves the common program timeline; it does not drop the opening video interval.
 
-The installed FFmpeg probe rules out dropped or transparent source frames. LOGO and OP first report video PTS
-600/601 ms on the shim's shared mux timeline, then deliver every tested opening frame at consecutive 33/34 ms
-steps; pixels change within the first 20 frames. Every decoded alpha byte in those frames is 255. MPEG-1 has no
-alpha plane. Native `movie_texture_renderer_set_media_type@0x463750` accepts RGB24/RGB32, and the RGB24 copy
+The earlier installed FFmpeg probe proved that its returned frames were consecutive and opaque, but not that
+decode began at the first packet: its explicit seek had already skipped to PTS 600/601 ms. After the corrected
+common-origin rewind, LOGO and OP begin at PTS 0; their first 20 frames remain consecutive 33/34 ms samples and
+change within that window. Every decoded alpha byte is 255. MPEG-1 has no alpha plane. Native
+`movie_texture_renderer_set_media_type@0x463750` accepts RGB24/RGB32, and the RGB24 copy
 path promotes pixels to alpha `0xff` before comparing the complete packed ARGB value with its renderer key.
 Opcode `0x20f` attaches that renderer to the existing D3D target and never reloads the retained surface or
 assigns it an RGB color key. The former port did both `Gfx.SetSurface(..., colorKey: 0)` and RGB-only keying,
 which incorrectly made exact-black movie texels transparent and explained grey-background MPEG speckles.
 
-The corrected port publishes frame zero before starting audio, then schedules all video frames from
-`source_video_pts - first_video_pts`; audio retains its own complete stream from timestamp zero. No video or
-audio samples are discarded. Signal-bearing PCM in OP's first 600 ms proves only that the audio data is real,
-not that the MPEG mux's cross-stream start offset is an intended 600 ms visible lead.
+The port's error was below managed pacing. `rewind_for_decode` sought the video demuxer to
+`AVStream.start_time` (600/601 ms for LOGO/OP), skipping valid earlier packets/decoded frames. Managed pacing then
+treated the first surviving frame as presentation time zero while audio correctly retained the common origin.
+For LOGO this decoded only 200 frames and moved picture about 600 ms ahead of sound. The native shim now rewinds
+video to the format's common `timeline_origin_ms`; LOGO produces 218 consecutive frames beginning at PTS 0. The
+asset-level cue confirms the correction: audio signal begins around 2,380 ms and the first `E` appears at video
+PTS 2,502 ms, preserving the authored roughly 122 ms sound lead instead of the old roughly 478 ms lag.
+
+**Audio-bearing graph completion (2026-08-11):** DirectShow remains active through the common graph endpoint.
+The port had completed once final PCM was *submitted* to Godot, not when it became audible, and LOGO could still
+have roughly 375 ms queued. Audio-bearing playback holds the terminal image until the sound-hardware clock reaches
+the full source endpoint; audio decode EOF and PCM submission remain additional requirements. With the recovered
+opening video frames, LOGO's video and audio now naturally share the approximately 7,288 ms graph lifetime. A live
+Windows F6 series showed zero generator underruns and a stable output-latency-compensated clock, ruling out decode
+starvation and startup buffer loss.
 
 An existing native operand trace identifies every observed heap codebase by a 100% match against its static
 instruction-offset set. The captured New Game route is:

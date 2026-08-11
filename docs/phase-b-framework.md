@@ -759,7 +759,8 @@ demuxers, preserving concurrent decode without temporary files, and exposes time
 float PCM resampled at the source rate. Video and audio timestamps share the same normalized media origin.
 The managed decoder owns bounded video and PCM queues plus separate workers; audio-bearing movies use the
 Godot audio-device clock as the presentation master, while video-only movies retain monotonic stopwatch pacing.
-Completion waits for the final video interval and for decoded PCM to be submitted.
+Completion waits for the final video interval and for decoded PCM to be submitted through the shared zero-based
+presentation endpoint.
 
 ABI v3 adds a synchronous dual-demuxer initial seek used by opcode `0x241`. Native seek lands on preceding
 indexed packets; managed preroll selects the video frame active at the requested position, sample-trims audio
@@ -792,6 +793,16 @@ COM/temp-file adapter, compatibility test, and managed Windows platform annotati
 Linux/macOS FFmpeg builds and packaging smoke gates when work returns to cross-platform distribution.
 Post-cleanup validation passes all 405 engine tests, the warning-free Godot build, threaded selftest, opcode
 lint/tooling, and the 213/213 installed video/audio corpus gate.
+
+The shared Windows/Linux residual A/V report was investigated on 2026-08-11. A read-only native LOGO trace
+proved DirectShow supplies AGE zero-based 33.3667 ms video samples and contiguous 26.1224 ms audio samples; an
+early hook measured the first non-silent native PCM block at 2,351 ms. Sparse native video fingerprints match
+FFmpeg frames at equal timestamps and expose changing native frames during 0--600 ms. The shim had skipped those
+frames by rewinding to the video stream's declared 600 ms `start_time`, then managed pacing displayed frame 600 at
+time zero while audio retained the common origin. Rewinding video to the format timeline origin recovers 218 LOGO
+frames beginning at PTS 0 instead of 200 beginning at 600. Its audio onset around 2,380 ms again precedes the
+first `E` at PTS 2,502 ms. Completion separately retains the terminal image until queued audio drains through the
+full graph endpoint. Focused and real-asset regressions pin both corrections; manual LOGO/OP confirmation remains.
 
 **CORPUS-WIDE OPCODE HARDENING PASS STARTED (2026-07-28).**
 With numbered-save implementation complete and further live save testing explicitly deferred, the active
