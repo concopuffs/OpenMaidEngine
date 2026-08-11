@@ -3048,9 +3048,8 @@ The distinction comes from the reference launch path, not the script preset. `AG
 hard-coded `MS Gothic` family strings. The comparison screenshots therefore show the patch-wrapper
 realization of AGE's Mincho request as bold MS Gothic, not true unwrapped native rendering.
 `windows-gdi-gray4` remains the correct native-default path because it reproduces AGE's authored Mincho
-request directly. A future launch/profile parameter may optionally override the realized face to reproduce
-wrapper-specific environments, but that is compatibility configuration rather than a native-fidelity
-correction and is not current work.
+request directly. Wrapper-specific realized-face substitution is outside the native-AGE compatibility target;
+no launch/profile override is planned for it.
 
 `ImmediateSurfaceTextRenderer` builds the complete CP932 request list before touching the destination,
 making an unsupported character an atomic fallback rather than a partially rasterized string. It applies

@@ -1192,8 +1192,8 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    lighter-weight discrepancy: the `AGE Patch.exe`/`jprun.dll` reference launch realizes AGE's authored
    24px bold Mincho request as `MS Gothic`. Thirteen intercepted masks match an independent Gothic request
    byte-for-byte and Mincho 0/13. That result is specific to the wrapper and does not supersede the true
-   native Mincho target; a realized-face override is optional launch-profile compatibility, not an
-   acceptance requirement for the exact backend.
+   native Mincho target. Reproducing that wrapper substitution is outside the native-AGE compatibility
+   target and no realized-face override is planned for it.
    This reference backend remains opt-in and is not yet connected to live presentation; the existing Label path
    therefore remains the current fallback.
 4. **Move immediate surface strings first.** Completed 2026-07-30 for the exact Windows path. Ops
@@ -1252,9 +1252,9 @@ primitive, which cannot be made equivalent by choosing another embolden constant
   neighbors, clipping, alpha, and RGB integer rounding.
 - On Windows, representative CP932 glyph masks, `GLYPHMETRICS`, and advances match a direct invocation of
   the decoded GDI request; tests compare returned data, not screenshot histograms.
-- If wrapper compatibility is requested, a launch profile may override the realized face ahead of the
-  raster request. Himegari's `AGE Patch.exe`/`jprun.dll` path realizes 24px authored Mincho as MS Gothic,
-  but the true-native acceptance target remains the authored Mincho request.
+- Himegari's `AGE Patch.exe`/`jprun.dll` path realizes 24px authored Mincho as MS Gothic, but that
+  third-party wrapper substitution is outside the compatibility target. The exact backend accepts the
+  authored Mincho request as native AGE does without the wrapper.
 - Surface-string tests prove text is occluded by later handles and inherits the bound object's alpha, tint,
   affine transform, source clipping, offscreen capture, and transition behavior in both render backends.
 - Retained-layout tests prove per-glyph handle order, capacity bounds, partial/full erase, reset/republication,
@@ -1452,9 +1452,12 @@ layer's rendering diverges from ADV; save layout.
 ---
 
 ## 8. Immediate next step
-The **codebase consolidation** maintenance slice is complete: ownership/layout cleanup, source-only Linux CI,
-private-remote backup, binary and Kelebek-source history sanitation, attribution, and the MIT project license are
-all established. Resume the planned **AGE-exact retained glyph-mask text renderer** polish slice, starting with
-the platform-neutral glyph request/result contract and shared coverage/compositing core. Concrete playthrough
-blockers may still preempt that work; do not change remote policy without the user's explicit direction.
-The completed consolidation effort does not replace Phase B gameplay validation or the open cross-platform gates.
+The **AGE-exact retained glyph-mask text renderer** and its portable TextServer backend are complete. The later
+codebase-consolidation, Linux/Windows packaging, and dual-platform release-CI efforts are also complete through
+`v0.2.0`. Resume **playthrough-led Phase B polish and native save-compatibility testing**; no decoded effectful
+opcode gap remains in the shipped 481-script corpus. Use the next reproducible natural-playthrough discrepancy
+to choose the concrete gameplay slice instead of returning to opcode-coverage work.
+
+The open portability gates remain separate follow-ups: deliberately mixed-case synthetic roots, fresh-profile
+save/settings writes, native Linux desktop coverage, shared movie A/V synchronization, and a deliberate Linux
+font-bundling policy. Do not change remote or release policy without the user's explicit direction.
