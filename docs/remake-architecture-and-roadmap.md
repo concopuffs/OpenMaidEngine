@@ -155,13 +155,79 @@ No single language should serve every layer:
 Lua and Open Maid Script solve different problems. Lua would run **alongside** the AGE VM and talk to a
 controlled engine API; it would not need to compile into AGE bytecode. Open Maid Script, if justified
 later, should be a narrow content language for scenes, dialogue, choices and common presentation rather
-than an attempt to replace Lua as a general-purpose language. Its eventual backend could be AGE
-bytecode, an engine-owned extended representation, or generated Lua coroutines; defer that choice until
-the ADV and hook APIs expose stable abstractions.
+than an attempt to replace Lua as a general-purpose language. Its compatibility backend should compile
+to AGE bytecode; extended-only constructs could later target an engine-owned representation or generated
+Lua coroutines. Defer the exact language boundary until the ADV and hook APIs expose stable abstractions.
 
 AGE assembly remains important. It is the most exact route for changing original logic and the only
 route likely to preserve native-engine compatibility, but it should not be the normal requirement for
 behavioral mods.
+
+#### Decompilation and round-trip contract
+
+Open Maid Script should eventually have a decompiler as well as a compiler. The goal is not to recover
+Eushully's unknown source language: compiler-lost names, comments, includes, macros and original control-
+structure spelling are unrecoverable. The useful goal is a human-readable language that can represent
+every decoded AGE script without loss, lift well-understood idioms into clearer constructs, and compile
+back to AGE bytecode.
+
+Treat this as three related representations rather than requiring one syntax level to satisfy every use:
+
+| Representation | Purpose | Expected round trip |
+|---|---|---|
+| Annotated AGE assembly | exact opcode, typed-operand and layout inspection | byte-identical |
+| Lowered OMS | labels, calls, named/raw variables, simple expressions and control flow, with AGE escape nodes | byte-identical in preservation mode |
+| Idiomatic OMS | scenes, dialogue, choices, structured conditions and common presentation actions | semantic equivalence; byte identity only for certified lifts |
+
+The lowered language is the completeness boundary. It must be able to express every opcode and operand
+type, including unnamed or future operations, and retain enough source metadata to reproduce local-bank
+counts, labels, inline strings/arrays, string sharing and physical ordering, the T1/T2/T3 tables, magic
+and revision fields, exact CP932 bytes where text re-encoding is ambiguous, and otherwise-unreferenced or
+unknown body dwords. If a construct cannot be lifted confidently, the decompiler emits a raw/lowered AGE
+operation rather than guessing. Better decompilation can then grow incrementally without ever reducing
+corpus coverage.
+
+The pipeline should be:
+
+```text
+SYS script container
+    -> exact AGE instruction/data representation
+    -> symbolic labels + control-flow graph + normalized operands/data flow
+    -> recognized OMS constructs
+    -> lowered/raw fallback for everything else
+```
+
+Longest-sequence matching is appropriate for small compiler idioms, but match normalized instructions,
+not raw bytes: absolute offsets and temporary locations can differ while the idiom remains the same.
+Rules capture typed operands and labels, use deterministic specificity/length precedence, and normally
+stay within a basic block. Larger `if`/`else` and loop recovery should use control-flow joins and
+dominance; unusual or irreducible flow remains explicit labels and branches. A proposed lift is accepted
+only when immediately compiling the candidate reproduces the consumed normalized instructions, or the
+exact dwords when the rule promises exactness. Otherwise it falls back.
+
+Compilation needs two explicit policies:
+
+- **Preserve layout** is for an unchanged lossless decompilation. Preserve encoding choices, duplicate
+  strings, pool/table order, unused data and original physical layout so `BIN -> source -> BIN` can be
+  byte-identical.
+- **Rebuild** is for edited source. Recompute labels, offsets, string/data placement and metadata in a
+  deterministic canonical form. The result must be valid AGE bytecode, but harmless physical differences
+  from Eushully's compiler are allowed.
+
+Prove the toolchain in layers:
+
+1. Round-trip the installed script corpus through lossless AGE assembly byte-for-byte.
+2. Round-trip it through lowered OMS byte-for-byte, with visible accounting for every raw fallback.
+3. Require `OMS -> BIN -> OMS -> BIN` to reach a byte-identical fixed point for compiler-generated code.
+4. For readable lifts of native scripts, compare normalized instructions, VM traces and observable
+   behavior; test selected native-compatible rebuilds under both Open Maid Engine and `AGE.EXE`.
+
+Byte identity strongly validates container serialization, operand encoding, relocation, string/data
+layout and metadata reconstruction. It does not alone prove opcode semantics or high-level OMS lowering:
+a compiler and decompiler can share the same mistaken model, so independent VM tests, trace comparison
+and the native-engine oracle remain necessary. The realistic contract is therefore: every supported
+script has valid lossless source; understood regions become idiomatic OMS; preservation mode is
+byte-identical; rebuild mode is behaviorally equivalent.
 
 ### 3.4 Hook selectors: identify inline code once
 
@@ -419,16 +485,18 @@ When Phase C/D actually begins, proceed incrementally:
 7. Put user scripting behind an `IModRuntime`-style boundary and spike Lua as the first runtime.
 8. Add typed semantic events where actual mod use cases justify them.
 9. Add namespaced saved state, virtual assets/scripts and controlled UI/audio services.
-10. Integrate AGE assembly/reassembly and instruction-level transforms.
-11. Consider Open Maid Script only after the stable ADV/event vocabulary is known.
+10. Integrate AGE assembly/reassembly, lossless lowered-OMS decompilation and instruction-level
+    transforms; establish byte-identical corpus round trips before readable lifting.
+11. Design the idiomatic Open Maid Script surface only after the stable ADV/event vocabulary is known.
 
 This ordering avoids baking Lua or a speculative DSL into the VM core. It also leaves room for another
 runtime later while making the selectors, event contracts and mod packages language-independent.
 
 **Readability, concretely:** annotated disassembly is available now (opcode names, raw offsets,
 call-script names and a growing global map). Pseudo-decompilation for reading is feasible and has been
-demonstrated on RECOVER. Clean round-trippable high-level source remains a compiler project and a stretch
-goal; none of the Tier-2 hook design depends on solving it.
+demonstrated on RECOVER. The lossless lowered representation and byte-identical reassembly are the first
+compiler/decompiler milestone; broad idiomatic lifting remains a stretch goal. None of the Tier-2 hook
+design depends on solving it.
 
 ---
 
@@ -513,10 +581,11 @@ requirements.
 - Asset pipeline: AGF↔PNG, audio and deterministic `.omp` packaging. → Tier-1 modding works.
 
 ### Phase D — Logic modding
-- Integrate the **assembler** (Tier-2 bytecode-patch mods) and ship the **host hook API**
+- Integrate the **assembler and lossless decompiler** (Tier-2 bytecode-patch mods) and ship the
+  **host hook API**
   behind a language-independent runtime boundary; spike Lua as the first user-facing runtime per §3.
   → Tier-2 modding works.
-- Optionally invest in decompiler quality toward Tier 3.
+- Optionally invest in idiomatic OMS lifting and decompiler readability toward Tier 3.
 
 ### Phase E — Enhance, polish, productize
 - Enhancements the VM unlocks: higher/wide resolution, faster text, QoL, save-anywhere, new-content
