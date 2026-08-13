@@ -49,6 +49,27 @@ The Phase A implementation/result history remains in `docs/phase-a-slice-plan.md
    connects it to a reproduced defect.
 6. **Bound every slice by an observable transition.** Each stage starts from a known state and ends at a
    visible screen, input boundary, scene handoff, or gameplay action.
+7. **Escalate persistent or cross-subsystem discrepancies.** Start with the smallest evidence-backed local
+   investigation. If a discrepancy crosses a subsystem boundary, or survives one focused local correction,
+   stop making local patches and apply the subsystem escalation rule below.
+
+### Subsystem escalation rule
+
+When the escalation trigger is met:
+
+1. Bound the affected native subsystem and map its relevant entry points, lifecycle, owned state, and
+   interactions with adjacent subsystems. This is a focused map of the failing contract, not an exhaustive
+   decompilation of `AGE.EXE`.
+2. Define the observable contract at stable coordinates and capture native evidence for it. Prefer a
+   repeatable differential oracle such as VM/global snapshots, save/resume state, retained-surface
+   fingerprints, audio/video timestamps, or input/yield transitions.
+3. Compare the native evidence with the port and localize the first meaningful divergence before changing
+   the implementation again.
+4. Implement the smallest correction consistent with the mapped lifecycle, then retain the differential
+   comparison as an automated regression where practical and finish with the slice's manual acceptance check.
+
+End the escalation once the reproduced discrepancy and its relevant contract are explained. Do not expand it
+into reconstructing unused handlers, recovering the whole native engine, or producing a byte-matching C build.
 
 ## Stage B0 — Ground-truth reconnaissance
 
