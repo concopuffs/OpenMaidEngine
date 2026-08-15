@@ -61,6 +61,19 @@ public class WindowsGdiGlyphMaskRasterizerTests
     }
 
     [Fact]
+    public void IdeographicSpacePreservesAdvanceWithTransparentCoverage()
+    {
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        GlyphMask space = rasterizer.Rasterize(
+            NativeRequest("ＭＳ 明朝", 24, -12, 0, 0x3000));
+
+        Assert.True(space.CellAdvanceX > 0);
+        Assert.All(space.Coverage.ToArray(), value => Assert.Equal(0, value));
+    }
+
+    [Fact]
     public void FontHandlesUseTheSharedBoundedLruAndDisposeCleanly()
     {
         if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;

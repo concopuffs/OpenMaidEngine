@@ -71,6 +71,28 @@ When the escalation trigger is met:
 End the escalation once the reproduced discrepancy and its relevant contract are explained. Do not expand it
 into reconstructing unused handlers, recovering the whole native engine, or producing a byte-matching C build.
 
+### DEBUGMAP P008/P009 GDI worker-end regression corrected (2026-08-15)
+
+A live `SYSTEM4 > FIELD > SC0270` run first reported `[vm] ended: unknown` while the locator still showed P008
+(`SC0270@0x5b22`). The coordinate is an ordinary `wait-for-input`; its next instruction begins P009. A
+corpus-backed regression and automated portable-text runs crossed that boundary, but those runs did not exercise
+the exact Windows GDI rasterizer used by normal Windows play. The `unknown` message also hid the actionable
+exception because the worker's `finally` set the completion flag while the main loop printed only the unset VM
+halt reason. Godot now retains and prints the complete worker exception and automatically writes a
+`worker-failure` diagnostic snapshot at the last traced script/opcode coordinate.
+
+The next live failure and that snapshot localized the defect to P009's `show-text` at `SC0270@0x5bea`. This line
+contains an ideographic full-width space (`U+3000`, CP932 `0x8140`). With `ＭＳ 明朝` at the active 24-pixel
+style, `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` returns the spacing glyph's advance and a nominal 1x1 metric box but
+reports a zero-byte bitmap requirement. The adapter incorrectly required the reported buffer size to equal the
+four-byte aligned metric box and threw before P009 could be published. It now treats only a zero-byte result as
+a zero-ink glyph: the GDI placement and advance metrics are retained and the implied mask is filled with
+transparent coverage. Nonzero short or oversized payloads remain hard failures. A focused Windows regression
+reproduces the original 0-versus-4 result and verifies that the ideographic space advances without drawing ink;
+the SYSTEM4/DEBUGMAP boundary regression remains in place. The user then repeated the normal exact-GDI
+DEBUGMAP entry and confirmed that the dialogue now continues into the map without the worker failure, accepting
+the fix end to end.
+
 ## Stage B0 — Ground-truth reconnaissance
 
 Before changing runtime architecture, record the original game's path from process start through the first

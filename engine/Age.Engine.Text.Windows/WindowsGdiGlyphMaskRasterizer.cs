@@ -124,7 +124,11 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         int height = checked((int)metrics.BlackBoxY);
         int stride = checked((width + 3) & ~3);
         int expectedBytes = checked(stride * height);
-        if (size != expectedBytes)
+        // CP932 0x8140 (U+3000 IDEOGRAPHIC SPACE) is a zero-ink spacing glyph. GDI reports
+        // its placement as a nominal 1x1 black box but returns a zero-byte required buffer.
+        // Preserve those metrics and materialize the implied transparent mask; a nonzero
+        // short/oversized payload still means that the bitmap contract is inconsistent.
+        if (size != 0 && size != expectedBytes)
             throw new InvalidOperationException(
                 $"GDI gray-4 buffer size {size} disagrees with {width}x{height}, stride {stride}.");
 

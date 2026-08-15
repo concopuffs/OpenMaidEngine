@@ -39,6 +39,7 @@ public partial class Main : Godot.Control
     private volatile bool _done;
     private bool _ended;
     private Task? _vmTask;
+    private Exception? _vmFailure;
     private bool _selftest;
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
@@ -455,6 +456,7 @@ public partial class Main : Godot.Control
         _vmTask = Task.Run(() =>
         {
             try { _vm.Run(); }
+            catch (Exception error) { _vmFailure = error; }
             finally { _done = true; }
         });
 
@@ -560,14 +562,24 @@ public partial class Main : Godot.Control
             {
                 _ended = true;
                 DumpHistogram();
-                GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
-                ReportSubroutines();
-                ShowEnd();
-                if (_vm.HaltReason == "STEP-LIMIT")
+                if (_vmFailure != null)
                 {
-                    GodotTraceSnapshot haltTrace = _trace.HaltSnapshot ?? _trace.Snapshot();
-                    GD.Print(StepLimitDiagnosticFormatter.Format(haltTrace, _table!));
-                    CaptureStallDiagnostic(haltTrace, "step-limit");
+                    GD.PushError($"[vm] worker failed after {_vm!.Steps} steps: {_vmFailure}");
+                    ReportSubroutines();
+                    if (!_selftest)
+                        CaptureStallDiagnostic(_trace.Snapshot(), "worker-failure");
+                }
+                else
+                {
+                    GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
+                    ReportSubroutines();
+                    ShowEnd();
+                    if (_vm.HaltReason == "STEP-LIMIT")
+                    {
+                        GodotTraceSnapshot haltTrace = _trace.HaltSnapshot ?? _trace.Snapshot();
+                        GD.Print(StepLimitDiagnosticFormatter.Format(haltTrace, _table!));
+                        CaptureStallDiagnostic(haltTrace, "step-limit");
+                    }
                 }
                 if (_selftest) RunSelfTestAndQuitOnFailure();
             }

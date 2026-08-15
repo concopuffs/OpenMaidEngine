@@ -7,6 +7,36 @@ using Xunit;
 
 public class DebugSceneLaunchTests
 {
+    private sealed class ReachedDebugMapPage8ContinuationException : Exception { }
+
+    private sealed class LaunchDebugMapAndStopAfterPage8Sink : ITraceSink
+    {
+        public VirtualMachine Vm = null!;
+        public bool TracingSteps => true;
+
+        public void Emit(in TraceEvent e)
+        {
+            if (e.Kind == TraceEventKind.FrameEnter
+                && e.Name?.Equals("TITLE.BIN", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                DebugFrameSnapshot frame = Assert.IsType<DebugFrameSnapshot>(Vm.DebugFrame);
+                Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>
+                {
+                    [0] = 1,
+                    [0xaba5c] = -1,
+                    [0x62ccf] = 0,
+                    [0x699] = 0x338c,
+                }));
+            }
+
+            if (e.Kind == TraceEventKind.Step
+                && e.Ins?.Offset == 0x5b25
+                && Vm.DebugFrame?.CurrentScript.Equals(
+                    "SC0270.BIN", StringComparison.OrdinalIgnoreCase) == true)
+                throw new ReachedDebugMapPage8ContinuationException();
+        }
+    }
+
     private static Operand I(long value) => new(0, value);
     private static Operand G(long address) => new(3, address);
     private static (int, Operand[]) Call(Operand id) => (0x3, new[] { id });
@@ -14,6 +44,24 @@ public class DebugSceneLaunchTests
     private static (int, Operand[]) Wait() => (0x72, new[] { I(0) });
     private static (int, Operand[]) Sleep() => (0xc8, new[] { I(1) });
     private static (int, Operand[]) Exit() => (0x2, Array.Empty<Operand>());
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void RealDebugMapLaunchContinuesPastSc0270Page8Wait()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var sink = new LaunchDebugMapAndStopAfterPage8Sink();
+        var vm = new VirtualMachine(
+            scripts.RequireByName("SYSTEM4.BIN"), table, new CaptureHost(),
+            new VmOptions(MaxSteps: 1_000_000), scripts, sink);
+        sink.Vm = vm;
+
+        Exception? exception = Record.Exception(() => vm.Run());
+
+        Assert.IsType<ReachedDebugMapPage8ContinuationException>(exception);
+        Assert.Null(vm.HaltReason);
+    }
 
     [Fact]
     public async Task ParkedTitleFrameReturnsToCoordinatorWhichDispatchesSelectedScript()
