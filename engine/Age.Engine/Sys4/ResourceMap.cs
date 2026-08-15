@@ -11,49 +11,43 @@ public sealed class ResourceMap
 {
     private readonly Sys4AssetCatalog _catalog;
     private readonly IAssetStore _store;
+    private readonly Action<string>? _diagnostic;
+    private readonly HashSet<string> _reportedDiagnostics = new(StringComparer.Ordinal);
+    private readonly object _diagnosticLock = new();
 
-    public ResourceMap(Sys4AssetCatalog catalog, IAssetStore? store = null)
+    public ResourceMap(Sys4AssetCatalog catalog, IAssetStore? store = null,
+                       Action<string>? diagnostic = null)
     {
         _catalog = catalog;
         _store = store ?? new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
+        _diagnostic = diagnostic;
     }
 
-    public static ResourceMap Load() => new(Sys4AssetCatalog.Load(Paths.Sys4Ini));
+    public static ResourceMap Load(Action<string>? diagnostic = null)
+        => new(Sys4AssetCatalog.Load(Paths.Sys4Ini), diagnostic: diagnostic);
 
     /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF texture record.</summary>
     public AssetEntry? ResolveTexture(long resourceId)
-    {
-        var entry = _catalog.ResolvePacked(resourceId);
-        return entry is { IsPlaceholder: false } &&
-               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
-    }
+        => ResolveTypedPacked(resourceId, "texture", "an AGF record",
+            entry => entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Resolve a universal packed SYS4INI/AAI id to a voice audio record.</summary>
     public AssetEntry? ResolveVoice(long resourceId)
-    {
-        var entry = _catalog.ResolvePacked(resourceId);
-        return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
-    }
+        => ResolveTypedPacked(resourceId, "voice", "an OGG/WAV record", IsAudio);
 
     /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF-named movie record. ReadMovie
     /// validates the MPEG signature because still images use the same extension.</summary>
     public AssetEntry? ResolveMovie(long resourceId)
-    {
-        var entry = _catalog.ResolvePacked(resourceId);
-        return entry is { IsPlaceholder: false } &&
-               entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase) ? entry : null;
-    }
+        => ResolveTypedPacked(resourceId, "movie", "an AGF record",
+            entry => entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
     public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
 
     /// <summary>Resolve a native packed raw id to one of AGE's Windows cursor resources.</summary>
     public AssetEntry? ResolveCursor(long resourceId)
-    {
-        var entry = _catalog.ResolvePacked(resourceId);
-        return entry is { IsPlaceholder: false }
-            && entry.Name.EndsWith(".CUR", StringComparison.OrdinalIgnoreCase) ? entry : null;
-    }
+        => ResolveTypedPacked(resourceId, "cursor", "a CUR record",
+            entry => entry.Name.EndsWith(".CUR", StringComparison.OrdinalIgnoreCase));
 
     public CursorImage DecodeCursor(AssetEntry entry)
     {
@@ -79,10 +73,7 @@ public sealed class ResourceMap
 
     /// <summary>Resolve opcode 0xb4's universal packed SYS4INI/AAI id to an audio entry.</summary>
     public AssetEntry? ResolveSoundEffect(long packedRawId)
-    {
-        var entry = _catalog.ResolvePacked(packedRawId);
-        return entry is { IsPlaceholder: false } && IsAudio(entry) ? entry : null;
-    }
+        => ResolveTypedPacked(packedRawId, "sound effect", "an OGG/WAV record", IsAudio);
 
     /// <summary>Read a catalog-resolved OGG/WAV payload through the loose-first ALF/AAI byte store.</summary>
     public AudioPayload ReadAudio(AssetEntry entry)
@@ -108,6 +99,43 @@ public sealed class ResourceMap
     private static bool IsAudio(AssetEntry entry)
         => entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase)
         || entry.Name.EndsWith(".WAV", StringComparison.OrdinalIgnoreCase);
+
+    private AssetEntry? ResolveTypedPacked(long resourceId, string kind, string expected,
+                                            Func<AssetEntry, bool> matches)
+    {
+        AssetEntry? entry = _catalog.ResolvePacked(resourceId);
+        if (entry == null)
+        {
+            ReportOnce($"[asset-resolution] {kind} resource {FormatResourceId(resourceId)} " +
+                       "does not select a mounted SYS4INI/AAI record");
+            return null;
+        }
+        if (entry.IsPlaceholder)
+        {
+            ReportOnce($"[asset-resolution] {kind} resource {FormatResourceId(resourceId)} " +
+                       "selects a placeholder catalog record");
+            return null;
+        }
+        if (!matches(entry))
+        {
+            ReportOnce($"[asset-resolution] {kind} resource {FormatResourceId(resourceId)} " +
+                       $"selects {entry.Name}, expected {expected}");
+            return null;
+        }
+        return entry;
+    }
+
+    private void ReportOnce(string message)
+    {
+        if (_diagnostic == null) return;
+        bool report;
+        lock (_diagnosticLock)
+            report = _reportedDiagnostics.Add(message);
+        if (report) _diagnostic(message);
+    }
+
+    private static string FormatResourceId(long resourceId)
+        => resourceId < 0 ? resourceId.ToString() : $"0x{resourceId:x}";
 }
 
 public sealed record AudioPayload(string Name, byte[] Bytes);

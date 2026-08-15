@@ -42,7 +42,7 @@ if (args[0] == "audio")
     // each resolved via ResourceMap (same rule as the Godot host). Diagnostic only.
     var sceneName = args[1];
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = ResourceMap.Load();
+    var res = ResourceMap.Load(Console.Error.WriteLine);
     var host = new AudioTraceHost(res);
     var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
@@ -69,7 +69,7 @@ if (args[0] == "gfx")
     bool boot = args.Contains("--boot");
     var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = ResourceMap.Load();
+    var res = ResourceMap.Load(Console.Error.WriteLine);
     var host = new GfxTraceHost(res);
     var session = new GameSession();
     foreach (var s in args.Where(a => a.Contains('=')))

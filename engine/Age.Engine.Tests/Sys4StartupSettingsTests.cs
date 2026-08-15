@@ -101,11 +101,11 @@ public class Sys4StartupSettingsTests
         params (string Key, string Value)[] pairs)
         => WrapCatalog(BuildExpanded(pairs));
 
-    internal static byte[] BuildCatalog(bool includeTrailer)
-        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer));
+    internal static byte[] BuildCatalog(bool includeTrailer, string fileName = "@")
+        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer, fileName));
 
     private static byte[] BuildExpanded(
-        (string Key, string Value)[] pairs, bool includeTrailer = true)
+        (string Key, string Value)[] pairs, bool includeTrailer = true, string fileName = "@")
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Encoding cp932 = Encoding.GetEncoding(932);
@@ -113,7 +113,7 @@ public class Sys4StartupSettingsTests
         AddU32(blob, 1);
         AddFixedString(blob, "DATA.ALF", 256, cp932);
         AddU32(blob, 1);
-        AddFixedString(blob, "@", 64, cp932);
+        AddFixedString(blob, fileName, 64, cp932);
         AddU32(blob, 0);
         AddU32(blob, 0);
         AddU32(blob, 0);

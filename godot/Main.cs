@@ -301,8 +301,8 @@ public partial class Main : Godot.Control
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
-            ? new ResourceMap(scripts.Catalog, trackedAssetStore)
-            : new ResourceMap(catalog, _assetStore);
+            ? new ResourceMap(scripts.Catalog, trackedAssetStore, GD.PushWarning)
+            : new ResourceMap(catalog, _assetStore, GD.PushWarning);
         IGlyphMaskRasterizer? surfaceTextRasterizer = null;
         PortableTextRenderingPolicy? portableTextPolicy = null;
         string? exactUnavailable = null;

@@ -307,6 +307,10 @@ public class Sys4AssetStoreTests
             File.Delete(Path.Combine(loose, "TEST.BIN"));
             Assert.Equal(new byte[] { 1, 2, 3 }, store.ReadAll(entry));
 
+            Directory.CreateDirectory(Path.Combine(loose, "TEST.BIN"));
+            Assert.Equal(new byte[] { 1, 2, 3 }, store.ReadAll(entry));
+            Directory.Delete(Path.Combine(loose, "TEST.BIN"));
+
             var reads = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => store.ReadAll(entry))));
             Assert.All(reads, bytes => Assert.Equal(new byte[] { 1, 2, 3 }, bytes));
             Assert.Throws<InvalidDataException>(() => store.Open(entry with { Name = "../TEST.BIN" }));
@@ -317,6 +321,28 @@ public class Sys4AssetStoreTests
         {
             Directory.Delete(temp, recursive: true);
         }
+    }
+
+    [Fact]
+    public void TypedResolutionReportsInvalidAndMismatchedPackedIdsOnce()
+    {
+        var catalog = Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog(
+            includeTrailer: true, fileName: "TEST.BIN"));
+        var diagnostics = new List<string>();
+        var resources = new ResourceMap(catalog, diagnostic: diagnostics.Add);
+
+        Assert.Null(resources.ResolveTexture(0x02000000));
+        Assert.Null(resources.ResolveTexture(0x02000000));
+        Assert.Null(resources.ResolveTexture(0));
+        Assert.Null(resources.ResolveTexture(0));
+
+        Assert.Collection(diagnostics,
+            message => Assert.Equal(
+                "[asset-resolution] texture resource 0x2000000 does not select a mounted SYS4INI/AAI record",
+                message),
+            message => Assert.Equal(
+                "[asset-resolution] texture resource 0x0 selects TEST.BIN, expected an AGF record",
+                message));
     }
 
     private static byte[] ReadToEnd(Stream stream)

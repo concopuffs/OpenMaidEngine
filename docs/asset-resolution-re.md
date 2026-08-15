@@ -214,6 +214,24 @@ graphics, voice/SFX, and movie bytes. Resolution and opening remain separate onl
 packed id selects one record, then the store applies loose-first/archive-second opening. There is no
 scene-local numeric addressing mode.
 
+**Native/port fallback fidelity recheck and correction (2026-08-15).** A fresh `/v2` decompile and disassembly
+comparison confirmed the normal installed-asset contract above, including base/append packed selection, exact loose
+basename, archive offset/size, and successful-open catalog tracking. `Sys4AssetStore` now also matches the two
+previously divergent open details: any ordinary loose-file open failure (`IOException` or
+`UnauthorizedAccessException`) continues through later override roots and then the archive, and both loose and
+archive handles request `FileOptions.SequentialScan`. A loose file that opens but fails later decoding remains
+authoritative in both implementations; decode failure never reveals the archive copy.
+
+Native still throws for a base id outside the table, a missing signed append selector, an append id outside its
+table, or a selected entry that cannot be opened loose or archived. The typed port intentionally retains its safer
+`null` result for invalid, unmounted, placeholder, or wrong-type packed records. `ResourceMap` now emits a
+deduplicated diagnostic for each `(resource kind, packed id, failure)` through an optional host callback; Godot sends
+these to `GD.PushWarning`, and the CLI audio/gfx diagnostics send them to standard error. Thus malformed scripts or
+mods remain nonfatal without becoming silent.
+
+The corresponding Ghidra helper is named `asset_register_open_handle_range@0x44edf0`; it stores the selected
+handle, current position, and readable length in the FileDB stream table.
+
 ### Proposed layers
 
 1. **Catalog + read-only ALF store (VFS-A DONE).** `Sys4AssetCatalog` parses SYS4INI at runtime while preserving all 13208 raw records

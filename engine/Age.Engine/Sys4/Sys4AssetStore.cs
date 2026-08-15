@@ -64,10 +64,12 @@ public sealed class Sys4AssetStore : IAssetStore
             try
             {
                 return new FileStream(candidate, FileMode.Open, FileAccess.Read, FileShare.Read,
-                                      64 * 1024, FileOptions.RandomAccess);
+                                      64 * 1024, FileOptions.SequentialScan);
             }
-            catch (FileNotFoundException) { }
-            catch (DirectoryNotFoundException) { }
+            // Native falls through on any INVALID_HANDLE_VALUE result from the loose CreateFileA.
+            // Keep malformed payloads authoritative once open; only open failures reach the archive.
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
 
         ValidateBasename(entry.Archive, "archive");
@@ -75,7 +77,7 @@ public sealed class Sys4AssetStore : IAssetStore
         if (!IsDirectChild(_archiveRoot, archivePath))
             throw new InvalidDataException($"unsafe archive name: {entry.Archive}");
         var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                                  64 * 1024, FileOptions.RandomAccess);
+                                  64 * 1024, FileOptions.SequentialScan);
         try
         {
             if (entry.Offset < 0 || entry.Size < 0 || entry.Offset > file.Length

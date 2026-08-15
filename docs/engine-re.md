@@ -307,11 +307,19 @@ the dispatch table (op `0x03` → `ctx[0x26c93+3]` = **`FUN_0041bc90`**), then t
   **SYS4INI 80-byte layout** `{name[64], arc_id@0x40, file_number@0x44, offset@0x48, size@0x4c}`
   (count = `[FileDB+0x40c]`, archive-name table = `[FileDB+0x410]`; absolute EngineCtx fields
   `+0x9c658/+0x9c65c/+0x9c660`). It tries a **loose override first**
-  (`CreateFileA` on `record.name` → the mod/patch hook point), else opens archive
+  (`CreateFileA` on `record.name` → the mod/patch hook point). Any failed loose `CreateFileA` result—not only
+  file-not-found—takes the archive branch; a successfully opened but malformed loose payload remains authoritative.
+  Both loose and archive opens use read access, read sharing, `OPEN_EXISTING`, and the sequential-scan hint. The
+  archive branch opens
   `[record.arc_id*0x100 + FileDB+0x410]`, `SetFilePointer` to `record.offset`, size = `record.size`.
   High-byte-tagged ids select `[FileDB+0x3028 + signed_selector*4]` and use the low 24 bits as the
   selected AAI record. The base corpus has no explicit high-byte call-script operand; INIT2 op `0x143`
   supplies mounted record-zero ids dynamically.
+- **`asset_register_open_handle_range@0x44edf0`** registers the selected handle in FileDB's 256-slot stream
+  table, retaining its current file position and the loose-file length or catalog-record length supplied by the
+  opener. A full table closes the new handle and throws. Base out-of-range ids, missing signed append selectors,
+  append out-of-range ids, and entries for which neither loose nor archive open succeeds likewise throw rather
+  than returning an unresolved sentinel.
 
 **So `call-script <id>` = a direct RAW index into the SYS4INI global file table** — the same table
 `parse_sys4ini.py` reads, but indexed *without* skipping `@` placeholders (13208 records, 2
