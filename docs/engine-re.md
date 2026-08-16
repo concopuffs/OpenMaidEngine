@@ -3062,6 +3062,14 @@ height/width, weight, `DEFAULT_CHARSET`, and raw CP932 face bytes. Each request 
 or two-byte CP932 code for `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` and `GetTextExtentPoint32A`; returned masks
 flow through the same normalized `GlyphMask` contract without another pixel conversion.
 
+`GetGlyphOutline`'s queried allocation size is not always identical to the rows described by
+`GLYPHMETRICS`. On the reference Windows installation, 24-pixel bold MS Mincho `p` reports a 12x15 box with a
+12-byte row stride but requests 192 bytes rather than 180; a live SC0000 run likewise produced 672 bytes for a
+25x23 box with 28-byte rows. The adapter therefore allocates and reads the complete queried size, as the API
+requires, while exposing only `stride * gmBlackBoxY` row bytes to the normalized mask/compositor. Extra storage
+is outside the drawable metric box and can contain unspecified data. Zero-byte spacing glyphs retain their
+separate transparent-mask handling; nonzero undersized buffers still fail.
+
 This exact ANSI reference requires Windows system ACP 932. `TryGetAvailability` reports the active-platform/
 code-page incompatibility and the constructor refuses to masquerade as exact when unavailable.
 `GlyphRasterizerBackendInfo` identifies the backend as `windows-gdi-gray4`, native-CP932, and pixel-exact.

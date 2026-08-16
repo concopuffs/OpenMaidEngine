@@ -87,11 +87,30 @@ style, `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` returns the spacing glyph's advance 
 reports a zero-byte bitmap requirement. The adapter incorrectly required the reported buffer size to equal the
 four-byte aligned metric box and threw before P009 could be published. It now treats only a zero-byte result as
 a zero-ink glyph: the GDI placement and advance metrics are retained and the implied mask is filled with
-transparent coverage. Nonzero short or oversized payloads remain hard failures. A focused Windows regression
-reproduces the original 0-versus-4 result and verifies that the ideographic space advances without drawing ink;
-the SYSTEM4/DEBUGMAP boundary regression remains in place. The user then repeated the normal exact-GDI
-DEBUGMAP entry and confirmed that the dialogue now continues into the map without the worker failure, accepting
-the fix end to end.
+transparent coverage. A focused Windows regression reproduces the original 0-versus-4 result and verifies that
+the ideographic space advances without drawing ink; nonzero buffers smaller than the metric-defined rows remain
+hard failures. The SYSTEM4/DEBUGMAP boundary regression remains in place. The user then repeated the normal
+exact-GDI DEBUGMAP entry and confirmed that the dialogue now continues into the map without the worker failure,
+accepting the fix end to end.
+
+### SYSTEM4 P009 oversized GDI buffer corrected (2026-08-16)
+
+A new-game run with Ctrl held reached `SYSTEM4 P009`, whose text is `SC0000@0xa77` and whose following wait is
+`SC0000@0xa7f`, then failed while rasterizing the retained line. GDI reported a 672-byte gray-4 requirement for
+a 25x23 metric box with 28-byte rows; the adapter rejected it because the metric-defined coverage is only 644
+bytes. This is not the earlier zero-ink spacing-glyph case. A focused independent ANSI/Unicode probe reproduces
+the same oversized-storage contract with 24-pixel bold MS Mincho `p`: `GLYPHMETRICS` reports 12x15 and a
+12-byte row stride, while `GetGlyphOutline` requests 192 bytes rather than the 180 bytes described by those
+rows. The surplus may contain unspecified data and is not an additional drawable metric row.
+
+The adapter now follows the two returned contracts independently: it allocates and reads the complete size
+requested by GDI, but normalizes only `stride * gmBlackBoxY` bytes into `GlyphMask` for layout/composition.
+A nonzero undersized result, a failed read, or changed metrics between the query and read remains an error. The
+regression compares the ANSI adapter with an independent Unicode GDI call, proves that the raw buffer is larger
+than the normalized mask, and checks the exact metric-defined coverage. A second regression covers every glyph
+in the reported SC0000 line with its active 24-pixel bold Mincho style. The real direct-scene harness, exact GDI
+backend, and held-Ctrl input then recorded the reported P009 coordinate and continued through P166 without a
+worker failure; the probe stopped at the later interactive name-entry boundary.
 
 ## Stage B0 — Ground-truth reconnaissance
 

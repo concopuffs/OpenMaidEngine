@@ -126,22 +126,31 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         int expectedBytes = checked(stride * height);
         // CP932 0x8140 (U+3000 IDEOGRAPHIC SPACE) is a zero-ink spacing glyph. GDI reports
         // its placement as a nominal 1x1 black box but returns a zero-byte required buffer.
-        // Preserve those metrics and materialize the implied transparent mask; a nonzero
-        // short/oversized payload still means that the bitmap contract is inconsistent.
-        if (size != 0 && size != expectedBytes)
+        // Preserve those metrics and materialize the implied transparent mask. GDI can also
+        // return storage beyond the metric-defined rows (for example, bold 24px MS Mincho 'p'
+        // reports 12x15 but requests 192 bytes rather than 180). Treat the queried size as the
+        // allocation contract and the GLYPHMETRICS box as the raster-consumption contract: read
+        // exactly the requested buffer, then retain only the rows described by the metrics. Bytes
+        // outside that box are not drawable coverage and are not required to be initialized to zero.
+        if (size != 0 && size < expectedBytes)
             throw new InvalidOperationException(
-                $"GDI gray-4 buffer size {size} disagrees with {width}x{height}, stride {stride}.");
+                $"GDI gray-4 buffer size {size} for CP932 0x{code:x4} " +
+                $"('{request.FontFace}', {request.PixelHeight}px, width {request.RequestedWidth}, " +
+                $"weight {request.Weight}) is smaller than its {width}x{height} metric box, " +
+                $"stride {stride} ({expectedBytes} bytes).");
 
         byte[] coverage = new byte[expectedBytes];
         if (size > 0)
         {
+            byte[] gdiBuffer = new byte[checked((int)size)];
             identity = Mat2.Identity;
             uint written = NativeMethods.GetGlyphOutlineA(
                 _displayIc.DangerousGetHandle(), code, GgoGray4Bitmap,
-                out GlyphMetrics secondMetrics, size, coverage, ref identity);
+                out GlyphMetrics secondMetrics, size, gdiBuffer, ref identity);
             if (written == GdiError) ThrowWin32($"GetGlyphOutlineA read failed for CP932 0x{code:x4}");
             if (written != size || !metrics.Equals(secondMetrics))
                 throw new InvalidOperationException("GDI glyph metrics changed between query and read.");
+            gdiBuffer.AsSpan(0, expectedBytes).CopyTo(coverage);
         }
 
         byte[] encoded = EncodeCp932Code(code);

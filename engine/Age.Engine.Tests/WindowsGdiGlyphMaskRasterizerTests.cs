@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using Age.Engine.Model;
 using Age.Engine.Text;
 using Age.Engine.Text.Windows;
 
@@ -74,6 +75,48 @@ public class WindowsGdiGlyphMaskRasterizerTests
     }
 
     [Fact]
+    public void Sc0000OpeningNarrationLineRasterizesEveryGlyph()
+    {
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+
+        const string text =
+            "だが怨嗟に満ちた言葉は、呪いのように彼らの心に暗い影を落とした。";
+        var style = AdvTextStyle.Default with
+        {
+            PrimaryFontSize = 24,
+            Bold = true,
+            FontFace = "ＭＳ 明朝",
+            RenderMode = 3,
+            LineSpacing = 8,
+        };
+
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        foreach (GlyphRasterRequest request in
+                 ImmediateSurfaceTextRenderer.CreateRequests(text, style))
+        {
+            Exception? error = Record.Exception(() => rasterizer.Rasterize(request));
+            Assert.True(
+                error == null,
+                $"U+{request.UnicodeScalar:X4} CP932 0x{request.Cp932Code:X4}: {error}");
+        }
+    }
+
+    [Fact]
+    public void Gray4StorageBeyondMetricRowsIsTrimmed()
+    {
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+
+        GlyphRasterRequest request = NativeRequest("ＭＳ 明朝", 24, -12, 700, 'p');
+        DirectGlyph direct = RasterizeUnicodeDirect("ＭＳ 明朝", 24, -12, 700, 'p');
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        GlyphMask actual = rasterizer.Rasterize(request);
+
+        Assert.True(direct.RawBufferSize > direct.Coverage.Length);
+        Assert.Equal(direct.Coverage, actual.Coverage.ToArray());
+        Assert.Equal(actual.Stride * actual.Height, actual.Coverage.Length);
+    }
+
+    [Fact]
     public void FontHandlesUseTheSharedBoundedLruAndDisposeCleanly()
     {
         if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
@@ -135,17 +178,19 @@ public class WindowsGdiGlyphMaskRasterizerTests
             int glyphWidth = checked((int)metrics.BlackBoxX);
             int glyphHeight = checked((int)metrics.BlackBoxY);
             int stride = checked((glyphWidth + 3) & ~3);
-            Assert.Equal(checked(stride * glyphHeight), (int)size);
-            byte[] coverage = new byte[size];
+            int expectedBytes = checked(stride * glyphHeight);
+            Assert.True(size >= expectedBytes);
+            byte[] rawCoverage = new byte[size];
             if (size > 0)
             {
                 identity = Mat2.Identity;
                 uint written = Native.GetGlyphOutlineW(
                     dc, (uint)scalar, GgoGray4Bitmap,
-                    out GlyphMetrics second, size, coverage, ref identity);
+                    out GlyphMetrics second, size, rawCoverage, ref identity);
                 Assert.Equal(size, written);
                 Assert.Equal(metrics, second);
             }
+            byte[] coverage = rawCoverage.AsSpan(0, expectedBytes).ToArray();
 
             string text = char.ConvertFromUtf32(scalar);
             if (!Native.GetTextExtentPoint32W(dc, text, text.Length, out NativeSize cell))
@@ -154,7 +199,7 @@ public class WindowsGdiGlyphMaskRasterizerTests
                 glyphWidth, glyphHeight, stride,
                 metrics.GlyphOrigin.X, metrics.GlyphOrigin.Y,
                 metrics.CellIncrementX, metrics.CellIncrementY,
-                cell.Width, cell.Height, coverage);
+                cell.Width, cell.Height, coverage, checked((int)size));
         }
         finally
         {
@@ -178,7 +223,8 @@ public class WindowsGdiGlyphMaskRasterizerTests
         int CellAdvanceY,
         int CellWidth,
         int CellHeight,
-        byte[] Coverage);
+        byte[] Coverage,
+        int RawBufferSize);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
