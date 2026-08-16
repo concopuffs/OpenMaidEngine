@@ -3730,6 +3730,7 @@
 | `0x6cb` | adv_hover_message_skip | high | investigation | Pointer-hover flag for the standard ADV all-message Skip button at (728,572). See adv_hover_history. |
 | `0x6cc` | adv_hover_read_message_skip | high | investigation | Pointer-hover flag for the standard ADV read-message-only Skip button at (750,572). See adv_hover_history. |
 | `0x6cd` | adv_hover_hide_window | high | investigation | Pointer-hover flag for the standard ADV Hide-window button at (772,572). See adv_hover_history. |
+| `0x3238` | menu_cursor_auto_move_enabled | high | investigation | Persistent game option controlling whether a newly opened BUNKI/SBUNKI choice menu moves the physical cursor to its default row. INITCONFIG defaults it to 1; CONFIG writes 1/0 for the paired choices. BUNKI@0x2b6 and SBUNKI@0x289 call set-cursor-virtual when enabled and sample the existing cursor with get-cursor-virtual when disabled; BUNKIMOVE/SBUNKIMOVE use the same toggle during menu entrance motion. Not a scene story flag. |
 | `0x62425` | adv_hide_window_enabled | high | investigation | Native ADV-scheduler permission for the standard Hide Window action. After op 0x199 enters the registered yield-A handler, every standard ADV scene calls HIDEWIN.BIN only while this value is nonzero. No script writes it and the complete boot-to-SC0000 VM-write capture does not contain it, so it is native-owned inherited state rather than saved-game or script boot data. The Godot scene bootstrap mirrors the original enabled value 1. |
 | `0x15a096` | information_message_handled | high | investigation | INFOMES clears this before walking handler rows and stops when it becomes one. CIMES, EIMES, and VIMES set it after rendering a matching character, enemy, or glossary message, implementing a first-handler-wins extension chain. |
 
@@ -3737,7 +3738,6 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
-| `0x3238` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 5 scripts; compared against [1]. |
 | `0x3301` | — | low | inference | Config/settings global (INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 6 scripts; compared against [1, 2]. |
 | `0x3303` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 8 scripts; compared against [1]. |
 | `0x3304` | — | low | inference | Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 13 scripts; compared against [1]. |

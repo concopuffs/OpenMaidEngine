@@ -76,6 +76,7 @@ internal class RecordingHost : IHost
     public readonly List<FullwidthTextEditRequest> FullwidthTextEdits = new();
     public System.Func<FullwidthTextEditRequest, FullwidthTextEditResult>? OnFullwidthTextEdit;
     public readonly List<long> CursorResources = new();
+    public readonly List<(int X, int Y)> CursorWarps = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
     public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
@@ -176,6 +177,7 @@ internal class RecordingHost : IHost
     public virtual long InputClockMilliseconds => Environment.TickCount64;
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
     public void ClearCursorResource() => CursorClearCount++;
+    public void WarpCursor(int virtualX, int virtualY) => CursorWarps.Add((virtualX, virtualY));
     public virtual void Sleep(long duration) => SleptDurations.Add(duration);
     public virtual void WaitForTimedCallbackDeadline(long duration)
     {

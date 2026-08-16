@@ -1282,7 +1282,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 ### 0x10a `set-cursor-virtual` (u0041E540, argc 2)
 - **summary:** (x)(y) - convert AGE virtual-screen coordinates to client/screen coordinates and move the OS cursor.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly.
+- **evidence:** Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls USER32 SetCursorPos. BUNKI@0x2b6 and SBUNKI@0x289 test G[0x3238], compute the default choice point, and call 0x10a when menu cursor auto-move is enabled; their disabled branches retain the physical position through 0x109. SC0000 also alternates the cursor by one vertical pixel after state-changing ADV button clicks so hover re-enters cleanly.
 
 ### 0x10b `map-mouse-button` (u0041E5A0, argc 2)
 - **summary:** (button_slot)(physical_button) - map a physical mouse button to a logical button slot; polling emits the slot as logical action slot+4.

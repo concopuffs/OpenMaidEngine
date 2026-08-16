@@ -2727,6 +2727,25 @@ deferred ReadTextDB work should remain a seam rather than a storage dependency. 
 names/comments the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice
 opcode paths.
 
+### Menu default cursor auto-move (2026-08-16)
+
+The menu option stored in `G[0x3238]` is `menu_cursor_auto_move_enabled`. `INITCONFIG.BIN` defaults it to
+one and `CONFIG.BIN` writes the paired enabled/disabled values. At `BUNKI.BIN@0x2b6` and
+`SBUNKI.BIN@0x289`, an enabled value makes the script compute a point in the default choice row and invoke
+`set-cursor-virtual` (`0x10a`); the disabled path instead samples the existing physical position through
+`get-cursor-virtual` (`0x109`). `BUNKIMOVE` and `SBUNKIMOVE` use the same toggle while animating the menu.
+The highlighted default row and the physical pointer are therefore two consequences of the same script
+path, not one frontend-owned selection operation.
+
+The `/v2` handler `op_0x10a_set_cursor_virtual@0x421590` converts the client origin to screen space,
+applies active VirtualFullScreen scale/letterbox geometry, and calls USER32 `SetCursorPos`. The port now
+preserves its immediate virtual-pointer update and also forwards a cursor-warp request to the interactive
+host. Godot marshals that request onto its main thread, inversely maps the 800x600 AGE coordinate into the
+current viewport, and calls `Viewport.WarpMouse`. Godot supports that operation on the port's Windows,
+macOS, and Linux desktop targets; it is documented as a no-op on Android, iOS, and Web, where the VM's
+logical position still remains correct. A synthetic opcode regression covers both the VM position and host
+request. The Ghidra handler annotation was updated and the `/v2` program saved on 2026-08-16.
+
 ### ADV Hide Window implementation (2026-07-18)
 
 The x=772 callback now follows the original control flow rather than a Godot-only visibility shortcut.

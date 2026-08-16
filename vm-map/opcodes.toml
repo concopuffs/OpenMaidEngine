@@ -2426,7 +2426,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls SetCursorPos. SC0000 alternates the cursor by one vertical pixel after state-changing ADV button clicks so the hover state re-enters cleanly."
+evidence = "Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordinates through the active VirtualFullScreen geometry and calls USER32 SetCursorPos. BUNKI@0x2b6 and SBUNKI@0x289 test G[0x3238], compute the default choice point, and call 0x10a when menu cursor auto-move is enabled; their disabled branches retain the physical position through 0x109. SC0000 also alternates the cursor by one vertical pixel after state-changing ADV button clicks so hover re-enters cleanly."
 
 [[opcode.semantics.args]]
 i = 1

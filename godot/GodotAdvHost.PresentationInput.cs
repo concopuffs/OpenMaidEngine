@@ -482,6 +482,13 @@ public sealed partial class GodotAdvHost
         _timeline?.Event("cursor-clear", new());
     }
 
+    public void WarpCursor(int virtualX, int virtualY)
+    {
+        // Script execution is on the VM thread; Godot input/display APIs belong to the main thread.
+        _main.CallDeferred("WarpAgeCursor", virtualX, virtualY);
+        _timeline?.Event("cursor-warp", new() { ["x"] = virtualX, ["y"] = virtualY });
+    }
+
     public void WaitForForegroundTransition(GfxState gfx)
     {
         _foregroundTransitionWaitBypassed = false;

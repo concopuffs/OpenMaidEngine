@@ -2419,13 +2419,13 @@ depends_on = ["0x3234"]
 
 [[global]]
 address = "0x3238"
-name = ""
-category = "unknown"
+name = "menu_cursor_auto_move_enabled"
+category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "Config/settings global (CONFIG.BIN/INITCONFIG.BIN writer, scene-reach 0) — NOT a scene story flag; miner over-tagged it. Branch-read in 5 scripts; compared against [1]."
-source = "inference"
-confidence = "low"
+usage = "Persistent game option controlling whether a newly opened BUNKI/SBUNKI choice menu moves the physical cursor to its default row. INITCONFIG defaults it to 1; CONFIG writes 1/0 for the paired choices. BUNKI@0x2b6 and SBUNKI@0x289 call set-cursor-virtual when enabled and sample the existing cursor with get-cursor-virtual when disabled; BUNKIMOVE/SBUNKIMOVE use the same toggle during menu entrance motion. Not a scene story flag."
+source = "investigation"
+confidence = "high"
 depends_on = []
 
 [[global]]

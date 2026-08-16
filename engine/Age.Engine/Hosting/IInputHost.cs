@@ -32,6 +32,7 @@ public interface IInputHost
 
     void SetCursorResource(long resourceId) { }
     void ClearCursorResource() { }
+    void WarpCursor(int virtualX, int virtualY) { }
 
     // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
     // hosts default to normal playback; the Godot host supplies the live interactive values.

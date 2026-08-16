@@ -159,8 +159,14 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             }
             case "u0041E540":
-            case "set-cursor-virtual": // 0x10a; retain the virtual position even without OS warping
-                UpdatePointer((int)Read(a[0]), (int)Read(a[1])); return pc + 1;
+            case "set-cursor-virtual": // 0x10a: update AGE state immediately, then request the native warp
+            {
+                int x = (int)Read(a[0]);
+                int y = (int)Read(a[1]);
+                UpdatePointer(x, y);
+                _host.WarpCursor(x, y);
+                return pc + 1;
+            }
             case "u0041E5A0":
             case "map-mouse-button": // 0x10b: physical button -> slot, polled action is slot+4
                 InputBindings.MapMouseButton(unchecked((int)Read(a[0])), unchecked((int)Read(a[1])));

@@ -48,6 +48,25 @@ public class InputBindingTests
     }
 
     [Fact]
+    public void SetCursorVirtualUpdatesVmCoordinatesAndRequestsAHostWarp()
+    {
+        var script = ScriptAssembler.Assemble(Table, "CURSOR_WARP", new List<(int, Operand[])>
+        {
+            (0x10a, new[] { I(321), I(234) }),
+            (0x109, new[] { G(0x710), G(0x711) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, Table, host);
+
+        vm.Run();
+
+        Assert.Equal((321, 234), Assert.Single(host.CursorWarps));
+        Assert.Equal(321, vm.Globals.GetValueOrDefault(0x710));
+        Assert.Equal(234, vm.Globals.GetValueOrDefault(0x711));
+    }
+
+    [Fact]
     [Trait("Category", "Workspace")]
     public void System4BootstrapReplaysAllSixteenInputConfigurationCalls()
     {

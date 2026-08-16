@@ -256,6 +256,17 @@ public partial class Main
                 (int)System.Math.Floor(position.Y * _screenHeight / size.Y));
     }
 
+    public void WarpAgeCursor(int virtualX, int virtualY)
+    {
+        // Viewport.WarpMouse expects viewport coordinates. This is the inverse of ToNativeScreen and
+        // lets Godot account for the platform window origin before moving the desktop pointer.
+        Vector2 size = GetViewport().GetVisibleRect().Size;
+        if (size.X <= 0 || size.Y <= 0 || _screenWidth <= 0 || _screenHeight <= 0) return;
+        GetViewport().WarpMouse(new Vector2(
+            virtualX * size.X / _screenWidth,
+            virtualY * size.Y / _screenHeight));
+    }
+
     public void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY)
     {
         var image = Image.CreateFromData(width, height, false, Image.Format.Rgba8, rgba);
