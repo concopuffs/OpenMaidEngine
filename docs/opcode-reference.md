@@ -1024,10 +1024,10 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **grounding:** source=investigation, confidence=high
 - **evidence:** Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides operands 3..5 by 100 and calls gfx_range_transform_set_scale_target@0x472d50. The worker arms the embedded transform object's ordinary scale channel (delay obj+0x3c, duration +0x50, target matrix +0xac), which gfx_range_transform_sample_frame@0x476df0 samples before range composition. FIELD has the sole corpus call, a 300 ms camera zoom.
 
-### 0x22f `set-gfx-position-current` (u00421DD0, argc 5)
-- **summary:** (handle)(control)(x)(y)(z) — set the object's current/base translation matrix. The native worker also retains operand 2 as channel control state; the port currently applies x/y/z but ignores that control operand.
+### 0x22f `set-gfx-range-translation-target` (u00421DD0, argc 5)
+- **summary:** (delay_ms)(duration_ms)(target_x)(target_y)(target_z) — animate the selected retained-gfx range transform's translation from its current matrix to the target. FIELD pairs this with an ordinary-object tween for the minimap viewport marker so both camera representations pan together.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** Ghidra /v2: gfx_op_0x22f_set_position_anim@0x423b00 fetches x/y/z as floats and passes all five operands to gfx_worker_set_translation@0x472e90. The worker builds the current translation matrix with x/y/z and stores operand 2 in the channel record. This is distinct from the shared range transform at 0x229. The C# handler sets V24 directly and is therefore position-correct but does not yet model operand 2.
+- **evidence:** Ghidra /v2 assembly: op_0x22f_set_gfx_range_translation_target@0x423b00 loads ECX with retained-gfx owner ctx+0x46614 before calling gfx_range_transform_set_translation_target@0x472e90. The worker writes owner+0x428's embedded object fields: active bit, shared start obj+0x34, delay obj+0x44, duration obj+0x58, and target translation matrix obj+0x1ac. It never resolves an ordinary object handle. FIELD@0xb4d8 supplies (0, pan_duration, target_x, target_y, 0) while the following 0x220 animates the minimap viewport marker over the same duration.
 
 ### 0x230 `reset-gfx-cyclic-animations` (u00421E70, argc 1)
 - **summary:** (handle) — get or create a retained gfx object, clear its cyclic-animation active flag, and zero all five looping-channel start/period pairs without changing current/base transforms.

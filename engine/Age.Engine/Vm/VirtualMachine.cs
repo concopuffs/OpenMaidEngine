@@ -1528,7 +1528,8 @@ public sealed partial class VirtualMachine
                 return StepRetainedObject(label, a, pc);
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
-            case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
+            case "u00421DD0":                         // pre-reference compatibility
+            case "set-gfx-range-translation-target": // 0x22f (delay)(duration)(x)(y)(z)
             case "u004219E0":                  // pre-reference compatibility
             case "set-gfx-range-transform":   // 0x229 (first)(count)(anchor x/y/z)
             case "u00421A90":                  // pre-reference compatibility

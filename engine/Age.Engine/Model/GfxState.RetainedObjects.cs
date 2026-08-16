@@ -182,6 +182,23 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Op 0x22f: arm the selected retained-gfx range transform's delayed one-shot
+    /// translation target. FIELD uses this channel to pan the world while its ordinary minimap object
+    /// runs a matching op-0x220 translation.</summary>
+    public void SetRangeTranslationChannel(long delayMs, long durationMs,
+                                           (long X, long Y, long Z) target)
+    {
+        lock (_lock)
+        {
+            _rangeTransform.TranslationDelayMs = delayMs;
+            _rangeTransform.TranslationDurationMs = durationMs;
+            _rangeTransform.TranslationTarget = target;
+            _rangeTransform.TranslationEnabled = durationMs > 0;
+            _rangeTransform.OneShotStartMs = -1;
+            MarkRetainedMutation();
+        }
+    }
+
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
     public bool CloneObject(long sourceHandle, long destinationHandle)
     {

@@ -52,6 +52,41 @@ public class GfxRangeTransformTests
     }
 
     [Fact]
+    public void Opcode22fPansTheSelectedRangeInSyncWithAnOrdinaryObjectTween()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "RANGE_PAN", new List<(int, Operand[])>
+        {
+            (0x229, new[] { I(1), I(1), I(500), I(350), I(0) }),
+            (0x22c, new[] { I(100), I(50), I(0) }),
+            (0x22f, new[] { I(0), I(300), I(300), I(150), I(0) }),
+            (0x220, new[] { I(50001), I(0), I(300), I(100), I(50), I(0) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Gfx.SetSurface(1, 1, -1);
+        vm.Gfx.BindDraw(1, 1, 0, 0, 1, 1, 500, 350);
+        vm.Gfx.BindDraw(50001, 1, 0, 0, 1, 1, 0, 0);
+        vm.Run();
+        vm.Gfx.SnapshotVisibleObjects(1000); // seed the shared one-shot start
+        var halfway = vm.Gfx.SnapshotVisibleObjects(1150);
+        var map = halfway.Single(x => x.Handle == 1);
+        var marker = halfway.Single(x => x.Handle == 50001);
+        var mapPoint = Transform2DMath.Build(map.Transform).FromLocalOrigin(map.DstX, map.DstY)
+            .Then(map.RangeTransform!.Value).Apply(0, 0);
+        var markerPoint = Transform2DMath.Build(marker.Transform)
+            .FromLocalOrigin(marker.DstX, marker.DstY).Apply(0, 0);
+
+        Assert.Equal((700.0, 450.0), mapPoint);
+        Assert.Equal((50.0, 25.0), markerPoint);
+        Assert.Null(vm.Gfx.TryGet(0));
+        Assert.True(vm.Gfx.HasActiveTimedPresentation(1150));
+        vm.Gfx.SnapshotVisibleObjects(1300);
+        Assert.False(vm.Gfx.HasActiveTimedPresentation(1300));
+    }
+
+    [Fact]
     public void Opcode229SelectsRangeWithoutCreatingAnOrdinaryObject()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

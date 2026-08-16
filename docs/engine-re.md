@@ -1289,13 +1289,12 @@ Native `gfx_object_blit_d3d9@0x4774c0` clips the explicit source rectangle and r
 `right<=left || bottom<=top`; mode-1's tiled blit likewise visits no children for an empty rectangle. The
 port now preserves that empty draw rather than leaking the complete SO005 sheet.
 
-#### Selected retained-object range transform — opcodes `0x229`/`0x22a`/`0x22c`/`0x22d` (2026-07-21)
+#### Selected retained-object range transform — opcodes `0x229`/`0x22a`/`0x22c`/`0x22d`/`0x22f` (2026-07-21; corrected 2026-08-16)
 
 `0x229` was formerly misclassified as a second per-object position setter. Native
 `op_0x229_set_gfx_range_transform@0x423700` instead resets an embedded gfx-object record at retained-gfx
 owner `+0x428`, writes `(first_handle,count)` to owner `+0x420/+0x424`, and writes operands 3..5 as that
-embedded object's anchor at owner `+0x440..+0x448`. The actual per-object direct-position opcode remains
-`0x22f`.
+embedded object's anchor at owner `+0x440..+0x448`.
 
 On every render frame, `gfx_range_transform_sample_frame@0x476df0` samples the embedded object's ordinary
 scale/rotation/translation channels into owner matrix `+0xb5b4`. `gfx_object_composite@0x47f650`
@@ -1306,7 +1305,10 @@ post-multiplies an object's normal matrix by this shared matrix only when its ha
 - `0x22b`: current axis-angle rotation (present in the native dispatch table, zero Himegari corpus calls);
 - `0x22c`: current translation in pixels;
 - `0x22d`: delayed/duration scale target, using the embedded object's ordinary one-shot scale channel;
-- `0x22e`: delayed/duration axis-angle target (native-dispatch-only, zero Himegari corpus calls).
+- `0x22e`: delayed/duration axis-angle target (native-dispatch-only, zero Himegari corpus calls);
+- `0x22f`: delayed/duration translation target. Its handler loads ECX with retained-gfx owner
+  `ctx+0x46614`, and worker `gfx_range_transform_set_translation_target@0x472e90` writes the embedded
+  object's start/delay/duration fields and target matrix. Operand 1 is delay, not an object handle.
 
 FIELD's camera helper selects handles `[1,50000)`, anchors the transform at the current camera world
 coordinate `(G[0x767e],G[0x767f])`, sets translation to `(400-camera_x,300-camera_y,0)`, and applies the
@@ -1315,6 +1317,14 @@ UI—remain screen-fixed. FIELD's sole `0x22d` call animates a zoom over 300 ms.
 camera helper. Across the corpus, `0x229` occurs 693 times in 309 scripts: 590 all-zero disables, 101
 identity-range selections, and the two FIELD/LOOK camera selections. Correcting the contract therefore
 removes spurious object-zero mutations without changing established ADV output.
+
+FIELD's minimap-click helper at `FIELD@0xb3fe` changes the camera world coordinate, then issues two
+synchronized one-shot translations: `0x22f` pans the selected world range and `0x220` moves the ordinary
+minimap viewport-marker object. The former was previously mistaken for a direct position write to ordinary
+object handle 0, so the marker moved immediately while the world stayed fixed until the next camera-helper
+rebuild snapped it to the new coordinate. Routing `0x22f` to the embedded range translation channel restores
+the shared pan duration and keeps both representations aligned. The user confirmed the natural FIELD minimap
+path now pans the world and viewport marker together on 2026-08-16.
 
 ### Blend & transparency — colorkey + `0x202`/`0x203` color/alpha (2026-07-08)
 
@@ -1430,7 +1440,7 @@ annotated in Ghidra, saved.
 **In scope (built this slice):**
 | op | handler / worker | semantics |
 |---|---|---|
-| `0x22f` | `gfx_op_0x22f_set_position_anim` → `gfx_worker_set_translation` | set object **position** (translation vec `obj+0x5d4`); base transform, not a ping-pong channel. Operand 2 is also retained as channel control state; the port currently ignores that field. |
+| `0x22f` | `op_0x22f_set_gfx_range_translation_target` → `gfx_range_transform_set_translation_target` | set the shared selected-range **translation target** with independent delay/duration (embedded object target matrix `owner+0x5d4` = `obj+0x1ac`); FIELD pairs it with the minimap marker's ordinary-object `0x220` tween. |
 | `0x229` | `op_0x229_set_gfx_range_transform` → `gfx_range_transform_reset` / `select_handles` / `set_anchor` | reset/select the shared **retained-object range transform**; not a per-object position setter (superseded finding above) |
 | `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |

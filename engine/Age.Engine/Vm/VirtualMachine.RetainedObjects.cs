@@ -39,8 +39,10 @@ public sealed partial class VirtualMachine
                 Gfx.SetDefaultObjectSlot((int)Read(a[0])); return pc + 1;
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
-            case "u00421DD0":   // 0x22f set-position: (handle)(op2)(x)(y)(z) -> base position (direct set)
-                Gfx.SetObjectPosition(Read(a[0]), (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
+            case "u00421DD0":                         // pre-reference compatibility
+            case "set-gfx-range-translation-target": // 0x22f (delay)(duration)(x)(y)(z)
+                Gfx.SetRangeTranslationChannel(Read(a[0]), Read(a[1]),
+                    (Read(a[2]), Read(a[3]), Read(a[4]))); return pc + 1;
             case "u004219E0":                  // pre-reference compatibility
             case "set-gfx-range-transform":   // 0x229 (first)(count)(anchor x/y/z)
                 Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
