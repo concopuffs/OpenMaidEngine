@@ -99,4 +99,34 @@ public class SfxOpsTests
         Assert.Equal(0, Assert.Single(host.SfxReleases));
         Assert.Equal((25, 3000L), Assert.Single(host.BgmFades));
     }
+
+    [Fact]
+    public void ActiveAdvSkipForcesBgmFadeEndpointButOrdinaryDispatchKeepsAuthoredDelay()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "BGM-FADE-SKIP",
+            new List<(int, Operand[])>
+            {
+                (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var persistentSkipScript = ScriptAssembler.Assemble(table, "BGM-FADE-PERSISTENT-SKIP",
+            new List<(int, Operand[])>
+            {
+                (0x88, new[] { new Operand(0, 1) }),
+                (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var ordinaryHost = new RecordingHost();
+        var physicalSkipHost = new RecordingHost { MessageSkip = true };
+        var persistentSkipHost = new RecordingHost();
+
+        new VirtualMachine(script, table, ordinaryHost).Run();
+        new VirtualMachine(script, table, physicalSkipHost).Run();
+        new VirtualMachine(persistentSkipScript, table, persistentSkipHost).Run();
+
+        Assert.Equal((0, 3000L), Assert.Single(ordinaryHost.BgmFades));
+        Assert.Equal((0, 0L), Assert.Single(physicalSkipHost.BgmFades));
+        Assert.Equal((0, 0L), Assert.Single(persistentSkipHost.BgmFades));
+    }
 }

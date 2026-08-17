@@ -3356,16 +3356,30 @@ accept/cancel `IHost` exchange, so cancellation cannot overwrite operand 1. Godo
 focus and show AGERC's exact Japanese errors. The helper operates on the C-string prefix and encodes through
 the configured native code page, avoiding both UTF-16 indexing and accidental splitting of CP932 pairs.
 
-`0xc2` is BGM rather than SFX: `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`, arms the service timer,
-and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates current to target percent;
-durations at least 1000 ms take 100 steps, shorter durations take 10, and target zero releases the source.
-The VM is parked for the requested duration while the native main loop continues rendering. The Godot host
-mirrors that ownership split: its VM worker waits on the fade clock only after publishing the completed
+`0xc2` is BGM rather than SFX. During ordinary execution, `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`,
+arms the service timer, and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates
+current to target percent; durations at least 1000 ms take 100 steps, shorter durations take 10, and target
+zero releases the source. The VM is parked for the requested duration while the native main loop continues
+rendering. Active ADV fast-forward (`run_state_flags & 0x08000000`) takes a separate opcode-local branch: it
+arms the requested target, applies the terminal fade tick immediately, and never sets blocking state `0x200`.
+A normal advance click does not take that branch. `adv_input_service_poll@0x411230` uses action bit `0x10` to
+release the preceding text wait, while only fast-forward bit `0x40` establishes `0x08000000`; once `0x200` is
+active, `engine_main_tick_with_exception_policy@0x411e8a` services only elapsed timer steps and does not poll
+click input for the BGM fade. The Godot host mirrors that ownership split: its VM worker waits on the fade
+clock only after publishing the completed
 pre-fade graphics burst and releasing the script presentation barrier. This is required at
 `SC0000@0x7c1`, where the three-second title-BGM fade begins after the New Game scene has already cleared
 to black; retaining presentation ownership during the wait incorrectly froze the last menu frame until the
 opening CG transition began. `0xd9` is adjacent startup control, not audio data: it clears
 run/service bit `0x1000` in the primary and, when active, secondary context and has no VM-visible result.
+
+**Skip endpoint correction (2026-08-16).** The port initially sent every `0xc2` request through that blocking
+host clock, so an already-active all-message or held-Ctrl Skip appeared to stop on SC0000 pages immediately
+followed by a BGM fade. `SYSTEM4 P046` (`wait SC0000@0x4180`) is followed by a 3000 ms target-zero fade at
+`SC0000@0x418d`; the captured run also contains the same pattern at P015 (3000 ms) and P090 (1500 ms). VM audio
+dispatch now sends zero duration only for the same combined active ADV-skip predicate used by native endpoint
+branches. Non-skip dispatch retains the authored duration, preserving native's deliberately unskippable-click
+behavior. A focused regression covers both outcomes.
 
 Opcode `0x1cf` belongs to the voice/BGM envelope rather than SFX. Handler
 `op_0x1cf_set_voice_bgm_duck_control@0x4209f0` replaces the transient mask at

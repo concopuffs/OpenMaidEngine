@@ -1946,13 +1946,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "fade-bgm"
 category = "audio"
-summary = "(target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Target 0 releases the current BGM source at completion."
+summary = "(target_percent)(duration_ms) — block script service while linearly fading current BGM volume to 0..100%. Durations >=1000 ms use 100 steps; shorter fades use 10. Active ADV fast-forward applies the endpoint immediately; an ordinary advance click does not. Target 0 releases the current BGM source at completion."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra op 0xc2 handler 0x4204c0 sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830; bgm_fade_tick@0x464960 interpolates current/target percent and applies volume, releasing at target 0. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms."
-details = "Implemented through the blocking host fade clock. Target zero clears the VM's retained track after the wait and invokes the shared BGM stop/release seam, so Godot does not retain a silent bound stream."
+evidence = "Ghidra op_0xc2_bgm_fade@0x4204c0 checks run-state 0x08000000 first: active ADV fast-forward arms the target and calls bgm_fade_tick@0x464960 with a terminal delta without setting blocking state. Otherwise it sets run-state 0x200, arms the service timer, and calls bgm_fade_arm@0x464830. engine_main_tick_with_exception_policy@0x411e8a services 0x200 only from elapsed timer steps and does not poll action-4 clicks; adv_input_service_poll@0x411230 uses click bit 0x10 only to release the preceding text wait, while fast-forward bit 0x40 establishes 0x08000000. Native SC0000 trace at 0x7c1/0x126c shows target 0, duration 3000, 1% ticks at about 30 ms."
+details = "Implemented through the blocking host fade clock. VM dispatch substitutes zero duration only when persistent/read/physical ADV fast-forward is already active, matching the native direct-endpoint branch; ordinary execution, including a click that merely released the preceding text wait, retains the authored duration. Target zero clears the VM's retained track after the wait and invokes the shared BGM stop/release seam, so Godot does not retain a silent bound stream."
 
 [[opcode.semantics.args]]
 i = 1

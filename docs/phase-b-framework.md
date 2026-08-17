@@ -112,6 +112,21 @@ in the reported SC0000 line with its active 24-pixel bold Mincho style. The real
 backend, and held-Ctrl input then recorded the reported P009 coordinate and continued through P166 without a
 worker failure; the probe stopped at the later interactive name-entry boundary.
 
+### SC0000 BGM fades now honor active ADV Skip (2026-08-16)
+
+The runtime locator captured `SYSTEM4 P046` at `wait SC0000@0x4180`, after which all-message Skip appeared to
+stall and clicks did not advance anything until execution eventually continued. The next effectful instruction
+is `fade-bgm SC0000@0x418d`, targeting zero over 3000 ms. The Godot audio host always entered its blocking fade
+clock, and neither its click path nor a skip wake changed the deadline. The same captured run exposes equivalent
+post-page fades at P015 (3000 ms) and P090 (1500 ms).
+
+Native `/v2` separates those inputs. `op_0xc2_bgm_fade@0x4204c0` immediately applies the endpoint without
+entering run-state `0x200` when ADV fast-forward state `0x08000000` is already active. A normal action-4 click
+only releases the preceding text wait; the native `0x200` service itself does not poll click input, so an
+ordinary click intentionally does not skip a BGM fade. VM audio dispatch now substitutes a zero-duration host
+fade only for active persistent/read/physical fast-forward and preserves the authored duration otherwise. The
+focused regression locks both outcomes.
+
 ## Stage B0 — Ground-truth reconnaissance
 
 Before changing runtime architecture, record the original game's path from process start through the first

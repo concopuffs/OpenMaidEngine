@@ -90,7 +90,12 @@ public sealed partial class VirtualMachine
             case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
             {
                 int targetPercent = (int)Read(a[0]);
-                _host.FadeBgm(targetPercent, Read(a[1]));
+                long durationMs = Read(a[1]);
+                // Native op 0xc2 enters its timed run-state only during ordinary playback. An
+                // already-active ADV fast-forward applies the fade endpoint immediately; a normal
+                // advance click does not set that skip state and therefore retains the authored delay.
+                bool forceEndpoint = _messageSkipServiceActive || _host.IsMessageSkipActive;
+                _host.FadeBgm(targetPercent, forceEndpoint ? 0 : durationMs);
                 if (targetPercent == 0)
                 {
                     _currentBgmTrackId = 0;
