@@ -221,18 +221,18 @@ public sealed partial class GfxState
         }
     }
 
-    /// <summary>Op 0x228: query the translation target decomposed from the native target matrix at
-    /// obj+0x17c (translation obj+0x1ac/+0x1b0/+0x1b4). This is independent of draw/base position V24.</summary>
-    public bool TryQueryTranslationTarget(long handle, out (double X, double Y, double Z) target)
+    /// <summary>Op 0x228: query the current translation decomposed from the native matrix at obj+0x16c.
+    /// This is independent of both the delayed target at obj+0x1ac and draw/base position V24.</summary>
+    public bool TryQueryTranslationCurrent(long handle, out (double X, double Y, double Z) current)
     {
         lock (_lock)
         {
             if (_objects.TryGetValue(handle, out var o))
             {
-                target = o.TranslationTarget;
+                current = o.TranslationCurrent;
                 return true;
             }
-            target = default;
+            current = default;
             return false;
         }
     }

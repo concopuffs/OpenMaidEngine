@@ -1546,7 +1546,9 @@ public sealed partial class VirtualMachine
             case "u00421EF0":   // 0x232 cyclic packed ARGB; negative alpha/RGB preserve static obj color
             case "set-scale-cycle": // 0x233 (handle)(period ms)(target scale x/y/z percent)
                 return StepAnimation(label, a, pc);
-            case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- target translation matrix
+            case "query-gfx-translation-target":  // pre-correction generated-name compatibility
+            case "query-gfx-translation-current":
+            case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- current translation matrix
                 return StepRetainedObject(label, a, pc);
             case "u00422930":
             case "query-surface-stop-time-ms":

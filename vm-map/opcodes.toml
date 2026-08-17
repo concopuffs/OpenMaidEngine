@@ -5886,14 +5886,15 @@ argc = 5
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "query-gfx-translation-target"
+name = "query-gfx-translation-current"
 category = "draw"
-summary = "0x228 query translation target (succ)(handle)(outX)(outY)(outZ): clone the retained object, decompose its target translation matrix at obj+0x17c, and return matrix translation obj+0x1ac/+0x1b0/+0x1b4. Returns succ=0 when found; when absent, writes succ=1 and leaves outputs untouched. The C# VM queries TranslationTarget independently of V24. See docs/engine-re.md §SC0000 anim cluster."
+summary = "0x228 query current translation (succ)(handle)(outX)(outY)(outZ): clone the retained object, decompose its current translation matrix at obj+0x16c, and return its x/y/z translation. Returns succ=0 when found; when absent, writes succ=1 and leaves outputs untouched. This is independent of both delayed target obj+0x1ac and base draw position V24. See docs/engine-re.md §SC0000 anim cluster."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2 handler gfx_op_0x228_query_position@0x42a3a0 calls gfx_object_query_translation_target@0x47cdd0. The worker copies the complete 0xb5-dword object record, passes copied obj+0x17c to matrix4_decompose_affine@0x48d7c8, and returns its translation outputs; the decomposition reads matrix elements +0x30/+0x34/+0x38, corresponding to obj+0x1ac/+0x1b0/+0x1b4. SC0000 AE001H queries this before each 0x220 leg. C# regression covers targets (40,-20), (50,-80), (130,-100), plus the missing-object output-preservation path."
+evidence = "Ghidra /v2 handler gfx_op_0x228_query_translation_current@0x42a3a0 calls gfx_object_query_translation_current@0x47cdd0. The worker copies the complete 0xb5-dword object record to stack local -0x2e0, then passes local_174, exactly +0x16c within that copy, to matrix4_decompose_affine@0x48d7c8. Thus it decomposes the current matrix obj+0x16c, not target obj+0x1ac. SYSTEM4 P102 supplies the runtime proof: SC0000@0x84e8 resets BG001A current translation to zero, 0x228@0x84fa must return zero, and 0x220@0x8521 then targets +600. The port's target query returned the preceding CG endpoint +600, producing +1200 and leaving BG001A below the viewport. Missing-object output preservation remains valid. Functions renamed, commented, and /v2 saved 2026-08-16."
+details = "Implemented by querying TranslationCurrent while preserving the missing-object output contract. The focused regression seeds a reused handle with current/target +600, rebinds it, applies SC0000's 0x1ff current-zero reset, verifies 0x228 returns zero, and confirms the following 0x220 target is +600 rather than +1200. An exact GPU SYSTEM4 P102 capture at wait SC0000@0x85de shows BG001A visible at its intended endpoint."
 
 [[opcode.semantics.args]]
 i = 1

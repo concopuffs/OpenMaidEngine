@@ -764,6 +764,19 @@ retained `(0,550)` translation, BG004D lands at `(0,50)`. A synchronized run at 
 background and character layers together. This path also established that op `0x1ff` directly replaces the
 current translation matrix at `obj+0x16c`; it is now modeled rather than stored in an inert side vector.
 
+**SYSTEM4 P102 / SC0000 `wait@0x85de` current-translation correction (2026-08-16).** The missing
+`BG001A.AGF` was not an asset or compositor failure. The retained log showed the new background animate
+from translation zero to `+1200`, then settle at `+1150`; with base Y `-500`, it remained below the
+600-pixel viewport. Native `0x228` had been misidentified as a query of the delayed target matrix.
+`gfx_object_query_translation_current@0x47cdd0` copies the complete object record to stack local
+`-0x2e0` and passes `local_174`—exactly `+0x16c` within that copy—to
+`matrix4_decompose_affine@0x48d7c8`. It therefore queries the **current** translation matrix, not the
+target at `obj+0x1ac` and not base position V24. SC0000 makes the consequence explicit: `0x1ff@0x84e8`
+sets current translation to zero, `0x228@0x84fa` reads that zero, and `0x220@0x8521` adds the intended
+`+600`; the following leg reads the completed current `+600` and subtracts 50 to settle at `+550`
+(screen Y 50). The C# VM now queries `TranslationCurrent`; its focused handle-reuse regression preserves a
+previous `+600` target, resets current to zero, and verifies the next SC0000 leg targets exactly `+600`.
+
 #### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-10, partial implementation)
 
 The scene-completeness tracker (`tools/scene_opcode_coverage.py`) flagged a dense band of GAP ops in

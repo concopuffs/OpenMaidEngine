@@ -12,15 +12,17 @@ public class AnimChannelTests
     private static (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
 
     [Fact]
-    public void Op0x228_QueriesTranslationTarget_NotBasePosition()
+    public void Op0x228_QueriesCurrentTranslation_NotTargetOrBasePosition()
     {
         var t = T();
-        // AE001H has draw/base V24=(360,20), independent of its op-0x220 translation target (40,-20).
+        // V24=(360,20), current translation=(12,34,5), and delayed target=(40,-20,0) are independent.
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
             (0x55, new[]{G(1), I(0xcf3a)}), (0x55, new[]{G(2), I(0)}),
             (0x55, new[]{G(3), I(360)}), (0x55, new[]{G(4), I(20)}), (0x55, new[]{G(5), I(0)}),
             (0x1fb, new[]{G(1), I(0), I(0), I(0), I(1), I(1), G(3), G(4)}),
+            (0x55, new[]{G(14), I(12)}), (0x55, new[]{G(15), I(34)}), (0x55, new[]{G(16), I(5)}),
+            (0x1ff, new[]{G(1), G(14), G(15), G(16)}),
             (0x55, new[]{G(6), I(300)}), (0x55, new[]{G(7), I(40)}),
             (0x55, new[]{G(8), I(20)}), (0x51, new[]{G(8), I(0), G(8)}),
             (0x220, new[]{G(1), G(2), G(6), G(7), G(8), G(5)}),
@@ -29,9 +31,9 @@ public class AnimChannelTests
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
         vm.Run();
-        Assert.Equal(40, vm.Globals[11]);
-        Assert.Equal(-20, vm.Globals[12]);
-        Assert.Equal(0, vm.Globals[13]);
+        Assert.Equal(12, vm.Globals[11]);
+        Assert.Equal(34, vm.Globals[12]);
+        Assert.Equal(5, vm.Globals[13]);
         Assert.Equal(0, vm.Globals[10]);   // success flag
         Assert.Equal((360L, 20L, 0L), vm.Gfx.TryGet(0xcf3a)!.V24);
     }
@@ -53,38 +55,28 @@ public class AnimChannelTests
     }
 
     [Fact]
-    public void Ae001hThreeLegSequence_BuildsEachTargetFromPreviousTranslationTarget()
+    public void Op0x228_ReusedHandleReadsResetCurrentInsteadOfPreviousTarget()
     {
         var t = T();
-        var ops = new List<(int, Operand[])>
+        var scene = ScriptAssembler.Assemble(t, "REUSED_TRANSLATION", new List<(int, Operand[])>
         {
-            (0x55, new[]{G(1), I(0xcf3a)}), (0x55, new[]{G(2), I(0)}), (0x55, new[]{G(3), I(300)}),
-            (0x55, new[]{G(4), I(360)}), (0x55, new[]{G(5), I(20)}), (0x55, new[]{G(6), I(0)}),
-            (0x55, new[]{G(40), I(20)}), (0x51, new[]{G(40), I(0), G(40)}),
-            (0x55, new[]{G(41), I(60)}), (0x51, new[]{G(41), I(0), G(41)}),
-            (0x1fb, new[]{G(1), I(0), I(0), I(0), I(1), I(1), G(4), G(5)}),
-
+            (0x55, new[]{G(1), I(0xcb20)}), (0x55, new[]{G(2), I(0)}),
+            // SC0000 rebinds the handle, resets only current translation, then queries current.
+            (0x1fb, new[]{G(1), I(4), I(0), I(0), I(800), I(500), I(0), I(-500)}),
+            (0x1ff, new[]{G(1), I(0), I(0), I(0)}),
             (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}),
-            (0x50, new[]{G(11), G(11), I(40)}), (0x50, new[]{G(12), G(12), G(40)}),
-            (0x220, new[]{G(1), G(2), G(3), G(11), G(12), G(13)}),
-
-            (0x228, new[]{G(20), G(1), G(21), G(22), G(23)}),
-            (0x50, new[]{G(21), G(21), I(10)}), (0x50, new[]{G(22), G(22), G(41)}),
-            (0x220, new[]{G(1), G(2), G(3), G(21), G(22), G(23)}),
-
-            (0x228, new[]{G(30), G(1), G(31), G(32), G(33)}),
-            (0x50, new[]{G(31), G(31), I(80)}), (0x50, new[]{G(32), G(32), G(40)}),
-            (0x220, new[]{G(1), G(2), G(3), G(31), G(32), G(33)}),
+            (0x50, new[]{G(22), G(12), I(600)}),
+            (0x220, new[]{G(1), G(2), I(500), G(11), G(22), G(13)}),
             Exit(),
-        };
-        var vm = new VirtualMachine(ScriptAssembler.Assemble(t, "AE001H_TRAVEL", ops,
-            System.Array.Empty<string>()), t, new RecordingHost());
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Gfx.BindDraw(0xcb20, 4, 0, 0, 800, 500, 0, 50);
+        vm.Gfx.SetCurrentTranslation(0xcb20, (0, 600, 0));
+        vm.Gfx.SetTranslationChannel(0xcb20, 0, 0, (0, 600, 0));
         vm.Run();
 
-        Assert.Equal((40L, -20L, 0L), (vm.Globals[11], vm.Globals[12], vm.Globals[13]));
-        Assert.Equal((50L, -80L, 0L), (vm.Globals[21], vm.Globals[22], vm.Globals[23]));
-        Assert.Equal((130L, -100L, 0L), (vm.Globals[31], vm.Globals[32], vm.Globals[33]));
-        Assert.Equal((130.0, -100.0, 0.0), vm.Gfx.TryGet(0xcf3a)!.TranslationTarget);
+        Assert.Equal((0L, 0L, 0L), (vm.Globals[11], vm.Globals[12], vm.Globals[13]));
+        Assert.Equal((0.0, 600.0, 0.0), vm.Gfx.TryGet(0xcb20)!.TranslationTarget);
     }
 
     [Fact]
