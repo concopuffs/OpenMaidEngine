@@ -91,6 +91,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         ):
             self.assertNotIn(legacy_name, active_surfaces)
 
+    def test_godot_csharp_uid_sidecars_match_sources(self) -> None:
+        godot_directory = REPO / "godot"
+        sources = {path.name for path in godot_directory.glob("*.cs")}
+        sidecar_sources = {
+            path.name.removesuffix(".uid")
+            for path in godot_directory.glob("*.cs.uid")
+        }
+        self.assertEqual(sources, sidecar_sources)
+
     def test_build_jobs_are_linux_hosted_read_only_and_target_separate(self) -> None:
         self.assertRegex(self.text, r"(?m)^permissions:\n  contents: read$")
         self.assertIn("runs-on: ubuntu-latest", self.linux)
