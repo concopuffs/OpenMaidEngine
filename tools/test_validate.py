@@ -70,6 +70,8 @@ class EnvironmentResolutionTests(unittest.TestCase):
 class GatePlanTests(unittest.TestCase):
     def test_core_contains_no_workspace_or_runtime_gates(self) -> None:
         keys = {gate.key for gate in validate.build_gate_plan("core")}
+        self.assertIn("engine-restore", keys)
+        self.assertIn("engine-cli-build", keys)
         self.assertIn("engine-tests", keys)
         self.assertIn("python-test_validate", keys)
         self.assertNotIn("sys4-corpus-validate", keys)
@@ -77,6 +79,26 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn("age-cli-sweep", keys)
         engine = next(gate for gate in validate.build_gate_plan("core") if gate.key == "engine-tests")
         self.assertIn("Category!=Workspace", engine.command)
+        self.assertIn("--no-restore", engine.command)
+        self.assertIn("-m:1", engine.command)
+        self.assertIn("-p:BuildInParallel=false", engine.command)
+        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, engine.environment)
+        self.assertIn(
+            "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+            engine.command,
+        )
+        cli = next(
+            gate for gate in validate.build_gate_plan("core") if gate.key == "engine-cli-build"
+        )
+        self.assertIn("engine/Age.Cli/Age.Cli.csproj", cli.command)
+        self.assertIn("--no-restore", cli.command)
+        self.assertIn("-m:1", cli.command)
+        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, cli.environment)
+        restore = next(
+            gate for gate in validate.build_gate_plan("core") if gate.key == "engine-restore"
+        )
+        self.assertIn("--disable-parallel", restore.command)
+        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, restore.environment)
 
     def test_workspace_extends_core(self) -> None:
         core = {gate.key for gate in validate.build_gate_plan("core")}
@@ -90,6 +112,9 @@ class GatePlanTests(unittest.TestCase):
             if gate.key == "engine-workspace-tests"
         )
         self.assertIn("Category=Workspace", installed.command)
+        self.assertIn("--no-restore", installed.command)
+        self.assertIn("-m:1", installed.command)
+        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, installed.environment)
 
     def test_runtime_requires_resolved_paths(self) -> None:
         with self.assertRaisesRegex(ValueError, "resolved Godot"):

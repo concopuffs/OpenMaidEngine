@@ -55,6 +55,12 @@ WORKSPACE_GENERATED_INPUTS = (
     paths.BUILD / "callscript-names.json",
     paths.BUILD / "scjump-decisions.json",
 )
+LOW_MEMORY_DOTNET_ENVIRONMENT = (
+    ("DOTNET_CLI_USE_MSBUILD_SERVER", "0"),
+    ("MSBUILDDISABLENODEREUSE", "1"),
+    ("DOTNET_gcServer", "0"),
+    ("DOTNET_GCConserveMemory", "9"),
+)
 
 
 @dataclass(frozen=True)
@@ -158,13 +164,43 @@ def build_gate_plan(
     )
     gates.append(
         Gate(
+            "engine-restore",
+            ".NET engine restore",
+            (
+                "dotnet", "restore", "engine/AgeEngine.sln", "--nologo",
+                "--verbosity", "minimal", "--disable-parallel",
+                "-p:RestoreDisableParallel=true",
+            ),
+            300,
+            LOW_MEMORY_DOTNET_ENVIRONMENT,
+        )
+    )
+    gates.append(
+        Gate(
+            "engine-cli-build",
+            ".NET engine CLI build",
+            (
+                "dotnet", "build", "engine/Age.Cli/Age.Cli.csproj", "--no-restore", "--nologo",
+                "--verbosity", "minimal", "-m:1", "-p:UseSharedCompilation=false",
+                "-p:BuildInParallel=false", "-p:DebugType=None", "-p:DebugSymbols=false",
+            ),
+            300,
+            LOW_MEMORY_DOTNET_ENVIRONMENT,
+        )
+    )
+    gates.append(
+        Gate(
             "engine-tests",
             ".NET engine core tests",
             (
-                "dotnet", "test", "engine/AgeEngine.sln", "--nologo", "--verbosity", "minimal",
-                "--filter", "Category!=Workspace", "-p:UseSharedCompilation=false",
+                "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                "--no-restore", "--nologo",
+                "--verbosity", "minimal", "--filter", "Category!=Workspace", "-m:1",
+                "-p:UseSharedCompilation=false", "-p:BuildInParallel=false",
+                "-p:DebugType=None", "-p:DebugSymbols=false",
             ),
             300,
+            LOW_MEMORY_DOTNET_ENVIRONMENT,
         )
     )
 
@@ -174,10 +210,14 @@ def build_gate_plan(
                 "engine-workspace-tests",
                 ".NET installed-data and native-oracle tests",
                 (
-                    "dotnet", "test", "engine/AgeEngine.sln", "--nologo", "--verbosity", "minimal",
-                    "--filter", "Category=Workspace", "-p:UseSharedCompilation=false",
+                    "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                    "--no-restore", "--nologo",
+                    "--verbosity", "minimal", "--filter", "Category=Workspace", "-m:1",
+                    "-p:UseSharedCompilation=false", "-p:BuildInParallel=false",
+                    "-p:DebugType=None", "-p:DebugSymbols=false",
                 ),
                 300,
+                LOW_MEMORY_DOTNET_ENVIRONMENT,
             )
         )
         gates.append(
