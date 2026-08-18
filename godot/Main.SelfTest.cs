@@ -16,7 +16,7 @@ public partial class Main
     // and deferred main-thread calls) drives the VM identically to a headless run.
     private void RunSelfTest()
     {
-        var table = HimegariRuntimeMetadata.LoadOpcodeTable();
+        var table = OmeRuntimeMetadata.LoadOpcodeTable();
         var (script, provider) = BuildSelfTestScene(table);
         var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider);
         headless.Run();

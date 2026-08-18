@@ -8,6 +8,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".gitea/workflows/linux-release-build.yml"
+EXPORT_PRESETS = REPO / "godot/export_presets.cfg"
+GODOT_PROJECT = REPO / "godot/project.godot"
+MANAGED_PROJECT = REPO / "godot/OME.csproj"
+MANAGED_SOLUTION = REPO / "godot/OME.sln"
+LINUX_BUILD = REPO / "tools/build-linux-x64.sh"
+WINDOWS_BUILD = REPO / "tools/build-windows-x64.sh"
+WINDOWS_HOSTED_EXPORT = REPO / "tools/export-linux-x64.ps1"
 
 
 def job(text: str, name: str, next_name: str | None) -> str:
@@ -23,6 +30,42 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.linux = job(cls.text, "linux-release", "windows-release")
         cls.windows = job(cls.text, "windows-release", "publish-release")
         cls.publish = job(cls.text, "publish-release", None)
+        cls.export_presets = EXPORT_PRESETS.read_text(encoding="utf-8")
+        cls.godot_project = GODOT_PROJECT.read_text(encoding="utf-8")
+        cls.managed_project = MANAGED_PROJECT.read_text(encoding="utf-8")
+        cls.managed_solution = MANAGED_SOLUTION.read_text(encoding="utf-8")
+        cls.linux_build = LINUX_BUILD.read_text(encoding="utf-8")
+        cls.windows_build = WINDOWS_BUILD.read_text(encoding="utf-8")
+        cls.windows_hosted_export = WINDOWS_HOSTED_EXPORT.read_text(encoding="utf-8")
+
+    def test_public_build_outputs_use_ome_branding(self) -> None:
+        self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
+        self.assertIn('export_path="../build/export/windows-x64/OME.exe"', self.export_presets)
+        self.assertIn('project/assembly_name="OME"', self.godot_project)
+        self.assertIn('LogicalName="OME.Runtime.opcodes.json"', self.managed_project)
+        self.assertIn('= "OME", "OME.csproj"', self.managed_solution)
+        self.assertIn("'OME.sln'", self.windows_hosted_export)
+        self.assertFalse((REPO / "godot/Himegari.csproj").exists())
+        self.assertFalse((REPO / "godot/Himegari.sln").exists())
+        active_surfaces = "\n".join(
+            (
+                self.text,
+                self.export_presets,
+                self.godot_project,
+                self.linux_build,
+                self.windows_build,
+                self.windows_hosted_export,
+            )
+        )
+        for legacy_name in (
+            "Himegari.exe",
+            "Himegari.x86_64",
+            "Himegari.dll",
+            "Himegari.csproj",
+            "Himegari.sln",
+            "OpenMaidEngine-Himegari",
+        ):
+            self.assertNotIn(legacy_name, active_surfaces)
 
     def test_build_jobs_are_linux_hosted_read_only_and_target_separate(self) -> None:
         self.assertRegex(self.text, r"(?m)^permissions:\n  contents: read$")
@@ -49,8 +92,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_windows_artifact_is_archive_plus_structural_evidence(self) -> None:
         for name in (
-            "OpenMaidEngine-Himegari-windows-x64.zip",
-            "OpenMaidEngine-Himegari-windows-x64.zip.sha256",
+            "OME-windows-x64.zip",
+            "OME-windows-x64.zip.sha256",
             "BUILD-INFO.json",
             "SHA256SUMS",
             "WINDOWS-VERIFICATION.json",
@@ -66,8 +109,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             r"(?m)^    needs:\n      - linux-release\n      - windows-release$",
         )
         self.assertIn("releases: write", self.publish)
-        self.assertIn("OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}", self.publish)
-        self.assertIn("OpenMaidEngine-Himegari-windows-x64-${{ gitea.sha }}", self.publish)
+        self.assertIn("OME-linux-x64-${{ gitea.sha }}", self.publish)
+        self.assertIn("OME-windows-x64-${{ gitea.sha }}", self.publish)
         self.assertIn("path: build/release-assets/linux", self.publish)
         self.assertIn("path: build/release-assets/windows", self.publish)
         self.assertIn("--linux-artifact-directory build/release-assets/linux", self.publish)

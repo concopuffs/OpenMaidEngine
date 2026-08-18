@@ -69,17 +69,17 @@ jobs:
       - name: Stage verified workflow artifact
         run: |
           mkdir -p build/workflow-artifact
-          cp build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz build/workflow-artifact/
-          cp build/package/staging/OpenMaidEngine-Himegari-linux-x64/BUILD-INFO.json build/workflow-artifact/
-          cp build/package/staging/OpenMaidEngine-Himegari-linux-x64/SHA256SUMS build/workflow-artifact/
+          cp build/package/OME-linux-x64.tar.gz build/workflow-artifact/
+          cp build/package/staging/OME-linux-x64/BUILD-INFO.json build/workflow-artifact/
+          cp build/package/staging/OME-linux-x64/SHA256SUMS build/workflow-artifact/
           cp build/package/package-smoke.log build/workflow-artifact/
           cd build/workflow-artifact
-          sha256sum OpenMaidEngine-Himegari-linux-x64.tar.gz > OpenMaidEngine-Himegari-linux-x64.tar.gz.sha256
+          sha256sum OME-linux-x64.tar.gz > OME-linux-x64.tar.gz.sha256
 
       - name: Upload verified Linux package
         uses: christopherhx/gitea-upload-artifact@v4
         with:
-          name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
+          name: OME-linux-x64-${{ gitea.sha }}
           path: build/workflow-artifact/*
           if-no-files-found: error
           retention-days: 30
@@ -155,17 +155,17 @@ jobs:
       - name: Stage verified workflow artifact
         run: |
           mkdir -p build/workflow-artifact-windows
-          cp build/package/windows-x64/OpenMaidEngine-Himegari-windows-x64.zip build/workflow-artifact-windows/
-          cp build/package/windows-x64/staging/OpenMaidEngine-Himegari-windows-x64/BUILD-INFO.json build/workflow-artifact-windows/
-          cp build/package/windows-x64/staging/OpenMaidEngine-Himegari-windows-x64/SHA256SUMS build/workflow-artifact-windows/
-          cp build/package/windows-x64/staging/OpenMaidEngine-Himegari-windows-x64/WINDOWS-VERIFICATION.json build/workflow-artifact-windows/
+          cp build/package/windows-x64/OME-windows-x64.zip build/workflow-artifact-windows/
+          cp build/package/windows-x64/staging/OME-windows-x64/BUILD-INFO.json build/workflow-artifact-windows/
+          cp build/package/windows-x64/staging/OME-windows-x64/SHA256SUMS build/workflow-artifact-windows/
+          cp build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json build/workflow-artifact-windows/
           cd build/workflow-artifact-windows
-          sha256sum OpenMaidEngine-Himegari-windows-x64.zip > OpenMaidEngine-Himegari-windows-x64.zip.sha256
+          sha256sum OME-windows-x64.zip > OME-windows-x64.zip.sha256
 
       - name: Upload verified Windows package
         uses: christopherhx/gitea-upload-artifact@v4
         with:
-          name: OpenMaidEngine-Himegari-windows-x64-${{ gitea.sha }}
+          name: OME-windows-x64-${{ gitea.sha }}
           path: build/workflow-artifact-windows/*
           if-no-files-found: error
           retention-days: 30
@@ -177,7 +177,7 @@ jobs:
           name: windows-release-failure-${{ gitea.run_id }}-${{ gitea.run_attempt }}
           path: |
             build/native/win-x64/verification.json
-            build/package/windows-x64/staging/OpenMaidEngine-Himegari-windows-x64/WINDOWS-VERIFICATION.json
+            build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json
             build/validation/**
           if-no-files-found: ignore
           retention-days: 7
@@ -209,13 +209,13 @@ jobs:
       - name: Download verified Linux artifact
         uses: christopherhx/gitea-download-artifact@v4
         with:
-          name: OpenMaidEngine-Himegari-linux-x64-${{ gitea.sha }}
+          name: OME-linux-x64-${{ gitea.sha }}
           path: build/release-assets/linux
 
       - name: Download verified Windows artifact
         uses: christopherhx/gitea-download-artifact@v4
         with:
-          name: OpenMaidEngine-Himegari-windows-x64-${{ gitea.sha }}
+          name: OME-windows-x64-${{ gitea.sha }}
           path: build/release-assets/windows
 
       - name: Create or resume Gitea release

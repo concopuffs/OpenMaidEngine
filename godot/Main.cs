@@ -240,7 +240,7 @@ public partial class Main : Godot.Control
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
-        var table = HimegariRuntimeMetadata.LoadOpcodeTable();
+        var table = OmeRuntimeMetadata.LoadOpcodeTable();
         // Persistence retains AGE's native filenames and formats, but the port owns one profile-root
         // interception point. Himegari's SYS4INI makes SAVEPATH the SAVE child of REGFILEPATH, so both
         // save payloads and SYS4REG.INI remain isolated together under Godot's user directory.

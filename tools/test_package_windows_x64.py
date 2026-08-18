@@ -33,7 +33,7 @@ def make_export(root: Path) -> Path:
         path = export / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f"fixture:{relative}".encode())
-    write_pe(export / "Himegari.exe")
+    write_pe(export / "OME.exe")
     managed = export / package_windows_x64.MANAGED_DIRECTORY
     for name in (verify_windows_native.SHIM, *verify_windows_native.RUNTIME_DLLS):
         write_pe(managed / name)
@@ -41,6 +41,19 @@ def make_export(root: Path) -> Path:
 
 
 class PackageWindowsX64Tests(unittest.TestCase):
+    def test_public_output_names_use_ome_branding(self) -> None:
+        self.assertEqual("OME-windows-x64", package_windows_x64.PACKAGE_NAME)
+        self.assertIn("OME.exe", package_windows_x64.REQUIRED_FILES)
+        self.assertIn("OME.pck", package_windows_x64.REQUIRED_FILES)
+        self.assertIn(
+            f"{package_windows_x64.MANAGED_DIRECTORY}/OME.dll",
+            package_windows_x64.REQUIRED_FILES,
+        )
+        self.assertIn(
+            f"{package_windows_x64.MANAGED_DIRECTORY}/Himegari.dll",
+            package_windows_x64.LEGACY_FILES,
+        )
+
     def test_verify_rejects_missing_linux_and_wrong_machine_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             export = make_export(Path(temporary))
@@ -56,7 +69,12 @@ class PackageWindowsX64Tests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Linux-only"):
                 package_windows_x64.verify_export(export, "objdump")
             linux.unlink()
-            write_pe(export / "Himegari.exe", machine=0x014C)
+            legacy = export / package_windows_x64.LEGACY_FILES[0]
+            legacy.write_bytes(b"legacy")
+            with self.assertRaisesRegex(ValueError, "legacy-branded"):
+                package_windows_x64.verify_export(export, "objdump")
+            legacy.unlink()
+            write_pe(export / "OME.exe", machine=0x014C)
             with self.assertRaisesRegex(ValueError, "not AMD64"):
                 package_windows_x64.verify_export(export, "objdump")
 
@@ -88,7 +106,7 @@ class PackageWindowsX64Tests(unittest.TestCase):
             self.assertTrue((package_root / "BUILD-INFO.json").is_file())
             self.assertTrue((package_root / "WINDOWS-VERIFICATION.json").is_file())
             checksums = (package_root / "SHA256SUMS").read_text(encoding="utf-8")
-            self.assertIn("Himegari.exe", checksums)
+            self.assertIn("OME.exe", checksums)
             self.assertIn("THIRD_PARTY_NOTICES.md", checksums)
 
 

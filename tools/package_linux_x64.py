@@ -15,12 +15,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-MANAGED_DIRECTORY = "data_Himegari_linuxbsd_x86_64"
-PACKAGE_NAME = "OpenMaidEngine-Himegari-linux-x64"
+MANAGED_DIRECTORY = "data_OME_linuxbsd_x86_64"
+PACKAGE_NAME = "OME-linux-x64"
 REQUIRED_FILES = (
-    "Himegari.x86_64",
-    "Himegari.pck",
-    f"{MANAGED_DIRECTORY}/Himegari.dll",
+    "OME",
+    "OME.pck",
+    f"{MANAGED_DIRECTORY}/OME.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.Frontend.dll",
     f"{MANAGED_DIRECTORY}/libage_movie_ffmpeg.so",
@@ -36,6 +36,7 @@ FORBIDDEN_FILES = (
     f"{MANAGED_DIRECTORY}/age_movie_ffmpeg.dll",
     f"{MANAGED_DIRECTORY}/avformat-62.dll",
 )
+LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
 
 
@@ -54,7 +55,10 @@ def verify_export(export_directory: Path) -> Path:
     forbidden = [name for name in FORBIDDEN_FILES if (export_directory / name).exists()]
     if forbidden:
         raise ValueError("Linux export contains Windows-only files: " + ", ".join(forbidden))
-    executable = export_directory / "Himegari.x86_64"
+    legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
+    if legacy:
+        raise ValueError("Linux export contains legacy-branded files: " + ", ".join(legacy))
+    executable = export_directory / "OME"
     if os.name != "nt" and not os.access(executable, os.X_OK):
         raise ValueError(f"Linux export executable bit is not set: {executable}")
     return export_directory
@@ -89,7 +93,7 @@ def build_metadata(epoch: int) -> dict[str, object]:
     dirty = bool(_git("status", "--porcelain", "--untracked-files=normal"))
     return {
         "schema_version": 1,
-        "project": "OpenMaidEngine Himegari profile",
+        "project": "Open Maid Engine",
         "target": "linux-x64",
         "source_commit": _git("rev-parse", "HEAD"),
         "source_dirty": dirty,

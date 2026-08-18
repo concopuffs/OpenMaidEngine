@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo    = $PSScriptRoot                          # age-reimpl/
 $project = Join-Path $repo 'godot'
-$csproj  = Join-Path $project 'Himegari.csproj'
+$csproj  = Join-Path $project 'OME.csproj'
 
 function Resolve-ConfiguredFile {
     param(

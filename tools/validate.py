@@ -216,7 +216,7 @@ def build_gate_plan(
             Gate(
                 "godot-build",
                 "Godot C# build",
-                ("dotnet", "build", "godot/Himegari.csproj", "--nologo", "--verbosity", "minimal"),
+                ("dotnet", "build", "godot/OME.csproj", "--nologo", "--verbosity", "minimal"),
                 300,
             ),
             Gate(

@@ -15,7 +15,7 @@
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
     <ProjectReference Include="..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
-                      LogicalName="Himegari.Runtime.opcodes.json" />
+                      LogicalName="OME.Runtime.opcodes.json" />
   </ItemGroup>
   <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <ProjectReference Include="..\engine\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />

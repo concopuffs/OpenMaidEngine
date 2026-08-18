@@ -9,13 +9,13 @@ $projectRoot = Join-Path $repoRoot 'godot'
 $godotConsolePath = (Resolve-Path -LiteralPath $GodotConsole).Path
 $outputDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'build\export\linux-x64'))
 $expectedOutputDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'build\export\linux-x64'))
-$executable = Join-Path $outputDirectory 'Himegari.x86_64'
+$executable = Join-Path $outputDirectory 'OME'
 
 if (-not (Test-Path -LiteralPath $godotConsolePath -PathType Leaf)) {
     throw "Godot console executable was not found: $godotConsolePath"
 }
 foreach ($required in @(
-    (Join-Path $projectRoot 'Himegari.sln'),
+    (Join-Path $projectRoot 'OME.sln'),
     (Join-Path $projectRoot 'export_presets.cfg'),
     (Join-Path $repoRoot 'build\native\linux-x64\libage_movie_ffmpeg.so')
 )) {

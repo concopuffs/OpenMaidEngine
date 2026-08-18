@@ -10,7 +10,7 @@ public partial class Main
             if (!OS.HasFeature("linux") && !OS.HasFeature("windows"))
                 throw new PlatformNotSupportedException(
                     "the packaged-runtime smoke gate supports Linux and Windows x64");
-            var table = HimegariRuntimeMetadata.LoadOpcodeTable();
+            var table = OmeRuntimeMetadata.LoadOpcodeTable();
             if (table.Count != 548)
                 throw new InvalidOperationException(
                     $"embedded opcode table has {table.Count} entries; expected 548");

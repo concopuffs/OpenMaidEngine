@@ -307,8 +307,8 @@ Windows target, a native C compiler/binutils for Linux, and the ordinary archive
 
 The managed isolated probes load from `AGE_FFMPEG_NATIVE_DIR` when set, then application-local and
 `runtimes/<rid>/native` locations. Build the target shim before running the `FfmpegShim*` tests; no original-game
-movie is copied into the repository or native output. A target-aware `dotnet build godot/Himegari.csproj`
-stages the matching shim, five shared-library dependencies, and `FFmpeg-LICENSE.txt` beside `Himegari.dll`
+movie is copied into the repository or native output. A target-aware `dotnet build godot/OME.csproj`
+stages the matching shim, five shared-library dependencies, and `FFmpeg-LICENSE.txt` beside `OME.dll`
 when the corresponding `build/native/win-x64/` or `build/native/linux-x64/` bundle exists.
 
 The current native movie ABI is version 3. In addition to sequential video/audio decode, it exposes a
@@ -382,7 +382,7 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
   `godot --path godot -- --scene SC0000 --boot --shot out/p1.png --trace-histogram out/hist.txt`.
 
 **Godot frontend** (Godot 4.7 .NET; project = `godot/`). Toolchain: `godot --headless --path godot
---import` → `dotnet build godot/Himegari.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
+--import` → `dotnet build godot/OME.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
 Plays the real bytecode with call-script execution on (subroutines run live). The game root is selected
 before catalog loading: `--game-root <directory>` wins, otherwise the directory containing the running
 executable is tried, then the current working directory. A candidate must contain `SYS4INI.BIN`; invalid
@@ -391,7 +391,7 @@ resolved against the current working directory, and repeated overrides use the l
 Godot preserves the shell launch directory through inherited `PWD` because editor/project startup may
 change the process directory before managed code runs.
 
-**Linux x64 export** uses the committed `godot/export_presets.cfg` preset and `godot/Himegari.sln`:
+**Linux x64 export** uses the committed `godot/export_presets.cfg` preset and `godot/OME.sln`:
 
 For the complete Linux-native release path, run from `age-reimpl/`:
 
@@ -419,10 +419,10 @@ The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, a source/dep
 `BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
 modes, ordering, and timestamps using `SOURCE_DATE_EPOCH` or the source commit time. Outputs are the loose
 export under `build/export/linux-x64/`, the staged installation and `package-smoke.log` under
-`build/package/`, and `build/package/OpenMaidEngine-Himegari-linux-x64.tar.gz`.
+`build/package/`, and `build/package/OME-linux-x64.tar.gz`.
 
 Before reporting success, the command launches the staged executable as
-`Himegari.x86_64 --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
+`OME --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
 and proves that the packaged managed assembly can read all 548 embedded opcode records and dynamically load
 the bundled native movie shim plus its local FFmpeg dependencies at ABI version 3. It does not exercise game
 archives, fonts, rendering, audio output, or a desktop window; retain the installed-game self-test below as a
@@ -452,9 +452,10 @@ It regenerates runtime metadata, builds and statically verifies the pinned Windo
 exact self-contained `ExportRelease/win-x64` managed runtime, and performs the real Godot `Windows x86_64`
 release export. No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
 PCK, self-contained runtime, project assemblies including `Age.Engine.Text.Windows.dll`, and FFmpeg DLL/license
-set; it rejects Linux shared objects and embeds `BUILD-INFO.json`, `WINDOWS-VERIFICATION.json`, notices, and a
+set; it rejects Linux shared objects and the legacy `Himegari.dll` name, and embeds `BUILD-INFO.json`,
+`WINDOWS-VERIFICATION.json`, notices, and a
 complete `SHA256SUMS`. The normalized output is
-`build/package/windows-x64/OpenMaidEngine-Himegari-windows-x64.zip`.
+`build/package/windows-x64/OME-windows-x64.zip`.
 
 Focused commands are:
 
@@ -469,7 +470,7 @@ The package verifier needs `x86_64-w64-mingw32-objdump` unless `--objdump` names
 Windows host, an extracted package can optionally run the same asset-independent dynamic gate as Linux:
 
 ```powershell
-.\Himegari.exe --headless -- --package-smoke
+.\OME.exe --headless -- --package-smoke
 ```
 
 That command proves the embedded 548-opcode table and local FFmpeg ABI 3 load. It is a manual acceptance aid,
@@ -486,8 +487,8 @@ Install the Godot 4.7 .NET export templates first and build the pinned native bu
 only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, then calls the
 same Python payload verifier used by the Linux pipeline. The verifier checks the executable/PCK/self-contained
 managed payload plus all six project-owned FFmpeg files and rejects the Windows GDI adapter and Windows FFmpeg
-DLLs. Output is `build/export/linux-x64/Himegari.x86_64` with its
-PCK and `data_Himegari_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
+DLLs as well as the legacy `Himegari.dll` name. Output is `build/export/linux-x64/OME` with `OME.pck` and the
+`data_OME_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
 items are one artifact.
 
 The portable font policy requires a Japanese-capable system font. A minimal Ubuntu install needs, for
@@ -495,7 +496,7 @@ example, `sudo apt install fonts-noto-cjk`; absence is a startup failure rather 
 output. The exported headless smoke command is:
 
 ```bash
-./build/export/linux-x64/Himegari.x86_64 --headless -- \
+./build/export/linux-x64/OME --headless -- \
   --selftest --game-root "/absolute/path/to/Himegari_Game" --text-backend portable
 ```
 

@@ -16,11 +16,24 @@ def make_export(root: Path) -> Path:
         path = export / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f"fixture:{relative}".encode())
-    (export / "Himegari.x86_64").chmod(0o755)
+    (export / "OME").chmod(0o755)
     return export
 
 
 class PackageLinuxX64Tests(unittest.TestCase):
+    def test_public_output_names_use_ome_branding(self) -> None:
+        self.assertEqual("OME-linux-x64", package_linux_x64.PACKAGE_NAME)
+        self.assertIn("OME", package_linux_x64.REQUIRED_FILES)
+        self.assertIn("OME.pck", package_linux_x64.REQUIRED_FILES)
+        self.assertIn(
+            f"{package_linux_x64.MANAGED_DIRECTORY}/OME.dll",
+            package_linux_x64.REQUIRED_FILES,
+        )
+        self.assertIn(
+            f"{package_linux_x64.MANAGED_DIRECTORY}/Himegari.dll",
+            package_linux_x64.LEGACY_FILES,
+        )
+
     def test_verify_rejects_missing_and_windows_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             export = make_export(Path(temporary))
@@ -33,12 +46,17 @@ class PackageLinuxX64Tests(unittest.TestCase):
             forbidden.write_bytes(b"windows")
             with self.assertRaisesRegex(ValueError, "Windows-only"):
                 package_linux_x64.verify_export(export)
+            forbidden.unlink()
+            legacy = export / package_linux_x64.LEGACY_FILES[0]
+            legacy.write_bytes(b"legacy")
+            with self.assertRaisesRegex(ValueError, "legacy-branded"):
+                package_linux_x64.verify_export(export)
 
     @unittest.skipIf(package_linux_x64.os.name == "nt", "executable-bit gate is POSIX-only")
     def test_verify_requires_executable_bit_on_posix(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             export = make_export(Path(temporary))
-            (export / "Himegari.x86_64").chmod(0o644)
+            (export / "OME").chmod(0o644)
             with self.assertRaisesRegex(ValueError, "executable bit"):
                 package_linux_x64.verify_export(export)
 
@@ -65,7 +83,7 @@ class PackageLinuxX64Tests(unittest.TestCase):
             self.assertTrue((package_root / "LICENSE").is_file())
             self.assertTrue((package_root / "BUILD-INFO.json").is_file())
             checksums = (package_root / "SHA256SUMS").read_text(encoding="utf-8")
-            self.assertIn("Himegari.x86_64", checksums)
+            self.assertIn("OME", checksums)
             self.assertIn("THIRD_PARTY_NOTICES.md", checksums)
 
 

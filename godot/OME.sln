@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Himegari", "Himegari.csproj", "{5821B505-EBD3-4B50-A83A-7AFE22AA1528}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OME", "OME.csproj", "{5821B505-EBD3-4B50-A83A-7AFE22AA1528}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Frontend", "..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj", "{2B018D3E-4057-465E-89CB-4CC77FDD60E2}"
 EndProject

@@ -49,7 +49,7 @@ def matching_release() -> dict[str, Any]:
         "id": 17,
         "tag_name": TAG,
         "target_commitish": TARGET,
-        "name": f"OpenMaidEngine Himegari {TAG}",
+        "name": f"Open Maid Engine {TAG}",
         "draft": False,
         "prerelease": False,
         "html_url": "https://gitea.invalid/releases/tag/v0.2.0",
@@ -77,7 +77,7 @@ def windows_verification() -> bytes:
         "native": {
             "schema_version": 1,
             "target": "win-x64",
-            "bundle": "data_Himegari_windows_x86_64",
+            "bundle": "data_OME_windows_x86_64",
             "machines": {
                 name: "AMD64"
                 for name in (verify_windows_native.SHIM, *verify_windows_native.RUNTIME_DLLS)
@@ -109,7 +109,7 @@ def create_artifacts(root: Path) -> tuple[Path, Path, Path]:
     windows.mkdir()
 
     linux_info = build_info("linux-x64")
-    linux_ledger = f"{'0' * 64}  Himegari.x86_64\n".encode()
+    linux_ledger = f"{'0' * 64}  OME\n".encode()
     linux_archive = linux / publish_gitea_release.LINUX_ARCHIVE
     with tarfile.open(linux_archive, "w:gz") as archive:
         add_tar_bytes(
@@ -130,7 +130,7 @@ def create_artifacts(root: Path) -> tuple[Path, Path, Path]:
     write_checksum(linux, linux_archive)
 
     windows_info = build_info("win-x64")
-    windows_ledger = f"{'1' * 64}  Himegari.exe\n".encode()
+    windows_ledger = f"{'1' * 64}  OME.exe\n".encode()
     verification = windows_verification()
     windows_archive = windows / publish_gitea_release.WINDOWS_ARCHIVE
     with zipfile.ZipFile(windows_archive, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -156,6 +156,7 @@ class PublishGiteaReleaseTests(unittest.TestCase):
             self.assertEqual(17, result["id"])
             self.assertEqual(TAG, api.created_payload["tag_name"])
             self.assertEqual(TARGET, api.created_payload["target_commitish"])
+            self.assertEqual(f"Open Maid Engine {TAG}", api.created_payload["name"])
             self.assertIn("Windows archive", api.created_payload["body"])
             self.assertEqual(
                 publish_gitea_release.EXPECTED_RELEASE_ASSETS,

@@ -20,8 +20,8 @@ from typing import Any, Callable, Protocol
 import verify_windows_native
 
 
-LINUX_ARCHIVE = "OpenMaidEngine-Himegari-linux-x64.tar.gz"
-WINDOWS_ARCHIVE = "OpenMaidEngine-Himegari-windows-x64.zip"
+LINUX_ARCHIVE = "OME-linux-x64.tar.gz"
+WINDOWS_ARCHIVE = "OME-windows-x64.zip"
 RELEASE_CHECKSUMS = "RELEASE-SHA256SUMS"
 LINUX_ARTIFACT_FILES = frozenset({
     LINUX_ARCHIVE,
@@ -38,8 +38,8 @@ WINDOWS_ARTIFACT_FILES = frozenset({
     "WINDOWS-VERIFICATION.json",
 })
 EXPECTED_RELEASE_ASSETS = frozenset({LINUX_ARCHIVE, WINDOWS_ARCHIVE, RELEASE_CHECKSUMS})
-LINUX_PACKAGE_ROOT = "OpenMaidEngine-Himegari-linux-x64"
-WINDOWS_PACKAGE_ROOT = "OpenMaidEngine-Himegari-windows-x64"
+LINUX_PACKAGE_ROOT = "OME-linux-x64"
+WINDOWS_PACKAGE_ROOT = "OME-windows-x64"
 SMOKE_MARKER = "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3"
 TAG_PATTERN = re.compile(r"v[0-9][0-9A-Za-z.+-]*\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
@@ -279,8 +279,8 @@ def _validate_windows_verification(data: bytes) -> None:
     }
     if native.get("schema_version") != 1 or native.get("target") != "win-x64":
         mismatches["native"] = ((native.get("schema_version"), native.get("target")), (1, "win-x64"))
-    if native.get("bundle") != "data_Himegari_windows_x86_64":
-        mismatches["bundle"] = (native.get("bundle"), "data_Himegari_windows_x86_64")
+    if native.get("bundle") != "data_OME_windows_x86_64":
+        mismatches["bundle"] = (native.get("bundle"), "data_OME_windows_x86_64")
     if machines != expected_machines:
         mismatches["machines"] = (machines, expected_machines)
     exports_value = native.get("shim_exports")
@@ -361,9 +361,9 @@ def prepare_release_assets(
         if external != internal:
             raise ValueError(f"external and packaged {label} do not match")
 
-    if b"  Himegari.x86_64\n" not in linux_ledger:
+    if b"  OME\n" not in linux_ledger:
         raise ValueError("Linux SHA256SUMS does not contain the packaged executable")
-    if b"  Himegari.exe\n" not in windows_ledger:
+    if b"  OME.exe\n" not in windows_ledger:
         raise ValueError("Windows SHA256SUMS does not contain the packaged executable")
 
     output_directory = output_directory.resolve()
@@ -410,7 +410,7 @@ def promote_release(
     )
     if {asset.name for asset in assets} != EXPECTED_RELEASE_ASSETS:
         raise RuntimeError("prepared release asset set is invalid")
-    title = f"OpenMaidEngine Himegari {tag}"
+    title = f"Open Maid Engine {tag}"
     release = api.get_release(tag)
     if release is None:
         release = api.create_release({

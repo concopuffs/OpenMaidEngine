@@ -18,12 +18,12 @@ import verify_windows_native
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-MANAGED_DIRECTORY = "data_Himegari_windows_x86_64"
-PACKAGE_NAME = "OpenMaidEngine-Himegari-windows-x64"
+MANAGED_DIRECTORY = "data_OME_windows_x86_64"
+PACKAGE_NAME = "OME-windows-x64"
 REQUIRED_FILES = (
-    "Himegari.exe",
-    "Himegari.pck",
-    f"{MANAGED_DIRECTORY}/Himegari.dll",
+    "OME.exe",
+    "OME.pck",
+    f"{MANAGED_DIRECTORY}/OME.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.Frontend.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.Text.Windows.dll",
@@ -34,10 +34,11 @@ REQUIRED_FILES = (
     *(f"{MANAGED_DIRECTORY}/{name}" for name in verify_windows_native.REQUIRED_FILES),
 )
 FORBIDDEN_FILES = (
-    "Himegari.x86_64",
+    "OME",
     f"{MANAGED_DIRECTORY}/libage_movie_ffmpeg.so",
     f"{MANAGED_DIRECTORY}/libavformat.so.62",
 )
+LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
 
 
@@ -61,10 +62,13 @@ def verify_export(export_directory: Path, objdump: str) -> tuple[Path, dict[str,
     )
     if forbidden:
         raise ValueError("Windows export contains Linux-only files: " + ", ".join(sorted(set(forbidden))))
-    executable_machine = verify_windows_native.pe_machine(export_directory / "Himegari.exe")
+    legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
+    if legacy:
+        raise ValueError("Windows export contains legacy-branded files: " + ", ".join(legacy))
+    executable_machine = verify_windows_native.pe_machine(export_directory / "OME.exe")
     if executable_machine != verify_windows_native.PE_MACHINE_AMD64:
         raise ValueError(
-            f"Windows executable is not AMD64 PE (0x{executable_machine:04x}): Himegari.exe"
+            f"Windows executable is not AMD64 PE (0x{executable_machine:04x}): OME.exe"
         )
     native_report = verify_windows_native.verify_bundle(
         export_directory / MANAGED_DIRECTORY,
@@ -113,7 +117,7 @@ def build_metadata(epoch: int) -> dict[str, object]:
         ffmpeg = json.load(stream)
     return {
         "schema_version": 1,
-        "project": "OpenMaidEngine Himegari profile",
+        "project": "Open Maid Engine",
         "target": "win-x64",
         "source_commit": _git("rev-parse", "HEAD"),
         "source_dirty": bool(_git("status", "--porcelain", "--untracked-files=normal")),

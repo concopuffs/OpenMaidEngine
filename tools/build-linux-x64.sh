@@ -39,7 +39,7 @@ DOTNET_CLI_USE_MSBUILD_SERVER=0 \
 MSBUILDDISABLENODEREUSE=1 \
 DOTNET_gcServer=0 \
 DOTNET_GCConserveMemory=9 \
-dotnet publish "$project_root/Himegari.csproj" \
+dotnet publish "$project_root/OME.csproj" \
     --configuration ExportRelease \
     --runtime linux-x64 \
     --self-contained true \
@@ -61,7 +61,7 @@ if [[ "$managed_proxy_directory" != "$expected_managed_proxy_directory" || "$man
 fi
 rm -rf -- "$managed_proxy_directory"
 mkdir -p -- "$managed_proxy_directory"
-cp -- "$managed_publish_directory/Himegari.dll" "$managed_proxy_directory/Himegari.dll"
+cp -- "$managed_publish_directory/OME.dll" "$managed_proxy_directory/OME.dll"
 
 real_dotnet="$(command -v dotnet)"
 expected_dotnet_proxy_directory="$repo_root/build/dotnet-export-proxy"
@@ -90,15 +90,15 @@ RestoreDisableParallel=true \
 DOTNET_gcServer=0 \
 DOTNET_GCConserveMemory=9 \
 AGE_REAL_DOTNET="$real_dotnet" \
-AGE_PUBLISH_PROJECT="$project_root/Himegari.csproj" \
+AGE_PUBLISH_PROJECT="$project_root/OME.csproj" \
 AGE_PREPUBLISHED_OUTPUT="$managed_proxy_directory" \
 AGE_PUBLISH_OUTPUT_ROOT="${TMPDIR:-/tmp}/godot-publish-dotnet" \
-AGE_PUBLISH_ASSEMBLY="Himegari.dll" \
+AGE_PUBLISH_ASSEMBLY="OME.dll" \
 AGE_PUBLISH_RUNTIME="linux-x64" \
 PATH="$dotnet_proxy_directory:$PATH" \
 XDG_DATA_HOME="$xdg_data_home" "$godot_console" \
     --headless --quit-after 120 --path "$project_root" \
-    --export-release "Linux x86_64" "$export_directory/Himegari.x86_64"
+    --export-release "Linux x86_64" "$export_directory/OME"
 export_status=$?
 set -e
 if [[ $export_status -ne 0 ]]; then
@@ -108,8 +108,8 @@ if [[ $export_status -ne 0 ]]; then
     exit "$export_status"
 fi
 
-managed_export_directory="$export_directory/data_Himegari_linuxbsd_x86_64"
-expected_managed_export_directory="$repo_root/build/export/linux-x64/data_Himegari_linuxbsd_x86_64"
+managed_export_directory="$export_directory/data_OME_linuxbsd_x86_64"
+expected_managed_export_directory="$repo_root/build/export/linux-x64/data_OME_linuxbsd_x86_64"
 if [[ "$managed_export_directory" != "$expected_managed_export_directory" || "$managed_export_directory" == "/" ]]; then
     echo "refusing to replace unexpected managed export directory: $managed_export_directory" >&2
     exit 1
@@ -131,7 +131,7 @@ package_root="${package_outputs[0]}"
 archive_path="${package_outputs[1]}"
 smoke_log="$package_directory/package-smoke.log"
 set +e
-"$package_root/Himegari.x86_64" --headless -- --package-smoke >"$smoke_log" 2>&1
+"$package_root/OME" --headless -- --package-smoke >"$smoke_log" 2>&1
 smoke_status=$?
 set -e
 cat "$smoke_log"

@@ -158,13 +158,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
                                             plus the optional exact Windows text adapter). Its assembly embeds
-                                            generated build/opcodes.json through HimegariRuntimeMetadata, so
+                                            generated build/opcodes.json through OmeRuntimeMetadata, so
                                             exports do not need repository discovery. Also contains the portable
                                             TextServer glyph adapter, per-profile font-substitution configuration,
                                             and TITLE-only F4 debug scene launcher
 ```
 
-The Godot deliverable includes `Himegari.sln` because Godot's .NET exporter requires a solution,
+The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
 `export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below
 the project do not enter its import or export scan. `tools/build-linux-x64.sh` and
 `tools/build-windows-x64.sh` produce their complete disposable artifacts under `build/export/`; the older
@@ -181,7 +181,7 @@ Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control
 full-width text entry.
 
 `engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
-Both `engine/AgeEngine.sln` and `godot/Himegari.sln` include the project; Godot and `Age.Engine.Tests` consume it
+Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
 `PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
 `PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie decoder boundary/runtime,

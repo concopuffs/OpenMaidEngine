@@ -758,7 +758,7 @@ decodes at most one frame ahead, waits against a monotonic `Stopwatch` clock for
 newest-frame-wins handoff, and reports EOF only after the larger of declared stop time or the final frame interval.
 Disposal interrupts a far-future frame wait and joins the worker; asynchronous decode failure records a diagnostic
 and completes the decoder so AGE cannot remain blocked. `Main` now selects `FfmpegMovieDecoderFactory`, while the
-Godot build stages the shim and its five local shared-library dependencies beside `Himegari.dll`. DirectShow stays
+Godot build stages the shim and its five local shared-library dependencies beside `OME.dll`. DirectShow stays
 in-tree but is no longer selected; delete it only after the corpus and live acceptance gates. Deterministic fake-
 clock tests cover due-frame publication, final completion, cancellation, and failure. Real paced probes cover
 formerly failing 280x352 `MVB961` and aligned `MVB908`. A natural headless SYSTEM4 smoke played and released
