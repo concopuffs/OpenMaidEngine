@@ -11,7 +11,7 @@ manifest_value() {
         "$manifest" "$1"
 }
 
-for command in python3 curl sha256sum awk; do
+for command in python3 curl sha256sum awk wc; do
     command -v "$command" >/dev/null 2>&1 || {
         echo "required command was not found: $command" >&2
         exit 1
@@ -21,6 +21,7 @@ done
 archive="$(manifest_value archive)"
 url="$(manifest_value url)"
 expected_hash="$(manifest_value sha256)"
+expected_size="$(manifest_value size)"
 archive_root="${archive%.zip}"
 download_directory="$repo_root/build/downloads"
 archive_path="$download_directory/$archive"
@@ -28,9 +29,14 @@ sdk_root="$destination/$archive_root"
 
 mkdir -p -- "$download_directory" "$destination"
 if [[ ! -f "$archive_path" ]]; then
-    curl --fail --location --retry 3 --output "$archive_path" "$url"
+    curl --fail --location --retry 3 --remove-on-error --output "$archive_path" "$url"
 fi
 
+actual_size="$(wc -c < "$archive_path")"
+if [[ "$actual_size" != "$expected_size" ]]; then
+    echo "FFmpeg archive size mismatch: expected $expected_size, got $actual_size" >&2
+    exit 1
+fi
 actual_hash="$(sha256sum "$archive_path" | awk '{ print $1 }')"
 if [[ "$actual_hash" != "$expected_hash" ]]; then
     echo "FFmpeg archive SHA-256 mismatch: expected $expected_hash, got $actual_hash" >&2

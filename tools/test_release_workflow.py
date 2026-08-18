@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -15,6 +16,10 @@ MANAGED_SOLUTION = REPO / "godot/OME.sln"
 LINUX_BUILD = REPO / "tools/build-linux-x64.sh"
 WINDOWS_BUILD = REPO / "tools/build-windows-x64.sh"
 WINDOWS_HOSTED_EXPORT = REPO / "tools/export-linux-x64.ps1"
+LINUX_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-linux-x64.json"
+WINDOWS_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-win64.json"
+LINUX_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-linux-x64.sh"
+WINDOWS_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-win64.sh"
 
 
 def job(text: str, name: str, next_name: str | None) -> str:
@@ -37,6 +42,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.linux_build = LINUX_BUILD.read_text(encoding="utf-8")
         cls.windows_build = WINDOWS_BUILD.read_text(encoding="utf-8")
         cls.windows_hosted_export = WINDOWS_HOSTED_EXPORT.read_text(encoding="utf-8")
+
+    def test_ffmpeg_inputs_are_dated_size_and_hash_pinned(self) -> None:
+        manifests = [
+            json.loads(LINUX_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
+            json.loads(WINDOWS_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
+        ]
+        self.assertEqual(1, len({manifest["release_tag"] for manifest in manifests}))
+        for manifest in manifests:
+            self.assertRegex(manifest["release_tag"], r"^autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$")
+            self.assertNotEqual("latest", manifest["release_tag"])
+            self.assertIn(f"/{manifest['release_tag']}/", manifest["url"])
+            self.assertTrue(manifest["url"].endswith("/" + manifest["archive"]))
+            self.assertIn(manifest["ffmpeg_commit"], manifest["archive"])
+            self.assertGreater(manifest["size"], 50_000_000)
+            self.assertRegex(manifest["sha256"], r"^[0-9a-f]{64}$")
+        for bootstrap in (LINUX_FFMPEG_BOOTSTRAP, WINDOWS_FFMPEG_BOOTSTRAP):
+            text = bootstrap.read_text(encoding="utf-8")
+            self.assertIn("manifest_value size", text)
+            self.assertIn("--remove-on-error", text)
 
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
