@@ -221,10 +221,12 @@ VM op 0x236 (non-modal) / op 0x20f (modal) / op 0x24d (green-mask transition)
 
 Everything before and after the selected decoder is portable. The replacement decision is an in-process
 FFmpeg backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. FFmpeg
-`n8.1.2-44-g7c533d0f86` is pinned by dated release URL, exact byte size, and SHA-256 in each target manifest under
-`native/age_movie_ffmpeg/`. BtbN prunes older dated autobuild releases, so upstream availability is not permanent:
-the current paired pin restores hosted builds, while a durable project-owned mirror remains necessary to prevent
-future 404-driven repins. Changing either pin requires rerunning the full installed-movie gate. The shim
+`n8.1.2-44-g7c533d0f86` is pinned by immutable project-mirror URL, exact byte size, and SHA-256 in each target
+manifest under `native/age_movie_ffmpeg/`. The anonymously readable `conco/ome-ffmpeg-sdk` generic package on the
+project Gitea server holds both platform archives under version `btbn-autobuild-2026-08-17-13-05`; each manifest
+also retains the original BtbN release URL as provenance. This removes hosted builds from BtbN's dated-autobuild
+retention window. Changing either pin requires a new immutable mirror version and a rerun of the complete
+installed-movie gate. The shim
 dynamically links an LGPL build made without GPL or nonfree components and uses
 `libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `libswresample`. Release artifacts must carry
 the matching FFmpeg source/configuration and notices required by FFmpeg's

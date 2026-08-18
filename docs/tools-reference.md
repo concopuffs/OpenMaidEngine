@@ -292,12 +292,14 @@ send either the `step-limit` console block or the generated JSON.
 ## Native FFmpeg movie shim (Windows and Linux x64)
 
 The target-specific dependency manifests pin dated LGPL shared FFmpeg archives by exact byte size and SHA-256.
-BtbN prunes older dated autobuild releases, so the bytes are immutable while retained but their upstream URLs
-are not permanent; a failed 404 requires a paired manifest repin and full native/movie validation, while a
-project-owned durable mirror remains the long-term fix. Bootstrap downloads remove partial files on HTTP failure
-before validating the complete archive. Windows development can use PowerShell/MSVC. Linux-hosted builds use Bash
-with Python 3, curl, MinGW-w64/binutils for the Windows target, a native C compiler/binutils for Linux, and the
-ordinary archive/core utilities available.
+Their primary URLs use the anonymously readable, immutable `conco/ome-ffmpeg-sdk` generic package on the project
+Gitea server; `upstream_url` records the original BtbN release location for provenance. BtbN prunes older dated
+autobuild releases, so bootstraps do not depend on those upstream URLs remaining live. Uploading a different file
+under an existing Gitea package version is forbidden; a dependency change requires a new version plus a paired
+manifest update and full native/movie validation. Bootstrap downloads remove partial files on HTTP failure before
+validating the complete archive. Windows development can use PowerShell/MSVC. Linux-hosted builds use Bash with
+Python 3, curl, MinGW-w64/binutils for the Windows target, a native C compiler/binutils for Linux, and the ordinary
+archive/core utilities available.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
