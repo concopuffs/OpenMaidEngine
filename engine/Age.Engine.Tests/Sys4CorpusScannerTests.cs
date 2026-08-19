@@ -36,6 +36,14 @@ public class Sys4CorpusScannerTests
         Assert.True(scan.InstructionCount > 0);
         Assert.True(scan.OpcodeOccurrences.Count > 0);
         Assert.Empty(scan.Failures);
+        OpcodeCorpusObservation observation = table.Observations[profileId];
+        Assert.Equal(abiId, observation.ScriptRevision);
+        Assert.Equal(abiId, observation.EngineAbiId);
+        Assert.Equal(scan.ScriptCount, observation.ScriptCount);
+        Assert.Equal(scan.InstructionCount, observation.InstructionCount);
+        Assert.Equal(
+            observation.Opcodes.Order(),
+            scan.OpcodeOccurrences.Keys.Order());
         if (profileId == "kamidori")
         {
             Assert.True(scan.AppendScriptCount > 0);

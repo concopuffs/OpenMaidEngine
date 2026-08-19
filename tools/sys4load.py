@@ -40,12 +40,12 @@ except ImportError:  # allow import from another cwd
     from age_opcodes import (OPCODES, ARG_TYPES, CONTROL_FLOW, ARRAY_OPCODE,
                              is_label_argument)
 
-# Himegari inference layer (optional): improves labels for unnamed opcodes from the
-# canonical generated ABI view; see age_opcodes_himegari.py.
+# Investigated semantic layer (optional): improves labels for unnamed opcodes from the
+# canonical generated registry; observation scope remains available in opcodes.json.
 try:
-    from age_opcodes_himegari import INFERRED
+    from age_opcode_semantics import SEMANTICS
 except ImportError:
-    INFERRED = {}
+    SEMANTICS = {}
 
 # Global-variable labels (optional): annotate global operands from the merged registry
 # build/globals.json (curated vm-map/globals.toml over the auto shape map), produced by
@@ -101,8 +101,8 @@ def display_label(op: int) -> str:
     """Rendered mnemonic: canonical ABI label, else the inferred name, else u00…."""
     lbl = OPCODES.get(op, (f"?{op:x}", 0))[0]
     is_unnamed = (lbl.startswith(("u00", "dev_ukn")) or lbl.lower() == f"{op:x}")
-    if is_unnamed and op in INFERRED:
-        return INFERRED[op]["name"]
+    if is_unnamed and op in SEMANTICS:
+        return SEMANTICS[op]["name"]
     return lbl
 
 MAGIC = b"SYS4422 "         # canonical; also seen: SYS4424 (patch scripts). Both 0x3C headers.

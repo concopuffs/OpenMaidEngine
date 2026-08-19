@@ -67,9 +67,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
     │   ├── age_opcodes.py                      GENERATED complete Python ABI view (do not hand-edit)
-    │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> the 5 artifacts below
+    │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> derived runtime/reference views
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
-    │   ├── age_opcodes_himegari.py             GENERATED from opcodes.toml (do not hand-edit)
+    │   ├── age_opcode_semantics.py             GENERATED investigated semantic-name view (do not hand-edit)
     │   ├── globals_build.py                    generator/linter: vm-map/globals.toml (+auto map) -> build/globals.json, docs/global-reference.md
     │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/story-flags-candidates.json; --bootstrap
     │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/scjump-decisions.* ; --verify (VM cross-check)
@@ -332,10 +332,12 @@ have no repository output tree and write their automatic maps below
   Extracted roots regenerate from the `.ALF` files with a separately obtained local extractor.
   `bin/README.md` records the optional local convention; no extractor binary is tracked. Safe to delete
   and rebuild; do not hand-edit.
-- **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (ABI + semantics + provenance +
-  `depends_on`). Run `tools/opcodes_build.py --build` to regenerate both Python views
-  (`tools/age_opcodes.py`, `tools/age_opcodes_himegari.py`), machine JSON (`build/opcodes.json`), reference
-  (`docs/opcode-reference.md`), and coverage. `--lint` checks dangling deps / confidence-ceiling / vocabulary.
+- **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (catalog framing, per-profile observation,
+  revision-scoped structured evidence, semantics, and dependencies). Runtime implementation remains owned by
+  `OpcodeRuntimeCoverage.cs`. Run `tools/opcodes_build.py --build` to regenerate both Python views
+  (`tools/age_opcodes.py`, `tools/age_opcode_semantics.py`), machine JSON (`build/opcodes.json`), reference
+  (`docs/opcode-reference.md`), and union/per-profile coverage. `--lint` also checks profile/revision/evidence
+  references, dangling deps, confidence ceilings, and vocabulary.
   Both Python modules are generated and must not be hand-edited.
 - **Global-variable knowledge is edited ONLY in `vm-map/globals.toml`** (name + category + value_domain +
   provenance). Run `tools/globals_build.py --build` to regenerate `build/globals.json` (sys4load labels) and

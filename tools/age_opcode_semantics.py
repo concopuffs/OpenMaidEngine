@@ -1,9 +1,9 @@
 # DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build
 
-"""Inferred Himegari opcode semantics (generated). sys4load reads INFERRED[op]['name']."""
+"""Investigated AGE opcode semantics (generated). sys4load reads SEMANTICS[op]['name']."""
 from __future__ import annotations
 
-INFERRED: dict[int, dict] = {
+SEMANTICS: dict[int, dict] = {
     0x21: dict(name='fade-surface-in-from-black', category='draw', noop=False, confidence='high', source='investigation', summary='(surface_slot)(timing_argument) — block while fading from black to a captured full-frame surface. The captured surface remains the terminal frame.'),
     0x22: dict(name='fade-surface-out-to-black', category='draw', noop=False, confidence='high', source='investigation', summary='(surface_slot)(timing_argument) — block while fading a captured full-frame surface to black. Black remains the terminal frame.'),
     0x23: dict(name='fade-surface-in-from-white', category='draw', noop=False, confidence='high', source='investigation', summary='(surface_slot)(timing_argument) — broader-AGE mode-2 sibling of 0x21: block while fading from white to a captured full-frame surface.'),
@@ -87,3 +87,4 @@ INFERRED: dict[int, dict] = {
     0x23f: dict(name='query-surface-stop-time-ms', category='draw', noop=False, confidence='high', source='investigation', summary='(out_stop_time_ms)(surface_slot) — query the DirectShow stop position retained by a loaded movie surface, convert seconds to integer milliseconds by truncating toward zero, and write -1 when the movie slot is empty. Port-only host decoder failure is modeled as an explicitly completed, zero-duration movie.'),
     0x2c5: dict(name='byte-string-length', category='compute', noop=False, confidence='high', source='investigation', summary="Write the resolved NUL-terminated engine string's raw byte length."),
 }
+INFERRED = SEMANTICS  # compatibility alias for older external tooling

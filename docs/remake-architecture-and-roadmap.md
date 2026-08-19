@@ -1442,7 +1442,8 @@ and Godot displayed its ordinary `— end —` marker instead of reporting an in
 **ABI-registry floor completed 2026-07-28.** `vm-map/opcodes.toml` and generated `build/opcodes.json`
 now contain the complete 548-entry Kelebek AGE catalog: 248 instructions observed in Himegari and 300
 catalog-only compatibility entries (including the already mapped but unused persistence opcode `0x19f`).
-Each entry carries `observed_in_himegari`; per-game observation no longer limits decoding. A recognized
+K4 replaced that temporary flag with profile/revision-scoped corpus observations; per-game observation no
+longer limits decoding. A recognized
 but unimplemented opcode reaches the VM's traced stub-and-advance fallback, so a probe continues beyond
 it instead of losing the rest of the script. Catalog-only entries deliberately remain
 `noop_headless=false`: skipping them is a temporary compatibility-probe behavior, not evidence that their
@@ -1482,7 +1483,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-19): K0 through K3 complete; K4 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 through K4 complete; K5 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1557,7 +1558,7 @@ construct a store, while a mismatched explicit choice still continues as request
 **K2 gate (complete 2026-08-19):** a selected-ABI table now carries its ABI id into parsing and execution.
 Missing table entries throw a structured decode exception instead of becoming zero-argument terminal
 instructions. Runtime implementation coverage is an explicit engine-owned set, separate from both table
-membership and `observed_in_himegari`; every currently observed Himegari opcode is covered by regression.
+membership and the then-current Himegari observation set; every Himegari-observed opcode is covered by regression.
 A recognized unsupported instruction emits one structured diagnostic. Normal mode halts and surfaces it as a
 compatibility failure; explicit probe mode alone traces and advances. The installed Kamidori regression fixes
 the current deliberate frontier at `TITLE.BIN@0xd7`, opcode `0x1be`, under profile `kamidori`, ABI `SYS4433`.
@@ -1584,28 +1585,36 @@ shared. Installed validation can select either game independently. Its corpus ga
 extracted tree. In the current installs, Himegari decodes 520 catalog scripts (481 base + 39 append), 1,522,942
 instructions, and 248 distinct opcodes with no decode failures; Kamidori decodes 732 scripts (542 base + 190
 append), 2,126,378 instructions, and 269 distinct opcodes with no decode failures. Kamidori currently has 27
-recognized opcodes without runtime handlers. Those observations remain profile-scoped generated evidence;
-moving them into the canonical provenance model is K4 work.
+recognized opcodes without runtime handlers. K4 subsequently promoted those profile-scoped measurements into
+the canonical observation/provenance model without treating either game as a base SYS4 definition.
 
 ##### Phase K4 — generalize opcode observation and evidence provenance
 
-- [ ] Replace `observed_in_himegari` and `opcodes_used_by_himegari` with a general per-game observation model.
+- [x] Replace `observed_in_himegari` and `opcodes_used_by_himegari` with a general per-game observation model.
   Record observation independently from ABI membership and semantic/runtime support.
-- [ ] Give each semantic evidence record structured provenance: game/profile when applicable, exact engine or
+- [x] Give each semantic evidence record structured provenance: game/profile when applicable, exact engine or
   script revision/build, method (`corpus`, native RE, Frida, harness, inference, or upstream catalog), artifact
   or site, confidence, and explanatory text. Evidence that applies across games should name an engine family or
   revision/dialect rather than inventing a game owner.
-- [ ] Add ABI applicability/revision data only where evidence shows a real framing or semantic difference. Begin
+- [x] Add ABI applicability/revision data only where evidence shows a real framing or semantic difference. Begin
   with independently resolved revision snapshots such as `SYS4422` and `SYS4433`; do not infer a historical
   base `SYS4` definition merely from the first game implemented, and do not assume revisions form a simple
   linear chain. Factor shared definitions only after comparison supports that scope, preferring claims such as
   "shared by `SYS4422` and `SYS4433`" over "common to SYS4" until broader evidence exists. The clean `422`/`433`
   decode is evidence for reuse, not proof that every SYS4 revision is identical.
-- [ ] Generate per-game and union coverage views from the canonical model, and lint profile ids plus evidence
+- [x] Generate per-game and union coverage views from the canonical model, and lint profile ids plus evidence
   references. Rename the generated Himegari-only Python semantics view as part of the same migration.
 
-**K4 gate:** the reference can answer separately whether an opcode is decodable for a selected ABI, observed by
-each game, semantically understood, and implemented by the runtime.
+**K4 gate (complete 2026-08-19):** canonical observation records now identify the exact profile, catalog/script
+revision, selected ABI id, corpus artifact, and corpus totals. Himegari records 248 opcodes under `SYS4422`;
+Kamidori records 269 under `SYS4433`; their observed union is 275, with 242 shared observations, six
+Himegari-only, and 27 Kamidori-only. These are independent revision snapshots, not a claimed base/derived
+lineage. The broader 548-entry Kelebek catalog remains explicitly revision-unscoped compatibility framing.
+Semantic evidence resolves to structured method, profile/revision scope, artifact, site, confidence, and text;
+the linter cross-checks those references and observation revisions against embedded profiles. Generated JSON,
+the human reference, union/per-profile coverage, C# table metadata, and installed-corpus drift tests expose
+observation, semantic status, and engine-owned runtime implementation separately. The neutral generated Python
+view is now `age_opcode_semantics.py`.
 
 ##### Phase K5 — separate game data from SYS revision behavior
 

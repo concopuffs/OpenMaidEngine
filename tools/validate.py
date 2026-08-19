@@ -155,7 +155,7 @@ def build_gate_plan(
             "Generated opcode references",
             (
                 "git", "diff", "--exit-code", "--",
-                "tools/age_opcodes_himegari.py", "docs/opcode-reference.md",
+                "tools/age_opcode_semantics.py", "docs/opcode-reference.md",
             ),
         ),
     ]

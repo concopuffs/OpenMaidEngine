@@ -12,7 +12,24 @@ def check(cond, msg):
 
 FIXTURE = '''
 [meta]
-opcodes_used_by_himegari = 2
+profile_ids = ["himegari"]
+inline_array_opcode = 0x64
+[evidence_defaults.investigation]
+method = "native-re"
+artifact = "fixture artifact"
+scope = "fixture SYS4422"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+[[observation]]
+profile_id = "himegari"
+catalog_revision = "S4IC422"
+script_revision = "SYS4422"
+engine_abi_id = "SYS4422"
+method = "catalog-corpus"
+artifact = "build/games/himegari/fixture-corpus.json"
+script_count = 1
+instruction_count = 2
+opcodes = [0x90, 0x1f4]
 [[opcode]]
 op = 0x90
 label = "u0041BEB0"
@@ -56,6 +73,10 @@ def test_load():
     check(o.semantics.name == "hotspot-branch", "0x90 semantics.name")
     check(o.semantics.depends_on == [0x1f4], "depends_on parsed as int list")
     check(o.semantics.args[0]["role"] == "x", "arg role parsed")
+    check(o.observed_by == frozenset({"himegari"}), "per-profile observation parsed")
+    check(o.observed_revisions == frozenset({"SYS4422"}), "revision observation parsed")
+    check(o.semantics.evidence[0].method == "native-re", "evidence defaults resolve method")
+    check(o.semantics.evidence[0].profile_ids == ("himegari",), "evidence profile scope parsed")
     rev = M.dependents(m)
     check(rev.get(0x1f4) == [0x90], "dependents: 0x1f4 depended on by 0x90")
 
@@ -106,6 +127,37 @@ source = "inference"
 confidence = "low"
 '''
 
+BAD_PROVENANCE = '''
+[meta]
+profile_ids = ["himegari"]
+[evidence_defaults.investigation]
+method = "made-up-method"
+artifact = ""
+scope = ""
+profile_ids = ["not-a-profile"]
+engine_revisions = ["SYS4999"]
+[[observation]]
+profile_id = "himegari"
+catalog_revision = "S4IC422"
+script_revision = "SYS4422"
+engine_abi_id = "SYS4422"
+method = "catalog-corpus"
+artifact = "build/games/himegari/fixture.json"
+script_count = 1
+instruction_count = 1
+opcodes = [0x10]
+[[opcode]]
+op = 0x10
+label = "x"
+argc = 0
+[opcode.semantics]
+name = "x"
+category = "compute"
+source = "investigation"
+confidence = "low"
+evidence = "claim"
+'''
+
 def test_lint():
     e, w = M.lint(M.load(write_tmp(DANGLING)))
     check(any("0x99" in m for m in e), "dangling depends_on is an error")
@@ -116,12 +168,17 @@ def test_lint():
     check(any("category" in m for m in e), "unknown category is an error")
     e, w = M.lint(M.load(write_tmp(FIXTURE)))
     check(e == [], "clean fixture has no lint errors")
+    e, w = M.lint(M.load(write_tmp(BAD_PROVENANCE)))
+    check(any("bad method" in message for message in e), "evidence method is linted")
+    check(any("unknown profiles" in message for message in e), "evidence profile ids are linted")
+    check(any("unknown revisions" in message for message in e), "evidence revisions are linted")
+    check(any("missing artifact" in message for message in e), "evidence artifact is required")
 
 def test_bootstrap():
     import opcodes_build as B
     from pathlib import Path
     canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
-    observed = sorted(op for op, entry in canonical.opcodes.items() if entry.observed_in_himegari)
+    observed = sorted(canonical.observations["himegari"].opcodes)
     synthetic_scan = (
         Counter({op: 1 for op in observed}),
         {op: {i: {0} for i in range(canonical.opcodes[op].argc)} for op in observed},
@@ -141,21 +198,21 @@ def test_bootstrap():
     B.bootstrap_age(tp, catalog_model=canonical)
     full = M.load(tp)
     check(len(full.opcodes) == len(canonical.opcodes), "bootstrap-age seeds the complete AGE catalog")
-    check(sum(o.observed_in_himegari for o in full.opcodes.values()) == len(m.opcodes),
-          "bootstrap-age marks only added catalog entries unobserved")
+    check(all(not o.observed_by for o in full.opcodes.values()),
+          "bootstrap does not invent a game observation record")
     check(all(not o.semantics.noop_headless for o in full.opcodes.values()
-              if not o.observed_in_himegari),
+              if o.op not in m.opcodes),
           "compatibility stubs are not misclassified as semantically safe no-ops")
     e, w = M.lint(full)
     check(e == [], f"full catalog lints clean (errors: {e[:3]})")
 
-def test_emit_inferred():
+def test_emit_semantics():
     import opcodes_build as B
-    src = B.emit_inferred_py(M.load(write_tmp(FIXTURE)))
-    check("INFERRED" in src and "hotspot-branch" in src, "shim contains INFERRED + our mnemonic")
+    src = B.emit_semantics_py(M.load(write_tmp(FIXTURE)))
+    check("SEMANTICS" in src and "hotspot-branch" in src, "semantic view contains our mnemonic")
     ns = {}
     exec(compile(src, "<gen>", "exec"), ns)
-    inf = ns["INFERRED"]
+    inf = ns["SEMANTICS"]
     check(0x90 in inf and inf[0x90]["name"] == "hotspot-branch", "generated INFERRED[0x90]['name'] correct")
     check(0x1f4 in inf, "named marker 0x1f4 (name != label) included")
 
@@ -181,6 +238,10 @@ def test_emit_views():
     j = _json.loads(B.emit_json(m))
     check(j["dependents"]["0x1f4"] == ["0x90"], "json dependents index correct")
     check(any(o["op"] == "0x90" for o in j["opcodes"]), "json lists opcode 0x90")
+    hotspot = next(o for o in j["opcodes"] if o["op"] == "0x90")
+    check(hotspot["observed_by"] == ["himegari"], "json exposes general observation list")
+    check(hotspot["semantics"]["evidence"][0]["method"] == "native-re",
+          "json emits structured semantic evidence")
     md = B.emit_reference_md(m)
     check("hotspot-branch" in md and "depended on by" in md.lower(), "reference md has entry + dependents line")
     cov = B.emit_coverage_md(m)
@@ -190,7 +251,7 @@ def main():
     test_load()
     test_lint()
     test_bootstrap()
-    test_emit_inferred()
+    test_emit_semantics()
     test_emit_runtime()
     test_emit_views()
     print("FAILURES:", len(FAILS))

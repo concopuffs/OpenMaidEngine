@@ -1,13 +1,24 @@
 namespace Age.Engine.Model;
 
+public sealed record OpcodeCorpusObservation(
+    string ProfileId,
+    string CatalogRevision,
+    string ScriptRevision,
+    string EngineAbiId,
+    string Artifact,
+    int ScriptCount,
+    long InstructionCount,
+    IReadOnlySet<int> Opcodes);
+
 public sealed record OpcodeDefinition(
     int Opcode,
     string Label,
     int Argc,
-    bool ObservedInHimegari = false,
+    IReadOnlySet<string> ObservedBy,
     string? SemanticName = null)
 {
     public string CanonicalLabel => string.IsNullOrWhiteSpace(SemanticName) ? Label : SemanticName;
+    public bool IsObservedBy(string profileId) => ObservedBy.Contains(profileId);
 }
 
 public sealed class OpcodeTable
@@ -18,20 +29,26 @@ public sealed class OpcodeTable
                        string abiId = "AGE-catalog")
         : this(entries.ToDictionary(
             pair => pair.Key,
-            pair => new OpcodeDefinition(pair.Key, pair.Value.Label, pair.Value.Argc)), abiId)
+            pair => new OpcodeDefinition(
+                pair.Key, pair.Value.Label, pair.Value.Argc,
+                new HashSet<string>(StringComparer.Ordinal))), abiId, null)
     {
     }
 
     public OpcodeTable(IReadOnlyDictionary<int, OpcodeDefinition> entries,
-                       string abiId = "AGE-catalog")
+                       string abiId = "AGE-catalog",
+                       IReadOnlyDictionary<string, OpcodeCorpusObservation>? observations = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrWhiteSpace(abiId);
         _t = entries;
         AbiId = abiId;
+        Observations = observations
+            ?? new Dictionary<string, OpcodeCorpusObservation>(StringComparer.Ordinal);
     }
 
     public string AbiId { get; }
+    public IReadOnlyDictionary<string, OpcodeCorpusObservation> Observations { get; }
     public int Count => _t.Count;
     public IEnumerable<OpcodeDefinition> Entries => _t.Values;
 

@@ -1,11 +1,122 @@
 # vm-map/opcodes.toml -- CANONICAL living opcode reference (hand-edited).
-# Generated artifacts (age_opcodes_himegari.py, build/opcodes.json, docs/opcode-reference.md,
+# Generated artifacts (age_opcode_semantics.py, build/opcodes.json, docs/opcode-reference.md,
 # build/opcode-coverage.md) come from this file via tools/opcodes_build.py --build. Do not edit those.
 # Skeletons are appended by --bootstrap; enrich each [opcode.semantics] as we investigate.
 [meta]
 instruction_model = "code = seq of <opcode:u32> then argc*(<argtype:u32><value:u32>); len_dwords = 1 + 2*argc"
-opcodes_used_by_himegari = 248
+profile_ids = ["himegari", "kamidori"]
 inline_array_opcode = 0x64
+
+# Compact defaults resolve the existing semantic evidence text into structured records. They state
+# only scopes the current evidence proves: Himegari research is SYS4422-specific; the upstream AGE
+# catalog has deliberately unspecified revision applicability.
+[evidence_defaults.kelebek]
+method = "upstream-catalog"
+artifact = "Kelebek1/Eushully-Decompiler age-shared.cpp"
+scope = "upstream AGE opcode catalog; engine revision applicability unspecified"
+
+[evidence_defaults.investigation]
+method = "native-re"
+artifact = "Himegari AGE.EXE Ghidra /v2 and decoded script corpus"
+scope = "Himegari SYS4422"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+
+[evidence_defaults.frida]
+method = "frida"
+artifact = "Himegari AGE.EXE runtime capture and Ghidra /v2"
+scope = "Himegari SYS4422"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+
+[evidence_defaults.harness]
+method = "harness"
+artifact = "OME compatibility harness"
+scope = "Himegari SYS4422 behavior oracle"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+
+[evidence_defaults.inference]
+method = "inference"
+artifact = "Himegari decoded script corpus"
+scope = "Himegari SYS4422"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+
+[evidence_defaults.unicorn]
+method = "unicorn"
+artifact = "Himegari AGE.EXE Unicorn harness"
+scope = "Himegari SYS4422"
+profile_ids = ["himegari"]
+engine_revisions = ["SYS4422"]
+
+[[observation]]
+profile_id = "himegari"
+catalog_revision = "S4IC422"
+script_revision = "SYS4422"
+engine_abi_id = "SYS4422"
+method = "catalog-corpus"
+artifact = "build/games/himegari/catalog-opcode-coverage.json"
+script_count = 520
+instruction_count = 1522942
+opcodes = [
+  0x1, 0x2, 0x3, 0x5, 0x6, 0x8, 0x9, 0x21, 0x22, 0x25, 0x50, 0x51,
+  0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d,
+  0x5e, 0x5f, 0x60, 0x61, 0x63, 0x64, 0x6c, 0x6e, 0x6f, 0x70, 0x71, 0x72,
+  0x73, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7f, 0x80, 0x85,
+  0x86, 0x87, 0x88, 0x8b, 0x8c, 0x8f, 0x90, 0x93, 0x94, 0x97, 0xa0, 0xa1,
+  0xa2, 0xa3, 0xae, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbf, 0xc0,
+  0xc2, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xcc, 0xcd, 0xd0, 0xd3, 0xd4, 0xd5,
+  0xd9, 0xfb, 0xfe, 0xff, 0x100, 0x101, 0x107, 0x108, 0x109, 0x10a, 0x10b, 0x10c,
+  0x10d, 0x12c, 0x12e, 0x12f, 0x130, 0x131, 0x132, 0x133, 0x134, 0x135, 0x136, 0x137,
+  0x13a, 0x13f, 0x140, 0x141, 0x142, 0x143, 0x144, 0x149, 0x191, 0x192, 0x193, 0x194,
+  0x195, 0x196, 0x197, 0x198, 0x199, 0x19a, 0x19b, 0x19c, 0x19d, 0x19e, 0x1a0, 0x1a1,
+  0x1a2, 0x1a3, 0x1a4, 0x1a5, 0x1a6, 0x1a7, 0x1a8, 0x1a9, 0x1aa, 0x1ab, 0x1ac, 0x1ad,
+  0x1ae, 0x1af, 0x1b0, 0x1b2, 0x1b3, 0x1b4, 0x1b5, 0x1b6, 0x1b7, 0x1b8, 0x1b9, 0x1ba,
+  0x1bb, 0x1bc, 0x1bd, 0x1bf, 0x1c1, 0x1c7, 0x1c8, 0x1ca, 0x1cb, 0x1cc, 0x1ce, 0x1cf,
+  0x1d0, 0x1d1, 0x1d2, 0x1d3, 0x1d4, 0x1d5, 0x1f4, 0x1f5, 0x1f6, 0x1f7, 0x1f8, 0x1f9,
+  0x1fa, 0x1fb, 0x1fd, 0x1fe, 0x1ff, 0x202, 0x203, 0x204, 0x205, 0x207, 0x208, 0x20a,
+  0x20b, 0x20c, 0x20d, 0x20e, 0x20f, 0x212, 0x213, 0x215, 0x216, 0x217, 0x218, 0x219,
+  0x21a, 0x21b, 0x21c, 0x21d, 0x21e, 0x21f, 0x220, 0x222, 0x223, 0x224, 0x228, 0x229,
+  0x22a, 0x22c, 0x22d, 0x22f, 0x230, 0x231, 0x232, 0x233, 0x234, 0x236, 0x238, 0x239,
+  0x23a, 0x23b, 0x23c, 0x23d, 0x23f, 0x241, 0x242, 0x243, 0x248, 0x249, 0x24d, 0x24e,
+  0x258, 0x259, 0x2bd, 0x2bf, 0x2c0, 0x2c5, 0x2c6, 0x2c8,
+]
+
+[[observation]]
+profile_id = "kamidori"
+catalog_revision = "S4IC433"
+script_revision = "SYS4433"
+engine_abi_id = "SYS4433"
+method = "catalog-corpus"
+artifact = "build/games/kamidori/catalog-opcode-coverage.json"
+script_count = 732
+instruction_count = 2126378
+opcodes = [
+  0x1, 0x2, 0x3, 0x5, 0x6, 0x8, 0x9, 0x21, 0x22, 0x24, 0x25, 0x27,
+  0x28, 0x32, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
+  0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x61, 0x63, 0x64, 0x6c, 0x6e,
+  0x6f, 0x70, 0x71, 0x72, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c,
+  0x7f, 0x80, 0x82, 0x83, 0x85, 0x86, 0x87, 0x88, 0x8b, 0x8c, 0x8f, 0x90,
+  0x93, 0x94, 0x97, 0xa0, 0xa1, 0xa2, 0xa3, 0xae, 0xb4, 0xb5, 0xb6, 0xb7,
+  0xb8, 0xb9, 0xba, 0xbf, 0xc0, 0xc2, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xcc,
+  0xcd, 0xd0, 0xd3, 0xd4, 0xd5, 0xd9, 0xfa, 0xfb, 0xfe, 0xff, 0x100, 0x101,
+  0x106, 0x107, 0x108, 0x109, 0x10a, 0x10b, 0x10c, 0x10d, 0x12c, 0x12e, 0x12f, 0x130,
+  0x131, 0x132, 0x133, 0x134, 0x135, 0x136, 0x137, 0x13a, 0x13f, 0x140, 0x141, 0x142,
+  0x143, 0x147, 0x191, 0x192, 0x193, 0x194, 0x195, 0x196, 0x197, 0x198, 0x199, 0x19a,
+  0x19b, 0x19c, 0x19d, 0x19e, 0x1a0, 0x1a1, 0x1a2, 0x1a3, 0x1a4, 0x1a5, 0x1a6, 0x1a7,
+  0x1a8, 0x1a9, 0x1aa, 0x1ab, 0x1ac, 0x1ad, 0x1ae, 0x1af, 0x1b0, 0x1b1, 0x1b2, 0x1b3,
+  0x1b4, 0x1b5, 0x1b6, 0x1b7, 0x1b8, 0x1b9, 0x1ba, 0x1bb, 0x1bc, 0x1bd, 0x1be, 0x1bf,
+  0x1c1, 0x1c7, 0x1c8, 0x1ca, 0x1cb, 0x1cc, 0x1ce, 0x1cf, 0x1d0, 0x1d1, 0x1d2, 0x1d3,
+  0x1d4, 0x1d5, 0x1f4, 0x1f5, 0x1f6, 0x1f7, 0x1f8, 0x1f9, 0x1fa, 0x1fb, 0x1fd, 0x1fe,
+  0x1ff, 0x202, 0x203, 0x204, 0x205, 0x207, 0x208, 0x20a, 0x20b, 0x20c, 0x20d, 0x20e,
+  0x20f, 0x212, 0x213, 0x214, 0x215, 0x216, 0x217, 0x218, 0x219, 0x21a, 0x21b, 0x21c,
+  0x21d, 0x21e, 0x21f, 0x220, 0x222, 0x223, 0x224, 0x227, 0x228, 0x229, 0x22a, 0x22c,
+  0x22d, 0x22e, 0x22f, 0x230, 0x231, 0x232, 0x233, 0x234, 0x235, 0x236, 0x238, 0x239,
+  0x23a, 0x23b, 0x23c, 0x23d, 0x23f, 0x241, 0x242, 0x243, 0x246, 0x248, 0x249, 0x24e,
+  0x24f, 0x250, 0x251, 0x258, 0x259, 0x25a, 0x2bc, 0x2bd, 0x2bf, 0x2c0, 0x2c5, 0x2d8,
+  0x2da, 0x2db, 0x2dc, 0x2dd, 0x2de,
+]
 
 [meta.arg_types]
 "0x0" = "imm"
@@ -72,7 +183,7 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Ghidra /v2: op_0xba_sfx_start_loop@0x420290 records a 3-dword instruction, fetches channel operand 1, and calls sfx_channel_start@0x4825d0 with logical loop mode 1. The same worker receives mode 0 from op 0xb5. sound_stream_fill_quarter@0x483b70 rewinds the decoder at EOF only for mode 1. All 334 Himegari sites pass literal channel 9 immediately after op 0xb4 loads that channel."
+evidence = ""
 
 [[opcode]]
 op = 0x3
@@ -1888,7 +1999,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0xba_sfx_start_loop@0x420290 records a 3-dword instruction, fetches channel operand 1, and calls sfx_channel_start@0x4825d0 with logical loop mode 1. The same worker receives mode 0 from op 0xb5. sound_stream_fill_quarter@0x483b70 rewinds the decoder at EOF only for mode 1. All 334 Himegari sites pass literal channel 9 immediately after op 0xb4 loads that channel."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3447,7 +3558,6 @@ observed_types = ["g-int", "l-int"]
 op = 0x19f
 label = "load-numbered-slot-data-only"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -6983,7 +7093,6 @@ observed_types = ["imm"]
 op = 0x4
 label = "u00417E30"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -6994,13 +7103,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x7
 label = "u00417F90"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7011,13 +7119,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xa
 label = "u00424170"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7028,13 +7135,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xb
 label = "u00418090"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7045,13 +7151,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xc
 label = "u004149E0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7062,13 +7167,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd
 label = "u004181A0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7079,13 +7183,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xe
 label = "u00418200"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7096,13 +7199,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xf
 label = "u00418300"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7113,13 +7215,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x10
 label = "u00414A00"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7130,13 +7231,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x11
 label = "u00418330"
 argc = 9
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7147,13 +7247,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x12
 label = "u004183F0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7164,13 +7263,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x13
 label = "u00418420"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7181,13 +7279,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x14
 label = "u00414A20"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7198,13 +7295,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x15
 label = "u00418490"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7215,13 +7311,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x16
 label = "u00418520"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7232,13 +7327,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x17
 label = "u00418560"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7249,13 +7343,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1e
 label = "u004185B0"
 argc = 8
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7266,13 +7359,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1f
 label = "u00418690"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7283,13 +7375,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x20
 label = "u004187C0"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7300,13 +7391,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x23
 label = "u004189D0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7333,7 +7423,6 @@ observed_types = []
 op = 0x24
 label = "u00418A90"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7360,7 +7449,6 @@ observed_types = []
 op = 0x26
 label = "u00418C00"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7371,13 +7459,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x27
 label = "u00418CC0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7388,13 +7475,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x28
 label = "u00418D90"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7405,13 +7491,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2a
 label = "u00418E60"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7422,13 +7507,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2b
 label = "u00418F30"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7439,13 +7523,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c
 label = "u00419010"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7456,13 +7539,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d
 label = "u004190A0"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7473,13 +7555,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e
 label = "u004194B0"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7490,13 +7571,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f
 label = "u004195A0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7507,13 +7587,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x30
 label = "u00419670"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7524,13 +7603,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x31
 label = "u00419750"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7541,13 +7619,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32
 label = "u004197C0"
 argc = 10
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7558,13 +7635,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x33
 label = "u00419900"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7575,13 +7651,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x34
 label = "u004199C0"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7592,13 +7667,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35
 label = "u00419AF0"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7609,13 +7683,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x36
 label = "u00419C00"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7626,13 +7699,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x37
 label = "u00419C90"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7643,13 +7715,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x38
 label = "u00419DA0"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7660,13 +7731,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x62
 label = "u0041A360"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7677,13 +7747,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x65
 label = "u00414AA0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7694,13 +7763,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x66
 label = "u00414AE0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7711,13 +7779,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x67
 label = "u00414B20"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7728,13 +7795,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x68
 label = "u00414B60"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7745,13 +7811,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x69
 label = "u00414BA0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7762,13 +7827,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x6a
 label = "u00414BE0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7779,13 +7843,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x6b
 label = "u00414C20"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7796,13 +7859,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x6d
 label = "u00416960"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7813,13 +7875,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x74
 label = "u0041AC00"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7830,13 +7891,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x7d
 label = "u0041AE00"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7847,13 +7907,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x7e
 label = "u0041AEA0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7864,13 +7923,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x81
 label = "u0041AF30"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7881,13 +7939,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x82
 label = "u0041AF80"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7898,13 +7955,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x83
 label = "u00414C90"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7915,13 +7971,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x84
 label = "u0041AFE0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7932,13 +7987,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x89
 label = "u0041B2E0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7949,13 +8003,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x8a
 label = "u0041B330"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7966,13 +8019,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x8d
 label = "u0041BCE0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -7983,13 +8035,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x8e
 label = "u0041BD60"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8000,13 +8051,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x91
 label = "u0041BFB0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8017,13 +8067,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x92
 label = "u0041C030"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8034,13 +8083,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x95
 label = "u0041C0C0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8051,13 +8099,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x96
 label = "u004150C0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8068,13 +8115,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xaa
 label = "u0041C270"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8085,13 +8131,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xab
 label = "u0041C330"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8102,13 +8147,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xac
 label = "u0041C3E0"
 argc = 9
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8119,13 +8163,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xad
 label = "u00415110"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8136,13 +8179,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xaf
 label = "u00415480"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8153,13 +8195,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xb0
 label = "u0041C530"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8170,13 +8211,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xb1
 label = "u0041C560"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8187,13 +8227,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xb2
 label = "u0041C590"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8204,13 +8243,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xb3
 label = "u004154B0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8221,13 +8259,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xbb
 label = "u0041D250"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8238,13 +8275,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xbc
 label = "u0041D280"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8255,13 +8291,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xbd
 label = "u00415570"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8272,13 +8307,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xbe
 label = "u004155E0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8289,13 +8323,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xc1
 label = "u00415650"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8306,13 +8339,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xc3
 label = "u0041D390"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8323,13 +8355,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xc9
 label = "u00415770"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8340,13 +8371,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xca
 label = "u004157A0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8357,13 +8387,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xcb
 label = "u00415800"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8374,13 +8403,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xce
 label = "u0041E0B0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8391,13 +8419,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xcf
 label = "u00416D40"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8408,13 +8435,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd1
 label = "u00415860"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8425,13 +8451,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd2
 label = "u0041E110"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8442,13 +8467,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd6
 label = "u004267D0"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8459,13 +8483,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd7
 label = "u0041E1A0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8476,13 +8499,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xd8
 label = "u0041E150"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8493,13 +8515,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xda
 label = "u004158B0"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8510,13 +8531,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xfa
 label = "u00415940"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8527,13 +8547,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xfc
 label = "u004159F0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8544,13 +8563,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0xfd
 label = "u0041E2D0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8561,13 +8579,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x102
 label = "u0041E3C0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8578,13 +8595,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x103
 label = "u0041E4A0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8595,13 +8611,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x104
 label = "u00415C50"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8612,13 +8627,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x105
 label = "u0041E4D0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8629,13 +8643,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x106
 label = "u00415E40"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8646,13 +8659,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x10e
 label = "u0041E650"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8663,13 +8675,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x10f
 label = "u0041E690"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8680,13 +8691,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x12d
 label = "u0041E720"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8697,13 +8707,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x138
 label = "push-int-stack"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8731,7 +8740,6 @@ observed_types = []
 op = 0x139
 label = "try-pop-int-stack"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8764,7 +8772,6 @@ observed_types = []
 op = 0x13b
 label = "u0041F440"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8775,13 +8782,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x13c
 label = "u0041F7E0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8792,13 +8798,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x13d
 label = "u0041F840"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8809,13 +8814,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x13e
 label = "u0041F8D0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8826,13 +8830,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x145
 label = "u00416040"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8843,13 +8846,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x146
 label = "u0041FB40"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8860,13 +8862,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x147
 label = "u0041FB80"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8877,13 +8878,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x148
 label = "get-system-menu-show-delay"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -8905,7 +8905,6 @@ role = "out: unsigned top-edge system-menu dwell threshold in milliseconds"
 op = 0x14a
 label = "u0041FD10"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8916,13 +8915,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x14b
 label = "u0041FF50"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8933,13 +8931,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x14c
 label = "set-agerc-export"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8950,13 +8947,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x14d
 label = "call-agerc-export"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8967,13 +8963,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x190
 label = "u0041C5E0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -8984,13 +8979,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1b1
 label = "u0041B5C0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9001,13 +8995,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1be
 label = "u0041D9D0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9018,13 +9011,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c0
 label = "u0041DB70"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9035,13 +9027,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c2
 label = "u0041B860"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9052,13 +9043,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c3
 label = "u0041B8A0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9069,13 +9059,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c4
 label = "u00415720"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9086,13 +9075,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c5
 label = "u00425800"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9103,13 +9091,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c6
 label = "u0041DD80"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9120,13 +9107,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1c9
 label = "u0041B8E0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9137,13 +9123,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1cd
 label = "u0041A560"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9154,13 +9139,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1d6
 label = "u0041DA40"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9171,13 +9155,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1d7
 label = "u0041DA80"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9188,13 +9171,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1d8
 label = "u0041DAD0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9205,13 +9187,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1d9
 label = "u0041DB20"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9222,13 +9203,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x1fc
 label = "u004205F0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9239,13 +9219,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x200
 label = "u00420800"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9256,13 +9235,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x201
 label = "u00416190"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9273,13 +9251,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x206
 label = "u004161C0"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9290,13 +9267,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x209
 label = "u00420C50"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9307,13 +9283,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x210
 label = "u00420FF0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9324,13 +9299,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x211
 label = "u00421060"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9341,13 +9315,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x214
 label = "u00421120"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9358,13 +9331,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x221
 label = "u00421670"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9375,13 +9347,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x225
 label = "u00421780"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9392,13 +9363,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x226
 label = "u004217D0"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9409,13 +9379,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x227
 label = "u00421880"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9426,13 +9395,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x22b
 label = "u00421B30"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9443,13 +9411,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x22e
 label = "u00421D10"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9460,13 +9427,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x235
 label = "u00422100"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9477,13 +9443,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x237
 label = "u00422350"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9494,13 +9459,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x23e
 label = "u004228C0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9511,13 +9475,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x240
 label = "u004229A0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9528,13 +9491,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x244
 label = "u00416360"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9545,13 +9507,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x245
 label = "u00422DA0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9562,13 +9523,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x246
 label = "u00422E10"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9579,13 +9539,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x247
 label = "u00416390"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9596,13 +9555,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x24a
 label = "u004163C0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9613,13 +9571,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x24f
 label = "u00422ED0"
 argc = 10
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9630,13 +9587,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x250
 label = "u00422F60"
 argc = 10
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9647,13 +9603,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x251
 label = "u00422FF0"
 argc = 12
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9664,13 +9619,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x252
 label = "u00423000"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9681,13 +9635,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x253
 label = "u00423019"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9698,13 +9651,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x254
 label = "u00423049"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9715,13 +9667,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x256
 label = "u00423050"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9732,13 +9683,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x257
 label = "257"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9749,13 +9699,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25a
 label = "u00423120"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9766,13 +9715,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25b
 label = "25B"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9783,13 +9731,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25c
 label = "u00423122"
 argc = 8
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9800,13 +9747,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25d
 label = "u00423123"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9817,13 +9763,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25e
 label = "u00423124"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9834,13 +9779,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x25f
 label = "u00423125"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9851,13 +9795,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x260
 label = "u00423126"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9868,13 +9811,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x261
 label = "u00423127"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9885,13 +9827,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x262
 label = "262"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9902,13 +9843,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x263
 label = "263"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9919,13 +9859,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x264
 label = "264"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9936,13 +9875,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2bc
 label = "u00423020"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9953,13 +9891,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2be
 label = "u00423140"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9970,13 +9907,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c1
 label = "u00425BC0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -9987,13 +9923,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c2
 label = "u00425CD0"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10004,13 +9939,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c3
 label = "u00423200"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10021,13 +9955,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c4
 label = "u00416450"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10038,13 +9971,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c7
 label = "u0042B5F0"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10055,13 +9987,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2c9
 label = "2C9"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10072,13 +10003,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2cc
 label = "2CC"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10089,13 +10019,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2cd
 label = "2CD"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10106,13 +10035,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ce
 label = "u0042B616"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10123,13 +10051,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2cf
 label = "u0042B617"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10140,13 +10067,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d0
 label = "u0042B940"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10157,13 +10083,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d1
 label = "u0042B950"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10174,13 +10099,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d2
 label = "u0042B960"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10191,13 +10115,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d3
 label = "u0042B970"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10208,13 +10131,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d5
 label = "u0042B990"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10225,13 +10147,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d7
 label = "u0042B9B0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10242,13 +10163,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d8
 label = "set-array-to"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10259,13 +10179,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2d9
 label = "u0042BA30"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10276,13 +10195,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2da
 label = "u004234E0"
 argc = 8
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10293,13 +10211,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2db
 label = "u004235C0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10310,13 +10227,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2dc
 label = "u0042BA80"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10327,13 +10243,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2dd
 label = "u0042D880"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10344,13 +10259,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2de
 label = "u0042BAC0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10361,13 +10275,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2df
 label = "u0042BAC1"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10378,13 +10291,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e0
 label = "u0042CE0F"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10395,13 +10307,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e1
 label = "u0042CE10"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10412,13 +10323,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e2
 label = "u0042CE11"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10429,13 +10339,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e3
 label = "u0042CE30"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10446,13 +10355,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e4
 label = "u0042CE31"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10463,13 +10371,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e5
 label = "u0042CE50"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10480,13 +10387,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e6
 label = "u0042CE60"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10497,13 +10403,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e7
 label = "u0042CE70"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10514,13 +10419,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e8
 label = "u0042CE80"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10531,13 +10435,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2e9
 label = "u0042CE90"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10548,13 +10451,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ea
 label = "u0042CEA0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10565,13 +10467,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2eb
 label = "u0042CEB0"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10582,13 +10483,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ec
 label = "u0042CEC0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10599,13 +10499,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ee
 label = "u0042CEC2"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10616,13 +10515,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ef
 label = "u0042CEC3"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10633,13 +10531,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f0
 label = "u0042CEC4"
 argc = 9
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10650,13 +10547,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f1
 label = "u0042CEC5"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10667,13 +10563,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f2
 label = "u0042CEC6"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10684,13 +10579,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f3
 label = "2F3"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10701,13 +10595,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f4
 label = "2F4"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10718,13 +10611,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f5
 label = "2F5"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10735,13 +10627,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f6
 label = "2F6"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10752,13 +10643,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f7
 label = "2F7"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10769,13 +10659,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f8
 label = "2F8"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10786,13 +10675,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2f9
 label = "2F9"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10803,13 +10691,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2fa
 label = "2FA"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10820,13 +10707,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2fb
 label = "2FB"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10837,13 +10723,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2fc
 label = "2FC"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10854,13 +10739,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2fd
 label = "2FD"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10871,13 +10755,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2fe
 label = "2FE"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10888,13 +10771,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x2ff
 label = "2FF"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10905,13 +10787,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x300
 label = "300"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10922,13 +10803,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x301
 label = "301"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10939,13 +10819,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x302
 label = "302"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10956,13 +10835,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x303
 label = "303"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10973,13 +10851,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x304
 label = "304"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -10990,13 +10867,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x305
 label = "305"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11007,13 +10883,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x306
 label = "306"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11024,13 +10899,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x307
 label = "307"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11041,13 +10915,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x308
 label = "308"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11058,13 +10931,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x30a
 label = "30A"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11075,13 +10947,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x30c
 label = "30C"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11092,13 +10963,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x320
 label = "u0043AA20"
 argc = 10
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11109,13 +10979,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x321
 label = "u0043AA30"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11126,13 +10995,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x322
 label = "u0043AA40"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11143,13 +11011,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x323
 label = "u0043AA50"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11160,13 +11027,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x324
 label = "u0043AA60"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11177,13 +11043,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x325
 label = "u0043AA70"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11194,13 +11059,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x326
 label = "u0043AA80"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11211,13 +11075,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x327
 label = "u0043AA90"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11228,13 +11091,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x328
 label = "u0043AAA0"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11245,13 +11107,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x329
 label = "u0043AAB0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11262,13 +11123,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32a
 label = "32A"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11279,13 +11139,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32b
 label = "u0043AAD0"
 argc = 0
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11296,13 +11155,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32c
 label = "u0043AAE0"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11313,13 +11171,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32d
 label = "u0043AAF0"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11330,13 +11187,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32e
 label = "u0043AB10"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11347,13 +11203,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x32f
 label = "u0043AB11"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11364,13 +11219,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x330
 label = "u0043AB12"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11381,13 +11235,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x332
 label = "u0043AB14"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11398,13 +11251,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x334
 label = "u0043AB16"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11415,13 +11267,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x335
 label = "u0043AB17"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11432,13 +11283,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x337
 label = "u0043AB19"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11449,13 +11299,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x33b
 label = "u0043AB1D"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11466,13 +11315,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x33d
 label = "u0043AB1E"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11483,13 +11331,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x33e
 label = "u0043AB1F"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11500,13 +11347,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x33f
 label = "u0043AB20"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11517,13 +11363,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "low"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x340
 label = "340"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11534,13 +11379,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x341
 label = "341"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11551,13 +11395,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x342
 label = "342"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11568,13 +11411,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x344
 label = "344"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11585,13 +11427,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x345
 label = "345"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11602,13 +11443,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x349
 label = "349"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11619,13 +11459,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x34d
 label = "34D"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11636,13 +11475,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x34e
 label = "34E"
 argc = 4
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11653,13 +11491,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x352
 label = "352"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11670,13 +11507,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x353
 label = "353"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11687,13 +11523,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x354
 label = "354"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11704,13 +11539,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x358
 label = "358"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11721,13 +11555,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35a
 label = "35A"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11738,13 +11571,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35b
 label = "35B"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11755,13 +11587,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35c
 label = "35C"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11772,13 +11603,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35d
 label = "35D"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11789,13 +11619,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x35f
 label = "35F"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11806,13 +11635,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x360
 label = "360"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11823,13 +11651,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x361
 label = "361"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11840,13 +11667,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x363
 label = "363"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11857,13 +11683,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x364
 label = "364"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11874,13 +11699,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x384
 label = "384"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11891,13 +11715,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x386
 label = "386"
 argc = 11
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11908,13 +11731,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x387
 label = "387"
 argc = 8
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11925,13 +11747,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x388
 label = "388"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11942,13 +11763,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x389
 label = "389"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11959,13 +11779,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x38f
 label = "38F"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11976,13 +11795,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x390
 label = "390"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -11993,13 +11811,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x391
 label = "391"
 argc = 2
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12010,13 +11827,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x392
 label = "392"
 argc = 1
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12027,13 +11843,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x393
 label = "393"
 argc = 6
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12044,13 +11859,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x396
 label = "396"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12061,13 +11875,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x398
 label = "398"
 argc = 3
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12078,13 +11891,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x399
 label = "399"
 argc = 7
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12095,13 +11907,12 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
 [[opcode]]
 op = 0x39b
 label = "39B"
 argc = 5
-observed_in_himegari = false
 abi_source = "kelebek"
 
 [opcode.semantics]
@@ -12112,4 +11923,4 @@ noop_headless = false
 source = "kelebek"
 confidence = "med"
 depends_on = []
-evidence = "Not observed in Himegari's script corpus; ABI label/argc come from Kelebek's AGE table."
+evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."

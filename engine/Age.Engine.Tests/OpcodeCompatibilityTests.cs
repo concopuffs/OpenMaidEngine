@@ -13,11 +13,18 @@ public class OpcodeCompatibilityTests
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
 
         Assert.True(table.TryGetDefinition(0x1be, out OpcodeDefinition definition));
-        Assert.False(definition.ObservedInHimegari);
+        Assert.False(definition.IsObservedBy("himegari"));
+        Assert.True(definition.IsObservedBy("kamidori"));
         Assert.False(OpcodeRuntimeCoverage.IsImplemented(0x1be));
         Assert.Equal("SYS4433", table.AbiId);
+        IReadOnlySet<int> himegari = table.Observations["himegari"].Opcodes;
+        IReadOnlySet<int> kamidori = table.Observations["kamidori"].Opcodes;
+        Assert.Equal(248, himegari.Count);
+        Assert.Equal(269, kamidori.Count);
+        Assert.Equal(242, himegari.Intersect(kamidori).Count());
+        Assert.Equal(275, himegari.Union(kamidori).Count());
         Assert.All(
-            table.Entries.Where(entry => entry.ObservedInHimegari),
+            table.Entries.Where(entry => entry.IsObservedBy("himegari")),
             entry => Assert.True(
                 OpcodeRuntimeCoverage.IsImplemented(entry.Opcode),
                 $"Himegari-observed opcode 0x{entry.Opcode:x} would enter unsupported fallback"));

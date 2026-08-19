@@ -38,7 +38,7 @@ T_IMM, T_STR = 0x0, 0x2
 T_GINT, T_GFLOAT, T_GSTR, T_GPTR = 0x3, 0x4, 0x5, 0x6
 T_LINT, T_LFLOAT, T_LSTR, T_LPTR = 0x9, 0xA, 0xB, 0xC
 
-# opcodes treated as no-ops in v1 (classified markers; see age_opcodes_himegari.py)
+# opcodes treated as no-ops in v1 (classified markers; see age_opcode_semantics.py)
 # 0x71 = label-definition pseudo-op (count == T1 table size) — structural, no runtime effect.
 MARKERS = {0x71, 0x1f4, 0x1f5, 0x1d5, 0x1bc, 0x1bf, 0x21b, 0x1d2, 0x258}
 

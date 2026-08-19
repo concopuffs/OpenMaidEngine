@@ -112,8 +112,8 @@ changes, not the toolkit. The genuine rare tail stays lazy (name on demand).
 - [x] **3.0 — Inference pass DONE (2026-07-06).** Classified the top 21 unnamed opcodes →
   **instruction coverage 72.62% (named) → 96.94% (classified)**; ~90.5% is VM-handleable by
   inference alone. Tooling: `tools/opcode_context.py` (evidence gatherer). Results:
-  `vm-map/opcodes.toml` (per-op evidence + provenance), `tools/age_opcodes_himegari.py`
-  (`INFERRED` dict consumed by the disassembler + future VM), `build/opcode-coverage.md`
+  `vm-map/opcodes.toml` (per-op evidence + provenance), `tools/age_opcode_semantics.py`
+  (`SEMANTICS` dict consumed by the disassembler), `build/opcode-coverage.md`
   (tiers + Frida/Unicorn shortlist). `sys4load` now renders inferred names (verified: MENU's
   `label-def 0x71` land exactly on its T1 targets). Key findings: `0x1f4`/`0x1f5` = stmt
   begin/end brackets, `0x1d5`/`0x1bc`/`0x1bf` = block markers (all zero-arg no-ops); `0x71`
