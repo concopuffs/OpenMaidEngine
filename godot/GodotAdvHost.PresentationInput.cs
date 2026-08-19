@@ -517,14 +517,19 @@ public sealed partial class GodotAdvHost
                    && !_stopping)
             {
                 var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
-                int bucket = active.Count == 0 ? 100 : (int)System.Math.Floor(active[0].Progress * 10);
+                var radial = gfx.SnapshotRadialBlurRangeTransitions(_clock.NowMs);
+                double progress = active.Count != 0 ? active[0].Progress
+                    : radial.Count != 0 ? radial[0].Progress : 1.0;
+                bool forced = active.Count != 0 ? active[0].Forced
+                    : radial.Count != 0 && radial[0].Forced;
+                int bucket = (int)System.Math.Floor(progress * 10);
                 if (bucket != lastBucket)
                 {
                     lastBucket = bucket;
                     _timeline?.State("transition-progress", new()
                     {
-                        ["progress"] = active.Count == 0 ? 1.0 : active[0].Progress,
-                        ["forced"] = active.Count != 0 && active[0].Forced,
+                        ["progress"] = progress,
+                        ["forced"] = forced,
                     });
                 }
                 _frameSignal.WaitOne(50);

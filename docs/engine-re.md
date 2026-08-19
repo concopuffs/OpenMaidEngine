@@ -103,6 +103,7 @@ annotated these handlers in the SYS4433 image:
 | `0x1be` | `op_0x1be_sound_channel_is_playing@0x429400` | `TITLE@0xd7`; validates one of thirteen channels and returns its normalized live-playing flag. |
 | `0x24` | `op_0x24_fade_surface_out_to_white@0x41ad80` | `GAMESTART@0x19dc`; runs blocking screen-transition mode 3 from captured surface 1 to white with timing 80. |
 | `0x2da` | `op_0x2da_register_extended_numeric_glyph_style@0x4234e0` | `DRAWCHP@0x626`; registers a seven-field decimal-glyph atlas style with independent source/destination spacing. |
+| `0x251` | `op_0x251_queue_radial_blur_range_transition@0x422ff0` | `AIM@0xae`; queues a delayed radial-blur post-effect over the dungeon condition-object range. |
 
 Comparative decompilation confirmed equivalent SYS4422 behavior for `0x1b1`, `0x1be`, `0x2bc`, `0x25a`,
 and `0x24`; that supports shared runtime handlers without claiming a true base SYS4 dialect. Opcodes `0x2da`,
@@ -120,6 +121,25 @@ source atlas cells by `digit_width + source_spacing` and destination objects by
 The complete installed Kamidori corpus has 66 `0x2da` calls. All three functions are named/commented in the
 SYS4433 Ghidra image; SYS4422 retains its independent five-dword style layout and has no installed `0x2da`
 dispatch entry.
+
+The next strict Dungeon frontier, after the `SC2310` ADV portion and condition display, was
+`AIM.BIN@0xae`, opcode `0x251`. `op_0x251_queue_radial_blur_range_transition@0x422ff0` fetches twelve
+operands and calls `gfx_queue_radial_blur_range_transition@0x486b90`. That worker creates retained special
+command type 3/mode 1 at `command_handle`, with `target_surface`, `range_start`, and `range_count`. It stores
+the first effect triple at record `+0x40/+0x44/+0x48`, the second at `+0x50/+0x54/+0x58`, and the start
+delay/duration at `+0x8/+0xc`.
+
+`gfx_present_retained_effect_commands@0x486d50` proves the field meanings. It linearly interpolates the
+triples after the delay, binds the first sampled component as shader `Length`, divides the other two by the
+target width/height for `CenterU` and `CenterV`, marks the retained handle interval for offscreen rendering,
+and clears the command's active state at completion. The exact AIM call is
+`(90000,14,70010,23,100,512,204,0,512,204,100,500)`: radial length contracts from 100 to 0 around
+`(512,204)` after 100 ms over 500 ms. The adjacent `0x250` producer creates type 3/mode 0 and supplies
+`Angle/Length` endpoints for the sibling directional effect; that opcode remains outside this frontier.
+Kamidori's complete catalog contains 64 `0x251` calls in 28 scripts. The SYS4433 constructor installs the
+handler at `ctx+0xa0044`; the inspected SYS4422 constructor has no corresponding dispatch-slot store, so the
+semantic provenance is SYS4433-only rather than an inferred SYS4 baseline. All three SYS4433 functions are
+named and commented in the Ghidra image.
 
 After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed

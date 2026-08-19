@@ -60,4 +60,30 @@ public sealed class KamidoriTranslationOverlayTests
             new[] { new Operand(0, 9), new Operand(14, 0) },
             speakerName.Args);
     }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void InstalledTranslationAimUsesSys4433RadialBlurConditionReveal()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string patchRoot = Path.Combine(gameRoot, "patch");
+        Assert.True(File.Exists(Path.Combine(patchRoot, "AIM.BIN")));
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(Path.Combine(gameRoot, "SYS4INI.BIN"));
+        var store = new Sys4AssetStore(catalog, gameRoot, patchRoot, gameRoot);
+        var scripts = new Sys4ScriptProvider(table, catalog, store);
+
+        Instruction transition = Assert.Single(scripts.RequireByName("AIM.BIN").Instructions,
+            instruction => instruction.Offset == 0xae);
+
+        Assert.Equal(0x251, transition.Opcode);
+        Assert.Equal(new[]
+        {
+            new Operand(0, 90_000), new Operand(0, 14), new Operand(9, 20), new Operand(0, 23),
+            new Operand(0, 100), new Operand(0, 512), new Operand(0, 204), new Operand(0, 0),
+            new Operand(0, 512), new Operand(0, 204), new Operand(0, 100), new Operand(0, 500),
+        }, transition.Args);
+    }
 }

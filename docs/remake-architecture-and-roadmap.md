@@ -1719,6 +1719,16 @@ The reimplementation-only emit guard now applies to authored inline strings, as 
 and leaves reusable dynamic string sites to the ordinary VM step bound. Exact installed-overlay and synthetic
 regressions preserve both sides of that distinction. Repeat the Dungeon route to collect the next real frontier.
 
+**Post-K6 Dungeon radial-blur frontier `0x251` (2026-08-19):** after ADV completion and the dungeon
+win/loss-condition display, strict execution reached `AIM.BIN@0xae`. SYS4433 native RE identifies the opcode
+as a twelve-operand retained radial-blur range command: it republishes a selected object interval at the
+command handle while linearly interpolating shader `Length/CenterU/CenterV` after a delay. AIM contracts
+length 100 to 0 around `(512,204)` over 500 ms after 100 ms. The VM now implements the exact revision-scoped
+command and lifecycle; the shared Godot renderer uses a center-anchored multisample approximation until the
+exact zero-length endpoint. The complete Kamidori corpus has 64 calls in 28 scripts, while the inspected
+SYS4422 constructor does not install slot `0x251`. Repeat Dungeon past the condition reveal for the next
+strict frontier.
+
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
 UTF-16^0xFFFF), opcode set (overlapping, version-specific; Kelebek's table already spans the family

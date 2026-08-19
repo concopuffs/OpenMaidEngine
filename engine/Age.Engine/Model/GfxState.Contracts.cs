@@ -30,6 +30,18 @@ public readonly record struct SurfaceTransitionState(long CommandKey, int Target
     long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
 
+/// <summary>Sampled SYS4433 op-0x251 radial-blur command. The selected retained-object range is
+/// rendered through a center/length post-effect at the command handle's z position.</summary>
+public readonly record struct RadialBlurRangeTransitionState(
+    long CommandKey, int TargetSlot, long RangeStart, int RangeCount,
+    double CenterX, double CenterY, double Length,
+    long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced)
+{
+    public bool Contains(long handle)
+        => RangeCount > 0 && handle >= RangeStart &&
+           (ulong)(handle - RangeStart) < (ulong)RangeCount;
+}
+
 public readonly record struct MovieMaskTransitionState(
     MovieMaskTransitionRequest Request, bool Completed);
 
@@ -88,7 +100,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            ColorTransitionState? ColorTransition = null,
                                            Affine2D? RangeTransform = null,
                                            bool TimeVarying = false,
-                                           ScaleCycleState ScaleCycle = default);
+                                           ScaleCycleState ScaleCycle = default,
+                                           RadialBlurRangeTransitionState? RadialBlurTransition = null);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

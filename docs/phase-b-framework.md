@@ -593,6 +593,16 @@ dynamic global/local string renderers remain bounded by the VM step limit. Insta
 anchors the exact `SC2310` instruction, while synthetic regressions prove reusable dynamic emission and retain
 the repeated-inline-line halt.
 
+The following real compatibility frontier is `AIM.BIN@0xae`, reached when the ADV portion ends and the
+dungeon win/loss conditions appear. SYS4433 opcode `0x251` is a retained radial-blur range transition, not
+an AIM gameplay operation: command handle 90000 republishes handles 70010..70032 through target surface 14,
+animating blur length 100 to 0 around `(512,204)` after a 100 ms delay over 500 ms. The shared presentation
+model now carries the native command/range/timing contract through the ordinary `0x21c` wait service and both
+Godot compositor backends. The original D3D9 effect is not available to the cross-platform compositor, so presentation uses
+six center-anchored weighted zoom samples while length is nonzero and the exact unfiltered range at the zero
+endpoint. This approximation is host presentation policy; the VM contract remains the native SYS4433
+contract, and no game-specific AIM branch was added.
+
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat
 popup and TITLE's shipped developer menu. Both routes use `BUNKI.BIN`'s temporary-surface renderer rather

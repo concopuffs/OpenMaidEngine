@@ -9673,14 +9673,77 @@ argc = 12
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00422FF0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "queue-radial-blur-range-transition"
+category = "draw"
+summary = "Queue a timed radial-blur post-effect over a retained-object range."
+details = "Operands are command_handle, target_surface, range_start, range_count, start_length, start_center_x, start_center_y, end_length, end_center_x, end_center_y, delay_ms, and duration_ms. The command replaces the ordinary record at command_handle with native retained record type 3/mode 1. At the next foreground presentation boundary, SYS4433 linearly interpolates Length and CenterU/CenterV, renders the selected object range through its radial-blur effect at the command handle's z position, and clears the command's active flag at completion. AIM.BIN@0xae uses (90000,14,70010,23,100,512,204,0,512,204,100,500) for the dungeon win/loss-condition reveal. The complete Kamidori catalog has 64 calls in 28 scripts. SYS4422 does not install dispatch slot 0x251 in the inspected Himegari executable."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+source = "investigation"
+confidence = "high"
+depends_on = [0x21c, 0x222]
+evidence = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, retained-command producer/consumer, complete Kamidori corpus, and AIM dungeon frontier", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x251_queue_radial_blur_range_transition@0x422ff0 feeds twelve operands to gfx_queue_radial_blur_range_transition@0x486b90. The record's two triples become interpolated Length/CenterU/CenterV shader parameters over delay/duration while its retained-object range is rendered at the command key. AIM@0xae animates Length 100 to 0 around (512,204) after a 100 ms delay for 500 ms. SYS4422 does not install this slot." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "command_handle"
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "target_surface"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "range_start"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "range_count"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "start_length"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "start_center_x"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = "start_center_y"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = "end_length"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 9
+role = "end_center_x"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 10
+role = "end_center_y"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 11
+role = "delay_ms"
+observed_types = ["imm", "g-int", "l-int"]
+
+[[opcode.semantics.args]]
+i = 12
+role = "duration_ms"
+observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
 op = 0x252

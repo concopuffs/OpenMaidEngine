@@ -1373,7 +1373,7 @@ Port status (2026-07-24): the VM refreshes this state from message:ReadTextSkip 
 - **summary:** Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
-- **depended on by:** 0x223
+- **depended on by:** 0x223, 0x251
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x21c`; scope=Himegari SYS4422. Ghidra handler 0x417520 records the 1-dword instruction length and ORs ctx+0xa0ce4 with 0x400. engine_main_tick_with_exception_policy@0x411840 branch 0x4123d1 polls gfx_animation_service_poll; its active branch reads EffectSkipOnClick@0x570f60, rejects gfx_animation_service_flags bit 0, polls/consumes action-4 bit 0x10, clears run-state 0x400, calls gfx_request_force_complete_and_reset_anim_clock@0x4076c0, then gfx_render_frame. capture_presentation_trace.py: after 0x125a6 render, 0xcb8e/0xcb98 bind and 0xd5a/0xd63/0xd73/0xd8a mode+targets execute without render; repeated gfx_render_frame begins only at 0x21c. 2026-07-10, click lifecycle refined 2026-07-29.
 
 SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 is consumed and run-state 0x400 is cleared before the engine requests the same forced completion as 0x243 and renders once. Wait release is independent of endpoint completion: service-flags bit 1 can suppress the force worker, while op-0x242-detached channels, ambient cycles, and movie-backed presentation can continue asynchronously after interpreter resume. With ordinary flags, the request completes finite color/scale/rotation/translation channels and type-0 surface commands together. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here.
@@ -1825,6 +1825,7 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x222` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x222` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range into the currently selected backbuffer or offscreen render target, then clear their pending update flags.
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x251
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x222`; scope=Himegari SYS4422. Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch in the D3D target previously selected by op 0x20d. HISTORY.BIN uses (0,60000) for the backbuffer. SAVE.BIN instead renders [0,0x130b0) into 800x600 slot 2, then handle 0x15f90 at 14% scale into 112x84 slot 192; op 0x1ae writes slot 192 as the numbered .STH thumbnail.
 
 ### 0x223 `queue-surface-alpha-transition` (queue-surface-alpha-transition, argc 8)
@@ -2140,6 +2141,19 @@ The RGB24 sample callback copies the bottom-up green byte verbatim. In the nativ
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x24e`; scope=Himegari SYS4422. Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to EngineCtx.gfx_animation_service_flags at +0x51b80. engine_main_tick_with_exception_policy@0x411840 tests bit 0 before polling action 4 in the run-state-0x400 EffectSkipOnClick branch. gfx_request_force_complete_and_reset_anim_clock@0x4076c0 tests bit 1 before setting force-complete and zeroing the service clock; opcode 0x243 calls the same worker.
 
 Bit 0 disables the run-state-0x400 EffectSkipOnClick branch while finite retained presentation is active. Bit 1 independently suppresses opcode 0x243 and the click branch's shared force-complete/clock-reset request. BTL brackets combat presentation with 1/0 and GAMECLEAR uses 3/0, protecting those service-owned animations from ordinary ADV click completion.
+
+### 0x251 `queue-radial-blur-range-transition` (u00422FF0, argc 12)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x251` (evidence-confirmed)
+- **summary:** Queue a timed radial-blur post-effect over a retained-object range.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x21c, 0x222
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x251`; scope=SYS4433 handler, retained-command producer/consumer, complete Kamidori corpus, and AIM dungeon frontier. op_0x251_queue_radial_blur_range_transition@0x422ff0 feeds twelve operands to gfx_queue_radial_blur_range_transition@0x486b90. The record's two triples become interpolated Length/CenterU/CenterV shader parameters over delay/duration while its retained-object range is rendered at the command key. AIM@0xae animates Length 100 to 0 around (512,204) after a 100 ms delay for 500 ms. SYS4422 does not install this slot.
+
+Operands are command_handle, target_surface, range_start, range_count, start_length, start_center_x, start_center_y, end_length, end_center_x, end_center_y, delay_ms, and duration_ms. The command replaces the ordinary record at command_handle with native retained record type 3/mode 1. At the next foreground presentation boundary, SYS4433 linearly interpolates Length and CenterU/CenterV, renders the selected object range through its radial-blur effect at the command handle's z position, and clears the command's active flag at completion. AIM.BIN@0xae uses (90000,14,70010,23,100,512,204,0,512,204,100,500) for the dungeon win/loss-condition reveal. The complete Kamidori catalog has 64 calls in 28 scripts. SYS4422 does not install dispatch slot 0x251 in the inspected Himegari executable.
 
 ### 0x258 `set-surface-persistence-flags` (set-surface-persistence-flags, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -4209,15 +4223,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x250`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x251 `u00422FF0` (u00422FF0, argc 12)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x251`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x252 `u00423000` (u00423000, argc 1)
 - **observed by:** none in recorded corpora

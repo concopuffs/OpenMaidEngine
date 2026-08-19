@@ -12,6 +12,13 @@ public sealed partial class VirtualMachine
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
                 Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;
+            case "u00422FF0": // SYS4433 0x251 upstream ABI label
+            case "queue-radial-blur-range-transition":
+                Gfx.QueueRadialBlurRangeTransition(
+                    Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
+                    Read(a[4]), Read(a[5]), Read(a[6]),
+                    Read(a[7]), Read(a[8]), Read(a[9]), Read(a[10]), Read(a[11]));
+                return pc + 1;
             case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint
                 _host.PresentFrame(Gfx); return pc + 1;
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface

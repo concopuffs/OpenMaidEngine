@@ -38,6 +38,66 @@ public class ForegroundTransitionTests
     }
 
     [Fact]
+    public void RadialBlurRangeTransition_SamplesNativeLengthAndCenterTriples()
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(14, 0, -1);
+        gfx.BindDraw(90_000, 14, 0, 0, 1024, 576, 0, 0);
+        gfx.BindDraw(70_010, 14, 0, 0, 100, 100, 0, 0);
+        gfx.QueueRadialBlurRangeTransition(
+            90_000, 14, 70_010, 23,
+            100, 512, 204, 0, 512, 204, 100, 500);
+
+        Assert.Equal(1, gfx.StartForegroundTransitions(1_000));
+        var delayed = Assert.Single(gfx.SnapshotRadialBlurRangeTransitions(1_050));
+        Assert.Equal(100, delayed.Length);
+        Assert.Equal(512, delayed.CenterX);
+        Assert.Equal(204, delayed.CenterY);
+        Assert.Equal(0, delayed.Progress);
+
+        var midpoint = Assert.Single(gfx.SnapshotRadialBlurRangeTransitions(1_350));
+        Assert.Equal(50, midpoint.Length);
+        Assert.Equal(0.5, midpoint.Progress, 3);
+        Assert.True(midpoint.Contains(70_010));
+        Assert.True(midpoint.Contains(70_032));
+        Assert.False(midpoint.Contains(70_033));
+        Assert.True(gfx.HasActiveTimedPresentation(1_350));
+        Assert.False(gfx.HasActiveTimedPresentation(1_600));
+
+        RenderObject command = gfx.SnapshotVisibleObjects(1_350).Single(x => x.Handle == 90_000);
+        Assert.Equal(midpoint, command.RadialBlurTransition);
+        gfx.EraseRange(90_000, 1);
+        Assert.Empty(gfx.SnapshotRadialBlurRangeTransitions(1_350));
+    }
+
+    [Fact]
+    public void Sys4433Opcode251_QueuesExactAimDungeonTransitionContract()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var scene = ScriptAssembler.Assemble(table, "AIM", new List<(int, Operand[])>
+        {
+            (0x251, new[]
+            {
+                I(90_000), I(14), I(70_010), I(23), I(100), I(512), I(204),
+                I(0), I(512), I(204), I(100), I(500),
+            }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        var transition = Assert.Single(vm.Gfx.SnapshotRadialBlurRangeTransitions(0));
+        Assert.Equal(90_000, transition.CommandKey);
+        Assert.Equal(14, transition.TargetSlot);
+        Assert.Equal(70_010, transition.RangeStart);
+        Assert.Equal(23, transition.RangeCount);
+        Assert.Equal(100, transition.Length);
+        Assert.Null(vm.CompatibilityFailure);
+    }
+
+    [Fact]
     public void CloneObject_SnapshotsOldSurfaceBindingForTransitionRangeA()
     {
         var gfx = new GfxState();

@@ -77,6 +77,11 @@ public partial class Main
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
+            if (v.RadialBlurTransition == null && IsRadialBlurSource(_visibleSnapshot, v.Handle))
+            {
+                _perf?.RecordSkippedLayer();
+                continue;
+            }
             var affine = Transform2DMath.Build(v.Transform, v.Rotation, v.ScaleCycle)
                 .FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
@@ -89,7 +94,12 @@ public partial class Main
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
             bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
 
-            if (v.SurfaceTransition is { } transition)
+            if (v.RadialBlurTransition is { } radialBlur)
+            {
+                _perf?.RecordTransitionLayer();
+                DrawRadialBlurRangeGpu(_visibleSnapshot, radialBlur);
+            }
+            else if (v.SurfaceTransition is { } transition)
             {
                 _perf?.RecordTransitionLayer();
                 DrawTransitionRangeGpu(_visibleSnapshot, transition);
@@ -210,6 +220,91 @@ public partial class Main
         return drawn;
     }
 
+    private static bool IsRadialBlurSource(IReadOnlyList<RenderObject> visible, long handle)
+    {
+        foreach (RenderObject item in visible)
+            if (item.RadialBlurTransition is { } effect && effect.Contains(handle)) return true;
+        return false;
+    }
+
+    // SYS4433's native mode-1 shader consumes CenterU/CenterV/Length. Godot has no copy of that D3D9
+    // effect, so approximate its radial sampling with six alpha-weighted, center-anchored zoom samples.
+    // Length zero takes the exact one-sample path used at the native terminal frame.
+    private int DrawRadialBlurRangeGpu(
+        IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)
+    {
+        int samples = System.Math.Abs(effect.Length) < 0.5 ? 1 : 6;
+        int drawn = 0;
+        foreach (RenderObject source in visible)
+        {
+            if (!effect.Contains(source.Handle) || source.RadialBlurTransition != null) continue;
+            _perf?.RecordObject(source.TimeVarying);
+            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+                .FromLocalOrigin(source.DstX, source.DstY);
+            if (source.RangeTransform is { } rangeTransform)
+                baseAffine = baseAffine.Then(rangeTransform);
+            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            var texture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+                : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            if (source.SurfaceResId == 0 && texture == null)
+            {
+                if (source.Blend == BlendKind.Opaque) { _perf?.RecordSkippedLayer(); continue; }
+                int width = source.W > 0 ? source.W : _screenWidth;
+                int height = source.H > 0 ? source.H : _screenHeight;
+                for (int sample = 0; sample < samples; sample++)
+                {
+                    var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                    _perf?.RecordFillLayer();
+                    if (_gpuRenderer.DrawFill(
+                        width, height, affine, source.Tint,
+                        source.Alpha / 255f * source.TintStrength / 255f / samples))
+                    {
+                        _perf?.RecordGpuLayer(width, height, affine, _screenWidth, _screenHeight,
+                                              dynamic: false, BlendKind.Alpha);
+                        drawn++;
+                    }
+                }
+                continue;
+            }
+            if (!movieSurfaceBound && texture == null)
+                texture = _host.ResolveResIdTexture(source.SurfaceResId);
+            if (texture == null) { _perf?.RecordSkippedLayer(); continue; }
+
+            for (int sample = 0; sample < samples; sample++)
+            {
+                var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                var resolved = texture.Value;
+                float opacity = source.Alpha / 255f / samples;
+                if (_gpuRenderer.DrawTexture(
+                    resolved.Image, resolved.AssetId, source.ColorKey,
+                    source.SrcX, source.SrcY, source.W, source.H, affine,
+                    source.Tint, source.TintStrength, opacity, source.MultiplyTint,
+                    resolved.IsDynamic, rawObject?.SourceSlot ?? source.Handle, BlendKind.Alpha))
+                {
+                    _perf?.RecordGpuLayer(source.W, source.H, affine, _screenWidth, _screenHeight,
+                                          resolved.IsDynamic, BlendKind.Alpha);
+                    drawn++;
+                }
+            }
+        }
+        return drawn;
+    }
+
+    private static Affine2D RadialSampleAffine(
+        Affine2D source, RadialBlurRangeTransitionState effect,
+        int sample, int sampleCount, int viewportWidth)
+    {
+        double fraction = sampleCount == 1 ? 0 : sample / (double)(sampleCount - 1);
+        double scale = 1.0 + effect.Length / System.Math.Max(1, viewportWidth) * fraction;
+        var zoom = new Affine2D(scale, 0, 0, scale,
+            effect.CenterX * (1 - scale), effect.CenterY * (1 - scale));
+        return source.Then(zoom);
+    }
+
     private void RecompositeSoftware(
         IReadOnlyList<RenderObject>? sampledVisible = null,
         bool preserveExistingPixels = false)
@@ -286,6 +381,12 @@ public partial class Main
         foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
             _perf?.RecordObject(v.TimeVarying);
+            if (v.RadialBlurTransition == null && IsRadialBlurSource(visible, v.Handle))
+            {
+                _perf?.RecordSkippedLayer();
+                if (decisions != null) decisions[v.Handle] = "SKIP(radial-blur source range)";
+                continue;
+            }
             var t = v.Transform;
             var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
@@ -307,7 +408,16 @@ public partial class Main
             // thousand retained objects per composition, so formatting them unconditionally creates
             // several megabytes of short-lived garbage even in an ordinary run.
             string? outcome = null;
-            if (v.SurfaceTransition is { } transition)
+            if (v.RadialBlurTransition is { } radialBlur)
+            {
+                _perf?.RecordTransitionLayer();
+                int layers = DrawRadialBlurRange(visible, radialBlur);
+                if (decisions != null)
+                    outcome = $"RADIAL-BLUR key=0x{radialBlur.CommandKey:x} " +
+                              $"center=({radialBlur.CenterX:0.0},{radialBlur.CenterY:0.0}) " +
+                              $"length={radialBlur.Length:0.0} progress={radialBlur.Progress:0.000} layers={layers}";
+            }
+            else if (v.SurfaceTransition is { } transition)
             {
                 _perf?.RecordTransitionLayer();
                 int layers = DrawTransitionRange(visible, transition);
@@ -434,6 +544,61 @@ public partial class Main
                           texture.Value.IsDynamic, source.Blend);
             }
             drawn++;
+        }
+        return drawn;
+    }
+
+    private int DrawRadialBlurRange(
+        IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)
+    {
+        int samples = System.Math.Abs(effect.Length) < 0.5 ? 1 : 6;
+        int drawn = 0;
+        foreach (RenderObject source in visible)
+        {
+            if (!effect.Contains(source.Handle) || source.RadialBlurTransition != null) continue;
+            _perf?.RecordObject(source.TimeVarying);
+            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+                .FromLocalOrigin(source.DstX, source.DstY);
+            if (source.RangeTransform is { } rangeTransform)
+                baseAffine = baseAffine.Then(rangeTransform);
+            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            var texture = rawObject != null
+                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+                : null;
+            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
+            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            if (source.SurfaceResId == 0 && texture == null)
+            {
+                if (source.Blend == BlendKind.Opaque) { _perf?.RecordSkippedLayer(); continue; }
+                int width = source.W > 0 ? source.W : _screenWidth;
+                int height = source.H > 0 ? source.H : _screenHeight;
+                for (int sample = 0; sample < samples; sample++)
+                {
+                    var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                    _perf?.RecordFillLayer();
+                    FillAffineQuad(
+                        width, height, affine, source.Tint,
+                        source.Alpha / 255f * source.TintStrength / 255f / samples);
+                    drawn++;
+                }
+                continue;
+            }
+            if (!movieSurfaceBound && texture == null)
+                texture = _host.ResolveResIdTexture(source.SurfaceResId);
+            if (texture == null) { _perf?.RecordSkippedLayer(); continue; }
+
+            for (int sample = 0; sample < samples; sample++)
+            {
+                var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                var resolved = texture.Value;
+                BlitLayer(
+                    resolved.Image, resolved.AssetId, source.ColorKey, source.Tint,
+                    source.TintStrength / 255f, source.SrcX, source.SrcY, source.W, source.H,
+                    affine, source.Alpha / 255f / samples, source.MultiplyTint,
+                    resolved.IsDynamic, BlendKind.Alpha);
+                drawn++;
+            }
         }
         return drawn;
     }
