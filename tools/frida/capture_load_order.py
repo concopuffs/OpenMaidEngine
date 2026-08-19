@@ -19,10 +19,12 @@ import re
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "frida-load-order.jsonl"
-INDEX = REPO / "build" / "asset-index.json"
+REPO = paths.REPO
+OUT = paths.BUILD / "frida-load-order.jsonl"
+INDEX = paths.BUILD / "asset-index.json"
 
 
 def prefix(name):
@@ -112,7 +114,7 @@ def analyze():
 
     res = {"load_order": exact_order, "containment_order": contain_order,
            "reads_per_archive": per_arc}
-    (REPO / "build" / "frida-load-order-result.json").write_text(
+    (paths.BUILD / "frida-load-order-result.json").write_text(
         json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print("\n-> build/frida-load-order-result.json")
     return 0

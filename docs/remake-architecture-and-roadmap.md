@@ -1482,7 +1482,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-19): K0 through K2 complete; K3 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 through K3 complete; K4 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1566,19 +1566,26 @@ This does not claim that the shared 548-entry catalog has already been partition
 
 ##### Phase K3 — make tools and derived data profile-aware
 
-- [ ] Replace mutable module-level Himegari path selection with one shared tool context selected through
+- [x] Replace mutable module-level Himegari path selection with one shared tool context selected through
   `--profile`, `--game-root`, and, where needed, an extracted-data override. Preserve convenient Himegari
   defaults for existing commands without requiring edits to `tools/paths.py`.
-- [ ] Split game-derived outputs beneath `build/games/<profile-id>/` (catalog indexes, call-script names,
+- [x] Split game-derived outputs beneath `build/games/<profile-id>/` (catalog indexes, call-script names,
   disassembly/text corpora, global maps, init tables, progression maps, traces, page maps, and coverage).
   Keep engine-wide generated ABI/reference artifacts in their shared location.
-- [ ] Teach catalog/corpus coverage to scan scripts through `Sys4AssetStore` directly, including append packs
+- [x] Teach catalog/corpus coverage to scan scripts through `Sys4AssetStore` directly, including append packs
   and loose overrides, so onboarding does not require a separately extracted archive tree.
-- [ ] Update validation levels so shared/core gates remain content-free while installed-data gates can select
+- [x] Update validation levels so shared/core gates remain content-free while installed-data gates can select
   either profile independently and cannot consume the other game's derived artifacts.
 
-**K3 gate:** both games can be analyzed in one checkout without editing a source file or overwriting one
-another's derived results.
+**K3 gate (complete 2026-08-19):** one immutable Python tool context consumes common profile/game/extracted
+selection and places content-derived output under `build/games/<profile-id>/`, while engine ABI artifacts stay
+shared. Installed validation can select either game independently. Its corpus gate uses the production catalog,
+`Sys4AssetStore`, and script provider, so archive, append, and loose-override behavior is exercised without an
+extracted tree. In the current installs, Himegari decodes 520 catalog scripts (481 base + 39 append), 1,522,942
+instructions, and 248 distinct opcodes with no decode failures; Kamidori decodes 732 scripts (542 base + 190
+append), 2,126,378 instructions, and 269 distinct opcodes with no decode failures. Kamidori currently has 27
+recognized opcodes without runtime handlers. Those observations remain profile-scoped generated evidence;
+moving them into the canonical provenance model is K4 work.
 
 ##### Phase K4 — generalize opcode observation and evidence provenance
 

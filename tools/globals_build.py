@@ -152,9 +152,9 @@ def emit_reference_md(merged: dict[int, dict]) -> str:
     return "\n".join(L) + "\n"
 
 
-def build(tp: Path) -> int:
+def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
     curated, meta = load_toml(tp)
-    auto = load_auto(AUTO_MAP)
+    auto = load_auto(auto_map)
     all_addrs = set(curated) | {int(a, 16) for a in auto.get("globals", {})}
     errors, warnings = lint(curated, all_addrs)
     for m in warnings: print("warn:", m)
@@ -174,6 +174,8 @@ def main(argv=None):
     ap.add_argument("--build", action="store_true")
     ap.add_argument("--lint", action="store_true")
     ap.add_argument("--toml", default=str(TOML_DEFAULT))
+    ap.add_argument("--auto-map", default=str(AUTO_MAP),
+                    help="profile-specific global-var-map.json input")
     args = ap.parse_args(argv)
     tp = Path(args.toml)
     if args.lint:
@@ -184,7 +186,7 @@ def main(argv=None):
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")
         return 1 if errors else 0
     if args.build:
-        return build(tp)          # implemented in Task 2
+        return build(tp, Path(args.auto_map))
     ap.error("no action (expected --build/--lint)")
 
 

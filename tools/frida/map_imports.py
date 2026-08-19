@@ -18,9 +18,11 @@ Usage:
 import struct
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-BUILD = REPO / "build"
+REPO = paths.REPO
+BUILD = paths.BUILD
 MODULE = "AGE.EXE"
 DUMP_SIZE = 0x260000          # /v2 dump covers 0x400000..0x660000; RVA >= this is out-of-dump
 CHUNK = 2 * 1024 * 1024       # keep each frida message small (matches dump_engine.py)

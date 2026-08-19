@@ -11,8 +11,9 @@ import struct
 import sys
 from pathlib import Path
 from collections import Counter
+import paths
 
-ROOT = Path(__file__).resolve().parents[2] / "extracted" / "DATA1"
+ROOT = paths.DATA1
 
 def parse(path):
     data = path.read_bytes()

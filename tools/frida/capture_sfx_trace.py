@@ -8,11 +8,13 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "native-sfx-trace.jsonl"
-TMP = REPO / "build" / "native-sfx-trace.tmp.jsonl"
-LIVE = REPO / "build" / "sfx-tracer-live.flag"
+REPO = paths.REPO
+OUT = paths.BUILD / "native-sfx-trace.jsonl"
+TMP = paths.BUILD / "native-sfx-trace.tmp.jsonl"
+LIVE = paths.BUILD / "sfx-tracer-live.flag"
 
 JS = r"""
 const mod=Process.getModuleByName('AGE.EXE');

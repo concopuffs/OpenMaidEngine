@@ -300,10 +300,10 @@ def main(argv=None):
         (paths.REPO / "tools" / "age_opcodes.py").write_text(emit_runtime_py(model), encoding="utf-8")
         (paths.REPO / "tools" / "age_opcodes_himegari.py").write_text(emit_inferred_py(model), encoding="utf-8")
         print("build: wrote tools/age_opcodes.py, tools/age_opcodes_himegari.py")
-        paths.BUILD.mkdir(parents=True, exist_ok=True)
-        (paths.BUILD / "opcodes.json").write_text(emit_json(model), encoding="utf-8")
+        paths.SHARED_BUILD.mkdir(parents=True, exist_ok=True)
+        (paths.SHARED_BUILD / "opcodes.json").write_text(emit_json(model), encoding="utf-8")
         (paths.REPO / "docs" / "opcode-reference.md").write_text(emit_reference_md(model), encoding="utf-8")
-        (paths.BUILD / "opcode-coverage.md").write_text(emit_coverage_md(model), encoding="utf-8")
+        (paths.SHARED_BUILD / "opcode-coverage.md").write_text(emit_coverage_md(model), encoding="utf-8")
         print("build: wrote build/opcodes.json, docs/opcode-reference.md, build/opcode-coverage.md")
         return 0
     if args.lint:

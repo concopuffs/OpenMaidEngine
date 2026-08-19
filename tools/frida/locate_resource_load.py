@@ -27,10 +27,12 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]           # age-reimpl/
-OUT = REPO / "build" / "frida-resource-bt.jsonl"
-INDEX = REPO / "build" / "asset-index.json"
+REPO = paths.REPO
+OUT = paths.BUILD / "frida-resource-bt.jsonl"
+INDEX = paths.BUILD / "asset-index.json"
 
 
 def load_data2_offsets():

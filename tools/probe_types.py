@@ -3,9 +3,10 @@ and do a stricter string scan.
 """
 import struct
 from pathlib import Path
+import paths
 from collections import Counter
 
-ROOT = Path(__file__).resolve().parents[2] / "extracted" / "DATA1"
+ROOT = paths.DATA1
 
 def parse(path):
     data = path.read_bytes()

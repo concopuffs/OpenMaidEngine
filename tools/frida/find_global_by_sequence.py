@@ -18,9 +18,11 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-INDEX = REPO / "build" / "asset-index.json"
+REPO = paths.REPO
+INDEX = paths.BUILD / "asset-index.json"
 
 
 BG_MIN_SIZE = 500_000        # backgrounds are big AGFs (~1MB); portraits/sprites are far smaller

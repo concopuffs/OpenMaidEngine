@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """Phase 2 batch extraction: disassembly + text corpora from every SYS4 script.
 
-Outputs (all under build/, workspace-root relative):
-  build/disasm/<NAME>.asm         full disassembly listing (one per script)
-  build/text/<NAME>.strings.txt   all inline strings in that script
-  build/text/dialogue.jsonl       show-text (0x6E) lines only — the translation corpus
-  build/text/strings.jsonl        every inline string, tagged by the opcode that references it
-  build/manifest.json             per-script stats (instructions, strings, dialogue, decode-clean)
+Outputs live under the selected ``build/games/<profile-id>/`` root: disassembly,
+text/dialogue corpora, and the per-script manifest.
 
 Authoritative copies: a game-dir override shadows its extracted/DATA1 copy. Run:
   py -3.11 -X utf8 tools/extract_phase2.py
@@ -101,10 +97,11 @@ def main() -> int:
     clean = sum(1 for m in manifest if m["clean"])
     print(f"scripts processed: {len(manifest)}  (decode-clean: {clean}/{len(manifest)})")
     print(f"skipped (non-script magic): {len(skipped)}  -> {[s[0] for s in skipped]}")
-    print(f"disasm listings: build/disasm/*.asm")
-    print(f"dialogue lines (show-text): {n_dialogue}  -> build/text/dialogue.jsonl")
-    print(f"all inline strings: {n_strings}  -> build/text/strings.jsonl")
-    print(f"manifest: build/manifest.json")
+    display_root = BUILD.relative_to(paths.REPO)
+    print(f"disasm listings: {display_root}/disasm/*.asm")
+    print(f"dialogue lines (show-text): {n_dialogue}  -> {display_root}/text/dialogue.jsonl")
+    print(f"all inline strings: {n_strings}  -> {display_root}/text/strings.jsonl")
+    print(f"manifest: {display_root}/manifest.json")
     return 0
 
 

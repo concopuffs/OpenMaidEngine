@@ -82,7 +82,10 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("--no-restore", engine.command)
         self.assertIn("-m:1", engine.command)
         self.assertIn("-p:BuildInParallel=false", engine.command)
-        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, engine.environment)
+        self.assertEqual(
+            validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
+            engine.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
+        )
         self.assertIn(
             "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
             engine.command,
@@ -93,28 +96,57 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("engine/Age.Cli/Age.Cli.csproj", cli.command)
         self.assertIn("--no-restore", cli.command)
         self.assertIn("-m:1", cli.command)
-        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, cli.environment)
+        self.assertEqual(
+            validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
+            cli.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
+        )
         restore = next(
             gate for gate in validate.build_gate_plan("core") if gate.key == "engine-restore"
         )
         self.assertIn("--disable-parallel", restore.command)
-        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, restore.environment)
+        self.assertEqual(
+            validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
+            restore.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
+        )
 
     def test_workspace_extends_core(self) -> None:
         core = {gate.key for gate in validate.build_gate_plan("core")}
         workspace = {gate.key for gate in validate.build_gate_plan("workspace")}
         self.assertLess(core, workspace)
-        self.assertIn("sys4-corpus-validate", workspace)
+        self.assertIn("catalog-corpus-scan", workspace)
         self.assertIn("engine-workspace-tests", workspace)
         self.assertNotIn("godot-selftest", workspace)
         installed = next(
             gate for gate in validate.build_gate_plan("workspace")
             if gate.key == "engine-workspace-tests"
         )
-        self.assertIn("Category=Workspace", installed.command)
+        self.assertIn("Category=Workspace&Profile!=kamidori", installed.command)
         self.assertIn("--no-restore", installed.command)
         self.assertIn("-m:1", installed.command)
-        self.assertEqual(validate.LOW_MEMORY_DOTNET_ENVIRONMENT, installed.environment)
+        self.assertEqual(
+            validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
+            installed.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
+        )
+
+    def test_kamidori_workspace_uses_only_selected_profile_gates_and_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = validate.paths.ToolContext.resolve(
+                "kamidori", root / "game", root / "extract", environ={}
+            )
+            plan = validate.build_gate_plan(
+                "workspace", game_root=context.game_root, tool_context=context
+            )
+        keys = {gate.key for gate in plan}
+        self.assertIn("catalog-corpus-scan", keys)
+        self.assertNotIn("globals-build", keys)
+        self.assertNotIn("python-test_extract_init", keys)
+        self.assertNotIn("vm0-recover", keys)
+        installed = next(gate for gate in plan if gate.key == "engine-workspace-tests")
+        self.assertIn("Category=Workspace&Profile=kamidori", installed.command)
+        scan = next(gate for gate in plan if gate.key == "catalog-corpus-scan")
+        self.assertIn(str(context.game_build / "catalog-opcode-coverage.json"), scan.command)
+        self.assertNotIn("himegari", str(context.game_build))
 
     def test_runtime_requires_resolved_paths(self) -> None:
         with self.assertRaisesRegex(ValueError, "resolved Godot"):
@@ -126,7 +158,7 @@ class GatePlanTests(unittest.TestCase):
         state_root = Path("state")
         plan = validate.build_gate_plan("full", fake_godot, fake_root, state_root)
         keys = {gate.key for gate in plan}
-        self.assertIn("sys4-corpus-validate", keys)
+        self.assertIn("catalog-corpus-scan", keys)
         self.assertIn("godot-selftest", keys)
         self.assertIn("age-cli-sweep", keys)
         self.assertEqual("diff-check", plan[-1].key)

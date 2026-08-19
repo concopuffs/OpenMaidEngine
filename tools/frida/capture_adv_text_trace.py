@@ -11,9 +11,11 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "native-adv-text-trace.jsonl"
+REPO = paths.REPO
+OUT = paths.BUILD / "native-adv-text-trace.jsonl"
 
 JS = r"""
 const mod = Process.getModuleByName('AGE.EXE');

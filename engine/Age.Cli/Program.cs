@@ -3,20 +3,95 @@ using System.Text.RegularExpressions;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Profiles;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 
-var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+if (args.Length == 0)
+{
+    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--output report.json]");
+    return 1;
+}
+
+string? OptionValue(string name)
+{
+    int index = Array.IndexOf(args, name);
+    return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+}
+
+string? requestedProfile = OptionValue("--profile");
+string conventionalGameRoot = requestedProfile switch
+{
+    "kamidori" => Path.Combine(Paths.Workspace, "Kamidori"),
+    _ => Paths.GameDir,
+};
+string gameRoot = Path.GetFullPath(OptionValue("--game-root") ?? conventionalGameRoot);
+string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+GameCatalogIdentity catalogIdentity = GameCatalogIdentity.ReadSys4IniHeader(sys4Ini);
+SelectedGameProfile selectedProfile = GameProfileSelection.Resolve(args, catalogIdentity);
+if (selectedProfile.MismatchDiagnostic is { } mismatchDiagnostic)
+    Console.Error.WriteLine($"warning: {mismatchDiagnostic}");
+var table = OpcodeTableJson.Load(Paths.OpcodesJson, selectedProfile.Profile.EngineAbiId);
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
-var provider = Sys4ScriptProvider.Load(table);
+var catalog = Sys4AssetCatalog.Load(sys4Ini);
+var provider = new Sys4ScriptProvider(
+    table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
 Script ScriptByName(string name) => provider.RequireByName(name);
 
 // Diagnostics flags (see the TraceSetup class below): --trace (text flow), --trace-steps (every op),
 // --trace-ops <csv> (only these mnemonics/hex, tagged with their script), --trace-histogram (op +
 // call-site execution counts, dumped after the run), --trace-file <path> (write to a file, else console).
 
-if (args.Length == 0) { Console.WriteLine("usage: run <file> | trace <out.json>"); return 1; }
+if (args.Contains("catalog-scan"))
+{
+    Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
+    var unsupported = scan.OpcodeOccurrences
+        .Where(pair => !OpcodeRuntimeCoverage.IsImplemented(pair.Key))
+        .ToDictionary(pair => $"0x{pair.Key:x}", pair => new
+        {
+            occurrences = pair.Value,
+            label = table.TryGetDefinition(pair.Key, out OpcodeDefinition definition)
+                ? definition.CanonicalLabel : null,
+        });
+    var report = new
+    {
+        profile_id = selectedProfile.Profile.Id,
+        engine_abi_id = selectedProfile.Profile.EngineAbiId,
+        catalog_identity = selectedProfile.DetectedIdentity.Display,
+        selection_source = selectedProfile.SourceName,
+        identity_matched = selectedProfile.IdentityMatched,
+        script_count = scan.ScriptCount,
+        base_script_count = scan.BaseScriptCount,
+        append_script_count = scan.AppendScriptCount,
+        instruction_count = scan.InstructionCount,
+        distinct_opcode_count = scan.OpcodeOccurrences.Count,
+        opcode_occurrences = scan.OpcodeOccurrences.ToDictionary(
+            pair => $"0x{pair.Key:x}", pair => pair.Value),
+        unsupported_runtime_opcodes = unsupported,
+        failures = scan.Failures,
+    };
+    string? output = OptionValue("--output");
+    if (output != null)
+    {
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(output));
+        if (directory != null) Directory.CreateDirectory(directory);
+        File.WriteAllText(output, JsonSerializer.Serialize(report, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        }));
+    }
+    Console.WriteLine(
+        $"catalog-scan: profile={selectedProfile.Profile.Id} abi={table.AbiId} "
+        + $"scripts={scan.ScriptCount} (base={scan.BaseScriptCount}, append={scan.AppendScriptCount}) "
+        + $"instructions={scan.InstructionCount} opcodes={scan.OpcodeOccurrences.Count} "
+        + $"unsupported={unsupported.Count} failures={scan.Failures.Count}"
+        + (output == null ? "" : $" -> {output}"));
+    foreach (Sys4CorpusScanFailure failure in scan.Failures.Take(20))
+        Console.Error.WriteLine($"  0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
+    return scan.Failures.Count == 0 ? 0 : 1;
+}
 
 if (args[0] == "run")
 {

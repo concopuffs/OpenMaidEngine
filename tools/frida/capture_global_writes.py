@@ -28,13 +28,15 @@ import sys
 import time
 from collections import OrderedDict
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-GAME_DIR = REPO.parent / "Himegari_Game"
-AGE_EXE = GAME_DIR / "AGE.EXE"
-RAW = REPO / "build" / "global-writes.jsonl"
-SNAP = REPO / "build" / "scene-entry-state.json"
-LIVE = REPO / "build" / "tracer-live.flag"
+REPO = paths.REPO
+GAME_DIR = paths.GAME_DIR
+AGE_EXE = paths.AGE_EXE
+RAW = paths.BUILD / "global-writes.jsonl"
+SNAP = paths.BUILD / "scene-entry-state.json"
+LIVE = paths.BUILD / "tracer-live.flag"
 
 WRITE_OFF = 0x25fb0     # vm_operand_write (0x425fb0)
 IDX_OFF   = 0x53d14     # cur_ctx_index

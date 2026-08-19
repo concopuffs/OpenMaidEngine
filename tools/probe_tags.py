@@ -3,9 +3,10 @@ Also profile the first body dword and the recurring 'type' dwords 0x55/0x6E/0x6F
 """
 import struct
 from pathlib import Path
+import paths
 from collections import Counter
 
-ROOT = Path(__file__).resolve().parents[2] / "extracted" / "DATA1"
+ROOT = paths.DATA1
 
 def parse(p):
     data = p.read_bytes()

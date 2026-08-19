@@ -3,9 +3,10 @@ in context. Uses T3 jump-target values as confirmed instruction starts.
 """
 import struct
 from pathlib import Path
+import paths
 from collections import Counter
 
-ROOT = Path(__file__).resolve().parents[2] / "extracted" / "DATA1"
+ROOT = paths.DATA1
 
 def parse(name):
     data = (ROOT / name).read_bytes()

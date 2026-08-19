@@ -21,9 +21,11 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "gfx-objects.jsonl"
+REPO = paths.REPO
+OUT = paths.BUILD / "gfx-objects.jsonl"
 
 OPFETCH_OFF = 0x1b940     # operand-fetch helper (call 0x41b940) — confirmed firing; ecx = context
 REC_BASE = 0x53d64        # object-record array offset within the engine context (esi)

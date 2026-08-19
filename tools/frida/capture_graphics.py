@@ -13,9 +13,11 @@ Usage: py -3.11 -u -X utf8 tools/frida_capture_graphics.py [process_name]   (def
 """
 import frida, sys, time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
 proc = sys.argv[1] if len(sys.argv) > 1 else "AGE.EXE"
-OUT = Path(__file__).resolve().parents[2] / "build" / "frida-reads.log"  # age-reimpl/build/
+OUT = paths.BUILD / "frida-reads.log"
 OUT.parent.mkdir(parents=True, exist_ok=True)
 log = open(OUT, "w", encoding="utf-8")
 

@@ -506,7 +506,7 @@ def test_unit_stat_growth_fractions_evidence():
           "level-up, training, and catch-up growth carry hundredths into current stats")
 
     persistence_ok = all(
-        instructions["GAMESTART.BIN"][offset + 0xb].label == "string-lookup-set"
+        instructions["GAMESTART.BIN"][offset + 0xb].opcode == 0x1a3
         for offset in expected_offsets["GAMESTART.BIN"]
     )
     for name, first, second, copy in (

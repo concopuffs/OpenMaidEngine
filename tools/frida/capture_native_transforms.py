@@ -18,9 +18,11 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "native-transform-trace.jsonl"
+REPO = paths.REPO
+OUT = paths.BUILD / "native-transform-trace.jsonl"
 
 COMPOSITE_OFF = 0x7F650
 APPLY_OFF = 0x72F00

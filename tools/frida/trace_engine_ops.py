@@ -22,10 +22,12 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "engine-optrace.jsonl"
-LIVE = REPO / "build" / "tracer-live.flag"   # touched once hooks are installed; removed on exit
+REPO = paths.REPO
+OUT = paths.BUILD / "engine-optrace.jsonl"
+LIVE = paths.BUILD / "tracer-live.flag"   # touched once hooks are installed; removed on exit
 
 TICK_OFF    = 0x10fb0   # adv_interpreter_tick (0x410fb0); one op per tick, thiscall ecx=ctx
 OPFETCH_OFF = 0x1b940   # vm_operand_fetch    (0x41b940); per-operand, thiscall ecx=ctx  (PROVEN-safe)

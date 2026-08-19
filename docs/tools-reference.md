@@ -10,30 +10,41 @@ whenever a tool's inputs/outputs change.**
 
 - **Run with** `py -3.11 -X utf8 tools/<name>.py …` — the `-X utf8` is required on Windows so
   cp932/Shift-JIS source text renders (and generated files stay UTF-8).
-- **Paths are never hard-coded.** Every tool imports `tools/paths.py` for `GAME_DIR` /
-  `EXTRACTED` / `DATA1` / `BUILD` / `VM_MAP` / `BIN`. Relocate the tree by editing only that file.
+- **Paths are never hard-coded.** Every tool imports the immutable context in `tools/paths.py`.
+  Common `--profile`, `--game-root`, and `--extracted-root` options may appear anywhere on a tool
+  command line; the equivalent child-process variables are `AGE_PROFILE`, `AGE_GAME_ROOT`, and
+  `AGE_EXTRACTED_ROOT`. Omitting them preserves the conventional Himegari sibling roots.
 - **Generated files are never hand-edited** (they're marked ⚙ below). Edit the source, re-run
   the generator.
-- **`build/` and `extracted/` are disposable** — everything under them regenerates from a tool.
+- **`build/` and extracted roots are disposable** — engine-wide ABI outputs remain directly under
+  `build/`; game-derived outputs live under `build/games/<profile-id>/`. In the tables below, an
+  unqualified game-derived `build/...` path is shorthand for that selected profile directory.
 
 ## Path anchor
 
 | Tool | Purpose | I/O |
 |---|---|---|
-| `paths.py` | ★ Single path anchor — derives all workspace dirs from its own location; `paths.scripts()` returns the override-aware `{NAME.BIN → path}` corpus map (loose game-folder patches shadow `extracted/DATA1`). | *Imported, not run.* |
+| `paths.py` | ★ Shared immutable tool context — validates ids against the embedded runtime profile manifests; resolves common command-line/environment/conventional roots; separates shared `build/` from `build/games/<profile-id>/`. `paths.scripts()` remains the legacy extracted/loose Himegari-analysis view; new whole-catalog scans use the runtime store. | *Imported, not run.* |
+| `test_paths.py` | Pure profile/root precedence, round-trip environment, default-compatibility, and output-isolation regressions. | temporary files only |
 
 ## Project validation
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `validate.py` | Layered project validation front door. `core` regenerates/runtime-checks opcode metadata, lints canonical registries, runs pure Python tooling tests and the source-only .NET cases without the `Workspace` trait, checks generated opcode references, and runs `git diff --check`. Its .NET solution restore, CLI build, and test-project execution are separate low-memory gates; restore/build parallelism, compiler/MSBuild servers, server GC, and debug-symbol emission are disabled so constrained hosted runners do not kill Roslyn with exit 137. `workspace` adds the explicitly traited installed-data/native-oracle cases, corpus-derived global generation, real-data Python suites, full SYS4 decode, and Python RECOVER. `runtime` adds the Godot C# build and forced-portable threaded self-test. `full` combines all phases and adds the booted faithful-wait C# scene sweep. Selected prerequisites are strict: an unavailable game/corpus/Godot requirement fails before execution instead of becoming a green skip. Each gate has a timeout and UTF-8 log under `build/validation/validate-<timestamp>/`; Godot receives an isolated validation-owned user-data/log root there so it cannot read or modify the developer's saves/settings. The final table reports results/durations and a before/after Godot-process leak audit. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--godot <console>` · `--game-root <install>` · `--verbose` · `--fail-fast` | sources + selected toolchain/game/corpus prerequisites → console summary + ⚙ `build/validation/validate-*/<gate>.log` |
+| `validate.py` | Layered project validation front door. `core` remains content-free. `workspace` selects one installed profile, runs only its traited .NET gate, and decodes its complete production catalog through `Sys4AssetStore`; Himegari additionally runs its current extracted-data globals/Python/RECOVER gates. `runtime` adds Godot, and `full` combines all phases plus the faithful-wait sweep. The selected game writes only its own coverage and logs. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--profile <id>` · `--game-root <install>` · `--extracted-root <root>` · `--godot <console>` · `--verbose` · `--fail-fast` | sources + selected prerequisites → console summary + ⚙ `build/games/<profile-id>/validation/validate-*/<gate>.log` + ⚙ `catalog-opcode-coverage.json` |
 | `test_validate.py` | Pure tests for launcher-equivalent explicit/environment/PATH/conventional resolution precedence, invalid-explicit hard failure, level composition, and final gate ordering. | `test_validate.py` | temporary files only |
 
 Levels are cumulative around `core`: `workspace` means core+workspace-corpus, `runtime` means core+Godot,
 and `full` means every phase. `workspace`/`full` intentionally require the disposable generated inputs named
 by a failed preflight; rebuild each through its owning tool in this reference. Runtime Godot resolution uses
 `--godot`, then `AGE_GODOT_CONSOLE`, then `godot4`/`godot`/`godot-mono` on `PATH`. Game-root resolution uses
-`--game-root`, then `AGE_GAME_ROOT`, then the conventional sibling install and always requires `SYS4INI.BIN`.
+`--game-root`, then `AGE_GAME_ROOT`, then the selected profile's conventional sibling install and always
+requires `SYS4INI.BIN`. For example, independently analyze both installs with:
+
+```powershell
+py -3.11 -X utf8 tools/validate.py --level workspace --profile himegari
+py -3.11 -X utf8 tools/validate.py --level workspace --profile kamidori
+```
 
 The hosted wrapper is `.gitea/workflows/core-validation.yml`. It matches the target server's demonstrated
 `ubuntu-latest`, `actions/checkout@v4`, `actions/setup-dotnet@v4`, and
@@ -111,7 +122,7 @@ All opcode knowledge (ABI, semantics, provenance, `depends_on`) is hand-edited *
 | `validate_opcode_table.py` | Definitive decode-coverage validator using the canonical registry's generated ABI and the SYS4 code/data boundary. | `validate_opcode_table.py` | corpus → stdout |
 | `validate_opcode_table_naive.py` | Naïve variant of the above (baseline comparison). | `validate_opcode_table_naive.py` | corpus → stdout |
 | `age_opcodes_himegari.py` | ⚙ Inferred Himegari opcode semantics — **generated; do not hand-edit.** | *Imported by `sys4load.py`.* | — |
-| `globals_build.py` | Merge curated `globals.toml` over the auto shape map, preserve optional machine-readable row-table `columns`, and generate the global registry + linter. | `--build` · `--lint` | `vm-map/globals.toml`, `build/global-var-map.json` → ⚙ `build/globals.json`, ⚙ `docs/global-reference.md` |
+| `globals_build.py` | Merge curated `globals.toml` over the selected profile's auto shape map, preserve optional machine-readable row-table `columns`, and generate the global registry + linter. The tracked human reference remains the Himegari registry until the K4 provenance migration. | `--build` · `--lint` · `--auto-map <json>` | `vm-map/globals.toml`, selected `build/global-var-map.json` → ⚙ selected `build/globals.json`, ⚙ `docs/global-reference.md` |
 | `story_flags.py` | Static story-flag miner (branch-condition mining) + `--bootstrap` skeleton seeding. | `story_flags.py` · `--bootstrap` | corpus, `build/global-var-map.json` → ⚙ `build/story-flags-candidates.json`, appends `vm-map/globals.toml` |
 | `test_globals.py` | Unit tests for the globals registry + story-flag miner. | `test_globals.py` | — |
 | `scjump_decode.py` | Decode SCJUMP's progression logic → decision table; `--verify` VM cross-check. | `scjump_decode.py` · `--verify` | SCJUMP.BIN, `build/globals.json` → ⚙ `build/scjump-decisions.{json,md}` |
@@ -657,7 +668,7 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `tools/frida/capture_native_transforms.py` | Capture native `0x21f`/`0x223`/`0x234` worker operands, corrected integer base/anchor coordinates, all one-shot/cyclic retained fields, the one-shot 4×4 matrix, and the final post-cyclic 4×4 matrix. Optional handle filter; read-only. | `py -3.11 -u -X utf8 tools/frida/capture_native_transforms.py [secs] [pid|AGE.EXE] [--handle 0xHANDLE]` | running game → `build/native-transform-trace.jsonl` |
-| `parse_sys4ini.py` | Parse `SYS4INI.BIN` (S4IC422, LZSS-compressed) into the diagnostic JSON asset-index mirror — name ↔ archive ↔ offset ↔ size for all DATA*.ALF. Each real entry carries universal `raw_index`; the runtime parses SYS4INI itself, while these generated files remain tooling/test oracles. Also emits the `call-script <id> → name` annotation map. | `parse_sys4ini.py [--check]` (`--check` validates vs `extracted/` + `.ALF` sizes) | `姫狩り…/SYS4INI.BIN` → `build/asset-index.json` + `build/callscript-names.json` |
+| `parse_sys4ini.py` | Parse the selected profile's `SYS4INI.BIN` into a diagnostic JSON asset-index mirror — name ↔ archive ↔ offset ↔ size for base and append catalogs. Each real entry carries universal `raw_index`; the runtime parses SYS4INI itself, while these files remain tooling/test oracles. Also emits the `call-script <id> → name` annotation map. | `parse_sys4ini.py [--check] [--profile ID] [--game-root PATH] [--extracted-root PATH]` (`--check` validates against extracted files and archive sizes) | selected `SYS4INI.BIN` → selected `build/asset-index.json` + `build/callscript-names.json` |
 | `resolve_asset.py` | **Historical scene-group correlation diagnostic, not a runtime resolver.** Builds/queries the strong `file_number ≈ position − group_start` relationship that helped classify SYS4INI ordering. Native RE proves bytecode resources are already universal packed ids, so do not feed this tool's scene-relative result to runtime lookup. | `resolve_asset.py --build` · `resolve_asset.py <SCENE> [resId]` | `build/asset-index.json` → `build/asset-sections.json`; inspects inferred groups |
 | `resolve_frida_reads.py` | Rescue noisy Frida archive-read offsets → asset names via the index (per-archive range search; drops 0x20000 paging reads); recovers the per-scene asset load order. | `resolve_frida_reads.py [reads.log] [-o out.json]` | `build/frida-reads.log` + `build/asset-index.json` → `build/frida-asset-loads.json` |
 | `convert_agf.py` | Convert AGF stills to BMP via `AGF2BMP2AGF.exe` (searches all `extracted/DATA*`). `--scene` batch-converts a scene's whole SYS4INI manifest. Since VFS-C, output is a diagnostic pixel-parity oracle; the runtime decodes AGF bytes directly. | `convert_agf.py EV052CA.AGF …` · `convert_agf.py --scene SC0000` | `extracted/DATA*/*.AGF` → `build/textures/*.BMP` |

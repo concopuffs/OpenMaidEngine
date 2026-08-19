@@ -21,9 +21,11 @@ import statistics
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "frida-present.jsonl"
+REPO = paths.REPO
+OUT = paths.BUILD / "frida-present.jsonl"
 
 OPFETCH_OFF = 0x1b940   # operand-fetch (0x41b940), ecx=ctx — proven-safe engine hook to grab ctx
 CTX_SCAN    = 0x200000  # bytes of the engine context to scan for the d3d9 device pointer

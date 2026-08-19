@@ -30,6 +30,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import paths
+
 try:
     from age_opcodes import (OPCODES, ARG_TYPES, CONTROL_FLOW, ARRAY_OPCODE,
                              is_label_argument)
@@ -62,7 +64,7 @@ def _short_global_label(lbl: str) -> str:
 
 def _load_global_labels() -> dict:
     try:
-        p = Path(__file__).resolve().parent.parent / "build" / "globals.json"
+        p = paths.BUILD / "globals.json"
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
@@ -84,7 +86,7 @@ def _load_callscript_names() -> dict:
     """id -> script name. `call-script <id>` (op 0x03) is a raw index into the SYS4INI file
     table; build/callscript-names.json maps every id to its script name (see docs/engine-re.md)."""
     try:
-        p = Path(__file__).resolve().parent.parent / "build" / "callscript-names.json"
+        p = paths.BUILD / "callscript-names.json"
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}

@@ -18,9 +18,11 @@ import json
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUTDIR = REPO / "build" / "engine-dump"
+REPO = paths.REPO
+OUTDIR = paths.BUILD / "engine-dump"
 
 # Dump every r-x range (code), plus the AGE.EXE module image in full. rw- ranges are only listed in
 # the manifest (native object-manager state; snapshot later if a handler needs it). CHUNK keeps each

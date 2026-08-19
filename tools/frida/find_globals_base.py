@@ -18,9 +18,11 @@ import collections
 import json
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-SIG = REPO / "build" / "globals-signature.json"
+REPO = paths.REPO
+SIG = paths.BUILD / "globals-signature.json"
 sys.path.insert(0, str(REPO / "tools"))
 
 MOV, T_GINT, T_IMM = 0x55, 3, 0

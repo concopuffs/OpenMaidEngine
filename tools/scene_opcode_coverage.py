@@ -39,7 +39,7 @@ import paths
 import sys4load
 
 VM_SRC   = paths.REPO / "engine" / "Age.Engine" / "Vm" / "VirtualMachine.cs"
-OPCODES  = paths.BUILD / "opcodes.json"
+OPCODES  = paths.SHARED_BUILD / "opcodes.json"
 CALLNAME = paths.BUILD / "callscript-names.json"
 OUT_DIR  = paths.BUILD / "scene-opcode-coverage"
 

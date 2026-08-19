@@ -8,8 +8,12 @@ written back into the game folder.
 
 Workspace root: `S:\Game Hacking\Eushully\Himegari\`
 
+The conventional read-only install roots are `Himegari_Game/` and `Kamidori/`. Himegari's legacy
+extracted archive tree is `extracted/`; Kamidori onboarding does not require one because production
+catalog scans read its archives directly. Additional extracted roots may be selected explicitly.
+
 ```
-S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
+S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │
 ├── Himegari_Game/                          ← SOURCE — pristine game install (read-only)
 │   │   Never edit, move, or add to this folder. It holds ORIGINALS ONLY.
@@ -41,9 +45,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the conventional sibling install
     ├── tools/                               Python tooling (parser/disassembler + extractors + VM)
-    │   ├── paths.py                           ★ central path anchor — the ONLY place that knows
-    │   │                                        where the game / extracted / build dirs are. All
-    │   │                                        tools import it; relocatable with no other edits.
+    │   ├── paths.py                           ★ immutable profile-aware context: selected game,
+    │   │                                        extracted roots, and shared/game output ownership
     │   ├── validate.py                        layered core/workspace/runtime/full validation driver
     │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
@@ -165,6 +168,14 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
                                             TextServer glyph adapter, per-profile font-substitution configuration,
                                             and TITLE-only F4 debug scene launcher
 ```
+
+Within disposable `build/`, engine-wide generated ABI/reference artifacts (`opcodes.json`, opcode
+coverage, and `engine-ctx.json`) remain shared. Every content-derived artifact belongs under
+`build/games/<profile-id>/`: catalog indexes, call-script names, disassembly/text corpora, parsed data,
+global/progression maps, traces, page maps, coverage reports, and validation logs. This is an ownership
+boundary, not just a naming convention; tools resolve it from the selected immutable profile context.
+`engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
+`engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports.
 
 The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
 `export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below
@@ -308,18 +319,19 @@ have no repository output tree and write their automatic maps below
 - **Three-way separation.** `Himegari_Game/` = untouched originals; `extracted/` =
   game-derived data (regenerable, game-side); `age-reimpl/` = everything we authored. The first two
   are consumed, never modified.
-- **Tools never hard-code paths.** `tools/paths.py` derives `GAME_DIR`, `EXTRACTED`, `DATA1`,
-  `BUILD`, etc. from its own location. To point the tools at a different install, edit that one file.
-  The whole tree can be relocated without touching any other tool.
+- **Tools never hard-code paths.** `tools/paths.py` resolves an immutable context from common
+  `--profile`, `--game-root`, and `--extracted-root` options (or matching `AGE_*` variables), with
+  conventional Himegari defaults. Switching profiles or relocating the tree requires no source edits.
 - **Path references in docs** are `age-reimpl/`-relative (e.g. `tools/sys4load.py`,
   `build/text/dialogue.jsonl`) unless they name a game/extracted path explicitly.
 - **Authoritative script copies:** where a script exists both as a loose `.BIN` in the game folder
   and under `extracted/DATA1/`, the game-folder copy (patch v1.03) wins. `paths.scripts()` resolves
   this automatically (overrides win).
-- **`build/` and `extracted/` are disposable.** `build/` regenerates via `tools/extract_phase2.py`
-  (or `sys4load.py`); `extracted/` regenerates from the `.ALF` files with a separately obtained local
-  extractor. `bin/README.md` records the optional local convention; no extractor binary is tracked.
-  Safe to delete and rebuild; do not hand-edit.
+- **`build/` and extracted roots are disposable.** Shared engine ABI artifacts live directly under
+  `build/`; selected game outputs regenerate under `build/games/<profile-id>/` without colliding.
+  Extracted roots regenerate from the `.ALF` files with a separately obtained local extractor.
+  `bin/README.md` records the optional local convention; no extractor binary is tracked. Safe to delete
+  and rebuild; do not hand-edit.
 - **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (ABI + semantics + provenance +
   `depends_on`). Run `tools/opcodes_build.py --build` to regenerate both Python views
   (`tools/age_opcodes.py`, `tools/age_opcodes_himegari.py`), machine JSON (`build/opcodes.json`), reference

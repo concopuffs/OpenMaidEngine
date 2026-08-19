@@ -26,9 +26,11 @@ import statistics
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import paths
 
-REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "build" / "frida-frame-cadence.jsonl"
+REPO = paths.REPO
+OUT = paths.BUILD / "frida-frame-cadence.jsonl"
 
 OPFETCH_OFF = 0x1b940   # operand-fetch helper (0x41b940); per operand read, ecx=ctx. PROVEN-safe hook.
 IDX_OFF     = 0x53d14   # current coroutine index

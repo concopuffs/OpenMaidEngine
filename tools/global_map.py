@@ -23,8 +23,8 @@ import paths
 import sys4load
 
 CORPUS = paths.DATA1
-DATA = ROOT / "build" / "data"
-OUT = ROOT / "build"
+DATA = paths.BUILD / "data"
+OUT = paths.BUILD
 
 LOOKUP = 0x61            # lookup-array:    (dst, base1d, idx)
 LOOKUP2D = 0x12c        # lookup-array-2d: (dst, base2d, rowidx, stride, col)

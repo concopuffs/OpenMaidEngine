@@ -43,6 +43,7 @@ CORE_TESTS = (
     "test_init_table_profile.py",
     "test_locate_page.py",
     "test_opcodes.py",
+    "test_paths.py",
     "frida/test_map_imports.py",
 )
 WORKSPACE_TESTS = (
@@ -139,7 +140,11 @@ def build_gate_plan(
     godot: Path | None = None,
     game_root: Path | None = None,
     runtime_state_root: Path | None = None,
+    tool_context: paths.ToolContext | None = None,
 ) -> list[Gate]:
+    context = tool_context or paths.CONTEXT
+    profile_environment = tuple(context.subprocess_environment().items())
+    low_memory_profile_environment = LOW_MEMORY_DOTNET_ENVIRONMENT + profile_environment
     phases = selected_phases(level)
     gates = [
         Gate("opcodes-build", "Opcode metadata build", _python_tool("opcodes_build.py", "--build")),
@@ -172,7 +177,7 @@ def build_gate_plan(
                 "-p:RestoreDisableParallel=true",
             ),
             300,
-            LOW_MEMORY_DOTNET_ENVIRONMENT,
+            low_memory_profile_environment,
         )
     )
     gates.append(
@@ -185,7 +190,7 @@ def build_gate_plan(
                 "-p:BuildInParallel=false", "-p:DebugType=None", "-p:DebugSymbols=false",
             ),
             300,
-            LOW_MEMORY_DOTNET_ENVIRONMENT,
+            low_memory_profile_environment,
         )
     )
     gates.append(
@@ -200,47 +205,60 @@ def build_gate_plan(
                 "-p:DebugType=None", "-p:DebugSymbols=false",
             ),
             300,
-            LOW_MEMORY_DOTNET_ENVIRONMENT,
+            low_memory_profile_environment,
         )
     )
 
     if "workspace" in phases:
-        gates.append(
-            Gate(
-                "engine-workspace-tests",
-                ".NET installed-data and native-oracle tests",
-                (
-                    "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
-                    "--no-restore", "--nologo",
-                    "--verbosity", "minimal", "--filter", "Category=Workspace", "-m:1",
-                    "-p:UseSharedCompilation=false", "-p:BuildInParallel=false",
-                    "-p:DebugType=None", "-p:DebugSymbols=false",
-                ),
-                300,
-                LOW_MEMORY_DOTNET_ENVIRONMENT,
-            )
+        workspace_filter = (
+            "Category=Workspace&Profile=kamidori"
+            if context.profile_id == "kamidori"
+            else "Category=Workspace&Profile!=kamidori"
         )
-        gates.append(
-            Gate("globals-build", "Global registry build", _python_tool("globals_build.py", "--build"))
-        )
-        gates.extend(
-            Gate(
-                f"python-{Path(test).stem}",
-                f"Python {test}",
-                _python_tool(test),
-                300,
-            )
-            for test in WORKSPACE_TESTS
-        )
-        gates.extend((
-            Gate(
-                "sys4-corpus-validate",
-                "SYS4 corpus decode",
-                _python_tool("sys4load.py", str(paths.DATA1), "--validate"),
-                300,
+        gates.append(Gate(
+            "engine-workspace-tests",
+            f".NET installed-data tests ({context.profile_id})",
+            (
+                "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                "--no-restore", "--nologo", "--verbosity", "minimal",
+                "--filter", workspace_filter, "-m:1", "-p:UseSharedCompilation=false",
+                "-p:BuildInParallel=false", "-p:DebugType=None", "-p:DebugSymbols=false",
             ),
-            Gate("vm0-recover", "Python VM RECOVER", _python_tool("vm0.py", "--test")),
+            300,
+            low_memory_profile_environment,
         ))
+        gates.append(Gate(
+            "catalog-corpus-scan",
+            f"Catalog/store corpus decode ({context.profile_id})",
+            (
+                "dotnet", "run", "--project", "engine/Age.Cli/Age.Cli.csproj",
+                "--no-build", "--", "catalog-scan", "--profile", context.profile_id,
+                "--game-root", str(game_root or context.game_root), "--output",
+                str(context.game_build / "catalog-opcode-coverage.json"),
+            ),
+            300,
+            profile_environment,
+        ))
+        if context.profile_id == "himegari":
+            gates.append(Gate(
+                "globals-build", "Global registry build",
+                _python_tool("globals_build.py", "--build"),
+                environment=profile_environment,
+            ))
+            gates.extend(
+                Gate(
+                    f"python-{Path(test).stem}",
+                    f"Python {test}",
+                    _python_tool(test),
+                    300,
+                    profile_environment,
+                )
+                for test in WORKSPACE_TESTS
+            )
+            gates.append(Gate(
+                "vm0-recover", "Python VM RECOVER", _python_tool("vm0.py", "--test"),
+                environment=profile_environment,
+            ))
 
     if "runtime" in phases:
         if godot is None or game_root is None:
@@ -280,8 +298,11 @@ def build_gate_plan(
                 (
                     "dotnet", "run", "--project", "engine/Age.Cli", "--configuration", "Debug",
                     "--", "sweep", "--boot", "--halt-at-wait",
+                    "--profile", context.profile_id,
+                    "--game-root", str(game_root or context.game_root),
                 ),
                 600,
+                profile_environment,
             )
         )
 
@@ -289,23 +310,27 @@ def build_gate_plan(
     return gates
 
 
-def validate_prerequisites(level: str) -> list[str]:
+def validate_prerequisites(
+    level: str, tool_context: paths.ToolContext | None = None
+) -> list[str]:
+    context = tool_context or paths.CONTEXT
     errors = []
     for executable in ("git", "dotnet"):
         if not shutil.which(executable):
             errors.append(f"required executable not found on PATH: {executable}")
     phases = selected_phases(level)
     if "workspace" in phases:
-        if not paths.DATA1.is_dir():
-            errors.append(f"extracted DATA1 corpus not found: {paths.DATA1}")
-        if not (paths.GAME_DIR / "SYS4INI.BIN").is_file():
-            errors.append(f"conventional game install is unavailable: {paths.GAME_DIR}")
-        for required in WORKSPACE_GENERATED_INPUTS:
-            if not required.is_file():
-                errors.append(
-                    f"workspace-derived prerequisite not found: {required} "
-                    "(rebuild it with the owning tool in docs/tools-reference.md)"
-                )
+        if not context.sys4ini.is_file():
+            errors.append(f"selected game install is unavailable: {context.game_root}")
+        if context.profile_id == "himegari":
+            if not context.data1.is_dir():
+                errors.append(f"extracted DATA1 corpus not found: {context.data1}")
+            for required in WORKSPACE_GENERATED_INPUTS:
+                if not required.is_file():
+                    errors.append(
+                        f"workspace-derived prerequisite not found: {required} "
+                        "(rebuild it with the owning tool in docs/tools-reference.md)"
+                    )
     return errors
 
 
@@ -443,7 +468,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--level", choices=LEVELS, default="full")
     parser.add_argument("--godot", help="Godot 4.7 .NET console executable")
+    parser.add_argument("--profile", default=paths.CONTEXT.profile_id,
+                        help="game profile id (common tool-context option)")
     parser.add_argument("--game-root", help="AGE install containing SYS4INI.BIN")
+    parser.add_argument("--extracted-root", help="optional extracted DATA1..DATA5 root")
     parser.add_argument("--verbose", action="store_true", help="stream successful gate output")
     parser.add_argument("--fail-fast", action="store_true", help="stop after the first failed gate")
     return parser.parse_args(argv)
@@ -451,12 +479,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(argv)
-    prerequisite_errors = validate_prerequisites(arguments.level)
+    context = paths.CONTEXT
+    prerequisite_errors = validate_prerequisites(arguments.level, context)
     phases = selected_phases(arguments.level)
     godot = game_root = None
-    if "runtime" in phases:
+    if "runtime" in phases or "workspace" in phases:
         try:
-            godot = resolve_godot(arguments.godot)
+            if "runtime" in phases:
+                godot = resolve_godot(arguments.godot)
             game_root = resolve_game_root(arguments.game_root)
         except ValueError as error:
             prerequisite_errors.append(str(error))
@@ -467,13 +497,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_dir = paths.BUILD / "validation" / f"validate-{stamp}"
+    log_dir = context.game_build / "validation" / f"validate-{stamp}"
     log_dir.mkdir(parents=True, exist_ok=True)
     initial_godot = snapshot_godot_processes()
     results: list[GateResult] = []
     runtime_state_root = log_dir / "godot-user"
     runtime_state_root.mkdir(parents=True, exist_ok=True)
-    for gate in build_gate_plan(arguments.level, godot, game_root, runtime_state_root):
+    for gate in build_gate_plan(
+        arguments.level, godot, game_root, runtime_state_root, context
+    ):
         result = run_gate(gate, log_dir, arguments.verbose)
         results.append(result)
         if result.status == "FAIL" and arguments.fail_fast:
