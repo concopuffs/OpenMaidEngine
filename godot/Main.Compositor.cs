@@ -77,7 +77,8 @@ public partial class Main
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
-            if (v.RadialBlurTransition == null && IsRadialBlurSource(_visibleSnapshot, v.Handle))
+            if (v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
+                IsBlurSource(_visibleSnapshot, v.Handle))
             {
                 _perf?.RecordSkippedLayer();
                 continue;
@@ -94,7 +95,12 @@ public partial class Main
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
             bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
 
-            if (v.RadialBlurTransition is { } radialBlur)
+            if (v.DirectionalBlurTransition is { } directionalBlur)
+            {
+                _perf?.RecordTransitionLayer();
+                DrawDirectionalBlurRangeGpu(_visibleSnapshot, directionalBlur);
+            }
+            else if (v.RadialBlurTransition is { } radialBlur)
             {
                 _perf?.RecordTransitionLayer();
                 DrawRadialBlurRangeGpu(_visibleSnapshot, radialBlur);
@@ -220,24 +226,38 @@ public partial class Main
         return drawn;
     }
 
-    private static bool IsRadialBlurSource(IReadOnlyList<RenderObject> visible, long handle)
+    private static bool IsBlurSource(IReadOnlyList<RenderObject> visible, long handle)
     {
         foreach (RenderObject item in visible)
-            if (item.RadialBlurTransition is { } effect && effect.Contains(handle)) return true;
+            if ((item.DirectionalBlurTransition is { } directional && directional.Contains(handle)) ||
+                (item.RadialBlurTransition is { } radial && radial.Contains(handle))) return true;
         return false;
     }
 
-    // SYS4433's native mode-1 shader consumes CenterU/CenterV/Length. Godot has no copy of that D3D9
-    // effect, so approximate its radial sampling with six alpha-weighted, center-anchored zoom samples.
+    private int DrawDirectionalBlurRangeGpu(
+        IReadOnlyList<RenderObject> visible, DirectionalBlurRangeTransitionState effect)
+        => DrawBlurRangeGpu(visible, effect, null);
+
+    // SYS4433's mode-0/1 shaders consume Angle/Length or CenterU/CenterV/Length. Godot has no copy of
+    // those D3D9 effects, so approximate them with six alpha-weighted translated or center-zoom samples.
     // Length zero takes the exact one-sample path used at the native terminal frame.
     private int DrawRadialBlurRangeGpu(
         IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)
+        => DrawBlurRangeGpu(visible, null, effect);
+
+    private int DrawBlurRangeGpu(
+        IReadOnlyList<RenderObject> visible,
+        DirectionalBlurRangeTransitionState? directional,
+        RadialBlurRangeTransitionState? radial)
     {
-        int samples = System.Math.Abs(effect.Length) < 0.5 ? 1 : 6;
+        double length = directional?.Length ?? radial!.Value.Length;
+        int samples = System.Math.Abs(length) < 0.5 ? 1 : 6;
         int drawn = 0;
         foreach (RenderObject source in visible)
         {
-            if (!effect.Contains(source.Handle) || source.RadialBlurTransition != null) continue;
+            bool contains = directional?.Contains(source.Handle) ?? radial!.Value.Contains(source.Handle);
+            if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
+                continue;
             _perf?.RecordObject(source.TimeVarying);
             var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
@@ -257,7 +277,7 @@ public partial class Main
                 int height = source.H > 0 ? source.H : _screenHeight;
                 for (int sample = 0; sample < samples; sample++)
                 {
-                    var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                    var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                     _perf?.RecordFillLayer();
                     if (_gpuRenderer.DrawFill(
                         width, height, affine, source.Tint,
@@ -276,7 +296,7 @@ public partial class Main
 
             for (int sample = 0; sample < samples; sample++)
             {
-                var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                 var resolved = texture.Value;
                 float opacity = source.Alpha / 255f / samples;
                 if (_gpuRenderer.DrawTexture(
@@ -294,11 +314,22 @@ public partial class Main
         return drawn;
     }
 
-    private static Affine2D RadialSampleAffine(
-        Affine2D source, RadialBlurRangeTransitionState effect,
+    private static Affine2D BlurSampleAffine(
+        Affine2D source, DirectionalBlurRangeTransitionState? directional,
+        RadialBlurRangeTransitionState? radial,
         int sample, int sampleCount, int viewportWidth)
     {
         double fraction = sampleCount == 1 ? 0 : sample / (double)(sampleCount - 1);
+        if (directional is { } directionalEffect)
+        {
+            double radians = directionalEffect.AngleDegrees * System.Math.PI / 180.0;
+            double distance = directionalEffect.Length * fraction;
+            return source.Then(new Affine2D(
+                1, 0, 0, 1,
+                System.Math.Cos(radians) * distance,
+                System.Math.Sin(radians) * distance));
+        }
+        RadialBlurRangeTransitionState effect = radial!.Value;
         double scale = 1.0 + effect.Length / System.Math.Max(1, viewportWidth) * fraction;
         var zoom = new Affine2D(scale, 0, 0, scale,
             effect.CenterX * (1 - scale), effect.CenterY * (1 - scale));
@@ -381,10 +412,11 @@ public partial class Main
         foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
             _perf?.RecordObject(v.TimeVarying);
-            if (v.RadialBlurTransition == null && IsRadialBlurSource(visible, v.Handle))
+            if (v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
+                IsBlurSource(visible, v.Handle))
             {
                 _perf?.RecordSkippedLayer();
-                if (decisions != null) decisions[v.Handle] = "SKIP(radial-blur source range)";
+                if (decisions != null) decisions[v.Handle] = "SKIP(blur source range)";
                 continue;
             }
             var t = v.Transform;
@@ -408,7 +440,17 @@ public partial class Main
             // thousand retained objects per composition, so formatting them unconditionally creates
             // several megabytes of short-lived garbage even in an ordinary run.
             string? outcome = null;
-            if (v.RadialBlurTransition is { } radialBlur)
+            if (v.DirectionalBlurTransition is { } directionalBlur)
+            {
+                _perf?.RecordTransitionLayer();
+                int layers = DrawDirectionalBlurRange(visible, directionalBlur);
+                if (decisions != null)
+                    outcome = $"DIRECTIONAL-BLUR key=0x{directionalBlur.CommandKey:x} " +
+                              $"angle={directionalBlur.AngleDegrees:0.0} " +
+                              $"length={directionalBlur.Length:0.0} " +
+                              $"progress={directionalBlur.Progress:0.000} layers={layers}";
+            }
+            else if (v.RadialBlurTransition is { } radialBlur)
             {
                 _perf?.RecordTransitionLayer();
                 int layers = DrawRadialBlurRange(visible, radialBlur);
@@ -550,12 +592,25 @@ public partial class Main
 
     private int DrawRadialBlurRange(
         IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)
+        => DrawBlurRange(visible, null, effect);
+
+    private int DrawDirectionalBlurRange(
+        IReadOnlyList<RenderObject> visible, DirectionalBlurRangeTransitionState effect)
+        => DrawBlurRange(visible, effect, null);
+
+    private int DrawBlurRange(
+        IReadOnlyList<RenderObject> visible,
+        DirectionalBlurRangeTransitionState? directional,
+        RadialBlurRangeTransitionState? radial)
     {
-        int samples = System.Math.Abs(effect.Length) < 0.5 ? 1 : 6;
+        double length = directional?.Length ?? radial!.Value.Length;
+        int samples = System.Math.Abs(length) < 0.5 ? 1 : 6;
         int drawn = 0;
         foreach (RenderObject source in visible)
         {
-            if (!effect.Contains(source.Handle) || source.RadialBlurTransition != null) continue;
+            bool contains = directional?.Contains(source.Handle) ?? radial!.Value.Contains(source.Handle);
+            if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
+                continue;
             _perf?.RecordObject(source.TimeVarying);
             var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
@@ -575,7 +630,7 @@ public partial class Main
                 int height = source.H > 0 ? source.H : _screenHeight;
                 for (int sample = 0; sample < samples; sample++)
                 {
-                    var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                    var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                     _perf?.RecordFillLayer();
                     FillAffineQuad(
                         width, height, affine, source.Tint,
@@ -590,7 +645,7 @@ public partial class Main
 
             for (int sample = 0; sample < samples; sample++)
             {
-                var affine = RadialSampleAffine(baseAffine, effect, sample, samples, _screenWidth);
+                var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                 var resolved = texture.Value;
                 BlitLayer(
                     resolved.Image, resolved.AssetId, source.ColorKey, source.Tint,

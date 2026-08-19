@@ -42,6 +42,18 @@ public readonly record struct RadialBlurRangeTransitionState(
            (ulong)(handle - RangeStart) < (ulong)RangeCount;
 }
 
+/// <summary>Sampled SYS4433 op-0x250 directional-blur command. Angle is expressed in the
+/// script/native shader's degree convention; length is the sample span in target-surface pixels.</summary>
+public readonly record struct DirectionalBlurRangeTransitionState(
+    long CommandKey, int TargetSlot, long RangeStart, int RangeCount,
+    double Length, double AngleDegrees,
+    long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced)
+{
+    public bool Contains(long handle)
+        => RangeCount > 0 && handle >= RangeStart &&
+           (ulong)(handle - RangeStart) < (ulong)RangeCount;
+}
+
 public readonly record struct MovieMaskTransitionState(
     MovieMaskTransitionRequest Request, bool Completed);
 
@@ -101,7 +113,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            Affine2D? RangeTransform = null,
                                            bool TimeVarying = false,
                                            ScaleCycleState ScaleCycle = default,
-                                           RadialBlurRangeTransitionState? RadialBlurTransition = null);
+                                           RadialBlurRangeTransitionState? RadialBlurTransition = null,
+                                           DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

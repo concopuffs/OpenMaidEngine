@@ -242,7 +242,8 @@ public sealed partial class GfxState
     {
         lock (_lock)   // re-entrant: EraseRange already holds _lock
         {
-            bool removedTransition = _radialBlurTransitions.Remove(handle);
+            bool removedTransition = _radialBlurTransitions.Remove(handle)
+                                     | _directionalBlurTransitions.Remove(handle);
             if (_objects.Remove(handle))
             {
                 int index = _orderedObjectHandles.BinarySearch(handle);
@@ -275,6 +276,7 @@ public sealed partial class GfxState
             _objects.Clear();
             _orderedObjectHandles.Clear();
             _radialBlurTransitions.Clear();
+            _directionalBlurTransitions.Clear();
             CurrentObject = 0;
             MarkRetainedMutation();
         }

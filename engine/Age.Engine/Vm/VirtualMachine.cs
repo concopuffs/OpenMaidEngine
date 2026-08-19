@@ -1640,6 +1640,8 @@ public sealed partial class VirtualMachine
             case "u004213E0": // 0x21b tentative line/statement id marker
                 return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
+            case "u00422F60": // SYS4433 opcode 0x250 upstream ABI label
+            case "queue-directional-blur-range-transition": // SYS4433 0x250: retained range post-effect
             case "u00422FF0": // SYS4433 opcode 0x251 upstream ABI label
             case "queue-radial-blur-range-transition": // SYS4433 0x251: retained range post-effect
             case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint

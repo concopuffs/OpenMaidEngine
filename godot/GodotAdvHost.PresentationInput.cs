@@ -517,10 +517,13 @@ public sealed partial class GodotAdvHost
                    && !_stopping)
             {
                 var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
+                var directional = gfx.SnapshotDirectionalBlurRangeTransitions(_clock.NowMs);
                 var radial = gfx.SnapshotRadialBlurRangeTransitions(_clock.NowMs);
                 double progress = active.Count != 0 ? active[0].Progress
+                    : directional.Count != 0 ? directional[0].Progress
                     : radial.Count != 0 ? radial[0].Progress : 1.0;
                 bool forced = active.Count != 0 ? active[0].Forced
+                    : directional.Count != 0 ? directional[0].Forced
                     : radial.Count != 0 && radial[0].Forced;
                 int bucket = (int)System.Math.Floor(progress * 10);
                 if (bucket != lastBucket)

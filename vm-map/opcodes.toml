@@ -9703,14 +9703,67 @@ argc = 10
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00422F60"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "queue-directional-blur-range-transition"
+category = "draw"
+summary = "Queue a timed directional-blur post-effect over a retained-object range."
+details = "Operands are command_handle, target_surface, range_start, range_count, start_length, start_angle_degrees, end_length, end_angle_degrees, delay_ms, and duration_ms. The command replaces the ordinary record at command_handle with native retained record type 3/mode 0. At the next foreground presentation boundary, SYS4433 linearly interpolates Length and Angle, supplies Width/Height from the target surface, renders the selected object range through its directional effect at the command handle's z position, and clears the command's active flag at completion. The complete Kamidori catalog has 34 calls in 11 scripts; all use local variables for the two endpoint pairs. Story code demonstrates ordinary degree values such as +90/-90 and can interpolate through 1800 degrees for a multi-turn effect. SYS4422 does not install dispatch slot 0x250 in the inspected Himegari executable."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+source = "investigation"
+confidence = "high"
+depends_on = [0x21c, 0x222]
+evidence = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, retained-command producer/consumer, and complete Kamidori corpus", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x250_queue_directional_blur_range_transition@0x422f60 feeds ten operands to gfx_queue_directional_blur_range_transition@0x4869e0. The producer writes start Length/Angle at record +0x40/+0x4c and end Length/Angle at +0x50/+0x5c. gfx_present_retained_effect_commands linearly samples field 0 as Length and field 3 as Angle, supplies the target surface dimensions as Width/Height, and renders the retained range with effect mode 0. The catalog contains 34 calls in 11 scripts with signature l-int/g-int/g-int/imm/l-int/l-int/l-int/l-int/imm/imm; SC6750 authors +/-90-degree effects and SC0050 includes a 1800-degree interpolation. SYS4422 does not install this slot." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "command_handle"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "target_surface"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "range_start"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "range_count"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "start_length"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "start_angle_degrees"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 7
+role = "end_length"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = "end_angle_degrees"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 9
+role = "delay_ms"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 10
+role = "duration_ms"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x251

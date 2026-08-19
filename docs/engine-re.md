@@ -135,11 +135,20 @@ target width/height for `CenterU` and `CenterV`, marks the retained handle inter
 and clears the command's active state at completion. The exact AIM call is
 `(90000,14,70010,23,100,512,204,0,512,204,100,500)`: radial length contracts from 100 to 0 around
 `(512,204)` after 100 ms over 500 ms. The adjacent `0x250` producer creates type 3/mode 0 and supplies
-`Angle/Length` endpoints for the sibling directional effect; that opcode remains outside this frontier.
+the sibling directional effect. `op_0x250_queue_directional_blur_range_transition@0x422f60` forwards ten
+operands to `gfx_queue_directional_blur_range_transition@0x4869e0`: command handle, target surface, retained
+range start/count, start Length/Angle, end Length/Angle, delay, and duration. The producer stores Length at
+record `+0x40/+0x50` and Angle at `+0x4c/+0x5c`; the unused mode-1 center fields are zero. The shared
+consumer samples those pairs linearly, passes Angle and Length directly to the mode-0 effect, and obtains
+shader Width/Height from the target surface. The complete Kamidori corpus has 34 calls in 11 scripts. Story
+code establishes degrees as the authored angle convention (`+90/-90` are common, while one SC0050 effect
+interpolates through 1800 degrees for multiple turns). The port now retains the exact command lifecycle,
+range selection, endpoint interpolation, and timing. Godot approximates the missing D3D9 directional shader
+with six alpha-weighted translated samples, collapsing exactly to one unshifted sample at Length zero.
 Kamidori's complete catalog contains 64 `0x251` calls in 28 scripts. The SYS4433 constructor installs the
 handler at `ctx+0xa0044`; the inspected SYS4422 constructor has no corresponding dispatch-slot store, so the
 semantic provenance is SYS4433-only rather than an inferred SYS4 baseline. All three SYS4433 functions are
-named and commented in the Ghidra image.
+named and commented in the Ghidra image; the `0x250` handler and producer are annotated there as well.
 
 The first complete-corpus follow-up selected opcode `0x2d8` because it is used by combat calculation and
 setup rather than only a peripheral menu. The SYS4433 dispatcher installs

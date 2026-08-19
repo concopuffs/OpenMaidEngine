@@ -610,7 +610,8 @@ than relying only on whichever opcode strict execution reaches next. The officia
 2,126,378 instructions; the translated overlay has 2,161,326. Both decode with zero failures, use the same
 269 distinct opcodes, and produce the same missing-opcode distribution. After implementing `0x2d8`, the
 initial catalog contained 17 gaps. The following `0x27`/`0x28` patterned surface-reveal slice removed 193
-calls across 47 scripts, leaving these 15 recognized opcodes without an executable runtime handler:
+calls across 47 scripts. Implementing the retained directional-blur command `0x250` then removed another
+34 calls across 11 scripts, leaving these 14 recognized opcodes without an executable runtime handler:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
@@ -626,14 +627,15 @@ calls across 47 scripts, leaving these 15 recognized opcodes without an executab
 | `0x235` | 28 | 12 | story/presentation scripts |
 | `0x246` | 1 | 1 | `BTL` |
 | `0x24f` | 10 | 10 | story scripts |
-| `0x250` | 34 | 11 | `DEBUGADV3` plus story scripts |
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
 
-The completed pair preserves the native selector mapping, direction, blocking duration, fast-forward
+The patterned-reveal pair preserves the native selector mapping, direction, blocking duration, fast-forward
 endpoint, and surface target. Godot currently approximates the legacy simultaneous/staggered strip masks as
-a timed crossfade; this is host presentation policy rather than a VM contract change. Static priority now
-moves to the high-use `0x235`/`0x250` presentation families, while the isolated `BTL` opcode `0x246` becomes
+a timed crossfade; this is host presentation policy rather than a VM contract change. `0x250` now preserves
+the native type-3/mode-0 command contract, selected retained range, Length/Angle interpolation, timing, and
+completion behavior; Godot approximates the unavailable D3D9 shader with translated alpha-weighted samples.
+Static priority now moves to the high-use `0x235` presentation family, while the isolated `BTL` opcode `0x246` becomes
 the likely gameplay priority if the Dungeon route reaches combat first. Map/save, arrangement/studio,
 configuration, and font-selection-only gaps can follow unless live execution reaches one first. This ranking
 is triage, not a substitute for strict-runtime evidence: the next real compatibility halt still takes
@@ -641,7 +643,7 @@ precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
 `build/games/kamidori/translation-overlay-corpus.json`; each entry includes every script/offset, operand-type
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
-`0x27`, `0x28`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
+`0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible

@@ -25,10 +25,20 @@ public sealed partial class GfxState
         public long StartMs = -1;
         public bool Forced;
     }
+    private sealed class DirectionalBlurRangeTransition
+    {
+        public long CommandKey, RangeStart, DelayMs, DurationMs;
+        public int TargetSlot, RangeCount;
+        public double StartLength, StartAngleDegrees;
+        public double EndLength, EndAngleDegrees;
+        public long StartMs = -1;
+        public bool Forced;
+    }
 
     private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
     private readonly Dictionary<int, MovieMaskTransition> _movieMaskTransitions = new();
     private readonly Dictionary<long, RadialBlurRangeTransition> _radialBlurTransitions = new();
+    private readonly Dictionary<long, DirectionalBlurRangeTransition> _directionalBlurTransitions = new();
 
     /// <summary>Op 0x223: queue a type-0 timed alpha transition into a target surface slot.</summary>
     public void QueueSurfaceAlphaTransition(long commandKey, int targetSlot,
@@ -83,6 +93,7 @@ public sealed partial class GfxState
             GfxObject command = GetOrCreate(commandKey);
             command.SourceSlot = targetSlot;
             command.Visible = true;
+            _directionalBlurTransitions.Remove(commandKey);
             _radialBlurTransitions[commandKey] = new RadialBlurRangeTransition
             {
                 CommandKey = commandKey,
@@ -95,6 +106,37 @@ public sealed partial class GfxState
                 EndLength = endLength,
                 EndCenterX = endCenterX,
                 EndCenterY = endCenterY,
+                DelayMs = System.Math.Max(0, delayMs),
+                DurationMs = System.Math.Max(0, durationMs),
+            };
+            MarkRetainedMutation();
+        }
+    }
+
+    /// <summary>SYS4433 op 0x250: replace the command handle with a delayed directional-blur
+    /// post-effect over a contiguous retained-object range.</summary>
+    public void QueueDirectionalBlurRangeTransition(
+        long commandKey, int targetSlot, long rangeStart, int rangeCount,
+        double startLength, double startAngleDegrees,
+        double endLength, double endAngleDegrees,
+        long delayMs, long durationMs)
+    {
+        lock (_lock)
+        {
+            GfxObject command = GetOrCreate(commandKey);
+            command.SourceSlot = targetSlot;
+            command.Visible = true;
+            _radialBlurTransitions.Remove(commandKey);
+            _directionalBlurTransitions[commandKey] = new DirectionalBlurRangeTransition
+            {
+                CommandKey = commandKey,
+                TargetSlot = targetSlot,
+                RangeStart = rangeStart,
+                RangeCount = System.Math.Max(0, rangeCount),
+                StartLength = startLength,
+                StartAngleDegrees = startAngleDegrees,
+                EndLength = endLength,
+                EndAngleDegrees = endAngleDegrees,
                 DelayMs = System.Math.Max(0, delayMs),
                 DurationMs = System.Math.Max(0, durationMs),
             };
@@ -132,6 +174,8 @@ public sealed partial class GfxState
                 if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
             foreach (var t in _radialBlurTransitions.Values)
                 if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+            foreach (var t in _directionalBlurTransitions.Values)
+                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
             return started;
         }
     }
@@ -141,6 +185,7 @@ public sealed partial class GfxState
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                    || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                   || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                    || _movieMaskTransitions.Values.Any(t => !t.Completed);
     }
 
@@ -151,6 +196,7 @@ public sealed partial class GfxState
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _movieMaskTransitions.Values.Any(t => !t.Completed) ||
                    _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
                    _rangeTransform.TranslationEnabled ||
@@ -180,12 +226,14 @@ public sealed partial class GfxState
                 nowMs,
                 _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                     || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                    || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                     || _movieMaskTransitions.Values.Any(t => !t.Completed)
                     || range != null || objects.Length != 0,
                 _objects.Count,
                 _objects.Values.Count(o => o.Visible),
                 _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
                     + _radialBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                    + _directionalBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
                     + _movieMaskTransitions.Values.Count(t => !t.Completed),
                 AnimationServiceFlags,
                 AnimClockDurationTicks,
@@ -218,6 +266,7 @@ public sealed partial class GfxState
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _movieMaskTransitions.Values.Any(t => !t.Completed) ||
                    _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
                    _rangeTransform.TranslationEnabled ||
@@ -250,6 +299,12 @@ public sealed partial class GfxState
                     completed++;
                 }
                 foreach (var t in _radialBlurTransitions.Values)
+                {
+                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+                    t.Forced = true;
+                    completed++;
+                }
+                foreach (var t in _directionalBlurTransitions.Values)
                 {
                     if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
                     t.Forced = true;
@@ -291,6 +346,8 @@ public sealed partial class GfxState
                 if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
             foreach (var t in _radialBlurTransitions.Values)
                 if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+            foreach (var t in _directionalBlurTransitions.Values)
+                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
             if (completed > 0) MarkRetainedMutation();
             return completed;
         }
@@ -306,6 +363,12 @@ public sealed partial class GfxState
     {
         lock (_lock)
             return _radialBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+    }
+
+    public IReadOnlyList<DirectionalBlurRangeTransitionState> SnapshotDirectionalBlurRangeTransitions(long nowMs)
+    {
+        lock (_lock)
+            return _directionalBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     private static double TransitionProgress(SurfaceTransition t, long nowMs)
@@ -344,6 +407,27 @@ public sealed partial class GfxState
             t.DelayMs, t.DurationMs, t.StartMs, progress, t.Forced);
     }
 
+    private static double TransitionProgress(DirectionalBlurRangeTransition t, long nowMs)
+    {
+        if (t.Forced) return 1.0;
+        if (t.StartMs < 0) return 0.0;
+        long elapsed = nowMs - t.StartMs - t.DelayMs;
+        if (elapsed <= 0) return 0.0;
+        if (t.DurationMs <= 0) return 1.0;
+        return System.Math.Clamp(elapsed / (double)t.DurationMs, 0.0, 1.0);
+    }
+
+    private static DirectionalBlurRangeTransitionState SampleTransition(
+        DirectionalBlurRangeTransition t, long nowMs)
+    {
+        double progress = TransitionProgress(t, nowMs);
+        return new DirectionalBlurRangeTransitionState(
+            t.CommandKey, t.TargetSlot, t.RangeStart, t.RangeCount,
+            t.StartLength + (t.EndLength - t.StartLength) * progress,
+            t.StartAngleDegrees + (t.EndAngleDegrees - t.StartAngleDegrees) * progress,
+            t.DelayMs, t.DurationMs, t.StartMs, progress, t.Forced);
+    }
+
     /// <summary>Sample the shared native frame clock and report why the retained scene needs publishing.
     /// Continuous channels remain frame-driven; op-0x231 spritesheets become dirty only when the shared
     /// previous/current samples select different cells. Retained VM writes are published exactly once.</summary>
@@ -365,6 +449,7 @@ public sealed partial class GfxState
 
             if (_surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                 _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                 _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
                 _rangeTransform.TranslationEnabled ||
                 _objects.Values.Any(o => o.Visible &&
@@ -577,6 +662,9 @@ public sealed partial class GfxState
                 RadialBlurRangeTransitionState? radialBlur =
                     _radialBlurTransitions.TryGetValue(handle, out var rb)
                         ? SampleTransition(rb, nowMs) : null;
+                DirectionalBlurRangeTransitionState? directionalBlur =
+                    _directionalBlurTransitions.TryGetValue(handle, out var db)
+                        ? SampleTransition(db, nowMs) : null;
                 Affine2D? objectRangeTransform = rangeAffine is { } ra &&
                     handle >= _rangeTransformFirst && handle - _rangeTransformFirst < _rangeTransformCount
                     ? ra : null;
@@ -589,6 +677,7 @@ public sealed partial class GfxState
                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
                     transition is { Progress: < 1.0 } ||
                     radialBlur is { Progress: < 1.0 } ||
+                    directionalBlur is { Progress: < 1.0 } ||
                     (objectRangeTransform != null && rangeTimeVarying);
                 list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
@@ -603,7 +692,7 @@ public sealed partial class GfxState
                                           colorTransition, objectRangeTransform, timeVarying,
                                           new ScaleCycleState(o.ScaleCycleEnabled, o.ScaleCyclePeriodMs,
                                                               cycleScaleX, cycleScaleY, cycleScaleZ),
-                                          radialBlur));
+                                          radialBlur, directionalBlur));
             }
         }
     }

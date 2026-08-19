@@ -249,7 +249,7 @@ def test_emit_runtime():
 def test_canonical_kamidori_revision_provenance():
     from pathlib import Path
     canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
-    for op in (0x27, 0x28, 0x251, 0x2d8, 0x2da, 0x2db, 0x2de):
+    for op in (0x27, 0x28, 0x250, 0x251, 0x2d8, 0x2da, 0x2db, 0x2de):
         revisions = {revision for evidence in canonical.opcodes[op].semantics.evidence
                      for revision in evidence.engine_revisions}
         check(revisions == {"SYS4433"},

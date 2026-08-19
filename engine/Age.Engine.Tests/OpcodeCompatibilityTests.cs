@@ -219,4 +219,34 @@ public class OpcodeCompatibilityTests
         Assert.Equal(new long[] { 0, 1, 2, 3 }, staggered
             .Select(instruction => instruction.Args[3].Value).Distinct().OrderBy(value => value));
     }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriDirectionalBlurCorpusUsesTheRecoveredTenOperandContract()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var scripts = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+        List<Instruction> calls = catalog.EnumerateScripts()
+            .Select(entry => scripts.GetById(entry.PackedId))
+            .Where(script => script != null)
+            .SelectMany(script => script!.Instructions)
+            .Where(instruction => instruction.Opcode == 0x250)
+            .ToList();
+
+        Assert.Equal(34, calls.Count);
+        Assert.All(calls, instruction =>
+            Assert.Equal(new[] { 9, 3, 3, 0, 9, 9, 9, 9, 0, 0 },
+                instruction.Args.Select(argument => argument.Type)));
+        Assert.Equal(11, catalog.EnumerateScripts()
+            .Select(entry => scripts.GetById(entry.PackedId))
+            .Where(script => script?.Instructions.Any(instruction => instruction.Opcode == 0x250) == true)
+            .Count());
+    }
 }
