@@ -1480,6 +1480,153 @@ the logical canvas, VM coordinates, and surface geometry remain fixed. The execu
 live in `phase-a-slice-plan.md`. This experiment was
 diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
+#### Kamidori profile onboarding — tracked execution plan
+
+**Status (2026-08-18): not started.** This is the executable checklist for turning the existing
+single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
+Himegari and Kamidori must continue to share the SYS4 frontend, complete opcode ABI, VM core, catalog/VFS,
+and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
+original game content.
+
+**Measured baseline:** Kamidori identifies itself as catalog revision `S4IC433` and its loose scripts as
+`SYS4433`, versus Himegari's `S4IC422`/`SYS4422`. The current 548-entry AGE catalog decodes Kamidori's loose
+`TITLE.BIN` and all 183 other parseable loose/patch scripts cleanly. Those scripts exercise 213 distinct
+opcodes, including 13 not observed in Himegari's corpus: `0x24`, `0x28`, `0x82`, `0x83`, `0x147`, `0x1be`,
+`0x235`, `0x246`, `0x24f`, `0x250`, `0x251`, `0x2d8`, and `0x2da`. This is a lower bound until every
+catalog-owned script is scanned. `TITLE.BIN@0xd7` reaches `0x1be` first on the probed boot path. The
+per-game provenance task below will move this measured observation into the canonical opcode model rather
+than leaving it only as roadmap prose.
+
+##### Phase K0 — freeze the profile contract
+
+- [ ] Add one authored, content-free profile manifest for Himegari and one for Kamidori. Give each a stable
+  ASCII id, display title, supported catalog/script revisions, SYS frontend id, engine-ABI selection (initially
+  a resolved `SYS4422` or `SYS4433` snapshot, with ancestry only where evidence supports it), natural boot script,
+  game-owned metadata references, and persistence namespace.
+- [ ] Define selection precedence: explicit `--profile <id>` is authoritative; OME still compares the selected
+  root's catalog title/revision with that profile and emits a prominent mismatch diagnostic, but continues with
+  the profile the user requested. Without `--profile`, require a unique auto-detection match; ambiguous or
+  unknown installs fail before VM or persistence construction and may be reopened in explicit probe mode.
+- [ ] Keep `--game-root` as the content-location argument. Profiles must never commit machine-specific install
+  paths; a future launcher may discover roots and pass the same `(profile, game-root)` pair.
+- [ ] Provide an explicit read-only/probe mode for an unknown or incomplete profile. Probe mode may inspect and
+  trace, but must disable every save/settings write and must not masquerade as supported gameplay.
+- [ ] Add synthetic selection tests plus installed-data gates proving Himegari auto-selects `himegari`, Kamidori
+  auto-selects `kamidori`, and an explicit cross-pair continues with the requested profile while reporting the
+  expected/actual identity mismatch and recording that state in runtime diagnostics.
+
+**K0 gate:** startup produces one immutable selected-profile object before constructing the opcode table,
+VM options, frontend hosts, diagnostics, or persistence services. It records whether selection was automatic
+or explicit and whether the detected install identity matched, without allowing auto-detection to override an
+explicit user choice.
+
+##### Phase K1 — make persistence safe before normal Kamidori execution
+
+- [ ] Move the hardcoded Himegari `NativeSaveIdentity`, save-layout versions, numbered-save compatibility id,
+  serialized VM-bank dimensions, and related persistence policy behind the selected profile. Prefer values
+  decoded from SYS4INI VM metadata/settings where proven; keep only irreducible values in the manifest.
+- [ ] Namespace Godot-owned state per game (for example `user://games/<profile-id>/`) so `SAVE.DAT`, `RT.DAT`,
+  numbered saves, thumbnails, `SYS4REG.INI`, and diagnostics cannot collide across profiles.
+- [ ] Determine and validate Kamidori's native save identity and bank dimensions before enabling its writes.
+  Until then, Kamidori remains read-only even when its profile is recognized.
+- [ ] Add cross-profile regressions proving that opening, saving, deleting, or copying a slot under one profile
+  cannot observe or mutate the other profile's files.
+
+**K1 gate:** no ordinary Kamidori run is permitted until isolation tests pass and its persistence capability is
+either validated read/write or explicitly read-only.
+
+##### Phase K2 — replace silent compatibility loss with structured diagnostics
+
+- [ ] Make an opcode absent from the selected engine-ABI lineage a structured decode error instead of a
+  synthetic terminal instruction.
+- [ ] In normal compatibility mode, halt on a recognized but unimplemented opcode with profile id, engine/script
+  revision, script name/id, bytecode offset, opcode, canonical label, and operands. Retain trace-and-advance only
+  in explicit probe mode.
+- [ ] Expose implementation coverage separately from ABI membership and per-game observation. Add a regression
+  that prevents a newly observed game opcode from silently entering the default VM stub.
+- [ ] Make Kamidori's expected first strict halt (`TITLE.BIN@0xd7`, opcode `0x1be`) a bring-up test; advance that
+  expected frontier deliberately as services are implemented.
+
+**K2 gate:** a green boot can no longer mean that unknown behavior was skipped.
+
+##### Phase K3 — make tools and derived data profile-aware
+
+- [ ] Replace mutable module-level Himegari path selection with one shared tool context selected through
+  `--profile`, `--game-root`, and, where needed, an extracted-data override. Preserve convenient Himegari
+  defaults for existing commands without requiring edits to `tools/paths.py`.
+- [ ] Split game-derived outputs beneath `build/games/<profile-id>/` (catalog indexes, call-script names,
+  disassembly/text corpora, global maps, init tables, progression maps, traces, page maps, and coverage).
+  Keep engine-wide generated ABI/reference artifacts in their shared location.
+- [ ] Teach catalog/corpus coverage to scan scripts through `Sys4AssetStore` directly, including append packs
+  and loose overrides, so onboarding does not require a separately extracted archive tree.
+- [ ] Update validation levels so shared/core gates remain content-free while installed-data gates can select
+  either profile independently and cannot consume the other game's derived artifacts.
+
+**K3 gate:** both games can be analyzed in one checkout without editing a source file or overwriting one
+another's derived results.
+
+##### Phase K4 — generalize opcode observation and evidence provenance
+
+- [ ] Replace `observed_in_himegari` and `opcodes_used_by_himegari` with a general per-game observation model.
+  Record observation independently from ABI membership and semantic/runtime support.
+- [ ] Give each semantic evidence record structured provenance: game/profile when applicable, exact engine or
+  script revision/build, method (`corpus`, native RE, Frida, harness, inference, or upstream catalog), artifact
+  or site, confidence, and explanatory text. Evidence that applies across games should name an engine family or
+  revision/dialect rather than inventing a game owner.
+- [ ] Add ABI applicability/revision data only where evidence shows a real framing or semantic difference. Begin
+  with independently resolved revision snapshots such as `SYS4422` and `SYS4433`; do not infer a historical
+  base `SYS4` definition merely from the first game implemented, and do not assume revisions form a simple
+  linear chain. Factor shared definitions only after comparison supports that scope, preferring claims such as
+  "shared by `SYS4422` and `SYS4433`" over "common to SYS4" until broader evidence exists. The clean `422`/`433`
+  decode is evidence for reuse, not proof that every SYS4 revision is identical.
+- [ ] Generate per-game and union coverage views from the canonical model, and lint profile ids plus evidence
+  references. Rename the generated Himegari-only Python semantics view as part of the same migration.
+
+**K4 gate:** the reference can answer separately whether an opcode is decodable for a selected ABI, observed by
+each game, semantically understood, and implemented by the runtime.
+
+##### Phase K5 — separate game data from SYS revision behavior
+
+- [ ] Audit frontend/VM code for script names, offsets, global addresses, resource names, bank sizes, text
+  policies, and diagnostic boot seeds that came from Himegari. Classify each as a shared AGE/SYS4 rule, a
+  SYS revision/dialect rule, profile data, or a diagnostic-only fixture.
+- [ ] Make opcode metadata and handler resolution capable of composition without requiring it: resolve the
+  selected revision's complete snapshot directly at first. If comparative evidence later establishes a shared
+  layer or ancestry, compose that layer with revision/dialect additions and replacements. Resolution must retain
+  which snapshot or layer supplied the effective operand contract and handler, and what evidence justified its
+  scope.
+- [ ] Keep code reuse separate from semantic scope: two revision snapshots may reference the same handler
+  implementation without promoting that behavior to an asserted universal `SYS4` base.
+- [ ] Have profiles select the ABI lineage rather than own opcode handlers. Do not name a handler override after
+  Himegari or Kamidori when the evidence actually scopes it to `SYS4422`, `SYS4433`, or another SYS revision.
+- [ ] Move game-owned values behind the profile or its diagnostic configuration. Keep generic engine constants
+  in shared code and retain Himegari-named tests when they intentionally test installed Himegari behavior.
+- [ ] Add executable/build provenance to native-RE and `EngineCtx` metadata so offsets from Himegari's AGE image
+  cannot be applied to Kamidori's distinct executable by implication.
+- [ ] Select portable text policy through the profile, with an engine-wide Japanese fallback allowed where the
+  policy is genuinely shared.
+
+**K5 gate:** a normal Kamidori boot performs no Himegari global seed, save-layout assumption, scene-offset
+workaround, or profile-specific resource bootstrap, and opcode behavior is owned by an evidence-scoped SYS
+revision/dialect snapshot or layer rather than an assumed base ABI or game-specific compatibility shim.
+
+##### Phase K6 — full Kamidori inventory and vertical bring-up
+
+- [ ] Scan the complete base and append script corpus and publish the Kamidori-vs-Himegari opcode coverage
+  delta through the K4 model. Confirm argument shapes against the selected `SYS4433` dialect before semantic
+  work.
+- [ ] Implement newly reached services in execution order, beginning with `0x1be`; use Kamidori native RE or
+  runtime observation for semantics that Himegari cannot supply. Record every finding with the new provenance
+  fields and annotate the correct native executable image when Ghidra is used.
+- [ ] Reach the natural title loop under strict mode, then the New Game route, then select one bounded ADV
+  scene as Kamidori's first visual/audio/input acceptance slice.
+- [ ] Add installed-data smoke coverage for catalog/VFS access, `1024x576` logical presentation, title input,
+  and the selected ADV slice. Keep persistence read-only until K1's Kamidori write contract is proven.
+
+**K6 completion gate:** one packaged OME runtime selects either installed game and its engine-ABI lineage without
+rebuilding, boots each through its natural SYSTEM4 route under strict compatibility semantics, keeps all writable
+state isolated, and reports separate reproducible opcode/feature coverage for both profiles.
+
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
 UTF-16^0xFFFF), opcode set (overlapping, version-specific; Kelebek's table already spans the family
