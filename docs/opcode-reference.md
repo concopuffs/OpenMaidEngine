@@ -908,6 +908,18 @@ This is character count rather than .NET UTF-16 length or raw CP932 byte length.
 
 The release call uses nonnegative in-range indices and count 1. Port status (2026-07-29): implemented over encoded byte spans, preserving every valid lead/trail pair and reproducing native end clamping (`end = length` when start+count < 1 or > length) before selecting the half-open character interval [start,end).
 
+### 0x2d8 `fill-int-array` (set-array-to, argc 3)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2d8` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (destination)(value)(count) — fill `count` consecutive integer cells at the resolved destination address with the signed dword value. Nonpositive counts write nothing.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2d8_fill_int_array@0x42b9c0 resolves operand 1 as an address, reads operands 2/3 as value/count, converts the value to the native encrypted integer-cell representation once, and writes it to each consecutive dword while count is positive. The official and translated complete catalogs both have the same 23 calls across five scripts.
+
+The destination follows the ordinary SYS4 address resolver, so direct global/local integer spans and integer-pointer operands retain their address domain. The complete Kamidori corpus has 23 calls in CALCDMG, SETEN, SETSTUDIOCH, SELORN, and TOWN; CALCDMG owns 15 and uses the opcode to initialize pointer-addressed calculation arrays. This contract is proven only for SYS4433; Himegari's observed SYS4422 snapshot does not contain opcode 0x2d8.
+
 ## control
 
 ### 0x1 `throw-exit-request` (throw-exit-request, argc 0)
@@ -4511,15 +4523,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d7`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d8 `set-array-to` (set-array-to, argc 3)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=med
-- **evidence:** method=upstream-catalog; confidence=med; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2d9 `u0042BA30` (u0042BA30, argc 2)
 - **observed by:** none in recorded corpora

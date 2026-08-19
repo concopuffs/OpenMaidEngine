@@ -29,6 +29,8 @@ public partial class Main : Godot.Control
     private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;
     private Label _status = null!;
+    private Label _fpsHud = null!;
+    private double _fpsHudUpdateSeconds;
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private IDisposable? _glyphRasterizerOwner;
@@ -175,6 +177,21 @@ public partial class Main : Godot.Control
         _locatorHud = new Label { Visible = false, MouseFilter = MouseFilterEnum.Ignore };
         _locatorHud.Position = new Vector2(8, 8);
         AddChild(_locatorHud);
+        _fpsHud = new Label
+        {
+            Visible = System.Array.IndexOf(userArgs, "--fps-counter") >= 0,
+            Text = "FPS --",
+            MouseFilter = MouseFilterEnum.Ignore,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        AddChild(_fpsHud);
+        _fpsHud.SetAnchorsPreset(LayoutPreset.TopRight);
+        _fpsHud.OffsetLeft = -180;
+        _fpsHud.OffsetTop = 8;
+        _fpsHud.OffsetRight = -8;
+        _fpsHud.OffsetBottom = 36;
+        _fpsHud.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _fpsHud.AddThemeConstantOverride("outline_size", 4);
 
         // Best-effort CJK font for diagnostic/status UI. Gameplay text is always surface pixels.
         foreach (var fp in new[] { "C:/Windows/Fonts/msgothic.ttc", "C:/Windows/Fonts/YuGothM.ttc",
@@ -186,6 +203,7 @@ public partial class Main : Godot.Control
                 var ff = new FontFile { Data = System.IO.File.ReadAllBytes(fp) };
                 _status.AddThemeFontOverride("font", ff);
                 _locatorHud.AddThemeFontOverride("font", ff);
+                _fpsHud.AddThemeFontOverride("font", ff);
                 break;
             }
             catch { /* fall back to the default font */ }
@@ -527,6 +545,18 @@ public partial class Main : Godot.Control
 
     public override void _Process(double delta)
     {
+        if (_fpsHud != null && _fpsHud.Visible)
+        {
+            _fpsHudUpdateSeconds += delta;
+            if (_fpsHudUpdateSeconds >= 0.25)
+            {
+                _fpsHudUpdateSeconds %= 0.25;
+                double fps = Godot.Engine.GetFramesPerSecond();
+                _fpsHud.Text = fps > 0
+                    ? $"FPS {fps:0}  ·  {1000.0 / fps:0.0} ms"
+                    : "FPS --";
+            }
+        }
         _clock.Advance(delta);
         _timelineFrame++;
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);

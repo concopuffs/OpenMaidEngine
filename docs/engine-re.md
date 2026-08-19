@@ -141,6 +141,16 @@ handler at `ctx+0xa0044`; the inspected SYS4422 constructor has no corresponding
 semantic provenance is SYS4433-only rather than an inferred SYS4 baseline. All three SYS4433 functions are
 named and commented in the Ghidra image.
 
+The first complete-corpus follow-up selected opcode `0x2d8` because it is used by combat calculation and
+setup rather than only a peripheral menu. The SYS4433 dispatcher installs
+`op_0x2d8_fill_int_array@0x42b9c0`. It resolves operand 1 as an integer-cell address, evaluates operand 2
+once and converts it to the engine's stored integer representation, then writes that value into operand 3
+consecutive dwords. A nonpositive count performs no writes. This covers direct global/local spans and
+integer-pointer destinations through the ordinary address resolver. The complete official and translated
+Kamidori catalogs agree on 23 calls: CALCDMG (15), SETEN (4), SETSTUDIOCH (2), SELORN (1), and TOWN (1).
+The inspected Himegari SYS4422 corpus does not observe `0x2d8`, so the finding remains SYS4433-scoped rather
+than being promoted to a presumed base SYS4 contract. The handler is named/commented in the SYS4433 image.
+
 After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
 ADV page wait with retained visuals and scene-local audio requests. A windowed 1024×576 capture also confirms

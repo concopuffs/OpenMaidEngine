@@ -48,15 +48,74 @@ Script ScriptByName(string name) => provider.RequireByName(name);
 if (args.Contains("catalog-scan"))
 {
     Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
-    var unsupported = scan.OpcodeOccurrences
+    int[] unsupportedOpcodes = scan.OpcodeOccurrences
         .Where(pair => !OpcodeRuntimeCoverage.TryResolve(table, pair.Key, out var handler)
                        || !handler.IsExecutable)
-        .ToDictionary(pair => $"0x{pair.Key:x}", pair => new
+        .Select(pair => pair.Key)
+        .ToArray();
+    var unsupportedSites = unsupportedOpcodes.ToDictionary(
+        opcode => opcode,
+        _ => new List<(Script Script, Instruction Instruction)>());
+    foreach (PackedAssetEntry packed in catalog.EnumerateScripts())
+    {
+        Script? script = provider.GetById(packed.PackedId);
+        if (script == null) continue;
+        foreach (Instruction instruction in script.Instructions)
+            if (unsupportedSites.TryGetValue(instruction.Opcode, out var sites))
+                sites.Add((script, instruction));
+    }
+    var unsupported = unsupportedOpcodes.ToDictionary(opcode => $"0x{opcode:x}", opcode =>
+    {
+        List<(Script Script, Instruction Instruction)> sites = unsupportedSites[opcode];
+        return new
         {
-            occurrences = pair.Value,
-            label = table.TryGetDefinition(pair.Key, out OpcodeDefinition definition)
+            occurrences = scan.OpcodeOccurrences[opcode],
+            label = table.TryGetDefinition(opcode, out OpcodeDefinition definition)
                 ? definition.CanonicalLabel : null,
-        });
+            script_count = sites.Select(site => site.Script.PackedId).Distinct().Count(),
+            scripts = sites
+                .GroupBy(site => site.Script.PackedId)
+                .OrderByDescending(group => group.LongCount())
+                .ThenBy(group => group.First().Script.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    packed_id = $"0x{group.Key:x8}",
+                    name = group.First().Script.Name,
+                    append_selector = (group.Key >> 24) & 0xff,
+                    occurrences = group.LongCount(),
+                    offsets = group.Select(site => $"0x{site.Instruction.Offset:x}").ToArray(),
+                })
+                .ToArray(),
+            operand_type_signatures = sites
+                .GroupBy(site => string.Join(",", site.Instruction.Args.Select(operand => operand.Type)))
+                .OrderByDescending(group => group.LongCount())
+                .Select(group => new
+                {
+                    operand_types = group.First().Instruction.Args
+                        .Select(operand => operand.Type).ToArray(),
+                    occurrences = group.LongCount(),
+                })
+                .ToArray(),
+            representative_sites = sites
+                .GroupBy(site => site.Script.PackedId)
+                .Select(group => group.OrderBy(site => site.Instruction.Offset).First())
+                .OrderBy(site => site.Script.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(site => site.Script.PackedId)
+                .Take(8)
+                .Select(site => new
+                {
+                    packed_id = $"0x{site.Script.PackedId:x8}",
+                    script = site.Script.Name,
+                    offset = $"0x{site.Instruction.Offset:x}",
+                    operands = site.Instruction.Args.Select(operand => new
+                    {
+                        type = operand.Type,
+                        value = operand.Value,
+                    }).ToArray(),
+                })
+                .ToArray(),
+        };
+    });
     var report = new
     {
         profile_id = selectedProfile.Profile.Id,

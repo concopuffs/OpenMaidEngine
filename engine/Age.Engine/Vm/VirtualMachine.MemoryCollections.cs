@@ -58,6 +58,16 @@ public sealed partial class VirtualMachine
                 for (int i = 0; i < count; i++) WriteIntCell(destination.Offset(i), values[i]);
                 return pc + 1;
             }
+            case "set-array-to": // upstream ABI label
+            case "fill-int-array": // 0x2d8: fill count consecutive resolved integer cells
+            {
+                VmAddress destination = BaseAddr(a[0]);
+                int value = unchecked((int)Read(a[1]));
+                int count = unchecked((int)Read(a[2]));
+                for (int i = 0; i < count; i++)
+                    WriteIntCell(destination.Offset(i), value);
+                return pc + 1;
+            }
             case "find-hit-rectangle": // 0x12e: inclusive rectangle intersection over addressed arrays
             case "u0041E940":
             {

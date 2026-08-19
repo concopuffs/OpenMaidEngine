@@ -7,6 +7,7 @@
 #   .\run-godot.ps1 -NativeDebugMenu  expose TITLE's unreachable shipped developer menu
 #   .\run-godot.ps1 -StartupDiagnostics  capture the natural TITLE -> Game Start -> SC0000 route
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
+#   .\run-godot.ps1 -FpsCounter  show live rendered FPS and frame time in the top-right corner
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
 #   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
 #   .\run-godot.ps1 -Kamidori -TranslationPatch  enable its patch/ English overlay and BMP assets
@@ -32,6 +33,7 @@ param(
     [switch]$NativeDebugMenu,
     [switch]$StartupDiagnostics,
     [switch]$PerfLog,
+    [switch]$FpsCounter,
     [switch]$SoftwareRenderer,
     [switch]$Doctor
 )
@@ -213,6 +215,7 @@ if ($SelfTest) {
         $userArgs += @('--perf-log', $perfLogFile)
     }
     if ($SoftwareRenderer) { $userArgs += @('--render-backend', 'software') }
+    if ($FpsCounter) { $userArgs += '--fps-counter' }
     if ($NativeDebugMenu -and -not $StartupDiagnostics) { $userArgs += '--native-debug-menu' }
     if ($StartupDiagnostics) {
         Write-Host "==> startup diagnostics enabled (native exit semantics)" -ForegroundColor Cyan

@@ -84,4 +84,49 @@ public class PointerAndBlockCopyOpsTests
 
         Assert.Equal("aliased", vm.GlobalStrings[0x740]);
     }
+
+    [Fact]
+    public void FillIntArray_WritesResolvedPointerAndDirectSpansAndIgnoresNonpositiveCounts()
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        int move = table.ByLabel("mov")!.Value;
+        var script = ScriptAssembler.Assemble(table, "FILL-INT-ARRAY", new List<(int, Operand[])>
+        {
+            (0x63, new[] { new Operand(LocalPointer, 0), new Operand(GlobalInt, 0x800) }),
+            (0x2d8, new[]
+            {
+                new Operand(LocalPointer, 0), new Operand(Immediate, -7), new Operand(Immediate, 3),
+            }),
+            (0x2d8, new[]
+            {
+                new Operand(LocalInt, 4), new Operand(Immediate, 9), new Operand(Immediate, 2),
+            }),
+            (move, new[] { new Operand(GlobalInt, 0x820), new Operand(LocalInt, 4) }),
+            (move, new[] { new Operand(GlobalInt, 0x821), new Operand(LocalInt, 5) }),
+            (0x2d8, new[]
+            {
+                new Operand(GlobalInt, 0x810), new Operand(Immediate, 5), new Operand(Immediate, 0),
+            }),
+            (0x2d8, new[]
+            {
+                new Operand(GlobalInt, 0x811), new Operand(Immediate, 6), new Operand(Immediate, -1),
+            }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(
+            script, table, new RecordingHost(),
+            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+        vm.Globals[0x810] = 44;
+        vm.Globals[0x811] = 55;
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Null(vm.CompatibilityFailure);
+        Assert.Equal(new long[] { -7, -7, -7 },
+            new[] { vm.Globals[0x800], vm.Globals[0x801], vm.Globals[0x802] });
+        Assert.Equal(new long[] { 9, 9 }, new[] { vm.Globals[0x820], vm.Globals[0x821] });
+        Assert.Equal(44, vm.Globals[0x810]);
+        Assert.Equal(55, vm.Globals[0x811]);
+    }
 }

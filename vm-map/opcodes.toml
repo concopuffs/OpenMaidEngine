@@ -10356,14 +10356,33 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "set-array-to"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "fill-int-array"
+category = "compute"
+summary = "(destination)(value)(count) — fill `count` consecutive integer cells at the resolved destination address with the signed dword value. Nonpositive counts write nothing."
+details = "The destination follows the ordinary SYS4 address resolver, so direct global/local integer spans and integer-pointer operands retain their address domain. The complete Kamidori corpus has 23 calls in CALCDMG, SETEN, SETSTUDIOCH, SELORN, and TOWN; CALCDMG owns 15 and uses the opcode to initialize pointer-addressed calculation arrays. This contract is proven only for SYS4433; Himegari's observed SYS4422 snapshot does not contain opcode 0x2d8."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Kamidori SYS4433 Ghidra: op_0x2d8_fill_int_array@0x42b9c0 resolves operand 1 as an address, reads operands 2/3 as value/count, converts the value to the native encrypted integer-cell representation once, and writes it to each consecutive dword while count is positive. The official and translated complete catalogs both have the same 23 calls across five scripts."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 array-fill handler and complete official/translated Kamidori catalogs", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "Dispatcher slot 0x2d8 installs handler 0x42b9c0. It resolves operand 1 through the integer address resolver, converts operand 2 to the encrypted cell form, and writes it count times while operand 3 is positive. Both catalog scans contain 23 calls in the same five scripts; CALCDMG has 15 pointer-addressed sites." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "destination integer-cell span"
+observed_types = ["g-int", "l-int", "l-ptr"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "signed dword fill value"
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "cell count"
+observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x2d9

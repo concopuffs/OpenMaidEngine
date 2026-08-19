@@ -151,4 +151,35 @@ public class OpcodeCompatibilityTests
         Assert.True(table.TryGetDefinition(0x2da, out OpcodeDefinition definition));
         Assert.Equal("register-extended-numeric-glyph-style", definition.SemanticName);
     }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriArrayFillContractIsAnchoredInCombatAndEnemySetupScripts()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var scripts = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+        Instruction calcdmg = Assert.Single(
+            scripts.RequireByName("CALCDMG.BIN").Instructions,
+            instruction => instruction.Offset == 0x2ff);
+        Instruction seten = Assert.Single(
+            scripts.RequireByName("SETEN.BIN").Instructions,
+            instruction => instruction.Offset == 0xb4);
+
+        Assert.Equal(0x2d8, calcdmg.Opcode);
+        Assert.Equal(new[]
+        {
+            new Operand(12, 0), new Operand(0, 1), new Operand(0, 17),
+        }, calcdmg.Args);
+        Assert.Equal(0x2d8, seten.Opcode);
+        Assert.True(table.TryGetDefinition(0x2d8, out OpcodeDefinition definition));
+        Assert.Equal("fill-int-array", definition.SemanticName);
+        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x2d8));
+    }
 }

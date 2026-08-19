@@ -1307,6 +1307,8 @@ public sealed partial class VirtualMachine
             case "take-address": // 0x63: pointer destination <- underlying address of operand 2
             case "copy-inline-int-array": // 0x64: count dword followed by plain file values
             case "copy-dwords": // 0x1b0: memcpy(count * 4) across resolved integer-cell spans
+            case "set-array-to": // upstream ABI label for SYS4433 opcode 0x2d8
+            case "fill-int-array": // 0x2d8: fill count consecutive resolved integer cells
                 return StepMemoryCollection(label, a, pc);
             case "find-hit-rectangle": // 0x12e: inclusive rectangle intersection over addressed arrays
             case "u0041E940":

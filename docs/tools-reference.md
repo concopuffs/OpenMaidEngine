@@ -367,6 +367,7 @@ root/call-script parsing). Generated asset/callscript JSON remains a tooling and
 
 | Command | Purpose | Notes |
 |---|---|---|
+| `catalog-scan [--output <report.json>]` | Decode the selected profile's complete production catalog and report script/instruction/opcode totals plus recognized opcodes without executable runtime handlers. | Unsupported entries include their complete per-script occurrence/offset distribution, operand-type signatures, and representative typed operands. Accepts the profile/game-root/overlay options above; **does not execute scripts**. |
 | `run <file.BIN>` | Execute a script; print steps, show-text count, **call-script dispatch count**, the first 30 lines (each tagged with its source script), and the distinct source scripts. | `CaptureHost` (headless); **executes call-script**. |
 | `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps. **Provider-less** (call-script stubbed) = a base-ISA offset dump. | writes JSON. (Was the vm0 differential oracle; vm0 is retired from oracle duty — `TraceDiffTests` removed.) |
 | `trace <SCENE.BIN> [--boot] [--state <f>] [0xADDR=VAL…] --trace-json <out>` | ★ Emit the **full per-op executed-offset path** of one scene (not just show-text), filtered to the scene's own frame — the VM side of the differential offset-path oracle (`diff_optrace.py`). `--boot` runs the selected profile's proven direct-scene state prefix (Himegari: `INITCONFIG/INIT2/INIT`); **`--state <f>` loads a captured scene-entry snapshot** (`capture_global_writes.py`) = the engine's real pre-scene state; `0xADDR=VAL` hand-seeds. | `JsonOffsetTraceSink` (observe-only, parity held) → `{scene, offsets:[…]}` JSON. |
@@ -547,7 +548,8 @@ it authoritatively selects the `kamidori` profile and install root while still a
 `-GameRoot` override. `-OverlayRoot <directory>` is repeatable and `-AllowBmpAsAgf` opts into BMP payloads
 under `.AGF` catalog names. `run-godot.cmd -Kamidori -TranslationPatch` is the convenience spelling for
 Kamidori's installed `patch/` overlay plus that BMP compatibility option; neither behavior is inferred from
-the game profile. `run-godot.ps1 -Doctor` prints the resolved repository, Godot, game root, ordered overlays,
+the game profile. `-FpsCounter` forwards `--fps-counter` to display a low-overhead live FPS/frame-time overlay.
+`run-godot.ps1 -Doctor` prints the resolved repository, Godot, game root, ordered overlays,
 BMP compatibility, requested profile/probe state, .NET, and Python prerequisites without building or
 launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe` requires it and forces the
 read-only diagnostic policy. The launchers leave the natural boot script to the selected manifest and pass
@@ -603,6 +605,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   that logical canvas and aspect-preserving letterboxing, so these options do not change VM coordinates,
   AGE surfaces, layout, or backbuffer allocation. Values must be integers in `1..16384`; duplicate
   options use the last value.
+- `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
+  refreshed four times per second. The overlay observes the presentation loop only; it does not alter VM
+  timing, input, compositor selection, or opcode handling.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
 - `--boot` — direct-scene diagnostic only: with `--scene <non-SYSTEM4>`, run the old
   `INITCONFIG/INIT2/INIT` state prefix before that isolated scene. The normal SYSTEM4-rooted launch neither
