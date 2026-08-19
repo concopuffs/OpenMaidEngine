@@ -575,6 +575,14 @@ measures the configured native encoding (CP932 for SYS4). Focused coverage plus 
 suite, zero-warning Godot build, and threaded frontend selftest pass. The next field action is the manual
 visual recheck of the same `DEBUGMAP` HUD before pursuing any state seeding.
 
+Kamidori SYS4433 later reached the same subsystem through its extended opcode `0x2da` at
+`DRAWCHP.BIN@0x626` on the hidden-menu Dungeon route. SYS4433 stores seven fields per numeric-glyph style:
+the five `0x13a` fields plus independent source-atlas and destination-object cell spacing. Its `0x13a`
+writer clears those additions; `0x2da` supplies them explicitly; `0x23b` consumes both when stepping digits.
+The neutral retained-graphics model now represents all seven fields while preserving zero spacing for
+SYS4422 and legacy SYS4433 registrations. This is revision-scoped opcode behavior reusing a shared renderer,
+not a Kamidori gameplay special case.
+
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat
 popup and TITLE's shipped developer menu. Both routes use `BUNKI.BIN`'s temporary-surface renderer rather

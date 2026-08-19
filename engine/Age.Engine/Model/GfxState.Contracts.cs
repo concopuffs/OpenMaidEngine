@@ -37,9 +37,10 @@ public readonly record struct MovieMaskTransitionState(
 public readonly record struct ColorTransitionState(long Current, long Target,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Active);
 
-/// <summary>One EngineCtx numeric-glyph style registered by opcode 0x13a.</summary>
+/// <summary>One EngineCtx numeric-glyph style registered by opcode 0x13a or SYS4433 opcode 0x2da.</summary>
 public readonly record struct NumericGlyphStyle(int SurfaceSlot, int AtlasX, int AtlasY,
-                                                int DigitWidth, int DigitHeight)
+                                                int DigitWidth, int DigitHeight,
+                                                int SourceCellSpacing, int DestinationCellSpacing)
 {
     public bool Registered => SurfaceSlot != 0;
 }

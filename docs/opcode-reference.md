@@ -1471,7 +1471,7 @@ The handler uses an alpha step of 16 and timer interval=argument when argument <
 - **depended on by:** 0x23b
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x13a`; scope=Himegari SYS4422. Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to EngineCtx+0x55180+style_index*0x14 after enforcing style_index<11. scene_context_init_reset@0x40b560 clears 200 bytes at +0x55180, exactly ten records; record 10 therefore overlaps ret_stack_a at +0x55248. Corpus: 74 sites in 24 scripts; all literal style registrations are 0..9.
 
-The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. Scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow.
+SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow.
 
 ### 0x141 `set-message-window-alpha` (set-message-window-alpha, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2014,12 +2014,13 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x23b` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x23b` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** Draw an integer as decimal glyph objects from a style registered by opcode 0x13a.
+- **summary:** Draw an integer as decimal glyph objects from a style registered by opcode 0x13a or SYS4433 opcode 0x2da.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x13a
+- **depended on by:** 0x2da
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x23b`; scope=Himegari SYS4422. Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy.
 
-First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error.
+First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error.
 
 ### 0x23c `sample-frame-time` (sample-frame-time, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2171,6 +2172,19 @@ Scripts place declaration chains immediately after opcode 0x259 clears both fiel
 - **summary:** (rgb) - select the persistent solid-color display background and recreate its full-canvas surface.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x25a`; scope=Himegari SYS4422. Ghidra matching handlers: SYS4422 op_0x25a_set_display_background_color@0x4253a0 and SYS4433 @0x423120 store persistent background mode 1 and the operand RGB value, then call display_recreate_background_color_surface (SYS4422 0x479a90; SYS4433 0x4803d0) when the active display mode permits. That worker supplies the logical canvas width/height, RGB value, and backend mode to gfx_create_filled_canvas_surface, which creates a surface and fills its full rectangle at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 sets black (0) during natural startup.
+
+### 0x2da `register-extended-numeric-glyph-style` (u004234E0, argc 8)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2da` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** Register a SYS4433 decimal-glyph atlas style with independent source-cell and destination-cell spacing.
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x23b
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2da_register_extended_numeric_glyph_style@0x4234e0 enforces style_index<11 and writes operands 2..8 to the seven-dword numeric style record at EngineCtx+0x5940c+index*0x1c. The SYS4433 op_0x23b_draw_decimal_glyphs@0x422000 reads source stride as digit_width+operand7 and destination stride as digit_width+operand8. The complete catalog has 66 calls; strict dungeon execution first halted at DRAWCHP.BIN@0x626. SYS4422 does not install slot 0x2da.
+
+Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices take the native script-error path. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da.
 
 ## input
 
@@ -4510,15 +4524,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2da `u004234E0` (u004234E0, argc 8)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2dc `u0042BA80` (u0042BA80, argc 1)
 - **observed by:** kamidori (SYS4433)

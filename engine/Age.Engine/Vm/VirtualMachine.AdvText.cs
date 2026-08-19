@@ -166,6 +166,20 @@ public sealed partial class VirtualMachine
                 }
                 return pc + 1;
             }
+            case "u004234E0": // SYS4433 opcode 0x2da
+            case "register-extended-numeric-glyph-style":
+            {
+                int styleIndex = unchecked((int)Read(a[0]));
+                if (!Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
+                        unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
+                        unchecked((int)Read(a[4])), unchecked((int)Read(a[5])),
+                        unchecked((int)Read(a[6])), unchecked((int)Read(a[7]))))
+                {
+                    HaltReason ??= $"numeric-glyph-style-index-out-of-range:{styleIndex}";
+                    return HALT;
+                }
+                return pc + 1;
+            }
             case "u00422460":
             case "draw-decimal-glyphs": // 0x23b: retained decimal glyph draw
             {

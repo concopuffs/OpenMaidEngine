@@ -1516,6 +1516,8 @@ public sealed partial class VirtualMachine
                 return StepSurface(label, a, pc);
             case "u0041F3A0":
             case "register-numeric-glyph-style": // 0x13a: (style)(surface)(atlas x/y)(digit w/h)
+            case "u004234E0": // SYS4433 opcode 0x2da
+            case "register-extended-numeric-glyph-style":
             case "u00422460":
             case "draw-decimal-glyphs": // 0x23b: retained decimal glyph draw
                 return StepAdvText(label, ins, pc);

@@ -2991,12 +2991,15 @@ abi_source = "kelebek+decode-validated"
 name = "register-numeric-glyph-style"
 category = "draw"
 summary = "Register a decimal-glyph atlas style as (surface slot, source x/y, digit width/height); the handler admits style indices 0..10."
-details = "The five-dword definition is stored at EngineCtx+0x55180+style_index*0x14. Opcode 0x23b consumes it to turn an integer into retained draw objects, one atlas cell per decimal digit. Scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow."
+details = "SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to EngineCtx+0x55180+style_index*0x14 after enforcing style_index<11. scene_context_init_reset@0x40b560 clears 200 bytes at +0x55180, exactly ten records; record 10 therefore overlaps ret_stack_a at +0x55248. Corpus: 74 sites in 24 scripts; all literal style registrations are 0..9."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 legacy numeric-glyph style writer and shared record layout", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x13a_register_numeric_glyph_style@0x41fae0 writes surface/atlas/digit fields to the seven-dword record at EngineCtx+0x5940c+index*0x1c and explicitly zeros its source/destination spacing fields. Opcode 0x2da writes the same record with explicit spacing." }
+]
 
 [[opcode.semantics.args]]
 i = 1
@@ -6559,13 +6562,16 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "draw-decimal-glyphs"
 category = "draw"
-summary = "Draw an integer as decimal glyph objects from a style registered by opcode 0x13a."
-details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using adjacent digit-width cells from the registered atlas. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error."
+summary = "Draw an integer as decimal glyph objects from a style registered by opcode 0x13a or SYS4433 opcode 0x2da."
+details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x13a]
 evidence = "Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 extended numeric-glyph record consumption", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x23b_draw_decimal_glyphs@0x422000 reads the seven-dword style record at EngineCtx+0x5940c. It adds source_cell_spacing to digit width for atlas selection and destination_cell_spacing for right/center/left placement; opcodes 0x13a and 0x2da are the legacy and extended writers." }
+]
 
 [[opcode.semantics.args]]
 i = 1
@@ -10319,14 +10325,58 @@ argc = 8
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004234E0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "register-extended-numeric-glyph-style"
+category = "draw"
+summary = "Register a SYS4433 decimal-glyph atlas style with independent source-cell and destination-cell spacing."
+details = "Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices take the native script-error path. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+source = "investigation"
+confidence = "high"
+depends_on = [0x23b]
+evidence = "Kamidori SYS4433 Ghidra: op_0x2da_register_extended_numeric_glyph_style@0x4234e0 enforces style_index<11 and writes operands 2..8 to the seven-dword numeric style record at EngineCtx+0x5940c+index*0x1c. The SYS4433 op_0x23b_draw_decimal_glyphs@0x422000 reads source stride as digit_width+operand7 and destination stride as digit_width+operand8. The complete catalog has 66 calls; strict dungeon execution first halted at DRAWCHP.BIN@0x626. SYS4422 does not install slot 0x2da."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 extended numeric-glyph style writer and consumer", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2da_register_extended_numeric_glyph_style@0x4234e0 writes all seven fields after enforcing index<11; op_0x23b_draw_decimal_glyphs@0x422000 adds fields 6/7 to digit width for source/destination stride. DRAWCHP.BIN@0x626 is the first reached dungeon site; SYS4422 has no handler in slot 0x2da." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "style_index"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "surface_slot"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "atlas_x"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "atlas_y"
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "digit_width"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "digit_height"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = "source_cell_spacing"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 8
+role = "destination_cell_spacing"
+observed_types = ["imm", "l-int"]
 
 [[opcode]]
 op = 0x2db

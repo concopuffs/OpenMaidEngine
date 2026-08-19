@@ -64,6 +64,36 @@ public class NumericGlyphOpsTests
     }
 
     [Fact]
+    public void Sys4433ExtendedStyleAppliesIndependentSourceAndDestinationSpacing()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var scene = ScriptAssembler.Assemble(table, "SPACED-NUMERIC-GLYPHS",
+            new List<(int, Operand[])>
+            {
+                (0x1f9, new[] { I(0x123), I(0x48), I(0) }),
+                (0x2da, new[] { I(0), I(0x48), I(10), I(20), I(8), I(12), I(2), I(3) }),
+                (0x23b, new[] { I(1000), I(0), I(42), I(100), I(30), I(3), I(0) }),
+                Exit(),
+            }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Null(vm.CompatibilityFailure);
+        var visible = vm.Gfx.SnapshotVisibleObjects();
+        Assert.Equal(2, visible.Count);
+        Assert.Equal((1000L, 10 + 2 * 10, 100 + 2 * 11),
+            (visible[0].Handle, visible[0].SrcX, visible[0].DstX));
+        Assert.Equal((1001L, 10 + 4 * 10, 100 + 1 * 11),
+            (visible[1].Handle, visible[1].SrcX, visible[1].DstX));
+        Assert.All(visible, item =>
+            Assert.Equal((0x123, 20, 8, 12, 30),
+                         (item.SurfaceResId, item.SrcY, item.W, item.H, item.DstY)));
+    }
+
+    [Fact]
     public void RedrawingAShorterValueErasesStaleDigitObjects()
     {
         var table = T();
@@ -99,14 +129,28 @@ public class NumericGlyphOpsTests
                 (0x23b, new[] { I(1), I(0), I(7), I(0), I(0), I(1), I(0) }),
                 Exit(),
             }, System.Array.Empty<string>());
+        var sys4433 = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var invalidExtendedRegistration = ScriptAssembler.Assemble(
+            sys4433, "BAD-EXTENDED-NUMERIC-STYLE",
+            new List<(int, Operand[])>
+            {
+                (0x2da, new[] { I(11), I(1), I(0), I(0), I(8), I(12), I(1), I(1) }),
+                Exit(),
+            }, System.Array.Empty<string>());
 
         var invalidVm = new VirtualMachine(invalidRegistration, table, new RecordingHost());
         var unregisteredVm = new VirtualMachine(unregisteredDraw, table, new RecordingHost());
+        var invalidExtendedVm = new VirtualMachine(
+            invalidExtendedRegistration, sys4433, new RecordingHost(),
+            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
         invalidVm.Run();
         unregisteredVm.Run();
+        invalidExtendedVm.Run();
 
         Assert.Equal("numeric-glyph-style-index-out-of-range:11", invalidVm.HaltReason);
         Assert.Equal("numeric-glyph-style-unregistered:0", unregisteredVm.HaltReason);
+        Assert.Equal("numeric-glyph-style-index-out-of-range:11", invalidExtendedVm.HaltReason);
+        Assert.Null(invalidExtendedVm.CompatibilityFailure);
     }
 
     [Fact]

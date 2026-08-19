@@ -1704,6 +1704,14 @@ title. The translated 732-script production-store scan decodes 2,161,326 instruc
 observation set as the official corpus, so it is retained as overlay provenance rather than a new SYS4433
 dialect snapshot.
 
+**Post-K6 Dungeon frontier `0x2da` (2026-08-19):** the translated hidden-menu Dungeon route reaches
+`SYSTEM4 → FIELD → DRAWCHP` and first halted at `DRAWCHP.BIN@0x626`. SYS4433 native RE identifies `0x2da` as
+the seven-field extension of numeric-glyph style registration `0x13a`: it adds independent source-atlas and
+destination-object spacing consumed by existing decimal renderer `0x23b`. The shared graphics model now owns
+both fields; legacy `0x13a` registrations retain zero spacing, while the SYS4433 snapshot binds and implements
+the extended opcode. Installed `DRAWCHP` frontier coverage and model tests prove the exact operands and
+placement. The next ordinary-play frontier should be collected by repeating Dungeon past this point.
+
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
 UTF-16^0xFFFF), opcode set (overlapping, version-specific; Kelebek's table already spans the family

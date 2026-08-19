@@ -318,16 +318,19 @@ public sealed partial class GfxState
         }
     }
 
-    /// <summary>Op 0x13a: replace one of eleven safely isolated handler-addressable styles.
+    /// <summary>Ops 0x13a/0x2da: replace one of eleven safely isolated handler-addressable styles.
     /// Native physically clears ten records; its admitted index 10 aliases return-stack storage.</summary>
     public bool RegisterNumericGlyphStyle(int styleIndex, int surfaceSlot, int atlasX, int atlasY,
-                                          int digitWidth, int digitHeight)
+                                          int digitWidth, int digitHeight,
+                                          int sourceCellSpacing = 0,
+                                          int destinationCellSpacing = 0)
     {
         lock (_lock)
         {
             if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length) return false;
             _numericGlyphStyles[styleIndex] =
-                new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight);
+                new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight,
+                                      sourceCellSpacing, destinationCellSpacing);
             return true;
         }
     }
@@ -345,6 +348,9 @@ public sealed partial class GfxState
 
             NumericGlyphStyle style = _numericGlyphStyles[styleIndex];
             EraseRange(baseHandle, digitCapacity);
+            int sourceCellAdvance = unchecked(style.DigitWidth + style.SourceCellSpacing);
+            int destinationCellAdvance =
+                unchecked(style.DigitWidth + style.DestinationCellSpacing);
 
             int remaining = value;
             int handleOffset = 0;
@@ -360,24 +366,24 @@ public sealed partial class GfxState
                 if ((flags & 0x2) != 0)
                 {
                     draw = slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + style.DigitWidth * slot
-                        - (digitCapacity - digitCount) * style.DigitWidth / 2);
+                    drawX = unchecked(x + destinationCellAdvance * slot
+                        - (digitCapacity - digitCount) * destinationCellAdvance / 2);
                 }
                 else if ((flags & 0x4) != 0)
                 {
                     digitCount--;
                     draw = slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + style.DigitWidth * digitCount);
+                    drawX = unchecked(x + destinationCellAdvance * digitCount);
                 }
                 else
                 {
                     draw = (flags & 0x1) != 0 || slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + style.DigitWidth * slot);
+                    drawX = unchecked(x + destinationCellAdvance * slot);
                 }
 
                 if (draw)
                 {
-                    int srcX = unchecked(style.AtlasX + digit * style.DigitWidth);
+                    int srcX = unchecked(style.AtlasX + digit * sourceCellAdvance);
                     BindDraw(baseHandle + handleOffset, style.SurfaceSlot,
                              srcX, style.AtlasY, style.DigitWidth, style.DigitHeight, drawX, y);
                     handleOffset++;

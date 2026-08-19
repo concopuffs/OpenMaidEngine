@@ -102,4 +102,53 @@ public class OpcodeCompatibilityTests
         Assert.Equal("STEP-LIMIT", vm.HaltReason);
         Assert.Equal(100_000, vm.Steps);
     }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriDrawchpExtendedNumericStyleFrontierExecutesWithNativeSpacing()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var scripts = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+        Script drawchp = scripts.RequireByName("DRAWCHP.BIN");
+        Instruction frontier = Assert.Single(
+            drawchp.Instructions.Where(instruction => instruction.Offset == 0x626));
+        Assert.Equal(0x2da, frontier.Opcode);
+        Assert.Equal(
+            new long[] { 0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1 },
+            frontier.Args.Select(argument => argument.Value));
+
+        var probe = ScriptAssembler.Assemble(table, "DRAWCHP-0X2DA-FRONTIER",
+            new[]
+            {
+                (frontier.Opcode, frontier.Args.ToArray()),
+                (0x23b, new[]
+                {
+                    new Operand(0, 500), new Operand(0, 0), new Operand(0, 7),
+                    new Operand(0, 10), new Operand(0, 20), new Operand(0, 1),
+                    new Operand(0, 0),
+                }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(
+            probe, table, new RecordingHost(),
+            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Null(vm.CompatibilityFailure);
+        RenderObject visible = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
+        Assert.Equal((500L, 0x39f + 7 * (0x15 + 1), 10),
+            (visible.Handle, visible.SrcX, visible.DstX));
+        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x2da));
+        Assert.True(table.TryGetDefinition(0x2da, out OpcodeDefinition definition));
+        Assert.Equal("register-extended-numeric-glyph-style", definition.SemanticName);
+    }
 }

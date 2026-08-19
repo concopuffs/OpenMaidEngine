@@ -102,11 +102,24 @@ annotated these handlers in the SYS4433 image:
 | `0x25a` | `op_0x25a_set_display_background_color@0x423120` | `SYSTEM4@0x1f3`; persists mode 1/RGB and recreates a logical-canvas filled surface. |
 | `0x1be` | `op_0x1be_sound_channel_is_playing@0x429400` | `TITLE@0xd7`; validates one of thirteen channels and returns its normalized live-playing flag. |
 | `0x24` | `op_0x24_fade_surface_out_to_white@0x41ad80` | `GAMESTART@0x19dc`; runs blocking screen-transition mode 3 from captured surface 1 to white with timing 80. |
+| `0x2da` | `op_0x2da_register_extended_numeric_glyph_style@0x4234e0` | `DRAWCHP@0x626`; registers a seven-field decimal-glyph atlas style with independent source/destination spacing. |
 
 Comparative decompilation confirmed equivalent SYS4422 behavior for `0x1b1`, `0x1be`, `0x2bc`, `0x25a`,
-and `0x24`; that supports shared runtime handlers without claiming a true base SYS4 dialect. Opcodes `0x2db`
-and `0x2de` are installed only by the inspected SYS4433 constructor. Exact operand contracts and structured
-profile/revision provenance remain canonical in `vm-map/opcodes.toml`.
+and `0x24`; that supports shared runtime handlers without claiming a true base SYS4 dialect. Opcodes `0x2da`,
+`0x2db`, and `0x2de` are installed only by the inspected SYS4433 constructor. Exact operand contracts and
+structured profile/revision provenance remain canonical in `vm-map/opcodes.toml`.
+
+The first post-K6 Dungeon route reached `DRAWCHP.BIN@0x626` after `SYSTEM4 → FIELD → DRAWCHP` and established
+the SYS4433 numeric-glyph extension. `op_0x2da_register_extended_numeric_glyph_style@0x4234e0` enforces
+`style_index < 11`, then stores operands 2..8 in a seven-dword record at
+`EngineCtx+0x5940c+style_index*0x1c`: surface slot, atlas x/y, digit width/height, source-cell spacing, and
+destination-cell spacing. The legacy SYS4433 `op_0x13a_register_numeric_glyph_style@0x41fae0` writes the same
+first five fields and clears both spacing fields. Consumer `op_0x23b_draw_decimal_glyphs@0x422000` advances
+source atlas cells by `digit_width + source_spacing` and destination objects by
+`digit_width + destination_spacing`, using the latter stride in right-, center-, and left-aligned placement.
+The complete installed Kamidori corpus has 66 `0x2da` calls. All three functions are named/commented in the
+SYS4433 Ghidra image; SYS4422 retains its independent five-dword style layout and has no installed `0x2da`
+dispatch entry.
 
 After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
@@ -114,8 +127,8 @@ ADV page wait with retained visuals and scene-local audio requests. A windowed 1
 the rendered title. Kamidori's startup MPEG records use literal `.MPG` catalog names; that cross-game asset
 contract and its runtime support are documented in `docs/asset-resolution-re.md`. That reference also records
 the later finding that the installed English translation injects a `patch\\<basename>` base-asset overlay ahead
-of normal root/archive resolution; K6's captured title used the official root/archive layer because the port does
-not yet opt into that translation overlay.
+of normal root/archive resolution. K6's original capture used the official root/archive layer; the port now offers
+that translation behavior explicitly through ordered overlay roots plus its separate BMP-as-AGF codec option.
 
 ---
 
