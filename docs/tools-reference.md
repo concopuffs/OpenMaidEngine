@@ -538,7 +538,10 @@ editor executable, so pass `--game-root <install>` after Godot's `--` separator.
 `run-godot.ps1`/`.cmd` launchers resolve Godot and the game root without machine-specific tracked paths.
 Explicit `-GodotConsole`/`-GameRoot` values win, followed by `AGE_GODOT_CONSOLE`/`AGE_GAME_ROOT`; Godot
 then falls back to `godot4`, `godot`, or `godot-mono` on `PATH`, while the game root falls back to the
-conventional `../Himegari_Game` sibling only when it contains `SYS4INI.BIN`. `run-godot.ps1 -Doctor`
+selected profile's conventional sibling (`../Himegari_Game` or `../Kamidori`) only when it contains
+`SYS4INI.BIN`. `run-godot.cmd -Kamidori` is the one-flag shortcut for the conventional Kamidori install:
+it authoritatively selects the `kamidori` profile and install root while still allowing an explicit
+`-GameRoot` override. `run-godot.ps1 -Doctor`
 prints the resolved repository, Godot, game-root, requested profile/probe state, .NET, and Python
 prerequisites without building or launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe`
 requires it and forces the read-only diagnostic policy. The launchers leave the natural boot script to the
@@ -572,9 +575,8 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   read-only until K1 validates and isolates its persistence contract.
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and
-  asserts it matches a live headless run (full handling; no vm0/frozen golden). Its auxiliary debug-launcher and
-  WAV fixture checks are still Himegari-owned, so the complete Godot self-test is Himegari-only until K5; the
-  source-only and installed-catalog profile-selection tests cover Kamidori's K0 contract independently. Exits.
+  asserts it matches a live headless run (full handling; no vm0/frozen golden). Profile-owned fixture checks
+  use the selected install's proven assets; the complete self-test passes for both built-in profiles. Exits.
 - `--text-backend auto|gdi|portable` — select gameplay glyph-mask rasterization. `auto` (default) uses the
   exact GDI gray-4 backend only when the Windows ACP-932 gate passes, otherwise the explicitly non-identical
   Godot TextServer Unicode policy. `gdi` fails startup when exact selection is unavailable; `portable`

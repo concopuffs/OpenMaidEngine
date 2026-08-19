@@ -8,6 +8,7 @@
 #   .\run-godot.ps1 -StartupDiagnostics  capture the natural TITLE -> Game Start -> SC0000 route
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
+#   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
 #   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
 #   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
@@ -18,6 +19,7 @@ param(
     [string]$GodotConsole,
     [string]$GameRoot,
     [string]$Profile,
+    [switch]$Kamidori,
     [switch]$Probe,
     [switch]$SelfTest,
     [switch]$Import,
@@ -90,10 +92,20 @@ $godotArguments = @{
     Description = 'Godot .NET console executable'
 }
 $godot = Resolve-ConfiguredFile @godotArguments
+if ($Kamidori) {
+    if ($Profile -and $Profile -ne 'kamidori') {
+        throw "-Kamidori conflicts with -Profile $Profile."
+    }
+    $Profile = 'kamidori'
+    if (-not $PSBoundParameters.ContainsKey('GameRoot')) {
+        $GameRoot = Join-Path (Split-Path $repo -Parent) 'Kamidori'
+    }
+}
+$conventionalInstallName = if ($Profile -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }
 $gameRootArguments = @{
     ExplicitValue = $GameRoot
     EnvironmentValue = $env:AGE_GAME_ROOT
-    ConventionalValue = Join-Path (Split-Path $repo -Parent) 'Himegari_Game'
+    ConventionalValue = Join-Path (Split-Path $repo -Parent) $conventionalInstallName
 }
 $resolvedGameRoot = Resolve-ConfiguredGameRoot @gameRootArguments
 if ($Probe -and -not $Profile) {

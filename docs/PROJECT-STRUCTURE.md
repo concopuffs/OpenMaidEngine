@@ -43,7 +43,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       independent Linux/Windows x64 artifact jobs plus Linux-only tag promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
-    │                                          PATH, and the conventional sibling install
+    │                                          PATH, and the selected profile's conventional sibling install
     ├── tools/                               Python tooling (parser/disassembler + extractors + VM)
     │   ├── paths.py                           ★ immutable profile-aware context: selected game,
     │   │                                        extracted roots, and shared/game output ownership
