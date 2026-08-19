@@ -16,9 +16,21 @@ public sealed partial class VirtualMachine
                 {
                     if (!IsStr(o)) continue;
                     int off = o.Type == T_STR ? (int)o.Value : ins.Offset;
-                    _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
-                    if (c > _o.EmitCap) { HaltReason = $"LOOP:line@0x{off:x}×{c}"; return HALT; }
                     string text = ReadStr(o);
+                    // Inline strings identify one authored line, so repeated emission is a useful
+                    // runaway-loop guard. Dynamic string operands identify a reusable renderer site:
+                    // Kamidori SC2310@0x57b7 legitimately publishes every speaker name through the
+                    // same local-string-pointer instruction. MaxSteps remains the guard for dynamic
+                    // script loops.
+                    if (o.Type == T_STR)
+                    {
+                        _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
+                        if (c > _o.EmitCap)
+                        {
+                            HaltReason = $"LOOP:line@0x{off:x}×{c}";
+                            return HALT;
+                        }
+                    }
                     Emitted.Add((off, text, _cur.Script.Name));
                     int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
                     string[] scriptStack;

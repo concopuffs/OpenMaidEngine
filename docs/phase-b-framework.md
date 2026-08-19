@@ -583,6 +583,16 @@ The neutral retained-graphics model now represents all seven fields while preser
 SYS4422 and legacy SYS4433 registrations. This is revision-scoped opcode behavior reusing a shared renderer,
 not a Kamidori gameplay special case.
 
+Continuing that route through `SC2310` exposed a diagnostic false positive rather than another ABI frontier.
+The halt printed as `LOOP:line@0x57b7×3` (the multiplication marker can disappear when copied). Translated
+`SC2310@0x57b7` is a reusable `show-text 9, local-string-pointer` helper that publishes the resolved speaker
+name before many distinct dialogue lines. The VM's authored-line loop guard had generalized its original
+inline-string rule to all string operand forms, so the helper's third legitimate invocation looked like one
+literal line looping. The guard again counts only inline string coordinates, matching the headless oracle;
+dynamic global/local string renderers remain bounded by the VM step limit. Installed translation coverage
+anchors the exact `SC2310` instruction, while synthetic regressions prove reusable dynamic emission and retain
+the repeated-inline-line halt.
+
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat
 popup and TITLE's shipped developer menu. Both routes use `BUNKI.BIN`'s temporary-surface renderer rather

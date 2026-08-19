@@ -1712,6 +1712,13 @@ both fields; legacy `0x13a` registrations retain zero spacing, while the SYS4433
 the extended opcode. Installed `DRAWCHP` frontier coverage and model tests prove the exact operands and
 placement. The next ordinary-play frontier should be collected by repeating Dungeon past this point.
 
+**Post-K6 Dungeon dynamic-text guard correction (2026-08-19):** after six translated `SC2310` ADV pages,
+the port reported `LOOP:line@0x57b7×3`. This was not a script loop or opcode difference: `SC2310@0x57b7`
+is the common local-string-pointer speaker-name renderer, intentionally reached for multiple dialogue lines.
+The reimplementation-only emit guard now applies to authored inline strings, as its Python oracle already did,
+and leaves reusable dynamic string sites to the ordinary VM step bound. Exact installed-overlay and synthetic
+regressions preserve both sides of that distinction. Repeat the Dungeon route to collect the next real frontier.
+
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
 UTF-16^0xFFFF), opcode set (overlapping, version-specific; Kelebek's table already spans the family

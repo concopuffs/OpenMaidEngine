@@ -126,6 +126,64 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void ReusableDynamicTextHelperMayEmitPastTheLiteralLineLoopCap()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        int call = table.ByLabel("call")!.Value;
+        int ret = table.ByLabel("ret")!.Value;
+        static Operand I(long value) => new(0, value);
+        const int helperOffset = 10;
+        var script = ScriptAssembler.Assemble(table, "DYNAMIC_TEXT_HELPER",
+            new List<(int, Operand[])>
+            {
+                (call, new[] { I(helperOffset) }),
+                (call, new[] { I(helperOffset) }),
+                (call, new[] { I(helperOffset) }),
+                (0x2, Array.Empty<Operand>()),
+                (0x6e, new[] { I(9), new Operand(5, 0x322) }),
+                (ret, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+        vm.GlobalStrings[0x322] = "Melodiana";
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(3, host.LiveTextRuns.Count);
+        Assert.All(host.LiveTextRuns, run => Assert.Equal("Melodiana", run.Run.Text));
+        Assert.All(vm.Emitted, line => Assert.Equal(helperOffset, line.Offset));
+    }
+
+    [Fact]
+    public void RepeatedInlineLineStillTripsTheLiteralLineLoopCap()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        int call = table.ByLabel("call")!.Value;
+        int ret = table.ByLabel("ret")!.Value;
+        static Operand I(long value) => new(0, value);
+        const int helperOffset = 10;
+        const int inlineStringOffset = 16;
+        var script = ScriptAssembler.Assemble(table, "LITERAL_TEXT_LOOP",
+            new List<(int, Operand[])>
+            {
+                (call, new[] { I(helperOffset) }),
+                (call, new[] { I(helperOffset) }),
+                (call, new[] { I(helperOffset) }),
+                (0x2, Array.Empty<Operand>()),
+                (0x6e, new[] { I(1), new Operand(2, 0) }),
+                (ret, Array.Empty<Operand>()),
+            }, new[] { "same authored line" });
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal($"LOOP:line@0x{inlineStringOffset:x}×3", vm.HaltReason);
+        Assert.Equal(2, host.LiveTextRuns.Count);
+    }
+
+    [Fact]
     public void LayoutResetRestoresConfiguredCursorAndPreservesConfiguredBounds()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
