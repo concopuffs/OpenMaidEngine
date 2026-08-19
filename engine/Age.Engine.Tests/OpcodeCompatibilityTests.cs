@@ -182,4 +182,41 @@ public class OpcodeCompatibilityTests
         Assert.Equal("fill-int-array", definition.SemanticName);
         Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x2d8));
     }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriPatternRevealCorpusUsesTheRecoveredNativeModes()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var scripts = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+        List<Instruction> calls = catalog.EnumerateScripts()
+            .Select(entry => scripts.GetById(entry.PackedId))
+            .Where(script => script != null)
+            .SelectMany(script => script!.Instructions)
+            .Where(instruction => instruction.Opcode is 0x27 or 0x28)
+            .ToList();
+
+        Instruction striped = Assert.Single(calls, instruction => instruction.Opcode == 0x27);
+        Assert.Equal(new long[] { 2, 40, 64, 3 },
+            striped.Args.Select(argument => argument.Value));
+        List<Instruction> staggered = calls.Where(instruction => instruction.Opcode == 0x28).ToList();
+        Assert.Equal(192, staggered.Count);
+        Assert.All(staggered, instruction =>
+        {
+            long[] operands = instruction.Args.Select(argument => argument.Value).ToArray();
+            Assert.Equal(2, operands[0]);
+            Assert.Contains(operands[1], new long[] { 10, 15 });
+            Assert.Equal(64, operands[2]);
+            Assert.InRange(operands[3], 0, 3);
+        });
+        Assert.Equal(new long[] { 0, 1, 2, 3 }, staggered
+            .Select(instruction => instruction.Args[3].Value).Distinct().OrderBy(value => value));
+    }
 }

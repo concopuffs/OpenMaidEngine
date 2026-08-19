@@ -24,6 +24,8 @@ public interface IGraphicsHost
     void CrossfadeSurfaces(
         GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
         bool forceEndpoint = false) { }
+    void RevealSurfaceWithPattern(
+        GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false) { }
 
     void CreateTexture(int slot, int width, int height);
 

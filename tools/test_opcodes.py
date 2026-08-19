@@ -246,6 +246,15 @@ def test_emit_runtime():
     check(not ns["is_label_argument"](0x90, 4, 0xffffffff), "fallthrough sentinel is not a target")
     check(ns["ARRAY_OPCODE"] == 0x64, "runtime view emits the inline-array opcode")
 
+def test_canonical_kamidori_revision_provenance():
+    from pathlib import Path
+    canonical = M.load(Path(__file__).resolve().parents[1] / "vm-map" / "opcodes.toml")
+    for op in (0x27, 0x28, 0x251, 0x2d8, 0x2da, 0x2db, 0x2de):
+        revisions = {revision for evidence in canonical.opcodes[op].semantics.evidence
+                     for revision in evidence.engine_revisions}
+        check(revisions == {"SYS4433"},
+              f"0x{op:x} native evidence remains scoped only to SYS4433")
+
 def test_emit_views():
     import opcodes_build as B, json as _json
     m = M.load(write_tmp(FIXTURE))
@@ -277,6 +286,7 @@ def main():
     test_bootstrap()
     test_emit_semantics()
     test_emit_runtime()
+    test_canonical_kamidori_revision_provenance()
     test_emit_views()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

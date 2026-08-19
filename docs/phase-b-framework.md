@@ -608,13 +608,12 @@ contract, and no game-specific AIM branch was added.
 A complete `catalog-scan` of all 732 scripts (542 base and 190 append) provides the static backlog rather
 than relying only on whichever opcode strict execution reaches next. The official root/archive corpus has
 2,126,378 instructions; the translated overlay has 2,161,326. Both decode with zero failures, use the same
-269 distinct opcodes, and produce the same missing-opcode distribution. After implementing `0x2d8`, 17
-recognized opcodes used by Kamidori still have no executable runtime handler:
+269 distinct opcodes, and produce the same missing-opcode distribution. After implementing `0x2d8`, the
+initial catalog contained 17 gaps. The following `0x27`/`0x28` patterned surface-reveal slice removed 193
+calls across 47 scripts, leaving these 15 recognized opcodes without an executable runtime handler:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
-| `0x27` | 1 | 1 | `SC1050` |
-| `0x28` | 192 | 47 | broad `SC*` story use |
 | `0x32` | 2 | 2 | `ALLMAP`, `SAVE` |
 | `0x82` | 6 | 5 | `CONFIG1`--`CONFIG5` |
 | `0x83` | 6 | 5 | `CONFIG1`--`CONFIG5` |
@@ -631,14 +630,19 @@ recognized opcodes used by Kamidori still have no executable runtime handler:
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
 
-Static priority starts with the paired `0x27`/`0x28` family because `0x28` has by far the broadest scene
-reach, followed by the high-use `0x235`/`0x250` presentation families and the isolated `BTL` opcode
-`0x246`. Map/save, arrangement/studio, configuration, and font-selection-only gaps can follow unless live
-execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
-real compatibility halt still takes precedence. The machine-readable reports are
+The completed pair preserves the native selector mapping, direction, blocking duration, fast-forward
+endpoint, and surface target. Godot currently approximates the legacy simultaneous/staggered strip masks as
+a timed crossfade; this is host presentation policy rather than a VM contract change. Static priority now
+moves to the high-use `0x235`/`0x250` presentation families, while the isolated `BTL` opcode `0x246` becomes
+the likely gameplay priority if the Dungeon route reaches combat first. Map/save, arrangement/studio,
+configuration, and font-selection-only gaps can follow unless live execution reaches one first. This ranking
+is triage, not a substitute for strict-runtime evidence: the next real compatibility halt still takes
+precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
 `build/games/kamidori/translation-overlay-corpus.json`; each entry includes every script/offset, operand-type
-signatures, and representative typed operands.
+signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
+`0x27`, `0x28`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
+SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat

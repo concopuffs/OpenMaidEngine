@@ -653,15 +653,40 @@ public sealed partial class GodotAdvHost
             }, overlayRgb: 0xffffff);
     }
 
+    public void RevealSurfaceWithPattern(
+        GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false)
+    {
+        long start = _clock.NowMs;
+        IReadOnlyList<RenderObject> target;
+        lock (_screenTransitionLock)
+            target = _renderTargetSnapshots.TryGetValue(request.Surface, out var captured)
+                ? captured : gfx.SnapshotVisibleObjects(start);
+        IReadOnlyList<RenderObject> source = gfx.SnapshotVisibleObjects(start);
+        long duration = LegacyScreenTransitionTiming.PatternDurationMilliseconds(
+            _screenWidth, _screenHeight, request.IntervalMilliseconds,
+            request.Divisions, request.Mode);
+        RunLegacyScreenTransition(source, target, start, request.IntervalMilliseconds,
+            forceEndpoint || duration == 0, new()
+            {
+                ["kind"] = "surface-pattern-reveal",
+                ["surface"] = request.Surface,
+                ["divisions"] = request.Divisions,
+                ["mode"] = (int)request.Mode,
+                ["presentation_policy"] = "crossfade-approximation",
+            }, durationOverride: duration);
+    }
+
     // The native 0x21/0x22/0x25 family advances an 8-bit alpha accumulator. Values <=64 use
     // the operand as the timer interval and step alpha by sixteen; larger values divide the
     // interval by sixteen and step alpha by one. This reproduces its blocking wall-clock duration.
     private void RunLegacyScreenTransition(
         IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
         long start, long intervalArgument, bool forceEndpoint,
-        Dictionary<string, object?> timelineDetail, long overlayRgb = 0)
+        Dictionary<string, object?> timelineDetail, long overlayRgb = 0,
+        long? durationOverride = null)
     {
-        long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
+        long duration = durationOverride
+            ?? LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
         lock (_screenTransitionLock)
             _screenTransition = new LegacyScreenTransition(source, target, start, duration, overlayRgb)
             {

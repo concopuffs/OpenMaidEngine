@@ -391,20 +391,20 @@ Republish snapshots the global reveal index, clamps only to the selected layout'
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
 - **runtime implemented:** yes
-- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2db` (compatibility-reuse-unconfirmed-for-revision)
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2db` (evidence-confirmed)
 - **summary:** (mode) - select the SYS4433 glyph aspect/metric mode and rebuild the primary font resources.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2db_set_text_aspect_mode@0x4235c0 fetches operand 1, stores it at text-manager+0x313d0 (EngineCtx+0x45d08), and tail-calls text_rebuild_primary_font_resources@0x452320. The rebuild and text_measure_glyph_with_aspect_mode@0x452080 branch on modes 0/1/2 and display:AspectMode while selecting glyph metrics and the ordinary/@-prefixed vertical font paths. Kamidori's sole decoded use is SYSTEM4.BIN@0xbd with mode 1 during natural startup. Himegari SYS4422 does not install dispatch slot 0x2db, so this semantic claim is SYS4433-only.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=SYS4433 handler, text resource rebuild, glyph measurement, and natural startup. op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. SYS4422 has no installed handler in this slot.
 
 ### 0x2de `find-font-family-index` (u0042BAC0, argc 2)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
 - **runtime implemented:** yes
-- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2de` (compatibility-reuse-unconfirmed-for-revision)
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2de` (evidence-confirmed)
 - **summary:** (out_index)(face_name) - find a face in the installed-font cache, ignoring one leading vertical-font '@'; return -1 when absent.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2de_find_font_family_index@0x42bac0 reads operand 2 through vm_operand_read_string@0x418ff0, passes it to text_find_font_family_index@0x423a50, and writes the result to operand 1. The lookup scans the text manager's 0x20-byte installed-family entries, strips one leading '@', and returns a zero-based index or -1. Kamidori first reaches it at CHECKCONFIG.BIN@0x0 with (L0, G[633]). Himegari SYS4422 does not install dispatch slot 0x2de.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=SYS4433 handler, operand conversion, font-family cache lookup, and natural startup. op_0x2de_find_font_family_index@0x42bac0 reads operand 2 as a string, calls text_find_font_family_index@0x423a50, and writes its zero-based index or -1 result to operand 1. The lookup ignores one leading '@'. Natural boot reaches CHECKCONFIG.BIN@0x0; SYS4422 has no handler in this slot.
 
 ## audio
 
@@ -913,10 +913,10 @@ The release call uses nonnegative in-range indices and count 1. Port status (202
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
 - **runtime implemented:** yes
-- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2d8` (compatibility-reuse-unconfirmed-for-revision)
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2d8` (evidence-confirmed)
 - **summary:** (destination)(value)(count) — fill `count` consecutive integer cells at the resolved destination address with the signed dword value. Nonpositive counts write nothing.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2d8_fill_int_array@0x42b9c0 resolves operand 1 as an address, reads operands 2/3 as value/count, converts the value to the native encrypted integer-cell representation once, and writes it to each consecutive dword while count is positive. The official and translated complete catalogs both have the same 23 calls across five scripts.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=SYS4433 array-fill handler and complete official/translated Kamidori catalogs. Dispatcher slot 0x2d8 installs handler 0x42b9c0. It resolves operand 1 through the integer address resolver, converts operand 2 to the encrypted cell form, and writes it count times while operand 3 is positive. Both catalog scans contain 23 calls in the same five scripts; CALCDMG has 15 pointer-addressed sites.
 
 The destination follows the ordinary SYS4 address resolver, so direct global/local integer spans and integer-pointer operands retain their address domain. The complete Kamidori corpus has 23 calls in CALCDMG, SETEN, SETSTUDIOCH, SELORN, and TOWN; CALCDMG owns 15 and uses the opcode to initialize pointer-addressed calculation arrays. This contract is proven only for SYS4433; Himegari's observed SYS4422 snapshot does not contain opcode 0x2d8.
 
@@ -1451,6 +1451,30 @@ Port status (2026-07-29, skip lifecycle corrected 2026-07-29): implemented throu
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x25`; scope=Himegari SYS4422. Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 checks ADV fast-forward bit 0x08000000. Clear: it sets effect-service bit 8, converts operand 3 to timer interval/alpha step (<=64: interval=arg ms and step=16; >64: interval=arg/16 ms and step=1), starts screen_transition_begin@0x439da0 mode 4, flushes the initiating trigger, and advances the PC. engine_main_tick_with_exception_policy@0x411840 polls interval_timer_poll_elapsed_steps@0x44d080 and calls screen_transition_tick@0x43a7a0; mode 4 draws source then target with progress alpha and commits target at 0x100. With system:EffectSkipOnClick enabled, logical action 4 is consumed and delta 0x10000000 forces that endpoint. If fast-forward was already set at dispatch, the handler calls screen_transition_finalize@0x4399c0 for the target directly; this is not post-transition re-entry. Thus ROOM argument 10 is about 160 ms and argument 30 about 480 ms. ROOM sites: 0x12f,0x7c6,0x856 use (1,2,10); 0x8dc uses (1,2,30). /v2 annotations corrected 2026-07-29.
 
 The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer and does not resume ordinary script execution until the target endpoint is presented. An already-active ADV fast-forward channel publishes the target without starting the service; with system:EffectSkipOnClick enabled, logical action 4 forces an in-progress service to the same endpoint. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces the blocking and forced-endpoint lifecycle in the interactive host.
+
+### 0x27 `reveal-surface-striped` (u00418CC0, argc 4)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x27` (evidence-confirmed)
+- **summary:** (surface)(interval ms)(divisions)(selector) — blocking equal-strip reveal of a captured surface; selectors 0..3 choose vertical/horizontal direction and selector 4 selects the first staggered mode.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x27`; scope=SYS4433 opcode 0x27 handler plus patterned-transition begin/tick workers. Handler 0x41b070 maps selector to modes 4..8 and uses the shared timer/blocking service. Worker 0x43d6b0 reveals vertical or horizontal strips and commits the full target surface on completion. The sole corpus call SC1050@0x8cf5 is `(2,40,64,3)`.
+
+SYS4433 maps selector 0..4 to native pattern modes 4..8. Modes 4/5 divide the active width into equal strips and reveal each strip left-to-right/right-to-left in parallel; modes 6/7 do the equivalent across equal-height strips from top/bottom. Mode 8 is the first staggered vertical variant shared with opcode 0x28. A positive division count must evenly divide the relevant active dimension. Operand 2 arms the per-step timer; ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori's only call is SC1050@0x8cf5 `(2,40,64,3)`, mode 7. This is proven for SYS4433 only.
+
+### 0x28 `reveal-surface-staggered-strips` (u00418D90, argc 4)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x28` (evidence-confirmed)
+- **summary:** (surface)(interval ms)(divisions)(selector) — blocking staggered-strip reveal of a captured surface in one of four vertical/horizontal directions.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x28`; scope=SYS4433 opcode 0x28 handler plus patterned-transition begin/tick workers and complete Kamidori corpus. Handler 0x41b150 maps selector to modes 8..12. Worker 0x43d6b0 implements four stagger directions for modes 8..11; begin worker 0x43ce80 rejects mode 12. All 192 calls use surface 2, 64 divisions, interval 10/15, and selectors 0..3.
+
+SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements modes 8/9 as staggered equal-width strips revealed from the left/right and modes 10/11 as staggered equal-height strips revealed from the top/bottom. Each strip starts one timer step after its predecessor; completion takes `(divisions - 1 + strip thickness)` timer steps. Selector 4 reaches the worker's invalid-mode error for mode 12. ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori has 192 calls across 47 scripts; every call targets surface 2 with 64 divisions, uses a 10 or 15 ms interval, and selects one of modes 8..11. This is proven for SYS4433 only.
 
 ### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2204,11 +2228,11 @@ Scripts place declaration chains immediately after opcode 0x259 clears both fiel
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
 - **runtime implemented:** yes
-- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2da` (compatibility-reuse-unconfirmed-for-revision)
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2da` (evidence-confirmed)
 - **summary:** Register a SYS4433 decimal-glyph atlas style with independent source-cell and destination-cell spacing.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x23b
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2da_register_extended_numeric_glyph_style@0x4234e0 enforces style_index<11 and writes operands 2..8 to the seven-dword numeric style record at EngineCtx+0x5940c+index*0x1c. The SYS4433 op_0x23b_draw_decimal_glyphs@0x422000 reads source stride as digit_width+operand7 and destination stride as digit_width+operand8. The complete catalog has 66 calls; strict dungeon execution first halted at DRAWCHP.BIN@0x626. SYS4422 does not install slot 0x2da.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=SYS4433 extended numeric-glyph style writer and consumer. op_0x2da_register_extended_numeric_glyph_style@0x4234e0 writes all seven fields after enforcing index<11; op_0x23b_draw_decimal_glyphs@0x422000 adds fields 6/7 to digit width for source/destination stride. DRAWCHP.BIN@0x626 is the first reached dungeon site; SYS4422 has no handler in slot 0x2da.
 
 Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices take the native script-error path. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da.
 
@@ -2885,24 +2909,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x26`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x27 `u00418CC0` (u00418CC0, argc 4)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x27`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x28 `u00418D90` (u00418D90, argc 4)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x28`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2a `u00418E60` (u00418E60, argc 4)
 - **observed by:** none in recorded corpora

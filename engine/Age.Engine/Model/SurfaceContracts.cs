@@ -12,3 +12,18 @@ public enum SurfaceBlackFadeDirection
     FromBlack,
     ToBlack,
 }
+
+public enum SurfacePatternTransitionMode
+{
+    VerticalStripsLeftToRight = 4,
+    VerticalStripsRightToLeft = 5,
+    HorizontalStripsTopToBottom = 6,
+    HorizontalStripsBottomToTop = 7,
+    StaggeredVerticalStripsLeftToRight = 8,
+    StaggeredVerticalStripsRightToLeft = 9,
+    StaggeredHorizontalStripsTopToBottom = 10,
+    StaggeredHorizontalStripsBottomToTop = 11,
+}
+
+public readonly record struct SurfacePatternTransitionRequest(
+    int Surface, long IntervalMilliseconds, int Divisions, SurfacePatternTransitionMode Mode);

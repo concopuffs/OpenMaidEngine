@@ -151,6 +151,25 @@ Kamidori catalogs agree on 23 calls: CALCDMG (15), SETEN (4), SETSTUDIOCH (2), S
 The inspected Himegari SYS4422 corpus does not observe `0x2d8`, so the finding remains SYS4433-scoped rather
 than being promoted to a presumed base SYS4 contract. The handler is named/commented in the SYS4433 image.
 
+The next static pair, opcodes `0x27` and `0x28`, belongs to the older patterned full-frame surface service,
+not retained gameplay objects. SYS4433 handlers `op_0x27_reveal_surface_striped@0x41b070` and
+`op_0x28_reveal_surface_staggered_strips@0x41b150` both accept
+`(target_surface, interval_ms, divisions, selector)`, enter blocking VM state 9, arm the interval timer, and
+call `pattern_surface_transition_begin@0x43ce80`. `0x27` maps selectors 0..4 to native modes 4..8;
+`0x28` maps them to modes 8..12. The begin worker implements modes 4..11 and reports mode 12 as invalid.
+
+`pattern_surface_transition_tick@0x43d6b0` proves the geometry. Modes 4/5 divide the active width and reveal
+all vertical strips simultaneously from the left/right; modes 6/7 do the same across equal-height strips
+from the top/bottom. Modes 8..11 use the same four orientations but initialize per-strip counters one timer
+step apart. Thus simultaneous modes last `strip_thickness * interval`, while staggered modes last
+`(division_count - 1 + strip_thickness) * interval`. ADV fast-forward or a nonpositive division count
+publishes the full target immediately. Kamidori's sole `0x27` call is
+`SC1050@0x8cf5 (2,40,64,3)`, a 360 ms bottom-to-top horizontal-strip reveal. Its 192 `0x28` calls across 47
+scripts all use surface 2, 64 divisions, a 10 or 15 ms interval, and selectors 0..3, exercising all four
+stagger directions. The port preserves the exact blocking/timing/endpoint contract and currently represents
+the unavailable legacy strip compositor as a host-level crossfade approximation. Both handlers and both
+workers are named/commented in the saved SYS4433 image.
+
 After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
 ADV page wait with retained visuals and scene-local audio requests. A windowed 1024×576 capture also confirms

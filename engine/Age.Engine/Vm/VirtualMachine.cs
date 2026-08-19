@@ -1651,6 +1651,10 @@ public sealed partial class VirtualMachine
             case "u00418A90":
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
+            case "u00418CC0": // SYS4433 opcode 0x27 upstream ABI label
+            case "reveal-surface-striped":
+            case "u00418D90": // SYS4433 opcode 0x28 upstream ABI label
+            case "reveal-surface-staggered-strips":
             case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary
             case "clear-gfx-command-queue": // 0x224: retained compositor does not use this native queue
             case "present-gfx-object-range": // 0x222: publish pending retained changes in the selected range

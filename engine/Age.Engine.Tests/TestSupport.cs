@@ -68,9 +68,11 @@ internal class RecordingHost : IHost
     public readonly List<(int Surface, long Interval, SurfaceBlackFadeDirection Direction)> SurfaceBlackFades = new();
     public readonly List<(int Surface, long Interval)> SurfaceWhiteFades = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
+    public readonly List<SurfacePatternTransitionRequest> SurfacePatternTransitions = new();
     public readonly List<bool> SurfaceBlackFadeForceEndpoints = new();
     public readonly List<bool> SurfaceWhiteFadeForceEndpoints = new();
     public readonly List<bool> SurfaceCrossfadeForceEndpoints = new();
+    public readonly List<bool> SurfacePatternForceEndpoints = new();
     public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
@@ -243,6 +245,12 @@ internal class RecordingHost : IHost
     {
         SurfaceCrossfades.Add((sourceSurface, targetSurface, intervalArgument));
         SurfaceCrossfadeForceEndpoints.Add(forceEndpoint);
+    }
+    public void RevealSurfaceWithPattern(
+        GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false)
+    {
+        SurfacePatternTransitions.Add(request);
+        SurfacePatternForceEndpoints.Add(forceEndpoint);
     }
     public void CreateTexture(int slot, int w, int h) { }
     public void SetTexture(long resId, int slot) => Textures.Add((resId, slot));

@@ -131,6 +131,50 @@ public class CoreScalarAndScreenTransitionOpsTests
     }
 
     [Fact]
+    public void KamidoriPatternedSurfaceReveals_MapSelectorsAndNativeTiming()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "PATTERNED-SURFACE-REVEALS",
+            new List<(int, Operand[])>
+            {
+                (0x27, new[]
+                {
+                    new Operand(Imm, 2), new Operand(Imm, 40),
+                    new Operand(Imm, 64), new Operand(Imm, 3),
+                }),
+                (0x28, new[]
+                {
+                    new Operand(Imm, 2), new Operand(Imm, 15),
+                    new Operand(Imm, 64), new Operand(Imm, 0),
+                }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433")).Run();
+
+        Assert.Equal(new[]
+        {
+            new SurfacePatternTransitionRequest(
+                2, 40, 64, SurfacePatternTransitionMode.HorizontalStripsBottomToTop),
+            new SurfacePatternTransitionRequest(
+                2, 15, 64, SurfacePatternTransitionMode.StaggeredVerticalStripsLeftToRight),
+        }, host.SurfacePatternTransitions);
+        Assert.Equal(new[] { false, false }, host.SurfacePatternForceEndpoints);
+        Assert.Equal(360, LegacyScreenTransitionTiming.PatternDurationMilliseconds(
+            1024, 576, 40, 64, SurfacePatternTransitionMode.HorizontalStripsBottomToTop));
+        Assert.Equal(1185, LegacyScreenTransitionTiming.PatternDurationMilliseconds(
+            1024, 576, 15, 64,
+            SurfacePatternTransitionMode.StaggeredVerticalStripsLeftToRight));
+        Assert.Equal(1080, LegacyScreenTransitionTiming.PatternDurationMilliseconds(
+            1024, 576, 15, 64,
+            SurfacePatternTransitionMode.StaggeredHorizontalStripsTopToBottom));
+        Assert.Equal(0, LegacyScreenTransitionTiming.PatternDurationMilliseconds(
+            1024, 576, 15, 64, (SurfacePatternTransitionMode)12));
+    }
+
+    [Fact]
     public void ActiveAdvSkip_ForcesLegacyScreenTransitionEndpointsAtDispatch()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -142,6 +186,11 @@ public class CoreScalarAndScreenTransitionOpsTests
                 {
                     new Operand(Imm, 1), new Operand(Imm, 2), new Operand(Imm, 10),
                 }),
+                (0x28, new[]
+                {
+                    new Operand(Imm, 2), new Operand(Imm, 15),
+                    new Operand(Imm, 64), new Operand(Imm, 0),
+                }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var host = new RecordingHost { MessageSkip = true };
@@ -150,5 +199,6 @@ public class CoreScalarAndScreenTransitionOpsTests
 
         Assert.Equal(new[] { true }, host.SurfaceBlackFadeForceEndpoints);
         Assert.Equal(new[] { true }, host.SurfaceCrossfadeForceEndpoints);
+        Assert.Equal(new[] { true }, host.SurfacePatternForceEndpoints);
     }
 }

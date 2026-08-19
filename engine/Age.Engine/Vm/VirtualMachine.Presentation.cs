@@ -45,6 +45,24 @@ public sealed partial class VirtualMachine
                     Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
+            case "u00418CC0": // SYS4433 0x27 upstream ABI label
+            case "reveal-surface-striped":
+                _host.RevealSurfaceWithPattern(
+                    Gfx,
+                    new SurfacePatternTransitionRequest(
+                        (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
+                        (SurfacePatternTransitionMode)(4 + (int)Read(a[3]))),
+                    _messageSkipServiceActive || _host.IsMessageSkipActive || Read(a[2]) <= 0);
+                return pc + 1;
+            case "u00418D90": // SYS4433 0x28 upstream ABI label
+            case "reveal-surface-staggered-strips":
+                _host.RevealSurfaceWithPattern(
+                    Gfx,
+                    new SurfacePatternTransitionRequest(
+                        (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
+                        (SurfacePatternTransitionMode)(8 + (int)Read(a[3]))),
+                    _messageSkipServiceActive || _host.IsMessageSkipActive || Read(a[2]) <= 0);
+                return pc + 1;
             case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary
                 _host.WaitForForegroundTransition(Gfx); return pc + 1;
             case "clear-gfx-command-queue": // 0x224: retained compositor does not use this native queue
