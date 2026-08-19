@@ -255,6 +255,14 @@ def test_canonical_kamidori_revision_provenance():
         check(revisions == {"SYS4433"},
               f"0x{op:x} native evidence remains scoped only to SYS4433")
 
+    shared = canonical.opcodes[0x235].semantics.evidence
+    revisions = {revision for evidence in shared for revision in evidence.engine_revisions}
+    profiles = {profile for evidence in shared for profile in evidence.profile_ids}
+    check(revisions == {"SYS4422", "SYS4433"},
+          "0x235 native evidence records both independently inspected revisions")
+    check(profiles == {"himegari", "kamidori"},
+          "0x235 native evidence records both source games")
+
 def test_emit_views():
     import opcodes_build as B, json as _json
     m = M.load(write_tmp(FIXTURE))

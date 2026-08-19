@@ -394,6 +394,27 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void Op0x235_ConfiguresAnIndependentCyclicTranslationChannel()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "TRANSLATION_CYCLE", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 2000), MovGI(3, 10), MovGI(4, 20), MovGI(5, 3),
+            (0x235, new[] { G(1), G(2), G(3), G(4), G(5) }),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+
+        vm.Run();
+
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.Equal(2000, o.TranslationCyclePeriodMs);
+        Assert.Equal((10.0, 20.0, 3.0), o.TranslationCycleTarget);
+        Assert.True(o.TranslationCycleEnabled);
+        Assert.Equal((0.0, 0.0, 0.0), o.TranslationCurrent);
+    }
+
+    [Fact]
     public void ResetCyclicAnimationChannels_StopsEveryLoopAndPreservesBaseAndOneShotState()
     {
         var g = new GfxState();
@@ -414,6 +435,7 @@ public class GfxAnimationTests
         g.SetColorAnim(7, 400, GfxState.PackColor(0x80, 0xff0000));
         g.SetScaleCycle(7, 600, (150, 75, 100));
         g.SetRotationCycle(7, 800, (0, 0, 1));
+        g.SetTranslationCycle(7, 1000, (12, -8, 4));
         g.SetSrcRect(7, frameCount: 8, columns: 4, cell: 3, period: 100);
 
         g.ResetCyclicAnimationChannels(7);
@@ -421,9 +443,12 @@ public class GfxAnimationTests
         Assert.False(o.ColorAnim);
         Assert.False(o.ScaleCycleEnabled);
         Assert.False(o.RotationEnabled);
+        Assert.False(o.TranslationCycleEnabled);
         Assert.False(o.SrcAnim);
-        Assert.Equal((0L, 0L, 0L, 0L), (o.ColorPeriod, o.ScaleCyclePeriodMs, o.RotationPeriodMs, o.SrcPeriod));
-        Assert.Equal((-1L, -1L, -1L, -1L), (o.ColorStart, o.ScaleCycleStartMs, o.RotationStartMs, o.SrcStart));
+        Assert.Equal((0L, 0L, 0L, 0L, 0L), (o.ColorPeriod, o.ScaleCyclePeriodMs,
+            o.RotationPeriodMs, o.TranslationCyclePeriodMs, o.SrcPeriod));
+        Assert.Equal((-1L, -1L, -1L, -1L, -1L), (o.ColorStart, o.ScaleCycleStartMs,
+            o.RotationStartMs, o.TranslationCycleStartMs, o.SrcStart));
         Assert.Equal((10L, 20L, 30L), o.V18);
         Assert.Equal((12L, 34L, 56L), o.V24);
         Assert.Equal((7L, 8L, 9L), o.V16c);
@@ -435,6 +460,7 @@ public class GfxAnimationTests
         Assert.Equal(123, o.OneShotStartMs);
         Assert.Equal((1.5, 0.75, 1.0), o.ScaleCycleTarget);
         Assert.Equal((0L, 0L, 1L), o.RotationAxis);
+        Assert.Equal((12.0, -8.0, 4.0), o.TranslationCycleTarget);
         Assert.Equal((8L, 4L, 3L), (o.SrcFrameCount, o.SrcColumns, o.SrcCell));
         Assert.Equal(0, o.NativePersistenceRecord[0] & 4);
         Assert.All(o.NativePersistenceRecord.Skip(0x20c).Take(0x28), value => Assert.Equal(0, value));
@@ -456,6 +482,7 @@ public class GfxAnimationTests
         vm.Gfx.SetColorAnim(0x1000, 400, GfxState.PackColor(0x80, 0xff0000));
         vm.Gfx.SetScaleCycle(0x1000, 600, (150, 75, 100));
         vm.Gfx.SetRotationCycle(0x1000, 800, (0, 0, 1));
+        vm.Gfx.SetTranslationCycle(0x1000, 1000, (12, -8, 4));
         vm.Gfx.SetSrcRect(0x1000, frameCount: 8, columns: 4, cell: 0, period: 100);
         Assert.True(vm.Gfx.HasActiveVisualPresentation(1000));
 
@@ -588,6 +615,32 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void SnapshotSamplesTranslationCycleWithNativeTriangularPhase()
+    {
+        var g = new GfxState();
+        g.SetSurface(1, 5, -1);
+        g.BindDraw(7, 1, 0, 0, 64, 64, 0, 0);
+        g.SetTranslationCycle(7, 1200, (60, -30, 12));
+
+        var start = g.SnapshotVisibleObjects(1000).Single().TranslationCycle;
+        var quarter = g.SnapshotVisibleObjects(1300).Single().TranslationCycle;
+        var midpoint = g.SnapshotVisibleObjects(1600).Single().TranslationCycle;
+        var threeQuarter = g.SnapshotVisibleObjects(1900).Single().TranslationCycle;
+        var wrapped = g.SnapshotVisibleObjects(2200).Single().TranslationCycle;
+
+        Assert.Equal((0.0, 0.0, 0.0),
+            (start.TranslateX, start.TranslateY, start.TranslateZ));
+        Assert.Equal((30.0, -15.0, 6.0),
+            (quarter.TranslateX, quarter.TranslateY, quarter.TranslateZ));
+        Assert.Equal((60.0, -30.0, 12.0),
+            (midpoint.TranslateX, midpoint.TranslateY, midpoint.TranslateZ));
+        Assert.Equal((30.0, -15.0, 6.0),
+            (threeQuarter.TranslateX, threeQuarter.TranslateY, threeQuarter.TranslateZ));
+        Assert.Equal((0.0, 0.0, 0.0),
+            (wrapped.TranslateX, wrapped.TranslateY, wrapped.TranslateZ));
+    }
+
+    [Fact]
     public void ScaleCycleClonePreservesTargetAndSharedPhase()
     {
         var g = new GfxState();
@@ -652,5 +705,18 @@ public class GfxAnimationTests
 
         Assert.Equal(100.0, p.X, 10);
         Assert.Equal(200.0, p.Y, 10);
+    }
+
+    [Fact]
+    public void Transform2D_CyclicTranslationOccursAfterCyclicRotation()
+    {
+        var t = new TransformState(1, 1, 1, 0, 0, 0, 0, 0, 0);
+        var rotation = new RotationCycleState(true, 1000, 0, 0, 1, 90);
+        var translation = new TranslationCycleState(true, 1000, 10, 0, 0);
+
+        var p = Transform2DMath.Apply(1, 0, t, rotation, default, translation);
+
+        Assert.Equal(10.0, p.X, 10);
+        Assert.Equal(1.0, p.Y, 10);
     }
 }

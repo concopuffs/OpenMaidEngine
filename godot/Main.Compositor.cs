@@ -83,7 +83,7 @@ public partial class Main
                 _perf?.RecordSkippedLayer();
                 continue;
             }
-            var affine = Transform2DMath.Build(v.Transform, v.Rotation, v.ScaleCycle)
+            var affine = Transform2DMath.Build(v.Transform, v.Rotation, v.ScaleCycle, v.TranslationCycle)
                 .FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
             float opacity = v.Alpha / 255f;
@@ -169,7 +169,7 @@ public partial class Main
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
@@ -259,7 +259,7 @@ public partial class Main
             if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 baseAffine = baseAffine.Then(rangeTransform);
@@ -420,7 +420,7 @@ public partial class Main
                 continue;
             }
             var t = v.Transform;
-            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle);
+            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle, v.TranslationCycle);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform)
                 localToDest = localToDest.Then(rangeTransform);
@@ -544,7 +544,7 @@ public partial class Main
             if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 affine = affine.Then(rangeTransform);
@@ -612,7 +612,7 @@ public partial class Main
             if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
-            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle)
+            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 baseAffine = baseAffine.Then(rangeTransform);

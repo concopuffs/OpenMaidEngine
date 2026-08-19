@@ -28,7 +28,7 @@ public static class RetainedSurfaceRasterizer
 
             TransformState transform = item.Transform;
             Affine2D localToDestination =
-                Transform2DMath.Build(transform, item.Rotation, item.ScaleCycle)
+                Transform2DMath.Build(transform, item.Rotation, item.ScaleCycle, item.TranslationCycle)
                     .FromLocalOrigin(item.DstX, item.DstY);
             if (item.RangeTransform is { } rangeTransform)
                 localToDestination = localToDestination.Then(rangeTransform);

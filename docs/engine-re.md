@@ -967,10 +967,11 @@ terms are `(-1600,-4000)`, projecting the base point to `(-1600,-1000)`. The por
 projection test and transform-aware gfx log reproduce those values.
 
 `gfx_object_composite` then right-multiplies `gfx_object_anim_interpolate`'s separately anchored product,
-which contains op `0x234`'s cyclic rotation. With the other oscillating matrices at identity, adjacent anchors
-cancel and the full order is
-`T(-V18) * scale * one-shot-rotation * translation * cyclic-rotation * T(+V18)`. Thus cyclic rotation
-also rotates the translation vector. The cyclic angle is integer degrees
+which contains op `0x233`'s cyclic scale, `0x234`'s cyclic rotation, and `0x235`'s cyclic translation.
+Adjacent anchors cancel and the full order is
+`T(-V18) * scale * one-shot-rotation * translation * cyclic-scale * cyclic-rotation * cyclic-translation * T(+V18)`.
+Thus cyclic rotation also rotates the one-shot translation vector, while cyclic translation is applied to
+the already-rotated coordinate result. The cyclic angle is integer degrees
 `floor(((frameTime-start) % period) * 360 / period)`; it wraps to zero without ping-pong. Positive Z produces
 `m01=+sin, m10=-sin`, clockwise on the Y-down screen.
 
@@ -982,7 +983,8 @@ those terms. In the windowed port capture, the two SC0000 `0x234` sites (periods
 affine PNG frames. Nearest-neighbour inverse mapping is the deliberate software raster sampling policy;
 native D3D9 subpixel filtering remains a possible pixel-level difference, not an uncertain matrix approximation.
 
-**Port result (2026-07-10):** `GfxState` retains scale, one-shot rotation, translation, and cyclic rotation
+**Port result (updated 2026-08-19):** `GfxState` retains scale, one-shot rotation, translation, and the
+cyclic scale/rotation/translation siblings
 with their native clocks/order. `Transform2DMath` composes the full row-vector 4×4 transform before 2D
 projection. Godot uses an inverse-mapped affine RGBA8 rasterizer for textured objects and solid fills,
 preserving colorkey/tint/opacity behavior and never deriving opacity from transform Z.
@@ -1595,9 +1597,20 @@ target to identity. This matrix lives in the separately anchored cyclic-animatio
 the immediate/current and delayed one-shot scale matrices. Himegari has 31 sites in nine scripts: nineteen
 in DEBUGADV and twelve across eight ordinary ADV scenes. The port now models this as its own retained
 channel, samples the exact triangular phase on the shared frame clock, and composes
-`T(-anchor) * one-shot-scale * one-shot-rotation * translation * cyclic-scale * cyclic-rotation *
+`T(-anchor) * one-shot-scale * one-shot-rotation * translation * cyclic-scale * cyclic-rotation * cyclic-translation *
 T(anchor)`. It remains frame-driven while visible and survives native-style object cloning independently
 of the immediate and delayed one-shot scale fields.
+
+**Cyclic-translation follow-up (2026-08-19):** opcode `0x235` is the fifth cyclic channel, not an
+unknown SYS4433 addition. The independently inspected handlers have the same five-operand contract in
+Himegari SYS4422 (`op_0x235_handler@0x423e40`) and Kamidori SYS4433
+(`op_0x235_set_translation_cycle@0x421ce0`): `(handle, period_ms, x, y, z)`. Their workers
+(`gfx_object_set_translation_cycle@0x47f110` and `@0x485f80`) clear lazy start `obj+0x218`, store period
+at `obj+0x22c`, and build a target translation matrix at `obj+0x290`. SYS4433
+`gfx_object_compose_animated_transform@0x47a400` uses the same exact triangular blend as cyclic scale,
+then right-multiplies the sampled matrix after cyclic rotation. The coordinates are raw translation units,
+not percentages. Kamidori contains 28 calls across 12 story/presentation scripts. The port now retains,
+clones, resets, persists, and samples this channel independently and passes it through both compositors.
 
 **Cyclic-channel reset follow-up (2026-07-29):** opcode `0x230` is the shared reset for this looping
 animation family. `op_0x230_reset_gfx_cyclic_animations@0x423ba0` takes one retained-object handle and
@@ -1609,15 +1622,15 @@ active flag bit 2, and zeroes five start/period pairs:
 | looping color | `obj+0x20c` | `obj+0x220` |
 | cyclic scale | `obj+0x210` | `obj+0x224` |
 | cyclic rotation | `obj+0x214` | `obj+0x228` |
-| second cyclic matrix | `obj+0x218` | `obj+0x22c` |
+| cyclic translation (`0x235`) | `obj+0x218` | `obj+0x22c` |
 | looping source rectangle | `obj+0x21c` | `obj+0x230` |
 
 It does not change the object's current/base transforms. Five DEBUGADV calls reset an effect object before
 demonstrating a new looping asset; FIELD's sole ordinary call resets the temporary moving-unit handle
 between its one-shot translation setup and `0x239` source-cell animation. This is a bounded retained-state
 operation. The port now exposes the same get-or-create reset on `GfxState`: it disables cyclic color,
-scale, rotation, and source-rectangle sampling; clears all ten native timing dwords in the preserved
-numbered-save record, including the unmodeled second cyclic matrix; and leaves base/current transforms,
+scale, rotation, translation, and source-rectangle sampling; clears all ten native timing dwords in the preserved
+numbered-save record; and leaves base/current transforms,
 cyclic targets, and finite one-shot channels intact.
 
 #### Diagnostic accumulator opcodes `0x1b2`–`0x1b4` (2026-07-29)

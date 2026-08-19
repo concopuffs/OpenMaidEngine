@@ -15,6 +15,10 @@ public readonly record struct RotationCycleState(bool Enabled, long PeriodMs,
 public readonly record struct ScaleCycleState(bool Enabled, long PeriodMs,
                                               double ScaleX, double ScaleY, double ScaleZ);
 
+public readonly record struct TranslationCycleState(bool Enabled, long PeriodMs,
+                                                    double TranslateX, double TranslateY,
+                                                    double TranslateZ);
+
 [System.Flags]
 public enum GfxPresentationReason
 {
@@ -114,7 +118,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            bool TimeVarying = false,
                                            ScaleCycleState ScaleCycle = default,
                                            RadialBlurRangeTransitionState? RadialBlurTransition = null,
-                                           DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null);
+                                           DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null,
+                                           TranslationCycleState TranslationCycle = default);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

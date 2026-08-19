@@ -2002,6 +2002,18 @@ Port status (2026-07-28): implemented as an independent retained-object scale cy
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x234`; scope=Himegari SYS4422. Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f060. gfx_object_anim_interpolate@0x473ed0 consumes obj+0x228/+0x214/+0x244 on retained-gfx owner+0xb550 (EngineCtx+0x51b64) and matrix4_make_axis_angle@0x48b215. gfx_object_composite@0x47f650 calls one-shot transform first, cyclic animation second.
 
+### 0x235 `set-translation-cycle` (set-translation-cycle, argc 5)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x235` (evidence-confirmed)
+- **summary:** (handle)(period_ms)(translate_x)(translate_y)(translate_z) — configure a cyclic ping-pong translation matrix that moves identity→target over the first half-period and target→identity over the second.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x235`; scope=matching handlers, retained-object producer/consumer, and complete Kamidori corpus. SYS4422 op_0x235_handler@0x423e40 -> gfx_object_set_translation_cycle@0x47f110 and SYS4433 op_0x235_set_translation_cycle@0x421ce0 -> gfx_object_set_translation_cycle@0x485f80 both fetch (handle, period, x, y, z), clear lazy start obj+0x218, store period at +0x22c, and build a target translation matrix at +0x290. SYS4433 gfx_object_compose_animated_transform@0x47a400 samples 2*min(elapsed%period, period-elapsed%period)/period, blends identity to target, and post-multiplies the result after cyclic rotation. Kamidori has 28 calls across 12 scripts; operand signatures are 25 g-int/imm/imm/imm/imm, two g-int/imm/l-int/imm/imm, and one g-int/imm/imm/l-int/imm.
+
+The channel is independent from one-shot translation and the cyclic scale/rotation siblings. Its target is expressed directly in retained-gfx coordinates, not percentages. Native composes it after cyclic rotation and before restoring the object anchor. The complete Kamidori catalog contains 28 calls in 12 story/presentation scripts.
+
 ### 0x236 `play-movie-to-surface` (play-movie-to-surface, argc 4)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4155,15 +4167,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x22e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x235 `u00422100` (u00422100, argc 5)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x235`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x237 `u00422350` (u00422350, argc 2)
 - **observed by:** none in recorded corpora

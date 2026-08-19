@@ -1594,6 +1594,7 @@ public sealed partial class VirtualMachine
             case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)
             case "u00421EF0":   // 0x232 cyclic packed ARGB; negative alpha/RGB preserve static obj color
             case "set-scale-cycle": // 0x233 (handle)(period ms)(target scale x/y/z percent)
+            case "set-translation-cycle": // 0x235 (handle)(period ms)(target translation x/y/z)
                 return StepAnimation(label, a, pc);
             case "query-gfx-translation-target":  // pre-correction generated-name compatibility
             case "query-gfx-translation-current":

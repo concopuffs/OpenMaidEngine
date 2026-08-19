@@ -276,7 +276,8 @@ public sealed partial class GfxState
                         (o.SrcAnim && o.SrcPeriod > 0) ||
                         (o.ColorAnim && o.ColorPeriod > 0) ||
                         (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
-                        (o.RotationEnabled && o.RotationPeriodMs > 0)));
+                        (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                        (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)));
     }
 
     /// <summary>Consume the native run-state-0x400 EffectSkipOnClick action and, when permitted, force its
@@ -457,7 +458,8 @@ public sealed partial class GfxState
                      o.TranslationEnabled ||
                      (o.ColorAnim && o.ColorPeriod > 0) ||
                      (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
-                     (o.RotationEnabled && o.RotationPeriodMs > 0))))
+                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                     (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))))
                 reasons |= GfxPresentationReason.ContinuousChannel;
 
             foreach (var o in _objects.Values)
@@ -642,6 +644,7 @@ public sealed partial class GfxState
 
                 double cycleAngle = 0;
                 double cycleScaleX = 1, cycleScaleY = 1, cycleScaleZ = 1;
+                double cycleTranslationX = 0, cycleTranslationY = 0, cycleTranslationZ = 0;
                 if (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0)
                 {
                     if (o.ScaleCycleStartMs < 0) o.ScaleCycleStartMs = nowMs;
@@ -655,6 +658,15 @@ public sealed partial class GfxState
                     if (o.RotationStartMs < 0) o.RotationStartMs = nowMs;
                     long elapsed = System.Math.Max(0, nowMs - o.RotationStartMs);
                     cycleAngle = ((elapsed % o.RotationPeriodMs) * 360) / o.RotationPeriodMs;
+                }
+                if (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)
+                {
+                    if (o.TranslationCycleStartMs < 0) o.TranslationCycleStartMs = nowMs;
+                    double weight = ScaleCycleWeight(
+                        nowMs, o.TranslationCycleStartMs, o.TranslationCyclePeriodMs);
+                    cycleTranslationX = o.TranslationCycleTarget.X * weight;
+                    cycleTranslationY = o.TranslationCycleTarget.Y * weight;
+                    cycleTranslationZ = o.TranslationCycleTarget.Z * weight;
                 }
 
                 SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
@@ -675,6 +687,7 @@ public sealed partial class GfxState
                     (o.ColorAnim && o.ColorPeriod > 0) ||
                     (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                    (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0) ||
                     transition is { Progress: < 1.0 } ||
                     radialBlur is { Progress: < 1.0 } ||
                     directionalBlur is { Progress: < 1.0 } ||
@@ -692,7 +705,12 @@ public sealed partial class GfxState
                                           colorTransition, objectRangeTransform, timeVarying,
                                           new ScaleCycleState(o.ScaleCycleEnabled, o.ScaleCyclePeriodMs,
                                                               cycleScaleX, cycleScaleY, cycleScaleZ),
-                                          radialBlur, directionalBlur));
+                                          radialBlur, directionalBlur,
+                                          new TranslationCycleState(
+                                              o.TranslationCycleEnabled,
+                                              o.TranslationCyclePeriodMs,
+                                              cycleTranslationX, cycleTranslationY,
+                                              cycleTranslationZ)));
             }
         }
     }

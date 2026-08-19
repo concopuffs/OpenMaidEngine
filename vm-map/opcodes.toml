@@ -9538,19 +9538,47 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x235
-label = "u00422100"
+label = "set-translation-cycle"
 argc = 5
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422100"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-translation-cycle"
+category = "draw"
+summary = "(handle)(period_ms)(translate_x)(translate_y)(translate_z) — configure a cyclic ping-pong translation matrix that moves identity→target over the first half-period and target→identity over the second."
+details = "The channel is independent from one-shot translation and the cyclic scale/rotation siblings. Its target is expressed directly in retained-gfx coordinates, not percentages. Native composes it after cyclic rotation and before restoring the object anchor. The complete Kamidori catalog contains 28 calls in 12 story/presentation scripts."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching handlers, retained-object producer/consumer, and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x235_handler@0x423e40 -> gfx_object_set_translation_cycle@0x47f110 and SYS4433 op_0x235_set_translation_cycle@0x421ce0 -> gfx_object_set_translation_cycle@0x485f80 both fetch (handle, period, x, y, z), clear lazy start obj+0x218, store period at +0x22c, and build a target translation matrix at +0x290. SYS4433 gfx_object_compose_animated_transform@0x47a400 samples 2*min(elapsed%period, period-elapsed%period)/period, blends identity to target, and post-multiplies the result after cyclic rotation. Kamidori has 28 calls across 12 scripts; operand signatures are 25 g-int/imm/imm/imm/imm, two g-int/imm/l-int/imm/imm, and one g-int/imm/imm/l-int/imm." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "retained object handle"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "period milliseconds"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "target translation X"
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "target translation Y"
+observed_types = ["imm", "l-int"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "target translation Z"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x237

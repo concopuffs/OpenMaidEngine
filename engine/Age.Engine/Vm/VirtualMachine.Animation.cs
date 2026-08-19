@@ -20,6 +20,9 @@ public sealed partial class VirtualMachine
             case "set-scale-cycle": // 0x233 (handle)(period ms)(target scale x/y/z percent)
                 Gfx.SetScaleCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
                 return pc + 1;
+            case "set-translation-cycle": // 0x235 (handle)(period ms)(target translation x/y/z)
+                Gfx.SetTranslationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+                return pc + 1;
             case "sample-frame-time": // 0x23c: previous <- current; current <- monotonic time
                 Gfx.SampleFrameTime(_host.InputClockMilliseconds); return pc + 1;
             case "gfx-blit-color":      // 0x202 (handle)(delay)(duration)(alpha)(color) — one-shot color

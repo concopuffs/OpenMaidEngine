@@ -72,6 +72,12 @@ public sealed partial class GfxState
         public (double X, double Y, double Z) ScaleCycleTarget = (1, 1, 1);
         public bool ScaleCycleEnabled;
         public long ScaleCycleStartMs = -1;
+
+        // Op 0x235 is a separate cyclic translation channel (period obj+0x22c, target matrix obj+0x290).
+        public long TranslationCyclePeriodMs;
+        public (double X, double Y, double Z) TranslationCycleTarget;
+        public bool TranslationCycleEnabled;
+        public long TranslationCycleStartMs = -1;
     }
 
     // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
@@ -309,6 +315,10 @@ public sealed partial class GfxState
             RotationEnabled = s.RotationEnabled, RotationStartMs = s.RotationStartMs,
             ScaleCyclePeriodMs = s.ScaleCyclePeriodMs, ScaleCycleTarget = s.ScaleCycleTarget,
             ScaleCycleEnabled = s.ScaleCycleEnabled, ScaleCycleStartMs = s.ScaleCycleStartMs,
+            TranslationCyclePeriodMs = s.TranslationCyclePeriodMs,
+            TranslationCycleTarget = s.TranslationCycleTarget,
+            TranslationCycleEnabled = s.TranslationCycleEnabled,
+            TranslationCycleStartMs = s.TranslationCycleStartMs,
         };
 
     /// <summary>draw-texture bind (gfx_object_bind_draw): object <paramref name="handle"/> draws surface

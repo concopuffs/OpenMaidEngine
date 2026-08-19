@@ -374,7 +374,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x0232: ('u00421EF0', 4),
     0x0233: ('set-scale-cycle', 5),
     0x0234: ('anim-start', 5),
-    0x0235: ('u00422100', 5),
+    0x0235: ('set-translation-cycle', 5),
     0x0236: ('play-movie-to-surface', 4),
     0x0237: ('u00422350', 2),
     0x0238: ('set-anim-clock', 1),

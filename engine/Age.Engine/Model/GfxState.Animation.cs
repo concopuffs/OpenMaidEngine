@@ -276,9 +276,23 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Op 0x235: cyclic identity-to-target translation, sampled with a triangular
+    /// ping-pong phase and composed after the sibling cyclic rotation.</summary>
+    public void SetTranslationCycle(long handle, long periodMs, (long X, long Y, long Z) target)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            o.TranslationCyclePeriodMs = periodMs;
+            o.TranslationCycleTarget = target;
+            o.TranslationCycleEnabled = periodMs > 0;
+            o.TranslationCycleStartMs = -1;
+        }
+    }
+
     /// <summary>Op 0x230: stop every cyclic object channel without changing its base/current state,
     /// one-shot channels, or retained cyclic targets. Native clears flag bit 2 and the five start/period
-    /// pairs at obj+0x20c..0x230, including one secondary matrix channel not otherwise modeled here.</summary>
+    /// pairs at obj+0x20c..0x230.</summary>
     public void ResetCyclicAnimationChannels(long handle)
     {
         lock (_lock)
@@ -287,18 +301,21 @@ public sealed partial class GfxState
             o.ColorStart = -1;
             o.ScaleCycleStartMs = -1;
             o.RotationStartMs = -1;
+            o.TranslationCycleStartMs = -1;
             o.SrcStart = -1;
             o.ColorPeriod = 0;
             o.ScaleCyclePeriodMs = 0;
             o.RotationPeriodMs = 0;
+            o.TranslationCyclePeriodMs = 0;
             o.SrcPeriod = 0;
             o.ColorAnim = false;
             o.ScaleCycleEnabled = false;
             o.RotationEnabled = false;
+            o.TranslationCycleEnabled = false;
             o.SrcAnim = false;
 
-            // Preserve drop-in numbered-save compatibility for the unmodeled secondary cyclic matrix
-            // as well as the modeled channels. The ten native timing dwords form one contiguous range.
+            // Preserve drop-in numbered-save compatibility for all five cyclic channels. The ten native
+            // timing dwords form one contiguous range.
             if (o.NativePersistenceRecord is { Length: >= 0x234 } raw)
             {
                 raw[0] &= 0xfb;
