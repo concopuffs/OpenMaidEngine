@@ -266,7 +266,7 @@ public partial class Main : Godot.Control
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
-        var table = OmeRuntimeMetadata.LoadOpcodeTable();
+        var table = OmeRuntimeMetadata.LoadOpcodeTable(selectedProfile.Profile.EngineAbiId);
         INativeDatStore? nativeSaveStore = null;
         var sharedProfile = new SharedProfile();
         _audioMixerSettings = new AudioMixerSettings();
@@ -404,7 +404,11 @@ public partial class Main : Godot.Control
             provider, sink,
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore,
-            audioMixerSettings: _audioMixerSettings);
+            audioMixerSettings: _audioMixerSettings,
+            compatibility: new VmCompatibilityContext(
+                selectedProfile.Profile.Id,
+                selectedProfile.Profile.EngineAbiId,
+                selectedProfile.ProbeMode));
         if (scripts != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -592,7 +596,15 @@ public partial class Main : Godot.Control
                 {
                     GD.Print($"[vm] ended: {_vm!.HaltReason ?? "unknown"} after {_vm.Steps} steps");
                     ReportSubroutines();
-                    ShowEnd();
+                    if (_vm.CompatibilityFailure is { } compatibilityFailure)
+                    {
+                        GD.PushError($"[compatibility] {compatibilityFailure}");
+                        _status.Text = "— compatibility halt —";
+                        if (!_selftest)
+                            CaptureStallDiagnostic(_trace.HaltSnapshot ?? _trace.Snapshot(),
+                                                   "compatibility-halt");
+                    }
+                    else ShowEnd();
                     if (_vm.HaltReason == "STEP-LIMIT")
                     {
                         GodotTraceSnapshot haltTrace = _trace.HaltSnapshot ?? _trace.Snapshot();
@@ -668,6 +680,7 @@ public partial class Main : Godot.Control
                 {
                     steps = _vm.Steps,
                     halt_reason = _vm.HaltReason,
+                    compatibility_failure = _vm.CompatibilityFailure,
                     done = _done,
                     trace,
                 },

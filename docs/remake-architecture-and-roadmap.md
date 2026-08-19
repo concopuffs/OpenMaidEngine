@@ -1482,7 +1482,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-19): K0 and K1 complete; K2 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 through K2 complete; K3 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1544,17 +1544,25 @@ construct a store, while a mismatched explicit choice still continues as request
 
 ##### Phase K2 — replace silent compatibility loss with structured diagnostics
 
-- [ ] Make an opcode absent from the selected engine-ABI lineage a structured decode error instead of a
+- [x] Make an opcode absent from the selected engine-ABI lineage a structured decode error instead of a
   synthetic terminal instruction.
-- [ ] In normal compatibility mode, halt on a recognized but unimplemented opcode with profile id, engine/script
+- [x] In normal compatibility mode, halt on a recognized but unimplemented opcode with profile id, engine/script
   revision, script name/id, bytecode offset, opcode, canonical label, and operands. Retain trace-and-advance only
   in explicit probe mode.
-- [ ] Expose implementation coverage separately from ABI membership and per-game observation. Add a regression
+- [x] Expose implementation coverage separately from ABI membership and per-game observation. Add a regression
   that prevents a newly observed game opcode from silently entering the default VM stub.
-- [ ] Make Kamidori's expected first strict halt (`TITLE.BIN@0xd7`, opcode `0x1be`) a bring-up test; advance that
+- [x] Make Kamidori's expected first strict halt (`TITLE.BIN@0xd7`, opcode `0x1be`) a bring-up test; advance that
   expected frontier deliberately as services are implemented.
 
-**K2 gate:** a green boot can no longer mean that unknown behavior was skipped.
+**K2 gate (complete 2026-08-19):** a selected-ABI table now carries its ABI id into parsing and execution.
+Missing table entries throw a structured decode exception instead of becoming zero-argument terminal
+instructions. Runtime implementation coverage is an explicit engine-owned set, separate from both table
+membership and `observed_in_himegari`; every currently observed Himegari opcode is covered by regression.
+A recognized unsupported instruction emits one structured diagnostic. Normal mode halts and surfaces it as a
+compatibility failure; explicit probe mode alone traces and advances. The installed Kamidori regression fixes
+the current deliberate frontier at `TITLE.BIN@0xd7`, opcode `0x1be`, under profile `kamidori`, ABI `SYS4433`.
+This does not claim that the shared 548-entry catalog has already been partitioned into historically proven
+`SYS4422`/`SYS4433` membership—comparative snapshot/layer evidence remains K4/K5 work.
 
 ##### Phase K3 — make tools and derived data profile-aware
 

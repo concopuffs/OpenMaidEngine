@@ -137,11 +137,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (AgeEngine.sln)
     │   ├── Age.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
     │                                       identity selection and profile-owned persistence policy/paths
-    │   ├── Age.Engine/Model/                retained graphics state plus separately navigable public
-    │                                       render, transition, diagnostic, and persistence contracts
-    │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
-    │                                       ALF asset store, script provider, AGF/LZSS and Windows CUR decoders,
-    │                                       and resource facade
+    │   ├── Age.Engine/Model/                opcode-table definitions plus retained graphics state and
+    │                                       separately navigable render, transition, diagnostic, and persistence contracts
+    │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
+    │                                       decode failures, loose-first bounded ALF asset store, script provider,
+    │                                       AGF/LZSS and Windows CUR decoders, and resource facade
     │   ├── Age.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
     │                                       publication, and bounded font/glyph cache primitives
@@ -246,7 +246,10 @@ owns surface/movie transition queues, presentation activity and click-skip logic
 accounting, and visible retained-scene snapshots.
 
 `engine/Age.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, and the proven
-top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, and the unknown-op fallback.
+top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, strict compatibility
+failure, and an internal coverage/dispatcher consistency guard. `OpcodeRuntimeCoverage.cs` owns runtime
+implementation membership independently of ABI-table membership and corpus observation;
+`VmCompatibilityContext.cs` owns selected-profile execution context and structured unsupported-op diagnostics.
 Its partial-class companion `engine/Age.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
 routes that family into the handler. `engine/Age.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/

@@ -12,13 +12,13 @@ internal static class OmeRuntimeMetadata
 {
     internal const string OpcodeTableResourceName = "OME.Runtime.opcodes.json";
 
-    internal static OpcodeTable LoadOpcodeTable()
+    internal static OpcodeTable LoadOpcodeTable(string abiId = "AGE-catalog")
     {
         Assembly assembly = typeof(OmeRuntimeMetadata).Assembly;
         using Stream stream = assembly.GetManifestResourceStream(OpcodeTableResourceName)
             ?? throw new InvalidDataException(
                 $"Embedded runtime metadata '{OpcodeTableResourceName}' is missing from " +
                 $"{assembly.GetName().Name}.");
-        return OpcodeTableJson.Load(stream);
+        return OpcodeTableJson.Load(stream, abiId);
     }
 }

@@ -39,6 +39,8 @@ public sealed class TextTraceSink : TraceSinkBase
             case TraceEventKind.Stub:
                 if (_opFilter != null && !_opFilter.Contains(e.Opcode)) break;
                 _w.WriteLine($"{indent}  {CurrentScript}:{e.Pc:x4} STUB op=0x{e.Opcode:x}"); break;
+            case TraceEventKind.UnsupportedOpcode:
+                _w.WriteLine($"{indent}  UNSUPPORTED {e.CompatibilityDiagnostic}"); break;
             case TraceEventKind.Halt:
                 _w.WriteLine($"halt: {e.Text} @ {e.Steps} steps"); break;
         }

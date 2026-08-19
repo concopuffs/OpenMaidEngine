@@ -2,6 +2,8 @@ namespace Age.Engine.Model;
 public sealed class Script
 {
     public string Name { get; init; } = "";
+    /// <summary>Fixed eight-byte SYS4 script/compiler revision, trimmed of trailing NULs and spaces.</summary>
+    public string EngineRevision { get; init; } = "";
     /// <summary>Raw packed SYS4/AAI resource id used as this script's native ReadTextDB key.</summary>
     public uint PackedId { get; init; }
     public required ScriptHeader Header { get; init; }

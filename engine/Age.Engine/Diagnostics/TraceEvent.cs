@@ -1,7 +1,7 @@
 using Age.Engine.Model;
 namespace Age.Engine.Diagnostics;
 
-public enum TraceEventKind { Step, FrameEnter, FrameExit, CallScript, Stub, Halt }
+public enum TraceEventKind { Step, FrameEnter, FrameExit, CallScript, Stub, UnsupportedOpcode, Halt }
 public enum FrameCause { TopScene, CallScript, RootReload, SaveRestore }
 
 /// <summary>An engine diagnostic fact. A <c>readonly struct</c> with a Kind discriminator and a shared
@@ -19,6 +19,7 @@ public readonly struct TraceEvent
     public string? Name  { get; private init; }    // script/scene name; resolved call-script name (null => unresolved/stub)
     public string? Text  { get; private init; }    // halt reason; frame outcome
     public Instruction? Ins { get; private init; } // Step: the instruction (args) by ref, never copied
+    public Vm.UnsupportedOpcodeDiagnostic? CompatibilityDiagnostic { get; private init; }
 
     public static TraceEvent Step(int pc, Instruction ins, int depth) => new()
         { Kind = TraceEventKind.Step, Pc = pc, Opcode = ins.Opcode, Ins = ins, Depth = depth };
@@ -30,6 +31,9 @@ public readonly struct TraceEvent
         { Kind = TraceEventKind.CallScript, Id = id, Name = name };
     public static TraceEvent Stub(int opcode, int pc) => new()
         { Kind = TraceEventKind.Stub, Opcode = opcode, Pc = pc };
+    public static TraceEvent UnsupportedOpcode(Vm.UnsupportedOpcodeDiagnostic diagnostic, int pc) => new()
+        { Kind = TraceEventKind.UnsupportedOpcode, Opcode = diagnostic.Opcode, Pc = pc,
+          CompatibilityDiagnostic = diagnostic };
     public static TraceEvent Halt(string reason, long steps) => new()
         { Kind = TraceEventKind.Halt, Text = reason, Steps = steps };
 }

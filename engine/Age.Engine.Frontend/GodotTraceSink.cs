@@ -81,6 +81,20 @@ public sealed class GodotTraceSink : ITraceSink
             {
                 ["stub_opcode"] = $"0x{e.Opcode:x}", ["pc_index"] = e.Pc,
             });
+        else if (e.Kind == TraceEventKind.UnsupportedOpcode
+                 && e.CompatibilityDiagnostic is { } diagnostic)
+            _timeline?.Event("unsupported-opcode", new()
+            {
+                ["profile_id"] = diagnostic.ProfileId,
+                ["engine_abi_id"] = diagnostic.EngineAbiId,
+                ["script_revision"] = diagnostic.ScriptRevision,
+                ["script_name"] = diagnostic.ScriptName,
+                ["packed_script_id"] = $"0x{diagnostic.PackedScriptId:x}",
+                ["offset"] = $"0x{diagnostic.Offset:x}",
+                ["opcode"] = $"0x{diagnostic.Opcode:x}",
+                ["canonical_label"] = diagnostic.CanonicalLabel,
+                ["operands"] = diagnostic.Operands.Select(value => $"{value.Type}:{value.Value}").ToArray(),
+            });
         else if (e.Kind == TraceEventKind.Halt)
             _timeline?.State("halted", new() { ["reason"] = e.Text, ["steps"] = e.Steps });
     }

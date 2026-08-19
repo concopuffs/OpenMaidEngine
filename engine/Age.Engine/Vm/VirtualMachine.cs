@@ -39,6 +39,7 @@ public sealed partial class VirtualMachine
     private readonly OpcodeTable _t;
     private readonly IHost _host;
     private readonly VmOptions _o;
+    private readonly VmCompatibilityContext _compatibility;
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
@@ -112,6 +113,7 @@ public sealed partial class VirtualMachine
     public InputBindings InputBindings { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
+    public UnsupportedOpcodeDiagnostic? CompatibilityFailure { get; private set; }
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
@@ -170,9 +172,15 @@ public sealed partial class VirtualMachine
                           AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
                           INativeDatStore? nativeDatStore = null,
                           AudioMixerSettings? audioMixerSettings = null,
-                          DiagnosticOutputState? diagnosticOutput = null)
+                          DiagnosticOutputState? diagnosticOutput = null,
+                          VmCompatibilityContext? compatibility = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
+        _compatibility = compatibility ?? VmCompatibilityContext.ForTable(t);
+        if (!string.Equals(_compatibility.EngineAbiId, t.AbiId, StringComparison.Ordinal))
+            throw new ArgumentException(
+                $"VM compatibility ABI '{_compatibility.EngineAbiId}' does not match opcode table ABI '{t.AbiId}'",
+                nameof(compatibility));
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
@@ -1203,7 +1211,30 @@ public sealed partial class VirtualMachine
     {
         int op = ins.Opcode;
         var a = ins.Args;
-        string label = _t.Label(op);
+        if (!_t.TryGetDefinition(op, out OpcodeDefinition definition))
+        {
+            HaltReason = $"opcode-not-in-abi:{_t.AbiId}:0x{op:x}";
+            return HALT;
+        }
+        string label = definition.Label;
+        if (!OpcodeRuntimeCoverage.IsImplemented(op))
+        {
+            var diagnostic = new UnsupportedOpcodeDiagnostic(
+                _compatibility.ProfileId,
+                _compatibility.EngineAbiId,
+                _cur.Script.EngineRevision,
+                _cur.Script.Name,
+                _cur.Script.PackedId,
+                ins.Offset,
+                op,
+                definition.CanonicalLabel,
+                ins.Args.ToArray());
+            _sink.Emit(TraceEvent.UnsupportedOpcode(diagnostic, pc));
+            if (_compatibility.ProbeMode) return pc + 1;
+            CompatibilityFailure = diagnostic;
+            HaltReason = diagnostic.ToString();
+            return HALT;
+        }
         switch (label)
         {
             case "script-entry":
@@ -1583,6 +1614,12 @@ public sealed partial class VirtualMachine
                 return StepAnimation(label, a, pc);
             case "play-movie-mask-transition":
                 return StepMovie(label, ins, pc);
+            case "u004156C0": // 0x1bf call-end marker
+            case "u00415700": // 0x1d5 conditional-body marker
+            case "u004160D0": // 0x1f4 statement-begin marker
+            case "u00416120": // 0x1f5 statement-end marker
+            case "u004213E0": // 0x21b tentative line/statement id marker
+                return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
             case "present-frame": // 0x20c: read/message-skip path snaps a queued transition to its endpoint
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
@@ -1597,9 +1634,10 @@ public sealed partial class VirtualMachine
             case "u004216C0":
                 return StepPresentation(label, a, pc);
             default:
-                // Stub is per-instruction frequency (the VM handles ~30 ops; the rest hit here, e.g.
-                // 0x258/0x259 stmt markers appear en masse), so gate it with Step — else --trace floods.
-                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc)); return pc + 1;
+                // Coverage and dispatch are checked independently. Drift is an internal hard error,
+                // never permission to skip an instruction.
+                HaltReason = $"runtime-coverage-inconsistency:0x{op:x}:{label}";
+                return HALT;
         }
     }
 

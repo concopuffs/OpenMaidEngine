@@ -49,11 +49,12 @@ public sealed class GameSession
     /// <summary>Run one scene: seed a fresh VM from session state, execute, merge final state back.</summary>
     public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
                                 VmOptions? options = null, IScriptProvider? provider = null,
-                                ITraceSink? sink = null)
+                                ITraceSink? sink = null,
+                                VmCompatibilityContext? compatibility = null)
     {
         var vm = new VirtualMachine(
             script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
-            AudioMixerSettings, DiagnosticOutput);
+            AudioMixerSettings, DiagnosticOutput, compatibility);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
