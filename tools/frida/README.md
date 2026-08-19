@@ -10,9 +10,9 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 ## Standard workflow
 
-1. Launch the game (via `AGE Patch.exe` to avoid the periodic system-check messagebox) to a safe
-   point (e.g. the title). **Attach after launch**, not `frida -f` — spawning the patcher wouldn't
-   hook its child `AGE.EXE`, and direct-spawn risks the messagebox.
+1. Launch the selected game through its normal executable/launcher to a safe point such as the title.
+   **Attach after launch by PID**, not `frida -f`; Himegari's optional `AGE Patch.exe` is not a
+   general SYS4 launcher and Kamidori does not inherit that assumption.
 2. Run the capture script (`py -3.11 -u -X utf8 tools/frida/<tool>.py`) — it attaches by process
    name and installs the hooks; run **unbuffered** (`-u`) so status prints appear immediately.
 3. Drive the game through the target scene (SC0000's opening auto-plays on new game).
@@ -21,15 +21,11 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 ## Tools
 
-- **`dump_engine.py`** — ★ dumps the **unpacked engine code** from the live process for offline static
-  RE (native op handlers). Both on-disk images are the same packed binary (`SYS4AB.BIN` = XOR-0xFF of
-  `AGE.EXE`), so the real handler code exists only in memory: the `AGE.EXE` module (some code unpacked
-  in-place, e.g. the AGF decoder `+0x74f1f`) plus the main VM interpreter in a large per-run heap `r-x`
-  region (~30 MB, nonstable base). Attach → it enumerates ranges, dumps the module image + every r-x
-  range ≥ 1 MB (chunked) → `build/engine-dump/{manifest.json,range_<base>.bin}`, and prints the
-  landmark bytes at `AGE.EXE+0x74f1f` to validate. Then disassemble (capstone) and locate a handler
-  (e.g. `0x215` → real handler `0x42a0b0`, resolved via the opcode dispatch table — Kelebek's `0x421160`
-  is VA-drift, an unrelated fn). Attach by pid.
+- **`dump_engine.py`** — ★ dumps the selected profile's **unpacked engine code** for offline native RE.
+  It captures the complete AGE module plus large anonymous executable ranges and writes a hashed,
+  gap-aware provenance manifest below `build/games/<profile>/engine-dump/`. New profiles have no
+  borrowed landmark or assumed image base. Run it with explicit `--profile`, `--game-root`, and PID;
+  canonical usage and I/O live in `docs/tools-reference.md`.
 - **`capture_load_order.py`** — ★ the working asset-resolution capture. Hooks `ReadFile` on
   `DATA2.ALF`; each asset load starts with header reads **at its exact archive offset**, so exact-start
   reads give the clean per-asset **load order** (→ names via `build/asset-index.json`). `--analyze`
@@ -49,9 +45,10 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 - **Attach, don't spawn**, and **use the pid** (`frida.get_local_device().enumerate_processes()` — the
   module-level `frida.enumerate_processes()` was removed in frida 17.x). The process is `AGE.EXE`.
-- **The game is packed.** Its main VM logic runs from a per-run heap `r-x` region (~30 MB, nonstable
-  base). So you **cannot** hook the `set-texture`/VM handlers at a fixed `AGE.EXE+off` — only stable
-  library code (e.g. the AGF decoder `AGE.EXE+0x74f1f`) keeps a fixed offset.
+- **The game is packed.** Himegari's proven interpreter and handlers unpack into its module image;
+  other revisions must be measured independently. The dumper retains both the module and large anonymous
+  executable ranges so a new profile does not assume either placement. Never reuse a Himegari RVA as a
+  Kamidori hook until the Kamidori image independently establishes it.
 - **Archives are NOT memory-mapped.** No archive-sized region exists; the game streams them through a
   small heap **block-cache via `ReadFile`** (128 KB blocks + big reads). The earlier "memory-mapped"
   note was wrong — the 128 KB reads are the block cache, not OS paging.

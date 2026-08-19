@@ -37,6 +37,10 @@ public interface IAudioHost
     void ReleaseSoundEffect(int channel) { }
     void FadeBgm(int targetPercent, long durationMs) { }
 
+    // Native op 0x1be queries the common 13-slot sound manager. Observed assignments are
+    // SFX 0..9, BGM 11, and voice 12; unsupported/unavailable slots report false.
+    bool IsSoundChannelPlaying(int channel) => false;
+
     // AGE's sound:* settings registry is VM-owned; the host applies changes to active playback.
     void ApplyAudioVolume(int category, int basisPoints) { }
     void ApplyAudioRouteEnabled(int category, bool enabled) { }

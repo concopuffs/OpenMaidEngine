@@ -9,6 +9,10 @@ public sealed partial class VirtualMachine
     {
         switch (label)
         {
+            case "u00423120": // opcode 0x25a
+            case "set-display-background-color":
+                Gfx.SetDisplayBackgroundColor(Read(a[0]));
+                return pc + 1;
             case "script-entry":
                 Gfx.ClearSurfaceReloadPolicies();
                 return pc + 1;

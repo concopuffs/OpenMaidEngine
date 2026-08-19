@@ -629,17 +629,36 @@ public sealed partial class GodotAdvHost
         });
     }
 
+    public void FadeSurfaceToWhite(
+        GfxState gfx, int surface, long intervalArgument, bool forceEndpoint = false)
+    {
+        long start = _clock.NowMs;
+        IReadOnlyList<RenderObject> captured;
+        lock (_screenTransitionLock)
+            captured = _renderTargetSnapshots.TryGetValue(surface, out var snapshot)
+                ? snapshot : System.Array.Empty<RenderObject>();
+
+        RunLegacyScreenTransition(
+            captured, System.Array.Empty<RenderObject>(), start, intervalArgument, forceEndpoint,
+            new()
+            {
+                ["kind"] = "surface-white-fade",
+                ["surface"] = surface,
+                ["direction"] = "to-white",
+            }, overlayRgb: 0xffffff);
+    }
+
     // The native 0x21/0x22/0x25 family advances an 8-bit alpha accumulator. Values <=64 use
     // the operand as the timer interval and step alpha by sixteen; larger values divide the
     // interval by sixteen and step alpha by one. This reproduces its blocking wall-clock duration.
     private void RunLegacyScreenTransition(
         IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
         long start, long intervalArgument, bool forceEndpoint,
-        Dictionary<string, object?> timelineDetail)
+        Dictionary<string, object?> timelineDetail, long overlayRgb = 0)
     {
         long duration = LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
         lock (_screenTransitionLock)
-            _screenTransition = new LegacyScreenTransition(source, target, start, duration)
+            _screenTransition = new LegacyScreenTransition(source, target, start, duration, overlayRgb)
             {
                 Forced = forceEndpoint,
             };
@@ -701,7 +720,8 @@ public sealed partial class GodotAdvHost
                 : System.Math.Clamp((_clock.NowMs - _screenTransition.StartMs)
                     / (double)_screenTransition.DurationMs, 0.0, 1.0);
             snapshot = new LegacyScreenTransitionSnapshot(
-                _screenTransition.Source, _screenTransition.Target, progress);
+                _screenTransition.Source, _screenTransition.Target, progress,
+                _screenTransition.OverlayRgb);
             if (_screenTransition.Forced) _screenTransition = null;
             return true;
         }
@@ -893,7 +913,8 @@ public sealed partial class GodotAdvHost
 }
 
 public readonly record struct LegacyScreenTransitionSnapshot(
-    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress);
+    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress,
+    long OverlayRgb);
 
 internal sealed class LegacyScreenTransition
 {
@@ -901,14 +922,16 @@ internal sealed class LegacyScreenTransition
     public IReadOnlyList<RenderObject> Target { get; }
     public long StartMs { get; }
     public long DurationMs { get; }
+    public long OverlayRgb { get; }
     public bool Forced { get; set; }
 
     public LegacyScreenTransition(IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
-                                  long startMs, long durationMs)
+                                  long startMs, long durationMs, long overlayRgb)
     {
         Source = source;
         Target = target;
         StartMs = startMs;
         DurationMs = durationMs;
+        OverlayRgb = overlayRgb;
     }
 }

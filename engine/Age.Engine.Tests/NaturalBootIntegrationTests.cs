@@ -9,6 +9,14 @@ using Xunit;
 public class NaturalBootIntegrationTests
 {
     private sealed class ReachedSc0000Exception : Exception { }
+    private sealed class ReachedKamidoriAdvPageException(
+        string scriptName, string text, int visibleObjectCount, int audioRequestCount) : Exception
+    {
+        public string ScriptName { get; } = scriptName;
+        public string Text { get; } = text;
+        public int VisibleObjectCount { get; } = visibleObjectCount;
+        public int AudioRequestCount { get; } = audioRequestCount;
+    }
     private sealed class ReachedChmenuRosterException : Exception { }
 
     private sealed record NaturalBootResult(
@@ -62,14 +70,39 @@ public class NaturalBootIntegrationTests
         }
     }
 
+    private sealed class KamidoriNaturalBootSink : ITraceSink
+    {
+        public readonly List<string> Entered = new();
+        public Action<string>? OnEnter;
+        public bool TracingSteps => true;
+
+        public void Emit(in TraceEvent e)
+        {
+            if (e.Kind != TraceEventKind.FrameEnter || e.Name == null) return;
+            Entered.Add(e.Name);
+            OnEnter?.Invoke(e.Name);
+        }
+    }
+
     private sealed class NewGameInputHost : RecordingHost
     {
         public VirtualMachine Vm = null!;
+        private readonly int _titlePointerX;
+        private readonly int _titlePointerY;
         private long _now;
         public int TitlePollSleeps;
         private bool _inGameStart;
+        private bool _stopAtKamidoriAdvPage;
+        private int _kamidoriAdvLineBaseline;
+        private int _kamidoriAdvAudioBaseline;
         private int _gameStartPollSleeps;
         public override long InputClockMilliseconds => _now;
+
+        public NewGameInputHost(int titlePointerX = 400, int titlePointerY = 300)
+        {
+            _titlePointerX = titlePointerX;
+            _titlePointerY = titlePointerY;
+        }
 
         public void BeginGameStart()
         {
@@ -78,6 +111,26 @@ public class NaturalBootIntegrationTests
             Vm.UpdateMouseButtonState(0x1, false);
             Vm.UpdateInputCallbackState(4, false);
             Vm.QueueInputCallback(10);
+        }
+
+        public void StopAtKamidoriAdvPage()
+        {
+            _stopAtKamidoriAdvPage = true;
+            _kamidoriAdvLineBaseline = Lines.Count;
+            _kamidoriAdvAudioBaseline = AudioRequestCount;
+        }
+
+        private int AudioRequestCount => BgmTracks.Count + BgmRestartRequests.Count
+            + Voices.Count + SfxLoads.Count;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            if (_stopAtKamidoriAdvPage && Lines.Count > _kamidoriAdvLineBaseline)
+                throw new ReachedKamidoriAdvPageException(
+                    "SC0000.BIN", Lines[^1].Text,
+                    Vm.Gfx.SnapshotVisibleObjects().Count,
+                    AudioRequestCount - _kamidoriAdvAudioBaseline);
+            base.WaitForInput(layoutSlot, serviceInputCallback);
         }
 
         public override void Sleep(long duration)
@@ -96,7 +149,7 @@ public class NaturalBootIntegrationTests
                 int input = _inGameStart && polls <= 400 ? 0 : 4;
                 if (!_inGameStart)
                 {
-                    Vm.UpdatePointer(400, 300);
+                    Vm.UpdatePointer(_titlePointerX, _titlePointerY);
                     Vm.UpdateMouseButtonState(0x1, true);
                 }
                 Vm.UpdateInputCallbackState(input, true);
@@ -176,6 +229,51 @@ public class NaturalBootIntegrationTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x6c1));
         Assert.False(sink.SawStringEqualsStub);
         Assert.False(sink.SawUnitDataCopyStub);
+    }
+
+    [Fact]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var scripts = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+        // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
+        var host = new NewGameInputHost(700, 300);
+        var sink = new KamidoriNaturalBootSink();
+        var vm = new VirtualMachine(
+            scripts.RequireByName(profile.NaturalBootScript), table, host,
+            new VmOptions(MaxSteps: 5_000_000), scripts, sink,
+            compatibility: new VmCompatibilityContext(
+                profile.Id, profile.EngineAbiId,
+                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
+        host.Vm = vm;
+        sink.OnEnter = name =>
+        {
+            if (name.Equals("GAMESTART.BIN", StringComparison.OrdinalIgnoreCase)) host.BeginGameStart();
+            if (name.Equals("SC0000.BIN", StringComparison.OrdinalIgnoreCase)) host.StopAtKamidoriAdvPage();
+        };
+
+        Exception? exception = Record.Exception(() => vm.Run());
+        Assert.True(exception is ReachedKamidoriAdvPageException,
+            $"exception={exception?.GetType().Name ?? "none"}; halt={vm.HaltReason}; "
+            + $"title_sleeps={host.TitlePollSleeps}; entered={string.Join(",", sink.Entered)}");
+        var reachedAdv = Assert.IsType<ReachedKamidoriAdvPageException>(exception);
+
+        Assert.Null(vm.CompatibilityFailure);
+        Assert.Contains("TITLE.BIN", sink.Entered);
+        Assert.Contains("GAMESTART.BIN", sink.Entered);
+        Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
+        Assert.NotEmpty(reachedAdv.Text);
+        Assert.True(reachedAdv.VisibleObjectCount > 0);
+        Assert.True(reachedAdv.AudioRequestCount > 0);
+        Assert.Equal(reachedAdv.ScriptName, sink.Entered[^1]);
     }
 
     [Fact]

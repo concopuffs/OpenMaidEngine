@@ -222,6 +222,16 @@ Mode 0 draws only the primary glyph. Mode 1 draws one effect-colored copy displa
 
 The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE also constructs an @-prefixed vertical face. Himegari uses only the full-width Windows family names ＭＳ 明朝 (168 sites) and ＭＳ ゴシック (39 sites). This is live raster state, not a declaration/no-op.
 
+### 0x1b1 `set-adv-wait-indicator-follow-last-glyph` (u0041B5C0, argc 1)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x1b1` (evidence-confirmed)
+- **summary:** (enabled) — choose the ADV wait indicator's destination anchor. Zero uses the layout origin plus configured offset; one also adds the final retained glyph record's left/top coordinates.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x1b1`; scope=matching SYS4422 and SYS4433 native handlers plus wait-indicator renderer. SYS4422 op_0x1b1_set_wait_indicator_follow_last_glyph@0x41f480 writes text-manager+0x56c (EngineCtx+0x14eac); SYS4433 equivalent @0x41d5f0 writes its shifted text-manager+0x570 (EngineCtx+0x14ea8). The wait-indicator publisher has explicit 0/1 branches: zero uses layout origin plus configured destination offset, while one additionally reads the final 0x14-byte retained glyph record and adds its left/top. Kamidori's natural SYSTEM4.BIN boot sets one at 0xb7. Himegari's dispatcher installs the same behavior despite no decoded corpus use.
+
 ### 0x1b5 `set-message-glyph-delay` (u0041B5F0, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -356,6 +366,16 @@ Republish snapshots the global reveal index, clamps only to the selected layout'
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x213`; scope=Himegari SYS4422. Ghidra /v2: handler 0x423110 indexes the ADV layout pointer table at text-manager+0x414 (EngineCtx+0x14d54) and writes layout+0x68/+0x6c. adv_text_publish_next_glyph@0x451220 binds handle first+glyph_index; adv_text_layout_reset@0x455210 and adv_text_publish_layout@0x450c80 erase this interval. All nine corpus sites are SYSTEM4 layout initialization; layout 1 receives 0xd6d8/0x1f4.
 
+### 0x2bc `configure-adv-wait-indicator-grid` (u00423020, argc 11)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2bc` (evidence-confirmed)
+- **summary:** (layout)(dst x/y)(surface)(source x/y)(cell w/h)(atlas columns)(exclusive terminal frame)(period) — configure the ADV input-wait animation from a possibly multi-row atlas. This is the 11-operand form of 0x73, which uses one value for both atlas columns and terminal frame.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2bc`; scope=matching SYS4422 and SYS4433 native handlers plus Kamidori natural SYSTEM4 boot. SYS4422 op_0x2bc_configure_wait_indicator_grid@0x4250e0 and SYS4433 equivalent @0x4231e0 set the animation period from operand 11, then copy operands 1..10 into the selected ADV layout's wait-indicator descriptor. The shared helper stores atlas column count and exclusive terminal frame separately; adjacent opcode 0x73's helper duplicates operand 9 into both fields. Rendering therefore selects (frame % columns, frame / columns). Kamidori's natural SYSTEM4.BIN boot first reaches this opcode at 0xa0 with (1,2,L0,12,0,0,30,30,32,20,64). Himegari's native dispatcher installs the equivalent handler despite no decoded Himegari use.
+
 ### 0x2bd `set-font-bold` (set-font-bold, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -365,6 +385,26 @@ Republish snapshots the global reveal index, clamps only to the selected layout'
 - **summary:** (enabled) - set the current primary text font weight to 700 when enabled or 0 when disabled, then rebuild the native font state.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2bd`; scope=Himegari SYS4422. Ghidra /v2: op_0x2bd_set_font_bold@0x4251c0 writes enabled?700:0 to LOGFONT weight at text-manager+0x4dc and calls text_rebuild_primary_font_resources@0x44f7f0. It immediately follows set-font throughout the UI corpus; HISTORY.BIN selects the Mincho face with bold enabled.
+
+### 0x2db `set-text-aspect-mode` (u004235C0, argc 1)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2db` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (mode) - select the SYS4433 glyph aspect/metric mode and rebuild the primary font resources.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2db_set_text_aspect_mode@0x4235c0 fetches operand 1, stores it at text-manager+0x313d0 (EngineCtx+0x45d08), and tail-calls text_rebuild_primary_font_resources@0x452320. The rebuild and text_measure_glyph_with_aspect_mode@0x452080 branch on modes 0/1/2 and display:AspectMode while selecting glyph metrics and the ordinary/@-prefixed vertical font paths. Kamidori's sole decoded use is SYSTEM4.BIN@0xbd with mode 1 during natural startup. Himegari SYS4422 does not install dispatch slot 0x2db, so this semantic claim is SYS4433-only.
+
+### 0x2de `find-font-family-index` (u0042BAC0, argc 2)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2de` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (out_index)(face_name) - find a face in the installed-font cache, ignoring one leading vertical-font '@'; return -1 when absent.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=Himegari SYS4422. Kamidori SYS4433 Ghidra: op_0x2de_find_font_family_index@0x42bac0 reads operand 2 through vm_operand_read_string@0x418ff0, passes it to text_find_font_family_index@0x423a50, and writes the result to operand 1. The lookup scans the text manager's 0x20-byte installed-family entries, strips one leading '@', and returns a zero-based index or -1. Kamidori first reaches it at CHECKCONFIG.BIN@0x0 with (L0, G[633]). Himegari SYS4422 does not install dispatch slot 0x2de.
 
 ## audio
 
@@ -543,6 +583,16 @@ Port status (2026-07-29): implemented with native SYS4REG.INI route persistence 
 - **summary:** Replay a voice id selected from retained ADV text history using native playback/history variant 1, preserving normal Skip and Auto-voice state behavior.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1bd`; scope=Himegari SYS4422. Ghidra /v2: op_0x1bd_play_history_voice@0x420920 stops/replaces the active voice and calls voice_play_indexed_asset@0x488330 with operand 1 plus playback variant 1 when Skip is inactive (or queues that pair while Skip is active). When text-history recording is enabled it appends voice pair {id,1}; HISTORY.BIN suppresses recording with op 0x1bb while its UI is active, preventing replay clicks from recursively entering the backlog. The handler also sets adv_auto_voice_pending when playback exists. voice_play_indexed_asset retains the variant in sound-buffer state before starting channel 12; its exact audible meaning remains unproven.
+
+### 0x1be `get-sound-channel-playing` (u0041D9D0, argc 2)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x1be` (evidence-confirmed)
+- **summary:** (out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; unavailable or out-of-range channels return false.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x1be`; scope=matching SYS4422 and SYS4433 native handlers plus Kamidori TITLE.BIN use. SYS4422 op_0x1be_sound_channel_is_playing@0x4286a0 and SYS4433 op_0x1be_sound_channel_is_playing@0x429400 have the same five-dword contract: fetch operand 2, call the revision's sound_channel_is_playing helper, normalize the result to boolean, and write operand 1. Each helper validates channel < 13 and returns sound-buffer +0x2460, independently identified as the live playing flag by the existing SFX trace. SYS4433 op 0x1c4 independently hard-codes channel 12 for its voice-playing query. Kamidori TITLE.BIN@0xd7 queries channel 11 after restart-bgm-once and combines false with its idle counter to wait for the one-shot title BGM to finish before the idle transition. Himegari's native dispatcher installs the equivalent handler even though no decoded Himegari script uses it.
 
 ### 0x1cf `set-voice-bgm-duck-control` (set-voice-bgm-duck-control, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1370,11 +1420,12 @@ Port status (2026-07-29, skip lifecycle corrected 2026-07-29): implemented throu
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
-- **runtime implemented:** no
-- **summary:** (surface_slot)(timing_argument) — broader-AGE mode-3 sibling of 0x22: block while fading a captured full-frame surface to white.
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x24` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (surface_slot)(timing_argument) — mode-3 sibling of 0x22: block while fading a captured full-frame surface to white.
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x20c, 0x20d
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x24`; scope=Himegari SYS4422. Ghidra /v2: dispatch slot 0x24 resolves to op_0x24_fade_surface_out_to_white@0x41cd40 and starts screen_transition_begin@0x439da0 mode 3 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x24`; scope=Himegari SYS4422. Matching native handlers: SYS4422 op_0x24_fade_surface_out_to_white@0x41cd40 and SYS4433 @0x41ad80 start their revision's screen_transition_begin in mode 3 with the same timing conversion as 0x21/0x22/0x25. Kamidori GAMESTART.BIN@0x19dc invokes (surface 1, timing 80); Himegari's decoded corpus does not use this installed opcode.
 
 ### 0x25 `crossfade-surfaces` (u00418B40, argc 3)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2110,6 +2161,16 @@ Scripts place declaration chains immediately after opcode 0x259 clears both fiel
 - **summary:** zero-arg script/prologue entry; clears surface-record persistence fields +0x08 and +0x0c across both 1,000-record native tables before the declaration chain continues
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x259`; scope=Himegari SYS4422. Ghidra /v2: op_0x259_script_entry_clear_surface_persistence_flags@0x417660 loops over both 20,000-byte surface-record tables (1,000 records x 20 bytes), writing zero to record +0x08 and +0x0c. SC0000 offset 0x0 and every observed script entry begins with this opcode; 0x258 continues the declaration chain. Port clears its modeled +0x08 reload policy; +0x0c remains opaque/unmodeled.
+
+### 0x25a `set-display-background-color` (u00423120, argc 1)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x25a` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (rgb) - select the persistent solid-color display background and recreate its full-canvas surface.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x25a`; scope=Himegari SYS4422. Ghidra matching handlers: SYS4422 op_0x25a_set_display_background_color@0x4253a0 and SYS4433 @0x423120 store persistent background mode 1 and the operand RGB value, then call display_recreate_background_color_surface (SYS4422 0x479a90; SYS4433 0x4803d0) when the active display mode permits. That worker supplies the logical canvas width/height, RGB value, and backend mode to gfx_create_filled_canvas_surface, which creates a surface and fills its full rectangle at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 sets black (0) during natural startup.
 
 ## input
 
@@ -3802,24 +3863,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 
-### 0x1b1 `u0041B5C0` (u0041B5C0, argc 1)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1b1`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x1be `u0041D9D0` (u0041D9D0, argc 2)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1be`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x1c0 `u0041DB70` (u0041DB70, argc 1)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4207,15 +4250,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=med
 - **evidence:** method=upstream-catalog; confidence=med; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x257`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x25a `u00423120` (u00423120, argc 1)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x25a`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x25b `25B` (25B, argc 1)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4305,15 +4339,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=med
 - **evidence:** method=upstream-catalog; confidence=med; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x264`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2bc `u00423020` (u00423020, argc 11)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2bc`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2be `u00423140` (u00423140, argc 1)
 - **observed by:** none in recorded corpora
@@ -4495,15 +4520,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x2db `u004235C0` (u004235C0, argc 1)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x2dc `u0042BA80` (u0042BA80, argc 1)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
@@ -4521,15 +4537,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2dd`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2de `u0042BAC0` (u0042BAC0, argc 2)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2df `u0042BAC1` (u0042BAC1, argc 3)
 - **observed by:** none in recorded corpora

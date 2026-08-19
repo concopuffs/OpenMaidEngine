@@ -30,6 +30,12 @@ public readonly record struct AdvTextStyle(
     int LineSpacing,
     string FontFace)
 {
+    /// <summary>
+    /// SYS4433 glyph aspect/metric mode selected by opcode 0x2db. Mode zero is the native default;
+    /// Kamidori selects mode one during SYSTEM4 startup.
+    /// </summary>
+    public int AspectMode { get; init; }
+
     public static AdvTextStyle Default => new(0, 0, false, 0, 0, 0, 0, 0, 6, "");
 }
 

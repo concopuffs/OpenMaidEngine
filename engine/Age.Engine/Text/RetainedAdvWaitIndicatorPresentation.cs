@@ -14,7 +14,9 @@ public sealed class RetainedAdvWaitIndicatorPresentation
         AdvWaitIndicatorConfig config,
         AdvTextLayoutPresentationBinding binding,
         int layoutOriginX,
-        int layoutOriginY)
+        int layoutOriginY,
+        int anchorOffsetX = 0,
+        int anchorOffsetY = 0)
     {
         if (config.LayoutSlot != binding.LayoutSlot)
             throw new ArgumentException(
@@ -30,12 +32,16 @@ public sealed class RetainedAdvWaitIndicatorPresentation
         Binding = binding;
         LayoutOriginX = layoutOriginX;
         LayoutOriginY = layoutOriginY;
+        AnchorOffsetX = anchorOffsetX;
+        AnchorOffsetY = anchorOffsetY;
     }
 
     public AdvWaitIndicatorConfig Config { get; }
     public AdvTextLayoutPresentationBinding Binding { get; }
     public int LayoutOriginX { get; }
     public int LayoutOriginY { get; }
+    public int AnchorOffsetX { get; }
+    public int AnchorOffsetY { get; }
     public int PublishedFrame => _publishedFrame;
     public bool IsPublished => _publishedFrame >= 0;
 
@@ -80,15 +86,18 @@ public sealed class RetainedAdvWaitIndicatorPresentation
 
     private void Bind(GfxState gfx, int frame)
     {
+        int columns = System.Math.Max(1, Config.AtlasColumns);
+        int column = frame % columns;
+        int row = frame / columns;
         gfx.BindDraw(
             Binding.WaitIndicatorObjectHandle,
             Config.SurfaceSlot,
-            checked(Config.SourceX + frame * Config.CellWidth),
-            Config.SourceY,
+            checked(Config.SourceX + column * Config.CellWidth),
+            checked(Config.SourceY + row * Config.CellHeight),
             Config.CellWidth,
             Config.CellHeight,
-            checked(LayoutOriginX + Config.X),
-            checked(LayoutOriginY + Config.Y));
+            checked(LayoutOriginX + AnchorOffsetX + Config.X),
+            checked(LayoutOriginY + AnchorOffsetY + Config.Y));
         _publishedFrame = frame;
     }
 }

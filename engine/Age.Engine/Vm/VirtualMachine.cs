@@ -1242,6 +1242,8 @@ public sealed partial class VirtualMachine
         {
             case "script-entry":
             case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
+            case "u00423120": // opcode 0x25a
+            case "set-display-background-color":
                 return StepSurface(label, a, pc);
             case "add":
             case "sub":
@@ -1469,6 +1471,10 @@ public sealed partial class VirtualMachine
             case "set-text-color":
             case "set-text-effect-color":
             case "set-text-render-mode":
+            case "u004235C0": // SYS4433 opcode 0x2db
+            case "set-text-aspect-mode":
+            case "u0042BAC0": // SYS4433 opcode 0x2de
+            case "find-font-family-index":
             case "set-text-effect-offset":
             case "set-adv-text-layout-origin": // 0x198; slot 0 selects the current layout
             case "u0041B540":
@@ -1493,6 +1499,10 @@ public sealed partial class VirtualMachine
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
                 return StepAdvService(label, a, pc);
             case "end-text-line":
+            case "u00423020":
+            case "configure-adv-wait-indicator-grid":
+            case "u0041B5C0":
+            case "set-adv-wait-indicator-follow-last-glyph":
             case "set-font":
             case "comment": case "display-furigana": case "dev_ukn":
                 return StepAdvText(label, ins, pc);
@@ -1535,6 +1545,8 @@ public sealed partial class VirtualMachine
             case "sfx-start-loop":
             case "u0041D080":
             case "schedule-sfx-start":
+            case "u0041D9D0":
+            case "get-sound-channel-playing":
             case "u0041D2B0":
             case "get-audio-volume":
             case "set-audio-volume":
@@ -1629,6 +1641,8 @@ public sealed partial class VirtualMachine
             case "u00418860":
             case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
             case "u00418920":
+            case "fade-surface-out-to-white": // 0x24: blocking captured full-frame surface -> white
+            case "u00418A90":
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
             case "mark-frame-yield": // 0x21c: normal foreground-transition scheduler/resume boundary

@@ -16,7 +16,7 @@ public class OpcodeCompatibilityTests
         Assert.True(table.TryGetDefinition(0x1be, out OpcodeDefinition definition));
         Assert.False(definition.IsObservedBy("himegari"));
         Assert.True(definition.IsObservedBy("kamidori"));
-        Assert.False(OpcodeRuntimeCoverage.IsImplemented(0x1be));
+        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x1be));
         Assert.Equal("SYS4433", table.AbiId);
         IReadOnlySet<int> himegari = table.Observations["himegari"].Opcodes;
         IReadOnlySet<int> kamidori = table.Observations["kamidori"].Opcodes;
@@ -53,52 +53,34 @@ public class OpcodeCompatibilityTests
     }
 
     [Fact]
-    public void NormalModeHaltsAndProbeModeTracesThenAdvancesAtUnsupportedOpcode()
+    public void NewlyImplementedCrossRevisionOpcodeRunsWithoutCompatibilityFallback()
     {
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
         Script script = ScriptAssembler.Assemble(table, "FRONTIER.BIN", new[]
         {
-            (0x1be, new[] { new Operand(0, 11), new Operand(0, 22) }),
+            (0x1be, new[] { new Operand(3, 0x100), new Operand(0, 11) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
 
         var normalTrace = new RecordingTraceSink();
+        var host = new RecordingHost();
+        host.PlayingSoundChannels.Add(11);
         var normal = new VirtualMachine(
-            script, table, new RecordingHost(), sink: normalTrace,
+            script, table, host, sink: normalTrace,
             compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
         normal.Run();
 
-        UnsupportedOpcodeDiagnostic failure = Assert.IsType<UnsupportedOpcodeDiagnostic>(
-            normal.CompatibilityFailure);
-        Assert.Equal("kamidori", failure.ProfileId);
-        Assert.Equal("SYS4433", failure.EngineAbiId);
-        Assert.Equal("SYS4422", failure.ScriptRevision);
-        Assert.Equal("FRONTIER.BIN", failure.ScriptName);
-        Assert.Equal(0, failure.Offset);
-        Assert.Equal(0x1be, failure.Opcode);
-        Assert.Equal("u0041D9D0", failure.CanonicalLabel);
-        Assert.Equal("SYS4433", failure.OperandContractLayerId);
-        Assert.Equal(new long[] { 11, 22 }, failure.Operands.Select(value => value.Value));
-        Assert.Contains(normalTrace.Events,
-            item => item.Kind == TraceEventKind.UnsupportedOpcode
-                    && item.CompatibilityDiagnostic == failure);
-
-        var probeTrace = new RecordingTraceSink();
-        var probe = new VirtualMachine(
-            script, table, new RecordingHost(), sink: probeTrace,
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433", ProbeMode: true));
-        probe.Run();
-
-        Assert.Null(probe.CompatibilityFailure);
-        Assert.Equal("exit", probe.HaltReason);
-        Assert.Contains(probeTrace.Events,
-            item => item.Kind == TraceEventKind.UnsupportedOpcode
-                    && item.CompatibilityDiagnostic?.Opcode == 0x1be);
+        Assert.Null(normal.CompatibilityFailure);
+        Assert.Equal("exit", normal.HaltReason);
+        Assert.Equal(1, normal.Globals[0x100]);
+        Assert.DoesNotContain(normalTrace.Events,
+            item => item.Kind == TraceEventKind.UnsupportedOpcode);
     }
 
     [Fact]
     [Trait("Category", "Workspace")]
-    public void KamidoriTitleStopsAtFirstKnownUnsupportedFrontier()
+    [Trait("Profile", "kamidori")]
+    public void KamidoriTitleEntersSupportedIdleLoop()
     {
         string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
@@ -115,11 +97,9 @@ public class OpcodeCompatibilityTests
 
         vm.Run();
 
-        UnsupportedOpcodeDiagnostic failure = Assert.IsType<UnsupportedOpcodeDiagnostic>(
-            vm.CompatibilityFailure);
+        Assert.Null(vm.CompatibilityFailure);
         Assert.Equal("SYS4433", title.EngineRevision);
-        Assert.Equal("TITLE.BIN", failure.ScriptName);
-        Assert.Equal(0xd7, failure.Offset);
-        Assert.Equal(0x1be, failure.Opcode);
+        Assert.Equal("STEP-LIMIT", vm.HaltReason);
+        Assert.Equal(100_000, vm.Steps);
     }
 }

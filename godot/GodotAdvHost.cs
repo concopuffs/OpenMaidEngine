@@ -45,6 +45,13 @@ public sealed partial class GodotAdvHost : IHost
 
     public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
     public void ReportWarning(string message) => System.Console.Error.WriteLine(message);
+    public int FindFontFamilyIndex(string faceName)
+    {
+        string ordinaryFace = faceName.StartsWith('@') ? faceName[1..] : faceName;
+        // Both exact Windows GDI and the portable text backend can render any non-empty authored
+        // family through system substitution. Scripts use only the non-negative/absent distinction.
+        return string.IsNullOrWhiteSpace(ordinaryFace) ? -1 : 0;
+    }
 }
 
 public sealed record GodotHostDiagnosticSnapshot(

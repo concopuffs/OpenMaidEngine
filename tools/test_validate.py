@@ -74,6 +74,7 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("engine-cli-build", keys)
         self.assertIn("engine-tests", keys)
         self.assertIn("python-test_validate", keys)
+        self.assertIn("python-test_sys4load", keys)
         self.assertNotIn("sys4-corpus-validate", keys)
         self.assertNotIn("godot-selftest", keys)
         self.assertNotIn("age-cli-sweep", keys)
@@ -165,6 +166,26 @@ class GatePlanTests(unittest.TestCase):
         selftest = next(gate for gate in plan if gate.key == "godot-selftest")
         self.assertIn(str(state_root / "godot.log"), selftest.command)
         self.assertIn(("APPDATA", str(state_root / "appdata")), selftest.environment)
+
+    def test_kamidori_full_uses_natural_boot_acceptance_not_himegari_direct_sweep(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = validate.paths.ToolContext.resolve(
+                "kamidori", root / "game", root / "extract", environ={}
+            )
+            plan = validate.build_gate_plan(
+                "full", Path("godot"), context.game_root, root / "state", context
+            )
+
+        keys = {gate.key for gate in plan}
+        self.assertIn("natural-boot-acceptance", keys)
+        self.assertNotIn("age-cli-sweep", keys)
+        acceptance = next(gate for gate in plan if gate.key == "natural-boot-acceptance")
+        self.assertIn(
+            "FullyQualifiedName=NaturalBootIntegrationTests."
+            "KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene",
+            acceptance.command,
+        )
 
 
 if __name__ == "__main__":

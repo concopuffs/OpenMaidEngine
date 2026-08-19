@@ -77,6 +77,45 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
 
 ---
 
+## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
+
+Kamidori was captured independently rather than treating Himegari's `/v2` image as a SYS4 baseline.
+`tools/frida/dump_engine.py` recorded the installed 2,183,936-byte packed `AGE.EXE` with SHA-256
+`977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`; the live module is based at
+`0x400000`, spans 2,294,528 bytes, and its gap-free dump has SHA-256
+`a071ca0fcc3f5955492d070c02e79d8f4ea8c54530d0a2bd1164811e07865a87`. The separate Ghidra program is
+`/kamidori/SYS4433/range_00400000.bin`, imported as flat `x86:LE:32:default` at `0x400000`. Kamidori has
+no borrowed Himegari landmark; the schema-v2 manifest under
+`build/games/kamidori/engine-dump/manifest.json` is the capture authority.
+
+`engine_ctx_construct_SYS4433@0x413e50` initializes Kamidori's opcode table at
+`ctx+0x9f700`, so its dispatch rule is `*(ctx + 0x9f700 + opcode*4)`. This differs from Himegari's
+`ctx+0x9b24c` table and is not an `EngineCtx` layout transfer. The K6 natural-boot frontier established and
+annotated these handlers in the SYS4433 image:
+
+| Opcode | SYS4433 handler | Finding reached naturally |
+|---|---|---|
+| `0x2bc` | `op_0x2bc_configure_wait_indicator_grid@0x4231e0` | `SYSTEM4@0xa0`; configures the wait-indicator atlas/grid and period. |
+| `0x1b1` | `op_0x1b1_set_wait_indicator_follow_last_glyph@0x41d5f0` | `SYSTEM4@0xb7`; stores the follow-last-glyph mode at SYS4433 text-manager `+0x570`. |
+| `0x2db` | `op_0x2db_set_text_aspect_mode@0x4235c0` | `SYSTEM4@0xbd`; mode 1 changes glyph metrics/font orientation and rebuilds primary font resources. |
+| `0x2de` | `op_0x2de_find_font_family_index@0x42bac0` | `CHECKCONFIG@0x0`; strips one leading `@`, then returns the installed-family index or `-1`. |
+| `0x25a` | `op_0x25a_set_display_background_color@0x423120` | `SYSTEM4@0x1f3`; persists mode 1/RGB and recreates a logical-canvas filled surface. |
+| `0x1be` | `op_0x1be_sound_channel_is_playing@0x429400` | `TITLE@0xd7`; validates one of thirteen channels and returns its normalized live-playing flag. |
+| `0x24` | `op_0x24_fade_surface_out_to_white@0x41ad80` | `GAMESTART@0x19dc`; runs blocking screen-transition mode 3 from captured surface 1 to white with timing 80. |
+
+Comparative decompilation confirmed equivalent SYS4422 behavior for `0x1b1`, `0x1be`, `0x2bc`, `0x25a`,
+and `0x24`; that supports shared runtime handlers without claiming a true base SYS4 dialect. Opcodes `0x2db`
+and `0x2de` are installed only by the inspected SYS4433 constructor. Exact operand contracts and structured
+profile/revision provenance remain canonical in `vm-map/opcodes.toml`.
+
+After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
+mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
+ADV page wait with retained visuals and scene-local audio requests. A windowed 1024×576 capture also confirms
+the rendered title. Kamidori's startup MPEG records use literal `.MPG` catalog names; that cross-game asset
+contract and its runtime support are documented in `docs/asset-resolution-re.md`.
+
+---
+
 ## Master key — the opcode→handler dispatch table (2026-07-07, anchored)
 
 The interpreter dispatches each op via a per-context handler table, **fully anchored**:

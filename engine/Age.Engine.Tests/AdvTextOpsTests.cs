@@ -391,6 +391,92 @@ public class AdvTextOpsTests
     }
 
     [Fact]
+    public void GridWaitIndicatorKeepsSeparateAtlasColumnsAndTerminalFrame()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        static Operand I(long value) => new(0, value);
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-WAITMARK",
+            new List<(int, Operand[])>
+            {
+                (0x2bc, new[]
+                {
+                    I(1), I(2), new Operand(9, 0), I(12), I(0), I(0),
+                    I(30), I(30), I(32), I(20), I(64),
+                }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433")).Run();
+
+        Assert.Equal(
+            new AdvWaitIndicatorConfig(1, 2, 0, 12, 0, 0, 30, 30, 32, 20, 64),
+            Assert.Single(host.WaitIndicators));
+    }
+
+    [Fact]
+    public void WaitIndicatorLastGlyphAnchorModeReachesHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-WAITMARK-ANCHOR",
+            new List<(int, Operand[])>
+            {
+                (0x1b1, new[] { new Operand(0, 1) }),
+                (0x1b1, new[] { new Operand(0, 0) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433")).Run();
+
+        Assert.Equal(new[] { true, false }, host.WaitIndicatorFollowLastGlyphChanges);
+    }
+
+    [Fact]
+    public void Sys4433TextAspectModeIsCapturedByFollowingTextRuns()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-TEXT-ASPECT",
+            new List<(int, Operand[])>
+            {
+                (0x2db, new[] { new Operand(0, 1) }),
+                (0x6e, new[] { new Operand(0, 0), new Operand(2, 0) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "aspect-aware" });
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433")).Run();
+
+        Assert.Equal(1, Assert.Single(host.LiveTextRuns).Run.Style.AspectMode);
+    }
+
+    [Theory]
+    [InlineData("ＭＳ 明朝", 7)]
+    [InlineData("@ＭＳ 明朝", 7)]
+    [InlineData("missing", -1)]
+    public void Sys4433FontFamilyLookupWritesHostCacheIndex(string face, int expected)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-FONT-LOOKUP",
+            new List<(int, Operand[])>
+            {
+                (0x2de, new[] { new Operand(3, 0x100), new Operand(2, 0) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { face });
+        var host = new RecordingHost();
+        host.FontFamilyIndices["ＭＳ 明朝"] = 7;
+        var vm = new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal(expected, vm.Globals[0x100]);
+    }
+
+    [Fact]
     public void WaitIndicatorHandlePublishesItsResolvedLayoutBindingToHost()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

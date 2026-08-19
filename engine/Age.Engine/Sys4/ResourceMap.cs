@@ -35,11 +35,10 @@ public sealed class ResourceMap
     public AssetEntry? ResolveVoice(long resourceId)
         => ResolveTypedPacked(resourceId, "voice", "an OGG/WAV record", IsAudio);
 
-    /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF-named movie record. ReadMovie
-    /// validates the MPEG signature because still images use the same extension.</summary>
+    /// <summary>Resolve a universal packed SYS4INI/AAI id to an AGF- or MPG-named movie record.
+    /// ReadMovie validates the MPEG signature because still images also use AGF.</summary>
     public AssetEntry? ResolveMovie(long resourceId)
-        => ResolveTypedPacked(resourceId, "movie", "an AGF record",
-            entry => entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase));
+        => ResolveTypedPacked(resourceId, "movie", "an AGF/MPG record", IsMovie);
 
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
     public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
@@ -84,8 +83,8 @@ public sealed class ResourceMap
     }
 
     /// <summary>Read a catalog-resolved MPEG program-stream movie through the same loose-first VFS as
-    /// scripts, graphics, and audio. AGE uses an .AGF basename for these payloads; the MPEG pack start
-    /// code, rather than the extension, distinguishes them from still-image AGF.</summary>
+    /// scripts, graphics, and audio. AGE games use both .AGF and .MPG basenames; the MPEG pack start
+    /// code remains the authoritative payload check.</summary>
     public MoviePayload ReadMovie(AssetEntry entry)
     {
         if (entry.IsPlaceholder)
@@ -99,6 +98,10 @@ public sealed class ResourceMap
     private static bool IsAudio(AssetEntry entry)
         => entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase)
         || entry.Name.EndsWith(".WAV", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMovie(AssetEntry entry)
+        => entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase)
+        || entry.Name.EndsWith(".MPG", StringComparison.OrdinalIgnoreCase);
 
     private AssetEntry? ResolveTypedPacked(long resourceId, string kind, string expected,
                                             Func<AssetEntry, bool> matches)

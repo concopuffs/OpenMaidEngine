@@ -807,6 +807,28 @@ public class MovieOpcodeTests
         Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
     }
 
+    [Theory]
+    [InlineData(0x4432, "LOGO.MPG")]
+    [InlineData(0x4533, "OP.MPG")]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriModalMoviePayloadAcceptsNativeMpgCatalogNames(
+        int resourceId, string expectedName)
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+        var catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var resources = new ResourceMap(
+            catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+
+        AssetEntry? entry = resources.ResolveMovie(resourceId);
+
+        Assert.Equal(expectedName, entry?.Name);
+        MoviePayload movie = resources.ReadMovie(entry!);
+        Assert.Equal(new byte[] { 0, 0, 1, 0xba }, movie.Bytes[..4]);
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     public void DebugTestMovieDecodesToExactGreenMaskDimensions()

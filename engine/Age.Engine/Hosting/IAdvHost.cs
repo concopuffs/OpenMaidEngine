@@ -24,6 +24,9 @@ public interface IAdvHost
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
         => DrawStringToSurface(surfaceSlot, x, y, text);
+    // SYS4433 op 0x2de exposes AGE's installed-font-family cache to scripts. Return a stable
+    // non-negative cache index for an available/renderable family, or -1 when unavailable.
+    int FindFontFamilyIndex(string faceName) => -1;
     void ClearRenderedAdvTextLayout(int layoutSlot) { }
     void ResetRenderedAdvTextLayout(
         GfxState gfx, AdvTextLayoutPresentationBinding binding)
@@ -44,6 +47,7 @@ public interface IAdvHost
     int MessageWindowAlphaSetting => 0;
     void SetMessageWindowAlphaSetting(int value) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
+    void SetAdvWaitIndicatorFollowLastGlyph(bool enabled) { }
     // Op 0x212 supplies the ordinary retained handle used to publish the configured atlas cell.
     void BindAdvWaitIndicator(
         AdvTextLayoutPresentationBinding binding,

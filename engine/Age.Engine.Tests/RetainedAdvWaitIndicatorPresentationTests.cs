@@ -76,6 +76,37 @@ public class RetainedAdvWaitIndicatorPresentationTests
     }
 
     [Fact]
+    public void GridAtlasWrapsAcrossRowsIndependentlyFromTerminalFrame()
+    {
+        var config = new AdvWaitIndicatorConfig(
+            1, 2, 3, 12, 5, 7, 30, 20, AtlasColumns: 4, TerminalFrame: 6,
+            FramePeriodMs: 10);
+        var presentation = new RetainedAdvWaitIndicatorPresentation(
+            config, Binding, layoutOriginX: 0, layoutOriginY: 0);
+        var gfx = new GfxState();
+
+        presentation.Update(gfx, elapsedMs: 50, visible: true);
+
+        RenderObject marker = Assert.Single(gfx.SnapshotVisibleObjects());
+        Assert.Equal((35, 27), (marker.SrcX, marker.SrcY)); // frame 5 => column 1, row 1
+        Assert.Equal((1, 1), config.AtlasCellAt(50));
+    }
+
+    [Fact]
+    public void OptionalLastGlyphAnchorOffsetsConfiguredDestination()
+    {
+        var presentation = new RetainedAdvWaitIndicatorPresentation(
+            Config, Binding, layoutOriginX: 10, layoutOriginY: 20,
+            anchorOffsetX: 30, anchorOffsetY: 40);
+        var gfx = new GfxState();
+
+        presentation.Update(gfx, elapsedMs: 0, visible: true);
+
+        RenderObject marker = Assert.Single(gfx.SnapshotVisibleObjects());
+        Assert.Equal((425, 200), (marker.DstX, marker.DstY));
+    }
+
+    [Fact]
     public void RejectsMissingHandleAndMismatchedLayout()
     {
         Assert.Throws<ArgumentException>(() =>

@@ -35,6 +35,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
 | `0x14ea4` | `text_effect_offset_x` | `int` | text-manager+0x564; op 0x1a4 horizontal displacement for mode 1 or ellipse radius for mode 3 |
 | `0x14ea8` | `text_effect_offset_y` | `int` | text-manager+0x568; op 0x1a4 vertical displacement for mode 1 or ellipse radius for mode 3 |
+| `0x14eac` | `adv_wait_indicator_follow_last_glyph` | `int` | text-manager+0x56c; op 0x1b1 selects fixed layout-origin anchoring (0) or adds the final retained glyph record's left/top to the wait-indicator destination (1) |
 | `0x14f45` | `script_frame_index` | `int` | call-script frame index (0x1e-dword frames) |
 | `0x46188` | `renderer_device_state` | `int` | embedded D3D9 device/render state; op 0x20e passes this base to the target/depth clear worker |
 | `0x46598` | `d3d9_device` | `void*` | IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac |

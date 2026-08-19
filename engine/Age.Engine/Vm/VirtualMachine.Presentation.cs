@@ -26,6 +26,12 @@ public sealed partial class VirtualMachine
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
+            case "fade-surface-out-to-white": // 0x24: blocking captured full-frame surface -> white
+            case "u00418A90":
+                _host.FadeSurfaceToWhite(
+                    Gfx, (int)Read(a[0]), Read(a[1]),
+                    _messageSkipServiceActive || _host.IsMessageSkipActive);
+                return pc + 1;
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
                 _host.CrossfadeSurfaces(

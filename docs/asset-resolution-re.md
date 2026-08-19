@@ -475,6 +475,15 @@ unmanaged default-device side path. Timestamped stereo float PCM feeds a per-pla
 `AudioStreamGenerator`; the sound-hardware position drives video presentation, and modal cancellation or
 surface cleanup releases both sides together.
 
+**Kamidori extension correction (2026-08-19):** Kamidori keeps the same MPEG program-stream payload
+contract but names its startup records literally `LOGO.MPG` (`0x4432`) and `OP.MPG` (`0x4533`) in
+`S4IC433`, rather than using Himegari's `.AGF` aliases. Restricting `ResolveMovie` to `.AGF` therefore made
+natural boot skip both otherwise valid movies. The typed movie facade now admits `.AGF` or `.MPG`, while
+`ReadMovie` still requires the authoritative `00 00 01 BA` payload signature. Installed-data regressions
+open both Kamidori records through the universal packed-id/VFS path. A windowed K6 capture decoded
+`LOGO.MPG` as 1024×576 with 44.1 kHz stereo audio before cancelling it through the ordinary modal-input
+path and continuing to the rendered title.
+
 VFS-B passes its bounded gates in `Sys4AssetStoreTests`: the installed AAI expands from the LZSS stream at
 `0x118` (expanded size at `0x110`, packed size at `0x114`) to one `APPEND01.ALF` archive and 81 80-byte
 records. All records carry selector 1 and literal `$1$` names. The full directory has stable SHA-256

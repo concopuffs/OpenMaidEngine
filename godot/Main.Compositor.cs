@@ -242,6 +242,9 @@ public partial class Main
         if (!preserveExistingPixels)
         {
             System.Array.Clear(_screenPixels);
+            long background = _vm.Gfx.DisplayBackgroundColor;
+            if (background != 0)
+                FillQuad(0, 0, _screenWidth, _screenHeight, background, 1f);
         }
         _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
         System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
@@ -251,7 +254,8 @@ public partial class Main
             // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
             // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
             CompositeVisibleObjects(transition.Source, 1f, decisions);
-            FillQuad(0, 0, _screenWidth, _screenHeight, 0, (float)transition.Progress);
+            FillQuad(0, 0, _screenWidth, _screenHeight,
+                transition.OverlayRgb, (float)transition.Progress);
             CompositeVisibleObjects(transition.Target, (float)transition.Progress, decisions);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }

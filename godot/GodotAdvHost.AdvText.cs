@@ -36,6 +36,7 @@ public sealed partial class GodotAdvHost
     private volatile int _messageWindowAlphaSetting;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
+    private bool _waitIndicatorFollowLastGlyph;
     private readonly Dictionary<int, (
         AdvTextLayoutPresentationBinding Binding,
         AdvTextLayoutSnapshot Layout)> _waitIndicatorBindings = new();
@@ -239,6 +240,7 @@ public sealed partial class GodotAdvHost
                 rendered.PresentationRects,
                 run.Layout.OriginX,
                 run.Layout.OriginY);
+            RebuildRetainedWaitIndicator(binding.LayoutSlot);
             result = new AdvRetainedTextRunResult(
                 binding.LayoutSlot,
                 first,
@@ -494,9 +496,21 @@ public sealed partial class GodotAdvHost
         {
             ["layout"] = config.LayoutSlot, ["x"] = config.X, ["y"] = config.Y,
             ["surface"] = config.SurfaceSlot, ["cell_w"] = config.CellWidth,
-            ["cell_h"] = config.CellHeight, ["terminal_frame"] = config.TerminalFrame,
+            ["cell_h"] = config.CellHeight, ["atlas_columns"] = config.AtlasColumns,
+            ["terminal_frame"] = config.TerminalFrame,
             ["period_ms"] = config.FramePeriodMs,
         });
+    }
+
+    public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
+    {
+        lock (_textLock)
+        {
+            _waitIndicatorFollowLastGlyph = enabled;
+            foreach (int layoutSlot in _waitIndicators.Keys.ToArray())
+                RebuildRetainedWaitIndicator(layoutSlot);
+        }
+        _timeline?.Event("wait-indicator-follow-last-glyph", new() { ["enabled"] = enabled });
     }
 
     public void BindAdvWaitIndicator(
@@ -529,12 +543,24 @@ public sealed partial class GodotAdvHost
             return;
         }
 
+        int anchorX = 0;
+        int anchorY = 0;
+        if (_waitIndicatorFollowLastGlyph
+            && _retainedTextLayouts.TryGetValue(layoutSlot, out var textLayout)
+            && textLayout.Glyphs.Count > 0)
+        {
+            AdvRetainedGlyphRecord last = textLayout.Glyphs[^1].Record;
+            anchorX = last.Left;
+            anchorY = last.Top;
+        }
         _retainedWaitIndicators[layoutSlot] =
             new RetainedAdvWaitIndicatorPresentation(
                 config,
                 retained.Binding,
                 retained.Layout.OriginX,
-                retained.Layout.OriginY);
+                retained.Layout.OriginY,
+                anchorX,
+                anchorY);
     }
 
     public void SetAdvWaitIndicatorEnabled(bool enabled)

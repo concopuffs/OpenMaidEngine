@@ -428,7 +428,7 @@ def render_listing(scr: Sys4Script) -> str:
         # annotate unnamed/inferred ops with their raw value for grep-ability
         raw_label = ins.label
         unnamed = raw_label.startswith(("u00", "dev_ukn")) or raw_label[:1].isdigit()
-        raw = f"   ; op 0x{ins.opcode:x}" + (" inferred" if unnamed and ins.opcode in INFERRED else "") \
+        raw = f"   ; op 0x{ins.opcode:x}" + (" investigated" if unnamed and ins.opcode in SEMANTICS else "") \
             if unnamed else ""
         out.append(f"  0x{ins.offset:05x}:  {mnem}{(' ' + ops) if ops else ''}{raw}")
 

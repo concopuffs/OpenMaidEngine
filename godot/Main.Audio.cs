@@ -9,6 +9,7 @@ public partial class Main
     private AudioStreamPlayer _bgm = null!;                // looping background music
     private Tween? _bgmFadeTween;
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
+    private int _bgmPlaying;
     private int _voiceQueuedGeneration;
     private int _voiceStartedGeneration;
     private int _voiceCompletedGeneration;
@@ -17,6 +18,7 @@ public partial class Main
     private float _voiceBgmDuckRestoreDb;
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
     private readonly int[] _sfxGenerations = new int[10];
+    private readonly int[] _sfxPlaying = new int[10];
     private AudioMixerSettings _audioMixerSettings = null!;
     private Sys4RegIniStore? _sys4RegIniStore;
 
@@ -41,6 +43,7 @@ public partial class Main
         _bgm.VolumeDb = 0;
         _bgm.Stream = stream;
         _bgm.Play();
+        System.Threading.Volatile.Write(ref _bgmPlaying, 1);
     }
 
     public void StopBgm()
@@ -50,6 +53,7 @@ public partial class Main
         _bgm.Stop();
         _bgm.Stream = null;
         _bgm.VolumeDb = 0;
+        System.Threading.Volatile.Write(ref _bgmPlaying, 0);
     }
 
     private void PersistAudioMixerSettings(AudioMixerSettingsSnapshot snapshot)
@@ -97,10 +101,17 @@ public partial class Main
             CancelBgmFade();
             if (enabled)
             {
-                if (_bgm.Stream != null) _bgm.Play();
+                if (_bgm.Stream != null)
+                {
+                    _bgm.Play();
+                    System.Threading.Volatile.Write(ref _bgmPlaying, 1);
+                }
             }
             else
+            {
                 _bgm.Stop();
+                System.Threading.Volatile.Write(ref _bgmPlaying, 0);
+            }
         }
         else if (!enabled && category == (int)AudioMixerCategory.SoundEffect)
         {
@@ -210,6 +221,7 @@ public partial class Main
         _sfxGenerations[channel]++;
         _sfx[channel].Stop();
         _sfx[channel].Stream = null;
+        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
         // This is intentionally a Godot-only compatibility boundary. The VFS and engine retain the
         // original WAV bytes; Godot sees an AGE-compatible first-RIFF copy without CP932 INFO metadata.
         byte[] godotWav = RiffWaveSanitizer.PrepareForGodot(wavBytes);
@@ -230,6 +242,7 @@ public partial class Main
                 ? AudioStreamWav.LoopModeEnum.Disabled
                 : AudioStreamWav.LoopModeEnum.Forward;
         _sfx[channel].Play();
+        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 1);
     }
 
     public void ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)
@@ -244,6 +257,7 @@ public partial class Main
                     ? AudioStreamWav.LoopModeEnum.Disabled
                     : AudioStreamWav.LoopModeEnum.Forward;
             _sfx[channel].Play();
+            System.Threading.Volatile.Write(ref _sfxPlaying[channel], 1);
         }
         if (realDelaySeconds <= 0)
         {
@@ -267,6 +281,25 @@ public partial class Main
         _sfxGenerations[channel]++;
         _sfx[channel].Stop();
         _sfx[channel].Stream = null;
+        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
+    }
+
+    public bool IsSoundChannelPlaying(int channel) => channel switch
+    {
+        >= 0 and < 10 => System.Threading.Volatile.Read(ref _sfxPlaying[channel]) != 0,
+        11 => System.Threading.Volatile.Read(ref _bgmPlaying) != 0,
+        12 => IsVoicePlaybackActive,
+        _ => false,
+    };
+
+    private void UpdateSoundChannelPlaybackState()
+    {
+        if (System.Threading.Volatile.Read(ref _bgmPlaying) != 0 && !_bgm.Playing)
+            System.Threading.Volatile.Write(ref _bgmPlaying, 0);
+        for (int channel = 0; channel < _sfx.Length; channel++)
+            if (System.Threading.Volatile.Read(ref _sfxPlaying[channel]) != 0
+                && !_sfx[channel].Playing)
+                System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
     }
 
     public void FadeBgm(int targetPercent, double realDurationSeconds)

@@ -101,6 +101,32 @@ public class SfxOpsTests
     }
 
     [Fact]
+    public void SoundChannelPlayingQueryWritesNormalizedHostState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        const int bgmResult = 0x100;
+        const int unavailableResult = 0x101;
+        var script = ScriptAssembler.Assemble(table, "SOUND-PLAYING",
+            new List<(int, Operand[])>
+            {
+                (0x1be, new[] { new Operand(3, bgmResult), new Operand(0, 11) }),
+                (0x1be, new[] { new Operand(3, unavailableResult), new Operand(0, 10) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        host.PlayingSoundChannels.Add(11);
+        var vm = new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.Globals[bgmResult]);
+        Assert.Equal(0, vm.Globals[unavailableResult]);
+        Assert.Null(vm.CompatibilityFailure);
+    }
+
+    [Fact]
     public void ActiveAdvSkipForcesBgmFadeEndpointButOrdinaryDispatchKeepsAuthoredDelay()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

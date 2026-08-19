@@ -1483,7 +1483,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-19): K0 through K5 complete; K6 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 through K6 complete.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1666,20 +1666,33 @@ introducing a game-named opcode shim.
 
 ##### Phase K6 — full Kamidori inventory and vertical bring-up
 
-- [ ] Scan the complete base and append script corpus and publish the Kamidori-vs-Himegari opcode coverage
+- [x] Before assigning native `SYS4433` semantics, capture Kamidori's unpacked AGE module into its
+  profile-scoped build root with exact packed/dumped hashes and runtime base/size. Import it as a separate
+  Ghidra program, recover its dispatcher/core VM helpers independently, and never apply Himegari `/v2`
+  addresses or `EngineCtx` fields without a verified match.
+- [x] Scan the complete base and append script corpus and publish the Kamidori-vs-Himegari opcode coverage
   delta through the K4 model. Confirm argument shapes against the selected `SYS4433` dialect before semantic
   work.
-- [ ] Implement newly reached services in execution order, beginning with `0x1be`; use Kamidori native RE or
+- [x] Implement newly reached services in execution order, beginning with `0x1be`; use Kamidori native RE or
   runtime observation for semantics that Himegari cannot supply. Record every finding with the new provenance
   fields and annotate the correct native executable image when Ghidra is used.
-- [ ] Reach the natural title loop under strict mode, then the New Game route, then select one bounded ADV
+- [x] Reach the natural title loop under strict mode, then the New Game route, then select one bounded ADV
   scene as Kamidori's first visual/audio/input acceptance slice.
-- [ ] Add installed-data smoke coverage for catalog/VFS access, `1024x576` logical presentation, title input,
+- [x] Add installed-data smoke coverage for catalog/VFS access, `1024x576` logical presentation, title input,
   and the selected ADV slice. Keep persistence read-only until K1's Kamidori write contract is proven.
 
 **K6 completion gate:** one packaged OME runtime selects either installed game and its engine-ABI lineage without
 rebuilding, boots each through its natural SYSTEM4 route under strict compatibility semantics, keeps all writable
 state isolated, and reports separate reproducible opcode/feature coverage for both profiles.
+
+**K6 gate (complete 2026-08-19):** Kamidori now has an independently hashed live module dump and separate
+`/kamidori/SYS4433` Ghidra image. Natural strict execution implements the reached `0x2bc`, `0x1b1`, `0x2db`,
+`0x2de`, `0x25a`, `0x1be`, and `0x24` frontiers from matching-revision evidence, reaches the stable title,
+selects Game Start through the real title callback geometry, enters `SC0000`, and completes its first ADV page
+with retained visual objects and scene-local audio requests. The windowed runtime renders the 1024×576 title;
+Kamidori's `.MPG`-named startup streams resolve through the shared MPEG/VFS backend, including 1024×576 video
+and 44.1 kHz stereo audio. Kamidori persistence intentionally remains read-only because K1's `0x2e4` numbered-
+save graphics record is still unsupported; profile namespaces prevent any writable-state collision.
 
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5

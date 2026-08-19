@@ -128,7 +128,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── data/                              parsed data tables (*INIT → JSON)
     │   ├── scripts-json/                      machine-readable full dumps (on demand via --json)
     │   ├── textures/                          AGF-to-BMP stills (convert_agf.py) - diagnostic pixel oracle only
-    │   ├── engine-dump/                       UNPACKED engine dump (frida/dump_engine.py): range_<base>.bin + manifest.json
+    │   ├── games/<profile-id>/engine-dump/    profile-scoped UNPACKED engine dump: hashed ranges + provenance manifest
     │   ├── asset-index.json, asset-sections.json   asset resolver data (parse_sys4ini / resolve_asset)
     │   ├── global-var-map.{json,md}           partial global-variable name map (auto shape inference; feeds globals.toml merge)
     │   ├── globals.json                        GENERATED from globals.toml merged over global-var-map (sys4load labels + C# VM)
@@ -172,7 +172,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 Within disposable `build/`, engine-wide generated ABI/reference artifacts (`opcodes.json`, opcode
 coverage, and `engine-ctx.json`) remain shared. Every content-derived artifact belongs under
 `build/games/<profile-id>/`: catalog indexes, call-script names, disassembly/text corpora, parsed data,
-global/progression maps, traces, page maps, coverage reports, and validation logs. This is an ownership
+global/progression maps, native engine dumps, traces, page maps, coverage reports, and validation logs. This is an ownership
 boundary, not just a naming convention; tools resolve it from the selected immutable profile context.
 `engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports.

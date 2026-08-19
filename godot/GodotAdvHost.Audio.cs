@@ -139,6 +139,8 @@ public sealed partial class GodotAdvHost
         _main.CallDeferred("ReleaseSoundEffect", channel);
     }
 
+    public bool IsSoundChannelPlaying(int channel) => _main.IsSoundChannelPlaying(channel);
+
     private AudioPayload? LoadAudio(AssetEntry asset)
     {
         try { return _res.ReadAudio(asset); }

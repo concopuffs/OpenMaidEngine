@@ -70,9 +70,20 @@ public sealed partial class VirtualMachine
                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
                     (int)Read(a[8]), Read(a[9])));
                 return pc + 1;
+            case "u00423020": // 0x2bc: grid-atlas form with separate column/frame counts
+            case "configure-adv-wait-indicator-grid":
+                _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
+                    (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                    (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
+                    (int)Read(a[8]), (int)Read(a[9]), Read(a[10])));
+                return pc + 1;
             case "u0041B9F0":
             case "set-adv-wait-indicator-enabled": // 0x1ce: explicit marker service start/stop
                 _host.SetAdvWaitIndicatorEnabled(Read(a[0]) != 0);
+                return pc + 1;
+            case "u0041B5C0": // 0x1b1: marker origin optionally follows the final glyph
+            case "set-adv-wait-indicator-follow-last-glyph":
+                _host.SetAdvWaitIndicatorFollowLastGlyph(Read(a[0]) != 0);
                 return pc + 1;
             case "u00420CE0":
             case "publish-adv-text-layout": // 0x20a: publish layout and current marker frame if active
@@ -111,6 +122,12 @@ public sealed partial class VirtualMachine
                 _advTextStyle = _advTextStyle with { EffectColor = Read(a[0]) }; return pc + 1;
             case "set-text-render-mode":
                 _advTextStyle = _advTextStyle with { RenderMode = (int)Read(a[0]) }; return pc + 1;
+            case "u004235C0": // SYS4433 opcode 0x2db
+            case "set-text-aspect-mode":
+                _advTextStyle = _advTextStyle with { AspectMode = (int)Read(a[0]) }; return pc + 1;
+            case "u0042BAC0": // SYS4433 opcode 0x2de
+            case "find-font-family-index":
+                Write(a[0], _host.FindFontFamilyIndex(ReadStr(a[1]))); return pc + 1;
             case "set-text-effect-offset":
                 _advTextStyle = _advTextStyle with
                 {

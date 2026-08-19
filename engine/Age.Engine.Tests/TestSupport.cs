@@ -32,6 +32,7 @@ internal class RecordingHost : IHost
     public readonly List<(int Slot, int SourceX, int SourceY, int Width, int Height, int X, int Y)>
         TextureDraws = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
+    public readonly List<bool> WaitIndicatorFollowLastGlyphChanges = new();
     public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout)>
         WaitIndicatorBindings = new();
     public readonly List<bool> WaitIndicatorEnabledChanges = new();
@@ -53,6 +54,7 @@ internal class RecordingHost : IHost
     public readonly List<(int Target, long Duration)> BgmFades = new();
     public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
     public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
+    public readonly HashSet<int> PlayingSoundChannels = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask, long PositionMs)>
         PositionedMovies = new();
@@ -64,8 +66,10 @@ internal class RecordingHost : IHost
     public readonly List<int> ClearedRenderTargets = new();
     public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<(int Surface, long Interval, SurfaceBlackFadeDirection Direction)> SurfaceBlackFades = new();
+    public readonly List<(int Surface, long Interval)> SurfaceWhiteFades = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
     public readonly List<bool> SurfaceBlackFadeForceEndpoints = new();
+    public readonly List<bool> SurfaceWhiteFadeForceEndpoints = new();
     public readonly List<bool> SurfaceCrossfadeForceEndpoints = new();
     public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
@@ -79,6 +83,7 @@ internal class RecordingHost : IHost
     public readonly List<(int X, int Y)> CursorWarps = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
+    public readonly Dictionary<string, int> FontFamilyIndices = new(StringComparer.Ordinal);
     public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
     public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
     public int CursorClearCount;
@@ -124,6 +129,11 @@ internal class RecordingHost : IHost
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
+    public int FindFontFamilyIndex(string faceName)
+    {
+        string ordinaryFace = faceName.StartsWith('@') ? faceName[1..] : faceName;
+        return FontFamilyIndices.TryGetValue(ordinaryFace, out int index) ? index : -1;
+    }
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
         ClearedTextLayouts.Add(layoutSlot);
@@ -156,6 +166,8 @@ internal class RecordingHost : IHost
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
+    public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
+        => WaitIndicatorFollowLastGlyphChanges.Add(enabled);
     public void BindAdvWaitIndicator(
         AdvTextLayoutPresentationBinding binding,
         AdvTextLayoutSnapshot layout)
@@ -219,6 +231,12 @@ internal class RecordingHost : IHost
         SurfaceBlackFades.Add((surface, intervalArgument, direction));
         SurfaceBlackFadeForceEndpoints.Add(forceEndpoint);
     }
+    public void FadeSurfaceToWhite(
+        GfxState gfx, int surface, long intervalArgument, bool forceEndpoint = false)
+    {
+        SurfaceWhiteFades.Add((surface, intervalArgument));
+        SurfaceWhiteFadeForceEndpoints.Add(forceEndpoint);
+    }
     public void CrossfadeSurfaces(
         GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
         bool forceEndpoint = false)
@@ -256,6 +274,7 @@ internal class RecordingHost : IHost
         => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
     public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
+    public bool IsSoundChannelPlaying(int channel) => PlayingSoundChannels.Contains(channel);
     public void ApplyAudioVolume(int category, int basisPoints)
         => AudioVolumeChanges.Add((category, basisPoints));
     public void ApplyAudioRouteEnabled(int category, bool enabled)

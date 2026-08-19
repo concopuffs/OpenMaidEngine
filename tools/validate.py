@@ -44,6 +44,8 @@ CORE_TESTS = (
     "test_locate_page.py",
     "test_opcodes.py",
     "test_paths.py",
+    "test_sys4load.py",
+    "frida/test_dump_engine.py",
     "frida/test_map_imports.py",
 )
 WORKSPACE_TESTS = (
@@ -291,20 +293,41 @@ def build_gate_plan(
         ))
 
     if "full" in phases:
-        gates.append(
-            Gate(
-                "age-cli-sweep",
-                "C# VM scene sweep",
-                (
-                    "dotnet", "run", "--project", "engine/Age.Cli", "--configuration", "Debug",
-                    "--", "sweep", "--boot", "--halt-at-wait",
-                    "--profile", context.profile_id,
-                    "--game-root", str(game_root or context.game_root),
-                ),
-                600,
-                profile_environment,
+        if context.profile_id == "himegari":
+            gates.append(
+                Gate(
+                    "age-cli-sweep",
+                    "C# VM scene sweep",
+                    (
+                        "dotnet", "run", "--project", "engine/Age.Cli", "--configuration", "Debug",
+                        "--", "sweep", "--boot", "--halt-at-wait",
+                        "--profile", context.profile_id,
+                        "--game-root", str(game_root or context.game_root),
+                    ),
+                    600,
+                    profile_environment,
+                )
             )
-        )
+        elif context.profile_id == "kamidori":
+            gates.append(
+                Gate(
+                    "natural-boot-acceptance",
+                    f"C# natural boot/ADV acceptance ({context.profile_id})",
+                    (
+                        "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                        "--no-restore", "--nologo", "--verbosity", "minimal",
+                        "--filter",
+                        "FullyQualifiedName=NaturalBootIntegrationTests."
+                        "KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene",
+                    ),
+                    600,
+                    low_memory_profile_environment,
+                )
+            )
+        else:
+            raise ValueError(
+                f"Profile {context.profile_id!r} has no full-validation terminal gate"
+            )
 
     gates.append(Gate("diff-check", "Git whitespace check", ("git", "diff", "--check")))
     return gates

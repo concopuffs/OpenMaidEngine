@@ -87,6 +87,10 @@ public sealed partial class VirtualMachine
             }
             case "schedule-sfx-start":  // 0x2bf / native SetDelay(channel, start mode, delay ms)
                 _host.ScheduleSoundEffectStart((int)Read(a[0]), (int)Read(a[1]), Read(a[2])); return pc + 1;
+            case "u0041D9D0":                 // pre-reference compatibility
+            case "get-sound-channel-playing": // 0x1be (out boolean)(native channel 0..12)
+                Write(a[0], _host.IsSoundChannelPlaying(unchecked((int)Read(a[1]))) ? 1 : 0);
+                return pc + 1;
             case "u0041D2B0":           // 0xc2 / semantics: fade-bgm
             {
                 int targetPercent = (int)Read(a[0]);

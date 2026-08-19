@@ -137,6 +137,11 @@ name = "text_effect_offset_y"
 type = "int"
 note = "text-manager+0x568; op 0x1a4 vertical displacement for mode 1 or ellipse radius for mode 3"
 [[field]]
+offset = 0x14eac
+name = "adv_wait_indicator_follow_last_glyph"
+type = "int"
+note = "text-manager+0x56c; op 0x1b1 selects fixed layout-origin anchoring (0) or adds the final retained glyph record's left/top to the wait-indicator destination (1)"
+[[field]]
 offset = 0x14f45
 name = "script_frame_index"
 type = "int"

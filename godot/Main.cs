@@ -491,9 +491,18 @@ public partial class Main : Godot.Control
         // --shot: auto-advance up to (but not past) the target page, then _Process captures + quits.
         if (_shotPath != null)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting && _host.Pages < _shotPage) _host.SignalInput(); await Task.Delay(1); } });
-        // --shot-sequence: auto-advance past every input wait so the paced burst isn't blocked on a click.
+        // --shot-sequence: auto-advance past every input-cancellable wait, including modal movies,
+        // so a bounded capture can reach the requested natural-boot presentation slice.
         if (_seqDir != null)
-            _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
+            _ = Task.Run(async () =>
+            {
+                while (!_done)
+                {
+                    GodotHostDiagnosticSnapshot snapshot = _host.CaptureDiagnosticSnapshot();
+                    if (_host.IsWaiting || snapshot.IsModalMovieWaiting) _host.SignalInput();
+                    await Task.Delay(1);
+                }
+            });
         if (transitionClickMs >= 0)
             _ = Task.Run(async () =>
             {
@@ -524,6 +533,7 @@ public partial class Main : Godot.Control
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
             UpdateVoicePlaybackState();
+            UpdateSoundChannelPlaybackState();
             AdoptPendingMovies();
             UpdateMovieFrames();
             perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);

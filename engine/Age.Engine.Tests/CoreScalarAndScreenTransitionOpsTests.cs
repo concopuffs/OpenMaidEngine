@@ -50,6 +50,24 @@ public class CoreScalarAndScreenTransitionOpsTests
     }
 
     [Fact]
+    public void KamidoriDisplayBackgroundColorReachesGraphicsState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "BACKGROUND-COLOR",
+            new List<(int, Operand[])>
+            {
+                (0x25a, new[] { new Operand(Imm, 0x123456) }),
+                (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost(),
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal(0x123456, vm.Gfx.DisplayBackgroundColor);
+    }
+
+    [Fact]
     public void BlackSurfaceFades_ForwardCapturedSlotTimingAndDirection()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
@@ -91,6 +109,25 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.Equal(160, LegacyScreenTransitionTiming.DurationMilliseconds(10));
         Assert.Equal(480, LegacyScreenTransitionTiming.DurationMilliseconds(30));
         Assert.Equal(1024, LegacyScreenTransitionTiming.DurationMilliseconds(65));
+    }
+
+    [Fact]
+    public void KamidoriWhiteSurfaceFade_ForwardsCapturedSlotAndTimingArgument()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "SURFACE_WHITE_FADE", new List<(int, Operand[])>
+        {
+            (0x24, new[] { new Operand(Imm, 1), new Operand(Imm, 80) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433")).Run();
+
+        Assert.Equal((1, 80L), Assert.Single(host.SurfaceWhiteFades));
+        Assert.Equal(1280, LegacyScreenTransitionTiming.DurationMilliseconds(80));
+        Assert.False(Assert.Single(host.SurfaceWhiteFadeForceEndpoints));
     }
 
     [Fact]

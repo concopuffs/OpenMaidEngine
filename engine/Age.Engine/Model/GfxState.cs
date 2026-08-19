@@ -13,6 +13,18 @@ public sealed partial class GfxState
     private long _mutationGeneration;
     private long _publishedMutationGeneration;
 
+    /// <summary>Process-owned solid display background selected by opcode 0x25a (0xRRGGBB).</summary>
+    public long DisplayBackgroundColor { get; private set; }
+
+    public void SetDisplayBackgroundColor(long packedRgb)
+    {
+        lock (_lock)
+        {
+            DisplayBackgroundColor = packedRgb & 0x00ff_ffff;
+            MarkRetainedMutation();
+        }
+    }
+
     private void MarkRetainedMutation() => _mutationGeneration++;
 
     /// <summary>Native scene_context_init_reset ownership boundary used by opcode 0x9: discard

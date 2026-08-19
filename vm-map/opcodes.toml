@@ -7455,12 +7455,21 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "fade-surface-out-to-white"
 category = "draw"
-summary = "(surface_slot)(timing_argument) — broader-AGE mode-3 sibling of 0x22: block while fading a captured full-frame surface to white."
+summary = "(surface_slot)(timing_argument) — mode-3 sibling of 0x22: block while fading a captured full-frame surface to white."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = [0x20c, 0x20d]
-evidence = "Ghidra /v2: dispatch slot 0x24 resolves to op_0x24_fade_surface_out_to_white@0x41cd40 and starts screen_transition_begin@0x439da0 mode 3 with the same timing conversion as 0x21/0x22/0x25. Not observed in Himegari's script corpus."
+evidence = "Matching native handlers: SYS4422 op_0x24_fade_surface_out_to_white@0x41cd40 and SYS4433 @0x41ad80 start their revision's screen_transition_begin in mode 3 with the same timing conversion as 0x21/0x22/0x25. Kamidori GAMESTART.BIN@0x19dc invokes (surface 1, timing 80); Himegari's decoded corpus does not use this installed opcode."
+
+[[opcode.semantics.evidence_items]]
+method = "native-re"
+artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433"
+scope = "matching handlers, transition workers, and Kamidori natural New Game frontier"
+profile_ids = ["himegari", "kamidori"]
+engine_revisions = ["SYS4422", "SYS4433"]
+confidence = "high"
+text = "SYS4422 handler @0x41cd40 and SYS4433 handler @0x41ad80 both arm the blocking timer and call their screen-transition worker with mode 3, selected surface, white endpoint, and the shared timing conversion. Kamidori GAMESTART.BIN@0x19dc supplies (1, 80)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -9015,14 +9024,21 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041B5C0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-adv-wait-indicator-follow-last-glyph"
+category = "adv"
+summary = "(enabled) — choose the ADV wait indicator's destination anchor. Zero uses the layout origin plus configured offset; one also adds the final retained glyph record's left/top coordinates."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching SYS4422 and SYS4433 native handlers plus wait-indicator renderer", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x1b1_set_wait_indicator_follow_last_glyph@0x41f480 writes text-manager+0x56c (EngineCtx+0x14eac); SYS4433 equivalent @0x41d5f0 writes its shifted text-manager+0x570 (EngineCtx+0x14ea8). The wait-indicator publisher has explicit 0/1 branches: zero uses layout origin plus configured destination offset, while one additionally reads the final 0x14-byte retained glyph record and adds its left/top. Kamidori's natural SYSTEM4.BIN boot sets one at 0xb7. Himegari's dispatcher installs the same behavior despite no decoded corpus use." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "follow final retained glyph (boolean)"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1be
@@ -9031,14 +9047,26 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041D9D0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-sound-channel-playing"
+category = "audio"
+summary = "(out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; unavailable or out-of-range channels return false."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching SYS4422 and SYS4433 native handlers plus Kamidori TITLE.BIN use", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x1be_sound_channel_is_playing@0x4286a0 and SYS4433 op_0x1be_sound_channel_is_playing@0x429400 have the same five-dword contract: fetch operand 2, call the revision's sound_channel_is_playing helper, normalize the result to boolean, and write operand 1. Each helper validates channel < 13 and returns sound-buffer +0x2460, independently identified as the live playing flag by the existing SFX trace. SYS4433 op 0x1c4 independently hard-codes channel 12 for its voice-playing query. Kamidori TITLE.BIN@0xd7 queries channel 11 after restart-bgm-once and combines false with its idle counter to wait for the one-shot title BGM to finish before the idle transition. Himegari's native dispatcher installs the equivalent handler even though no decoded Himegari script uses it." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "out boolean"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "native sound channel (0..12)"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x1c0
@@ -9735,14 +9763,17 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423120"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-display-background-color"
+category = "draw"
+summary = "(rgb) - select the persistent solid-color display background and recreate its full-canvas surface."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra matching handlers: SYS4422 op_0x25a_set_display_background_color@0x4253a0 and SYS4433 @0x423120 store persistent background mode 1 and the operand RGB value, then call display_recreate_background_color_surface (SYS4422 0x479a90; SYS4433 0x4803d0) when the active display mode permits. That worker supplies the logical canvas width/height, RGB value, and backend mode to gfx_create_filled_canvas_surface, which creates a surface and fills its full rectangle at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 sets black (0) during natural startup."
+evidence_records = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching handlers, display background workers, and Kamidori natural startup", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 handler @0x4253a0 and SYS4433 handler @0x423120 store mode 1 plus the RGB operand and recreate a logical-canvas-sized surface filled with that color at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 supplies zero." }
+]
 
 [[opcode]]
 op = 0x25b
@@ -9911,14 +9942,71 @@ argc = 11
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423020"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "configure-adv-wait-indicator-grid"
+category = "adv"
+summary = "(layout)(dst x/y)(surface)(source x/y)(cell w/h)(atlas columns)(exclusive terminal frame)(period) — configure the ADV input-wait animation from a possibly multi-row atlas. This is the 11-operand form of 0x73, which uses one value for both atlas columns and terminal frame."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching SYS4422 and SYS4433 native handlers plus Kamidori natural SYSTEM4 boot", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x2bc_configure_wait_indicator_grid@0x4250e0 and SYS4433 equivalent @0x4231e0 set the animation period from operand 11, then copy operands 1..10 into the selected ADV layout's wait-indicator descriptor. The shared helper stores atlas column count and exclusive terminal frame separately; adjacent opcode 0x73's helper duplicates operand 9 into both fields. Rendering therefore selects (frame % columns, frame / columns). Kamidori's natural SYSTEM4.BIN boot first reaches this opcode at 0xa0 with (1,2,L0,12,0,0,30,30,32,20,64). Himegari's native dispatcher installs the equivalent handler despite no decoded Himegari use." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "ADV layout slot (zero selects current)"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "layout-relative destination x"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "layout-relative destination y"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "source surface slot"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "source x"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "source y"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = "cell width"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 8
+role = "cell height"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 9
+role = "atlas columns"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 10
+role = "exclusive terminal frame"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 11
+role = "frame period"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x2be
@@ -10247,14 +10335,17 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004235C0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-text-aspect-mode"
+category = "adv"
+summary = "(mode) - select the SYS4433 glyph aspect/metric mode and rebuild the primary font resources."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Kamidori SYS4433 Ghidra: op_0x2db_set_text_aspect_mode@0x4235c0 fetches operand 1, stores it at text-manager+0x313d0 (EngineCtx+0x45d08), and tail-calls text_rebuild_primary_font_resources@0x452320. The rebuild and text_measure_glyph_with_aspect_mode@0x452080 branch on modes 0/1/2 and display:AspectMode while selecting glyph metrics and the ordinary/@-prefixed vertical font paths. Kamidori's sole decoded use is SYSTEM4.BIN@0xbd with mode 1 during natural startup. Himegari SYS4422 does not install dispatch slot 0x2db, so this semantic claim is SYS4433-only."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, text resource rebuild, glyph measurement, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. SYS4422 has no installed handler in this slot." }
+]
 
 [[opcode]]
 op = 0x2dc
@@ -10295,14 +10386,17 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042BAC0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "find-font-family-index"
+category = "adv"
+summary = "(out_index)(face_name) - find a face in the installed-font cache, ignoring one leading vertical-font '@'; return -1 when absent."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Kamidori SYS4433 Ghidra: op_0x2de_find_font_family_index@0x42bac0 reads operand 2 through vm_operand_read_string@0x418ff0, passes it to text_find_font_family_index@0x423a50, and writes the result to operand 1. The lookup scans the text manager's 0x20-byte installed-family entries, strips one leading '@', and returns a zero-based index or -1. Kamidori first reaches it at CHECKCONFIG.BIN@0x0 with (L0, G[633]). Himegari SYS4422 does not install dispatch slot 0x2de."
+evidence_records = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, operand conversion, font-family cache lookup, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2de_find_font_family_index@0x42bac0 reads operand 2 as a string, calls text_find_font_family_index@0x423a50, and writes its zero-based index or -1 result to operand 1. The lookup ignores one leading '@'. Natural boot reaches CHECKCONFIG.BIN@0x0; SYS4422 has no handler in this slot." }
+]
 
 [[opcode]]
 op = 0x2df
