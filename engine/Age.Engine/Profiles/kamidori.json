@@ -1,0 +1,17 @@
+{
+  "id": "kamidori",
+  "displayTitle": "Kamidori Alchemy Meister",
+  "catalogIdentities": [
+    {
+      "catalogRevision": "S4IC433",
+      "title": "神採りアルケミーマイスター"
+    }
+  ],
+  "scriptRevisions": ["SYS4433"],
+  "sysFrontendId": "SYS4",
+  "engineAbiId": "SYS4433",
+  "naturalBootScript": "SYSTEM4.BIN",
+  "metadataReferences": {},
+  "persistenceNamespace": "kamidori",
+  "persistenceWritesEnabled": false
+}

@@ -10,6 +10,7 @@ using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Persistence;
+using Age.Engine.Profiles;
 using Age.Engine.Sys4;
 using Age.Engine.Text;
 #if AGE_WINDOWS_GDI
@@ -24,6 +25,7 @@ public partial class Main : Godot.Control
     private int _screenHeight = Sys4LogicalCanvas.DefaultHeight;
     private WindowLaunchOptions _windowOptions;
     private Sys4AssetCatalog _catalog = null!;
+    private SelectedGameProfile _selectedProfile = null!;
     private IAssetStore _assetStore = null!;
     private Label _status = null!;
     private VirtualMachine _vm = null!;
@@ -66,6 +68,7 @@ public partial class Main : Godot.Control
             return;
         }
         GameRootSelection gameRoot;
+        SelectedGameProfile selectedProfile;
         Sys4AssetCatalog catalog;
         try
         {
@@ -82,6 +85,9 @@ public partial class Main : Godot.Control
             }
             gameRoot = GameRootSelection.Resolve(
                 userArgs, OS.GetExecutablePath(), workingDirectory);
+            GameCatalogIdentity detectedIdentity =
+                GameCatalogIdentity.ReadSys4IniHeader(gameRoot.Sys4IniPath);
+            selectedProfile = GameProfileSelection.Resolve(userArgs, detectedIdentity);
             catalog = Sys4AssetCatalog.Load(gameRoot.Sys4IniPath);
         }
         catch (System.Exception error) when (
@@ -92,8 +98,18 @@ public partial class Main : Godot.Control
             return;
         }
         _catalog = catalog;
+        _selectedProfile = selectedProfile;
         _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, gameRoot.Root);
-        GD.Print($"[profile] game root={gameRoot.Root} source={gameRoot.SourceName}");
+        GD.Print($"[profile] id={selectedProfile.Profile.Id} title=\"{selectedProfile.Profile.DisplayTitle}\" " +
+                 $"selection={selectedProfile.SourceName} identity-match={selectedProfile.IdentityMatched} " +
+                 $"frontend={selectedProfile.Profile.SysFrontendId} " +
+                 $"abi={selectedProfile.Profile.EngineAbiId} probe={selectedProfile.ProbeMode}");
+        GD.Print($"[profile] catalog={selectedProfile.DetectedIdentity.Display} " +
+                 $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
+        if (selectedProfile.MismatchDiagnostic is { } mismatch)
+            GD.PushWarning($"[profile] {mismatch}");
+        if (selectedProfile.IsReadOnly)
+            GD.PushWarning($"[profile] persistence is read-only: {selectedProfile.ReadOnlyReason}");
 
         // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
         // instance is reused for scripts and assets later in startup.
@@ -179,7 +195,8 @@ public partial class Main : Godot.Control
         bool nativeDebugMenu = System.Array.IndexOf(userArgs, "--native-debug-menu") >= 0;
         if (nativeDebugMenu)
             GD.Print("[debug] native exit requests disabled; post-0x1 bytecode may execute");
-        string scene = "SYSTEM4";                       // natural persistent root; --scene keeps direct diagnostics
+        string scene = System.IO.Path.GetFileNameWithoutExtension(
+            selectedProfile.Profile.NaturalBootScript); // natural profile root; --scene keeps direct diagnostics
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
@@ -241,22 +258,25 @@ public partial class Main : Godot.Control
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OmeRuntimeMetadata.LoadOpcodeTable();
-        // Persistence retains AGE's native filenames and formats, but the port owns one profile-root
-        // interception point. Himegari's SYS4INI makes SAVEPATH the SAVE child of REGFILEPATH, so both
-        // save payloads and SYS4REG.INI remain isolated together under Godot's user directory.
-        Sys4PersistencePaths persistencePaths = Sys4PersistencePaths.ResolveProfileOverride(
-            catalog.StartupSettings,
-            ProjectSettings.GlobalizePath("user://"));
-        var nativeSaveStore = new DirectoryNativeDatStore(
-            persistencePaths.SaveDirectory,
-            new NativeSaveIdentity(
-                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
-                SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
+        INativeDatStore? nativeSaveStore = null;
         var sharedProfile = new SharedProfile();
-        if (!_selftest) sharedProfile.Load(nativeSaveStore);
         _audioMixerSettings = new AudioMixerSettings();
-        if (!_selftest)
+        if (!_selftest && selectedProfile.PersistenceWritesEnabled)
         {
+            // K1 moves this remaining validated Himegari save identity and the user:// namespace behind
+            // the selected profile. K0 never constructs it for Kamidori, probe runs, or mismatched roots.
+            if (selectedProfile.Profile.Id != "himegari")
+                throw new InvalidOperationException(
+                    $"profile '{selectedProfile.Profile.Id}' enables persistence without a validated store");
+            Sys4PersistencePaths persistencePaths = Sys4PersistencePaths.ResolveProfileOverride(
+                catalog.StartupSettings,
+                ProjectSettings.GlobalizePath("user://"));
+            nativeSaveStore = new DirectoryNativeDatStore(
+                persistencePaths.SaveDirectory,
+                new NativeSaveIdentity(
+                    NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
+                    SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
+            sharedProfile.Load(nativeSaveStore);
             try
             {
                 _sys4RegIniStore = Sys4RegIniStore.ForPath(

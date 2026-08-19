@@ -1482,9 +1482,9 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-18): not started.** This is the executable checklist for turning the existing
+**Status (2026-08-18): K0 complete; K1 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
-Himegari and Kamidori must continue to share the SYS4 frontend, complete opcode ABI, VM core, catalog/VFS,
+Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
 original game content.
 
@@ -1499,26 +1499,28 @@ than leaving it only as roadmap prose.
 
 ##### Phase K0 — freeze the profile contract
 
-- [ ] Add one authored, content-free profile manifest for Himegari and one for Kamidori. Give each a stable
+- [x] Add one authored, content-free profile manifest for Himegari and one for Kamidori. Give each a stable
   ASCII id, display title, supported catalog/script revisions, SYS frontend id, engine-ABI selection (initially
   a resolved `SYS4422` or `SYS4433` snapshot, with ancestry only where evidence supports it), natural boot script,
   game-owned metadata references, and persistence namespace.
-- [ ] Define selection precedence: explicit `--profile <id>` is authoritative; OME still compares the selected
+- [x] Define selection precedence: explicit `--profile <id>` is authoritative; OME still compares the selected
   root's catalog title/revision with that profile and emits a prominent mismatch diagnostic, but continues with
   the profile the user requested. Without `--profile`, require a unique auto-detection match; ambiguous or
   unknown installs fail before VM or persistence construction and may be reopened in explicit probe mode.
-- [ ] Keep `--game-root` as the content-location argument. Profiles must never commit machine-specific install
+- [x] Keep `--game-root` as the content-location argument. Profiles must never commit machine-specific install
   paths; a future launcher may discover roots and pass the same `(profile, game-root)` pair.
-- [ ] Provide an explicit read-only/probe mode for an unknown or incomplete profile. Probe mode may inspect and
-  trace, but must disable every save/settings write and must not masquerade as supported gameplay.
-- [ ] Add synthetic selection tests plus installed-data gates proving Himegari auto-selects `himegari`, Kamidori
+- [x] Provide an explicit read-only/probe mode for an unknown install or incomplete profile. Probe mode may
+  inspect and trace, but must disable every save/settings write and must not masquerade as supported gameplay.
+- [x] Add synthetic selection tests plus installed-data gates proving Himegari auto-selects `himegari`, Kamidori
   auto-selects `kamidori`, and an explicit cross-pair continues with the requested profile while reporting the
   expected/actual identity mismatch and recording that state in runtime diagnostics.
 
-**K0 gate:** startup produces one immutable selected-profile object before constructing the opcode table,
-VM options, frontend hosts, diagnostics, or persistence services. It records whether selection was automatic
-or explicit and whether the detected install identity matched, without allowing auto-detection to override an
-explicit user choice.
+**K0 gate (complete 2026-08-18):** startup produces one immutable selected-profile object before constructing
+the opcode table, VM options, frontend hosts, diagnostics, or persistence services. It records whether selection
+was automatic or explicit and whether the detected install identity matched, without allowing auto-detection to
+override an explicit user choice. The runtime reads only SYS4INI's fixed identity header before selection.
+Built-in manifests are embedded in `Age.Engine`; Kamidori, probe runs, and explicit identity mismatches remain
+read-only pending K1.
 
 ##### Phase K1 — make persistence safe before normal Kamidori execution
 

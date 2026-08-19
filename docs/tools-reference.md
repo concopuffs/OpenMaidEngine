@@ -512,15 +512,17 @@ rendering logic, audio payload parsing, and teardown. It does not validate a des
 input, or audible output; run those gates on a real Linux desktop.
 
 With the exported executable placed in an AGE install, a no-argument launch therefore uses that install
-and starts the persistent `SYSTEM4.BIN` root naturally. Direct development runs are hosted by the Godot
+and auto-selects a built-in profile from SYS4INI's catalog revision/title before starting that profile's
+natural boot script. Direct development runs are hosted by the Godot
 editor executable, so pass `--game-root <install>` after Godot's `--` separator. The tracked
 `run-godot.ps1`/`.cmd` launchers resolve Godot and the game root without machine-specific tracked paths.
 Explicit `-GodotConsole`/`-GameRoot` values win, followed by `AGE_GODOT_CONSOLE`/`AGE_GAME_ROOT`; Godot
 then falls back to `godot4`, `godot`, or `godot-mono` on `PATH`, while the game root falls back to the
 conventional `../Himegari_Game` sibling only when it contains `SYS4INI.BIN`. `run-godot.ps1 -Doctor`
-prints the resolved repository, Godot, game-root, .NET, and Python prerequisites without building or
-launching. The launchers make the natural route explicit with
-`--scene SYSTEM4` and pass neither `--boot` nor SC0000 seeds. Examples below focus on their
+prints the resolved repository, Godot, game-root, requested profile/probe state, .NET, and Python
+prerequisites without building or launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe`
+requires it and forces the read-only diagnostic policy. The launchers leave the natural boot script to the
+selected manifest and pass neither `--boot` nor SC0000 seeds. Examples below focus on their
 feature-specific arguments and assume the game root is already selected this way. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes.
 On VM termination the console prints the exact halt reason and step count before the generic on-screen
@@ -540,9 +542,19 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 
 - `--game-root <directory>` — select the read-only AGE installation supplying `SYS4INI.BIN`, loose
   overrides, AAI append catalogs, and ALF archives. Absolute paths are launcher-friendly; relative paths
-  are current-working-directory-relative. This is the stable handoff for future game-profile launchers.
+  are current-working-directory-relative. Content location remains independent from profile selection.
+- `--profile <id>` — authoritatively select an embedded game profile (`himegari` or `kamidori`). Omit it for
+  exact catalog revision/title auto-detection. An explicit identity mismatch emits the expected and detected
+  identities but continues with the requested profile; the current K0 safety policy suppresses persistence
+  writes for mismatches. An unknown profile id is an error rather than a fallback.
+- `--probe` — require an explicit `--profile` and run it read-only for diagnostic inspection of an unknown or
+  incomplete install. It disables save and `SYS4REG.INI` stores. Kamidori's built-in profile is likewise
+  read-only until K1 validates and isolates its persistence contract.
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
-- `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and asserts it matches a live headless run (full handling; no vm0/frozen golden). Exits.
+- `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and
+  asserts it matches a live headless run (full handling; no vm0/frozen golden). Its auxiliary debug-launcher and
+  WAV fixture checks are still Himegari-owned, so the complete Godot self-test is Himegari-only until K5; the
+  source-only and installed-catalog profile-selection tests cover Kamidori's K0 contract independently. Exits.
 - `--text-backend auto|gdi|portable` — select gameplay glyph-mask rasterization. `auto` (default) uses the
   exact GDI gray-4 backend only when the Windows ACP-932 gate passes, otherwise the explicitly non-identical
   Godot TextServer Unicode policy. `gdi` fails startup when exact selection is unavailable; `portable`

@@ -1,0 +1,19 @@
+{
+  "id": "himegari",
+  "displayTitle": "Himegari Dungeon Meister",
+  "catalogIdentities": [
+    {
+      "catalogRevision": "S4IC422",
+      "title": "姫狩りダンジョンマイスター"
+    }
+  ],
+  "scriptRevisions": ["SYS4422"],
+  "sysFrontendId": "SYS4",
+  "engineAbiId": "SYS4422",
+  "naturalBootScript": "SYSTEM4.BIN",
+  "metadataReferences": {
+    "portableTextRendering": "godot/config/himegari-text-rendering.json"
+  },
+  "persistenceNamespace": "himegari",
+  "persistenceWritesEnabled": true
+}

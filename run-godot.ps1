@@ -1,4 +1,4 @@
-# run-godot.ps1 -- build the C# and launch the Himegari Godot project (how we've been running it).
+# run-godot.ps1 -- build the C# and launch the OME Godot project against an AGE game root.
 #
 #   .\run-godot.ps1            build, then run the persistent SYSTEM4 root windowed
 #   .\run-godot.ps1 -SelfTest  build, then headless self-test (asserts the dialogue trace vs vm0)
@@ -8,6 +8,8 @@
 #   .\run-godot.ps1 -StartupDiagnostics  capture the natural TITLE -> Game Start -> SC0000 route
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
+#   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
+#   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
 #
 # Uses the *console* Godot build so GD.Print / DRAW logs / the selftest result show in the terminal.
@@ -15,6 +17,8 @@
 param(
     [string]$GodotConsole,
     [string]$GameRoot,
+    [string]$Profile,
+    [switch]$Probe,
     [switch]$SelfTest,
     [switch]$Import,
     [switch]$NoBuild,
@@ -92,6 +96,12 @@ $gameRootArguments = @{
     ConventionalValue = Join-Path (Split-Path $repo -Parent) 'Himegari_Game'
 }
 $resolvedGameRoot = Resolve-ConfiguredGameRoot @gameRootArguments
+if ($Probe -and -not $Profile) {
+    throw '-Probe requires -Profile so the runtime knows which engine ABI to use.'
+}
+$profileArguments = @()
+if ($Profile) { $profileArguments += @('--profile', $Profile) }
+if ($Probe) { $profileArguments += '--probe' }
 
 if ($Doctor) {
     $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue |
@@ -103,6 +113,8 @@ if ($Doctor) {
     Write-Host "Repository : $repo"
     Write-Host "Godot      : $godot"
     Write-Host "Game root  : $resolvedGameRoot"
+    Write-Host "Profile    : $(if ($Profile) { $Profile } else { '<automatic>' })"
+    Write-Host "Probe      : $Probe"
     Write-Host "dotnet     : $($dotnet.Source)"
     Write-Host "Python     : $($python.Source)"
     exit 0
@@ -144,12 +156,13 @@ if ($Import) {
 
 if ($SelfTest) {
     Write-Host "==> headless self-test" -ForegroundColor Cyan
-    & $godot --headless --path $project -- --selftest --game-root $resolvedGameRoot
+    $userArgs = @('--selftest', '--game-root', $resolvedGameRoot) + $profileArguments
+    & $godot --headless --path $project -- @userArgs
 } else {
-    # SYSTEM4 owns the real initializer/title/New Game chain. Do not add --boot or SC0000
-    # seeds here: those belong only to explicit direct-scene diagnostics.
+    # The selected profile owns its natural boot script (currently SYSTEM4 for both built-ins).
+    # Do not add --boot or SC0000 seeds here: those belong only to explicit direct-scene diagnostics.
     Write-Host "==> launching windowed from SYSTEM4" -ForegroundColor Cyan
-    $userArgs = @('--scene', 'SYSTEM4', '--game-root', $resolvedGameRoot)
+    $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments
     if ($perfLogFile) {
         Write-Host "==> performance log: $perfLogFile" -ForegroundColor Cyan
         $userArgs += @('--perf-log', $perfLogFile)
