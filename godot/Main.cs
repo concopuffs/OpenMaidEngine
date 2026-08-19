@@ -267,6 +267,8 @@ public partial class Main : Godot.Control
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OmeRuntimeMetadata.LoadOpcodeTable(selectedProfile.Profile.EngineAbiId);
+        GD.Print($"[profile] opcode-layers={string.Join(",", table.ResolvedLayers)} " +
+                 $"contracts={table.Count}");
         INativeDatStore? nativeSaveStore = null;
         var sharedProfile = new SharedProfile();
         _audioMixerSettings = new AudioMixerSettings();
@@ -314,7 +316,12 @@ public partial class Main : Godot.Control
         }
         _scripts = scripts;
         bool directSceneHarness = !_selftest
-            && !scene.Equals("SYSTEM4", System.StringComparison.OrdinalIgnoreCase);
+            && !scene.Equals(
+                System.IO.Path.GetFileNameWithoutExtension(selectedProfile.Profile.NaturalBootScript),
+                System.StringComparison.OrdinalIgnoreCase);
+        DirectSceneDiagnosticPolicy? directScenePolicy = directSceneHarness
+            ? selectedProfile.Profile.DirectSceneDiagnostics
+            : null;
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
             pageMapPath = DefaultPageMapPath(scene);
@@ -357,7 +364,12 @@ public partial class Main : Godot.Control
                 if (textBackend == "gdi")
                     throw new PlatformNotSupportedException(
                         exactUnavailable ?? "Exact Windows GDI text is unavailable.");
-                portableTextPolicy = PortableTextRenderingPolicy.Load();
+                string portablePolicyResource =
+                    selectedProfile.Profile.MetadataReferences.TryGetValue(
+                        "portableTextRendering", out string? configuredPolicy)
+                    ? configuredPolicy
+                    : PortableTextRenderingPolicy.JapaneseFallbackResourcePath;
+                portableTextPolicy = PortableTextRenderingPolicy.Load(portablePolicyResource);
                 var portable =
                     new GodotTextServerGlyphMaskRasterizer(portableTextPolicy);
                 surfaceTextRasterizer = portable;
@@ -408,71 +420,62 @@ public partial class Main : Godot.Control
             compatibility: new VmCompatibilityContext(
                 selectedProfile.Profile.Id,
                 selectedProfile.Profile.EngineAbiId,
-                selectedProfile.ProbeMode));
-        if (scripts != null)
+                selectedProfile.ProbeMode,
+                selectedProfile.Profile.Runtime.SceneEntryCoroutineGateAddress));
+        if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
             _debugSceneLauncher = new DebugSceneLauncher();
             _debugSceneLauncher.LaunchRequested += LaunchDebugScene;
             AddChild(_debugSceneLauncher);
         }
-        // SYSTEM4.BIN defines these nine shared ADV text layouts before dispatching any scene. The
-        // single-scene harness starts after that prefix, so carry forward its exact script-owned state
-        // alongside the inherited SO000/SO001 state below. Full Phase-B SYSTEM4 replay will replace this
-        // bootstrap as one unit; HISTORY depends on the 650x150 dimensions of layouts 2..6 for clipping.
-        if (directSceneHarness)
+        // Direct-scene runs deliberately skip the natural boot script. Only apply bootstrap state that
+        // the selected profile explicitly owns as diagnostic policy; normal boot never enters this path.
+        if (directScenePolicy != null)
         {
-            var systemScript = scripts!.RequireByName("SYSTEM4.BIN");
+            var systemScript = scripts!.RequireByName(directScenePolicy.SystemScript);
             AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(systemScript, table, _vm.TextHistory);
             InputBindingBootstrap.Apply(systemScript, _vm.InputBindings);
         }
-        // SYSTEM4 loads the shared SO001 chrome sheet into surface slot 17 before any scene runs.
-        // Seed that inherited retained-surface state without replaying the entrypoint's unrelated UI flow.
-        if (directSceneHarness && resources.ResolveName("SO001.AGF") is { } systemChrome)
+        var loadedDiagnosticSurfaceSlots = new HashSet<int>();
+        foreach (ProfileSurfaceBootstrap surface in directScenePolicy?.InheritedSurfaces ?? [])
         {
-            _host.SetTexture(systemChrome.PackedId, 0x11);
-            _vm.Gfx.SetSurface(0x11, systemChrome.PackedId, 0);
+            if (resources.ResolveName(surface.ResourceName) is not { } resource) continue;
+            _host.SetTexture(resource.PackedId, surface.SurfaceSlot);
+            _vm.Gfx.SetSurface(surface.SurfaceSlot, resource.PackedId, surface.Flags);
+            loadedDiagnosticSurfaceSlots.Add(surface.SurfaceSlot);
         }
-        // SYSTEM4 also loads SO000 and configures op 0x73 before entering scene code. The Phase-A
-        // single-scene harness does not replay those graphics side effects, so inject their exact state
-        // alongside the existing SO001 bootstrap until Phase B runs the complete SYSTEM4 entrypoint.
-        if (directSceneHarness && resources.ResolveName("SO000.AGF") is { } waitIndicator)
+        if (directScenePolicy?.WaitIndicator is { } waitIndicator
+            && loadedDiagnosticSurfaceSlots.Contains(waitIndicator.SurfaceSlot))
         {
-            _host.SetTexture(waitIndicator.PackedId, 0x0c);
-            _vm.Gfx.SetSurface(0x0c, waitIndicator.PackedId, 0xff00);
-            _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
-                1, 385, 140, 0x0c, 0, 0, 30, 27, 12, 48));
+            _host.ConfigureAdvWaitIndicator(waitIndicator.ToConfig());
             AdvTextLayoutSnapshot waitLayout =
-                _vm.TextHistory.GetLayoutSnapshot(1);
+                _vm.TextHistory.GetLayoutSnapshot(waitIndicator.TextLayout);
             _host.BindAdvWaitIndicator(
-                _vm.TextHistory.GetPresentationBinding(1),
+                _vm.TextHistory.GetPresentationBinding(waitIndicator.TextLayout),
                 waitLayout);
         }
         // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
         // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
-        if (boot && directSceneHarness)
+        if (boot && directScenePolicy != null)
         {
             var session = new GameSession();
-            foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+            foreach (string b in directScenePolicy.DataBootstrapScripts)
                 session.RunScene(scripts!.RequireByName(b), table, new CaptureHost(), null, provider);
             foreach (var kv in session.Globals) _vm.Globals[kv.Key] = kv.Value;
             foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
             GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");
         }
-        // The native SYSTEM4 UI boot enables standard ADV chrome after the data-only *INIT prefix above.
-        // Without this inherited value the visible SO001 strip is still drawn, but every ADV script skips
-        // its five pointer rectangles and registers only the off-screen keyboard/pad records.
-        if (directSceneHarness)
+        if (directScenePolicy != null)
         {
-            _vm.Globals[0x6c1] = 1;
+            foreach (ProfileCellSeed seed in directScenePolicy.GlobalSeeds)
+                _vm.Globals[seed.Address] = seed.Value;
+            foreach (ProfileSceneCellSeed seed in directScenePolicy.SceneExternalGlobalSeeds
+                         .Where(value => value.Matches(scene + ".BIN")))
+                _vm.ExternalGlobals[seed.Address] = seed.Value;
         }
-        // The native ADV scheduler supplies this Hide Window permission outside script-visible writes.
-        // It is an engine service default, not a scene bootstrap, and remains present for either entry path.
-        if (!_selftest) _vm.Globals[0x62425] = 1;
-        // Native AGE owns this transient secondary-SFX channel outside script-visible writes.
-        // The matching SC0000 trace has value 4 at 0xc31; seed only this proven profile/slice.
-        if (!_selftest && scene.Equals("SC0000", System.StringComparison.OrdinalIgnoreCase))
-            _vm.ExternalGlobals[0x6242d] = 4;
+        if (!_selftest)
+            selectedProfile.Profile.Runtime.ApplyExternalGlobals(_vm.ExternalGlobals);
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
         if (holdMessageSkip)
             _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.

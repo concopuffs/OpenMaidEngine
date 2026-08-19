@@ -27,6 +27,25 @@ public sealed class GameProfileSelectionTests
         Assert.Equal(0x42323234u, himegari.Persistence.NumberedCompatibilityId);
         Assert.Equal([402459, 1, 789, 1, 1, 1], himegari.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
+        Assert.Equal("res://config/japanese-text-rendering.json",
+            himegari.MetadataReferences["portableTextRendering"]);
+        Assert.Equal([new ProfileCellSeed(0x62425, 1)], himegari.Runtime.ExternalGlobalSeeds);
+        Assert.Equal(0xaba5c, himegari.Runtime.SceneEntryCoroutineGateAddress);
+        DirectSceneDiagnosticPolicy himegariDiagnostics =
+            Assert.IsType<DirectSceneDiagnosticPolicy>(himegari.DirectSceneDiagnostics);
+        Assert.Equal("SYSTEM4.BIN", himegariDiagnostics.SystemScript);
+        Assert.Equal(["INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN"],
+            himegariDiagnostics.DataBootstrapScripts);
+        Assert.Equal([
+            "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+            "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN",
+        ], himegariDiagnostics.DataTableBootstrapScripts);
+        Assert.Equal([new ProfileCellSeed(0x6c1, 1)], himegariDiagnostics.GlobalSeeds);
+        DebugSceneLaunchPolicy debugLaunch =
+            Assert.IsType<DebugSceneLaunchPolicy>(himegari.DebugSceneLaunch);
+        Assert.Equal("SYSTEM4.BIN", debugLaunch.RootScript);
+        Assert.Equal("TITLE.BIN", debugLaunch.CoordinatorScript);
+        Assert.Equal(0x699, debugLaunch.PackedScriptIdAddress);
         Assert.True(himegari.Matches(HimegariIdentity));
 
         GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(registry.Find("kamidori"));
@@ -42,7 +61,27 @@ public sealed class GameProfileSelectionTests
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
         Assert.Contains("0x2e4", kamidori.Persistence.ReadOnlyReason);
+        Assert.Empty(kamidori.Runtime.ExternalGlobalSeeds);
+        Assert.Null(kamidori.Runtime.SceneEntryCoroutineGateAddress);
+        Assert.Null(kamidori.DirectSceneDiagnostics);
+        Assert.Null(kamidori.DebugSceneLaunch);
         Assert.True(kamidori.Matches(KamidoriIdentity));
+    }
+
+    [Fact]
+    public void NormalKamidoriRuntimePolicyInjectsNoHimegariState()
+    {
+        GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(
+            GameProfileRegistry.BuiltIn.Find("kamidori"));
+        var externalGlobals = new Dictionary<int, long>();
+
+        kamidori.Runtime.ApplyExternalGlobals(externalGlobals);
+
+        Assert.Empty(externalGlobals);
+        Assert.False(externalGlobals.ContainsKey(0x62425));
+        Assert.Null(kamidori.DirectSceneDiagnostics);
+        Assert.Null(kamidori.DebugSceneLaunch);
+        Assert.False(kamidori.PersistenceWritesEnabled);
     }
 
     [Theory]

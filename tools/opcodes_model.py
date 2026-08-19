@@ -40,6 +40,19 @@ class Observation:
     instruction_count: int
     opcodes: frozenset[int]
 
+@dataclass(frozen=True)
+class AbiLayer:
+    id: str
+    kind: str
+    composes: tuple[str, ...]
+    observation_profile_id: str
+    evidence_method: str
+    evidence_artifact: str
+    evidence_scope: str
+    members: frozenset[int]
+    contracts: tuple[dict, ...]
+    removes: frozenset[int]
+
 @dataclass
 class Semantics:
     name: str
@@ -73,6 +86,8 @@ class Model:
     opcodes: dict[int, Opcode]
     observations: dict[str, Observation]
     observation_profile_ids: tuple[str, ...]
+    abi_layers: dict[str, AbiLayer]
+    abi_layer_ids: tuple[str, ...]
 
 
 def _evidence_record(
@@ -117,6 +132,22 @@ def load(path) -> Model:
         for op in observation.opcodes:
             observed_by.setdefault(op, set()).add(observation.profile_id)
             observed_revisions.setdefault(op, set()).add(observation.script_revision)
+
+    abi_layers: dict[str, AbiLayer] = {}
+    for raw in data.get("abi_layer", []):
+        layer_id = raw.get("id", "")
+        abi_layers[layer_id] = AbiLayer(
+            id=layer_id,
+            kind=raw.get("kind", ""),
+            composes=tuple(raw.get("composes", [])),
+            observation_profile_id=raw.get("observation_profile_id", ""),
+            evidence_method=raw.get("evidence_method", ""),
+            evidence_artifact=raw.get("evidence_artifact", ""),
+            evidence_scope=raw.get("evidence_scope", ""),
+            members=frozenset(int(op) for op in raw.get("members", [])),
+            contracts=tuple(raw.get("contracts", [])),
+            removes=frozenset(int(op) for op in raw.get("removes", [])),
+        )
 
     evidence_defaults = data.get("evidence_defaults", {})
     ops: dict[int, Opcode] = {}
@@ -173,6 +204,8 @@ def load(path) -> Model:
         observation_profile_ids=tuple(
             raw.get("profile_id", "") for raw in data.get("observation", [])
         ),
+        abi_layers=abi_layers,
+        abi_layer_ids=tuple(raw.get("id", "") for raw in data.get("abi_layer", [])),
     )
 
 def lint(model: Model) -> tuple[list[str], list[str]]:
@@ -218,6 +251,63 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
                 f"{tag}: references missing opcodes "
                 + ", ".join(f"0x{op:x}" for op in missing)
             )
+    duplicate_layers = [
+        layer_id for layer_id, count in collections.Counter(model.abi_layer_ids).items()
+        if count > 1
+    ]
+    if duplicate_layers:
+        errors.append(f"duplicate ABI layer ids: {sorted(duplicate_layers)}")
+    known_layers = {"AGE-catalog", *model.abi_layers}
+    for layer_id, layer in model.abi_layers.items():
+        tag = f"abi_layer[{layer_id or '?'}]"
+        if not layer_id or layer_id == "AGE-catalog":
+            errors.append(f"{tag}: missing or reserved id")
+        if layer.kind not in {"complete-observed-snapshot", "revision-layer"}:
+            errors.append(f"{tag}: bad kind {layer.kind!r}")
+        unknown_parents = set(layer.composes) - known_layers
+        if unknown_parents:
+            errors.append(f"{tag}: unknown parents {sorted(unknown_parents)}")
+        if layer.observation_profile_id:
+            observation = model.observations.get(layer.observation_profile_id)
+            if observation is None:
+                errors.append(f"{tag}: unknown observation profile")
+            elif observation.engine_abi_id != layer.id:
+                errors.append(f"{tag}: observation ABI differs from layer id")
+        if layer.kind == "complete-observed-snapshot":
+            if not layer.observation_profile_id:
+                errors.append(f"{tag}: complete snapshot requires an observation profile")
+            if layer.composes:
+                errors.append(f"{tag}: complete snapshot cannot claim parent layers")
+        for field_name in ("evidence_method", "evidence_artifact", "evidence_scope"):
+            if not getattr(layer, field_name):
+                errors.append(f"{tag}: missing {field_name}")
+        missing_members = sorted(layer.members - set(ops))
+        if missing_members:
+            errors.append(
+                f"{tag}: members reference missing opcodes "
+                + ", ".join(f"0x{op:x}" for op in missing_members)
+            )
+        for contract in layer.contracts:
+            if "op" not in contract or "label" not in contract or "argc" not in contract:
+                errors.append(f"{tag}: replacement contracts require op, label, and argc")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    def visit_layer(layer_id: str):
+        if layer_id == "AGE-catalog" or layer_id in visited:
+            return
+        if layer_id in visiting:
+            errors.append(f"abi_layer[{layer_id}]: composition cycle")
+            return
+        layer = model.abi_layers.get(layer_id)
+        if layer is None:
+            return
+        visiting.add(layer_id)
+        for parent in layer.composes:
+            visit_layer(parent)
+        visiting.remove(layer_id)
+        visited.add(layer_id)
+    for layer_id in model.abi_layers:
+        visit_layer(layer_id)
     for op, oc in sorted(ops.items()):
         if oc.legacy_observation_field:
             errors.append(f"0x{op:x}: observed_in_himegari is obsolete; use [[observation]]")

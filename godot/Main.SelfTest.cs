@@ -1,6 +1,8 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Godot;
 using Age.Engine.Diagnostics;
 using Age.Engine.Hosting;
@@ -26,11 +28,14 @@ public partial class Main
         bool ok = actual.Count == expected.Count;
         for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected[i];
         var debugEntries = DebugSceneCatalog.Build(_catalog);
-        bool launcherOk = debugEntries.Any(entry => entry.Name == "DEBUG.BIN" && entry.Launchable)
+        bool launcherOk = debugEntries.Count > 0
+                          && debugEntries.Any(entry => entry.Launchable)
                           && debugEntries.Select(entry => entry.PackedId).Distinct().Count() == debugEntries.Count;
         var launcherSmoke = new DebugSceneLauncher();
         AddChild(launcherSmoke);
-        launcherSmoke.Open(debugEntries, "SYSTEM4.BIN > TITLE.BIN", present: false);
+        string launcherContext = _selectedProfile.Profile.DebugSceneLaunch?.CoordinatorScript
+                                 ?? _selectedProfile.Profile.NaturalBootScript;
+        launcherSmoke.Open(debugEntries, launcherContext, present: false);
         launcherSmoke.Free();
         bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
                               && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
@@ -40,18 +45,27 @@ public partial class Main
                                       new InputEventKey { PhysicalKeycode = Key.Up }, out int upVk) && upVk == 0x26
                                   && Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Ctrl }, out int ctrlVk) && ctrlVk == 0x11;
+        byte[] pcmFormat = BuildSelfTestPcmFormat();
+        byte[] pcmData = { 0x80, 0x81, 0x7f, 0x80 };
+        byte[] cleanWav = BuildSelfTestWave(("fmt ", pcmFormat), ("data", pcmData));
+        byte[] cp932Info =
+        {
+            (byte)'I', (byte)'N', (byte)'F', (byte)'O',
+            (byte)'I', (byte)'P', (byte)'R', (byte)'D', 3, 0, 0, 0, 0x81, 0x45, 0,
+        };
+        byte[] cp932Wav = BuildSelfTestWave(
+            ("fmt ", pcmFormat), ("LIST", cp932Info), ("data", pcmData));
+        byte[] cp932GodotWav = RiffWaveSanitizer.PrepareForGodot(cp932Wav);
+        bool cp932WavMetadataOk = cp932GodotWav.SequenceEqual(cleanWav)
+                                 && AudioStreamWav.LoadFromBuffer(cp932GodotWav) != null;
+        byte[] trailingWav = [.. cleanWav, .. Encoding.ASCII.GetBytes("trailing non-RIFF bytes")];
+        byte[] firstGodotWav = RiffWaveSanitizer.PrepareForGodot(trailingWav);
+        bool firstRiffBoundaryOk = firstGodotWav.SequenceEqual(cleanWav)
+                                   && AudioStreamWav.LoadFromBuffer(firstGodotWav) != null;
         var selftestResources = new ResourceMap(_catalog, _assetStore);
-        AudioPayload glowSfx = selftestResources.ReadAudio(selftestResources.ResolveSoundEffect(0x28)!);
-        byte[] glowGodotWav = RiffWaveSanitizer.PrepareForGodot(glowSfx.Bytes);
-        bool cp932WavMetadataOk = glowGodotWav.Length == 688_336
-                                 && AudioStreamWav.LoadFromBuffer(glowGodotWav) != null;
-        AudioPayload bossSfx = selftestResources.ReadAudio(
-            selftestResources.ResolveSoundEffect(0x125)!);
-        byte[] bossGodotWav = RiffWaveSanitizer.PrepareForGodot(bossSfx.Bytes);
-        bool firstRiffBoundaryOk = bossSfx.Bytes.Length == 323_009
-                                   && bossGodotWav.Length == 157_940
-                                   && AudioStreamWav.LoadFromBuffer(bossGodotWav) != null;
-        AudioPayload bgm = selftestResources.ReadAudio(selftestResources.ResolveBgm(5)!);
+        AssetEntry bgmEntry = _catalog.Files.First(entry =>
+            entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase));
+        AudioPayload bgm = selftestResources.ReadAudio(bgmEntry);
         FadeBgm(0, 10.0);
         bool bgmFadeStarted = _bgmFadeTween?.IsValid() == true;
         PlayBgm(bgm.Bytes, bgm.Name);
@@ -364,6 +378,36 @@ public partial class Main
             GD.PushError($"SELFTEST FAILED: {exception}");
             GetTree().Quit(1);
         }
+    }
+
+    private static byte[] BuildSelfTestPcmFormat()
+    {
+        var format = new byte[16];
+        BinaryPrimitives.WriteUInt16LittleEndian(format.AsSpan(0, 2), 1); // PCM
+        BinaryPrimitives.WriteUInt16LittleEndian(format.AsSpan(2, 2), 1); // mono
+        BinaryPrimitives.WriteUInt32LittleEndian(format.AsSpan(4, 4), 8000);
+        BinaryPrimitives.WriteUInt32LittleEndian(format.AsSpan(8, 4), 8000);
+        BinaryPrimitives.WriteUInt16LittleEndian(format.AsSpan(12, 2), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(format.AsSpan(14, 2), 8);
+        return format;
+    }
+
+    private static byte[] BuildSelfTestWave(params (string Id, byte[] Payload)[] chunks)
+    {
+        int length = 12 + chunks.Sum(chunk => 8 + chunk.Payload.Length + (chunk.Payload.Length & 1));
+        var wave = new byte[length];
+        Encoding.ASCII.GetBytes("RIFF").CopyTo(wave, 0);
+        BinaryPrimitives.WriteInt32LittleEndian(wave.AsSpan(4, 4), length - 8);
+        Encoding.ASCII.GetBytes("WAVE").CopyTo(wave, 8);
+        int offset = 12;
+        foreach ((string id, byte[] payload) in chunks)
+        {
+            Encoding.ASCII.GetBytes(id).CopyTo(wave, offset);
+            BinaryPrimitives.WriteInt32LittleEndian(wave.AsSpan(offset + 4, 4), payload.Length);
+            payload.CopyTo(wave, offset + 8);
+            offset += 8 + payload.Length + (payload.Length & 1);
+        }
+        return wave;
     }
 
     // A deterministic synthesized scene: show-text, wait-for-input (exercises the suspend plumbing), a

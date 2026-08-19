@@ -30,6 +30,17 @@ artifact = "build/games/himegari/fixture-corpus.json"
 script_count = 1
 instruction_count = 2
 opcodes = [0x90, 0x1f4]
+[[abi_layer]]
+id = "SYS4422"
+kind = "complete-observed-snapshot"
+composes = []
+observation_profile_id = "himegari"
+evidence_method = "catalog-corpus"
+evidence_artifact = "build/games/himegari/fixture-corpus.json"
+evidence_scope = "fixture SYS4422 snapshot"
+members = []
+contracts = []
+removes = []
 [[opcode]]
 op = 0x90
 label = "u0041BEB0"
@@ -173,6 +184,9 @@ def test_lint():
     check(any("unknown profiles" in message for message in e), "evidence profile ids are linted")
     check(any("unknown revisions" in message for message in e), "evidence revisions are linted")
     check(any("missing artifact" in message for message in e), "evidence artifact is required")
+    cycle = FIXTURE.replace('composes = []', 'composes = ["SYS4422"]', 1)
+    e, w = M.lint(M.load(write_tmp(cycle)))
+    check(any("composition cycle" in message for message in e), "ABI layer cycles are linted")
 
 def test_bootstrap():
     import opcodes_build as B
@@ -235,15 +249,25 @@ def test_emit_runtime():
 def test_emit_views():
     import opcodes_build as B, json as _json
     m = M.load(write_tmp(FIXTURE))
-    j = _json.loads(B.emit_json(m))
+    j = _json.loads(B.emit_json(m, frozenset({0x90})))
     check(j["dependents"]["0x1f4"] == ["0x90"], "json dependents index correct")
+    snapshot = next(layer for layer in j["abi_layers"] if layer["id"] == "SYS4422")
+    check(snapshot["kind"] == "complete-observed-snapshot"
+          and snapshot["composes"] == []
+          and snapshot["members"] == ["0x90", "0x1f4"],
+          "json emits a direct evidence-scoped ABI snapshot with a composition seam")
     check(any(o["op"] == "0x90" for o in j["opcodes"]), "json lists opcode 0x90")
     hotspot = next(o for o in j["opcodes"] if o["op"] == "0x90")
     check(hotspot["observed_by"] == ["himegari"], "json exposes general observation list")
     check(hotspot["semantics"]["evidence"][0]["method"] == "native-re",
           "json emits structured semantic evidence")
+    check(hotspot["handler_bindings"][0]["layer_id"] == "SYS4422"
+          and hotspot["handler_bindings"][0]["semantic_evidence_status"] == "evidence-confirmed",
+          "json separates snapshot handler binding from shared implementation identity")
     md = B.emit_reference_md(m)
-    check("hotspot-branch" in md and "depended on by" in md.lower(), "reference md has entry + dependents line")
+    check("hotspot-branch" in md and "depended on by" in md.lower()
+          and "ABI snapshots and composition" in md,
+          "reference md has entries, dependencies, and ABI resolution provenance")
     cov = B.emit_coverage_md(m)
     check("investigation" in cov, "coverage md breaks down by source")
 

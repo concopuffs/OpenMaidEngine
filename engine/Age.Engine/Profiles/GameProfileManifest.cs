@@ -74,7 +74,10 @@ public sealed record GameProfileManifest
         string engineAbiId,
         string naturalBootScript,
         IReadOnlyDictionary<string, string>? metadataReferences,
-        GamePersistencePolicy persistence)
+        GamePersistencePolicy persistence,
+        GameRuntimePolicy? runtime = null,
+        DirectSceneDiagnosticPolicy? directSceneDiagnostics = null,
+        DebugSceneLaunchPolicy? debugSceneLaunch = null)
     {
         RequireStableId(id, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(displayTitle);
@@ -105,6 +108,9 @@ public sealed record GameProfileManifest
         MetadataReferences = (metadataReferences ?? new Dictionary<string, string>())
             .ToImmutableDictionary(StringComparer.Ordinal);
         Persistence = persistence;
+        Runtime = runtime ?? GameRuntimePolicy.Empty;
+        DirectSceneDiagnostics = directSceneDiagnostics;
+        DebugSceneLaunch = debugSceneLaunch;
     }
 
     public string Id { get; }
@@ -116,6 +122,9 @@ public sealed record GameProfileManifest
     public string NaturalBootScript { get; }
     public ImmutableDictionary<string, string> MetadataReferences { get; }
     public GamePersistencePolicy Persistence { get; }
+    public GameRuntimePolicy Runtime { get; }
+    public DirectSceneDiagnosticPolicy? DirectSceneDiagnostics { get; }
+    public DebugSceneLaunchPolicy? DebugSceneLaunch { get; }
     public string PersistenceNamespace => Persistence.StorageNamespace;
     public bool PersistenceWritesEnabled => Persistence.WritesEnabled;
 

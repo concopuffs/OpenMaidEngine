@@ -17,7 +17,12 @@ def check(cond, msg):
         print("ok:", msg)
 
 
-GOOD = ('[meta]\nstruct_name="EngineCtx"\nsize=0x1000\n'
+PROVENANCE = ('profile_id="test"\ncatalog_revision="S4ICTEST"\nscript_revision="SYSTEST"\n'
+              '[meta.executable]\nname="AGE.EXE"\nsize=1\nsha256="' + ('a' * 64) + '"\n'
+              '[meta.analysis_image]\nghidra_program="/test/image.bin"\nimage_base=0x400000\n'
+              'size=2\nsha256="' + ('b' * 64) + '"\n')
+
+GOOD = ('[meta]\nstruct_name="EngineCtx"\nsize=0x1000\n' + PROVENANCE +
         '[[field]]\noffset=0x10\nname="a"\ntype="int"\nnote="x"\n'
         '[[field]]\noffset=0x20\nname="b"\ntype="void*"\nnote="y"\n')
 
@@ -33,14 +38,14 @@ def test_lint_clean():
 
 
 def test_lint_catches_overlap():
-    bad = ('[meta]\nstruct_name="E"\nsize=0x1000\n'
+    bad = ('[meta]\nstruct_name="E"\nsize=0x1000\n' + PROVENANCE +
            '[[field]]\noffset=0x10\nname="a"\ntype="int"\nnote=""\n'
            '[[field]]\noffset=0x12\nname="b"\ntype="int"\nnote=""\n')   # 0x10+4 > 0x12 -> overlap
     check(any("overlap" in e.lower() for e in lint(load(bad))), "lint flags overlapping fields")
 
 
 def test_lint_catches_oob_and_dupname():
-    bad = ('[meta]\nstruct_name="E"\nsize=0x14\n'
+    bad = ('[meta]\nstruct_name="E"\nsize=0x14\n' + PROVENANCE +
            '[[field]]\noffset=0x10\nname="a"\ntype="int"\nnote=""\n'
            '[[field]]\noffset=0x40\nname="a"\ntype="int"\nnote=""\n')   # 0x40 > size AND dup name
     errs = lint(load(bad))
@@ -48,11 +53,20 @@ def test_lint_catches_oob_and_dupname():
           "lint flags out-of-bounds offset and duplicate name")
 
 
+def test_lint_requires_executable_provenance():
+    bad = ('[meta]\nstruct_name="E"\nsize=0x1000\n'
+           '[[field]]\noffset=0x10\nname="a"\ntype="int"\nnote=""\n')
+    errs = lint(load(bad))
+    check(any("missing EngineCtx provenance executable" in error for error in errs),
+          "lint prevents unscoped EngineCtx offsets")
+
+
 def main():
     test_load_and_emit()
     test_lint_clean()
     test_lint_catches_overlap()
     test_lint_catches_oob_and_dupname()
+    test_lint_requires_executable_provenance()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

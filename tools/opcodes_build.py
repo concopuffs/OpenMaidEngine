@@ -208,6 +208,16 @@ def _semantic_status(opcode: M.Opcode) -> str:
     return "investigated" if semantics and semantics.source != "kelebek" else "catalog-only"
 
 
+def _handler_evidence_status(opcode: M.Opcode, revision: str) -> str:
+    evidence_revisions = {
+        revision_id
+        for evidence in (opcode.semantics.evidence if opcode.semantics else [])
+        for revision_id in evidence.engine_revisions
+    }
+    return ("evidence-confirmed" if revision in evidence_revisions
+            else "compatibility-reuse-unconfirmed-for-revision")
+
+
 def load_runtime_coverage() -> frozenset[int]:
     """Read the engine-owned implementation set without making it opcode-registry source data."""
     source = (
@@ -255,6 +265,10 @@ def profile_contract_errors(model: M.Model) -> list[str]:
             errors.append(
                 f"observation[{profile_id}]: engine ABI differs from profile manifest"
             )
+        if manifest["engineAbiId"] not in model.abi_layers:
+            errors.append(
+                f"profile[{profile_id}]: engine ABI has no canonical snapshot/layer"
+            )
     return errors
 
 
@@ -271,9 +285,54 @@ def _evidence_json(evidence: M.Evidence) -> dict:
     }
 
 
+def _abi_layers_json(model: M.Model) -> list[dict]:
+    """Emit directly resolved snapshots now, while preserving a future composition seam."""
+    layers = [{
+        "id": "AGE-catalog",
+        "kind": "revision-unscoped-catalog",
+        "composes": [],
+        "evidence": {
+            "method": "upstream-catalog",
+            "artifact": "Kelebek1/Eushully-Decompiler age-shared.cpp",
+            "scope": "opcode framing catalog; engine revision applicability unspecified",
+        },
+        "members": [f"0x{op:x}" for op in sorted(model.opcodes)],
+        "contracts": [],
+        "removes": [],
+    }]
+    for layer in model.abi_layers.values():
+        observation = (model.observations.get(layer.observation_profile_id)
+                       if layer.observation_profile_id else None)
+        members = set(layer.members)
+        if observation is not None:
+            members.update(observation.opcodes)
+        layers.append({
+            "id": layer.id,
+            "kind": layer.kind,
+            "composes": list(layer.composes),
+            "profile_ids": ([observation.profile_id] if observation is not None else []),
+            "evidence": {
+                "method": layer.evidence_method,
+                "artifact": layer.evidence_artifact,
+                "scope": layer.evidence_scope,
+            },
+            "members": [f"0x{op:x}" for op in sorted(members)],
+            "contracts": [
+                {
+                    **contract,
+                    "op": f"0x{int(contract['op']):x}",
+                }
+                for contract in layer.contracts
+            ],
+            "removes": [f"0x{op:x}" for op in sorted(layer.removes)],
+        })
+    return layers
+
+
 def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset()) -> str:
     rev = M.dependents(model)
     out = {"meta": model.meta,
+           "abi_layers": _abi_layers_json(model),
            "observations": [
                {
                    "profile_id": observation.profile_id,
@@ -299,7 +358,16 @@ def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset())
              "abi_applicability": {
                  "catalog_scope": "upstream AGE catalog; revision applicability unspecified",
                  "proven_by_observation": sorted(oc.observed_revisions),
-             }}
+             },
+             "handler_bindings": [
+                 {
+                     "layer_id": revision,
+                     "implementation_id": f"age-vm-switch/0x{op:x}",
+                     "semantic_evidence_status": _handler_evidence_status(oc, revision),
+                 }
+                 for revision in sorted(oc.observed_revisions)
+                 if op in runtime_implemented
+             ]}
         s = oc.semantics
         if s:
             e["semantics"] = {"name": s.name, "category": s.category, "summary": s.summary,
@@ -330,6 +398,18 @@ def emit_reference_md(
             f"artifact `{observation.artifact}`"
         )
     L.append("")
+    L += ["## ABI snapshots and composition", "",
+          "Each selected revision currently resolves one complete observed snapshot directly. The schema "
+          "also supports ordered parent composition, additions, full operand-contract replacements, and "
+          "removals; none are asserted until comparative evidence establishes a real layer.", ""]
+    for layer in _abi_layers_json(model):
+        parents = ", ".join(f"`{value}`" for value in layer["composes"]) or "none"
+        L.append(
+            f"- **{layer['id']}** ({layer['kind']}): {len(layer['members'])} members; "
+            f"parents={parents}; evidence={layer['evidence']['method']} "
+            f"`{layer['evidence']['artifact']}`; {layer['evidence']['scope']}"
+        )
+    L.append("")
     by_cat = collections.defaultdict(list)
     for op, oc in model.opcodes.items():
         cat = oc.semantics.category if oc.semantics else "unknown"
@@ -353,6 +433,13 @@ def emit_reference_md(
             )
             L.append(f"- **semantic status:** {_semantic_status(oc)}")
             L.append(f"- **runtime implemented:** {'yes' if op in runtime_implemented else 'no'}")
+            if op in runtime_implemented and oc.observed_revisions:
+                bindings = "; ".join(
+                    f"`{revision}` -> `age-vm-switch/0x{op:x}` "
+                    f"({_handler_evidence_status(oc, revision)})"
+                    for revision in sorted(oc.observed_revisions)
+                )
+                L.append(f"- **handler bindings:** {bindings}")
             if s:
                 L.append(f"- **summary:** {s.summary}" if s.summary else "- **summary:** —")
                 L.append(f"- **grounding:** source={s.source}, confidence={s.confidence}"

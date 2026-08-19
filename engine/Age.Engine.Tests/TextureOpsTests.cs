@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Age.Engine.Hosting;
+using Age.Engine.Profiles;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
@@ -27,7 +28,7 @@ public class TextureOpsTests
     [Trait("Category", "Workspace")]
     public void SC0000FiresTextureOpsWithAssignedFullScreenSlot()
     {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4422");
         var provider = Sys4ScriptProvider.Load(table);
         var session = new GameSession();
         foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
@@ -35,7 +36,12 @@ public class TextureOpsTests
 
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
         var host = new RecHost();
-        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider);
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("himegari")!;
+        var vm = new VirtualMachine(
+            script, table, host, new VmOptions(MaxSteps: 20_000_000), provider,
+            compatibility: new VmCompatibilityContext(
+                profile.Id, profile.EngineAbiId,
+                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         vm.Run();

@@ -10,15 +10,34 @@ public sealed record OpcodeCorpusObservation(
     long InstructionCount,
     IReadOnlySet<int> Opcodes);
 
+/// <summary>
+/// The evidence-scoped ABI snapshot/layer that supplied an effective operand contract. Layers are
+/// resolved independently from the shared C# implementation that may execute the instruction.
+/// </summary>
+public sealed record OpcodeResolutionProvenance(
+    string LayerId,
+    string LayerKind,
+    IReadOnlyList<string> ComposedFrom,
+    string EvidenceMethod,
+    string EvidenceArtifact,
+    string EvidenceScope);
+
 public sealed record OpcodeDefinition(
     int Opcode,
     string Label,
     int Argc,
     IReadOnlySet<string> ObservedBy,
-    string? SemanticName = null)
+    string? SemanticName = null,
+    IReadOnlySet<string>? SemanticEvidenceRevisions = null,
+    string? HandlerImplementationId = null,
+    OpcodeResolutionProvenance? Resolution = null)
 {
     public string CanonicalLabel => string.IsNullOrWhiteSpace(SemanticName) ? Label : SemanticName;
     public bool IsObservedBy(string profileId) => ObservedBy.Contains(profileId);
+    public IReadOnlySet<string> EvidenceRevisions { get; } = SemanticEvidenceRevisions
+        ?? new HashSet<string>(StringComparer.Ordinal);
+    public OpcodeResolutionProvenance ContractProvenance => Resolution
+        ?? throw new InvalidOperationException("opcode definition has not been resolved through an ABI layer");
 }
 
 public sealed class OpcodeTable
@@ -37,18 +56,28 @@ public sealed class OpcodeTable
 
     public OpcodeTable(IReadOnlyDictionary<int, OpcodeDefinition> entries,
                        string abiId = "AGE-catalog",
-                       IReadOnlyDictionary<string, OpcodeCorpusObservation>? observations = null)
+                       IReadOnlyDictionary<string, OpcodeCorpusObservation>? observations = null,
+                       IReadOnlyList<string>? resolvedLayers = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrWhiteSpace(abiId);
-        _t = entries;
+        var directProvenance = new OpcodeResolutionProvenance(
+            abiId, "direct-table", [], "caller-supplied", "in-memory OpcodeTable",
+            "caller-supplied table; revision applicability unspecified");
+        _t = entries.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Resolution == null
+                ? pair.Value with { Resolution = directProvenance }
+                : pair.Value);
         AbiId = abiId;
         Observations = observations
             ?? new Dictionary<string, OpcodeCorpusObservation>(StringComparer.Ordinal);
+        ResolvedLayers = resolvedLayers ?? [abiId];
     }
 
     public string AbiId { get; }
     public IReadOnlyDictionary<string, OpcodeCorpusObservation> Observations { get; }
+    public IReadOnlyList<string> ResolvedLayers { get; }
     public int Count => _t.Count;
     public IEnumerable<OpcodeDefinition> Entries => _t.Values;
 

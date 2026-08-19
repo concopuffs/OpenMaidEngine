@@ -2,7 +2,11 @@
 
 > Generated from `vm-map/engine-ctx.toml` by `tools/engine_ctx_build.py --build`. Do not edit.
 
-Struct `EngineCtx`, size `0xa1000`. Applied to the Ghidra `/v2` image (dispatch-handler `this` = `EngineCtx *`).
+Struct `EngineCtx`, size `0xa1000`. Scope: profile `himegari`, catalog `S4IC422`, scripts `SYS4422`.
+
+Executable identity: `AGE.EXE`, 1105920 bytes, SHA-256 `5c80a3a8c5b2e755647247c2195446385c5f1920db422bcb35cfd41cd77b5ee6`.
+
+Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 2490368 bytes, SHA-256 `3d7543ba97e0fd3d59db05d387096dd3afa912b8ec8bcb3c916d9dd313496476`. Offsets must not be transferred to another executable without separately matching provenance.
 
 | offset | name | type | note |
 |---|---|---|---|

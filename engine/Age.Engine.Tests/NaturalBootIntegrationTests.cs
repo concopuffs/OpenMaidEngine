@@ -1,5 +1,6 @@
 using Age.Engine.Diagnostics;
 using Age.Engine.Model;
+using Age.Engine.Profiles;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
 using Xunit;
@@ -114,12 +115,16 @@ public class NaturalBootIntegrationTests
 
     private static NaturalBootResult RunNaturalNewGameToSc0000()
     {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4422");
         var scripts = Sys4ScriptProvider.Load(table);
         var host = new NewGameInputHost();
         var sink = new StopAtSc0000Sink();
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("himegari")!;
         var vm = new VirtualMachine(scripts.RequireByName("SYSTEM4.BIN"), table, host,
-            new VmOptions(MaxSteps: 5_000_000), scripts, sink);
+            new VmOptions(MaxSteps: 5_000_000), scripts, sink,
+            compatibility: new VmCompatibilityContext(
+                profile.Id, profile.EngineAbiId,
+                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
         host.Vm = vm;
         sink.OnEnter = name =>
         {

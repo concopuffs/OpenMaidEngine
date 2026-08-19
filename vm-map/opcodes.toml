@@ -118,6 +118,33 @@ opcodes = [
   0x2da, 0x2db, 0x2dc, 0x2dd, 0x2de,
 ]
 
+# Exact snapshots resolve directly today. Future evidence-backed revision layers may name parents and
+# add members, replace full operand contracts/handler ids, or remove inherited entries. An empty
+# `composes` list deliberately makes no base-SYS4 or revision-ancestry claim.
+[[abi_layer]]
+id = "SYS4422"
+kind = "complete-observed-snapshot"
+composes = []
+observation_profile_id = "himegari"
+evidence_method = "catalog-corpus"
+evidence_artifact = "build/games/himegari/catalog-opcode-coverage.json"
+evidence_scope = "S4IC422 / SYS4422 complete decoded corpus snapshot"
+members = []
+contracts = []
+removes = []
+
+[[abi_layer]]
+id = "SYS4433"
+kind = "complete-observed-snapshot"
+composes = []
+observation_profile_id = "kamidori"
+evidence_method = "catalog-corpus"
+evidence_artifact = "build/games/kamidori/catalog-opcode-coverage.json"
+evidence_scope = "S4IC433 / SYS4433 complete decoded corpus snapshot"
+members = []
+contracts = []
+removes = []
+
 [meta.arg_types]
 "0x0" = "imm"
 "0x1" = "float"

@@ -1,10 +1,19 @@
 using System.Collections.Frozen;
+using Age.Engine.Model;
 
 namespace Age.Engine.Vm;
 
+public sealed record OpcodeHandlerResolution(
+    int Opcode,
+    string ImplementationId,
+    OpcodeResolutionProvenance BindingProvenance,
+    string SemanticEvidenceStatus,
+    bool IsExecutable);
+
 /// <summary>
 /// Runtime implementation coverage. This is deliberately independent from ABI-table membership and
-/// game-corpus observation: knowing how to decode an instruction is not the same as implementing it.
+/// game-corpus observation. A shared implementation may be bound separately by multiple exact ABI
+/// snapshots without asserting that those snapshots have universally identical semantics.
 /// </summary>
 public static class OpcodeRuntimeCoverage
 {
@@ -33,4 +42,30 @@ public static class OpcodeRuntimeCoverage
 
     public static IReadOnlySet<int> Implemented => ImplementedOpcodes;
     public static bool IsImplemented(int opcode) => ImplementedOpcodes.Contains(opcode);
+
+    public static bool TryResolve(
+        OpcodeTable table, int opcode, out OpcodeHandlerResolution resolution)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (!ImplementedOpcodes.Contains(opcode)
+            || !table.TryGetDefinition(opcode, out OpcodeDefinition definition))
+        {
+            resolution = null!;
+            return false;
+        }
+        string evidenceStatus = definition.EvidenceRevisions.Contains(table.AbiId)
+            ? "evidence-confirmed"
+            : table.AbiId == "AGE-catalog"
+                ? "revision-unscoped-test-binding"
+                : "compatibility-reuse-unconfirmed-for-revision";
+        string sharedImplementation = $"age-vm-switch/0x{opcode:x}";
+        string implementation = definition.HandlerImplementationId ?? sharedImplementation;
+        resolution = new OpcodeHandlerResolution(
+            opcode,
+            implementation,
+            definition.ContractProvenance,
+            evidenceStatus,
+            implementation == sharedImplementation);
+        return true;
+    }
 }

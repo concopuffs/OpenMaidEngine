@@ -5,7 +5,7 @@ using System.Text.Json;
 
 public sealed class PortableTextRenderingPolicy
 {
-    public const string ResourcePath = "res://config/himegari-text-rendering.json";
+    public const string JapaneseFallbackResourcePath = "res://config/japanese-text-rendering.json";
 
     public string Id { get; set; } = "";
     public int FontCacheCapacity { get; set; } = 8;
@@ -14,17 +14,19 @@ public sealed class PortableTextRenderingPolicy
     public string[] DefaultSubstitutes { get; set; } = [];
     public PortableFontFamilyPolicy[] Families { get; set; } = [];
 
-    public static PortableTextRenderingPolicy Load()
+    public static PortableTextRenderingPolicy Load(string resourcePath)
     {
-        string json = Godot.FileAccess.GetFileAsString(ResourcePath);
+        if (string.IsNullOrWhiteSpace(resourcePath))
+            throw new ArgumentException("Portable text policy resource path is required.", nameof(resourcePath));
+        string json = Godot.FileAccess.GetFileAsString(resourcePath);
         if (string.IsNullOrWhiteSpace(json))
             throw new InvalidOperationException(
-                $"Portable text policy '{ResourcePath}' is missing or empty.");
+                $"Portable text policy '{resourcePath}' is missing or empty.");
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         PortableTextRenderingPolicy policy =
             JsonSerializer.Deserialize<PortableTextRenderingPolicy>(json, options)
             ?? throw new InvalidOperationException(
-                $"Portable text policy '{ResourcePath}' decoded to null.");
+                $"Portable text policy '{resourcePath}' decoded to null.");
         policy.Validate();
         return policy;
     }

@@ -1308,7 +1308,7 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    Godot self-test, and a real SC0000 Vulkan capture cover the retained path.
 7. **Complete and select the portable backend — completed 2026-07-30.** Godot's TextServer atlas is the
    portable mask/metrics source, avoiding another native dependency. Profile data in
-   `godot/config/himegari-text-rendering.json` owns ordered Mincho/Gothic substitutions and bounded cache
+   `godot/config/japanese-text-rendering.json` owns the shared Japanese fallback's ordered Mincho/Gothic substitutions and bounded cache
    sizes. `auto` selects exact GDI when its ACP-932 gate passes and otherwise selects the explicitly
    non-pixel-exact Unicode backend; development runs can force either with `--text-backend`. Both modes pass
    the same immediate/live/History retained-glyph self-test. Gameplay `Label` pools and surface-text overlay
@@ -1483,7 +1483,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-19): K0 through K4 complete; K5 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 through K5 complete; K6 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1618,28 +1618,51 @@ view is now `age_opcode_semantics.py`.
 
 ##### Phase K5 — separate game data from SYS revision behavior
 
-- [ ] Audit frontend/VM code for script names, offsets, global addresses, resource names, bank sizes, text
+- [x] Audit frontend/VM code for script names, offsets, global addresses, resource names, bank sizes, text
   policies, and diagnostic boot seeds that came from Himegari. Classify each as a shared AGE/SYS4 rule, a
   SYS revision/dialect rule, profile data, or a diagnostic-only fixture.
-- [ ] Make opcode metadata and handler resolution capable of composition without requiring it: resolve the
+- [x] Make opcode metadata and handler resolution capable of composition without requiring it: resolve the
   selected revision's complete snapshot directly at first. If comparative evidence later establishes a shared
   layer or ancestry, compose that layer with revision/dialect additions and replacements. Resolution must retain
   which snapshot or layer supplied the effective operand contract and handler, and what evidence justified its
   scope.
-- [ ] Keep code reuse separate from semantic scope: two revision snapshots may reference the same handler
+- [x] Keep code reuse separate from semantic scope: two revision snapshots may reference the same handler
   implementation without promoting that behavior to an asserted universal `SYS4` base.
-- [ ] Have profiles select the ABI lineage rather than own opcode handlers. Do not name a handler override after
+- [x] Have profiles select the ABI lineage rather than own opcode handlers. Do not name a handler override after
   Himegari or Kamidori when the evidence actually scopes it to `SYS4422`, `SYS4433`, or another SYS revision.
-- [ ] Move game-owned values behind the profile or its diagnostic configuration. Keep generic engine constants
+- [x] Move game-owned values behind the profile or its diagnostic configuration. Keep generic engine constants
   in shared code and retain Himegari-named tests when they intentionally test installed Himegari behavior.
-- [ ] Add executable/build provenance to native-RE and `EngineCtx` metadata so offsets from Himegari's AGE image
+- [x] Add executable/build provenance to native-RE and `EngineCtx` metadata so offsets from Himegari's AGE image
   cannot be applied to Kamidori's distinct executable by implication.
-- [ ] Select portable text policy through the profile, with an engine-wide Japanese fallback allowed where the
+- [x] Select portable text policy through the profile, with an engine-wide Japanese fallback allowed where the
   policy is genuinely shared.
 
 **K5 gate:** a normal Kamidori boot performs no Himegari global seed, save-layout assumption, scene-offset
 workaround, or profile-specific resource bootstrap, and opcode behavior is owned by an evidence-scoped SYS
 revision/dialect snapshot or layer rather than an assumed base ABI or game-specific compatibility shim.
+
+**K5 gate (complete 2026-08-19):** the audit now classifies container/header parsing, catalog/VFS access,
+logical-canvas discovery, and reusable C# handler bodies as shared implementation; opcode operand contracts and
+handler bindings as revision-snapshot behavior; identity, persistence dimensions, natural boot, portable-text
+selection, and proven native-service globals as profile data; and direct-scene resources/scripts/globals plus
+the debug-scene coordinator as diagnostic-only profile fixtures. `SYS4422` resolves a direct 248-contract
+snapshot and `SYS4433` a direct 269-contract snapshot. Neither composes a claimed base. The canonical layer
+schema and runtime loader support evidence-backed parents, additions, full contract/handler replacements, and
+removals later; every effective contract and handler binding retains its supplying layer. Both snapshots may
+bind `age-vm-switch/0x...` implementations while reporting semantic evidence independently, so code reuse is
+not a cross-revision claim.
+
+Himegari's `0xaba5c` scene-entry gate, `0x62425` native-service value, direct-scene SYSTEM4/INIT/resource
+bootstrap, SC0000 external SFX value, and debug-launch coordinator writes now live only in the Himegari
+manifest. Kamidori's corresponding runtime and diagnostic policies are empty, persistence remains profile-owned
+and read-only, and a normal Kamidori boot receives none of those values. Portable text resolves the selected
+profile reference or the neutral Japanese fallback. `Age.Cli` asset diagnostics now use the selected
+catalog/store, and policy-less diagnostic `--boot` requests fail instead of borrowing Himegari's two bootstrap
+lists. The Godot self-test uses synthetic WAV fixtures, a profile-selected OGG, and catalog-neutral launcher
+checks; direct Himegari and Kamidori runs pass. Native RE and all 122 `EngineCtx` fields are pinned to
+Himegari `S4IC422`/`SYS4422`, the exact packed executable SHA-256, and the exact unpacked `/v2` image SHA-256;
+their offsets explicitly do not transfer to Kamidori. K6 can now investigate `0x1be` against `SYS4433` without
+introducing a game-named opcode shim.
 
 ##### Phase K6 — full Kamidori inventory and vertical bring-up
 

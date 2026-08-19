@@ -1,5 +1,13 @@
 # Native-engine reverse engineering (Ghidra + MCP)
 
+> **Executable scope:** every address, `EngineCtx` offset, and `/v2` annotation in this document belongs
+> to Himegari `S4IC422` / `SYS4422` unless a finding explicitly names broader evidence. The installed
+> packed `AGE.EXE` is 1,105,920 bytes with SHA-256
+> `5c80a3a8c5b2e755647247c2195446385c5f1920db422bcb35cfd41cd77b5ee6`; the unpacked Ghidra program
+> `/v2/range_00400000.bin` is 2,490,368 bytes with SHA-256
+> `3d7543ba97e0fd3d59db05d387096dd3afa912b8ec8bcb3c916d9dd313496476`. Do not apply these offsets
+> to Kamidori or another AGE executable without separately matching that executable and image.
+
 Static RE of the **unpacked** `AGE.EXE` engine image, driving Ghidra 12.1.2 via the
 bethington/ghidra-mcp bridge. This is the home for decompiled native-op findings — the class of logic
 the scripts call but that lives compiled in the engine (decision→scene, call-script dispatch, op 0x60,

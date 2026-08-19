@@ -59,7 +59,8 @@ public sealed class GameProfileRegistry
             {
                 profiles.Add(document.ToManifest());
             }
-            catch (Exception error) when (error is ArgumentException or InvalidOperationException)
+            catch (Exception error) when (
+                error is ArgumentException or InvalidOperationException or FormatException or OverflowException)
             {
                 throw new InvalidDataException($"{name}: invalid profile manifest: {error.Message}", error);
             }
@@ -78,6 +79,9 @@ public sealed class GameProfileRegistry
         public string? NaturalBootScript { get; init; }
         public Dictionary<string, string>? MetadataReferences { get; init; }
         public PersistenceDocument? Persistence { get; init; }
+        public RuntimeDocument? Runtime { get; init; }
+        public DirectSceneDiagnosticDocument? DirectSceneDiagnostics { get; init; }
+        public DebugSceneLaunchDocument? DebugSceneLaunch { get; init; }
 
         public GameProfileManifest ToManifest()
         {
@@ -91,8 +95,114 @@ public sealed class GameProfileRegistry
                 NaturalBootScript ?? "",
                 MetadataReferences,
                 (Persistence ?? throw new InvalidOperationException("persistence is required"))
-                    .ToPolicy());
+                    .ToPolicy(),
+                Runtime?.ToPolicy(),
+                DirectSceneDiagnostics?.ToPolicy(),
+                DebugSceneLaunch?.ToPolicy());
         }
+    }
+
+    private sealed class RuntimeDocument
+    {
+        public CellSeedDocument[]? ExternalGlobalSeeds { get; init; }
+        public string? SceneEntryCoroutineGateAddress { get; init; }
+
+        public GameRuntimePolicy ToPolicy()
+            => new(
+                (ExternalGlobalSeeds ?? []).Select(seed => seed.ToSeed()),
+                SceneEntryCoroutineGateAddress == null
+                    ? null : ParseAddress(SceneEntryCoroutineGateAddress));
+    }
+
+    private sealed class DirectSceneDiagnosticDocument
+    {
+        public string? SystemScript { get; init; }
+        public string[]? DataBootstrapScripts { get; init; }
+        public string[]? DataTableBootstrapScripts { get; init; }
+        public CellSeedDocument[]? GlobalSeeds { get; init; }
+        public SceneCellSeedDocument[]? SceneExternalGlobalSeeds { get; init; }
+        public SurfaceBootstrapDocument[]? InheritedSurfaces { get; init; }
+        public WaitIndicatorDocument? WaitIndicator { get; init; }
+
+        public DirectSceneDiagnosticPolicy ToPolicy()
+            => new(
+                SystemScript ?? "",
+                DataBootstrapScripts,
+                DataTableBootstrapScripts,
+                (GlobalSeeds ?? []).Select(seed => seed.ToSeed()),
+                (SceneExternalGlobalSeeds ?? []).Select(seed => seed.ToSeed()),
+                (InheritedSurfaces ?? []).Select(surface => surface.ToBootstrap()),
+                WaitIndicator?.ToBootstrap());
+    }
+
+    private sealed class DebugSceneLaunchDocument
+    {
+        public string? RootScript { get; init; }
+        public string? CoordinatorScript { get; init; }
+        public string? PackedScriptIdAddress { get; init; }
+        public CellSeedDocument[]? CoordinatorWrites { get; init; }
+
+        public DebugSceneLaunchPolicy ToPolicy()
+            => new(
+                RootScript ?? "",
+                CoordinatorScript ?? "",
+                ParseAddress(PackedScriptIdAddress),
+                (CoordinatorWrites ?? []).Select(seed => seed.ToSeed()));
+    }
+
+    private sealed class CellSeedDocument
+    {
+        public string? Address { get; init; }
+        public long Value { get; init; }
+
+        public ProfileCellSeed ToSeed() => new(ParseAddress(Address), Value);
+    }
+
+    private sealed class SceneCellSeedDocument
+    {
+        public string? Script { get; init; }
+        public string? Address { get; init; }
+        public long Value { get; init; }
+
+        public ProfileSceneCellSeed ToSeed()
+            => new(Script ?? "", ParseAddress(Address), Value);
+    }
+
+    private sealed class SurfaceBootstrapDocument
+    {
+        public string? Resource { get; init; }
+        public int SurfaceSlot { get; init; }
+        public uint Flags { get; init; }
+
+        public ProfileSurfaceBootstrap ToBootstrap()
+            => new(Resource ?? "", SurfaceSlot, Flags);
+    }
+
+    private sealed class WaitIndicatorDocument
+    {
+        public int TextLayout { get; init; }
+        public int X { get; init; }
+        public int Y { get; init; }
+        public int SurfaceSlot { get; init; }
+        public int SourceX { get; init; }
+        public int SourceY { get; init; }
+        public int FrameWidth { get; init; }
+        public int FrameHeight { get; init; }
+        public int FrameCount { get; init; }
+        public int FrameMilliseconds { get; init; }
+
+        public ProfileWaitIndicatorBootstrap ToBootstrap()
+            => new(TextLayout, X, Y, SurfaceSlot, SourceX, SourceY,
+                   FrameWidth, FrameHeight, FrameCount, FrameMilliseconds);
+    }
+
+    private static int ParseAddress(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException("profile seed address is required");
+        return value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? Convert.ToInt32(value[2..], 16)
+            : Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private sealed class PersistenceDocument

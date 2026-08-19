@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using Age.Engine.Diagnostics;
+using Age.Engine.Profiles;
 using Age.Engine.Vm;
 
 public partial class Main
@@ -190,6 +192,8 @@ public partial class Main
     private void LaunchDebugScene(DebugSceneEntry entry)
     {
         if (_debugSceneLauncher == null || _scripts == null) return;
+        DebugSceneLaunchPolicy? policy = _selectedProfile.Profile.DebugSceneLaunch;
+        if (policy == null) return;
         if (!TryGetTitleDebugFrame(out var frame, out string reason))
         {
             _debugSceneLauncher.SetStatus(reason);
@@ -201,13 +205,9 @@ public partial class Main
             return;
         }
 
-        var coordinatorWrites = new Dictionary<int, long>
-        {
-            [0] = 1,
-            [0xaba5c] = -1,
-            [0x62ccf] = 0,
-            [0x699] = entry.PackedId,
-        };
+        var coordinatorWrites = policy.CoordinatorWrites
+            .ToDictionary(seed => seed.Address, seed => seed.Value);
+        coordinatorWrites[policy.PackedScriptIdAddress] = entry.PackedId;
         if (!_vm.TryRequestDebugFrameReturn(frame.FrameId, coordinatorWrites))
         {
             _debugSceneLauncher.SetStatus("TITLE changed frames before launch; reopen the launcher and try again.");
@@ -219,7 +219,8 @@ public partial class Main
             ["script"] = entry.Name,
             ["packed_id"] = entry.PackedId,
         });
-        GD.Print($"[debug-launcher] SYSTEM4 dispatch requested: {entry.Name} (0x{entry.PackedId:x8})");
+        GD.Print($"[debug-launcher] {policy.RootScript} dispatch requested: "
+                 + $"{entry.Name} (0x{entry.PackedId:x8})");
         _debugSceneLauncher.Hide();
         // ADV waits need an explicit wake; TITLE's actual menu is a 1 ms sleep/poll loop and will consume
         // the request at its next opcode boundary without leaving a stale input signal for the child scene.
@@ -229,17 +230,24 @@ public partial class Main
     private bool TryGetTitleDebugFrame(out DebugFrameSnapshot frame, out string reason)
     {
         frame = _vm.DebugFrame!;
+        DebugSceneLaunchPolicy? policy = _selectedProfile.Profile.DebugSceneLaunch;
+        if (policy == null)
+        {
+            reason = "The selected profile has no debug-scene coordinator policy.";
+            return false;
+        }
         if (_done || frame == null)
         {
             reason = "Available only while TITLE is the active SYSTEM4 child.";
             return false;
         }
         if (frame.CallStack.Count != 2
-            || !frame.CallStack[0].Equals("SYSTEM4.BIN", System.StringComparison.OrdinalIgnoreCase)
-            || !frame.CallStack[1].Equals("TITLE.BIN", System.StringComparison.OrdinalIgnoreCase)
-            || !frame.CurrentScript.Equals("TITLE.BIN", System.StringComparison.OrdinalIgnoreCase))
+            || !frame.CallStack[0].Equals(policy.RootScript, System.StringComparison.OrdinalIgnoreCase)
+            || !frame.CallStack[1].Equals(policy.CoordinatorScript, System.StringComparison.OrdinalIgnoreCase)
+            || !frame.CurrentScript.Equals(
+                policy.CoordinatorScript, System.StringComparison.OrdinalIgnoreCase))
         {
-            reason = "Refused: the active stack is not SYSTEM4 > TITLE.";
+            reason = $"Refused: the active stack is not {policy.RootScript} > {policy.CoordinatorScript}.";
             return false;
         }
         reason = "";

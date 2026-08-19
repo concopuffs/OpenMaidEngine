@@ -29,7 +29,6 @@ public sealed partial class VirtualMachine
     private const int FRAME_RETURN = int.MinValue + 1;
     private const int HOTSPOT_RETURN = int.MinValue + 2;
     private const int ROOT_RELOAD = int.MinValue + 3;
-    private const int SceneEntryCoroutineGate = 0xaba5c;
     private const int T_IMM = 0, T_FLOAT = 1, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
                       T_LSTRPTR = 14;
@@ -710,8 +709,10 @@ public sealed partial class VirtualMachine
     {
         // The native scheduler supplies this scene-entry state outside script-visible global writes.
         // Restrict it to the byte-identical ADV LABEL/J idiom; op 0x140 also has an unrelated TITLE use.
-        if (entryOffset == 0 && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
-            Globals[SceneEntryCoroutineGate] = 1;
+        if (entryOffset == 0
+            && _compatibility.SceneEntryCoroutineGateAddress is { } sceneEntryGate
+            && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
+            Globals[sceneEntryGate] = 1;
 
         Script root = _s;
         int rootEntry = root.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
@@ -1217,7 +1218,8 @@ public sealed partial class VirtualMachine
             return HALT;
         }
         string label = definition.Label;
-        if (!OpcodeRuntimeCoverage.IsImplemented(op))
+        if (!OpcodeRuntimeCoverage.TryResolve(_t, op, out OpcodeHandlerResolution handler)
+            || !handler.IsExecutable)
         {
             var diagnostic = new UnsupportedOpcodeDiagnostic(
                 _compatibility.ProfileId,
@@ -1228,6 +1230,7 @@ public sealed partial class VirtualMachine
                 ins.Offset,
                 op,
                 definition.CanonicalLabel,
+                definition.ContractProvenance.LayerId,
                 ins.Args.ToArray());
             _sink.Emit(TraceEvent.UnsupportedOpcode(diagnostic, pc));
             if (_compatibility.ProbeMode) return pc + 1;

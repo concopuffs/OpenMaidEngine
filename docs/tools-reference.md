@@ -110,15 +110,15 @@ are recorded in `bin/README.md`. PE-sieve is obsolete and is not retained; its h
 
 ## Opcode reference toolchain — single source of truth = `vm-map/opcodes.toml`
 
-All opcode catalog framing, per-game corpus observation, semantic grounding, structured evidence provenance,
-and `depends_on` knowledge is hand-edited **only** in `vm-map/opcodes.toml`. Observation is independent from
+All opcode catalog framing, per-game corpus observation, ABI snapshot/layer composition, semantic grounding,
+structured evidence provenance, and `depends_on` knowledge is hand-edited **only** in `vm-map/opcodes.toml`. Observation is independent from
 the revision-unscoped upstream catalog, semantic status, and engine-owned runtime implementation coverage.
 Everything else is generated from those owners.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `opcodes_build.py` | Generator + linter for the opcode reference. It validates observation profile ids against embedded manifests, observation opcode references/count metadata, structured evidence methods/scopes/artifacts/sites/profile/revision references, and semantic dependencies. `--bootstrap` appends framing skeletons without inventing a game observation; `--bootstrap-age` adds revision-unscoped upstream-catalog compatibility entries. `--build` joins the engine-owned runtime implementation set only in derived reports. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` + `OpcodeRuntimeCoverage.cs` → ⚙ `tools/age_opcodes.py`, ⚙ `tools/age_opcode_semantics.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ union `build/opcode-coverage.md`, ⚙ `build/games/<profile-id>/opcode-coverage.md` |
-| `opcodes_model.py` | In-memory catalog/observation/evidence model + profile/revision/provenance/dependency linter. | *Imported by `opcodes_build.py`.* | `vm-map/opcodes.toml` → — |
+| `opcodes_build.py` | Generator + linter for the opcode reference. It validates observation profile ids against embedded manifests, observation opcode references/count metadata, ABI layer parents/cycles/contracts, structured evidence methods/scopes/artifacts/sites/profile/revision references, and semantic dependencies. Current `SYS4422`/`SYS4433` layers are complete direct snapshots; the schema can later compose evidence-backed parents with additions, full operand-contract/handler replacements, and removals. `--bootstrap` appends framing skeletons without inventing a game observation; `--bootstrap-age` adds revision-unscoped upstream-catalog compatibility entries. `--build` joins the engine-owned runtime implementation set only in derived reports. | `--build` · `--lint` · `--bootstrap` · `--bootstrap-age` | `vm-map/opcodes.toml` + `OpcodeRuntimeCoverage.cs` → ⚙ `tools/age_opcodes.py`, ⚙ `tools/age_opcode_semantics.py`, ⚙ `build/opcodes.json`, ⚙ `docs/opcode-reference.md`, ⚙ union `build/opcode-coverage.md`, ⚙ `build/games/<profile-id>/opcode-coverage.md` |
+| `opcodes_model.py` | In-memory catalog/observation/evidence/ABI-layer model + profile/revision/provenance/composition/dependency linter. | *Imported by `opcodes_build.py`.* | `vm-map/opcodes.toml` → — |
 | `test_opcodes.py` | Pure regressions for general observation loading, structured evidence resolution/lint, runtime/JSON/reference views, and bootstrap behavior. Its synthetic scan uses the canonical Himegari observation set but never reads private game content. | `test_opcodes.py` | `vm-map/opcodes.toml` → temporary files only |
 | `opcode_context.py` | Read-only evidence gatherer for classifying unnamed opcodes (frequency, argc, operand-type signature, neighbours, disassembly snippets, canonical registry note). | `--top 20` · `opcode_context.py 0x1f4 0x71 …` | `vm-map/opcodes.toml` + corpus → stdout |
 | `validate_opcode_table.py` | Definitive decode-coverage validator using the canonical registry's generated ABI and the SYS4 code/data boundary. | `validate_opcode_table.py` | corpus → stdout |
@@ -346,6 +346,12 @@ The `engine/` .NET solution (`AgeEngine.sln`) is the runtime VM; `godot/` is the
 Python, but listed here as the things you *run*. Build: `dotnet build engine/AgeEngine.sln`; test:
 `dotnet test engine/AgeEngine.sln`. Run a CLI command: `dotnet run --project engine/Age.Cli -- <cmd>`.
 
+Every CLI command resolves `--profile ID` and `--game-root PATH` before opening scripts or assets; without
+those options the established Himegari workspace layout remains the default. Asset diagnostics use that
+selected catalog/store. `--boot` is evidence-scoped profile behavior: it uses only the selected profile's
+declared diagnostic bootstrap lists and fails clearly when the profile has none, rather than borrowing
+Himegari's script names.
+
 **call-script executes** on the product paths: they inject `Sys4ScriptProvider`, which runtime-parses
 `SYS4INI.BIN` and opens `.BIN` bytes through the native loose-first/bounded-ALF store, so `call-script <id>` loads & runs the target as a nested subroutine
 frame sharing globals. `trace`/`audio`/`gfx` stay **provider-less** (call-script stubbed) — base-ISA /
@@ -360,10 +366,10 @@ root/call-script parsing). Generated asset/callscript JSON remains a tooling and
 |---|---|---|
 | `run <file.BIN>` | Execute a script; print steps, show-text count, **call-script dispatch count**, the first 30 lines (each tagged with its source script), and the distinct source scripts. | `CaptureHost` (headless); **executes call-script**. |
 | `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps. **Provider-less** (call-script stubbed) = a base-ISA offset dump. | writes JSON. (Was the vm0 differential oracle; vm0 is retired from oracle duty — `TraceDiffTests` removed.) |
-| `trace <SCENE.BIN> [--boot] [--state <f>] [0xADDR=VAL…] --trace-json <out>` | ★ Emit the **full per-op executed-offset path** of one scene (not just show-text), filtered to the scene's own frame — the VM side of the differential offset-path oracle (`diff_optrace.py`). `--boot` runs the SYSTEM4 state prefix; **`--state <f>` loads a captured scene-entry snapshot** (`capture_global_writes.py`) = the engine's real pre-scene state; `0xADDR=VAL` hand-seeds. | `JsonOffsetTraceSink` (observe-only, parity held) → `{scene, offsets:[…]}` JSON. |
+| `trace <SCENE.BIN> [--boot] [--state <f>] [0xADDR=VAL…] --trace-json <out>` | ★ Emit the **full per-op executed-offset path** of one scene (not just show-text), filtered to the scene's own frame — the VM side of the differential offset-path oracle (`diff_optrace.py`). `--boot` runs the selected profile's proven direct-scene state prefix (Himegari: `INITCONFIG/INIT2/INIT`); **`--state <f>` loads a captured scene-entry snapshot** (`capture_global_writes.py`) = the engine's real pre-scene state; `0xADDR=VAL` hand-seeds. | `JsonOffsetTraceSink` (observe-only, parity held) → `{scene, offsets:[…]}` JSON. |
 | `audio <SCENE.BIN> [0xADDR=VAL…]` | Dump executed ordinary/forced/stopped BGM and `play-voice` in order + resolved catalog record; forced BGM events distinguish loop and one-shot mode. | optional seeds. provider-less (stub) for now. |
-| `gfx [--boot] <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` (resolved file + computed geometry) **plus the per-object gfx slots** — the headless geometry oracle. **`--boot`** runs SYSTEM4's state prefix (`INITCONFIG/INIT2/INIT`) via `GameSession` first (so INIT2's gfx handle array is present) and runs the target with call-script on; without it, seeds-only + provider-less. | gfx ops now execute against `GfxState`. |
-| `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the 9 `*INIT` data scripts (real skill/item/unit/map/stage state). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
+| `gfx [--boot] <SCENE.BIN> [0xADDR=VAL…]` | Dump executed `set-texture`/`get-texture-size`/`draw-texture` (resolved file + computed geometry) **plus the per-object gfx slots** — the headless geometry oracle. **`--boot`** runs the selected profile's direct-scene state prefix via `GameSession` first and runs the target with call-script on; without it, seeds-only + provider-less. | gfx ops execute against `GfxState`; resources come from the selected profile's catalog/store. |
+| `play [--boot] [--state <f>] [--save-state <f>] <SCENE.BIN…> [0xADDR=VAL…]` | ★ Cross-scene **state runner**: run a scene sequence carrying persistent globals. `--boot` first runs the selected profile's proven data-table bootstrap list (Himegari currently declares its 9 `*INIT` scripts). `--state`/`--save-state` load/persist a JSON snapshot. | `GameSession`; **executes call-script**. |
 | `sweep [--boot] [0xADDR=VAL…]` | Corpus-scale run. **With call-script execution on: 284/297 exit, 13 STEP-LIMIT** (input/state-gated ADV scenes spin headless once subroutine global-writes drive their loops — state divergence, not a bug; 0 depth-cap/unresolved). **With seeds = a story-state explorer**: reports which scenes' dialogue changes ±seed (e.g. form flag `0xa57=1` → 34/297 scenes). | |
 
 **Faithful headless vs plow (`HaltAtWaitForInput`)** — headless has no player, so op `0x72 wait-for-input`
@@ -716,8 +722,8 @@ or bypass protection.
 |---|---|---|---|
 | `ghidra_handler_map.py` | Extract the opcode→real-handler dispatch table (`handler(op)=ctx[0x26c93+op]`) from `FUN_00413860`'s override stores — the general fix for Kelebek VA-drift. `--check` diffs derived handlers vs `opcodes.toml` prose (found 0 real drift). Feeds the one-shot Ghidra annotation pass that names every handler `op_0xNN_handler` (see `docs/engine-re.md` "Materialized + applied image-wide"). | `ghidra_handler_map.py build/engine-dump/FUN_00413860.disasm.txt [--check]` | ⚙ `build/engine-dump/FUN_00413860.disasm.txt` (from ghidra-mcp `disassemble_function(0x413860)`) → ⚙ `build/op-handler-map.json` |
 | `test_ghidra_handler_map.py` | Unit tests for the dispatch-table parser (plain runner, no pytest). | `test_ghidra_handler_map.py` | — |
-| `engine_ctx_build.py` | Build the `EngineCtx` struct artifacts from `vm-map/engine-ctx.toml` (canonical `ctx`-field registry). `--lint` = overlap/OOB/dup/type checks. The struct is then applied to the `/v2` image via `run_script_inline` (creates `EngineCtx`, retypes all dispatch-handler `this` → `EngineCtx *`) so handlers decompile `ctx->field` not `param_1+0x…`. Grows one `[[field]]` at a time. | `engine_ctx_build.py --build` · `--lint` | ⚙ `vm-map/engine-ctx.toml` → ⚙ `build/engine-ctx.json`, ⚙ `docs/engine-ctx-reference.md` |
-| `test_engine_ctx.py` | Unit tests for the ctx builder (load/lint/emit; plain runner). | `test_engine_ctx.py` | — |
+| `engine_ctx_build.py` | Build the `EngineCtx` struct artifacts from `vm-map/engine-ctx.toml` (canonical `ctx`-field registry). `--lint` checks overlap/OOB/dup/type plus required profile, executable, unpacked-image, size, image-base, and SHA-256 provenance. The struct applies only to the identified Himegari `S4IC422`/`SYS4422` `/v2` image via `run_script_inline`; offsets cannot transfer to another AGE executable by implication. | `engine_ctx_build.py --build` · `--lint` | ⚙ `vm-map/engine-ctx.toml` → ⚙ `build/engine-ctx.json`, ⚙ `docs/engine-ctx-reference.md` |
+| `test_engine_ctx.py` | Unit tests for the ctx builder, including rejection of unscoped executable metadata (plain runner). | `test_engine_ctx.py` | — |
 
 ## Tooling improvement backlog
 

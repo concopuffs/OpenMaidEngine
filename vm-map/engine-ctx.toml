@@ -6,6 +6,20 @@
 [meta]
 struct_name = "EngineCtx"
 size = 0xa1000
+profile_id = "himegari"
+catalog_revision = "S4IC422"
+script_revision = "SYS4422"
+
+[meta.executable]
+name = "AGE.EXE"
+size = 1105920
+sha256 = "5c80a3a8c5b2e755647247c2195446385c5f1920db422bcb35cfd41cd77b5ee6"
+
+[meta.analysis_image]
+ghidra_program = "/v2/range_00400000.bin"
+image_base = 0x400000
+size = 2490368
+sha256 = "3d7543ba97e0fd3d59db05d387096dd3afa912b8ec8bcb3c916d9dd313496476"
 
 [[field]]
 offset = 0x4

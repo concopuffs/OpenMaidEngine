@@ -3,7 +3,11 @@ using Age.Engine.Model;
 namespace Age.Engine.Vm;
 
 /// <summary>The selected game/profile facts needed to make compatibility behavior explicit.</summary>
-public sealed record VmCompatibilityContext(string ProfileId, string EngineAbiId, bool ProbeMode = false)
+public sealed record VmCompatibilityContext(
+    string ProfileId,
+    string EngineAbiId,
+    bool ProbeMode = false,
+    int? SceneEntryCoroutineGateAddress = null)
 {
     public static VmCompatibilityContext ForTable(OpcodeTable table)
         => new("unselected", table.AbiId);
@@ -19,11 +23,13 @@ public sealed record UnsupportedOpcodeDiagnostic(
     int Offset,
     int Opcode,
     string CanonicalLabel,
+    string OperandContractLayerId,
     IReadOnlyList<Operand> Operands)
 {
     public override string ToString()
         => $"unsupported opcode: profile={ProfileId}; abi={EngineAbiId}; revision={ScriptRevision}; "
            + $"script={ScriptName}; script_id=0x{PackedScriptId:x}; offset=0x{Offset:x}; "
-           + $"opcode=0x{Opcode:x}; label={CanonicalLabel}; operands=["
+           + $"opcode=0x{Opcode:x}; label={CanonicalLabel}; "
+           + $"contract_layer={OperandContractLayerId}; operands=["
            + string.Join(", ", Operands.Select(value => $"{value.Type}:{value.Value}")) + "]";
 }

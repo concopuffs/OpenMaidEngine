@@ -12,7 +12,53 @@
   "engineAbiId": "SYS4422",
   "naturalBootScript": "SYSTEM4.BIN",
   "metadataReferences": {
-    "portableTextRendering": "godot/config/himegari-text-rendering.json"
+    "portableTextRendering": "res://config/japanese-text-rendering.json"
+  },
+  "runtime": {
+    "sceneEntryCoroutineGateAddress": "0xaba5c",
+    "externalGlobalSeeds": [
+      { "address": "0x62425", "value": 1 }
+    ]
+  },
+  "directSceneDiagnostics": {
+    "systemScript": "SYSTEM4.BIN",
+    "dataBootstrapScripts": ["INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN"],
+    "dataTableBootstrapScripts": [
+      "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
+      "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN"
+    ],
+    "globalSeeds": [
+      { "address": "0x6c1", "value": 1 }
+    ],
+    "sceneExternalGlobalSeeds": [
+      { "script": "SC0000.BIN", "address": "0x6242d", "value": 4 }
+    ],
+    "inheritedSurfaces": [
+      { "resource": "SO001.AGF", "surfaceSlot": 17, "flags": 0 },
+      { "resource": "SO000.AGF", "surfaceSlot": 12, "flags": 65280 }
+    ],
+    "waitIndicator": {
+      "textLayout": 1,
+      "x": 385,
+      "y": 140,
+      "surfaceSlot": 12,
+      "sourceX": 0,
+      "sourceY": 0,
+      "frameWidth": 30,
+      "frameHeight": 27,
+      "frameCount": 12,
+      "frameMilliseconds": 48
+    }
+  },
+  "debugSceneLaunch": {
+    "rootScript": "SYSTEM4.BIN",
+    "coordinatorScript": "TITLE.BIN",
+    "packedScriptIdAddress": "0x699",
+    "coordinatorWrites": [
+      { "address": "0x0", "value": 1 },
+      { "address": "0xaba5c", "value": -1 },
+      { "address": "0x62ccf", "value": 0 }
+    ]
   },
   "persistence": {
     "storageNamespace": "himegari",

@@ -12,6 +12,8 @@ public class CoroutineHostModelTests
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_LINT = 9;
     private const int SceneEntryGate = 0xaba5c;
     private static readonly OpcodeTable Table = OpcodeTableJson.Load(Paths.OpcodesJson);
+    private static readonly VmCompatibilityContext HimegariCompatibility =
+        new("himegari", "AGE-catalog", SceneEntryCoroutineGateAddress: SceneEntryGate);
 
     private static int Op(string label) => Table.ByLabel(label)!.Value;
     private static Instruction Ins(int offset, int opcode, params Operand[] args) => new(offset, opcode, args);
@@ -45,7 +47,9 @@ public class CoroutineHostModelTests
             Ins(0x85, Op("exit")));
 
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, Table, new CaptureHost(), sink: sink);
+        var vm = new VirtualMachine(
+            script, Table, new CaptureHost(), sink: sink,
+            compatibility: HimegariCompatibility);
         vm.Globals[output] = 0x77; // stale value from a previous scene: already equal to this scene's terminal
         vm.Run();
 
@@ -103,7 +107,8 @@ public class CoroutineHostModelTests
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);
         var sink = new RecordingTraceSink { TracingSteps = true };
         var vm = new VirtualMachine(script, Table, new CaptureHost(),
-            new VmOptions(HaltAtWaitForInput: true), sink: sink);
+            new VmOptions(HaltAtWaitForInput: true), sink: sink,
+            compatibility: HimegariCompatibility);
         vm.Run();
 
         Assert.Equal("wait-for-input", vm.HaltReason);

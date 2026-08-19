@@ -35,8 +35,9 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson, selectedProfile.Profile.Engi
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
+var assetStore = new Sys4AssetStore(catalog, gameRoot, gameRoot);
 var provider = new Sys4ScriptProvider(
-    table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+    table, catalog, assetStore);
 Script ScriptByName(string name) => provider.RequireByName(name);
 
 // Diagnostics flags (see the TraceSetup class below): --trace (text flow), --trace-steps (every op),
@@ -47,7 +48,8 @@ if (args.Contains("catalog-scan"))
 {
     Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
     var unsupported = scan.OpcodeOccurrences
-        .Where(pair => !OpcodeRuntimeCoverage.IsImplemented(pair.Key))
+        .Where(pair => !OpcodeRuntimeCoverage.TryResolve(table, pair.Key, out var handler)
+                       || !handler.IsExecutable)
         .ToDictionary(pair => $"0x{pair.Key:x}", pair => new
         {
             occurrences = pair.Value,
@@ -58,6 +60,7 @@ if (args.Contains("catalog-scan"))
     {
         profile_id = selectedProfile.Profile.Id,
         engine_abi_id = selectedProfile.Profile.EngineAbiId,
+        resolved_abi_layers = table.ResolvedLayers,
         catalog_identity = selectedProfile.DetectedIdentity.Display,
         selection_source = selectedProfile.SourceName,
         identity_matched = selectedProfile.IdentityMatched,
@@ -117,7 +120,7 @@ if (args[0] == "audio")
     // each resolved via ResourceMap (same rule as the Godot host). Diagnostic only.
     var sceneName = args[1];
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = ResourceMap.Load(Console.Error.WriteLine);
+    var res = new ResourceMap(catalog, assetStore, Console.Error.WriteLine);
     var host = new AudioTraceHost(res);
     var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
@@ -144,7 +147,7 @@ if (args[0] == "gfx")
     bool boot = args.Contains("--boot");
     var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = ResourceMap.Load(Console.Error.WriteLine);
+    var res = new ResourceMap(catalog, assetStore, Console.Error.WriteLine);
     var host = new GfxTraceHost(res);
     var session = new GameSession();
     foreach (var s in args.Where(a => a.Contains('=')))
@@ -154,8 +157,13 @@ if (args[0] == "gfx")
         long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
         session.Seed(k, v);
     }
+    if (boot && selectedProfile.Profile.DirectSceneDiagnostics == null)
+    {
+        Console.Error.WriteLine($"profile '{selectedProfile.Profile.Id}' has no proven direct-scene boot policy");
+        return 2;
+    }
     if (boot)
-        foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+        foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
         {
             var bs = session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
             Console.WriteLine($"[boot] {b}: {bs.Steps} steps (halt: {bs.Halt})");
@@ -185,9 +193,14 @@ if (args[0] == "play")
     // state across them (optional up-front seeds). --boot first runs the data-table *INIT scripts so scenes
     // see the real skill/item/unit/etc. state. The state substrate for cross-scene flow; headless.
     // The *INIT boot set — all run clean (halt: exit) and populate the game's data tables into globals.
-    string[] bootScripts = { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
-                             "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" };
+    IReadOnlyList<string> bootScripts =
+        selectedProfile.Profile.DirectSceneDiagnostics?.DataTableBootstrapScripts ?? [];
     bool boot = args.Contains("--boot");
+    if (boot && selectedProfile.Profile.DirectSceneDiagnostics == null)
+    {
+        Console.Error.WriteLine($"profile '{selectedProfile.Profile.Id}' has no proven data-table boot policy");
+        return 2;
+    }
     var userScenes = args.Skip(1).Where(a => a.ToUpperInvariant().EndsWith(".BIN")).ToList();
     if (userScenes.Count == 0) { Console.WriteLine("usage: play [--boot] <SCENE.BIN...> [0xADDR=VAL ...]"); return 1; }
     var scenes = (boot ? bootScripts.Concat(userScenes) : userScenes).ToList();
@@ -235,8 +248,13 @@ if (args[0] == "sweep")
     if (boot)
     {
         var bootSession = new GameSession();
-        foreach (var s in new[] { "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
-                                  "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN" })
+        DirectSceneDiagnosticPolicy? diagnosticPolicy = selectedProfile.Profile.DirectSceneDiagnostics;
+        if (diagnosticPolicy == null)
+        {
+            Console.Error.WriteLine($"profile '{selectedProfile.Profile.Id}' has no proven data-table boot policy");
+            return 2;
+        }
+        foreach (string s in diagnosticPolicy.DataTableBootstrapScripts)
             bootSession.RunScene(ScriptByName(s), table, new CaptureHost(), null, provider);
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
@@ -323,8 +341,13 @@ if (args[0] == "trace")
             long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
             session.Seed(k, v);
         }
+        if (boot && si < 0 && selectedProfile.Profile.DirectSceneDiagnostics == null)
+        {
+            Console.Error.WriteLine($"profile '{selectedProfile.Profile.Id}' has no proven direct-scene boot policy");
+            return 2;
+        }
         if (boot && si < 0)   // --state already carries boot state; don't re-run the *INIT prefix
-            foreach (var b in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
+            foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
                 session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
         var sink = new JsonOffsetTraceSink(target.Name);
         var vm = new VirtualMachine(target, table, new CaptureHost(),

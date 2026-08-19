@@ -11,6 +11,7 @@ public class OpcodeCompatibilityTests
     public void RuntimeCoverageIsIndependentFromAbiMembershipAndCorpusObservation()
     {
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        OpcodeTable himegariTable = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4422");
 
         Assert.True(table.TryGetDefinition(0x1be, out OpcodeDefinition definition));
         Assert.False(definition.IsObservedBy("himegari"));
@@ -24,7 +25,7 @@ public class OpcodeCompatibilityTests
         Assert.Equal(242, himegari.Intersect(kamidori).Count());
         Assert.Equal(275, himegari.Union(kamidori).Count());
         Assert.All(
-            table.Entries.Where(entry => entry.IsObservedBy("himegari")),
+            himegariTable.Entries,
             entry => Assert.True(
                 OpcodeRuntimeCoverage.IsImplemented(entry.Opcode),
                 $"Himegari-observed opcode 0x{entry.Opcode:x} would enter unsupported fallback"));
@@ -76,6 +77,7 @@ public class OpcodeCompatibilityTests
         Assert.Equal(0, failure.Offset);
         Assert.Equal(0x1be, failure.Opcode);
         Assert.Equal("u0041D9D0", failure.CanonicalLabel);
+        Assert.Equal("SYS4433", failure.OperandContractLayerId);
         Assert.Equal(new long[] { 11, 22 }, failure.Operands.Select(value => value.Value));
         Assert.Contains(normalTrace.Events,
             item => item.Kind == TraceEventKind.UnsupportedOpcode

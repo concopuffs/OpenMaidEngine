@@ -139,8 +139,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │
     ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (AgeEngine.sln)
     │   ├── Age.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
-    │                                       identity selection and profile-owned persistence policy/paths
-    │   ├── Age.Engine/Model/                opcode-table definitions plus retained graphics state and
+    │                                       identity selection, persistence, runtime seeds, and diagnostic policy
+    │   ├── Age.Engine/Model/                composable ABI-layer/opcode definitions plus retained graphics state and
     │                                       separately navigable render, transition, diagnostic, and persistence contracts
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
@@ -165,7 +165,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
                                             plus the optional exact Windows text adapter). Its assembly embeds
                                             generated build/opcodes.json through OmeRuntimeMetadata, so
                                             exports do not need repository discovery. Also contains the portable
-                                            TextServer glyph adapter, per-profile font-substitution configuration,
+                                            TextServer glyph adapter, profile-selected Japanese font policy,
                                             and TITLE-only F4 debug scene launcher
 ```
 
@@ -333,7 +333,9 @@ have no repository output tree and write their automatic maps below
   `bin/README.md` records the optional local convention; no extractor binary is tracked. Safe to delete
   and rebuild; do not hand-edit.
 - **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (catalog framing, per-profile observation,
-  revision-scoped structured evidence, semantics, and dependencies). Runtime implementation remains owned by
+  evidence-scoped ABI snapshots/layers, revision-scoped structured evidence, semantics, and dependencies).
+  Current revision snapshots resolve directly; the schema supports future parent/add/replace/remove composition
+  without asserting a base SYS4 lineage. Runtime implementation remains owned by
   `OpcodeRuntimeCoverage.cs`. Run `tools/opcodes_build.py --build` to regenerate both Python views
   (`tools/age_opcodes.py`, `tools/age_opcode_semantics.py`), machine JSON (`build/opcodes.json`), reference
   (`docs/opcode-reference.md`), and union/per-profile coverage. `--lint` also checks profile/revision/evidence
