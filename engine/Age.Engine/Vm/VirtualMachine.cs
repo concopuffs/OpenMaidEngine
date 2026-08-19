@@ -919,10 +919,9 @@ public sealed partial class VirtualMachine
 
     private NativeNumberedSaveState CaptureNumberedState()
     {
-        const int himegariIntegerCount = 0x6241b;
-        const int himegariFloatCount = 1;
-        const int himegariStringCount = 0x315;
-        const int himegariPointerCount = 1;
+        NativeSaveBankDimensions dimensions = _nativeDatStore?.Identity.BankDimensions
+            ?? throw new InvalidDataException(
+                "The selected native persistence identity has no numbered-save bank dimensions.");
 
         ExecFrame[] active;
         int cutoff;
@@ -971,12 +970,12 @@ public sealed partial class VirtualMachine
             SoundEffectResourceIds = _loadedSoundEffectResourceIds
                 .Select(id => unchecked((int)id)).ToArray(),
             Frames = frames,
-            IntegerGlobals = DenseValues(Globals, himegariIntegerCount),
-            FloatGlobals = DenseValues(GlobalFloats, himegariFloatCount),
-            StringGlobals = DenseStrings(GlobalStrings, himegariStringCount),
-            PointerGlobals = DensePointerValues(GlobalPointers, himegariPointerCount),
-            PointerStrings = DensePointerValues(GlobalStringPointers, himegariPointerCount),
-            LocalPointerScratch = new int[himegariPointerCount],
+            IntegerGlobals = DenseValues(Globals, dimensions.IntegerGlobals),
+            FloatGlobals = DenseValues(GlobalFloats, dimensions.FloatGlobals),
+            StringGlobals = DenseStrings(GlobalStrings, dimensions.StringGlobals),
+            PointerGlobals = DensePointerValues(GlobalPointers, dimensions.PointerGlobals),
+            PointerStrings = DensePointerValues(GlobalStringPointers, dimensions.PointerStrings),
+            LocalPointerScratch = new int[dimensions.LocalPointerScratch],
             SurfaceRecords = gfx.SurfaceRecords,
             GfxObjects = gfx.Objects,
             RangeTransformFirst = gfx.RangeFirst,

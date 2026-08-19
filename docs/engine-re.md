@@ -230,15 +230,15 @@ This is intentionally a native-behavior catalog, not a mandate to reproduce ever
 base, default windowed client, backbuffer/compositor bounds, primary surface, movie/layout fallbacks, and input
 coordinates. `--window-width`/`--window-height` may vary that client independently while the logical canvas
 and all AGE coordinates remain unchanged. AGE's independent `640x480` defaults apply for missing or invalid
-dimensions. The port still
-preserves requested Mincho/Gothic faces, save version 3.10, and movie/audio behavior through their existing
-paths; those keys have not yet been migrated to the parsed registry.
+dimensions. The port still preserves requested Mincho/Gothic faces and movie/audio behavior through their
+existing paths. Persistence now reads and validates the selected profile's packed `SAVEVERSION` from this
+registry; the other keys have not yet been migrated to semantic consumers.
 
 The remaining generic-profile gap is semantic application of further portable settings. In particular,
 click-cancel, Auto/Skip coexistence, cursor policy, redraw policy, and wheel action ids must be decided from
-this evidence instead of AGE's compiled defaults. The port deliberately redirects the native profile to
-Godot `user://`: save payloads remain under `user://SAVE`, while engine options retain AGE's native
-`SYS4REG.INI` filename and format at `user://SYS4REG.INI`.
+this evidence instead of AGE's compiled defaults. The port deliberately redirects each native profile beneath
+Godot `user://games/<profile-id>/`: save payloads remain under its `SAVE` child, while engine options retain
+AGE's native `SYS4REG.INI` filename and format at the profile root.
 It should not reproduce legacy DirectDraw selection or native registration/key validation.
 
 ### ops `0x1a2`/`0x1a3` store and restore shared `SAVE.DAT` integer cells (resolved 2026-07-20)
@@ -2167,9 +2167,11 @@ The script operands select the operation and numbered slot only.
 
 The port preserves that ownership boundary while intercepting the enclosing profile root. For Himegari,
 `Sys4PersistencePaths` validates that `SAVEPATH` is beneath `REGFILEPATH`, maps their relative `SAVE` tail
-under Godot `user://`, and supplies `user://SAVE` to `DirectoryNativeDatStore`. This isolates authored port
-saves from the original installation while retaining compatible file structure; another profile root can
-be injected without changing script semantics.
+under Godot `user://games/himegari/`, and supplies `user://games/himegari/SAVE` to
+`DirectoryNativeDatStore`. This isolates authored port saves from the original installation and other game
+profiles while retaining compatible file structure. Pre-K1 files at the unnamespaced `user://SAVE` and
+`user://SYS4REG.INI` locations are left untouched and are not imported automatically; migration must be an
+explicit copy into the Himegari namespace so startup cannot guess which profile owns legacy data.
 
 The resolver reads two per-game settings from the SYS4INI-backed settings registry:
 `set:UseAppDataFolder` and `set:SavePath`. When `UseAppDataFolder == 1`, the modern-Windows branch
@@ -2254,7 +2256,8 @@ global pointers. `RT.DAT` is now implemented as the separate S3RT layer describe
 validates its distinct compatibility id, queries metadata without decoding payloads, and performs exact
 paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
 dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
-frame marker) are wired. Godot's shared profile-path resolver injects the store at `user://SAVE`.
+frame marker) are wired. Godot's shared profile-path resolver injects the Himegari store at
+`user://games/himegari/SAVE`.
 `NativeNumberedSaveCodec`, `NativeTextHistoryCodec`, and `NativeGfxPersistenceCodec` own the complete
 layout-3 numbered body, global/frame/gfx state, and appended history tail. The VM wires `0x19e`,
 data-only `0x19f`, full load
@@ -3450,9 +3453,10 @@ silently normalized to `1`. Writes use a sibling temporary file followed by repl
 
 AGE resolves save and settings locations independently, but Himegari makes `SAVEPATH` the `SAVE`
 descendant of `REGFILEPATH`. `Sys4PersistencePaths` models both native resolutions together. Godot's
-current profile override replaces the resolved `REGFILEPATH` directory with `user://`, preserving the
-relative `SAVE` tail and yielding `user://SYS4REG.INI` plus `user://SAVE`. If a future profile supplies
-unrelated paths, a single-root override is rejected instead of guessing; native resolution remains
+current profile override replaces the resolved `REGFILEPATH` directory with
+`user://games/<profile-id>/`, preserving the relative `SAVE` tail and yielding
+`user://games/himegari/SYS4REG.INI` plus `user://games/himegari/SAVE` for Himegari. If a future profile
+supplies unrelated paths, a single-root override is rejected instead of guessing; native resolution remains
 available as the exact `USEAPPDATAFOLDER` plus independent-path policy.
 
 ### Scene-entry state snapshot — auto-seeding single-scene runs (2026-07-09)

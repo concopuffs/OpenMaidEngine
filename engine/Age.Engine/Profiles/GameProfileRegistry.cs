@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json;
+using Age.Engine.Persistence;
 
 namespace Age.Engine.Profiles;
 
@@ -76,13 +77,10 @@ public sealed class GameProfileRegistry
         public string? EngineAbiId { get; init; }
         public string? NaturalBootScript { get; init; }
         public Dictionary<string, string>? MetadataReferences { get; init; }
-        public string? PersistenceNamespace { get; init; }
-        public bool? PersistenceWritesEnabled { get; init; }
+        public PersistenceDocument? Persistence { get; init; }
 
         public GameProfileManifest ToManifest()
         {
-            if (PersistenceWritesEnabled == null)
-                throw new InvalidOperationException("persistenceWritesEnabled is required");
             return new GameProfileManifest(
                 Id ?? "",
                 DisplayTitle ?? "",
@@ -92,9 +90,61 @@ public sealed class GameProfileRegistry
                 EngineAbiId ?? "",
                 NaturalBootScript ?? "",
                 MetadataReferences,
-                PersistenceNamespace ?? "",
-                PersistenceWritesEnabled.Value);
+                (Persistence ?? throw new InvalidOperationException("persistence is required"))
+                    .ToPolicy());
         }
+    }
+
+    private sealed class PersistenceDocument
+    {
+        public string? StorageNamespace { get; init; }
+        public bool? WritesEnabled { get; init; }
+        public string? ReadOnlyReason { get; init; }
+        public string? Magic { get; init; }
+        public uint? SharedCompatibilityId { get; init; }
+        public uint? NumberedCompatibilityId { get; init; }
+        public string? GameId { get; init; }
+        public int? ExpectedPackedSaveVersion { get; init; }
+        public BankDimensionsDocument? BankDimensions { get; init; }
+        public int? NumberedGfxRecordSize { get; init; }
+
+        public GamePersistencePolicy ToPolicy()
+        {
+            if (WritesEnabled == null) throw new InvalidOperationException("writesEnabled is required");
+            if (!Enum.TryParse(Magic, ignoreCase: true, out NativeSaveMagic magic))
+                throw new InvalidOperationException($"unknown native save magic '{Magic}'");
+            return new GamePersistencePolicy(
+                StorageNamespace ?? "",
+                WritesEnabled.Value,
+                ReadOnlyReason,
+                magic,
+                SharedCompatibilityId
+                    ?? throw new InvalidOperationException("sharedCompatibilityId is required"),
+                NumberedCompatibilityId
+                    ?? throw new InvalidOperationException("numberedCompatibilityId is required"),
+                GameId ?? "",
+                ExpectedPackedSaveVersion
+                    ?? throw new InvalidOperationException("expectedPackedSaveVersion is required"),
+                (BankDimensions
+                    ?? throw new InvalidOperationException("bankDimensions is required")).ToDimensions(),
+                NumberedGfxRecordSize
+                    ?? throw new InvalidOperationException("numberedGfxRecordSize is required"));
+        }
+    }
+
+    private sealed class BankDimensionsDocument
+    {
+        public int IntegerGlobals { get; init; }
+        public int FloatGlobals { get; init; }
+        public int StringGlobals { get; init; }
+        public int PointerGlobals { get; init; }
+        public int PointerStrings { get; init; }
+        public int LocalPointerScratch { get; init; }
+
+        public NativeSaveBankDimensions ToDimensions()
+            => new(
+                IntegerGlobals, FloatGlobals, StringGlobals,
+                PointerGlobals, PointerStrings, LocalPointerScratch);
     }
 
     private sealed class CatalogIdentityDocument

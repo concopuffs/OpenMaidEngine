@@ -74,17 +74,16 @@ public sealed record GameProfileManifest
         string engineAbiId,
         string naturalBootScript,
         IReadOnlyDictionary<string, string>? metadataReferences,
-        string persistenceNamespace,
-        bool persistenceWritesEnabled)
+        GamePersistencePolicy persistence)
     {
         RequireStableId(id, nameof(id));
-        RequireStableId(persistenceNamespace, nameof(persistenceNamespace));
         ArgumentException.ThrowIfNullOrWhiteSpace(displayTitle);
         ArgumentException.ThrowIfNullOrWhiteSpace(sysFrontendId);
         ArgumentException.ThrowIfNullOrWhiteSpace(engineAbiId);
         ArgumentException.ThrowIfNullOrWhiteSpace(naturalBootScript);
         ArgumentNullException.ThrowIfNull(catalogIdentities);
         ArgumentNullException.ThrowIfNull(scriptRevisions);
+        ArgumentNullException.ThrowIfNull(persistence);
 
         ImmutableArray<GameCatalogIdentity> identities = catalogIdentities.ToImmutableArray();
         ImmutableArray<string> revisions = scriptRevisions.ToImmutableArray();
@@ -105,8 +104,7 @@ public sealed record GameProfileManifest
         NaturalBootScript = naturalBootScript;
         MetadataReferences = (metadataReferences ?? new Dictionary<string, string>())
             .ToImmutableDictionary(StringComparer.Ordinal);
-        PersistenceNamespace = persistenceNamespace;
-        PersistenceWritesEnabled = persistenceWritesEnabled;
+        Persistence = persistence;
     }
 
     public string Id { get; }
@@ -117,13 +115,14 @@ public sealed record GameProfileManifest
     public string EngineAbiId { get; }
     public string NaturalBootScript { get; }
     public ImmutableDictionary<string, string> MetadataReferences { get; }
-    public string PersistenceNamespace { get; }
-    public bool PersistenceWritesEnabled { get; }
+    public GamePersistencePolicy Persistence { get; }
+    public string PersistenceNamespace => Persistence.StorageNamespace;
+    public bool PersistenceWritesEnabled => Persistence.WritesEnabled;
 
     public bool Matches(GameCatalogIdentity identity)
         => CatalogIdentities.Any(expected => expected.Matches(identity));
 
-    private static void RequireStableId(string value, string parameterName)
+    internal static void RequireStableId(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         if (!value.All(character => character is >= 'a' and <= 'z'

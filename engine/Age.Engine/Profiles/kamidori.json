@@ -12,6 +12,23 @@
   "engineAbiId": "SYS4433",
   "naturalBootScript": "SYSTEM4.BIN",
   "metadataReferences": {},
-  "persistenceNamespace": "kamidori",
-  "persistenceWritesEnabled": false
+  "persistence": {
+    "storageNamespace": "kamidori",
+    "writesEnabled": false,
+    "readOnlyReason": "numbered-save gfx record size 0x2e4 is not implemented",
+    "magic": "S4SD",
+    "sharedCompatibilityId": 1177760564,
+    "numberedCompatibilityId": 1177760564,
+    "gameId": "逾樊治繧翫い繝ｫ繧ｱ繝溘・繝槭う繧ｹ繧ｿ繝ｼ",
+    "expectedPackedSaveVersion": 320,
+    "bankDimensions": {
+      "integerGlobals": 1037327,
+      "floatGlobals": 1,
+      "stringGlobals": 802,
+      "pointerGlobals": 1,
+      "pointerStrings": 1,
+      "localPointerScratch": 1
+    },
+    "numberedGfxRecordSize": 740
+  }
 }

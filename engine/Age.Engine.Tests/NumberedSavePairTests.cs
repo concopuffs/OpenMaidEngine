@@ -12,7 +12,8 @@ public class NumberedSavePairTests
     private static readonly NativeSystemTime Timestamp =
         new(2026, 7, 5, 24, 13, 42, 17, 321);
     private static readonly NativeSaveIdentity Identity =
-        new(NativeSaveMagic.S4SD, 0x4a343234, "numbered-test", 3, 10, 0x42323234);
+        new(NativeSaveMagic.S4SD, 0x4a343234, "numbered-test", 3, 10, 0x42323234,
+            new NativeSaveBankDimensions(402459, 1, 789, 1, 1, 1));
 
     [Fact]
     public void ThumbnailCodecWritesNativeBottomUpBmpAndRoundTrips()

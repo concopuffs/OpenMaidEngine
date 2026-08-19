@@ -1,4 +1,5 @@
 using System.Text;
+using Age.Engine.Persistence;
 using Age.Engine.Profiles;
 using Age.Engine.Sys4;
 
@@ -21,6 +22,11 @@ public sealed class GameProfileSelectionTests
         Assert.Equal("SYSTEM4.BIN", himegari.NaturalBootScript);
         Assert.Equal("himegari", himegari.PersistenceNamespace);
         Assert.True(himegari.PersistenceWritesEnabled);
+        Assert.Equal(310, himegari.Persistence.ExpectedPackedSaveVersion);
+        Assert.Equal(0x4a343234u, himegari.Persistence.SharedCompatibilityId);
+        Assert.Equal(0x42323234u, himegari.Persistence.NumberedCompatibilityId);
+        Assert.Equal([402459, 1, 789, 1, 1, 1], himegari.Persistence.BankDimensions.ToArray());
+        Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
         Assert.True(himegari.Matches(HimegariIdentity));
 
         GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(registry.Find("kamidori"));
@@ -30,6 +36,12 @@ public sealed class GameProfileSelectionTests
         Assert.Equal("SYSTEM4.BIN", kamidori.NaturalBootScript);
         Assert.Equal("kamidori", kamidori.PersistenceNamespace);
         Assert.False(kamidori.PersistenceWritesEnabled);
+        Assert.Equal(320, kamidori.Persistence.ExpectedPackedSaveVersion);
+        Assert.Equal(0x46333334u, kamidori.Persistence.SharedCompatibilityId);
+        Assert.Equal(0x46333334u, kamidori.Persistence.NumberedCompatibilityId);
+        Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
+        Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
+        Assert.Contains("0x2e4", kamidori.Persistence.ReadOnlyReason);
         Assert.True(kamidori.Matches(KamidoriIdentity));
     }
 
@@ -185,6 +197,15 @@ public sealed class GameProfileSelectionTests
             "SYS4000",
             "SYSTEM4.BIN",
             metadataReferences: null,
-            persistenceNamespace: id,
-            persistenceWritesEnabled: false);
+            new GamePersistencePolicy(
+                id,
+                writesEnabled: false,
+                readOnlyReason: "synthetic test profile",
+                NativeSaveMagic.S4SD,
+                sharedCompatibilityId: 1,
+                numberedCompatibilityId: 1,
+                gameId: id,
+                expectedPackedSaveVersion: 300,
+                new NativeSaveBankDimensions(1, 1, 1, 1, 1, 1),
+                numberedGfxRecordSize: NativeNumberedSaveState.GfxRecordSize));
 }

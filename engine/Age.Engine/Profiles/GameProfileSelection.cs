@@ -17,14 +17,14 @@ public sealed record SelectedGameProfile(
     bool ProbeMode)
 {
     public bool PersistenceWritesEnabled
-        => Profile.PersistenceWritesEnabled && IdentityMatched && !ProbeMode;
+        => Profile.Persistence.WritesEnabled && IdentityMatched && !ProbeMode;
 
     public bool IsReadOnly => !PersistenceWritesEnabled;
 
     public string? ReadOnlyReason => !IsReadOnly ? null
         : ProbeMode ? "probe mode"
         : !IdentityMatched ? "catalog/profile identity mismatch"
-        : "profile persistence contract is not validated";
+        : Profile.Persistence.ReadOnlyReason ?? "profile persistence contract is not validated";
 
     public string SourceName => Source switch
     {

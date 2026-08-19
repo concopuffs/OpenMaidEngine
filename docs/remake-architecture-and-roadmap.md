@@ -1482,7 +1482,7 @@ diagnostic only; no Kamidori support or `0x1be` semantics were implemented.
 
 #### Kamidori profile onboarding — tracked execution plan
 
-**Status (2026-08-18): K0 complete; K1 is next.** This is the executable checklist for turning the existing
+**Status (2026-08-19): K0 and K1 complete; K2 is next.** This is the executable checklist for turning the existing
 single-install boundary into the first real second-game profile. It does not authorize a per-game VM fork:
 Himegari and Kamidori must continue to share the SYS4 frontend, current opcode catalog, VM core, catalog/VFS,
 and host backends. A profile selects game-owned data and compatibility policy; it does not contain or copy
@@ -1520,22 +1520,27 @@ the opcode table, VM options, frontend hosts, diagnostics, or persistence servic
 was automatic or explicit and whether the detected install identity matched, without allowing auto-detection to
 override an explicit user choice. The runtime reads only SYS4INI's fixed identity header before selection.
 Built-in manifests are embedded in `Age.Engine`; Kamidori, probe runs, and explicit identity mismatches remain
-read-only pending K1.
+read-only under the K1 persistence contract.
 
 ##### Phase K1 — make persistence safe before normal Kamidori execution
 
-- [ ] Move the hardcoded Himegari `NativeSaveIdentity`, save-layout versions, numbered-save compatibility id,
+- [x] Move the hardcoded Himegari `NativeSaveIdentity`, save-layout versions, numbered-save compatibility id,
   serialized VM-bank dimensions, and related persistence policy behind the selected profile. Prefer values
   decoded from SYS4INI VM metadata/settings where proven; keep only irreducible values in the manifest.
-- [ ] Namespace Godot-owned state per game (for example `user://games/<profile-id>/`) so `SAVE.DAT`, `RT.DAT`,
+- [x] Namespace Godot-owned state per game (`user://games/<profile-id>/`) so `SAVE.DAT`, `RT.DAT`,
   numbered saves, thumbnails, `SYS4REG.INI`, and diagnostics cannot collide across profiles.
-- [ ] Determine and validate Kamidori's native save identity and bank dimensions before enabling its writes.
+- [x] Determine and validate Kamidori's native save identity and bank dimensions before enabling its writes.
   Until then, Kamidori remains read-only even when its profile is recognized.
-- [ ] Add cross-profile regressions proving that opening, saving, deleting, or copying a slot under one profile
+- [x] Add cross-profile regressions proving that opening, saving, deleting, or copying a slot under one profile
   cannot observe or mutate the other profile's files.
 
-**K1 gate:** no ordinary Kamidori run is permitted until isolation tests pass and its persistence capability is
-either validated read/write or explicitly read-only.
+**K1 gate (complete 2026-08-19):** profile manifests now own native identity, expected SYS4INI
+`SAVEVERSION`, serialized VM-bank dimensions, graphics-record size, write capability, and the stable storage
+namespace. Himegari is validated read/write at `user://games/himegari/`. Installed Kamidori saves establish
+`S4SD`, compatibility id `0x46333334`, version 3.20, banks `[1037327,1,802,1,1,1]`, and a changed `0x2e4`
+graphics record; that unsupported record keeps Kamidori explicitly read-only. Isolation regressions exercise
+open/save/copy/delete behavior across both namespace roots. Probe runs and explicit profile mismatches cannot
+construct a store, while a mismatched explicit choice still continues as requested.
 
 ##### Phase K2 — replace silent compatibility loss with structured diagnostics
 

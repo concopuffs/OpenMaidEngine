@@ -8,7 +8,8 @@ public sealed record NativeSaveIdentity(
     string GameId,
     int SaveVersion1,
     int SaveVersion2,
-    uint? NumberedCompatibilityId = null)
+    uint? NumberedCompatibilityId = null,
+    NativeSaveBankDimensions? BankDimensions = null)
 {
     public uint EffectiveNumberedCompatibilityId => NumberedCompatibilityId ?? CompatibilityId;
 

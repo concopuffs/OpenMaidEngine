@@ -97,7 +97,7 @@ public class Sys4StartupSettingsTests
             Sys4AssetCatalog.Parse(WrapCatalog(countMismatch), "miscounted-settings"));
     }
 
-    private static byte[] BuildCatalog(
+    internal static byte[] BuildCatalog(
         params (string Key, string Value)[] pairs)
         => WrapCatalog(BuildExpanded(pairs));
 

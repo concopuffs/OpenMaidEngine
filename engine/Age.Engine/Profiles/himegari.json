@@ -14,6 +14,22 @@
   "metadataReferences": {
     "portableTextRendering": "godot/config/himegari-text-rendering.json"
   },
-  "persistenceNamespace": "himegari",
-  "persistenceWritesEnabled": true
+  "persistence": {
+    "storageNamespace": "himegari",
+    "writesEnabled": true,
+    "magic": "S4SD",
+    "sharedCompatibilityId": 1244934708,
+    "numberedCompatibilityId": 1110585908,
+    "gameId": "蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ",
+    "expectedPackedSaveVersion": 310,
+    "bankDimensions": {
+      "integerGlobals": 402459,
+      "floatGlobals": 1,
+      "stringGlobals": 789,
+      "pointerGlobals": 1,
+      "pointerStrings": 1,
+      "localPointerScratch": 1
+    },
+    "numberedGfxRecordSize": 724
+  }
 }

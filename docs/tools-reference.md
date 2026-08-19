@@ -272,7 +272,7 @@ and the exact FIELD/DRAWMINIMAP/RESETLAND copy/fallback/restore contract.
 | `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py SC0000 14 [--map <jsonl>] [--context N]` | `build/page-map-<SCENE>.jsonl` + script corpus → stdout |
 
 In a live Godot run, **F6** writes an observe-only stall snapshot under
-`user://diagnostics/stall-<timestamp>.json`, prints the absolute path, and copies
+`user://games/<profile-id>/diagnostics/stall-<timestamp>.json`, prints the absolute path, and copies
 `SCRIPT@offset · stall snapshot <path>` to the clipboard. The JSON contains the current call stack, a bounded
 128-instruction ring, VM/host wait flags, surface/movie completion state, decoder state, and the exact finite
 graphics channels capable of holding an op-`0x21c` presentation wait. Press it while the apparent stall is still
@@ -283,7 +283,8 @@ latency.
 
 Normal interactive Godot sessions have no cumulative instruction ceiling. Bounded Godot diagnostic runs retain
 `STEP-LIMIT`; if one fires, Godot captures the same diagnostic automatically as
-`user://diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path to the clipboard. Before nested
+`user://games/<profile-id>/diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path to the
+clipboard. Before nested
 frames unwind, the trace sink preserves the deepest active script stack. The console also prints the exact final
 script/offset/opcode, that frame chain, the hottest sites in the bounded final 128-instruction window, and the
 final 16-instruction sequence. This makes the last ADV locator unnecessary for identifying a post-dialogue loop;
@@ -641,7 +642,8 @@ call. F4 outside TITLE prints an unavailable reason and changes no state. Cancel
 The launcher does not seed story/profile state, jump to byte offsets, or force-switch an active child scene.
 
 **Godot page locator:** every editor/development run recreates `build/page-map-<SCENE>.jsonl`; a packaged
-export writes the same automatic map below `user://diagnostics/page-maps`. Each `wait-for-input` adds the
+export writes the same automatic map below `user://games/<profile-id>/diagnostics/page-maps`. Each
+`wait-for-input` adds the
 run-relative page, page-start location, canonical wait script/offset, last show-text instruction and string
 offsets, text, and nested call stack. Use `--page-map <jsonl>` to override the output; pass that explicit path
 to `locate_page.py --map` when resolving a map copied from an export profile. `--locator-hud` shows

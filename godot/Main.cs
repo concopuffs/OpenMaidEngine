@@ -26,6 +26,7 @@ public partial class Main : Godot.Control
     private WindowLaunchOptions _windowOptions;
     private Sys4AssetCatalog _catalog = null!;
     private SelectedGameProfile _selectedProfile = null!;
+    private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;
     private Label _status = null!;
     private VirtualMachine _vm = null!;
@@ -69,6 +70,7 @@ public partial class Main : Godot.Control
         }
         GameRootSelection gameRoot;
         SelectedGameProfile selectedProfile;
+        ResolvedGamePersistence profilePersistence;
         Sys4AssetCatalog catalog;
         try
         {
@@ -89,6 +91,10 @@ public partial class Main : Godot.Control
                 GameCatalogIdentity.ReadSys4IniHeader(gameRoot.Sys4IniPath);
             selectedProfile = GameProfileSelection.Resolve(userArgs, detectedIdentity);
             catalog = Sys4AssetCatalog.Load(gameRoot.Sys4IniPath);
+            profilePersistence = ResolvedGamePersistence.Resolve(
+                selectedProfile,
+                catalog.StartupSettings,
+                ProjectSettings.GlobalizePath("user://"));
         }
         catch (System.Exception error) when (
             error is System.ArgumentException or System.IO.IOException or System.UnauthorizedAccessException)
@@ -99,6 +105,7 @@ public partial class Main : Godot.Control
         }
         _catalog = catalog;
         _selectedProfile = selectedProfile;
+        _profilePersistence = profilePersistence;
         _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, gameRoot.Root);
         GD.Print($"[profile] id={selectedProfile.Profile.Id} title=\"{selectedProfile.Profile.DisplayTitle}\" " +
                  $"selection={selectedProfile.SourceName} identity-match={selectedProfile.IdentityMatched} " +
@@ -108,8 +115,10 @@ public partial class Main : Godot.Control
                  $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
         if (selectedProfile.MismatchDiagnostic is { } mismatch)
             GD.PushWarning($"[profile] {mismatch}");
-        if (selectedProfile.IsReadOnly)
-            GD.PushWarning($"[profile] persistence is read-only: {selectedProfile.ReadOnlyReason}");
+        if (!profilePersistence.WritesEnabled)
+            GD.PushWarning($"[profile] persistence is read-only: {profilePersistence.ReadOnlyReason}");
+        GD.Print($"[profile] data-root={profilePersistence.ProfileRoot} " +
+                 $"persistence={(profilePersistence.WritesEnabled ? "read-write" : "read-only")}");
 
         // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
         // instance is reused for scripts and assets later in startup.
@@ -261,26 +270,16 @@ public partial class Main : Godot.Control
         INativeDatStore? nativeSaveStore = null;
         var sharedProfile = new SharedProfile();
         _audioMixerSettings = new AudioMixerSettings();
-        if (!_selftest && selectedProfile.PersistenceWritesEnabled)
+        if (!_selftest && profilePersistence.WritesEnabled)
         {
-            // K1 moves this remaining validated Himegari save identity and the user:// namespace behind
-            // the selected profile. K0 never constructs it for Kamidori, probe runs, or mismatched roots.
-            if (selectedProfile.Profile.Id != "himegari")
-                throw new InvalidOperationException(
-                    $"profile '{selectedProfile.Profile.Id}' enables persistence without a validated store");
-            Sys4PersistencePaths persistencePaths = Sys4PersistencePaths.ResolveProfileOverride(
-                catalog.StartupSettings,
-                ProjectSettings.GlobalizePath("user://"));
-            nativeSaveStore = new DirectoryNativeDatStore(
-                persistencePaths.SaveDirectory,
-                new NativeSaveIdentity(
-                    NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
-                    SaveVersion1: 3, SaveVersion2: 10, NumberedCompatibilityId: 0x42323234));
+            nativeSaveStore = profilePersistence.CreateNativeDatStore()
+                ?? throw new InvalidOperationException(
+                    "write-enabled profile did not construct a native persistence store");
             sharedProfile.Load(nativeSaveStore);
             try
             {
                 _sys4RegIniStore = Sys4RegIniStore.ForPath(
-                    catalog.StartupSettings, persistencePaths.Sys4RegIniPath);
+                    catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath);
                 _audioMixerSettings = _sys4RegIniStore.Load();
                 GD.Print($"[settings] native engine options={_sys4RegIniStore.FilePath}");
             }
@@ -678,7 +677,7 @@ public partial class Main : Godot.Control
                 pending_movies = pendingMovies,
             };
 
-            string directory = ProjectSettings.GlobalizePath("user://diagnostics");
+            string directory = _profilePersistence.DiagnosticsDirectory;
             System.IO.Directory.CreateDirectory(directory);
             string path = System.IO.Path.Combine(directory,
                 $"{snapshotKind}-{System.DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.json");
@@ -795,7 +794,7 @@ public partial class Main : Godot.Control
         GD.Print($"[subroutines] {ids.Count} call-scripts executed as nested frames ({distinct.Count} distinct: {string.Join(", ", distinct)})");
     }
 
-    private static string DefaultPageMapPath(string scene)
+    private string DefaultPageMapPath(string scene)
     {
         string fileName = $"page-map-{scene.ToUpperInvariant()}.jsonl";
 #if TOOLS
@@ -805,7 +804,7 @@ public partial class Main : Godot.Control
         // Exports have no repository and may be installed read-only. Keep diagnostics with the
         // profile-owned Godot data instead of probing for an age-reimpl ancestor.
         return System.IO.Path.Combine(
-            ProjectSettings.GlobalizePath("user://"), "diagnostics", "page-maps", fileName);
+            _profilePersistence.DiagnosticsDirectory, "page-maps", fileName);
 #endif
     }
 

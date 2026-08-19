@@ -193,6 +193,52 @@ public class NativeNumberedSaveCodecTests
                     state.SurfaceRecords.AsSpan(slot * 20 + 8))));
     }
 
+    [Fact]
+    public void InstalledKamidoriExposesObservedBanksAndUnsupportedGfxRecordWhenPresent()
+    {
+        string eushullyRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Eushully");
+        if (!Directory.Exists(eushullyRoot)) return;
+        string? path = Directory.EnumerateFiles(
+                eushullyRoot, "SAVE00.DAT", SearchOption.AllDirectories)
+            .FirstOrDefault(candidate =>
+            {
+                try
+                {
+                    NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(
+                        File.ReadAllBytes(candidate));
+                    return metadata.CompatibilityId == 0x46333334
+                        && metadata.SaveVersion1 == 3 && metadata.SaveVersion2 == 20;
+                }
+                catch (Exception error) when (
+                    error is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    return false;
+                }
+            });
+        if (path == null) return;
+
+        NativeSaveDocument document = NativeSaveContainerCodec.Decode(File.ReadAllBytes(path));
+        int cutoff = BinaryPrimitives.ReadInt32LittleEndian(document.Payload);
+        int banksAt = checked(0x5718 + cutoff * 0x414);
+        int[] counts = Enumerable.Range(0, 6)
+            .Select(index => BinaryPrimitives.ReadInt32LittleEndian(
+                document.Payload.AsSpan(banksAt + index * 4)))
+            .ToArray();
+
+        Assert.Equal([1037327, 1, 802, 1, 1, 1], counts);
+
+        int at = banksAt + 24 + counts[0] * 4 + counts[1] * 4;
+        int stringDwords = BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(at));
+        at += 4 + stringDwords * 4
+            + counts[3] * 4 + counts[4] * 4 + counts[5] * 4;
+        Assert.Equal(0x2e4, BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(at)));
+        Assert.Contains(
+            "gfx record size 0x2e4",
+            Assert.Throws<InvalidDataException>(
+                () => NativeNumberedSaveCodec.Decode(document.Payload)).Message);
+    }
+
     private static int FindGfxObjects(byte[] payload, int count, int firstHandle)
     {
         for (int offset = 0; offset <= payload.Length - 12; offset += 4)

@@ -130,8 +130,9 @@ SE/Voice/Movie use zero/nonzero. The file is engine-option persistence, separate
 
 `SAVEPATH` and `REGFILEPATH` are independent native settings rather than one serialized profile-root
 field. Himegari deliberately relates them: `SAVEPATH` is the `SAVE` descendant of `REGFILEPATH`.
-The port's shared profile override preserves that relative layout, producing `user://SAVE` and
-`user://SYS4REG.INI`; the file contents and names remain native-compatible.
+The port's shared profile override preserves that relative layout beneath the selected profile namespace,
+producing `user://games/himegari/SAVE` and `user://games/himegari/SYS4REG.INI` for Himegari; the file
+contents and names remain native-compatible.
 
 ## Native persistence files — Himegari 3.10
 
@@ -171,8 +172,16 @@ standalone `S3RT` layout documented below. The fixed `.DAT` header is `0x124` by
 | `0x11c` | 4 | signed `SaveVersion1`, selecting the logical state layout |
 | `0x120` | 4 | signed `SaveVersion2`, selecting the payload-codec subversion |
 
-Himegari uses game id `姫狩りダンジョンマイスター` and versions 3.10. Shared `SAVE.DAT` uses
-compatibility id `0x4a343234`; installed numbered files use the distinct id `0x42323234`.
+Observed profile identities are:
+
+| Profile | Game id | Version | Shared compatibility id | Numbered compatibility id |
+|---|---|---:|---:|---:|
+| Himegari | `姫狩りダンジョンマイスター` | 3.10 | `0x4a343234` | `0x42323234` |
+| Kamidori | `神採りアルケミーマイスター` | 3.20 | `0x46333334` | `0x46333334` |
+
+The packed SYS4INI `SAVEVERSION` values `310` and `320` split into these major/minor fields by quotient
+and remainder modulo 100. Compatibility ids and game ids are not currently derived from SYS4INI, so the
+selected profile owns them and checks the catalog-provided save version before any store is constructed.
 
 A `0x14`-byte codec frame begins at file offset `0x124`, and expanded data begins at `0x138`:
 
@@ -412,6 +421,15 @@ larger than the meaningful sparse entries and range record
 The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
 `[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and
 `0x2aea` (channel 2), and 211 retained graphics objects.
+
+#### Kamidori 3.20 layout observation — HEADER AND BANKS CONFIRMED; GRAPHICS UNSUPPORTED
+
+Kamidori's installed `SAVE00.DAT` reaches the same six-count variable-bank position and records
+`[1037327,1,802,1,1,1]`. Its following graphics record size is `0x2e4`, not Himegari's `0x2d4`.
+The current layout-3 codec cannot preserve or recreate that larger record, so the `kamidori` profile records
+the observed identity and dimensions but is explicitly read-only. This is evidence of a persistence-layout
+difference associated with the observed SYS4433-era game; it is not yet evidence that every SYS4433 title
+shares the same layout.
 
 #### Appended text-history tail
 

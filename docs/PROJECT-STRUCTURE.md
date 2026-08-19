@@ -135,8 +135,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
     ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (AgeEngine.sln)
-    │   ├── Age.Engine/Profiles/             embedded content-free game manifests plus immutable
-    │                                       catalog-identity/profile selection contract
+    │   ├── Age.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
+    │                                       identity selection and profile-owned persistence policy/paths
     │   ├── Age.Engine/Model/                retained graphics state plus separately navigable public
     │                                       render, transition, diagnostic, and persistence contracts
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog parser, loose-first bounded
@@ -147,7 +147,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root (three siblings)
     │                                       publication, and bounded font/glyph cache primitives
     │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
-    │                                       and profile-owned state
+    │                                       profile-owned state, identity, and serialized bank dimensions
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, and WAV sanitization
@@ -297,7 +297,8 @@ delay opcode dispatch; reset/default initialization, public menu-state accessors
 
 The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
-have no repository output tree and write their automatic maps below `user://diagnostics/page-maps` instead.
+have no repository output tree and write their automatic maps below
+`user://games/<profile-id>/diagnostics/page-maps` instead.
 
 ## Conventions
 

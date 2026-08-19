@@ -911,7 +911,8 @@ warning-free Godot build, and Himegari-targeted threaded selftest pass (468 engi
 voice, and movie volume in native basis points; `0x1ba`/`0xc7` set/get the four non-master route flags.
 The registry is shared across fresh scene VMs and persisted in AGE's native CP932 `SYS4REG.INI`. A shared
 path resolver models SYS4INI's independent `SAVEPATH`/`REGFILEPATH` choices; Godot redirects Himegari's
-related profile root to `user://`, yielding `user://SAVE` and `user://SYS4REG.INI`. The compatibility
+related profile root to `user://games/himegari/`, yielding `user://games/himegari/SAVE` and
+`user://games/himegari/SYS4REG.INI`. The compatibility
 writer updates only the nine audio keys and preserves every unrelated option. Raw music state retains
 native `2 ↔ -1` band toggling. Godot applies
 gains through its nested audio buses, so master and category volume compose, and route changes immediately
@@ -1025,7 +1026,8 @@ cannot distinguish an SC0600 cleanup loop from resumed FIELD processing.
 Godot now retains the deepest frame chain before a halted frame unwinds and automatically emits a bounded
 STEP-LIMIT report: exact script/offset/opcode, nested frame chain, hottest sites in the final 128 instructions,
 and the final 16-instruction sequence. It also writes the ordinary full stall snapshot as
-`user://diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path. Focused formatter/stack
+`user://games/<profile-id>/diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path. Focused
+formatter/stack
 regressions made the next reproduction decisive: the cap fired at `DRAWMINIMAP@0xc4` under
 `SYSTEM4 > TITLE > SAVE > SYSTEM4 > FIELD > DRAWMINIMAP`, 127.452 seconds into the run. Its final trace is
 the ordinary bounded minimap scan: X increments at `0x77`, exits after 25, and the outer scan spans a fixed
