@@ -231,9 +231,12 @@ public class NaturalBootIntegrationTests
         Assert.False(sink.SawUnitDataCopyStub);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [Trait("Profile", "kamidori")]
-    public void KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene()
+    public void KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene(
+        bool translationOverlay)
     {
         string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
@@ -242,8 +245,11 @@ public class NaturalBootIntegrationTests
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        string[] looseRoots = translationOverlay
+            ? [Path.Combine(gameRoot, "patch"), gameRoot]
+            : [gameRoot];
         var scripts = new Sys4ScriptProvider(
-            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, looseRoots));
         // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
         var host = new NewGameInputHost(700, 300);
         var sink = new KamidoriNaturalBootSink();

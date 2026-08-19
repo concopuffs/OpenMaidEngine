@@ -324,6 +324,40 @@ public class Sys4AssetStoreTests
     }
 
     [Fact]
+    public void MultipleLooseRootsUseDeclaredPriorityBeforeGameRootAndArchive()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "age-vfs-order-" + Guid.NewGuid().ToString("N"));
+        string archives = Path.Combine(temp, "archives");
+        string first = Path.Combine(temp, "first");
+        string second = Path.Combine(temp, "second");
+        string game = Path.Combine(temp, "game");
+        foreach (string directory in new[] { archives, first, second, game })
+            Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(archives, "DATA1.ALF"), [4]);
+            File.WriteAllBytes(Path.Combine(game, "TEST.BIN"), [3]);
+            File.WriteAllBytes(Path.Combine(second, "TEST.BIN"), [2]);
+            File.WriteAllBytes(Path.Combine(first, "TEST.BIN"), [1]);
+            var catalog = Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog(includeTrailer: true));
+            var entry = new AssetEntry("TEST.BIN", "DATA1.ALF", 0, 1);
+            var store = new Sys4AssetStore(catalog, archives, first, second, game);
+
+            Assert.Equal([1], store.ReadAll(entry));
+            File.Delete(Path.Combine(first, "TEST.BIN"));
+            Assert.Equal([2], store.ReadAll(entry));
+            File.Delete(Path.Combine(second, "TEST.BIN"));
+            Assert.Equal([3], store.ReadAll(entry));
+            File.Delete(Path.Combine(game, "TEST.BIN"));
+            Assert.Equal([4], store.ReadAll(entry));
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
+    [Fact]
     public void TypedResolutionReportsInvalidAndMismatchedPackedIdsOnce()
     {
         var catalog = Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog(

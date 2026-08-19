@@ -1694,6 +1694,16 @@ Kamidori's `.MPG`-named startup streams resolve through the shared MPEG/VFS back
 and 44.1 kHz stereo audio. Kamidori persistence intentionally remains read-only because K1's `0x2e4` numbered-
 save graphics record is still unsupported; profile namespaces prevent any writable-state collision.
 
+**Post-K6 translation-overlay acceptance (2026-08-19):** translation-specific filesystem and image behavior
+is selected through general launch policy rather than embedded in the Kamidori profile or opcode ABI. Ordered,
+repeatable asset roots precede the game root and archive fallback, while a separate explicit option permits
+24/32-bit uncompressed BMP payloads under `.AGF` catalog names. Kamidori's local `-TranslationPatch` launcher
+shortcut expands to those two generic capabilities. Installed tests cover exact translated title assets and
+both official/translated natural paths to the first ADV page; a real Godot capture matches the native English
+title. The translated 732-script production-store scan decodes 2,161,326 instructions with the same 269-opcode
+observation set as the official corpus, so it is retained as overlay provenance rather than a new SYS4433
+dialect snapshot.
+
 ### Other engine versions (SYS3 / SYS5) — one app, not many
 Versions differ in: header (SYS4 `0x3C` vs SYS5 `0x44`), string codec (SYS4 cp932^0xFF vs SYS5
 UTF-16^0xFFFF), opcode set (overlapping, version-specific; Kelebek's table already spans the family

@@ -11,16 +11,18 @@ public sealed class ResourceMap
 {
     private readonly Sys4AssetCatalog _catalog;
     private readonly IAssetStore _store;
+    private readonly bool _allowBmpAsAgf;
     private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _reportedDiagnostics = new(StringComparer.Ordinal);
     private readonly object _diagnosticLock = new();
 
     public ResourceMap(Sys4AssetCatalog catalog, IAssetStore? store = null,
-                       Action<string>? diagnostic = null)
+                       Action<string>? diagnostic = null, bool allowBmpAsAgf = false)
     {
         _catalog = catalog;
         _store = store ?? new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
         _diagnostic = diagnostic;
+        _allowBmpAsAgf = allowBmpAsAgf;
     }
 
     public static ResourceMap Load(Action<string>? diagnostic = null)
@@ -41,7 +43,8 @@ public sealed class ResourceMap
         => ResolveTypedPacked(resourceId, "movie", "an AGF/MPG record", IsMovie);
 
     /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
-    public RgbaImage DecodeTexture(AssetEntry entry) => AgfDecoder.Decode(_store, entry);
+    public RgbaImage DecodeTexture(AssetEntry entry)
+        => AgfDecoder.Decode(_store, entry, _allowBmpAsAgf);
 
     /// <summary>Resolve a native packed raw id to one of AGE's Windows cursor resources.</summary>
     public AssetEntry? ResolveCursor(long resourceId)

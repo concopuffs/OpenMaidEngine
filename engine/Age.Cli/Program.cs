@@ -9,7 +9,7 @@ using Age.Engine.Vm;
 
 if (args.Length == 0)
 {
-    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--output report.json]");
+    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--overlay-root PATH] [--allow-bmp-as-agf] [--output report.json]");
     return 1;
 }
 
@@ -35,7 +35,8 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson, selectedProfile.Profile.Engi
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
-var assetStore = new Sys4AssetStore(catalog, gameRoot, gameRoot);
+AssetLaunchOptions assetOptions = AssetLaunchOptions.Resolve(args, gameRoot);
+var assetStore = new Sys4AssetStore(catalog, gameRoot, assetOptions.LooseRoots.ToArray());
 var provider = new Sys4ScriptProvider(
     table, catalog, assetStore);
 Script ScriptByName(string name) => provider.RequireByName(name);
@@ -64,6 +65,8 @@ if (args.Contains("catalog-scan"))
         catalog_identity = selectedProfile.DetectedIdentity.Display,
         selection_source = selectedProfile.SourceName,
         identity_matched = selectedProfile.IdentityMatched,
+        asset_overlay_roots = assetOptions.OverlayRoots,
+        allow_bmp_as_agf = assetOptions.AllowBmpAsAgf,
         script_count = scan.ScriptCount,
         base_script_count = scan.BaseScriptCount,
         append_script_count = scan.AppendScriptCount,
@@ -120,7 +123,8 @@ if (args[0] == "audio")
     // each resolved via ResourceMap (same rule as the Godot host). Diagnostic only.
     var sceneName = args[1];
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = new ResourceMap(catalog, assetStore, Console.Error.WriteLine);
+    var res = new ResourceMap(
+        catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
     var host = new AudioTraceHost(res);
     var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
@@ -147,7 +151,8 @@ if (args[0] == "gfx")
     bool boot = args.Contains("--boot");
     var sceneName = args.First(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase));
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
-    var res = new ResourceMap(catalog, assetStore, Console.Error.WriteLine);
+    var res = new ResourceMap(
+        catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
     var host = new GfxTraceHost(res);
     var session = new GameSession();
     foreach (var s in args.Where(a => a.Contains('=')))

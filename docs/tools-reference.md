@@ -348,9 +348,12 @@ Python, but listed here as the things you *run*. Build: `dotnet build engine/Age
 
 Every CLI command resolves `--profile ID` and `--game-root PATH` before opening scripts or assets; without
 those options the established Himegari workspace layout remains the default. Asset diagnostics use that
-selected catalog/store. `--boot` is evidence-scoped profile behavior: it uses only the selected profile's
-declared diagnostic bootstrap lists and fails clearly when the profile has none, rather than borrowing
-Himegari's script names.
+selected catalog/store. They also accept repeatable `--overlay-root PATH` and the explicit
+`--allow-bmp-as-agf` compatibility option described with the Godot arguments below. A relative overlay path
+is resolved against the selected game root, and `catalog-scan` records both options in its JSON report so an
+overlay corpus cannot be confused with the official root/archive corpus. `--boot` is evidence-scoped profile
+behavior: it uses only the selected profile's declared diagnostic bootstrap lists and fails clearly when the
+profile has none, rather than borrowing Himegari's script names.
 
 **call-script executes** on the product paths: they inject `Sys4ScriptProvider`, which runtime-parses
 `SYS4INI.BIN` and opens `.BIN` bytes through the native loose-first/bounded-ALF store, so `call-script <id>` loads & runs the target as a nested subroutine
@@ -541,11 +544,14 @@ then falls back to `godot4`, `godot`, or `godot-mono` on `PATH`, while the game 
 selected profile's conventional sibling (`../Himegari_Game` or `../Kamidori`) only when it contains
 `SYS4INI.BIN`. `run-godot.cmd -Kamidori` is the one-flag shortcut for the conventional Kamidori install:
 it authoritatively selects the `kamidori` profile and install root while still allowing an explicit
-`-GameRoot` override. `run-godot.ps1 -Doctor`
-prints the resolved repository, Godot, game-root, requested profile/probe state, .NET, and Python
-prerequisites without building or launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe`
-requires it and forces the read-only diagnostic policy. The launchers leave the natural boot script to the
-selected manifest and pass neither `--boot` nor SC0000 seeds. Examples below focus on their
+`-GameRoot` override. `-OverlayRoot <directory>` is repeatable and `-AllowBmpAsAgf` opts into BMP payloads
+under `.AGF` catalog names. `run-godot.cmd -Kamidori -TranslationPatch` is the convenience spelling for
+Kamidori's installed `patch/` overlay plus that BMP compatibility option; neither behavior is inferred from
+the game profile. `run-godot.ps1 -Doctor` prints the resolved repository, Godot, game root, ordered overlays,
+BMP compatibility, requested profile/probe state, .NET, and Python prerequisites without building or
+launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe` requires it and forces the
+read-only diagnostic policy. The launchers leave the natural boot script to the selected manifest and pass
+neither `--boot` nor SC0000 seeds. Examples below focus on their
 feature-specific arguments and assume the game root is already selected this way. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes.
 On VM termination the console prints the exact halt reason and step count before the generic on-screen
@@ -566,6 +572,16 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--game-root <directory>` — select the read-only AGE installation supplying `SYS4INI.BIN`, loose
   overrides, AAI append catalogs, and ALF archives. Absolute paths are launcher-friendly; relative paths
   are current-working-directory-relative. Content location remains independent from profile selection.
+- `--overlay-root <directory>` (repeatable) — prepend an explicitly selected read-only loose-file root to
+  asset and script lookup. Relative paths are game-root-relative. Roots are searched in argument order,
+  followed by the ordinary game root and then the catalog-selected ALF range; duplicates are ignored while
+  preserving the first position. Missing/non-directory roots fail startup. Nothing auto-mounts `patch/` or
+  otherwise infers a translation from a profile.
+- `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
+  uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible 24-bit
+  opaque or 32-bit straight-alpha `BI_RGB`, including top-down images and padded rows. Without this option,
+  such a payload fails with an actionable diagnostic; ordinary `ACGF` decoding is unchanged. This is an
+  asset-format compatibility option, not an opcode or SYS-revision handler.
 - `--profile <id>` — authoritatively select an embedded game profile (`himegari` or `kamidori`). Omit it for
   exact catalog revision/title auto-detection. An explicit identity mismatch emits the expected and detected
   identities but continues with the requested profile; the current K0 safety policy suppresses persistence

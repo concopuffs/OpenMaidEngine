@@ -9,6 +9,8 @@
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
 #   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
+#   .\run-godot.ps1 -Kamidori -TranslationPatch  enable its patch/ English overlay and BMP assets
+#   .\run-godot.ps1 -OverlayRoot <dir> -AllowBmpAsAgf  select generic asset compatibility options
 #   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
 #   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
@@ -20,6 +22,9 @@ param(
     [string]$GameRoot,
     [string]$Profile,
     [switch]$Kamidori,
+    [string[]]$OverlayRoot,
+    [switch]$AllowBmpAsAgf,
+    [switch]$TranslationPatch,
     [switch]$Probe,
     [switch]$SelfTest,
     [switch]$Import,
@@ -108,6 +113,32 @@ $gameRootArguments = @{
     ConventionalValue = Join-Path (Split-Path $repo -Parent) $conventionalInstallName
 }
 $resolvedGameRoot = Resolve-ConfiguredGameRoot @gameRootArguments
+$requestedOverlayRoots = @()
+if ($TranslationPatch) {
+    $requestedOverlayRoots += 'patch'
+    $AllowBmpAsAgf = $true
+}
+if ($OverlayRoot) { $requestedOverlayRoots += $OverlayRoot }
+$resolvedOverlayRoots = @()
+foreach ($requestedOverlayRoot in $requestedOverlayRoots) {
+    $candidate = if ([IO.Path]::IsPathRooted($requestedOverlayRoot)) {
+        $requestedOverlayRoot
+    } else {
+        Join-Path $resolvedGameRoot $requestedOverlayRoot
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+        throw "Overlay root not found: $candidate"
+    }
+    $resolvedOverlayRoot = (Resolve-Path -LiteralPath $candidate).Path
+    if ($resolvedOverlayRoots -notcontains $resolvedOverlayRoot) {
+        $resolvedOverlayRoots += $resolvedOverlayRoot
+    }
+}
+$assetArguments = @()
+foreach ($resolvedOverlayRoot in $resolvedOverlayRoots) {
+    $assetArguments += @('--overlay-root', $resolvedOverlayRoot)
+}
+if ($AllowBmpAsAgf) { $assetArguments += '--allow-bmp-as-agf' }
 if ($Probe -and -not $Profile) {
     throw '-Probe requires -Profile so the runtime knows which engine ABI to use.'
 }
@@ -127,6 +158,8 @@ if ($Doctor) {
     Write-Host "Game root  : $resolvedGameRoot"
     Write-Host "Profile    : $(if ($Profile) { $Profile } else { '<automatic>' })"
     Write-Host "Probe      : $Probe"
+    Write-Host "Overlays   : $(if ($resolvedOverlayRoots.Count) { $resolvedOverlayRoots -join ' -> ' } else { '<none>' })"
+    Write-Host "BMP as AGF : $AllowBmpAsAgf"
     Write-Host "dotnet     : $($dotnet.Source)"
     Write-Host "Python     : $($python.Source)"
     exit 0
@@ -168,13 +201,13 @@ if ($Import) {
 
 if ($SelfTest) {
     Write-Host "==> headless self-test" -ForegroundColor Cyan
-    $userArgs = @('--selftest', '--game-root', $resolvedGameRoot) + $profileArguments
+    $userArgs = @('--selftest', '--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
     & $godot --headless --path $project -- @userArgs
 } else {
     # The selected profile owns its natural boot script (currently SYSTEM4 for both built-ins).
     # Do not add --boot or SC0000 seeds here: those belong only to explicit direct-scene diagnostics.
     Write-Host "==> launching windowed from SYSTEM4" -ForegroundColor Cyan
-    $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments
+    $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
     if ($perfLogFile) {
         Write-Host "==> performance log: $perfLogFile" -ForegroundColor Cyan
         $userArgs += @('--perf-log', $perfLogFile)

@@ -268,12 +268,24 @@ The title evidence is exact:
   for a SYS4433 dialect; whether the translation changed the stock Kamidori resource-format dispatch has not
   yet been isolated from its preserved packed backup.
 
-The current Godot construction passes only the game root as a loose root, so it never probes `patch/` and the
-K6 title acceptance covers the official root/archive data layer. `Sys4AssetStore` already models multiple
-ordered loose roots, but wiring `patch/` alone would be incomplete: `AgfDecoder` currently accepts only ACGF
-payloads and would reject these BMP replacements. If translation/mod parity is selected as work, the general
-engine-shaped boundary is ordered, explicitly selected overlay roots plus image decoding by payload signature;
-there is no evidence for a Kamidori-title special case or a new opcode handler.
+Support landed on 2026-08-19 at the general asset boundary, without changing opcode dispatch or assigning the
+patch to the Kamidori profile. Godot and asset-aware CLI commands accept repeatable, ordered
+`--overlay-root <directory>` options; relative values resolve against the selected game root, selected roots
+precede the ordinary game root, and archive ranges remain the final fallback. `--allow-bmp-as-agf` separately
+opts into `BM` payload detection for `.AGF` records. The decoder accepts the overlay's uncompressed 24/32-bit
+`BITMAPINFOHEADER` images, row padding and either row direction, preserving the fourth byte of 32-bit overlay
+pixels as straight alpha. Without the option, a BMP-under-AGF payload remains a clear failure rather than a
+silent compatibility expansion. The local `-Kamidori -TranslationPatch` launcher switch merely expands to
+`patch/` plus this codec option; generic launch arguments remain available independently.
+
+Installed-data acceptance proves the overlay's `TITLE.BIN` hash, the 720×700 translucent `SO004` menu atlas,
+the opaque 1024×576 `SO005` background, and natural SYSTEM4 → TITLE → New Game → first-ADV-page execution under
+both the official and translated script corpora. A real 300-frame Godot capture reproduced the translated
+executable's English title composition. A production-store scan of the selected overlay decodes the same 732
+catalog scripts with zero failures: 2,161,326 instructions and the same 269 distinct opcode observations as the
+official 2,126,378-instruction corpus. The +34,948 executed corpus instructions are patch-script provenance,
+not evidence of a different opcode set. Diagnostic JSON records the selected overlay roots and BMP option so
+these measurements remain distinguishable from the official K4/K6 snapshot.
 
 ### Proposed layers
 

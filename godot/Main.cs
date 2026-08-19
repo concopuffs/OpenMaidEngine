@@ -72,6 +72,7 @@ public partial class Main : Godot.Control
         SelectedGameProfile selectedProfile;
         ResolvedGamePersistence profilePersistence;
         Sys4AssetCatalog catalog;
+        AssetLaunchOptions assetOptions;
         try
         {
             string workingDirectory = System.IO.Directory.GetCurrentDirectory();
@@ -87,6 +88,7 @@ public partial class Main : Godot.Control
             }
             gameRoot = GameRootSelection.Resolve(
                 userArgs, OS.GetExecutablePath(), workingDirectory);
+            assetOptions = AssetLaunchOptions.Resolve(userArgs, gameRoot.Root);
             GameCatalogIdentity detectedIdentity =
                 GameCatalogIdentity.ReadSys4IniHeader(gameRoot.Sys4IniPath);
             selectedProfile = GameProfileSelection.Resolve(userArgs, detectedIdentity);
@@ -106,13 +108,18 @@ public partial class Main : Godot.Control
         _catalog = catalog;
         _selectedProfile = selectedProfile;
         _profilePersistence = profilePersistence;
-        _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, gameRoot.Root);
+        _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, assetOptions.LooseRoots.ToArray());
         GD.Print($"[profile] id={selectedProfile.Profile.Id} title=\"{selectedProfile.Profile.DisplayTitle}\" " +
                  $"selection={selectedProfile.SourceName} identity-match={selectedProfile.IdentityMatched} " +
                  $"frontend={selectedProfile.Profile.SysFrontendId} " +
                  $"abi={selectedProfile.Profile.EngineAbiId} probe={selectedProfile.ProbeMode}");
         GD.Print($"[profile] catalog={selectedProfile.DetectedIdentity.Display} " +
                  $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
+        GD.Print($"[assets] overlays=" +
+                 (assetOptions.OverlayRoots.Count == 0
+                    ? "<none>"
+                    : string.Join(" -> ", assetOptions.OverlayRoots)) +
+                 $" bmp-as-agf={(assetOptions.AllowBmpAsAgf ? "enabled" : "disabled")}");
         if (selectedProfile.MismatchDiagnostic is { } mismatch)
             GD.PushWarning($"[profile] {mismatch}");
         if (!profilePersistence.WritesEnabled)
@@ -328,8 +335,10 @@ public partial class Main : Godot.Control
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
-            ? new ResourceMap(scripts.Catalog, trackedAssetStore, GD.PushWarning)
-            : new ResourceMap(catalog, _assetStore, GD.PushWarning);
+            ? new ResourceMap(scripts.Catalog, trackedAssetStore, GD.PushWarning,
+                              assetOptions.AllowBmpAsAgf)
+            : new ResourceMap(catalog, _assetStore, GD.PushWarning,
+                              assetOptions.AllowBmpAsAgf);
         IGlyphMaskRasterizer? surfaceTextRasterizer = null;
         PortableTextRenderingPolicy? portableTextPolicy = null;
         string? exactUnavailable = null;

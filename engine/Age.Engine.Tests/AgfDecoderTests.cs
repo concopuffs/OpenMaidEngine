@@ -52,6 +52,48 @@ public class AgfDecoderTests
         Assert.Equal(new byte[] { 1, 2, 3, 255 }, image.Pixels);
     }
 
+    [Fact]
+    public void BmpPayloadUnderAgfNameRequiresExplicitCompatibilityOption()
+    {
+        byte[] bmp = BuildBmp(1, 1, 32, topDown: false,
+                              new byte[] { 3, 2, 1, 0 });
+
+        var error = Assert.Throws<InvalidDataException>(
+            () => AgfDecoder.Decode(bmp, "PATCHED.AGF"));
+
+        Assert.Contains("PATCHED.AGF", error.Message);
+        Assert.Contains("--allow-bmp-as-agf", error.Message);
+    }
+
+    [Fact]
+    public void ExplicitCompatibilityDecodesBottomUpPaddedBmpAsOpaqueRgba()
+    {
+        byte[] bottomUp = {
+            90,80,70, 60,50,40, 0,0,
+            30,20,10, 6,5,4, 0,0,
+        };
+        byte[] bmp = BuildBmp(2, 2, 24, topDown: false, bottomUp);
+
+        var image = AgfDecoder.Decode(bmp, "PATCHED.AGF", allowBmpAsAgf: true);
+
+        Assert.Equal((2, 2), (image.Width, image.Height));
+        Assert.Equal(new byte[] {
+            10,20,30,255, 4,5,6,255,
+            70,80,90,255, 40,50,60,255,
+        }, image.Pixels);
+    }
+
+    [Fact]
+    public void ExplicitCompatibilityDecodesTopDownBmpWithStraightAlpha()
+    {
+        byte[] bmp = BuildBmp(2, 1, 32, topDown: true,
+                              new byte[] { 3,2,1,0, 6,5,4,127 });
+
+        var image = AgfDecoder.Decode(bmp, "PATCHED.AGF", allowBmpAsAgf: true);
+
+        Assert.Equal(new byte[] { 1,2,3,0, 4,5,6,127 }, image.Pixels);
+    }
+
     [Theory]
     [InlineData("AE000A.AGF")]
     [InlineData("AE001A.AGF")]
@@ -107,6 +149,24 @@ public class AgfDecoderTests
     }
 
     private static byte[] Palette(params (byte R, byte G, byte B)[] colors) => Palette(16, colors);
+
+    private static byte[] BuildBmp(
+        int width, int height, int bitsPerPixel, bool topDown, byte[] pixels)
+    {
+        const int pixelOffset = 14 + 40;
+        var file = new byte[pixelOffset + pixels.Length];
+        "BM"u8.CopyTo(file);
+        Put32(file, 2, file.Length);
+        Put32(file, 10, pixelOffset);
+        Put32(file, 14, 40);
+        Put32(file, 18, width);
+        Put32(file, 22, topDown ? -height : height);
+        Put16(file, 26, 1);
+        Put16(file, 28, bitsPerPixel);
+        Put32(file, 34, pixels.Length);
+        pixels.CopyTo(file, pixelOffset);
+        return file;
+    }
     private static byte[] Palette(int count, params (byte R, byte G, byte B)[] colors)
     {
         var result = new byte[count * 4];

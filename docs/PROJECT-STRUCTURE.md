@@ -43,7 +43,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       independent Linux/Windows x64 artifact jobs plus Linux-only tag promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
-    │                                          PATH, and the selected profile's conventional sibling install
+    │                                          PATH, and the selected profile's conventional sibling install;
+    │                                          forwards explicit ordered asset overlays and codec compatibility
     ├── tools/                               Python tooling (parser/disassembler + extractors + VM)
     │   ├── paths.py                           ★ immutable profile-aware context: selected game,
     │   │                                        extracted roots, and shared/game output ownership
@@ -144,7 +145,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       separately navigable render, transition, diagnostic, and persistence contracts
     │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
-    │                                       AGF/LZSS and Windows CUR decoders, and resource facade
+    │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP and Windows CUR
+    │                                       decoders, and resource facade
     │   ├── Age.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
     │                                       publication, and bounded font/glyph cache primitives

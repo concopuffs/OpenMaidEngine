@@ -11,11 +11,20 @@ public static class AgfDecoder
 {
     private const int OuterHeaderSize = 0x18;
 
-    public static RgbaImage Decode(IAssetStore store, AssetEntry entry)
-        => Decode(store.ReadAll(entry), entry.Name);
+    public static RgbaImage Decode(IAssetStore store, AssetEntry entry, bool allowBmpAsAgf = false)
+        => Decode(store.ReadAll(entry), entry.Name, allowBmpAsAgf);
 
-    public static RgbaImage Decode(ReadOnlySpan<byte> file, string name = "AGF")
+    public static RgbaImage Decode(
+        ReadOnlySpan<byte> file, string name = "AGF", bool allowBmpAsAgf = false)
     {
+        if (file.Length >= 2 && file[..2].SequenceEqual("BM"u8))
+        {
+            if (!allowBmpAsAgf)
+                throw new InvalidDataException(
+                    $"{name}: BMP payload under an AGF catalog name requires " +
+                    AssetLaunchOptions.AllowBmpAsAgfOptionName);
+            return BmpDecoder.Decode(file, name);
+        }
         if (file.Length < OuterHeaderSize ||
             !(file[..4].SequenceEqual("ACGF"u8) || BinaryPrimitives.ReadUInt32LittleEndian(file) == 0))
             throw new InvalidDataException($"{name}: expected an ACGF image");
