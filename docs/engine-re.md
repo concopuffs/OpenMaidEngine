@@ -112,7 +112,10 @@ After these implementations, strict natural execution reaches the stable `TITLE.
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
 ADV page wait with retained visuals and scene-local audio requests. A windowed 1024×576 capture also confirms
 the rendered title. Kamidori's startup MPEG records use literal `.MPG` catalog names; that cross-game asset
-contract and its runtime support are documented in `docs/asset-resolution-re.md`.
+contract and its runtime support are documented in `docs/asset-resolution-re.md`. That reference also records
+the later finding that the installed English translation injects a `patch\\<basename>` base-asset overlay ahead
+of normal root/archive resolution; K6's captured title used the official root/archive layer because the port does
+not yet opt into that translation overlay.
 
 ---
 

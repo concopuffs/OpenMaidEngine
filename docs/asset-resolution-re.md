@@ -232,6 +232,49 @@ mods remain nonfatal without becoming silent.
 The corresponding Ghidra helper is named `asset_register_open_handle_range@0x44edf0`; it stores the selected
 handle, current position, and readable length in the FileDB stream table.
 
+### Kamidori English-translation overlay (investigated 2026-08-19)
+
+The different Kamidori title screens produced by native AGE and the reimplementation are not a title-script
+branch, SYS4433 opcode difference, or append-catalog selection. This installation contains a translation-owned
+`patch/` overlay that the translated executable probes ahead of AGE's normal root-loose/archive path. The
+installed `AGE.EXE` is version 4.33F, SHA-256
+`977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`; the installer's preserved
+`Backup/age.exe.bak` is a distinct version 4.33G binary, SHA-256
+`52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e`.
+
+In the translated SYS4433 runtime image, `asset_open_indexed_entry_SYS4433@0x44eab0` has a patched jump at
+`0x44ec20` to the injected `translation_patch_try_open_overlay_trampoline@0x630000`. With `ECX` pointing at
+the selected base SYS4INI record's basename, the trampoline builds `patch\\<basename>` and calls
+`CreateFileA`. A successful overlay open is registered with its real loose-file length. Failure retries the
+ordinary root basename and then rejoins the indexed-archive fallback. The hook and caller are named/commented
+in `/kamidori/SYS4433/range_00400000.bin`, and the program is saved.
+
+The title evidence is exact:
+
+- Root `TITLE.BIN` is 11,756 bytes / SHA-256
+  `e842611f9c346f624aba85cb702848b355137a3043160aea717fcf5be64c8033`; `patch/TITLE.bin` is 11,712
+  bytes / SHA-256 `d50d2a6b0de63f53ae350a41494009e1e0ad0dafb2cd39121a7f7f459546c899`.
+  Both decode cleanly to 496 instructions over the same `0x000..0xad5` code extent and use the same title
+  graphics operations and resource ids. The patch copy translates embedded strings; it does not select a
+  different title composition.
+- Both scripts load raw id `0x4552` (`SO004.AGF`, the menu/logo atlas) and `0x4553` (`SO005.AGF`, the
+  1024x576 background). Root/archive resolution produces the Japanese Ver.2.0 title. The native translated
+  executable instead opens `patch/SO004.AGF`, which contains the English menu/logo atlas, and
+  `patch/SO005.AGF`, which contains the alternate character background shown by native AGE.
+- The overlay contains 556 files and every basename is present in the base SYS4INI catalog: 349 translated
+  `.BIN` scripts and 207 `.AGF`-named graphics. All 207 graphics actually begin with the BMP `BM` signature,
+  rather than `ACGF`. The translated native runtime demonstrably accepts those replacement payloads. A BMP
+  reader also exists in the independently captured Himegari SYS4422 image, so BMP capability is not evidence
+  for a SYS4433 dialect; whether the translation changed the stock Kamidori resource-format dispatch has not
+  yet been isolated from its preserved packed backup.
+
+The current Godot construction passes only the game root as a loose root, so it never probes `patch/` and the
+K6 title acceptance covers the official root/archive data layer. `Sys4AssetStore` already models multiple
+ordered loose roots, but wiring `patch/` alone would be incomplete: `AgfDecoder` currently accepts only ACGF
+payloads and would reject these BMP replacements. If translation/mod parity is selected as work, the general
+engine-shaped boundary is ordered, explicitly selected overlay roots plus image decoding by payload signature;
+there is no evidence for a Kamidori-title special case or a new opcode handler.
+
 ### Proposed layers
 
 1. **Catalog + read-only ALF store (VFS-A DONE).** `Sys4AssetCatalog` parses SYS4INI at runtime while preserving all 13208 raw records
