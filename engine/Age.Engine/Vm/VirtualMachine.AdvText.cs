@@ -140,6 +140,9 @@ public sealed partial class VirtualMachine
             case "u0042BA80": // SYS4433 opcode 0x2dc
             case "get-font-family-count":
                 Write(a[0], _host.FontFamilyCount); return pc + 1;
+            case "u0042D880": // SYS4433 opcode 0x2dd
+            case "get-font-family-name":
+                WriteStr(a[0], _host.GetFontFamilyName(unchecked((int)Read(a[1])))); return pc + 1;
             case "u0042BAC0": // SYS4433 opcode 0x2de
             case "find-font-family-index":
                 Write(a[0], _host.FindFontFamilyIndex(ReadStr(a[1]))); return pc + 1;

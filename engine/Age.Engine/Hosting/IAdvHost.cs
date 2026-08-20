@@ -29,6 +29,8 @@ public interface IAdvHost
     int FindFontFamilyIndex(string faceName) => -1;
     // SYS4433 op 0x2dc returns the installed-family vector size, using -1 for an empty cache.
     int FontFamilyCount => -1;
+    // SYS4433 op 0x2dd returns the indexed family or an empty string for an invalid index.
+    string GetFontFamilyName(int index) => "";
     void ClearRenderedAdvTextLayout(int layoutSlot) { }
     void ResetRenderedAdvTextLayout(
         GfxState gfx, AdvTextLayoutPresentationBinding binding)

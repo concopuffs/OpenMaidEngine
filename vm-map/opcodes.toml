@@ -10918,19 +10918,32 @@ observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x2dd
-label = "u0042D880"
+label = "get-font-family-name"
 argc = 2
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0042D880"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-font-family-name"
+category = "adv"
+summary = "(out_face_name)(index) - copy the indexed entry from SYS4433's installed-font-family cache, or write an empty string when the index is negative or out of range."
+details = "The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and searched by 0x2de. Both Kamidori calls are in SELFONT.BIN: one writes a global string from local index 1040 and one writes a local string from that same index. SYS4422 does not install this dispatch slot."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, installed-font vector, operand string writer, and complete Kamidori corpus", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "SYS4433 dispatcher slot 0x2dd installs op_0x2dd_get_font_family_name@0x42d880. It initializes a temporary string empty, fetches operand 2, copies vector[index] from EngineCtx+0x45cf8 only when `0 <= index < (end-begin)/0x20`, then vm_operand_write_string@0x42c600 stores the result to operand 1. SELFONT.BIN calls it at 0x958 with global-string/local-int and at 0xb86 with local-string/local-int. SYS4422 does not install this slot." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "out: installed font-family face name, or empty when invalid"
+observed_types = ["g-str", "l-str"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "zero-based installed font-family index"
+observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x2de

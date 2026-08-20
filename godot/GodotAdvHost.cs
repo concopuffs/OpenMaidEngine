@@ -58,6 +58,8 @@ public sealed partial class GodotAdvHost : IHost
             installed => installed.Equals(ordinaryFace, StringComparison.OrdinalIgnoreCase));
     }
     public int FontFamilyCount => _fontFamilies.Length == 0 ? -1 : _fontFamilies.Length;
+    public string GetFontFamilyName(int index)
+        => (uint)index < (uint)_fontFamilies.Length ? _fontFamilies[index] : "";
 }
 
 public sealed record GodotHostDiagnosticSnapshot(

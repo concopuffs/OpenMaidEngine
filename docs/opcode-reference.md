@@ -445,6 +445,18 @@ Republish snapshots the global reveal index, clamps only to the selected layout'
 
 The native cache is the same vector of 0x20-byte strings searched by opcode 0x2de and indexed by opcode 0x2dd. Kamidori's sole call stores the result in local integer 1033 near the start of SELFONT.BIN. SYS4422 does not install this dispatch slot.
 
+### 0x2dd `get-font-family-name` (get-font-family-name, argc 2)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x2dd` (evidence-confirmed)
+- **summary:** (out_face_name)(index) - copy the indexed entry from SYS4433's installed-font-family cache, or write an empty string when the index is negative or out of range.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2dd`; scope=SYS4433 handler, installed-font vector, operand string writer, and complete Kamidori corpus. SYS4433 dispatcher slot 0x2dd installs op_0x2dd_get_font_family_name@0x42d880. It initializes a temporary string empty, fetches operand 2, copies vector[index] from EngineCtx+0x45cf8 only when `0 <= index < (end-begin)/0x20`, then vm_operand_write_string@0x42c600 stores the result to operand 1. SELFONT.BIN calls it at 0x958 with global-string/local-int and at 0xb86 with local-string/local-int. SYS4422 does not install this slot.
+
+The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and searched by 0x2de. Both Kamidori calls are in SELFONT.BIN: one writes a global string from local index 1040 and one writes a local string from that same index. SYS4422 does not install this dispatch slot.
+
 ### 0x2de `find-font-family-index` (u0042BAC0, argc 2)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
@@ -4592,15 +4604,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2dd `u0042D880` (u0042D880, argc 2)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2dd`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2df `u0042BAC1` (u0042BAC1, argc 3)
 - **observed by:** none in recorded corpora

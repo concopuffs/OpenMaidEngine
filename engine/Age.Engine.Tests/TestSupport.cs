@@ -87,6 +87,7 @@ internal class RecordingHost : IHost
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
     public readonly Dictionary<string, int> FontFamilyIndices = new(StringComparer.Ordinal);
+    public readonly Dictionary<int, string> FontFamilyNames = new();
     public int FontFamilyCount { get; set; } = -1;
     public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
     public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
@@ -138,6 +139,8 @@ internal class RecordingHost : IHost
         string ordinaryFace = faceName.StartsWith('@') ? faceName[1..] : faceName;
         return FontFamilyIndices.TryGetValue(ordinaryFace, out int index) ? index : -1;
     }
+    public string GetFontFamilyName(int index)
+        => FontFamilyNames.TryGetValue(index, out string? name) ? name : "";
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
         ClearedTextLayouts.Add(layoutSlot);

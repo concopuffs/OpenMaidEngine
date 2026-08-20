@@ -555,6 +555,30 @@ public class AdvTextOpsTests
         Assert.Equal(familyCount, vm.Globals[0x100]);
     }
 
+    [Theory]
+    [InlineData(1, "Yu Mincho")]
+    [InlineData(-1, "")]
+    [InlineData(2, "")]
+    public void Sys4433FontFamilyNameReturnsIndexedFaceOrEmptyString(int index, string expected)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-FONT-NAME",
+            new List<(int, Operand[])>
+            {
+                (0x2dd, new[] { new Operand(5, 0x100), new Operand(0, index) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost { FontFamilyCount = 2 };
+        host.FontFamilyNames[0] = "MS Gothic";
+        host.FontFamilyNames[1] = "Yu Mincho";
+        var vm = new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal(expected, vm.GlobalStrings[0x100]);
+    }
+
     [Fact]
     public void WaitIndicatorHandlePublishesItsResolvedLayoutBindingToHost()
     {
