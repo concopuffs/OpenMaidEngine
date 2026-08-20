@@ -237,6 +237,23 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Op 0x227: query the current axis-angle rotation stored at
+    /// obj+0x1ec/+0x1f0/+0x1f4/+0x204, independently of the delayed target.</summary>
+    public bool TryQueryRotationCurrent(
+        long handle, out (double X, double Y, double Z, double Angle) current)
+    {
+        lock (_lock)
+        {
+            if (_objects.TryGetValue(handle, out var o))
+            {
+                current = o.RotationCurrent;
+                return true;
+            }
+            current = default;
+            return false;
+        }
+    }
+
     /// <summary>Op 0x21f: delayed one-shot axis-angle rotation target, sharing obj+0x34's start timestamp.</summary>
     public void SetRotationChannel(long handle, long delayMs, long durationMs,
                                    (long X, long Y, long Z) axis, long angleDegrees)

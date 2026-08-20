@@ -360,7 +360,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x0224: ('clear-gfx-command-queue', 0),
     0x0225: ('u00421780', 2),
     0x0226: ('u004217D0', 5),
-    0x0227: ('u00421880', 6),
+    0x0227: ('query-gfx-rotation-current', 6),
     0x0228: ('u00421940', 5),
     0x0229: ('set-gfx-range-transform', 5),
     0x022a: ('set-gfx-range-scale-current', 3),

@@ -1875,6 +1875,30 @@ device consumes PCM and advances the decoder's external video clock at the same 
 remain no-ops. Focused tests cover exact percent conversion, missing-graph behavior, and the halved video
 frame/completion deadlines.
 
+### Current rotation query opcode `0x227` (2026-08-19)
+
+Opcode `0x227` is the retained-object rotation counterpart to current-scale query `0x226` and
+current-translation query `0x228`. Its six-operand contract is
+`(out_failure, handle, out_axis_x, out_axis_y, out_axis_z, out_angle_degrees)`. On a found object it
+writes failure zero and returns the stored **current** axis-angle fields at object
+`+0x1ec/+0x1f0/+0x1f4/+0x204`; it does not read delayed target axis `+0x1f8..+0x200` or target angle
+`+0x208`. A missing handle writes failure one and leaves all four value outputs untouched.
+
+Himegari SYS4422 installs `op_0x227_query_rotation_current@0x42a2e0`, which calls
+`gfx_object_query_rotation_current@0x47cd20`, explicitly converts each returned float toward zero with
+`__ftol2_sse`, and passes the integer to the ordinary operand writer. Kamidori SYS4433 installs the same
+logical handler/worker at `0x42b230`/`0x484510`, but writes the values through the revision's separate
+`vm_operand_write_float@0x426ca0`. That helper preserves a float for float destinations and performs the
+conversion when the destination is an integer. This is a concrete SYS subrevision implementation/ABI
+detail even though it does not alter any observed game result: all twelve Kamidori sites use global-integer
+destinations, while Himegari has no decoded call site.
+
+Kamidori uses six parallel calls in each of `SC0600.BIN` and `SC2060.BIN`, querying presentation-object
+handles before deriving their next one-shot rotation targets. The portable VM exposes the current retained
+axis-angle independently of its target, truncates toward zero for these integer outputs, and preserves the
+missing-object outputs. Focused tests cover current-versus-target separation, positive and negative
+fractional truncation, and the missing-object contract.
+
 ### Integer LIFO family `0x137`-`0x139` and positioned movie playback `0x241` (2026-07-29)
 
 `op_0x137_reset_int_stack@0x421940` is the LIFO counterpart to the implemented integer FIFO family

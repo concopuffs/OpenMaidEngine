@@ -1886,6 +1886,18 @@ Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same nat
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x224`; scope=Himegari SYS4422. Ghidra handler 0x417550 -> gfx_command_queue_clear 0x47cb10, which destroys queued nodes and restores the sentinel links/count.
 
+### 0x227 `query-gfx-rotation-current` (query-gfx-rotation-current, argc 6)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x227` (evidence-confirmed)
+- **summary:** (out failure)(handle)(out axis_x)(out axis_y)(out axis_z)(out angle_degrees) — query a retained object's current axis-angle rotation. Found writes failure=0 and the current values; missing writes failure=1 and preserves all four outputs.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x227`; scope=matching native handlers/workers and complete Kamidori corpus. SYS4422 op_0x227_query_rotation_current@0x42a2e0 calls gfx_object_query_rotation_current@0x47cd20; SYS4433 equivalents are @0x42b230 and @0x484510. Both workers clone the retained object and return current axis X/Y/Z plus current angle from +0x1ec/+0x1f0/+0x1f4/+0x204, return false when the handle is absent, and never read the target fields. Missing handlers write only operand 1=1; success writes operands 3..6 then operand 1=0. SYS4422 uses __ftol2_sse before its integer writer; SYS4433 uses vm_operand_write_float@0x426ca0. Kamidori has twelve all-global-int calls, six each in SC0600.BIN@0x566d..0x57d5 and SC2060.BIN@0x107a..0x1228.
+
+The current values are the stored object fields at +0x1ec/+0x1f0/+0x1f4/+0x204, independently of delayed target axis +0x1f8..+0x200 and target angle +0x208. SYS4422 explicitly truncates the four floats toward zero before its integer operand writer. SYS4433 routes them through its float-aware destination writer, which performs the equivalent conversion for Kamidori's exclusively global-integer outputs. SC0600 and SC2060 each query six parallel presentation objects before constructing their next rotation target.
+
 ### 0x228 `query-gfx-translation-current` (u00421940, argc 5)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4152,15 +4164,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x226`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x227 `u00421880` (u00421880, argc 6)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x227`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x22b `u00421B30` (u00421B30, argc 4)
 - **observed by:** none in recorded corpora

@@ -12,6 +12,65 @@ public class AnimChannelTests
     private static (int, Operand[]) Exit() => (0x2, System.Array.Empty<Operand>());
 
     [Fact]
+    public void Op0x227_QueriesCurrentRotation_NotDelayedTarget()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "ROTATION_QUERY", new List<(int, Operand[])>
+        {
+            (0x55, new[]{G(1), I(0x4f8)}),
+            (0x1fb, new[]{G(1), I(0), I(0), I(0), I(1), I(1), I(0), I(0)}),
+            (0x1fe, new[]{G(1), I(1), I(2), I(3), I(45)}),
+            (0x21f, new[]{G(1), I(0), I(1200), I(4), I(5), I(6), I(90)}),
+            (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}),
+            Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+
+        Assert.Equal(0, vm.Globals[10]);
+        Assert.Equal((1L, 2L, 3L, 45L),
+            (vm.Globals[11], vm.Globals[12], vm.Globals[13], vm.Globals[14]));
+        Assert.Equal((4.0, 5.0, 6.0, 90.0), vm.Gfx.TryGet(0x4f8)!.RotationTarget);
+    }
+
+    [Fact]
+    public void Op0x227_TruncatesCurrentRotationTowardZero()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "ROTATION_QUERY_FRACTIONAL", new List<(int, Operand[])>
+        {
+            (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Globals[1] = 0x4f8;
+        vm.Gfx.BindDraw(0x4f8, 1, 0, 0, 1, 1, 0, 0);
+        vm.Gfx.TryGet(0x4f8)!.RotationCurrent = (1.9, -2.9, 0.9, -45.75);
+        vm.Run();
+
+        Assert.Equal((1L, -2L, 0L, -45L),
+            (vm.Globals[11], vm.Globals[12], vm.Globals[13], vm.Globals[14]));
+    }
+
+    [Fact]
+    public void Op0x227_MissingObject_SetsFailureAndPreservesOutputs()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "ROTATION_QUERY_MISSING", new List<(int, Operand[])>
+        {
+            (0x55, new[]{G(1), I(0xdead)}),
+            (0x55, new[]{G(11), I(7)}), (0x55, new[]{G(12), I(8)}),
+            (0x55, new[]{G(13), I(9)}), (0x55, new[]{G(14), I(10)}),
+            (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals[10]);
+        Assert.Equal((7L, 8L, 9L, 10L),
+            (vm.Globals[11], vm.Globals[12], vm.Globals[13], vm.Globals[14]));
+    }
+
+    [Fact]
     public void Op0x228_QueriesCurrentTranslation_NotTargetOrBasePosition()
     {
         var t = T();

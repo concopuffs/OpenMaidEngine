@@ -1599,6 +1599,8 @@ public sealed partial class VirtualMachine
             case "query-gfx-translation-target":  // pre-correction generated-name compatibility
             case "query-gfx-translation-current":
             case "u00421940":   // 0x228: (succ)(handle)(outX)(outY)(outZ) <- current translation matrix
+            case "u00421880":
+            case "query-gfx-rotation-current": // 0x227: current axis-angle + missing-object status
                 return StepRetainedObject(label, a, pc);
             case "u00422930":
             case "query-surface-stop-time-ms":

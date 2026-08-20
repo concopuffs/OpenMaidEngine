@@ -69,6 +69,19 @@ public sealed partial class VirtualMachine
                 else Write(a[0], 1);   // native missing-object path leaves output operands untouched
                 return pc + 1;
             }
+            case "u00421880":                    // upstream ABI label
+            case "query-gfx-rotation-current":  // 0x227: (failure)(handle)(out axis x/y/z)(out angle)
+            {
+                if (Gfx.TryQueryRotationCurrent(Read(a[1]), out var v))
+                {
+                    // Native writes floats through the revision's destination helper. Both revisions
+                    // truncate toward zero when these outputs target integer cells, as all corpus sites do.
+                    Write(a[2], (long)v.X); Write(a[3], (long)v.Y); Write(a[4], (long)v.Z);
+                    Write(a[5], (long)v.Angle); Write(a[0], 0);
+                }
+                else Write(a[0], 1);   // native missing-object path leaves output operands untouched
+                return pc + 1;
+            }
             case "set-gfx-geom3-c":     // 0x1ff: set current translation matrix
                 Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return pc + 1;
             case "u00420620":             // upstream ABI label
