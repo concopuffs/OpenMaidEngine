@@ -2825,6 +2825,21 @@ and does not mutate it. Query scans stop at the next group-start record; their t
 the native helpers. History's remaining work is therefore presentation and interaction rather than backlog
 data access.
 
+The ordinary ADV redraw pair `0x83` -> `0x82` uses the same retained index and 0x48-byte record vectors but
+is distinct from HISTORY's reflow path. In SYS4433, `op_0x83_query_text_redraw_state@0x427eb0` writes the
+input service's `-1/0/+1` redraw direction from `ctx+0x72078`, then
+`text_query_redraw_cursor@0x450410` returns the 8-byte entry selected by mutable text-manager cursor `+0xd70`.
+SYS4422's matching handler at `0x427140` instead calls `text_query_redraw_anchor@0x450bb0`, which reads the
+fixed latest-entry anchor at `+0xd6c`; that is a real revision distinction rather than a Kelebek-label
+difference. `0x82` then clears the selected layout and redraws the retained group at its stored coordinates:
+SYS4422 `op_0x82_redraw_retained_text_group@0x41edd0` -> `text_redraw_retained_group@0x451530`, and SYS4433
+equivalents `@0x41cec0` -> `@0x4553c0`. Both implement flag bits 1/2/4/8 for filtered-boundary traversal,
+temporary color overrides, binding suppression, and retained voice replay. Kamidori has six paired sites in
+`CONFIG1`--`CONFIG5`; they discard the direction result and pass only the current `(layout, record)` pair to
+`0x82` with flag 2. The portable path therefore returns neutral direction plus its newest retained entry and
+reuses retained host text presentation for the repaint. Direct key-driven history walking remains an input
+service feature, not an opcode compatibility stub.
+
 The third port slice implements visible History presentation without moving canonical records into Godot.
 Op `0x1d1` asks `AdvTextHistory` to select one retained group, skip metadata/voice records, and build a
 host-facing render batch using the target layout configured by `0x70/0x71`, positioned by `0x198`, and

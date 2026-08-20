@@ -160,6 +160,31 @@ Mode 0 draws only the primary glyph. Mode 1 draws one effect-colored copy displa
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x7f`; scope=Himegari SYS4422. Complete corpus consistency across all 7 uses in 5 scripts: MAMES, ITMES, SKMES, and INFOMES save this value immediately before op 0x1b5 sets zero for retained UI-description text, then restore it on exit; CONFIG reads it for the message-speed slider, whose paired op 0x1b5 adjustments use 5-ms steps over 5..100. Native ADV traces identify the consumed text-manager field as the per-glyph charDelay (normally 50 ms).
 
+### 0x82 `redraw-retained-text-group` (redraw-retained-text-group, argc 5)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x82` (evidence-confirmed)
+- **summary:** (layout_slot)(record_index)(flags)(text_color)(effect_color) - clear and redraw an ordinary retained ADV text group into its original layout.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x82`; scope=matching handlers/workers and complete Kamidori corpus. SYS4422 op_0x82_redraw_retained_text_group@0x41edd0 calls text_redraw_retained_group@0x451530; SYS4433 equivalents are @0x41cec0 and @0x4553c0. Both validate record_index against the shared 0x48-byte record vector, clear the selected layout surface/object range, walk until the next group-start record, apply flags 1/2/4/8, and restore temporary font state. Kamidori has six calls in CONFIG1--CONFIG5 (two in CONFIG4); each immediately consumes 0x83's pair with flags 2, white text, and configured effect color. Himegari installs the equivalent handler but has no decoded corpus call.
+
+This is the ordinary-page redraw sibling of 0x1d1's reflowed History renderer. It preserves each retained record's saved position/style, stops at the next group boundary, and replaces the selected layout's glyph objects. Flag bit 0 crosses navigation-filtered records, bit 1 temporarily overrides both colors, bit 2 suppresses destination binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG return paths: 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured global. The portable retained-text presentation preserves the selected group/layout and shipped color-override path; it uses the existing host text batch abstraction rather than native per-glyph GDI records.
+
+### 0x83 `query-current-text-redraw` (query-current-text-redraw, argc 3)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x83` (evidence-confirmed)
+- **summary:** (out_direction)(out_layout_slot)(out_record_index) - return the ADV redraw direction and selected retained-entry pair, or -1/-1 when no entry exists.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari SYS4422 Ghidra /v2`; site=`vm-map/opcodes.toml opcode 0x83`; scope=SYS4422 handler and retained-entry query helper. op_0x83_query_text_redraw_state@0x427140 writes ctx+0x6dbd0 to operand 1, then text_query_redraw_anchor@0x450bb0 returns the entry pair at text-manager+0xd6c or -1/-1. The helper reads the navigation anchor rather than SYS4433's later mutable redraw cursor. Himegari has no decoded corpus call.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x83`; scope=SYS4433 handler/helper and complete Kamidori corpus. op_0x83_query_text_redraw_state@0x427eb0 writes ctx+0x72078 to operand 1, then text_query_redraw_cursor@0x450410 returns the entry pair selected by text-manager+0xd70 or -1/-1. The state is maintained as -1/0/1 by the ADV input redraw service. Six CONFIG1--CONFIG5 calls immediately feed operands 2/3 to opcode 0x82 and never read operand 1 elsewhere.
+
+The first result is the native direct-history redraw direction/state (-1, 0, or 1). SYS4433 returns the entry at its mutable redraw cursor, while the inspected SYS4422 helper reads the latest navigation anchor instead. Kamidori's six CONFIG return sites discard out_direction and immediately pass the pair to 0x82. The portable runtime therefore returns neutral direction 0 and its newest retained navigation entry; this exactly covers every shipped Kamidori use while leaving native direct-history key walking as a distinct future input-service feature.
+
 ### 0x85 `clear-text-history` (clear-text-history, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -3379,24 +3404,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x81`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x82 `u0041AF80` (u0041AF80, argc 5)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x82`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x83 `u00414C90` (u00414C90, argc 3)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x83`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x84 `u0041AFE0` (u0041AFE0, argc 1)
 - **observed by:** none in recorded corpora

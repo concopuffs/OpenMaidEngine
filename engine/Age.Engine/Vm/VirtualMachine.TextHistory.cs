@@ -30,7 +30,25 @@ public sealed partial class VirtualMachine
                     Write(a[1], -1);
                 }
                 return pc + 1;
+            case "query-current-text-redraw": // 0x83: redraw direction plus selected (layout, record)
+                // Native SYS4433 exposes the mutable direct-history cursor here; its six Kamidori callers
+                // discard the direction and immediately feed the pair to 0x82. The portable ADV service
+                // does not drive that native-only cursor, so direction is neutral and the current entry is
+                // the newest retained boundary.
+                Write(a[0], 0);
+                if (TextHistory.TryGetCurrentRedrawEntry(out var redrawEntry))
+                {
+                    Write(a[1], redrawEntry.LayoutSlot);
+                    Write(a[2], redrawEntry.FirstRecordIndex);
+                }
+                else
+                {
+                    Write(a[1], -1);
+                    Write(a[2], -1);
+                }
+                return pc + 1;
             case "render-text-history": // 0x1d1: rasterize/bind one retained group to a target layout
+            case "redraw-retained-text-group": // 0x82: restore an ordinary ADV group at its retained layout
             case "u0041BAE0":
             {
                 int flags = (int)Read(a[2]);

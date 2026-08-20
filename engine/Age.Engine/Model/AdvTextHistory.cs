@@ -342,6 +342,23 @@ public sealed class AdvTextHistory
         return true;
     }
 
+    /// <summary>
+    /// Return the retained entry selected by AGE's ordinary ADV redraw service. The portable runtime does
+    /// not currently drive the native direct-history key walker, so its current redraw entry remains the
+    /// newest navigation anchor. This is the exact state used by the shipped CONFIG1--CONFIG5 restore path.
+    /// </summary>
+    public bool TryGetCurrentRedrawEntry(out AdvTextHistoryEntry entry)
+    {
+        if ((uint)_navigationAnchorIndex < (uint)_entries.Count)
+        {
+            entry = _entries[_navigationAnchorIndex];
+            return true;
+        }
+
+        entry = new AdvTextHistoryEntry(-1, -1);
+        return false;
+    }
+
     public bool TryFindMetadata(int firstRecordIndex, long metadataType, out long value)
     {
         value = 0;

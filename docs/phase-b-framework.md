@@ -616,13 +616,12 @@ scripts. Shared movie-rate opcode `0x246` then removed the sole BTL-only call. T
 query `0x227` subsequently removed twelve calls across `SC0600` and `SC2060`, leaving eleven recognized
 opcodes without an executable runtime handler. Complete retained-object swap `0x214` then removed one call
 from each of ten story/presentation scripts. Shared type-2 patterned transition `0x24f` removed the ten
-copies of Kamidori's story-portrait helper, leaving nine:
+copies of Kamidori's story-portrait helper. The paired ordinary-ADV redraw operations `0x83`/`0x82` then
+removed all twelve CONFIG1--CONFIG5 calls, leaving seven:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
 | `0x32` | 2 | 2 | `ALLMAP`, `SAVE` |
-| `0x82` | 6 | 5 | `CONFIG1`--`CONFIG5` |
-| `0x83` | 6 | 5 | `CONFIG1`--`CONFIG5` |
 | `0xfa` | 1 | 1 | `SHOWALLMAP` |
 | `0x106` | 1 | 1 | `CONFIG` |
 | `0x147` | 2 | 2 | `ARRANGE`, `STUDIO` |
@@ -644,8 +643,11 @@ writer where SYS4422 explicitly truncated before its ordinary writer. This does 
 all-integer call sites. `0x214` now swaps or moves complete retained-object records, including preserved
 native state and the handle-sorted presentation index. `0x24f` preserves the shared type-2 command's two
 retained ranges, command-object bounds, modes 0..11, pattern thickness, timing, validation, and endpoint;
-Godot currently uses a timed crossfade in place of the unavailable native clip-mask compositor. Map/save,
-arrangement/studio, configuration, and font-selection-only gaps can follow unless live
+Godot currently uses a timed crossfade in place of the unavailable native clip-mask compositor. `0x83` now
+returns the retained redraw pair and neutral direction used by every Kamidori CONFIG return, while `0x82`
+republishes that group with the shipped temporary color override. The native comparison records a genuine
+revision distinction: SYS4422 queries the latest anchor, while SYS4433 queries its mutable direct-history
+cursor. Map/save, arrangement/studio, configuration, and font-selection-only gaps can follow unless live
 execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
@@ -653,8 +655,8 @@ real compatibility halt still takes precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both Himegari/SYS4422 and
-Kamidori/SYS4433 rather than inferring one revision from the other.
+The `0x82`, `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both
+Himegari/SYS4422 and Kamidori/SYS4433 rather than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat

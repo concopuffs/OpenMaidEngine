@@ -1457,6 +1457,8 @@ public sealed partial class VirtualMachine
             case "set-text-history-recording":
             case "append-text-history-metadata":
             case "step-text-history":
+            case "query-current-text-redraw": // 0x83: direction plus current retained entry
+            case "redraw-retained-text-group": // 0x82: ordinary ADV redraw after CONFIG returns
             case "render-text-history": // 0x1d1: rasterize/bind one retained group to a target layout
             case "u0041BAE0":
             case "u0041BB90":

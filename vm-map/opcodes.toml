@@ -8031,35 +8031,82 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x82
-label = "u0041AF80"
+label = "redraw-retained-text-group"
 argc = 5
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041AF80"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "redraw-retained-text-group"
+category = "adv"
+summary = "(layout_slot)(record_index)(flags)(text_color)(effect_color) - clear and redraw an ordinary retained ADV text group into its original layout."
+details = "This is the ordinary-page redraw sibling of 0x1d1's reflowed History renderer. It preserves each retained record's saved position/style, stops at the next group boundary, and replaces the selected layout's glyph objects. Flag bit 0 crosses navigation-filtered records, bit 1 temporarily overrides both colors, bit 2 suppresses destination binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG return paths: 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured global. The portable retained-text presentation preserves the selected group/layout and shipped color-override path; it uses the existing host text batch abstraction rather than native per-glyph GDI records."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching handlers/workers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x82_redraw_retained_text_group@0x41edd0 calls text_redraw_retained_group@0x451530; SYS4433 equivalents are @0x41cec0 and @0x4553c0. Both validate record_index against the shared 0x48-byte record vector, clear the selected layout surface/object range, walk until the next group-start record, apply flags 1/2/4/8, and restore temporary font state. Kamidori has six calls in CONFIG1--CONFIG5 (two in CONFIG4); each immediately consumes 0x83's pair with flags 2, white text, and configured effect color. Himegari installs the equivalent handler but has no decoded corpus call." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "target ADV layout/surface slot"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "first retained text record index"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "render flags"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "temporary primary text color"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "temporary text effect color"
+observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x83
-label = "u00414C90"
+label = "query-current-text-redraw"
 argc = 3
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00414C90"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "query-current-text-redraw"
+category = "adv"
+summary = "(out_direction)(out_layout_slot)(out_record_index) - return the ADV redraw direction and selected retained-entry pair, or -1/-1 when no entry exists."
+details = "The first result is the native direct-history redraw direction/state (-1, 0, or 1). SYS4433 returns the entry at its mutable redraw cursor, while the inspected SYS4422 helper reads the latest navigation anchor instead. Kamidori's six CONFIG return sites discard out_direction and immediately pass the pair to 0x82. The portable runtime therefore returns neutral direction 0 and its newest retained navigation entry; this exactly covers every shipped Kamidori use while leaving native direct-history key walking as a distinct future input-service feature."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2", scope = "SYS4422 handler and retained-entry query helper", profile_ids = ["himegari"], engine_revisions = ["SYS4422"], confidence = "high", text = "op_0x83_query_text_redraw_state@0x427140 writes ctx+0x6dbd0 to operand 1, then text_query_redraw_anchor@0x450bb0 returns the entry pair at text-manager+0xd6c or -1/-1. The helper reads the navigation anchor rather than SYS4433's later mutable redraw cursor. Himegari has no decoded corpus call." },
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler/helper and complete Kamidori corpus", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x83_query_text_redraw_state@0x427eb0 writes ctx+0x72078 to operand 1, then text_query_redraw_cursor@0x450410 returns the entry pair selected by text-manager+0xd70 or -1/-1. The state is maintained as -1/0/1 by the ADV input redraw service. Six CONFIG1--CONFIG5 calls immediately feed operands 2/3 to opcode 0x82 and never read operand 1 elsewhere." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "output redraw direction/state (-1, 0, or 1)"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "output retained entry layout slot"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "output retained entry first-record index"
+observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x84
