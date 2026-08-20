@@ -228,7 +228,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x0144: ('edit-fullwidth-string-dialog', 2),
     0x0145: ('u00416040', 1),
     0x0146: ('u0041FB40', 1),
-    0x0147: ('u0041FB80', 6),
+    0x0147: ('point-in-polygon', 6),
     0x0148: ('get-system-menu-show-delay', 1),
     0x0149: ('set-system-menu-show-delay', 1),
     0x014a: ('u0041FD10', 7),

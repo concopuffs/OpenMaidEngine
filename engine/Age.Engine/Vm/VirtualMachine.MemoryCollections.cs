@@ -129,6 +129,35 @@ public sealed partial class VirtualMachine
                 }
                 return pc + 1;
             }
+            case "point-in-polygon": // 0x147: Win32 ALTERNATE-fill polygon membership
+            {
+                int pointX = unchecked((int)Read(a[1]));
+                int pointY = unchecked((int)Read(a[2]));
+                int count = unchecked((int)Read(a[5]));
+                bool inside = false;
+
+                // This is the standard half-open even/odd crossing rule used by a GDI alternate-fill
+                // region: top/left edges of an axis-aligned rectangle are included; bottom/right are not.
+                if (count >= 3)
+                {
+                    int previous = count - 1;
+                    for (int current = 0; current < count; current++)
+                    {
+                        int currentX = unchecked((int)ReadAddressedCell(a[3], current));
+                        int currentY = unchecked((int)ReadAddressedCell(a[4], current));
+                        int previousX = unchecked((int)ReadAddressedCell(a[3], previous));
+                        int previousY = unchecked((int)ReadAddressedCell(a[4], previous));
+                        if ((currentY > pointY) != (previousY > pointY)
+                            && pointX < ((double)previousX - currentX) * ((double)pointY - currentY)
+                                        / ((double)previousY - currentY) + currentX)
+                            inside = !inside;
+                        previous = current;
+                    }
+                }
+
+                Write(a[0], inside ? 1 : 0);
+                return pc + 1;
+            }
             case "u0041EF00":
             case "reset-int-queue": // 0x132: 11 safe logical slots; native's admitted id 10 aliases stack 0
             {

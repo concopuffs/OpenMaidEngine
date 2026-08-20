@@ -2624,6 +2624,18 @@ LineEdit, keeps it open on either native validation error, and resumes the worke
 or cancel. Accept replaces operand 1 and cancel leaves it untouched; operand 2 is never modified.
 
 
+### 0x147 `point-in-polygon` (point-in-polygon, argc 6)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x147` (evidence-confirmed)
+- **summary:** (out_inside)(point_x)(point_y)(vertex_x_array)(vertex_y_array)(vertex_count) — return whether the point lies in the polygon under Win32 ALTERNATE (even-odd) fill semantics.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2, Kamidori SYS4433 Ghidra /kamidori/SYS4433, and Win32 GDI behavior probe`; site=`vm-map/opcodes.toml opcode 0x147`; scope=matching polygon-region handlers and complete Kamidori corpus. SYS4422 op_0x147_point_in_polygon@0x429b10 and SYS4433 @0x42a9f0 share the six-operand CreatePolygonRgn(..., ALTERNATE) then PtInRegion contract. A direct GDI square probe returns inside for (5,5), top/left boundary points, and false for bottom/right boundary points. Kamidori's two sites are ARRANGE@0x4c6 and STUDIO@0x525; both pass local-int output/x/y, local pointers to parallel x/y arrays, and immediate vertex count 4.
+
+Both native handlers copy the parallel signed-dword coordinate arrays into POINT records, call CreatePolygonRgn(points, count, ALTERNATE), query PtInRegion, normalize the result to 0/1, and destroy the temporary region. The portable even-odd crossing rule preserves GDI's half-open raster convention: for an axis-aligned rectangle its top/left edges are included and bottom/right edges excluded. Kamidori's ARRANGE@0x4c6 and STUDIO@0x525 calls both use four vertices through local pointers.
+
 ### 0x148 `get-system-menu-show-delay` (get-system-menu-show-delay, argc 1)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -3911,15 +3923,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x146`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x147 `u0041FB80` (u0041FB80, argc 6)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x147`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x14a `u0041FD10` (u0041FD10, argc 7)
 - **observed by:** none in recorded corpora

@@ -618,13 +618,12 @@ opcodes without an executable runtime handler. Complete retained-object swap `0x
 from each of ten story/presentation scripts. Shared type-2 patterned transition `0x24f` removed the ten
 copies of Kamidori's story-portrait helper. The paired ordinary-ADV redraw operations `0x83`/`0x82` then
 removed all twelve CONFIG1--CONFIG5 calls. Shared scaled surface copy `0x32` then removed the two map/save
-thumbnail calls, leaving six:
+thumbnail calls. Shared point-in-polygon `0x147` then removed the ARRANGE/STUDIO pair, leaving five:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
 | `0xfa` | 1 | 1 | `SHOWALLMAP` |
 | `0x106` | 1 | 1 | `CONFIG` |
-| `0x147` | 2 | 2 | `ARRANGE`, `STUDIO` |
 | `0x22e` | 1 | 1 | `SC6400` |
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
@@ -649,8 +648,9 @@ republishes that group with the shipped temporary color override. The native com
 revision distinction: SYS4422 queries the latest anchor, while SYS4433 queries its mutable direct-history
 cursor. `0x32` preserves the shared ten-operand paired-rectangle contract; Kamidori's two in-bounds calls
 area-downsample the full 1024x576 map surface to 384x216 thumbnails, while equal-size requests reuse the
-existing exact surface-copy path. Arrangement/studio, configuration, and font-selection-only gaps can
-follow unless live
+existing exact surface-copy path. `0x147` preserves Win32 ALTERNATE-fill point-in-polygon semantics,
+including the half-open top/left-inclusive boundary convention used by its four-vertex ARRANGE/STUDIO
+sites. Map display, configuration, story, and font-selection-only gaps can follow unless live
 execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
@@ -658,7 +658,7 @@ real compatibility halt still takes precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x32`, `0x82`, `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both
+The `0x32`, `0x82`, `0x147`, `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both
 Himegari/SYS4422 and Kamidori/SYS4433 rather than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible

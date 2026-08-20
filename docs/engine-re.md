@@ -4505,6 +4505,20 @@ existing exact-copy route. This is a shared SYS4 graphics operation rather than 
 branch. Both revision handlers, workers, downsamplers, and enlargement helpers are renamed and commented in
 their Ghidra programs; both programs were saved.
 
+### Alternate-fill point-in-polygon -- opcode `0x147` (2026-08-19)
+
+SYS4422 `op_0x147_point_in_polygon@0x429b10` and SYS4433's matching handler at `0x42a9f0` implement
+`(out_inside, point_x, point_y, vertex_x_array, vertex_y_array, vertex_count)`. Each resolves the two
+parallel signed-dword arrays, materializes Win32 `POINT` records, calls `CreatePolygonRgn` with fill mode
+`ALTERNATE`, queries `PtInRegion`, normalizes the output to 0/1, and destroys the temporary region. There is
+no game-state mutation or retained host object.
+
+A direct GDI behavior probe establishes the raster boundary convention needed by the portable crossing
+test: for a square from `(0,0)` through `(10,10)`, the top and left edges are inside while the bottom and
+right edges are outside. The standard half-open even-odd crossing rule reproduces that behavior without a
+Windows dependency. Kamidori's only calls are `ARRANGE@0x4c6` and `STUDIO@0x525`; both use four vertices
+through local pointers. Both revision handlers are renamed/commented in their Ghidra programs and saved.
+
 ### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
 
 The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot

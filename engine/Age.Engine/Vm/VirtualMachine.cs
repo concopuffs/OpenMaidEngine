@@ -1315,6 +1315,7 @@ public sealed partial class VirtualMachine
             case "u0041E940":
             case "sort-indices-by-key-sum": // 0x12f: stable ascending permutation by signed key sum
             case "u0041ECB0":
+            case "point-in-polygon": // 0x147: alternate-fill polygon membership
                 return StepMemoryCollection(label, a, pc);
             case "u0041EF00":
             case "reset-int-queue": // 0x132: 11 safe logical slots; native's admitted id 10 aliases stack 0

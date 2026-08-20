@@ -9054,19 +9054,52 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x147
-label = "u0041FB80"
+label = "point-in-polygon"
 argc = 6
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0041FB80"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "point-in-polygon"
+category = "input"
+summary = "(out_inside)(point_x)(point_y)(vertex_x_array)(vertex_y_array)(vertex_count) — return whether the point lies in the polygon under Win32 ALTERNATE (even-odd) fill semantics."
+details = "Both native handlers copy the parallel signed-dword coordinate arrays into POINT records, call CreatePolygonRgn(points, count, ALTERNATE), query PtInRegion, normalize the result to 0/1, and destroy the temporary region. The portable even-odd crossing rule preserves GDI's half-open raster convention: for an axis-aligned rectangle its top/left edges are included and bottom/right edges excluded. Kamidori's ARRANGE@0x4c6 and STUDIO@0x525 calls both use four vertices through local pointers."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2, Kamidori SYS4433 Ghidra /kamidori/SYS4433, and Win32 GDI behavior probe", scope = "matching polygon-region handlers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x147_point_in_polygon@0x429b10 and SYS4433 @0x42a9f0 share the six-operand CreatePolygonRgn(..., ALTERNATE) then PtInRegion contract. A direct GDI square probe returns inside for (5,5), top/left boundary points, and false for bottom/right boundary points. Kamidori's two sites are ARRANGE@0x4c6 and STUDIO@0x525; both pass local-int output/x/y, local pointers to parallel x/y arrays, and immediate vertex count 4." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "inside result output (0 or 1)"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "point x"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "point y"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "pointer to vertex x coordinates"
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "pointer to vertex y coordinates"
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "vertex count"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x148
