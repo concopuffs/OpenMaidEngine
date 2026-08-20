@@ -26,6 +26,7 @@ internal interface IMovieDecoder : IDisposable
     }
     void AdvancePlaybackClock(long elapsedMilliseconds) { }
     void MarkAudioSubmitted() { }
+    void SetPlaybackRate(double rate) { }
 }
 
 internal interface IMovieDecoderFactory

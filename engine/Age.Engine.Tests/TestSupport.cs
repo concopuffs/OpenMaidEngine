@@ -58,6 +58,7 @@ internal class RecordingHost : IHost
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask, long PositionMs)>
         PositionedMovies = new();
+    public readonly List<(int Surface, double Rate)> MoviePlaybackRates = new();
     public readonly List<MovieMaskTransitionRequest> MovieMaskTransitions = new();
     public System.Action? OnPlayMovie;
     public long? MovieStopTimeMs;
@@ -307,6 +308,8 @@ internal class RecordingHost : IHost
         gfx.CompleteMovieMaskTransition(request.SurfaceSlot);
     }
     public bool IsMovieSurfaceActive(int surfaceSlot) => ActiveMovieSurfaces.Contains(surfaceSlot);
+    public void SetMoviePlaybackRate(int surfaceSlot, double rate)
+        => MoviePlaybackRates.Add((surfaceSlot, rate));
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
 }

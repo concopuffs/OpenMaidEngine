@@ -28,6 +28,10 @@ public interface IMovieHost
 
     bool IsMovieSurfaceActive(int surfaceSlot) => false;
 
+    // Native op 0x246 forwards rate_percent/100 to the bound graph's IMediaPosition::put_Rate.
+    // Hosts without a live movie binding may ignore the request, matching the native null-surface guard.
+    void SetMoviePlaybackRate(int surfaceSlot, double rate) { }
+
     // Native op 0x20f uses a universal packed id and parks script execution until the movie
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host
     // owns the modal wait so its render loop can continue publishing frames.

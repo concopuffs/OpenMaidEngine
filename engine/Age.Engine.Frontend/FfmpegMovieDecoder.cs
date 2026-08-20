@@ -102,6 +102,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
     private int _disposed;
     private int _firstFrameTaken;
     private long _firstFramePresentationTimeMs = -1;
+    private long _playbackRateBits = BitConverter.DoubleToInt64Bits(1.0);
 
     public long? StopTimeMs => _source.Info.StopTimeMs;
     public long InitialPositionMs => _initialPositionMs;
@@ -232,6 +233,13 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         UpdateCompletion();
     }
 
+    public void SetPlaybackRate(double rate)
+    {
+        if (!double.IsFinite(rate) || rate <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rate), "movie playback rate must be positive and finite");
+        Interlocked.Exchange(ref _playbackRateBits, BitConverter.DoubleToInt64Bits(rate));
+    }
+
     private void DecodeThread()
     {
         try
@@ -264,7 +272,7 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                         _source.Info.StopTimeMs,
                         lastTimestamp + FrameIntervalMilliseconds(_source.Info));
                     long completionTime = CompletionDeadline(sourceEndpoint, firstTimestamp);
-                    if (_clock.WaitUntil(completionTime, _cancel))
+                    if (_clock.WaitUntil(PacingDeadline(completionTime), _cancel))
                     {
                         _videoTimelineCompleted = true;
                         UpdateCompletion();
@@ -285,7 +293,8 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
                     if (signalled == 0) return;
                     continue;
                 }
-                if (!_clock.WaitUntil(PresentationDeadline(frame.PresentationTimeMs, firstTimestamp),
+                if (!_clock.WaitUntil(PacingDeadline(
+                                          PresentationDeadline(frame.PresentationTimeMs, firstTimestamp)),
                                       _cancel))
                     return;
                 lock (_frameLock) _latestFrame = frame.Image;
@@ -301,6 +310,15 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
         {
             WorkerCompleted();
         }
+    }
+
+    private long PacingDeadline(long sourceTimelineMilliseconds)
+    {
+        // Audio-bearing streams are paced by Godot's sound-device position. PitchScale advances that
+        // source timeline at the requested rate, so only video-only stopwatch pacing is rescaled here.
+        if (AudioInfo != null) return sourceTimelineMilliseconds;
+        double rate = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _playbackRateBits));
+        return Math.Max(0, (long)Math.Floor(sourceTimelineMilliseconds / rate));
     }
 
     private FfmpegVideoFrame? SelectFrameAtInitialPosition(out FfmpegVideoFrame? pending)

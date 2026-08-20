@@ -8,6 +8,7 @@ public partial class Main
     // 0x236 opens its decoder synchronously on the VM thread so 0x23f can query timing immediately.
     // Presentation ownership transfers here; _Process adopts staged decoders before sampling frames.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, MovieRuntime> _pendingMovies = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<long, double> _pendingMoviePlaybackRates = new();
     private IMovieDecoderFactory _movieDecoderFactory = new FfmpegMovieDecoderFactory();
     private double _audioOutputLatencySeconds;
     private readonly System.Collections.Generic.HashSet<long> _movieFrameSeen = new();
@@ -65,6 +66,7 @@ public partial class Main
     private void UpdateMovieFrames()
     {
         if (_host == null) return;
+        ApplyPendingMoviePlaybackRates();
         foreach (var (playbackId, movie) in _movies)
         {
             long elapsedMs = (long)Stopwatch.GetElapsedTime(
@@ -98,8 +100,44 @@ public partial class Main
         }
     }
 
+    public void QueueMoviePlaybackRate(long playbackId, double rate)
+    {
+        if (!double.IsFinite(rate) || rate <= 0)
+        {
+            GD.Print($"movie playback rate ignored playback={playbackId}: {rate}");
+            return;
+        }
+        _pendingMoviePlaybackRates[playbackId] = rate;
+    }
+
+    private void ApplyPendingMoviePlaybackRates()
+    {
+        foreach (var (playbackId, rate) in _pendingMoviePlaybackRates)
+        {
+            if (_movies.TryGetValue(playbackId, out MovieRuntime? movie))
+            {
+                movie.Decoder.SetPlaybackRate(rate);
+                if (_movieAudio.TryGetValue(playbackId, out MovieAudioOutput? audio))
+                    audio.SetPlaybackRate(rate);
+                _pendingMoviePlaybackRates.TryRemove(playbackId, out _);
+                GD.Print($"movie rate playback={playbackId}: {rate:0.###}x");
+            }
+            else if (_pendingMovies.TryGetValue(playbackId, out MovieRuntime? pending))
+            {
+                // The VM normally reaches op 0x246 before the next Godot frame adopts the decoder.
+                // Configure video pacing now and retain the request so the audio output receives it too.
+                pending.Decoder.SetPlaybackRate(rate);
+            }
+            else
+            {
+                _pendingMoviePlaybackRates.TryRemove(playbackId, out _);
+            }
+        }
+    }
+
     public void StopMovie(long playbackId)
     {
+        _pendingMoviePlaybackRates.TryRemove(playbackId, out _);
         if (_movieAudio.Remove(playbackId, out var audio)) audio.Dispose();
         if (_pendingMovies.TryRemove(playbackId, out var pending)) pending.Decoder.Dispose();
         if (_movies.Remove(playbackId, out var movie))

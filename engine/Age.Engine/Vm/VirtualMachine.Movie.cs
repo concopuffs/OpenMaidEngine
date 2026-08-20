@@ -85,6 +85,15 @@ public sealed partial class VirtualMachine
             }
             case "query-movie-surface-active": // 0x23a (out)(surface slot)
                 Write(a[0], _host.IsMovieSurfaceActive((int)Read(a[1])) ? 1 : 0); return pc + 1;
+            case "set-movie-playback-rate": // 0x246 (surface slot)(rate percent)
+            {
+                int surfaceSlot = unchecked((int)Read(a[0]));
+                // The native handler checks the CMovieToTexture surface pointer before dereferencing
+                // IMediaPosition. The port's movie metadata entry is the equivalent live graph marker.
+                if (Gfx.TryGetMovieStopTime(surfaceSlot, out _))
+                    _host.SetMoviePlaybackRate(surfaceSlot, Read(a[1]) / 100.0);
+                return pc + 1;
+            }
             case "play-movie-mask-transition": // 0x24d: captured retained range + movie green-channel mask
                 _host.PlayMovieMaskTransition(Gfx, new MovieMaskTransitionRequest(
                     Read(a[0]), unchecked((int)Read(a[1])),

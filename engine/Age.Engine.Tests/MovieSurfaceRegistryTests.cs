@@ -42,6 +42,8 @@ public class MovieSurfaceRegistryTests
         Assert.True(registry.PublishFrame(current.PlaybackId, Frame(2), "NEW.AGF", 2));
         Assert.True(registry.TryResolveSurface(7, out MovieSurfaceFrame? frame));
         Assert.Equal("NEW.AGF", frame!.Name);
+        Assert.True(registry.TryGetBinding(7, out MovieSurfaceBinding resolved));
+        Assert.Equal(current, resolved);
     }
 
     [Fact]

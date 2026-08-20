@@ -157,6 +157,13 @@ internal sealed class MovieAudioOutput : IDisposable
         _prerolling = true;
     }
 
+    public void SetPlaybackRate(double rate)
+    {
+        if (!double.IsFinite(rate) || rate <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rate));
+        _player.PitchScale = (float)rate;
+    }
+
     private void FinishPreroll()
     {
         if (!_prerolling) return;

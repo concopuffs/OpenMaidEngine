@@ -2143,6 +2143,18 @@ The setter get-or-creates the object and writes the complete operand. During ret
 - **depends on:** 0x242
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x243`; scope=Himegari SYS4422. Ghidra handler 0x4182d0: if !(ctx+0x51b80 & 2), set retained-gfx owner+0xb55c (EngineCtx+0x51b70)=1 and zero owner+0xb564/+0xb568. gfx_object_apply_transform_channels treats force value 1 as immediate completion unless obj+0x2d0 bit 0 is set. SC0000 label_1235a calls it before present-frame.
 
+### 0x246 `set-movie-playback-rate` (set-movie-playback-rate, argc 2)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x246` (evidence-confirmed)
+- **summary:** (surface_slot)(rate_percent) — set a live movie surface's playback rate through IMediaPosition::put_Rate(rate_percent / 100.0).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x246`; scope=matching native handlers and complete Kamidori corpus. SYS4422 op_0x246_set_movie_playback_rate@0x424a80 and SYS4433 op_0x246_set_movie_playback_rate@0x4228a0 both fetch surface slot and rate percent, guard a null EngineCtx surface pointer, dereference CMovieToTexture+0x414 IMediaPosition, and call vtable +0x38 put_Rate with operand2 divided by the double constant 100.0. Kamidori BTL.BIN has the sole catalog call at decoded body offset 0x4426 (report file offset 0x4451): after create-texture(44,512,200) and play-movie-to-surface(...,44), it calls (44,200) before starting a timed callback sequence.
+
+The native handler returns without effect when the surface slot is null and ignores the DirectShow HRESULT. Kamidori's sole site is BTL.BIN: it creates surface 44, starts a battle-effect MPEG, then sets rate 200 before a timed callback sequence. The port applies positive forward rates to both FFmpeg video pacing and Godot's movie-audio pitch/consumption rate; a missing movie binding remains a no-op.
+
 ### 0x248 `set-tiled-surface-edge-length` (set-tiled-surface-edge-length, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4212,15 +4224,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x245`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x246 `u00422E10` (u00422E10, argc 2)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x246`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x247 `u00416390` (u00416390, argc 1)
 - **observed by:** none in recorded corpora

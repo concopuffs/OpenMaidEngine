@@ -66,6 +66,11 @@ internal sealed class MovieSurfaceRegistry
         lock (_lock) return _bySurface.ContainsKey(surfaceSlot);
     }
 
+    public bool TryGetBinding(int surfaceSlot, out MovieSurfaceBinding binding)
+    {
+        lock (_lock) return _bySurface.TryGetValue(surfaceSlot, out binding);
+    }
+
     public bool HasActivePlayback
     {
         get

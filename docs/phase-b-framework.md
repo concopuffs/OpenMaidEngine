@@ -612,7 +612,8 @@ than relying only on whichever opcode strict execution reaches next. The officia
 initial catalog contained 17 gaps. The following `0x27`/`0x28` patterned surface-reveal slice removed 193
 calls across 47 scripts. Implementing the retained directional-blur command `0x250` then removed another
 34 calls across 11 scripts. The shared cyclic-translation opcode `0x235` removed 28 calls across 12 more
-scripts, leaving these 13 recognized opcodes without an executable runtime handler:
+scripts. Shared movie-rate opcode `0x246` then removed the sole BTL-only call, leaving these 12 recognized
+opcodes without an executable runtime handler:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
@@ -625,7 +626,6 @@ scripts, leaving these 13 recognized opcodes without an executable runtime handl
 | `0x214` | 10 | 10 | story/presentation scripts |
 | `0x227` | 12 | 2 | `SC0600`, `SC2060` |
 | `0x22e` | 1 | 1 | `SC6400` |
-| `0x246` | 1 | 1 | `BTL` |
 | `0x24f` | 10 | 10 | story scripts |
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
@@ -636,9 +636,9 @@ a timed crossfade; this is host presentation policy rather than a VM contract ch
 the native type-3/mode-0 command contract, selected retained range, Length/Angle interpolation, timing, and
 completion behavior; Godot approximates the unavailable D3D9 shader with translated alpha-weighted samples.
 `0x235` now preserves the shared SYS4422/SYS4433 cyclic-translation contract, native triangular clock,
-independent retained state, save-record fields, and composition after cyclic rotation. The isolated `BTL`
-opcode `0x246` is now the likely gameplay priority if the Dungeon route reaches combat; otherwise the
-12-call `0x227` and ten-call `0x214`/`0x24f` families lead the remaining static backlog. Map/save, arrangement/studio,
+independent retained state, save-record fields, and composition after cyclic rotation. `0x246` now maps the
+shared SYS4422/SYS4433 `IMediaPosition::put_Rate` contract onto synchronized FFmpeg video and Godot audio
+pacing. The 12-call `0x227` and ten-call `0x214`/`0x24f` families lead the remaining static backlog. Map/save, arrangement/studio,
 configuration, and font-selection-only gaps can follow unless live execution reaches one first. This ranking
 is triage, not a substitute for strict-runtime evidence: the next real compatibility halt still takes
 precedence. The machine-readable reports are
@@ -647,8 +647,8 @@ precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x235` evidence independently records both Himegari/SYS4422 and Kamidori/SYS4433 rather than inferring
-one revision from the other.
+The `0x235` and `0x246` evidence independently record both Himegari/SYS4422 and Kamidori/SYS4433 rather
+than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible
 discrepancy is shared menu text placed too far right, reproduced by both FIELD's three-choice wait/retreat

@@ -1603,6 +1603,7 @@ public sealed partial class VirtualMachine
             case "u00422930":
             case "query-surface-stop-time-ms":
             case "query-movie-surface-active":
+            case "set-movie-playback-rate":
                 return StepMovie(label, ins, pc);
             case "sample-frame-time":
                 return StepAnimation(label, a, pc);

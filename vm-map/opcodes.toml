@@ -9662,19 +9662,32 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x246
-label = "u00422E10"
+label = "set-movie-playback-rate"
 argc = 2
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422E10"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-movie-playback-rate"
+category = "draw"
+summary = "(surface_slot)(rate_percent) — set a live movie surface's playback rate through IMediaPosition::put_Rate(rate_percent / 100.0)."
+details = "The native handler returns without effect when the surface slot is null and ignores the DirectShow HRESULT. Kamidori's sole site is BTL.BIN: it creates surface 44, starts a battle-effect MPEG, then sets rate 200 before a timed callback sequence. The port applies positive forward rates to both FFmpeg video pacing and Godot's movie-audio pitch/consumption rate; a missing movie binding remains a no-op."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching native handlers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x246_set_movie_playback_rate@0x424a80 and SYS4433 op_0x246_set_movie_playback_rate@0x4228a0 both fetch surface slot and rate percent, guard a null EngineCtx surface pointer, dereference CMovieToTexture+0x414 IMediaPosition, and call vtable +0x38 put_Rate with operand2 divided by the double constant 100.0. Kamidori BTL.BIN has the sole catalog call at decoded body offset 0x4426 (report file offset 0x4451): after create-texture(44,512,200) and play-movie-to-surface(...,44), it calls (44,200) before starting a timed callback sequence." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "movie surface slot"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "playback rate percent"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x247

@@ -206,6 +206,25 @@ public class MovieOpcodeTests
     }
 
     [Fact]
+    public void FfmpegVideoOnlyDecoderAppliesPlaybackRateToFrameAndCompletionDeadlines()
+    {
+        var source = new FakeFfmpegFrameSource(
+            new FfmpegMovieInfo(1, 1, 200, 10, 1, false),
+            SyntheticMovieFrame(1, 0), SyntheticMovieFrame(2, 100));
+        using var clock = new ManualMoviePacingClock();
+        using var decoder = new FfmpegMovieDecoder(source, clock);
+
+        decoder.SetPlaybackRate(2.0);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(50));
+        clock.AdvanceTo(50);
+        Assert.True(SpinWait.SpinUntil(() => decoder.TryTakeFrame(out _), 1000));
+        Assert.True(clock.WaitForDeadline(100));
+        clock.AdvanceTo(100);
+        Assert.True(SpinWait.SpinUntil(() => decoder.IsCompleted, 1000));
+    }
+
+    [Fact]
     public void FfmpegDecoderRetimeUsesRequestedDurationAndHoldsTerminalFrameToEndpoint()
     {
         var source = new FakeFfmpegFrameSource(
@@ -623,6 +642,46 @@ public class MovieOpcodeTests
         var visible = vm.Gfx.SnapshotVisibleObjects().Single();
         Assert.Equal(0, visible.SurfaceResId);
         Assert.Equal(-1, visible.ColorKey);
+    }
+
+    [Fact]
+    public void Op0x246SetsBoundMoviePlaybackRateFromPercent()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MOVIE-RATE",
+        [
+            (0x236,
+            [
+                new Operand(0, 0x33), new Operand(0, 44),
+                new Operand(0, 0), new Operand(0, 0),
+            ]),
+            (0x246, [new Operand(0, 44), new Operand(0, 200)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var host = new RecordingHost { MovieStopTimeMs = 1000 };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { (44, 2.0) }, host.MoviePlaybackRates);
+    }
+
+    [Fact]
+    public void Op0x246IgnoresSurfaceWithoutMovieGraph()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "EMPTY-MOVIE-RATE",
+        [
+            (0x246, [new Operand(0, 44), new Operand(0, 200)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []);
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+        vm.Gfx.CreateSurface(44);
+
+        vm.Run();
+
+        Assert.Empty(host.MoviePlaybackRates);
     }
 
     [Fact]

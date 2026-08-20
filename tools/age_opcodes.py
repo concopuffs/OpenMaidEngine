@@ -391,7 +391,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x0243: ('reset-anim-clock', 0),
     0x0244: ('u00416360', 0),
     0x0245: ('u00422DA0', 2),
-    0x0246: ('u00422E10', 2),
+    0x0246: ('set-movie-playback-rate', 2),
     0x0247: ('u00416390', 1),
     0x0248: ('set-tiled-surface-edge-length', 1),
     0x0249: ('load-raw-texture-surface', 3),

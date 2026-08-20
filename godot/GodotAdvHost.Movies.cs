@@ -70,6 +70,18 @@ public sealed partial class GodotAdvHost
     public bool IsMovieSurfaceActive(int surfaceSlot)
         => _movieSurfaces.IsActive(surfaceSlot);
 
+    public void SetMoviePlaybackRate(int surfaceSlot, double rate)
+    {
+        if (!_movieSurfaces.TryGetBinding(surfaceSlot, out MovieSurfaceBinding binding)) return;
+        _main.QueueMoviePlaybackRate(binding.PlaybackId, rate);
+        _timeline?.Event("movie-rate", new()
+        {
+            ["surface"] = surfaceSlot,
+            ["playback"] = binding.PlaybackId,
+            ["rate"] = rate,
+        });
+    }
+
     public GodotHostDiagnosticSnapshot CaptureDiagnosticSnapshot()
     {
         IReadOnlyList<MovieSurfaceDiagnostic> movies = _movieSurfaces.Snapshot();

@@ -1852,6 +1852,29 @@ After the 213/213 video/audio corpus gate and clean audible LOGO/OP/CHAPTER acce
 `DirectShowMovieDecoder`, its COM/temp-file adapter, compatibility test, and managed Windows annotations.
 Native AGE's DirectShow behavior remains relevant evidence for opcode semantics; it is no longer port code.
 
+### Movie playback-rate opcode `0x246` (2026-08-19)
+
+The exact ABI is `set-movie-playback-rate(surface_slot, rate_percent)`. Independent dispatch-table recovery
+finds matching handlers in Himegari SYS4422 (`0x424a80`) and Kamidori SYS4433 (`0x4228a0`). Each records a
+five-dword instruction, fetches the surface slot, and returns without effect if the corresponding
+`EngineCtx` surface pointer is null. Otherwise it fetches operand 2, divides the signed integer by the
+double constant `100.0`, dereferences `CMovieToTexture+0x414`, and calls vtable slot `+0x38` with the
+resulting double.
+
+The interface is the same `IMediaPosition` proven above. After inherited `IUnknown` and `IDispatch`, its
+slots run from `get_Duration@+0x1c` through `put_StopTime@+0x2c`, `get/put_PrerollTime@+0x30/+0x34`, and
+`put_Rate@+0x38`. Opcode `0x246` therefore sets the live graph's playback-rate multiplier; it is not a
+battle-state mutation. The DirectShow `HRESULT` is ignored. Kamidori's complete corpus has one call in
+`BTL.BIN`: after creating 512x200 surface 44 and starting a selected battle-effect MPEG on it, the script
+calls `(44, 200)` before beginning the effect's timed callback sequence.
+
+The portable host resolves the surface to its instance-keyed movie playback and applies the 2.0 multiplier
+before the first frame leaves preroll. Video-only FFmpeg streams divide frame and completion deadlines by
+the positive forward rate. Audio-bearing streams set Godot's `AudioStreamPlayer.PitchScale`, so the sound
+device consumes PCM and advances the decoder's external video clock at the same rate. Missing movie bindings
+remain no-ops. Focused tests cover exact percent conversion, missing-graph behavior, and the halved video
+frame/completion deadlines.
+
 ### Integer LIFO family `0x137`-`0x139` and positioned movie playback `0x241` (2026-07-29)
 
 `op_0x137_reset_int_stack@0x421940` is the LIFO counterpart to the implemented integer FIFO family
