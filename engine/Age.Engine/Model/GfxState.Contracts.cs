@@ -34,6 +34,13 @@ public readonly record struct SurfaceTransitionState(long CommandKey, int Target
     long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
     long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
 
+/// <summary>Sampled op-0x24f type-2 transition. Native captures range A and B, then replaces A with B
+/// inside the command object's rectangle using one of twelve quantized wipe/strip masks.</summary>
+public readonly record struct PatternedSurfaceTransitionState(long CommandKey, int TargetSlot,
+    long RangeAStart, int RangeACount, long RangeBStart, int RangeBCount,
+    SurfacePatternTransitionMode Mode, int PatternThickness,
+    long DelayMs, long DurationMs, long StartMs, double Progress, bool Forced);
+
 /// <summary>Sampled SYS4433 op-0x251 radial-blur command. The selected retained-object range is
 /// rendered through a center/length post-effect at the command handle's z position.</summary>
 public readonly record struct RadialBlurRangeTransitionState(
@@ -119,7 +126,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            ScaleCycleState ScaleCycle = default,
                                            RadialBlurRangeTransitionState? RadialBlurTransition = null,
                                            DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null,
-                                           TranslationCycleState TranslationCycle = default);
+                                           TranslationCycleState TranslationCycle = default,
+                                           PatternedSurfaceTransitionState? PatternedSurfaceTransition = null);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

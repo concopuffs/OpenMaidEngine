@@ -615,7 +615,8 @@ calls across 47 scripts. Implementing the retained directional-blur command `0x2
 scripts. Shared movie-rate opcode `0x246` then removed the sole BTL-only call. The shared current-rotation
 query `0x227` subsequently removed twelve calls across `SC0600` and `SC2060`, leaving eleven recognized
 opcodes without an executable runtime handler. Complete retained-object swap `0x214` then removed one call
-from each of ten story/presentation scripts, leaving ten:
+from each of ten story/presentation scripts. Shared type-2 patterned transition `0x24f` removed the ten
+copies of Kamidori's story-portrait helper, leaving nine:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
@@ -626,7 +627,6 @@ from each of ten story/presentation scripts, leaving ten:
 | `0x106` | 1 | 1 | `CONFIG` |
 | `0x147` | 2 | 2 | `ARRANGE`, `STUDIO` |
 | `0x22e` | 1 | 1 | `SC6400` |
-| `0x24f` | 10 | 10 | story scripts |
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
 
@@ -641,9 +641,11 @@ shared SYS4422/SYS4433 `IMediaPosition::put_Rate` contract onto synchronized FFm
 pacing. `0x227` now returns current retained-object axis/angle state with the native missing-handle contract;
 its native handlers also expose a real subrevision detail, because SYS4433 added a float-aware operand
 writer where SYS4422 explicitly truncated before its ordinary writer. This does not change Kamidori's
-all-integer call sites. `0x214` now swaps or moves complete retained-object records, including preserved native state and
-the handle-sorted presentation index. The ten-call type-2 timed surface command `0x24f` now leads the static
-backlog. Map/save, arrangement/studio, configuration, and font-selection-only gaps can follow unless live
+all-integer call sites. `0x214` now swaps or moves complete retained-object records, including preserved
+native state and the handle-sorted presentation index. `0x24f` preserves the shared type-2 command's two
+retained ranges, command-object bounds, modes 0..11, pattern thickness, timing, validation, and endpoint;
+Godot currently uses a timed crossfade in place of the unavailable native clip-mask compositor. Map/save,
+arrangement/studio, configuration, and font-selection-only gaps can follow unless live
 execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
@@ -651,7 +653,7 @@ real compatibility halt still takes precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x214`, `0x227`, `0x235`, and `0x246` evidence independently record both Himegari/SYS4422 and
+The `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both Himegari/SYS4422 and
 Kamidori/SYS4433 rather than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible

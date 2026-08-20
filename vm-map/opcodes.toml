@@ -9769,19 +9769,72 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x24f
-label = "u00422ED0"
+label = "queue-patterned-surface-transition"
 argc = 10
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00422ED0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "queue-patterned-surface-transition"
+category = "draw"
+summary = "(command_key)(target_slot)(range_a_start)(range_a_count)(range_b_start)(range_b_count)(mode)(pattern_thickness)(delay_ms)(duration_ms) — queue a type-2 timed wipe/strip replacement of retained range A by range B."
+details = "At the next retained presentation boundary, native renders both ranges to scratch surfaces 0x24/0x25, takes the command object's retained rectangle as the effect bounds, clears target_slot, and composites the two captures through mode 0..11. Modes 0..3 are left/right/top/bottom quantized wipes; 4..7 reveal equal vertical/horizontal strips in parallel; 8..11 stagger those strips. pattern_thickness is the pixel quantum used by the consumer. A positive thickness with an out-of-range mode reports an error and queues nothing. A nonpositive thickness reports an error but queues an immediate mode -1 fallback. Kamidori's ten sites are identical copies of one story-portrait helper and calculate the thickness from a nominal 64-way division of the clipped 1024x576 canvas before calling this opcode. The portable host preserves the exact command, timing, mode, and thickness; its current GPU/software presentation is a timed crossfade approximation pending native clip-mask drawing."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+source = "investigation"
+confidence = "high"
+depends_on = [0x21c, 0x222]
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching handlers/producers, Himegari retained surface-command consumer, and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 handler op_0x24f_queue_patterned_surface_transition@0x425460 calls gfx_queue_patterned_surface_transition@0x47f7e0; SYS4433 equivalents are @0x422ed0 and @0x486800. Both validate thickness/mode and write the same type-2 command record. retained_gfx_surface_command_composite@0x47fbc0 captures the two ranges, derives bounds from the command object, advances delay/duration, and implements modes 0..11 as four directional wipes plus parallel and staggered strip variants. Kamidori has ten copies of the same helper in SC0010, SC0050, SC0100, SC0110, SC0150, SC0200, SC0250, SC0300, SC0350, and SC0400; all share operand types l-int/l-ptr/l-int/imm/l-ptr/imm/g-int/g-int/g-int/g-int." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "command object handle and command-map key"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "target surface slot"
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "range A start handle"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "range A count"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "range B start handle"
+observed_types = ["l-ptr"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "range B count"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 7
+role = "wipe/strip mode 0..11"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 8
+role = "pattern thickness in pixels"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 9
+role = "start delay in milliseconds"
+observed_types = ["g-int"]
+
+[[opcode.semantics.args]]
+i = 10
+role = "duration in milliseconds"
+observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x250

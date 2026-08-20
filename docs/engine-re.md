@@ -1923,6 +1923,36 @@ or moves every semantic field plus preserved native persistence bytes, maintains
 index, and invalidates presentation in all four cases. Focused tests cover both-found full-record exchange,
 one-found movement, and two-missing behavior.
 
+### Patterned retained-range transition opcode `0x24f` (2026-08-19)
+
+Opcode `0x24f` is the type-2 patterned sibling of type-0 alpha transition `0x223` and type-1 movie-mask
+transition `0x24d`. Its ten operands are `(command_key, target_slot, range_a_start, range_a_count,
+range_b_start, range_b_count, mode, pattern_thickness, delay_ms, duration_ms)`. Matching native producers
+are `op_0x24f_queue_patterned_surface_transition@0x425460` ->
+`gfx_queue_patterned_surface_transition@0x47f7e0` in Himegari SYS4422 and `@0x422ed0` -> `@0x486800`
+in Kamidori SYS4433. Both write the same 0x40-byte command prefix: type 2 at `+0`, delay/duration at
+`+8/+0xc`, target surface at `+0x10`, the two ranges at `+0x14/+0x1c` and `+0x18/+0x20`, mode at
+`+0x34`, pattern thickness at `+0x38`, and the command key at `+0x3c`.
+
+The shared Himegari consumer `retained_gfx_surface_command_composite@0x47fbc0` establishes the visual
+contract. It renders both retained ranges into scratch surfaces `0x24` and `0x25`, finds the ordinary
+retained object at `command_key` to obtain the clipped effect rectangle, clears `target_slot`, and combines
+the two captures according to the sampled delay/duration progress. Modes 0..3 are quantized wipes from
+left, right, top, and bottom. Modes 4..7 reveal equal vertical or horizontal strips in parallel, and modes
+8..11 stagger the same strips in the corresponding four directions. A positive thickness with a mode
+outside 0..11 logs an error and returns without creating the command. A nonpositive thickness logs an error
+but creates an immediate mode -1/thickness-1 fallback.
+
+Kamidori has ten byte-identical copies of one story-portrait helper in `SC0010`, `SC0050`, `SC0100`,
+`SC0110`, `SC0150`, `SC0200`, `SC0250`, `SC0300`, `SC0350`, and `SC0400`. Each transitions between two
+single-object portrait ranges into a newly created surface, then binds that surface to the command object.
+The helper starts from a nominal value 64 and derives a pixel thickness from the current clipped 1024x576
+extent before dispatch. The portable model retains both ranges, mode, thickness, timing, validation,
+force-completion, and command-object lifetime. Godot currently presents the same timed endpoints through a
+crossfade approximation; exact clip-mask geometry is isolated to a future host-compositor refinement.
+Focused tests cover timeline sampling, command attachment/removal, exact SYS4433 dispatch, and native
+validation fallbacks.
+
 ### Integer LIFO family `0x137`-`0x139` and positioned movie playback `0x241` (2026-07-29)
 
 `op_0x137_reset_int_stack@0x421940` is the LIFO counterpart to the implemented integer FIFO family

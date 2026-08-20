@@ -15,6 +15,10 @@ public enum SurfaceBlackFadeDirection
 
 public enum SurfacePatternTransitionMode
 {
+    WipeLeftToRight = 0,
+    WipeRightToLeft = 1,
+    WipeTopToBottom = 2,
+    WipeBottomToTop = 3,
     VerticalStripsLeftToRight = 4,
     VerticalStripsRightToLeft = 5,
     HorizontalStripsTopToBottom = 6,

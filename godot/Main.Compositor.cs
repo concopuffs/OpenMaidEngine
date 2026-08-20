@@ -105,6 +105,13 @@ public partial class Main
                 _perf?.RecordTransitionLayer();
                 DrawRadialBlurRangeGpu(_visibleSnapshot, radialBlur);
             }
+            else if (v.PatternedSurfaceTransition is { } patterned)
+            {
+                // The portable contract retains the native mask mode/thickness. Until the GPU path has
+                // clip-mask sprites, publish the same timed endpoints through a source-over crossfade.
+                _perf?.RecordTransitionLayer();
+                DrawTransitionRangeGpu(_visibleSnapshot, CrossfadeApproximation(patterned));
+            }
             else if (v.SurfaceTransition is { } transition)
             {
                 _perf?.RecordTransitionLayer();
@@ -166,7 +173,8 @@ public partial class Main
         long end = transition.RangeBStart + transition.RangeBCount;
         foreach (var source in visible)
         {
-            if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
+            if (source.Handle < transition.RangeBStart || source.Handle >= end ||
+                source.SurfaceTransition != null || source.PatternedSurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
             var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
@@ -459,6 +467,16 @@ public partial class Main
                               $"center=({radialBlur.CenterX:0.0},{radialBlur.CenterY:0.0}) " +
                               $"length={radialBlur.Length:0.0} progress={radialBlur.Progress:0.000} layers={layers}";
             }
+            else if (v.PatternedSurfaceTransition is { } patterned)
+            {
+                _perf?.RecordTransitionLayer();
+                int layers = DrawTransitionRange(visible, CrossfadeApproximation(patterned));
+                if (decisions != null)
+                    outcome = $"PATTERN-TRANSITION slot={patterned.TargetSlot} " +
+                              $"key=0x{patterned.CommandKey:x} mode={(int)patterned.Mode} " +
+                              $"thickness={patterned.PatternThickness} progress={patterned.Progress:0.000} " +
+                              $"forced={patterned.Forced} layers={layers}";
+            }
             else if (v.SurfaceTransition is { } transition)
             {
                 _perf?.RecordTransitionLayer();
@@ -541,7 +559,8 @@ public partial class Main
         long end = transition.RangeBStart + transition.RangeBCount;
         foreach (var source in visible)
         {
-            if (source.Handle < transition.RangeBStart || source.Handle >= end || source.SurfaceTransition != null)
+            if (source.Handle < transition.RangeBStart || source.Handle >= end ||
+                source.SurfaceTransition != null || source.PatternedSurfaceTransition != null)
                 continue;
             _perf?.RecordObject(source.TimeVarying);
             var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
@@ -589,6 +608,13 @@ public partial class Main
         }
         return drawn;
     }
+
+    private static SurfaceTransitionState CrossfadeApproximation(PatternedSurfaceTransitionState transition)
+        => new(transition.CommandKey, transition.TargetSlot,
+               transition.RangeAStart, transition.RangeACount,
+               transition.RangeBStart, transition.RangeBCount,
+               transition.DelayMs, transition.DurationMs, transition.StartMs,
+               transition.Progress, transition.Forced);
 
     private int DrawRadialBlurRange(
         IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)

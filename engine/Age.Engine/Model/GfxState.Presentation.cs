@@ -11,6 +11,14 @@ public sealed partial class GfxState
         public long StartMs = -1;
         public bool Forced;
     }
+    private sealed class PatternedSurfaceTransition
+    {
+        public long CommandKey, RangeAStart, RangeBStart, DelayMs, DurationMs;
+        public int TargetSlot, RangeACount, RangeBCount, PatternThickness;
+        public SurfacePatternTransitionMode Mode;
+        public long StartMs = -1;
+        public bool Forced;
+    }
     private sealed class MovieMaskTransition
     {
         public required MovieMaskTransitionRequest Request;
@@ -36,6 +44,7 @@ public sealed partial class GfxState
     }
 
     private readonly Dictionary<int, SurfaceTransition> _surfaceTransitions = new();
+    private readonly Dictionary<long, PatternedSurfaceTransition> _patternedSurfaceTransitions = new();
     private readonly Dictionary<int, MovieMaskTransition> _movieMaskTransitions = new();
     private readonly Dictionary<long, RadialBlurRangeTransition> _radialBlurTransitions = new();
     private readonly Dictionary<long, DirectionalBlurRangeTransition> _directionalBlurTransitions = new();
@@ -53,6 +62,40 @@ public sealed partial class GfxState
                 RangeAStart = rangeAStart, RangeACount = System.Math.Max(0, rangeACount),
                 RangeBStart = rangeBStart, RangeBCount = System.Math.Max(0, rangeBCount),
                 DelayMs = System.Math.Max(0, delayMs), DurationMs = System.Math.Max(0, durationMs),
+            };
+            MarkRetainedMutation();
+        }
+    }
+
+    /// <summary>Op 0x24f: queue the type-2 patterned replacement of one retained range by another.
+    /// Native uses the command object's rectangle as its clipping bounds and quantizes the wipe by
+    /// <paramref name="patternThickness"/>.</summary>
+    public void QueuePatternedSurfaceTransition(long commandKey, int targetSlot,
+        long rangeAStart, int rangeACount, long rangeBStart, int rangeBCount,
+        int mode, int patternThickness, long delayMs, long durationMs)
+    {
+        lock (_lock)
+        {
+            if (patternThickness > 0 && (mode < 0 || mode > 11)) return;
+            if (patternThickness < 1)
+            {
+                patternThickness = 1;
+                mode = -1;
+                delayMs = 0;
+                durationMs = 0;
+            }
+            _patternedSurfaceTransitions[commandKey] = new PatternedSurfaceTransition
+            {
+                CommandKey = commandKey,
+                TargetSlot = targetSlot,
+                RangeAStart = rangeAStart,
+                RangeACount = System.Math.Max(0, rangeACount),
+                RangeBStart = rangeBStart,
+                RangeBCount = System.Math.Max(0, rangeBCount),
+                Mode = (SurfacePatternTransitionMode)mode,
+                PatternThickness = patternThickness,
+                DelayMs = System.Math.Max(0, delayMs),
+                DurationMs = System.Math.Max(0, durationMs),
             };
             MarkRetainedMutation();
         }
@@ -172,6 +215,8 @@ public sealed partial class GfxState
             int started = 0;
             foreach (var t in _surfaceTransitions.Values)
                 if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+            foreach (var t in _patternedSurfaceTransitions.Values)
+                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
             foreach (var t in _radialBlurTransitions.Values)
                 if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
             foreach (var t in _directionalBlurTransitions.Values)
@@ -184,6 +229,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                   || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                    || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                    || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                    || _movieMaskTransitions.Values.Any(t => !t.Completed);
@@ -195,6 +241,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _movieMaskTransitions.Values.Any(t => !t.Completed) ||
@@ -225,6 +272,7 @@ public sealed partial class GfxState
             return new GfxDiagnosticSnapshot(
                 nowMs,
                 _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                    || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                     || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                     || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
                     || _movieMaskTransitions.Values.Any(t => !t.Completed)
@@ -232,6 +280,7 @@ public sealed partial class GfxState
                 _objects.Count,
                 _objects.Values.Count(o => o.Visible),
                 _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                    + _patternedSurfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
                     + _radialBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
                     + _directionalBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
                     + _movieMaskTransitions.Values.Count(t => !t.Completed),
@@ -265,6 +314,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                   _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _movieMaskTransitions.Values.Any(t => !t.Completed) ||
@@ -294,6 +344,12 @@ public sealed partial class GfxState
             if ((AnimationServiceFlags & 2) == 0)
             {
                 foreach (var t in _surfaceTransitions.Values)
+                {
+                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+                    t.Forced = true;
+                    completed++;
+                }
+                foreach (var t in _patternedSurfaceTransitions.Values)
                 {
                     if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
                     t.Forced = true;
@@ -345,6 +401,8 @@ public sealed partial class GfxState
             int completed = 0;
             foreach (var t in _surfaceTransitions.Values)
                 if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+            foreach (var t in _patternedSurfaceTransitions.Values)
+                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
             foreach (var t in _radialBlurTransitions.Values)
                 if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
             foreach (var t in _directionalBlurTransitions.Values)
@@ -358,6 +416,12 @@ public sealed partial class GfxState
     {
         lock (_lock)
             return _surfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+    }
+
+    public IReadOnlyList<PatternedSurfaceTransitionState> SnapshotPatternedSurfaceTransitions(long nowMs)
+    {
+        lock (_lock)
+            return _patternedSurfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     public IReadOnlyList<RadialBlurRangeTransitionState> SnapshotRadialBlurRangeTransitions(long nowMs)
@@ -385,6 +449,21 @@ public sealed partial class GfxState
     private static SurfaceTransitionState SampleTransition(SurfaceTransition t, long nowMs)
         => new(t.CommandKey, t.TargetSlot, t.RangeAStart, t.RangeACount, t.RangeBStart, t.RangeBCount,
                t.DelayMs, t.DurationMs, t.StartMs, TransitionProgress(t, nowMs), t.Forced);
+
+    private static double TransitionProgress(PatternedSurfaceTransition t, long nowMs)
+    {
+        if (t.Forced) return 1.0;
+        if (t.StartMs < 0) return 0.0;
+        long elapsed = nowMs - t.StartMs - t.DelayMs;
+        if (elapsed <= 0) return 0.0;
+        if (t.DurationMs <= 0) return 1.0;
+        return System.Math.Clamp(elapsed / (double)t.DurationMs, 0.0, 1.0);
+    }
+
+    private static PatternedSurfaceTransitionState SampleTransition(PatternedSurfaceTransition t, long nowMs)
+        => new(t.CommandKey, t.TargetSlot, t.RangeAStart, t.RangeACount, t.RangeBStart, t.RangeBCount,
+               t.Mode, t.PatternThickness, t.DelayMs, t.DurationMs, t.StartMs,
+               TransitionProgress(t, nowMs), t.Forced);
 
     private static double TransitionProgress(RadialBlurRangeTransition t, long nowMs)
     {
@@ -449,6 +528,7 @@ public sealed partial class GfxState
             }
 
             if (_surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+                _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                 _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                 _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                 _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
@@ -671,6 +751,9 @@ public sealed partial class GfxState
 
                 SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
                     ? SampleTransition(st, nowMs) : null;
+                PatternedSurfaceTransitionState? patternedTransition =
+                    _patternedSurfaceTransitions.TryGetValue(handle, out var pt)
+                        ? SampleTransition(pt, nowMs) : null;
                 RadialBlurRangeTransitionState? radialBlur =
                     _radialBlurTransitions.TryGetValue(handle, out var rb)
                         ? SampleTransition(rb, nowMs) : null;
@@ -689,6 +772,7 @@ public sealed partial class GfxState
                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
                     (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0) ||
                     transition is { Progress: < 1.0 } ||
+                    patternedTransition is { Progress: < 1.0 } ||
                     radialBlur is { Progress: < 1.0 } ||
                     directionalBlur is { Progress: < 1.0 } ||
                     (objectRangeTransform != null && rangeTimeVarying);
@@ -710,7 +794,7 @@ public sealed partial class GfxState
                                               o.TranslationCycleEnabled,
                                               o.TranslationCyclePeriodMs,
                                               cycleTranslationX, cycleTranslationY,
-                                              cycleTranslationZ)));
+                                              cycleTranslationZ), patternedTransition));
             }
         }
     }

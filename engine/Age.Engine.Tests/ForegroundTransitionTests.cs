@@ -38,6 +38,86 @@ public class ForegroundTransitionTests
     }
 
     [Fact]
+    public void PatternedSurfaceTransition_PreservesMaskContractAndTimeline()
+    {
+        var gfx = new GfxState();
+        gfx.BindDraw(102, 6, 0, 0, 1024, 576, 0, 0);
+        gfx.BindDraw(100, 4, 0, 0, 1024, 576, 0, 0);
+        gfx.BindDraw(101, 5, 0, 0, 1024, 576, 0, 0);
+        gfx.QueuePatternedSurfaceTransition(
+            102, 6, 101, 1, 100, 1,
+            (int)SurfacePatternTransitionMode.WipeLeftToRight, 16, 100, 500);
+
+        Assert.Equal(1, gfx.StartForegroundTransitions(1_000));
+        var delayed = Assert.Single(gfx.SnapshotPatternedSurfaceTransitions(1_050));
+        Assert.Equal(SurfacePatternTransitionMode.WipeLeftToRight, delayed.Mode);
+        Assert.Equal(16, delayed.PatternThickness);
+        Assert.Equal(0, delayed.Progress);
+
+        var midpoint = Assert.Single(gfx.SnapshotPatternedSurfaceTransitions(1_350));
+        Assert.Equal(0.5, midpoint.Progress, 3);
+        Assert.Equal(midpoint,
+            gfx.SnapshotVisibleObjects(1_350).Single(o => o.Handle == 102).PatternedSurfaceTransition);
+        Assert.True(gfx.HasActiveTimedPresentation(1_350));
+        Assert.Equal(1, gfx.CompleteForegroundTransitions(1_350));
+        Assert.Equal(1, gfx.SnapshotPatternedSurfaceTransitions(1_350).Single().Progress);
+
+        gfx.EraseRange(102, 1);
+        Assert.Empty(gfx.SnapshotPatternedSurfaceTransitions(1_350));
+    }
+
+    [Fact]
+    public void SharedOpcode24f_QueuesExactType2PatternContract()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var scene = ScriptAssembler.Assemble(table, "PATTERNED", new List<(int, Operand[])>
+        {
+            (0x24f, new[]
+            {
+                I(102), I(6), I(101), I(1), I(100), I(1),
+                G(10), G(11), G(12), G(13),
+            }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+            compatibility: new("kamidori", "SYS4433"));
+        vm.Globals[10] = 8;
+        vm.Globals[11] = 16;
+        vm.Globals[12] = 100;
+        vm.Globals[13] = 500;
+
+        vm.Run();
+
+        var transition = Assert.Single(vm.Gfx.SnapshotPatternedSurfaceTransitions(0));
+        Assert.Equal(102, transition.CommandKey);
+        Assert.Equal(6, transition.TargetSlot);
+        Assert.Equal(101, transition.RangeAStart);
+        Assert.Equal(1, transition.RangeACount);
+        Assert.Equal(100, transition.RangeBStart);
+        Assert.Equal(1, transition.RangeBCount);
+        Assert.Equal(SurfacePatternTransitionMode.StaggeredVerticalStripsLeftToRight, transition.Mode);
+        Assert.Equal(16, transition.PatternThickness);
+        Assert.Equal(100, transition.DelayMs);
+        Assert.Equal(500, transition.DurationMs);
+        Assert.Null(vm.CompatibilityFailure);
+    }
+
+    [Fact]
+    public void PatternedSurfaceTransition_MirrorsNativeValidationFallbacks()
+    {
+        var gfx = new GfxState();
+        gfx.QueuePatternedSurfaceTransition(1, 2, 3, 1, 4, 1, 12, 16, 100, 500);
+        Assert.Empty(gfx.SnapshotPatternedSurfaceTransitions(0));
+
+        gfx.QueuePatternedSurfaceTransition(1, 2, 3, 1, 4, 1, 8, 0, 100, 500);
+        var fallback = Assert.Single(gfx.SnapshotPatternedSurfaceTransitions(0));
+        Assert.Equal((SurfacePatternTransitionMode)(-1), fallback.Mode);
+        Assert.Equal(1, fallback.PatternThickness);
+        Assert.Equal(0, fallback.DelayMs);
+        Assert.Equal(0, fallback.DurationMs);
+    }
+
+    [Fact]
     public void RadialBlurRangeTransition_SamplesNativeLengthAndCenterTriples()
     {
         var gfx = new GfxState();

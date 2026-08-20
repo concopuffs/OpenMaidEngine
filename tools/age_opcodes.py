@@ -398,7 +398,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x024a: ('u004163C0', 3),
     0x024d: ('play-movie-mask-transition', 12),
     0x024e: ('set-gfx-animation-service-flags', 1),
-    0x024f: ('u00422ED0', 10),
+    0x024f: ('queue-patterned-surface-transition', 10),
     0x0250: ('u00422F60', 10),
     0x0251: ('u00422FF0', 12),
     0x0252: ('u00423000', 1),

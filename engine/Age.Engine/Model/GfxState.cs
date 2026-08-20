@@ -42,7 +42,10 @@ public sealed partial class GfxState
             _reloadableSurfaces.Clear();
             _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
+            _patternedSurfaceTransitions.Clear();
             _movieMaskTransitions.Clear();
+            _radialBlurTransitions.Clear();
+            _directionalBlurTransitions.Clear();
             CurrentObject = 0;
             CurrentRenderTargetSlot = -1;
             _rangeTransformFirst = 0;

@@ -255,7 +255,7 @@ def test_canonical_kamidori_revision_provenance():
         check(revisions == {"SYS4433"},
               f"0x{op:x} native evidence remains scoped only to SYS4433")
 
-    for op in (0x214, 0x227, 0x235, 0x246):
+    for op in (0x214, 0x227, 0x235, 0x246, 0x24f):
         shared = canonical.opcodes[op].semantics.evidence
         revisions = {revision for evidence in shared for revision in evidence.engine_revisions}
         profiles = {profile for evidence in shared for profile in evidence.profile_ids}
