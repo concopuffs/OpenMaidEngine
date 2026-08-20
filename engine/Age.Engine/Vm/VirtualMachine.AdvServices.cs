@@ -8,6 +8,13 @@ public sealed partial class VirtualMachine
     {
         switch (label)
         {
+            case "refresh-adv-skip-input-state": // 0xfa: reconcile physical skip and re-arm read skip
+                RefreshPhysicalMessageSkipState();
+                RefreshAdvReadSkipState();
+                _messageSkipServiceActive =
+                    _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
+                _host.SetMessageSkipActive(_messageSkipServiceActive);
+                return pc + 1;
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
                 _messageSkipEnabled = Read(a[0]) != 0;

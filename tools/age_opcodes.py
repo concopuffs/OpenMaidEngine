@@ -179,7 +179,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x00d8: ('u0041E150', 2),
     0x00d9: ('u00415880', 0),
     0x00da: ('u004158B0', 6),
-    0x00fa: ('u00415940', 0),
+    0x00fa: ('refresh-adv-skip-input-state', 0),
     0x00fb: ('joy_callback', 2),
     0x00fc: ('u004159F0', 0),
     0x00fd: ('u0041E2D0', 2),

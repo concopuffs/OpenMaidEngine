@@ -4519,6 +4519,20 @@ right edges are outside. The standard half-open even-odd crossing rule reproduce
 Windows dependency. Kamidori's only calls are `ARRANGE@0x4c6` and `STUDIO@0x525`; both use four vertices
 through local pointers. Both revision handlers are renamed/commented in their Ghidra programs and saved.
 
+### ADV skip/input-state refresh -- opcode `0xfa` (2026-08-19)
+
+The zero-operand SYS4422 handler `op_0xfa_refresh_adv_skip_input_state@0x416de0` and SYS4433 equivalent
+at `0x417560` reconcile one input-service boundary. They poll the configured held-action mask; when logical
+action 6 (`0x40`) is absent they clear transient fast-forward and play/clear the latest voice queued during
+message skip. If fast-forward is then inactive, they consume the triggered-action mask into the timed-
+callback abort slot, set run-state `0x80000000`, and clear the abort slot. That high bit is the gate consumed
+by `adv_refresh_read_skip_state@0x406cd0` before consulting `message:ReadTextSkip` and ReadTextDB.
+
+The portable VM maps this onto its existing split physical/script skip channels, host-owned latest-voice
+queue, and ReadTextDB refresh rather than retaining native bitfields. Kamidori's only call is
+`SHOWALLMAP@0x16a`; there is no map-specific behavior. Both handlers and the newly resolved SYS4433 input/
+voice helpers are renamed/commented in Ghidra, and both programs were saved.
+
 ### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
 
 The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot

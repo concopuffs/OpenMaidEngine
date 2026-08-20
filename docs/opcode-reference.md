@@ -205,6 +205,18 @@ The first result is the native direct-history redraw direction/state (-1, 0, or 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x8b`; scope=Himegari SYS4422. Ghidra /v2: op_0x8b_set_text_line_spacing@0x41f270 stores operand 1 at text manager +0x560 (ctx+0x14ea0). adv_text_manager_initialize@0x456800 defaults it to 6. Horizontal newline/history paths at 0x456fd0/0x452970 advance y by (+0x560 - primary LOGFONT.lfHeight); lfHeight is negative, so this is font pixel height plus configured leading. Corpus arguments are 8 for 22/24px Mincho blocks and 9 for 16px Gothic blocks.
 
+### 0xfa `refresh-adv-skip-input-state` (refresh-adv-skip-input-state, argc 0)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0xfa` (evidence-confirmed)
+- **summary:** () — reconcile held logical action 6 with transient ADV fast-forward, release the latest skip-queued voice when fast-forward ends, flush the triggered-action abort slot, and re-arm read-message skip evaluation.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0xfa`; scope=matching ADV skip/input refresh handlers and complete Kamidori corpus. SYS4422 op_0xfa_refresh_adv_skip_input_state@0x416de0 and SYS4433 @0x417560 have the same zero-operand control flow: poll action mask 0x40, clear fast-forward and release queued voice on absence, then flush triggered actions and set the 0x80000000 read-skip gate while fast-forward is inactive. adv_refresh_read_skip_state@0x406cd0 consumes that gate. Kamidori has one call at SHOWALLMAP@0x16a; Himegari installs the equivalent handler without a decoded corpus call.
+
+Both revisions first clear a save/load-adjacent transient flag, then poll the configured action mask. If bit 0x40 (logical action 6) is absent they clear run-state fast-forward bit 0x08000000 and play/clear the latest voice retained during skip. When fast-forward is then inactive they consume the triggered-action mask into the timed-callback abort slot, set run-state bit 0x80000000 (the gate consumed by adv_refresh_read_skip_state), and clear that abort slot. The portable VM maps this onto its existing independently tracked physical/script skip channels, host-owned queued-voice release, and ReadTextDB refresh. Kamidori's only site is SHOWALLMAP@0x16a.
+
 ### 0x197 `set-ruby-font-size` (set-ruby-font-size, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -3752,15 +3764,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0xda`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0xfa `u00415940` (u00415940, argc 0)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0xfa`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0xfc `u004159F0` (u004159F0, argc 0)
 - **observed by:** none in recorded corpora

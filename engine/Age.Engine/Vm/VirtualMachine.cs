@@ -1432,6 +1432,7 @@ public sealed partial class VirtualMachine
                 return StepTiming(label, a, pc);
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
+            case "refresh-adv-skip-input-state": // 0xfa: reconcile physical/read skip services
             case "u00414E50": // 0x19a: persistent state used by the SO001 active overlay
             case "u00414E80":
             case "suspend-adv-skip-service": // 0x19b: preserve the toggle while leaving ADV presentation

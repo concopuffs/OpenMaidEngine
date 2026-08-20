@@ -438,6 +438,26 @@ public class HotspotInputTests
     }
 
     [Fact]
+    public void RefreshAdvSkipInputState_ReconcilesTheExistingReadSkipChannel()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_SKIP", new List<(int, Operand[])>
+        {
+            (0xfa, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x148) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost { AdvReadSkip = true };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x148));
+        Assert.Equal(1, host.MessageSkipChanges.Count(value => value));
+        Assert.Equal(1, host.MessageSkip ? 1 : 0);
+    }
+
+    [Fact]
     [Trait("Category", "Workspace")]
     public void Sc0000MessageSkipButton_EnablesPersistentServiceState()
     {
