@@ -2011,6 +2011,17 @@ Implemented by querying TranslationCurrent while preserving the missing-object o
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x22d`; scope=Himegari SYS4422. Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides operands 3..5 by 100 and calls gfx_range_transform_set_scale_target@0x472d50. The worker arms the embedded transform object's ordinary scale channel (delay obj+0x3c, duration +0x50, target matrix +0xac), which gfx_range_transform_sample_frame@0x476df0 samples before range composition. FIELD has the sole corpus call, a 300 ms camera zoom.
 
+### 0x22e `set-gfx-range-rotation-target` (set-gfx-range-rotation-target, argc 6)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** no
+- **summary:** (delay_ms)(duration_ms)(axis_x)(axis_y)(axis_z)(angle_degrees) — animate the selected retained-gfx range transform's axis-angle rotation from its current matrix to the target.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x22e`; scope=matching native handlers/workers and complete Kamidori corpus. SYS4422 op_0x22e_set_gfx_range_rotation_target@0x423a40 calls gfx_range_transform_set_rotation_target with delay/duration and four integer-to-float axis-angle operands; SYS4433 equivalents @0x421940 and @0x479020 use the same embedded-object fields and target matrix while accepting float-aware operands 3..6. Both workers arm the ordinary one-shot rotation channel, clear its shared start timestamp, and dirty the retained range. Kamidori has one all-immediate call at SC6400.BIN@0x4c33: `(0,700,0,0,1,0)`.
+
+The range transform is selected by opcode 0x229 and applies only to handles in that half-open range. This channel shares the embedded transform object's one-shot start clock with range scale and translation. SYS4422 fetches the four axis-angle operands through its integer reader; SYS4433 uses its float-aware reader. Kamidori's sole SC6400 call is all-immediate `(0,700,0,0,1,0)`, so both revisions have the same observable contract there.
+
 ### 0x22f `set-gfx-range-translation-target` (u00421DD0, argc 5)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4208,15 +4219,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x22b`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x22e `u00421D10` (u00421D10, argc 6)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x22e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x237 `u00422350` (u00422350, argc 2)
 - **observed by:** none in recorded corpora

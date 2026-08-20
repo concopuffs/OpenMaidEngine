@@ -188,6 +188,21 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Op 0x22e: arm the range transform's delayed one-shot axis-angle rotation target.</summary>
+    public void SetRangeRotationChannel(long delayMs, long durationMs,
+                                        (long X, long Y, long Z) axis, long angleDegrees)
+    {
+        lock (_lock)
+        {
+            _rangeTransform.RotationDelayMs = delayMs;
+            _rangeTransform.RotationDurationMs = durationMs;
+            _rangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
+            _rangeTransform.RotationChannelEnabled = durationMs > 0;
+            _rangeTransform.OneShotStartMs = -1;
+            MarkRetainedMutation();
+        }
+    }
+
     /// <summary>Op 0x22f: arm the selected retained-gfx range transform's delayed one-shot
     /// translation target. FIELD uses this channel to pan the world while its ordinary minimap object
     /// runs a matching op-0x220 translation.</summary>

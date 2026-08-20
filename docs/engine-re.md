@@ -1441,7 +1441,10 @@ post-multiplies an object's normal matrix by this shared matrix only when its ha
 - `0x22b`: current axis-angle rotation (present in the native dispatch table, zero Himegari corpus calls);
 - `0x22c`: current translation in pixels;
 - `0x22d`: delayed/duration scale target, using the embedded object's ordinary one-shot scale channel;
-- `0x22e`: delayed/duration axis-angle target (native-dispatch-only, zero Himegari corpus calls);
+- `0x22e`: delayed/duration axis-angle target. SYS4422 handler
+  `op_0x22e_set_gfx_range_rotation_target@0x423a40` uses integer operand fetches, while SYS4433
+  `@0x421940` uses its float-aware reader for axis/angle; both call the matching
+  `gfx_range_transform_set_rotation_target` worker and arm the embedded object's shared one-shot clock;
 - `0x22f`: delayed/duration translation target. Its handler loads ECX with retained-gfx owner
   `ctx+0x46614`, and worker `gfx_range_transform_set_translation_target@0x472e90` writes the embedded
   object's start/delay/duration fields and target matrix. Operand 1 is delay, not an object handle.
@@ -1453,6 +1456,10 @@ UI—remain screen-fixed. FIELD's sole `0x22d` call animates a zoom over 300 ms.
 camera helper. Across the corpus, `0x229` occurs 693 times in 309 scripts: 590 all-zero disables, 101
 identity-range selections, and the two FIELD/LOOK camera selections. Correcting the contract therefore
 removes spurious object-zero mutations without changing established ADV output.
+
+Kamidori adds one shipped use of the previously dispatch-only range rotation setter:
+`SC6400.BIN@0x4c33` supplies `(delay=0, duration=700, axis=(0,0,1), angle=0)`. Although that particular
+target is visually neutral, executing it still preserves the native channel timing and range dirty state.
 
 FIELD's minimap-click helper at `FIELD@0xb3fe` changes the camera world coordinate, then issues two
 synchronized one-shot translations: `0x22f` pans the selected world range and `0x220` moves the ordinary

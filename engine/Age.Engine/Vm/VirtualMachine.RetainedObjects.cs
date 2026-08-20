@@ -61,6 +61,10 @@ public sealed partial class VirtualMachine
             case "set-gfx-range-scale-target": // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
                 Gfx.SetRangeScaleChannel(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
                 return pc + 1;
+            case "set-gfx-range-rotation-target": // 0x22e (delay)(duration)(axis x/y/z)(angle degrees)
+                Gfx.SetRangeRotationChannel(Read(a[0]), Read(a[1]),
+                    (Read(a[2]), Read(a[3]), Read(a[4])), Read(a[5]));
+                return pc + 1;
             case "query-gfx-translation-target":  // pre-correction generated-name compatibility
             case "u00421940":
             case "query-gfx-translation-current": // 0x228: (succ)(handle)(outX)(outY)(outZ) <- current matrix

@@ -1595,6 +1595,7 @@ public sealed partial class VirtualMachine
             case "set-gfx-range-translation-current": // 0x22c (tx)(ty)(tz)
             case "u00421C60":                  // pre-reference compatibility
             case "set-gfx-range-scale-target": // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
+            case "set-gfx-range-rotation-target": // 0x22e (delay)(duration)(axis x/y/z)(angle degrees)
                 return StepRetainedObject(label, a, pc);
             case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
             case "reset-gfx-cyclic-animations": // 0x230: stop all five retained looping channels

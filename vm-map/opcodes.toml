@@ -9712,19 +9712,52 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x22e
-label = "u00421D10"
+label = "set-gfx-range-rotation-target"
 argc = 6
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421D10"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-gfx-range-rotation-target"
+category = "draw"
+summary = "(delay_ms)(duration_ms)(axis_x)(axis_y)(axis_z)(angle_degrees) — animate the selected retained-gfx range transform's axis-angle rotation from its current matrix to the target."
+details = "The range transform is selected by opcode 0x229 and applies only to handles in that half-open range. This channel shares the embedded transform object's one-shot start clock with range scale and translation. SYS4422 fetches the four axis-angle operands through its integer reader; SYS4433 uses its float-aware reader. Kamidori's sole SC6400 call is all-immediate `(0,700,0,0,1,0)`, so both revisions have the same observable contract there."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching native handlers/workers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x22e_set_gfx_range_rotation_target@0x423a40 calls gfx_range_transform_set_rotation_target with delay/duration and four integer-to-float axis-angle operands; SYS4433 equivalents @0x421940 and @0x479020 use the same embedded-object fields and target matrix while accepting float-aware operands 3..6. Both workers arm the ordinary one-shot rotation channel, clear its shared start timestamp, and dirty the retained range. Kamidori has one all-immediate call at SC6400.BIN@0x4c33: `(0,700,0,0,1,0)`." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "delay milliseconds"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "duration milliseconds"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "target rotation axis X"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "target rotation axis Y"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "target rotation axis Z"
+observed_types = ["imm"]
+
+[[opcode.semantics.args]]
+i = 6
+role = "target rotation angle in degrees"
+observed_types = ["imm"]
 
 [[opcode]]
 op = 0x235

@@ -52,6 +52,39 @@ public class GfxRangeTransformTests
     }
 
     [Fact]
+    public void Opcode22eRotatesOnlyTheSelectedRangeOnTheSharedOneShotClock()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "RANGE_ROTATE", new List<(int, Operand[])>
+        {
+            (0x229, new[] { I(10), I(1), I(400), I(300), I(0) }),
+            (0x22e, new[] { I(0), I(300), I(0), I(0), I(1), I(90) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.Gfx.SetSurface(1, 1, -1);
+        vm.Gfx.BindDraw(10, 1, 0, 0, 1, 1, 410, 300);
+        vm.Gfx.BindDraw(20, 1, 0, 0, 1, 1, 410, 300);
+
+        vm.Run();
+        vm.Gfx.SnapshotVisibleObjects(1000);
+        var halfway = vm.Gfx.SnapshotVisibleObjects(1150);
+        var selected = halfway.Single(x => x.Handle == 10);
+        var unselected = halfway.Single(x => x.Handle == 20);
+        var selectedPoint = Transform2DMath.Build(selected.Transform)
+            .FromLocalOrigin(selected.DstX, selected.DstY).Then(selected.RangeTransform!.Value).Apply(0, 0);
+        var unselectedPoint = Transform2DMath.Build(unselected.Transform)
+            .FromLocalOrigin(unselected.DstX, unselected.DstY).Apply(0, 0);
+
+        Assert.Equal(400.0 + 10.0 / System.Math.Sqrt(2), selectedPoint.X, 8);
+        Assert.Equal(300.0 + 10.0 / System.Math.Sqrt(2), selectedPoint.Y, 8);
+        Assert.Equal((410.0, 300.0), unselectedPoint);
+        Assert.True(vm.Gfx.HasActiveTimedPresentation(1150));
+        vm.Gfx.SnapshotVisibleObjects(1300);
+        Assert.False(vm.Gfx.HasActiveTimedPresentation(1300));
+    }
+
+    [Fact]
     public void Opcode22fPansTheSelectedRangeInSyncWithAnOrdinaryObjectTween()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

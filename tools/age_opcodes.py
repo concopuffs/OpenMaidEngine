@@ -367,7 +367,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x022b: ('u00421B30', 4),
     0x022c: ('set-gfx-range-translation-current', 3),
     0x022d: ('set-gfx-range-scale-target', 5),
-    0x022e: ('u00421D10', 6),
+    0x022e: ('set-gfx-range-rotation-target', 6),
     0x022f: ('u00421DD0', 5),
     0x0230: ('u00421E70', 1),
     0x0231: ('u00421EA0', 4),
