@@ -98,6 +98,7 @@ annotated these handlers in the SYS4433 image:
 | `0x2bc` | `op_0x2bc_configure_wait_indicator_grid@0x4231e0` | `SYSTEM4@0xa0`; configures the wait-indicator atlas/grid and period. |
 | `0x1b1` | `op_0x1b1_set_wait_indicator_follow_last_glyph@0x41d5f0` | `SYSTEM4@0xb7`; stores the follow-last-glyph mode at SYS4433 text-manager `+0x570`. |
 | `0x2db` | `op_0x2db_set_text_aspect_mode@0x4235c0` | `SYSTEM4@0xbd`; mode 1 changes glyph metrics/font orientation and rebuilds primary font resources. |
+| `0x2dc` | `op_0x2dc_get_font_family_count@0x42ba80` | `SELFONT@0xa5`; returns the installed-family vector size, or `-1` when empty. |
 | `0x2de` | `op_0x2de_find_font_family_index@0x42bac0` | `CHECKCONFIG@0x0`; strips one leading `@`, then returns the installed-family index or `-1`. |
 | `0x25a` | `op_0x25a_set_display_background_color@0x423120` | `SYSTEM4@0x1f3`; persists mode 1/RGB and recreates a logical-canvas filled surface. |
 | `0x1be` | `op_0x1be_sound_channel_is_playing@0x429400` | `TITLE@0xd7`; validates one of thirteen channels and returns its normalized live-playing flag. |
@@ -107,8 +108,14 @@ annotated these handlers in the SYS4433 image:
 
 Comparative decompilation confirmed equivalent SYS4422 behavior for `0x1b1`, `0x1be`, `0x2bc`, `0x25a`,
 and `0x24`; that supports shared runtime handlers without claiming a true base SYS4 dialect. Opcodes `0x2da`,
-`0x2db`, and `0x2de` are installed only by the inspected SYS4433 constructor. Exact operand contracts and
+`0x2db`, `0x2dc`, and `0x2de` are installed only by the inspected SYS4433 constructor. Exact operand contracts and
 structured profile/revision provenance remain canonical in `vm-map/opcodes.toml`.
+
+The SYS4433 font-family cache is a contiguous vector of 0x20-byte strings at text-manager
+`+0x313c0/+0x313c4` (`EngineCtx+0x45cf8/+0x45cfc`). Opcode `0x2dc` divides its byte span by 0x20 and
+writes that count, except an empty vector produces `-1`. Opcode `0x2de` searches the same records by face
+name. This is revision-local text-manager layout evidence, not a field transfer to the SYS4422 `EngineCtx`
+struct applied to `/v2`.
 
 The first post-K6 Dungeon route reached `DRAWCHP.BIN@0x626` after `SYSTEM4 → FIELD → DRAWCHP` and established
 the SYS4433 numeric-glyph extension. `op_0x2da_register_extended_numeric_glyph_style@0x4234e0` enforces

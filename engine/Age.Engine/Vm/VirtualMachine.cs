@@ -1481,6 +1481,8 @@ public sealed partial class VirtualMachine
             case "set-text-render-mode":
             case "u004235C0": // SYS4433 opcode 0x2db
             case "set-text-aspect-mode":
+            case "u0042BA80": // SYS4433 opcode 0x2dc
+            case "get-font-family-count":
             case "u0042BAC0": // SYS4433 opcode 0x2de
             case "find-font-family-index":
             case "set-text-effect-offset":

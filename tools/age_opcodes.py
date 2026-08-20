@@ -447,7 +447,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x02d9: ('u0042BA30', 2),
     0x02da: ('u004234E0', 8),
     0x02db: ('u004235C0', 1),
-    0x02dc: ('u0042BA80', 1),
+    0x02dc: ('get-font-family-count', 1),
     0x02dd: ('u0042D880', 2),
     0x02de: ('u0042BAC0', 2),
     0x02df: ('u0042BAC1', 3),

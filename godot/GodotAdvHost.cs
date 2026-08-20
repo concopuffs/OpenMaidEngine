@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
@@ -15,6 +16,7 @@ public sealed partial class GodotAdvHost : IHost
     private readonly Age.Engine.Hosting.FrameClock _clock;
     private readonly GodotTimelineLog? _timeline;
     private readonly PageLocatorState _locator;
+    private readonly string[] _fontFamilies;
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
@@ -41,6 +43,10 @@ public sealed partial class GodotAdvHost : IHost
                 _surfaceTextMaskCache, _surfaceTextBackendInfo.Policy);
         _retainedGlyphLayoutEngine =
             new RetainedGlyphLayoutEngine(_surfaceTextMaskCache);
+        _fontFamilies = Godot.OS.GetSystemFonts()
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public Sys4LogicalCanvas LogicalCanvas => new(_screenWidth, _screenHeight);
@@ -48,10 +54,10 @@ public sealed partial class GodotAdvHost : IHost
     public int FindFontFamilyIndex(string faceName)
     {
         string ordinaryFace = faceName.StartsWith('@') ? faceName[1..] : faceName;
-        // Both exact Windows GDI and the portable text backend can render any non-empty authored
-        // family through system substitution. Scripts use only the non-negative/absent distinction.
-        return string.IsNullOrWhiteSpace(ordinaryFace) ? -1 : 0;
+        return Array.FindIndex(_fontFamilies,
+            installed => installed.Equals(ordinaryFace, StringComparison.OrdinalIgnoreCase));
     }
+    public int FontFamilyCount => _fontFamilies.Length == 0 ? -1 : _fontFamilies.Length;
 }
 
 public sealed record GodotHostDiagnosticSnapshot(

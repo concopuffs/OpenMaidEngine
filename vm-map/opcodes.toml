@@ -10894,19 +10894,27 @@ evidence = [
 
 [[opcode]]
 op = 0x2dc
-label = "u0042BA80"
+label = "get-font-family-count"
 argc = 1
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u0042BA80"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-font-family-count"
+category = "adv"
+summary = "(out_count) - return the number of entries in SYS4433's installed-font-family cache, or -1 when the cache is empty."
+details = "The native cache is the same vector of 0x20-byte strings searched by opcode 0x2de and indexed by opcode 0x2dd. Kamidori's sole call stores the result in local integer 1033 near the start of SELFONT.BIN. SYS4422 does not install this dispatch slot."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, installed-font vector, and complete Kamidori corpus", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "SYS4433 dispatcher slot 0x2dc installs op_0x2dc_get_font_family_count@0x42ba80. The handler computes `(EngineCtx+0x45cfc - EngineCtx+0x45cf8) / 0x20`, writes -1 instead of zero for an empty vector, and stores the result through operand 1. The same vector is searched by text_find_font_family_index@0x423a50 and indexed by opcode 0x2dd. SELFONT.BIN@0xa5 has the sole local-int output call. SYS4422 does not install this slot." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "out: installed font-family count, or -1 when empty"
+observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x2dd

@@ -87,6 +87,7 @@ internal class RecordingHost : IHost
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
     public readonly Dictionary<string, int> FontFamilyIndices = new(StringComparer.Ordinal);
+    public int FontFamilyCount { get; set; } = -1;
     public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
     public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
     public int CursorClearCount;

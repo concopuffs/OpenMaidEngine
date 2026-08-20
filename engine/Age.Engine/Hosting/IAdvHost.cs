@@ -27,6 +27,8 @@ public interface IAdvHost
     // SYS4433 op 0x2de exposes AGE's installed-font-family cache to scripts. Return a stable
     // non-negative cache index for an available/renderable family, or -1 when unavailable.
     int FindFontFamilyIndex(string faceName) => -1;
+    // SYS4433 op 0x2dc returns the installed-family vector size, using -1 for an empty cache.
+    int FontFamilyCount => -1;
     void ClearRenderedAdvTextLayout(int layoutSlot) { }
     void ResetRenderedAdvTextLayout(
         GfxState gfx, AdvTextLayoutPresentationBinding binding)

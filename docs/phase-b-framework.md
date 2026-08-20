@@ -621,11 +621,10 @@ removed all twelve CONFIG1--CONFIG5 calls. Shared scaled surface copy `0x32` the
 thumbnail calls. Shared point-in-polygon `0x147` then removed the ARRANGE/STUDIO pair. The shared ADV
 skip/input refresh `0xfa` removed SHOWALLMAP's singleton. Shared joystick capability query `0x106` then
 removed CONFIG's singleton. Shared selected-range rotation target `0x22e` removed SC6400's singleton,
-leaving two:
+then SYS4433 installed-font-family count `0x2dc` removed SELFONT's initialization call, leaving one:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
-| `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
 
 The patterned-reveal pair preserves the native selector mapping, direction, blocking duration, fast-forward
@@ -655,12 +654,14 @@ services; it has no map-specific behavior. `0x106` exposes the input host's acti
 count and defaults to zero when no device/capability is available. `0x22e` arms the selected range's
 axis-angle target on the same delayed one-shot clock as range scale and translation; the only Kamidori call
 uses a neutral zero-degree target but still runs its 700 ms channel. Font-selection-only gaps can follow unless live
-execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
+execution reaches one first. `0x2dc` exposes the SYS4433 installed-font vector size through the host cache,
+preserving native `-1` for an empty list; Godot supplies its stable system-family enumeration. This ranking
+is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
 `build/games/kamidori/translation-overlay-corpus.json`; each entry includes every script/offset, operand-type
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
-`0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
+`0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, `0x2dc`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
 The `0x32`, `0x82`, `0xfa`, `0x106`, `0x147`, `0x214`, `0x227`, `0x22e`, `0x235`, `0x246`, and `0x24f` evidence independently record both
 Himegari/SYS4422 and Kamidori/SYS4433 rather than inferring one revision from the other.

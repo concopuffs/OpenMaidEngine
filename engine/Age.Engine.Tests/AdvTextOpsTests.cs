@@ -534,6 +534,27 @@ public class AdvTextOpsTests
         Assert.Equal(expected, vm.Globals[0x100]);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(37)]
+    public void Sys4433FontFamilyCountUsesTheHostCacheSentinel(int familyCount)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        var script = ScriptAssembler.Assemble(table, "KAMIDORI-FONT-COUNT",
+            new List<(int, Operand[])>
+            {
+                (0x2dc, new[] { new Operand(3, 0x100) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost { FontFamilyCount = familyCount };
+        var vm = new VirtualMachine(script, table, host,
+            compatibility: new("kamidori", "SYS4433"));
+
+        vm.Run();
+
+        Assert.Equal(familyCount, vm.Globals[0x100]);
+    }
+
     [Fact]
     public void WaitIndicatorHandlePublishesItsResolvedLayoutBindingToHost()
     {
