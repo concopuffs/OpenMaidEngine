@@ -220,6 +220,43 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Op 0x214: exchange the complete retained-object records at two handles. If exactly
+    /// one handle exists, move its record to the missing handle; if neither exists, retain no records.</summary>
+    public void SwapObjects(long firstHandle, long secondHandle)
+    {
+        lock (_lock)
+        {
+            if (firstHandle == secondHandle)
+            {
+                MarkRetainedMutation();
+                return;
+            }
+
+            bool hasFirst = _objects.TryGetValue(firstHandle, out var first);
+            bool hasSecond = _objects.TryGetValue(secondHandle, out var second);
+            if (hasFirst && hasSecond)
+            {
+                _objects[firstHandle] = CloneState(second!);
+                _objects[secondHandle] = CloneState(first!);
+            }
+            else if (hasFirst)
+            {
+                _objects.Remove(firstHandle);
+                _objects[secondHandle] = CloneState(first!);
+                RemoveOrderedHandle(firstHandle);
+                InsertOrderedHandle(secondHandle);
+            }
+            else if (hasSecond)
+            {
+                _objects.Remove(secondHandle);
+                _objects[firstHandle] = CloneState(second!);
+                RemoveOrderedHandle(secondHandle);
+                InsertOrderedHandle(firstHandle);
+            }
+            MarkRetainedMutation();
+        }
+    }
+
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
 
     /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
@@ -413,5 +450,11 @@ public sealed partial class GfxState
     {
         int index = _orderedObjectHandles.BinarySearch(handle);
         if (index < 0) _orderedObjectHandles.Insert(~index, handle);
+    }
+
+    private void RemoveOrderedHandle(long handle)
+    {
+        int index = _orderedObjectHandles.BinarySearch(handle);
+        if (index >= 0) _orderedObjectHandles.RemoveAt(index);
     }
 }

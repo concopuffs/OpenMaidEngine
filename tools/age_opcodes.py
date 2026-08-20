@@ -341,7 +341,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x0211: ('u00421060', 1),
     0x0212: ('set-adv-wait-indicator-handle', 2),
     0x0213: ('set-adv-text-object-range', 3),
-    0x0214: ('u00421120', 2),
+    0x0214: ('swap-gfx-objects', 2),
     0x0215: ('query-gfx-object?', 2),
     0x0216: ('query-gfx-field?', 2),
     0x0217: ('set-gfx-geom3', 4),

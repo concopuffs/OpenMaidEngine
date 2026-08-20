@@ -1752,6 +1752,18 @@ This is a target-pixel operation, not retained-object teardown. It invokes IDire
 
 Implemented through IHost.PlayModalMovieToSurface. Its operand uses the same native universal packed-id catalog contract as 0x236; the separate host call exists for modal wait/cancel lifecycle, not a different resolver. ResourceMap.ResolveMovie selects through ResolvePacked and retains MPEG signature validation in ReadMovie. Godot reuses the asynchronous FFmpeg decoder/retained-surface compositor, parks only the VM thread until EOF, and treats mouse click or Accept/Cancel input as completion before wrapper cleanup releases both video and per-playback audio output. Movie playback leaves the existing mutable target at resourceId 0 with no RGB color key; MovieSurfaceRegistry supplies its live pixels. Audio-bearing movies deliver timestamped stereo float PCM through AudioStreamGenerator and use the sound-hardware position as the master clock. The native shim rewinds both demuxers to the common media origin; this preserves LOGO's 218-frame PTS-0 opening rather than skipping to the video stream's declared 600 ms start and moving picture ahead of audio. The first decoded image is latched before audio starts, later frames retain their common-timeline cadence, and the terminal image remains through the full audio graph endpoint.
 
+### 0x214 `swap-gfx-objects` (swap-gfx-objects, argc 2)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x214` (evidence-confirmed)
+- **summary:** (first_handle)(second_handle) — exchange the complete retained graphics-object records at two handles. If exactly one handle exists, move its record to the missing handle; if both are absent, leave the map empty.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x214`; scope=matching native handlers/workers and complete Kamidori corpus. SYS4422 op_0x214_swap_gfx_objects@0x423170 calls gfx_object_swap_records@0x47e310; SYS4433 equivalents are @0x421190 and @0x485000. Each worker looks up both handles, swaps complete records when both exist, inserts/copies/erases to move the sole record when exactly one exists, leaves two missing handles absent, and always raises the retained-gfx dirty flag. SYS4422 copies 0xb5 dwords per record; SYS4433 copies its expanded 0xb9-dword record. Kamidori has ten identical local-int signatures in SC0000, SC0710, SC0800, SC1050, SC1360, SC3030, SC3510, SC5550, SC6400, and SP6604; every site mirrors the two object swaps in a paired script metadata table.
+
+Both-found swaps every object field, including surface binding, geometry, color, animation channels, matrices, cyclic state, and native persistence bytes. One-found inserts a complete copy at the other key and erases the original. Equal handles are unchanged. The retained manager is marked dirty in every case. Kamidori's ten sites each run this in a two-iteration loop and immediately swap the matching two metadata-table rows, confirming presentation-object reordering rather than a surface-resource operation.
+
 ### 0x215 `query-gfx-object?` (query-gfx-object?, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4128,15 +4140,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x211`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x214 `u00421120` (u00421120, argc 2)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x214`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x221 `u00421670` (u00421670, argc 4)
 - **observed by:** none in recorded corpora

@@ -614,7 +614,8 @@ calls across 47 scripts. Implementing the retained directional-blur command `0x2
 34 calls across 11 scripts. The shared cyclic-translation opcode `0x235` removed 28 calls across 12 more
 scripts. Shared movie-rate opcode `0x246` then removed the sole BTL-only call. The shared current-rotation
 query `0x227` subsequently removed twelve calls across `SC0600` and `SC2060`, leaving eleven recognized
-opcodes without an executable runtime handler:
+opcodes without an executable runtime handler. Complete retained-object swap `0x214` then removed one call
+from each of ten story/presentation scripts, leaving ten:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
@@ -624,7 +625,6 @@ opcodes without an executable runtime handler:
 | `0xfa` | 1 | 1 | `SHOWALLMAP` |
 | `0x106` | 1 | 1 | `CONFIG` |
 | `0x147` | 2 | 2 | `ARRANGE`, `STUDIO` |
-| `0x214` | 10 | 10 | story/presentation scripts |
 | `0x22e` | 1 | 1 | `SC6400` |
 | `0x24f` | 10 | 10 | story scripts |
 | `0x2dc` | 1 | 1 | `SELFONT` |
@@ -641,7 +641,8 @@ shared SYS4422/SYS4433 `IMediaPosition::put_Rate` contract onto synchronized FFm
 pacing. `0x227` now returns current retained-object axis/angle state with the native missing-handle contract;
 its native handlers also expose a real subrevision detail, because SYS4433 added a float-aware operand
 writer where SYS4422 explicitly truncated before its ordinary writer. This does not change Kamidori's
-all-integer call sites. The ten-call `0x214` and `0x24f` families now jointly lead the remaining static
+all-integer call sites. `0x214` now swaps or moves complete retained-object records, including preserved native state and
+the handle-sorted presentation index. The ten-call type-2 timed surface command `0x24f` now leads the static
 backlog. Map/save, arrangement/studio, configuration, and font-selection-only gaps can follow unless live
 execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
@@ -650,7 +651,7 @@ real compatibility halt still takes precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x227`, `0x235`, and `0x246` evidence independently record both Himegari/SYS4422 and
+The `0x214`, `0x227`, `0x235`, and `0x246` evidence independently record both Himegari/SYS4422 and
 Kamidori/SYS4433 rather than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible

@@ -38,6 +38,10 @@ public sealed partial class VirtualMachine
             case "set-default-gfx-object-slot":
                 Gfx.SetDefaultObjectSlot((int)Read(a[0])); return pc + 1;
 
+            case "u00421120":           // upstream ABI label
+            case "swap-gfx-objects":   // 0x214 (first handle)(second handle)
+                Gfx.SwapObjects(Read(a[0]), Read(a[1])); return pc + 1;
+
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----
             case "u00421DD0":                         // pre-reference compatibility
             case "set-gfx-range-translation-target": // 0x22f (delay)(duration)(x)(y)(z)

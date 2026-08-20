@@ -1574,6 +1574,8 @@ public sealed partial class VirtualMachine
             case "set-gfx-geom3-b":
             case "u0041AF00":           // 0x80: default object slot substituted by native op 0x1d9
             case "set-default-gfx-object-slot":
+            case "u00421120":
+            case "swap-gfx-objects": // 0x214: exchange/move complete retained-object records
                 return StepRetainedObject(label, a, pc);
 
             // ---- SC0000 anim/transform/spritesheet cluster (docs/engine-re.md §"SC0000 anim ... cluster") ----

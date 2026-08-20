@@ -9426,19 +9426,32 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x214
-label = "u00421120"
+label = "swap-gfx-objects"
 argc = 2
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00421120"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "swap-gfx-objects"
+category = "draw"
+summary = "(first_handle)(second_handle) — exchange the complete retained graphics-object records at two handles. If exactly one handle exists, move its record to the missing handle; if both are absent, leave the map empty."
+details = "Both-found swaps every object field, including surface binding, geometry, color, animation channels, matrices, cyclic state, and native persistence bytes. One-found inserts a complete copy at the other key and erases the original. Equal handles are unchanged. The retained manager is marked dirty in every case. Kamidori's ten sites each run this in a two-iteration loop and immediately swap the matching two metadata-table rows, confirming presentation-object reordering rather than a surface-resource operation."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching native handlers/workers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x214_swap_gfx_objects@0x423170 calls gfx_object_swap_records@0x47e310; SYS4433 equivalents are @0x421190 and @0x485000. Each worker looks up both handles, swaps complete records when both exist, inserts/copies/erases to move the sole record when exactly one exists, leaves two missing handles absent, and always raises the retained-gfx dirty flag. SYS4422 copies 0xb5 dwords per record; SYS4433 copies its expanded 0xb9-dword record. Kamidori has ten identical local-int signatures in SC0000, SC0710, SC0800, SC1050, SC1360, SC3030, SC3510, SC5550, SC6400, and SP6604; every site mirrors the two object swaps in a paired script metadata table." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "first retained gfx object handle"
+observed_types = ["l-int"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "second retained gfx object handle"
+observed_types = ["l-int"]
 
 [[opcode]]
 op = 0x221

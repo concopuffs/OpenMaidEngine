@@ -1899,6 +1899,30 @@ axis-angle independently of its target, truncates toward zero for these integer 
 missing-object outputs. Focused tests cover current-versus-target separation, positive and negative
 fractional truncation, and the missing-object contract.
 
+### Retained graphics-object swap opcode `0x214` (2026-08-19)
+
+Opcode `0x214` takes two retained graphics-object handles and exchanges their complete records. Matching
+handlers are `op_0x214_swap_gfx_objects@0x423170` in Himegari SYS4422 and `@0x421190` in Kamidori
+SYS4433. Their workers (`gfx_object_swap_records@0x47e310` and `@0x485000`) implement the same four
+presence cases:
+
+- both found: copy the complete second record over the first and the saved first record over the second;
+- only the first found: insert its complete record at the second handle, then erase the first;
+- only the second found: insert its complete record at the first handle, then erase the second;
+- neither found: leave both absent.
+
+Equal handles are unchanged, and every path marks retained graphics dirty. The record size itself reflects
+the SYS subrevision: SYS4422 copies `0xb5` dwords (`0x2d4` bytes), while SYS4433 copies its expanded
+`0xb9`-dword (`0x2e4`-byte) record. The logical opcode contract does not otherwise change.
+
+Kamidori has ten sites, one each in `SC0000`, `SC0710`, `SC0800`, `SC1050`, `SC1360`, `SC3030`,
+`SC3510`, `SC5550`, `SC6400`, and `SP6604`. Every site runs two swaps over parallel object-handle ranges,
+then immediately swaps the same two rows in the script's presentation metadata table. That corroborates a
+complete presentation-object reorder rather than a surface-resource swap. The portable retained model swaps
+or moves every semantic field plus preserved native persistence bytes, maintains its handle-sorted compositor
+index, and invalidates presentation in all four cases. Focused tests cover both-found full-record exchange,
+one-found movement, and two-missing behavior.
+
 ### Integer LIFO family `0x137`-`0x139` and positioned movie playback `0x241` (2026-07-29)
 
 `op_0x137_reset_int_stack@0x421940` is the LIFO counterpart to the implemented integer FIFO family
