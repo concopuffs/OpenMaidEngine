@@ -33,6 +33,24 @@ public class BattleFrontierOpsTests
     }
 
     [Fact]
+    public void ScaledSurfaceRectCopy_ForwardsIndependentRectangleSizes()
+    {
+        var table = Table();
+        var script = ScriptAssembler.Assemble(table, "SCALED_SURFACE_COPY", new List<(int, Operand[])>
+        {
+            (0x32, new[] { I(2), I(193), I(0), I(0), I(1024), I(576),
+                            I(0), I(0), I(384), I(216) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new SurfaceRectCopy(2, 193, 0, 0, 1024, 576, 0, 0, 384, 216),
+                     Assert.Single(host.SurfaceCopies));
+    }
+
+    [Fact]
     public void ScalarBattleHelpers_PreserveNativeSignedBehaviorAndStringAliasing()
     {
         var table = Table();

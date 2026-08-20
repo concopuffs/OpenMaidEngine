@@ -139,8 +139,13 @@ public sealed partial class GodotAdvHost
         }
 
         var updated = new RgbaImage(destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        if (RgbaSurfaceOps.CopyRect(source, updated, copy.SourceX, copy.SourceY, copy.Width, copy.Height,
-                                   copy.DestinationX, copy.DestinationY))
+        bool copied = copy.Width == copy.DestinationWidth && copy.Height == copy.DestinationHeight
+            ? RgbaSurfaceOps.CopyRect(source, updated, copy.SourceX, copy.SourceY,
+                                      copy.Width, copy.Height, copy.DestinationX, copy.DestinationY)
+            : RgbaSurfaceOps.ScaleCopyRect(source, updated, copy.SourceX, copy.SourceY,
+                                           copy.Width, copy.Height, copy.DestinationX, copy.DestinationY,
+                                           copy.DestinationWidth, copy.DestinationHeight);
+        if (copied)
         {
             lock (_imageLock) _surfaceImages[copy.DestinationSurface] = updated;
             System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
@@ -148,8 +153,12 @@ public sealed partial class GodotAdvHost
         _timeline?.Event("surface-copy", new()
         {
             ["source"] = copy.SourceSurface, ["source_x"] = copy.SourceX, ["source_y"] = copy.SourceY,
-            ["w"] = copy.Width, ["h"] = copy.Height, ["destination"] = copy.DestinationSurface,
+            ["w"] = copy.Width, ["h"] = copy.Height,
+            ["source_w"] = copy.Width, ["source_h"] = copy.Height,
+            ["destination"] = copy.DestinationSurface,
             ["destination_x"] = copy.DestinationX, ["destination_y"] = copy.DestinationY,
+            ["destination_w"] = copy.DestinationWidth,
+            ["destination_h"] = copy.DestinationHeight,
         });
     }
 

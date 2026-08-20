@@ -74,6 +74,12 @@ public sealed partial class VirtualMachine
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
                 return pc + 1;
+            case "scale-copy-surface-rect": // 0x32: independent source/destination rectangle sizes
+                _host.CopySurfaceRect(new SurfaceRectCopy(
+                    (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                    (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
+                    (int)Read(a[8]), (int)Read(a[9])));
+                return pc + 1;
             case "select-render-target": // 0x20d: slot <1000 selects a surface; >=1000 restores backbuffer
                 Gfx.SelectRenderTarget(Read(a[0])); return pc + 1;
             case "clear-render-target": // 0x20e: clear color to black and depth to one

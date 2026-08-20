@@ -49,6 +49,21 @@ public class RgbaSurfaceOpsTests
     }
 
     [Fact]
+    public void ScaleCopyRect_AreaAveragesSourcePixelsWhenShrinking()
+    {
+        var source = new RgbaImage(2, 2, new byte[]
+        {
+            0, 0, 0, 0,       40, 80, 120, 160,
+            80, 120, 160, 200, 120, 160, 200, 240,
+        });
+        var destination = new RgbaImage(1, 1, new byte[4]);
+
+        Assert.True(RgbaSurfaceOps.ScaleCopyRect(source, destination, 0, 0, 2, 2, 0, 0, 1, 1));
+
+        Assert.Equal(new byte[] { 60, 90, 120, 150 }, destination.Pixels);
+    }
+
+    [Fact]
     public void WithColorKey_MakesMatchingSourcePixelsTransparentBeforeComposition()
     {
         var source = new RgbaImage(2, 1, new byte[] { 1, 2, 3, 255, 4, 5, 6, 255 });

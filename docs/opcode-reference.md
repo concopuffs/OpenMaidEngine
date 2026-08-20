@@ -1501,6 +1501,18 @@ SYS4433 maps selector 0..4 to native pattern modes 4..8. Modes 4/5 divide the ac
 
 SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements modes 8/9 as staggered equal-width strips revealed from the left/right and modes 10/11 as staggered equal-height strips revealed from the top/bottom. Each strip starts one timer step after its predecessor; completion takes `(divisions - 1 + strip thickness)` timer steps. Selector 4 reaches the worker's invalid-mode error for mode 12. ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori has 192 calls across 47 scripts; every call targets surface 2 with 64 divisions, uses a 10 or 15 ms interval, and selects one of modes 8..11. This is proven for SYS4433 only.
 
+### 0x32 `scale-copy-surface-rect` (scale-copy-surface-rect, argc 10)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x32` (evidence-confirmed)
+- **summary:** (source_surface)(destination_surface)(source_x)(source_y)(source_width)(source_height)(destination_x)(destination_y)(destination_width)(destination_height) — clip and scale a source surface rectangle into an independently sized destination rectangle.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x32`; scope=matching scaled surface-copy handlers, workers, and Kamidori corpus. SYS4422 op_0x32_scale_copy_surface_rect@0x41db20 -> gfx_scale_copy_surface_rect@0x47c6c0 and SYS4433 op_0x32_scale_copy_surface_rect@0x41bbc0 -> gfx_scale_copy_surface_rect@0x483410 have the same ten-operand contract. Both workers proportionally clip paired rectangles, mark the destination dirty, select direct/down/up scaling by the relative dimensions, and use scratch surface 0x20 when the two axes require different directions. SYS4433's two corpus sites are ALLMAP@0x4e2 and SAVE@0xbb6, both immediate 1024x576 -> 384x216 copies.
+
+Both revision handlers convert origin/extent operands into paired edge rectangles, validate the two surfaces, mark the destination dirty, and dispatch to direct copy, area-weighted shrink, interpolating enlargement, or a two-pass mixed-axis route through scratch surface 0x20. Kamidori's only two calls, ALLMAP@0x4e2 and SAVE@0xbb6, downsample the full 1024x576 surface 2 into a 384x216 thumbnail on surfaces 193 and 195. The portable host implements that observed shrink contract with an area-weighted RGBA sampler; equal-sized rectangles continue through the established exact-copy path.
+
 ### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -3080,15 +3092,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x31`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32 `u004197C0` (u004197C0, argc 10)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x33 `u00419900` (u00419900, argc 6)
 - **observed by:** none in recorded corpora

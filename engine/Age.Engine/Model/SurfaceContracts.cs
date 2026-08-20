@@ -5,7 +5,15 @@ public readonly record struct SurfaceRectFill(
 
 public readonly record struct SurfaceRectCopy(
     int SourceSurface, int DestinationSurface, int SourceX, int SourceY,
-    int Width, int Height, int DestinationX, int DestinationY);
+    int Width, int Height, int DestinationX, int DestinationY,
+    int DestinationWidth, int DestinationHeight)
+{
+    public SurfaceRectCopy(
+        int sourceSurface, int destinationSurface, int sourceX, int sourceY,
+        int width, int height, int destinationX, int destinationY)
+        : this(sourceSurface, destinationSurface, sourceX, sourceY, width, height,
+               destinationX, destinationY, width, height) { }
+}
 
 public enum SurfaceBlackFadeDirection
 {

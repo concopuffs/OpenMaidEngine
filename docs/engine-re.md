@@ -4487,6 +4487,24 @@ reads cannot race VM-side mutations. The first complete player attack remains th
 BTL's two `0x1a2` shared-profile writes were initially deferred because they do not feed same-exchange
 combat state; the unified profile service now handles them through the ordinary opcode dispatch.
 
+### Scaled surface rectangle copy -- opcode `0x32` (2026-08-19)
+
+Opcode `0x32` is the scaled sibling of `0x207`, with independent source and destination extents:
+`(source_surface, destination_surface, source_x, source_y, source_width, source_height, destination_x,
+destination_y, destination_width, destination_height)`. The SYS4422 handler
+`op_0x32_scale_copy_surface_rect@0x41db20` calls `gfx_scale_copy_surface_rect@0x47c6c0`; SYS4433 uses the
+matching pair at `0x41bbc0` and `0x483410`. Both workers validate the two surface slots, proportionally clip
+the paired rectangles, mark the destination dirty, and select a direct copy when the extents match. When
+both axes shrink they use an area-weighted sampler; when both grow they use the enlargement sampler; mixed
+directions are handled in two passes through scratch surface `0x20`.
+
+Kamidori has only two calls: `ALLMAP@0x4e2` copies surface 2 to 193 and `SAVE@0xbb6` copies surface 2 to 195.
+Both are wholly in-bounds immediate-operand downscales from 1024x576 to 384x216. The portable host therefore
+implements the observed path with an area-weighted RGBA sampler and leaves equal-sized requests on the
+existing exact-copy route. This is a shared SYS4 graphics operation rather than a Kamidori compatibility
+branch. Both revision handlers, workers, downsamplers, and enlargement helpers are renamed and commented in
+their Ghidra programs; both programs were saved.
+
 ### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
 
 The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot

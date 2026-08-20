@@ -81,4 +81,78 @@ public static class RgbaSurfaceOps
         }
         return true;
     }
+
+    /// <summary>
+    /// Scale one RGBA rectangle into another with area-weighted sampling. This matches AGE's shrink path,
+    /// including the 1024x576 to 384x216 map/save thumbnail operation. Source pixels are sampled from a
+    /// stable image while writes are clipped to the destination surface.
+    /// </summary>
+    public static bool ScaleCopyRect(RgbaImage source, RgbaImage destination,
+                                     int sourceX, int sourceY, int sourceWidth, int sourceHeight,
+                                     int destinationX, int destinationY,
+                                     int destinationWidth, int destinationHeight)
+    {
+        if (sourceWidth <= 0 || sourceHeight <= 0
+            || destinationWidth <= 0 || destinationHeight <= 0) return false;
+
+        long left = System.Math.Max(0L, destinationX);
+        long top = System.Math.Max(0L, destinationY);
+        long right = System.Math.Min((long)destination.Width, (long)destinationX + destinationWidth);
+        long bottom = System.Math.Min((long)destination.Height, (long)destinationY + destinationHeight);
+        if (right <= left || bottom <= top) return false;
+
+        bool wrote = false;
+        for (int y = (int)top; y < (int)bottom; y++)
+        {
+            double sy0 = sourceY + (double)(y - destinationY) * sourceHeight / destinationHeight;
+            double sy1 = sourceY + (double)(y + 1 - destinationY) * sourceHeight / destinationHeight;
+            for (int x = (int)left; x < (int)right; x++)
+            {
+                double sx0 = sourceX + (double)(x - destinationX) * sourceWidth / destinationWidth;
+                double sx1 = sourceX + (double)(x + 1 - destinationX) * sourceWidth / destinationWidth;
+                double clippedSx0 = System.Math.Max(0.0, sx0);
+                double clippedSy0 = System.Math.Max(0.0, sy0);
+                double clippedSx1 = System.Math.Min(source.Width, sx1);
+                double clippedSy1 = System.Math.Min(source.Height, sy1);
+                if (clippedSx1 <= clippedSx0 || clippedSy1 <= clippedSy0) continue;
+
+                double red = 0, green = 0, blue = 0, alpha = 0, total = 0;
+                int firstSourceY = (int)System.Math.Floor(clippedSy0);
+                int lastSourceY = (int)System.Math.Ceiling(clippedSy1);
+                int firstSourceX = (int)System.Math.Floor(clippedSx0);
+                int lastSourceX = (int)System.Math.Ceiling(clippedSx1);
+                for (int sourceRow = firstSourceY; sourceRow < lastSourceY; sourceRow++)
+                {
+                    double yWeight = System.Math.Min(clippedSy1, sourceRow + 1.0)
+                                     - System.Math.Max(clippedSy0, sourceRow);
+                    if (yWeight <= 0) continue;
+                    for (int sourceColumn = firstSourceX; sourceColumn < lastSourceX; sourceColumn++)
+                    {
+                        double xWeight = System.Math.Min(clippedSx1, sourceColumn + 1.0)
+                                         - System.Math.Max(clippedSx0, sourceColumn);
+                        double weight = xWeight * yWeight;
+                        if (weight <= 0) continue;
+                        int sourceOffset = checked((sourceRow * source.Width + sourceColumn) * 4);
+                        red += source.Pixels[sourceOffset] * weight;
+                        green += source.Pixels[sourceOffset + 1] * weight;
+                        blue += source.Pixels[sourceOffset + 2] * weight;
+                        alpha += source.Pixels[sourceOffset + 3] * weight;
+                        total += weight;
+                    }
+                }
+                if (total <= 0) continue;
+
+                int destinationOffset = checked((y * destination.Width + x) * 4);
+                destination.Pixels[destinationOffset] = ClampByte(red / total);
+                destination.Pixels[destinationOffset + 1] = ClampByte(green / total);
+                destination.Pixels[destinationOffset + 2] = ClampByte(blue / total);
+                destination.Pixels[destinationOffset + 3] = ClampByte(alpha / total);
+                wrote = true;
+            }
+        }
+        return wrote;
+    }
+
+    private static byte ClampByte(double value)
+        => (byte)System.Math.Clamp((int)System.Math.Round(value, MidpointRounding.AwayFromZero), 0, 255);
 }

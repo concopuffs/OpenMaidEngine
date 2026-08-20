@@ -1241,6 +1241,7 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "script-entry":
+            case "scale-copy-surface-rect": // 0x32: clipped source rectangle scaled into destination rectangle
             case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
             case "u00423120": // opcode 0x25a
             case "set-display-background-color":
