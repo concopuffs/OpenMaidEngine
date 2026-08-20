@@ -4533,6 +4533,14 @@ queue, and ReadTextDB refresh rather than retaining native bitfields. Kamidori's
 `SHOWALLMAP@0x16a`; there is no map-specific behavior. Both handlers and the newly resolved SYS4433 input/
 voice helpers are renamed/commented in Ghidra, and both programs were saved.
 
+### Joystick physical-button capability -- opcode `0x106` (2026-08-20)
+
+SYS4422 `op_0x106_get_joystick_button_count@0x428b30` and SYS4433's equivalent at `0x429a40` directly
+write the input manager's active-device physical button count (`EngineCtx+0x898`) to operand 1. Kamidori's
+only call is `CONFIG@0x12`, storing the result in global `0xfd49b` for controller configuration. The
+portable contract exposes this as an optional input-host capability; headless and hosts without device
+enumeration return zero. Both handlers are renamed/commented in their saved Ghidra programs.
+
 ### Movement/attack flood-fill FIFO -- opcodes `0x132`-`0x134` (2026-07-21)
 
 The DEBUGMAP symptom "selected unit can wait on its origin, but has no blue reachable tiles and cannot

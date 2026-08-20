@@ -619,11 +619,11 @@ from each of ten story/presentation scripts. Shared type-2 patterned transition 
 copies of Kamidori's story-portrait helper. The paired ordinary-ADV redraw operations `0x83`/`0x82` then
 removed all twelve CONFIG1--CONFIG5 calls. Shared scaled surface copy `0x32` then removed the two map/save
 thumbnail calls. Shared point-in-polygon `0x147` then removed the ARRANGE/STUDIO pair. The shared ADV
-skip/input refresh `0xfa` removed SHOWALLMAP's singleton, leaving four:
+skip/input refresh `0xfa` removed SHOWALLMAP's singleton. Shared joystick capability query `0x106` then
+removed CONFIG's singleton, leaving three:
 
 | Opcode | Calls | Scripts | Static scope |
 |---|---:|---:|---|
-| `0x106` | 1 | 1 | `CONFIG` |
 | `0x22e` | 1 | 1 | `SC6400` |
 | `0x2dc` | 1 | 1 | `SELFONT` |
 | `0x2dd` | 2 | 1 | `SELFONT` |
@@ -651,7 +651,8 @@ area-downsample the full 1024x576 map surface to 384x216 thumbnails, while equal
 existing exact surface-copy path. `0x147` preserves Win32 ALTERNATE-fill point-in-polygon semantics,
 including the half-open top/left-inclusive boundary convention used by its four-vertex ARRANGE/STUDIO
 sites. `0xfa` maps SHOWALLMAP's boundary onto the existing physical/script skip, queued-voice, and read-skip
-services; it has no map-specific behavior. Configuration, story, and font-selection-only gaps can follow unless live
+services; it has no map-specific behavior. `0x106` exposes the input host's active joystick physical-button
+count and defaults to zero when no device/capability is available. Story and font-selection-only gaps can follow unless live
 execution reaches one first. This ranking is triage, not a substitute for strict-runtime evidence: the next
 real compatibility halt still takes precedence. The machine-readable reports are
 `build/games/kamidori/catalog-opcode-coverage.json` and
@@ -659,7 +660,7 @@ real compatibility halt still takes precedence. The machine-readable reports are
 signatures, and representative typed operands. Generated handler bindings for the SYS4433-only findings
 `0x27`, `0x28`, `0x250`, `0x251`, `0x2d8`, `0x2da`, `0x2db`, and `0x2de` are explicitly evidence-confirmed for
 SYS4433; a generator regression prevents their provenance from falling back to Himegari/SYS4422 defaults.
-The `0x32`, `0x82`, `0xfa`, `0x147`, `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both
+The `0x32`, `0x82`, `0xfa`, `0x106`, `0x147`, `0x214`, `0x227`, `0x235`, `0x246`, and `0x24f` evidence independently record both
 Himegari/SYS4422 and Kamidori/SYS4433 rather than inferring one revision from the other.
 
 That recheck confirms the numeric HUD and centered unit/weapon strings are restored. The next visible

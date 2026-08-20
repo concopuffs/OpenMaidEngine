@@ -1400,6 +1400,7 @@ public sealed partial class VirtualMachine
             case "dispatch-mouse-callback": // 0xcd
             case "joy_callback":
             case "register-joy-callback": // 0xfb (input index, local target dword offset)
+            case "get-joystick-button-count": // 0x106: active-device physical-button capability
             case "u0041E360":
             case "set-input-action-count": // 0xfe: actions [0,count), no-input callback at count
             case "u00415A10":

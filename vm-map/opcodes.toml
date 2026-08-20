@@ -8838,19 +8838,27 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x106
-label = "u00415E40"
+label = "get-joystick-button-count"
 argc = 1
-abi_source = "kelebek"
+abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "u00415E40"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-joystick-button-count"
+category = "input"
+summary = "(out_count) — return the active joystick device's physical button capability count; zero when no device/capability is exposed."
+details = "Both native handlers directly return the input manager field populated from the active joystick device capabilities. The portable VM reads the equivalent optional input-host capability and defaults to zero for headless or hosts without controller enumeration. Kamidori's sole CONFIG@0x12 call stores the result in global 0xfd49b for its controller-configuration path."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching input capability handlers and complete Kamidori corpus", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 op_0x106_get_joystick_button_count@0x428b30 writes EngineCtx.joystick_physical_button_count (+0x898) to operand 1; SYS4433 @0x429a40 writes its matching +0x898 field. Kamidori has one global-int output call at CONFIG@0x12; Himegari installs the equivalent handler without a decoded corpus call." }
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "physical joystick button count output"
+observed_types = ["g-int"]
 
 [[opcode]]
 op = 0x10e

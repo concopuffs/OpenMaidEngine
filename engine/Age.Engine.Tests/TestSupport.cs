@@ -190,6 +190,7 @@ internal class RecordingHost : IHost
         => WaitForInput(layoutSlot, serviceInputCallback);
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
     public virtual long InputClockMilliseconds => Environment.TickCount64;
+    public int JoystickButtonCount { get; set; }
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
     public void ClearCursorResource() => CursorClearCount++;
     public void WarpCursor(int virtualX, int virtualY) => CursorWarps.Add((virtualX, virtualY));

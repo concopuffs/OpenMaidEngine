@@ -29,6 +29,7 @@ public interface IInputHost
     // Generic AGE input-callback services (ops 0xcc/0xcd, 0xfb/0xff/0x100, 0x108).
     // Interactive hosts expose the same monotonic clock used by their frame scheduler.
     long InputClockMilliseconds => Environment.TickCount64;
+    int JoystickButtonCount => 0;
 
     void SetCursorResource(long resourceId) { }
     void ClearCursorResource() { }

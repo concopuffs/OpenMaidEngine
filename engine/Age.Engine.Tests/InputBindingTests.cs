@@ -88,6 +88,22 @@ public class InputBindingTests
         Assert.Equal(7, bindings.MouseAction(1));
     }
 
+    [Fact]
+    public void JoystickButtonCount_ComesFromTheInputHostCapability()
+    {
+        var script = ScriptAssembler.Assemble(Table, "JOYSTICK_CAPABILITY", new List<(int, Operand[])>
+        {
+            (0x106, new[] { G(0x710) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost { JoystickButtonCount = 14 };
+        var vm = new VirtualMachine(script, Table, host);
+
+        vm.Run();
+
+        Assert.Equal(14, vm.Globals.GetValueOrDefault(0x710));
+    }
+
     [Theory]
     [InlineData(0x08)] // retained native Backspace default
     [InlineData(0x11)] // SYSTEM4 LeftCtrl binding

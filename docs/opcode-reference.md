@@ -2523,6 +2523,18 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **grounding:** source=investigation, confidence=med
 - **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x101`; scope=Himegari SYS4422. Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. It does not touch ctx+0x13dc or ctx+0x550fc, so adv_interpreter_tick re-injects Skip on the following tick while persistent state remains enabled. The Auto, Message-skip, Read-skip, and Hide-window callbacks invoke it after their 100 ms cursor re-arm sequence.
 
+### 0x106 `get-joystick-button-count` (get-joystick-button-count, argc 1)
+- **observed by:** kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4433` -> `age-vm-switch/0x106` (evidence-confirmed)
+- **summary:** (out_count) — return the active joystick device's physical button capability count; zero when no device/capability is exposed.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x106`; scope=matching input capability handlers and complete Kamidori corpus. SYS4422 op_0x106_get_joystick_button_count@0x428b30 writes EngineCtx.joystick_physical_button_count (+0x898) to operand 1; SYS4433 @0x429a40 writes its matching +0x898 field. Kamidori has one global-int output call at CONFIG@0x12; Himegari installs the equivalent handler without a decoded corpus call.
+
+Both native handlers directly return the input manager field populated from the active joystick device capabilities. The portable VM reads the equivalent optional input-host capability and defaults to zero for headless or hosts without controller enumeration. Kamidori's sole CONFIG@0x12 call stores the result in global 0xfd49b for its controller-configuration path.
+
 ### 0x107 `map-joystick-button` (u0041E500, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -3818,15 +3830,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x105`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x106 `u00415E40` (u00415E40, argc 1)
-- **observed by:** kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x106`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x10e `u0041E650` (u0041E650, argc 2)
 - **observed by:** none in recorded corpora

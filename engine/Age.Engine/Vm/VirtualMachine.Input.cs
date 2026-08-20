@@ -146,6 +146,8 @@ public sealed partial class VirtualMachine
             case "u00415E70":
             case "get-mouse-button-state": // 0x108
                 Write(a[0], Volatile.Read(ref _mouseButtonState)); return pc + 1;
+            case "get-joystick-button-count": // 0x106: active-device capability, zero when absent
+                Write(a[0], System.Math.Max(0, _host.JoystickButtonCount)); return pc + 1;
             case "u00415F10":
             case "consume-mouse-wheel-delta": // 0x10d
                 Write(a[0], Interlocked.Exchange(ref _mouseWheelDelta, 0)); return pc + 1;
