@@ -32,7 +32,7 @@ public sealed record GamePersistencePolicy
         if (!writesEnabled && string.IsNullOrWhiteSpace(readOnlyReason))
             throw new ArgumentException(
                 "a read-only persistence policy requires a reason", nameof(readOnlyReason));
-        if (writesEnabled && numberedGfxRecordSize != NativeNumberedSaveState.GfxRecordSize)
+        if (writesEnabled && !NativeGfxSaveLayout.IsSupported(numberedGfxRecordSize))
             throw new ArgumentException(
                 $"write-enabled policy uses unsupported numbered-save gfx record size " +
                 $"0x{numberedGfxRecordSize:x}", nameof(numberedGfxRecordSize));
@@ -87,7 +87,8 @@ public sealed record GamePersistencePolicy
             SaveVersion1: packed / 100,
             SaveVersion2: packed % 100,
             NumberedCompatibilityId: NumberedCompatibilityId,
-            BankDimensions: BankDimensions);
+            BankDimensions: BankDimensions,
+            NumberedGfxRecordSize: NumberedGfxRecordSize);
 }
 
 /// <summary>All Godot-owned writable locations and native persistence policy for one selection.</summary>

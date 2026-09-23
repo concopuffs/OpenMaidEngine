@@ -14,12 +14,11 @@
   "metadataReferences": {},
   "persistence": {
     "storageNamespace": "kamidori",
-    "writesEnabled": false,
-    "readOnlyReason": "numbered-save gfx record size 0x2e4 is not implemented",
+    "writesEnabled": true,
     "magic": "S4SD",
     "sharedCompatibilityId": 1177760564,
     "numberedCompatibilityId": 1177760564,
-    "gameId": "逾樊治繧翫い繝ｫ繧ｱ繝溘・繝槭う繧ｹ繧ｿ繝ｼ",
+    "gameId": "神採りアルケミーマイスター",
     "expectedPackedSaveVersion": 320,
     "bankDimensions": {
       "integerGlobals": 1037327,

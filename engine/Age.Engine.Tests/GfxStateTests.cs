@@ -4,6 +4,30 @@ using Xunit;
 public class GfxStateTests
 {
     [Fact]
+    public void SurfaceResourceQueryTracksLoadsAndBattleTransitionCopy()
+    {
+        var g = new GfxState();
+        Assert.Equal(-1, g.QueryField(0xc2));
+        g.SetSurface(0xc2, 0x01001234, -1);
+        long previous = g.QueryField(0xc2);
+        g.SetSurface(0xc2, 0x5678, -1);
+        g.SetSurface(0x2b, previous, -1);
+        Assert.Equal(0x01001234, g.QueryField(0x2b));
+        Assert.Equal(0x5678, g.QueryField(0xc2));
+        g.ClearRetainedObjects();
+        Assert.Equal(0x5678, g.QueryField(0xc2));
+        var restored = new GfxState();
+        restored.RestorePersistenceSnapshot(g.CapturePersistenceSnapshot());
+        Assert.Equal(0x01001234, restored.QueryField(0x2b));
+        g.CreateSurface(0xc2);
+        Assert.Equal(-1, g.QueryField(0xc2));
+        g.ReleaseSurfaceRange(0x2b, 1);
+        Assert.Equal(-1, g.QueryField(0x2b));
+        restored.ResetSceneContext();
+        Assert.Equal(-1, restored.QueryField(0x2b));
+    }
+
+    [Fact]
     public void QueryReturnsBoundSourceSlot()
     {
         // Native op 0x215 queries the retained-object map and returns obj+4. The default initializer zeroes

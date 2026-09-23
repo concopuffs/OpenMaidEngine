@@ -294,6 +294,10 @@ schedule construction, deadline/catch-up selection, and callback resumption opco
 `engine/Age.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
 restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string opcode
 dispatch; capture/apply helpers and persistent coordinator state remain in `VirtualMachine.cs`.
+`engine/Age.Engine/Persistence/NativeGfxSaveLayout.cs` owns the supported native graphics-record layouts
+used by the shared numbered-payload and semantic graphics codecs. The profile selects the layout through
+`NativeSaveIdentity`, including first-time saves; exact format details live in
+[SYS4 format notes](sys4-format-notes.md#kamidori-320-layout).
 `engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
 inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
 and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.

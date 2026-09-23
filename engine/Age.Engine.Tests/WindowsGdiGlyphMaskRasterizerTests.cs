@@ -11,6 +11,42 @@ public class WindowsGdiGlyphMaskRasterizerTests
     private const uint GdiError = 0xffffffff;
 
     [Fact]
+    public void KamidoriAspectModeKeepsBothTranslatedOpeningLinesWithinLayout()
+    {
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        var engine = new RetainedGlyphLayoutEngine(rasterizer);
+        var style = AdvTextStyle.Default with
+        {
+            PrimaryFontSize = 22, FontFace = "ＭＳ ゴシック", Bold = true,
+            LineSpacing = 10, AspectMode = 1,
+        };
+        var image = new RgbaImage(836, 139, new byte[836 * 139 * 4]);
+        string first = "Using power and magic passed down through the ages, a growing";
+        string second = "city-state produces new inventions every day, desired by all.";
+        var options = new GlyphTextLayoutOptions(63, 28, 63, 773, 113, true, style);
+        var oldMetrics = engine.Render(image, options with { Style = style with { AspectMode = 0 } },
+            ImmediateSurfaceTextRenderer.CreateRequests(first, style));
+        Assert.True(oldMetrics.WrappedLines == 1, $"count={first.Length} cursor={oldMetrics.CursorX},{oldMetrics.CursorY} records={oldMetrics.Records[0]}");
+        var rejected = engine.Render(image,
+            options with { CursorY = oldMetrics.CursorY + 32, Style = style with { AspectMode = 0 } },
+            ImmediateSurfaceTextRenderer.CreateRequests(second, style));
+        Assert.Equal(0, rejected.ConsumedGlyphs);
+        Assert.True(rejected.StoppedOnVerticalOverflow);
+
+        var a = engine.Render(image, options,
+            ImmediateSurfaceTextRenderer.CreateRequests(first, style));
+        Assert.Equal(first.Length, a.ConsumedGlyphs);
+        Assert.Equal(0, a.WrappedLines);
+        var b = engine.Render(image, options with { CursorY = a.CursorY + 32 },
+            ImmediateSurfaceTextRenderer.CreateRequests(second, style));
+        Assert.Equal(second.Length, b.ConsumedGlyphs);
+        Assert.Equal(0, b.WrappedLines);
+        Assert.False(b.StoppedOnVerticalOverflow);
+        Assert.Equal(60, b.CursorY);
+    }
+
+    [Fact]
     public void BackendSelectionIsExplicitAndDiagnostic()
     {
         if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out string availability))

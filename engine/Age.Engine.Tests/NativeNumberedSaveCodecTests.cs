@@ -1,18 +1,27 @@
 using Age.Engine.Model;
 using Age.Engine.Persistence;
+using Age.Engine.Sys4;
+using Age.Engine.Vm;
 using System.Buffers.Binary;
 
 public class NativeNumberedSaveCodecTests
 {
-    [Fact]
-    public void LayoutThreeRoundTripsNativeBanksFramesAndGfxRecords()
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
+
+    public NativeNumberedSaveCodecTests(Xunit.Abstractions.ITestOutputHelper output)
+        => _output = output;
+
+    [Theory]
+    [InlineData(0x2d4, 0xb54)]
+    [InlineData(0x2e4, 0xb94)]
+    public void LayoutThreeRoundTripsNativeBanksFramesAndGfxRecords(int recordSize, int nativeEntryStride)
     {
         var frames = new[]
         {
             new NativeSavedScriptFrame(-1, 0, new[] { 2, 4 }, 8, 7),
             new NativeSavedScriptFrame(0, 0x3389, Array.Empty<int>(), 3, -1),
         };
-        NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(frames) with
+        NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(frames, recordSize) with
         {
             SavedFrameOwner = 7,
             BgmTrackId = 9,
@@ -26,15 +35,15 @@ public class NativeNumberedSaveCodecTests
             GfxObjects =
             [
                 new NativeSavedGfxObject(0xcf08,
-                    Enumerable.Range(0, NativeNumberedSaveState.GfxRecordSize)
+                    Enumerable.Range(0, recordSize)
                         .Select(i => unchecked((byte)i)).ToArray()),
                 new NativeSavedGfxObject(0xcf09,
-                    Enumerable.Repeat((byte)0xa5, NativeNumberedSaveState.GfxRecordSize).ToArray()),
+                    Enumerable.Repeat((byte)0xa5, recordSize).ToArray()),
             ],
             RangeTransformFirst = 100,
             RangeTransformCount = 4,
             RangeTransformRecord = Enumerable.Repeat((byte)0x5a,
-                NativeNumberedSaveState.GfxRecordSize).ToArray(),
+                recordSize).ToArray(),
         };
 
         byte[] encoded = NativeNumberedSaveCodec.Encode(state);
@@ -60,11 +69,17 @@ public class NativeNumberedSaveCodecTests
         Assert.False(decoded.LegacyTightGfxLayout);
         Assert.Equal(state.RangeTransformRecord, decoded.RangeTransformRecord);
 
-        const int nativeEntryStride = (1 + NativeNumberedSaveState.GfxRecordSize) * 4;
-        int objectsAt = FindGfxObjects(encoded, 2, 0xcf08);
+        Assert.Equal(recordSize, decoded.GraphicsRecordSize);
+        int objectsAt = FindGfxObjects(encoded, 2, 0xcf08, recordSize);
         Assert.Equal(0xcf08, BinaryPrimitives.ReadInt32LittleEndian(encoded.AsSpan(objectsAt)));
         Assert.Equal(0xcf09, BinaryPrimitives.ReadInt32LittleEndian(
             encoded.AsSpan(objectsAt + nativeEntryStride)));
+        Assert.Throws<InvalidDataException>(() => NativeNumberedSaveCodec.Decode(
+            encoded, recordSize == 0x2d4 ? 0x2e4 : 0x2d4));
+        Assert.Throws<InvalidDataException>(() => NativeNumberedSaveCodec.Decode(
+            encoded.AsSpan(0, objectsAt + nativeEntryStride + 8)));
+        BinaryPrimitives.WriteInt32LittleEndian(encoded.AsSpan(objectsAt - 8), 0x2f4);
+        Assert.Throws<InvalidDataException>(() => NativeNumberedSaveCodec.Decode(encoded));
     }
 
     [Fact]
@@ -194,7 +209,7 @@ public class NativeNumberedSaveCodecTests
     }
 
     [Fact]
-    public void InstalledKamidoriExposesObservedBanksAndUnsupportedGfxRecordWhenPresent()
+    public void InstalledKamidoriLayoutThreeRoundTripsBanksGfxAndHistoryWhenPresent()
     {
         string eushullyRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Eushully");
@@ -218,7 +233,8 @@ public class NativeNumberedSaveCodecTests
             });
         if (path == null) return;
 
-        NativeSaveDocument document = NativeSaveContainerCodec.Decode(File.ReadAllBytes(path));
+        byte[] source = File.ReadAllBytes(path);
+        NativeSaveDocument document = NativeSaveContainerCodec.Decode(source);
         int cutoff = BinaryPrimitives.ReadInt32LittleEndian(document.Payload);
         int banksAt = checked(0x5718 + cutoff * 0x414);
         int[] counts = Enumerable.Range(0, 6)
@@ -233,17 +249,109 @@ public class NativeNumberedSaveCodecTests
         at += 4 + stringDwords * 4
             + counts[3] * 4 + counts[4] * 4 + counts[5] * 4;
         Assert.Equal(0x2e4, BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(at)));
-        Assert.Contains(
-            "gfx record size 0x2e4",
-            Assert.Throws<InvalidDataException>(
-                () => NativeNumberedSaveCodec.Decode(document.Payload)).Message);
+        // SYS4433 writer @0040d1e0 copies 0xb9 DWORDs but advances the DWORD cursor
+        // by 0x2e5 per handle+record; loader @0040faa0 mirrors this sparse layout.
+        int objectCount = BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(at + 4));
+        Assert.True(objectCount > 0);
+        int objectsAt = at + 8;
+        int rangeAt = checked(objectsAt + objectCount * 0xb94);
+        Assert.True(rangeAt + 8 + 0x2e4 <= document.Payload.Length);
+        int[] handles = Enumerable.Range(0, objectCount)
+            .Select(index => BinaryPrimitives.ReadInt32LittleEndian(
+                document.Payload.AsSpan(objectsAt + index * 0xb94)))
+            .ToArray();
+        Assert.Equal(handles.OrderBy(handle => handle).Distinct(), handles);
+
+        int expectedDwords = checked(cutoff * 0x105 + 0x53ea + counts.Sum()
+            + stringDwords + 0x2f1 + objectCount * 0x2e8);
+        Assert.Equal((expectedDwords - 2) * 4, document.Payload.Length);
+        int nonzeroRotationCaches = 0;
+        foreach (int index in Enumerable.Range(0, objectCount + 1))
+        {
+            int recordAt = index < objectCount ? objectsAt + index * 0xb94 + 4 : rangeAt + 8;
+            ReadOnlySpan<byte> tail = document.Payload.AsSpan(recordAt + 0x2d4, 16);
+            if (tail.ContainsAnyExcept((byte)0)) nonzeroRotationCaches++;
+            for (int component = 0; component < 4; component++)
+                Assert.True(float.IsFinite(BitConverter.Int32BitsToSingle(
+                    BinaryPrimitives.ReadInt32LittleEndian(tail[(component * 4)..]))));
+        }
+        var history = new AdvTextHistory();
+        NativeTextHistoryCodec.DecodeInto(source.AsSpan(document.BytesConsumed), history);
+        _output.WriteLine($"Kamidori 3.20: payload={document.Payload.Length}, cutoff={cutoff}, "
+            + $"objects={objectCount}, handles={handles[0]}..{handles[^1]}, stride=0xb94, "
+            + $"nonzero rotation caches={nonzeroRotationCaches}, "
+            + $"range first={BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(rangeAt))}, "
+            + $"range count={BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(rangeAt + 4))}, "
+            + $"history bytes={source.Length - document.BytesConsumed}");
+        var identity = Age.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!
+            .Persistence.CreateExpectedNativeIdentity();
+        Assert.Equal(document.Metadata.GameId, identity.GameId);
+        identity.Validate(document.Metadata, numbered: true);
+        NativeNumberedSaveState decoded = NativeNumberedSaveCodec.Decode(document.Payload, 0x2e4);
+        NativeNumberedSaveState roundTrip = NativeNumberedSaveCodec.Decode(
+            NativeNumberedSaveCodec.Encode(decoded), 0x2e4);
+        Assert.Equal(decoded.IntegerGlobals, roundTrip.IntegerGlobals);
+        Assert.Equal(decoded.FloatGlobals, roundTrip.FloatGlobals);
+        Assert.Equal(decoded.StringGlobals, roundTrip.StringGlobals);
+        Assert.Equal(decoded.PointerGlobals, roundTrip.PointerGlobals);
+        Assert.Equal(decoded.PointerStrings, roundTrip.PointerStrings);
+        Assert.Equal(decoded.RangeTransformRecord, roundTrip.RangeTransformRecord);
+        Assert.Equal(handles, roundTrip.GfxObjects.Select(item => (int)item.Handle));
+        for (int index = 0; index < objectCount; index++)
+            Assert.Equal(decoded.GfxObjects[index].Record, roundTrip.GfxObjects[index].Record);
+
+        // Exercise semantic import and fresh capture through the ordinary shared opcodes too.
+        // All writes target an isolated copy, never the installed native save directory.
+        string temporaryRoot = Path.Combine(Path.GetTempPath(), "age-kamidori-save-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temporaryRoot);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(temporaryRoot, "SAVE00.DAT"), source);
+            var store = new DirectoryNativeDatStore(temporaryRoot, identity);
+            // The catalog exposes the shared data-only import handler; SYS4433's shipped
+            // dispatch omits 0x19f, so full native-script continuation is checked separately.
+            OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
+            Script script = ScriptAssembler.Assemble(table, "SAVE_ROUNDTRIP.BIN",
+            [
+                (0x19f, [new Operand(3, 0x110000), new Operand(0, 0)]),
+                (0x19e, [new Operand(3, 0x110001), new Operand(0, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []);
+            var vm = new VirtualMachine(script, table, new RecordingHost(), nativeDatStore: store);
+            vm.Run();
+            Assert.Equal(0, vm.Globals[0x110000]);
+            Assert.Equal(0, vm.Globals[0x110001]);
+            NativeNumberedSaveState captured = NativeNumberedSaveCodec.Decode(
+                store.LoadNumberedFile(1)!.Document.Payload, 0x2e4);
+            Assert.Equal(decoded.IntegerGlobals, captured.IntegerGlobals);
+            Assert.Equal(decoded.FloatGlobals, captured.FloatGlobals);
+            Assert.Equal(decoded.StringGlobals, captured.StringGlobals);
+            Assert.Equal(decoded.RangeTransformFirst, captured.RangeTransformFirst);
+            Assert.Equal(decoded.RangeTransformCount, captured.RangeTransformCount);
+            Assert.Equal(decoded.RangeTransformRecord[0x2d4..], captured.RangeTransformRecord[0x2d4..]);
+            Assert.Equal(objectCount, captured.GfxObjects.Count);
+            for (int index = 0; index < objectCount; index++)
+            {
+                Assert.Equal(decoded.GfxObjects[index].Handle, captured.GfxObjects[index].Handle);
+                byte[] original = decoded.GfxObjects[index].Record;
+                byte[] restored = captured.GfxObjects[index].Record;
+                Assert.Equal(original[4..0x30], restored[4..0x30]);
+                Assert.Equal(original[0x68..0x6c], restored[0x68..0x6c]);
+                Assert.Equal(original[0x2d4..], restored[0x2d4..]);
+            }
+        }
+        finally
+        {
+            Directory.Delete(temporaryRoot, recursive: true);
+        }
     }
 
-    private static int FindGfxObjects(byte[] payload, int count, int firstHandle)
+    private static int FindGfxObjects(byte[] payload, int count, int firstHandle,
+        int recordSize = NativeGfxSaveLayout.BaseRecordSize)
     {
         for (int offset = 0; offset <= payload.Length - 12; offset += 4)
             if (BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset)) ==
-                    NativeNumberedSaveState.GfxRecordSize
+                    recordSize
                 && BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset + 4)) == count
                 && BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(offset + 8)) == firstHandle)
                 return offset + 8;

@@ -422,14 +422,60 @@ The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, glo
 `[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and
 `0x2aea` (channel 2), and 211 retained graphics objects.
 
-#### Kamidori 3.20 layout observation — HEADER AND BANKS CONFIRMED; GRAPHICS UNSUPPORTED
+#### Kamidori 3.20 layout
 
 Kamidori's installed `SAVE00.DAT` reaches the same six-count variable-bank position and records
 `[1037327,1,802,1,1,1]`. Its following graphics record size is `0x2e4`, not Himegari's `0x2d4`.
-The current layout-3 codec cannot preserve or recreate that larger record, so the `kamidori` profile records
-the observed identity and dimensions but is explicitly read-only. This is evidence of a persistence-layout
-difference associated with the observed SYS4433-era game; it is not yet evidence that every SYS4433 title
-shares the same layout.
+The 2026-09-21 native writer/reader investigation confirms that the common fixed prefix, frame size, and
+six-bank framing above still apply. Graphics keeps the same sparse DWORD-pointer convention:
+
+| Layout component | Himegari 3.10 | Kamidori 3.20 |
+|---|---:|---:|
+| Meaningful object/range record bytes | `0x2d4` | `0x2e4` |
+| Handle + sparse object entry stride, bytes | `0xb54` | `0xb94` |
+| Graphics allocation term, DWORDs | `0x2e1 + count * 0x2d8` | `0x2f1 + count * 0x2e8` |
+
+Kamidori preserves the old field offsets through `+0x2d0` and appends four float32 values:
+
+| Record offset | Meaning | Native initial value |
+|---|---|---|
+| `+0x2d4`, `+0x2d8`, `+0x2dc` | Cached evaluated one-shot rotation axis X/Y/Z | Copy current axis at `+0x1ec/+0x1f0/+0x1f4`, initially zero |
+| `+0x2e0` | Cached evaluated one-shot rotation angle, **radians** | Zero |
+
+These fields are live rendering state, not padding. They are separate from the authored current/target
+axis and angle fields in the shared prefix. Preserve their bytes when importing an existing save;
+newly captured records must populate a cache consistent with the evaluated rotation. Native initialization
+also seeds the two cyclic matrices at `+0x250/+0x290` to identity, in addition to the six one-shot matrices.
+Native call sites and the display-mode consumer are documented in
+[engine-re.md](engine-re.md#kamidori-numbered-save-graphics-extension-2026-09-21).
+
+The installed `SAVE00.DAT` independently validates the allocation formula and all 917 ordered unique
+handles (`0..51100`) at the sparse stride. It has cutoff 1, a 6,972,648-byte decoded payload, range
+first/count `1/49999`, and a 7,461-byte history tail accepted by `NativeTextHistoryCodec`. All appended
+rotation caches in that fixture, including the range record, are zero; it does **not** validate nonzero
+cache roundtrips. `NativeNumberedSaveCodecTests.InstalledKamidoriLayoutThreeRoundTripsBanksGfxAndHistoryWhenPresent`
+checks these structural invariants and roundtrips the installed records through both the payload codec and
+VM semantic load/save using an isolated temporary copy. Nonzero caches are covered by synthetic object
+and selected-range animation tests, including import/re-save and nested saved-frame continuation.
+
+As of 2026-09-21, both layouts are supported by the shared persistence codecs and Kamidori writes are
+enabled. The profile's `numberedGfxRecordSize` flows through `NativeSaveIdentity` into fresh capture;
+`NativeGfxSaveLayout` owns supported sizes, sparse stride, and allocation terms. File import checks the
+declared layout against the selected identity. Save opcodes remain shared. The Kamidori manifest's save
+game ID is `神採りアルケミーマイスター`, matching the native header; its former mojibake value prevented
+native-file acceptance even after graphics decoding succeeded.
+
+The shared semantic codec also writes anchor/base-position/cyclic-axis vectors as native float32 and
+preserves unchanged imported fractional bits through the integer-facing model. For old Himegari port
+records, non-finite/subnormal vector components are interpreted as legacy integer bytes and normalized
+on write; that compatibility interpretation is never applied to Kamidori records. The spritesheet start
+timestamp at `+0x21c` is now retained alongside the other cyclic clocks.
+
+Installed original and translated Kamidori scripts pass full-load continuation through the terminal
+`0xae` to the saved FIELD instruction. The managed suite and both Godot profile self-tests pass;
+Kamidori startup reports `persistence=read-write`. These gates establish port operation and native-format
+structure; opening a port-authored slot in the original AGE executable has not been tested. Evidence is
+scoped to the observed Kamidori SYS4433 executable, not every title using that script revision.
 
 #### Appended text-history tail
 

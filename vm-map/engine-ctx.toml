@@ -168,9 +168,9 @@ type = "int"
 note = "retained_gfx_manager+0x408 std::map handle->object; 0x1f6 clears, geometry/draw get-or-create, 0x215 queries, 0x1f7 erases"
 [[field]]
 offset = 0x46d14
-name = "query_table_46d14"
-type = "void*"
-note = "stride-0x14 table read by op 0x216"
+name = "surface_record_resource_id"
+type = "int"
+note = "first resource-id word of the inline stride-0x14 surface-record table; op 0x216 reads base + slot*0x14, asset loads maintain resource IDs and empty/blank records use -1"
 [[field]]
 offset = 0x4d7c
 name = "shared_profile_state"

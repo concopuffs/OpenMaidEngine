@@ -52,6 +52,9 @@ public sealed partial class GfxState
         public bool TranslationEnabled;
         public (double X, double Y, double Z, double Angle) RotationCurrent;
         public (double X, double Y, double Z, double Angle) RotationTarget;
+        // SYS4433 appends the last evaluated axis and radian angle to its native save record.
+        // Null means no evaluated/imported cache exists yet; persistence derives it from current.
+        public (double X, double Y, double Z, double Radians)? EvaluatedRotationCache;
         public long RotationDelayMs, RotationDurationMs;
         public bool RotationChannelEnabled;
         // Op 0x242 writes obj+0x2d0. Bit 0 detaches the finite one-shot group from the blocking-dirty
@@ -95,7 +98,6 @@ public sealed partial class GfxState
     private long _rangeTransformFirst, _rangeTransformCount;
     private GfxObject _rangeTransform = new();
 
-    private readonly Dictionary<long, long> _fieldTable = new();   // ctx+0x46d14 (0x216); no family writer -> default 0
     public long CurrentObject { get; private set; }
     /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero.</summary>
     public int DefaultObjectSlot { get; private set; }
@@ -294,7 +296,15 @@ public sealed partial class GfxState
                 MarkRetainedMutation();
             }
     }
-    public long QueryField(long idx) => _fieldTable.TryGetValue(idx, out var v) ? v : 0;
+    /// <summary>Opcode 0x216 reads the surface record's resource id, not an object field.</summary>
+    public long QueryField(long idx)
+    {
+        lock (_lock)
+            return idx >= int.MinValue && idx <= int.MaxValue
+                && !_createdSurfaces.Contains((int)idx)
+                && _surfaces.TryGetValue((int)idx, out var surface)
+                    ? surface.ResId : -1;
+    }
 
     public void Release(long handle)
     {
@@ -361,6 +371,7 @@ public sealed partial class GfxState
             TranslationDelayMs = s.TranslationDelayMs, TranslationDurationMs = s.TranslationDurationMs,
             TranslationEnabled = s.TranslationEnabled,
             RotationCurrent = s.RotationCurrent, RotationTarget = s.RotationTarget,
+            EvaluatedRotationCache = s.EvaluatedRotationCache,
             RotationDelayMs = s.RotationDelayMs, RotationDurationMs = s.RotationDurationMs,
             RotationChannelEnabled = s.RotationChannelEnabled,
             OneShotAnimationControlFlags = s.OneShotAnimationControlFlags,

@@ -44,7 +44,8 @@ public sealed class PerformanceFrameLog : IDisposable
             "integer_layers,fractional_translation_layers,axis_aligned_scale_layers," +
             "general_affine_layers,affine_layers,singular_layers,dynamic_layers,opaque_layers,alpha_layers," +
             "additive_layers,source_pixels,candidate_pixels,full_screen_layers,script,offset,opcode," +
-            "present_script,present_offset,present_opcode");
+            "present_script,present_offset,present_opcode," +
+            "gpu_blur_scan_ms,gpu_blur_scan_allocated_bytes,gpu_transform_ms,gpu_transform_allocated_bytes,gpu_object_lookup_ms,gpu_object_lookup_allocated_bytes,gpu_texture_lookup_ms,gpu_texture_lookup_allocated_bytes,gpu_sprite_update_ms,gpu_sprite_update_allocated_bytes");
     }
 
     public static long Timestamp() => Stopwatch.GetTimestamp();
@@ -70,6 +71,36 @@ public sealed class PerformanceFrameLog : IDisposable
             Gen2Start = GC.CollectionCount(2),
         };
         _frameOpen = true;
+    }
+
+    public void RecordGpuBlurScan(long ticks, long allocatedBytes)
+    {
+        _current.GpuBlurScanTicks += ticks;
+        _current.GpuBlurScanAllocatedBytes += allocatedBytes;
+    }
+
+    public void RecordGpuTransform(long ticks, long allocatedBytes)
+    {
+        _current.GpuTransformTicks += ticks;
+        _current.GpuTransformAllocatedBytes += allocatedBytes;
+    }
+
+    public void RecordGpuObjectLookup(long ticks, long allocatedBytes)
+    {
+        _current.GpuObjectLookupTicks += ticks;
+        _current.GpuObjectLookupAllocatedBytes += allocatedBytes;
+    }
+
+    public void RecordGpuTextureLookup(long ticks, long allocatedBytes)
+    {
+        _current.GpuTextureLookupTicks += ticks;
+        _current.GpuTextureLookupAllocatedBytes += allocatedBytes;
+    }
+
+    public void RecordGpuSpriteUpdate(long ticks, long allocatedBytes)
+    {
+        _current.GpuSpriteUpdateTicks += ticks;
+        _current.GpuSpriteUpdateAllocatedBytes += allocatedBytes;
     }
 
     public void RecordPulse(long ticks) => _current.PulseTicks += ticks;
@@ -265,7 +296,12 @@ public sealed class PerformanceFrameLog : IDisposable
         Append(b, f.AdditiveLayers); Append(b, f.SourcePixels); Append(b, f.CandidatePixels);
         Append(b, f.FullScreenLayers); AppendEscaped(b, f.Script); Append(b, f.Offset);
         Append(b, f.Opcode); AppendEscaped(b, f.PresentScript); Append(b, f.PresentOffset);
-        Append(b, f.PresentOpcode, last: true);
+        Append(b, f.PresentOpcode);
+        AppendTicks(b, f.GpuBlurScanTicks); Append(b, f.GpuBlurScanAllocatedBytes);
+        AppendTicks(b, f.GpuTransformTicks); Append(b, f.GpuTransformAllocatedBytes);
+        AppendTicks(b, f.GpuObjectLookupTicks); Append(b, f.GpuObjectLookupAllocatedBytes);
+        AppendTicks(b, f.GpuTextureLookupTicks); Append(b, f.GpuTextureLookupAllocatedBytes);
+        AppendTicks(b, f.GpuSpriteUpdateTicks); Append(b, f.GpuSpriteUpdateAllocatedBytes, last: true);
         _writer.WriteLine(b.ToString());
     }
 
@@ -317,6 +353,11 @@ public sealed class PerformanceFrameLog : IDisposable
         public long IntegerLayers, FractionalTranslationLayers, AxisAlignedScaleLayers;
         public long GeneralAffineLayers, AffineLayers, SingularLayers, DynamicLayers;
         public long OpaqueLayers, AlphaLayers, AdditiveLayers, SourcePixels, CandidatePixels, FullScreenLayers;
+        public long GpuBlurScanTicks, GpuBlurScanAllocatedBytes;
+        public long GpuTransformTicks, GpuTransformAllocatedBytes;
+        public long GpuObjectLookupTicks, GpuObjectLookupAllocatedBytes;
+        public long GpuTextureLookupTicks, GpuTextureLookupAllocatedBytes;
+        public long GpuSpriteUpdateTicks, GpuSpriteUpdateAllocatedBytes;
         public long GpuDrawItems, GpuTextureUploads, GpuTextureUploadTicks;
     }
 }

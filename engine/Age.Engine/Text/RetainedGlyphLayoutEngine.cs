@@ -48,14 +48,29 @@ public sealed class RetainedGlyphLayoutEngine
         var observed = AdvTextOverflowFlags.None;
         bool stopped = false;
 
+        // SYS4433 0x2db: layout uses the reference MS Gothic glyph's advance,
+        // independently of the selected face's ink/text extent (native 0x45b710).
+        GlyphMask? aspectReference = options.Style.AspectMode != 0 && glyphs.Count > 0
+            ? _rasterizer.Rasterize(ImmediateSurfaceTextRenderer.CreateRequests(
+                "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy)[0])
+            : null;
+
         foreach (GlyphRasterRequest request in glyphs)
         {
             ArgumentNullException.ThrowIfNull(request);
             GlyphMask mask = _rasterizer.Rasterize(request);
-            int right = checked(cursorX + mask.CellWidth);
-            int bottom = checked(cursorY + mask.CellHeight);
+            int advanceX = aspectReference == null ? mask.CellAdvanceX
+                : aspectReference.CellAdvanceX / (request.Cp932Code is <= 0xff ? 2 : 1);
+            int cellWidth = aspectReference == null ? mask.CellWidth : advanceX;
+            int cellHeight = aspectReference == null ? mask.CellHeight
+                : (options.Style.PrimaryFontSize > 0 ? options.Style.PrimaryFontSize : request.PixelHeight)
+                  + (options.Style.RenderMode != 0 ? options.Style.EffectOffsetY : 0);
+            int right = checked(cursorX + cellWidth);
+            int bottom = checked(cursorY + cellHeight);
+            int overflowBottom = aspectReference == null ? bottom
+                : checked(cursorY + aspectReference.CellAdvanceY);
             AdvTextOverflowFlags overflow = AdvRetainedTextContract.CheckOverflow(
-                options.RightBound, options.BottomBound, right, bottom);
+                options.RightBound, options.BottomBound, right, overflowBottom);
             observed |= overflow;
 
             if (overflow == AdvTextOverflowFlags.Vertical)
@@ -76,8 +91,8 @@ public sealed class RetainedGlyphLayoutEngine
                 cursorX = options.LineOriginX;
                 cursorY = checked(cursorY + fontHeight + options.Style.LineSpacing);
                 wrappedLines++;
-                right = checked(cursorX + mask.CellWidth);
-                bottom = checked(cursorY + mask.CellHeight);
+                right = checked(cursorX + cellWidth);
+                bottom = checked(cursorY + cellHeight);
             }
 
             AgeGlyphMaskCompositor.DrawGlyph(
@@ -92,8 +107,8 @@ public sealed class RetainedGlyphLayoutEngine
                 bottom,
                 request.PixelHeight,
                 options.Style));
-            cursorX = checked(cursorX + mask.CellAdvanceX);
-            cursorY = checked(cursorY + mask.CellAdvanceY);
+            cursorX = checked(cursorX + advanceX);
+            if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
         }
 
         return new GlyphTextLayoutResult(

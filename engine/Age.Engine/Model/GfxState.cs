@@ -36,7 +36,6 @@ public sealed partial class GfxState
         {
             _objects.Clear();
             _orderedObjectHandles.Clear();
-            _fieldTable.Clear();
             _surfaces.Clear();
             _createdSurfaces.Clear();
             _reloadableSurfaces.Clear();

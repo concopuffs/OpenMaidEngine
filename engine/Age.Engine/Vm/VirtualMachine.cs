@@ -970,9 +970,10 @@ public sealed partial class VirtualMachine
                 i - 1, frame.Script.PackedId, returns, resumeIndex, callTargetIndex);
         }
 
+        int gfxRecordSize = _nativeDatStore.Identity.NumberedGfxRecordSize;
         NativeNumberedSaveState basis = _retainedNativeNumberedState
-            ?? NativeNumberedSaveCodec.Empty(frames);
-        var gfx = NativeGfxPersistenceCodec.Capture(Gfx);
+            ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize);
+        var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize);
         return basis with
         {
             BgmTrackId = unchecked((int)_currentBgmTrackId),
@@ -990,6 +991,7 @@ public sealed partial class VirtualMachine
             RangeTransformFirst = gfx.RangeFirst,
             RangeTransformCount = gfx.RangeCount,
             RangeTransformRecord = gfx.RangeRecord,
+            GraphicsRecordSize = gfxRecordSize,
         };
     }
 
@@ -1000,7 +1002,8 @@ public sealed partial class VirtualMachine
         {
             NativeNumberedSaveFile? file = _nativeDatStore.LoadNumberedFile(slot);
             if (file == null) return false;
-            NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(file.Document.Payload);
+            NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(
+                file.Document.Payload, _nativeDatStore.Identity.NumberedGfxRecordSize);
             ApplyNumberedState(state);
             _retainedNativeNumberedState = state;
             _accumulatedPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;

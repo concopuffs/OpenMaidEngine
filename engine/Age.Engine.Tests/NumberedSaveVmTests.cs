@@ -14,13 +14,17 @@ public class NumberedSaveVmTests
         new(NativeSaveMagic.S4SD, 0x4a343234, "numbered-vm-test", 3, 10, 0x42323234,
             new NativeSaveBankDimensions(402459, 1, 789, 1, 1, 1));
 
-    [Fact]
-    public void SaveOpcodeWritesLayoutThreeStateHistoryAndRetainedGfx()
+    [Theory]
+    [InlineData("himegari", 0x2d4)]
+    [InlineData("kamidori", 0x2e4)]
+    public void SaveOpcodeWritesLayoutThreeStateHistoryAndRetainedGfx(string profile, int recordSize)
     {
         string root = NewTemporaryDirectory();
         try
         {
-            var store = new DirectoryNativeDatStore(root, Identity);
+            var identity = Age.Engine.Profiles.GameProfileRegistry.BuiltIn.Find(profile)!
+                .Persistence.CreateExpectedNativeIdentity();
+            var store = new DirectoryNativeDatStore(root, identity);
             Script script = WithPackedId(ScriptAssembler.Assemble(Table, "SAVE_TEST.BIN",
             [
                 (0xbf, [new Operand(Immediate, 24)]),
@@ -48,6 +52,10 @@ public class NumberedSaveVmTests
             vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 50, 60);
             vm.Gfx.SetCurrentTranslation(100, (7, 8, 9));
             vm.Gfx.SetRotationChannel(100, 0, 500, (0, 0, 1), 90);
+            vm.Gfx.SetRangeTransform(100, 1, (11, 22, 33));
+            vm.Gfx.SetRangeRotationChannel(0, 500, (0, 1, 0), 180);
+            vm.Gfx.SnapshotVisibleObjects(100);
+            vm.Gfx.SnapshotVisibleObjects(350);
 
             vm.Run();
 
@@ -55,7 +63,8 @@ public class NumberedSaveVmTests
             Assert.Equal(24, vm.Globals[0x21]);
             NativeNumberedSaveFile file = store.LoadNumberedFile(2)!;
             NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(file.Document.Payload);
-            Assert.Equal(0x6241b, state.IntegerGlobals.Count);
+            Assert.Equal(identity.BankDimensions!.IntegerGlobals, state.IntegerGlobals.Count);
+            Assert.Equal(recordSize, state.GraphicsRecordSize);
             Assert.Equal(456, state.IntegerGlobals[0x123]);
             Assert.Equal(24, state.BgmTrackId);
             Assert.Equal(0x3321, state.SoundEffectResourceIds[1]);
@@ -63,7 +72,17 @@ public class NumberedSaveVmTests
             Assert.Equal(0x77u, state.Frames.Single().ScriptId);
             NativeSavedGfxObject savedObject =
                 Assert.Single(state.GfxObjects, item => item.Handle == 100);
-            Assert.Equal(0, ReadGfxField(savedObject.Record, 0x34));
+            Assert.Equal(100, ReadGfxField(savedObject.Record, 0x34));
+            Assert.Equal(recordSize, savedObject.Record.Length);
+            Assert.Equal(BitConverter.SingleToInt32Bits(50), ReadGfxField(savedObject.Record, 0x24));
+            Assert.Equal(BitConverter.SingleToInt32Bits(60), ReadGfxField(savedObject.Record, 0x28));
+            if (recordSize == 0x2e4)
+            {
+                Assert.Equal(BitConverter.SingleToInt32Bits(0.5f), ReadGfxField(savedObject.Record, 0x2dc));
+                Assert.Equal(BitConverter.SingleToInt32Bits(MathF.PI / 4), ReadGfxField(savedObject.Record, 0x2e0));
+                Assert.Equal(BitConverter.SingleToInt32Bits(0.5f), ReadGfxField(state.RangeTransformRecord, 0x2d8));
+                Assert.Equal(BitConverter.SingleToInt32Bits(MathF.PI / 2), ReadGfxField(state.RangeTransformRecord, 0x2e0));
+            }
             Assert.Equal(-1, ReadGfxField(savedObject.Record, 0x60));
             Assert.Equal(0, ReadGfxField(savedObject.Record, 0x238));
             Assert.Equal(-1, ReadGfxField(savedObject.Record, 0x240));
@@ -100,13 +119,16 @@ public class NumberedSaveVmTests
         }
     }
 
-    [Fact]
-    public void FullLoadRestoresBanksThenResumesSavedScriptThroughOpcodeAe()
+    [Theory]
+    [InlineData(0x2d4, false)]
+    [InlineData(0x2d4, true)]
+    [InlineData(0x2e4, false)]
+    public void FullLoadRestoresBanksThenResumesSavedScriptThroughOpcodeAe(int recordSize, bool oldIntegerVectors)
     {
         string root = NewTemporaryDirectory();
         try
         {
-            var store = new DirectoryNativeDatStore(root, Identity);
+            var store = new DirectoryNativeDatStore(root, Identity with { NumberedGfxRecordSize = recordSize });
             Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
             [
                 (Table.ByLabel("mov")!.Value,
@@ -137,11 +159,17 @@ public class NumberedSaveVmTests
                     [new Operand(GlobalInt, 0x502), new Operand(Immediate, 1)]),
                 (0x2, Array.Empty<Operand>()),
             ], []), 0x90);
+            byte[] record = NativeGfxRecord(3, recordSize);
+            if (oldIntegerVectors)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(record.AsSpan(0x24), 50);
+                BinaryPrimitives.WriteInt32LittleEndian(record.AsSpan(0x28), 60);
+            }
             NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(
             [
                 new NativeSavedScriptFrame(-1, 0x88, Array.Empty<int>(), -1, 0),
                 new NativeSavedScriptFrame(0, 0x89, Array.Empty<int>(), -1, -1),
-            ]) with
+            ], recordSize) with
             {
                 BgmTrackId = 24,
                 SoundEffectResourceIds =
@@ -156,7 +184,7 @@ public class NumberedSaveVmTests
                 PointerStrings = [0],
                 LocalPointerScratch = [0],
                 SurfaceRecords = NativeSurfaceRecords(3, 0x1234, 0xff00ff),
-                GfxObjects = [new NativeSavedGfxObject(100, NativeGfxRecord(3))],
+                GfxObjects = [new NativeSavedGfxObject(100, record)],
             };
             var history = new AdvTextHistory();
             history.DefineLayout(1, 100, 50, 0, 0);
@@ -231,13 +259,15 @@ public class NumberedSaveVmTests
         }
     }
 
-    [Fact]
-    public void FullLoadReestablishesSaveBoundaryBeforeNestedSaveUiWritesAnotherSlot()
+    [Theory]
+    [InlineData(0x2d4)]
+    [InlineData(0x2e4)]
+    public void FullLoadReestablishesSaveBoundaryBeforeNestedSaveUiWritesAnotherSlot(int recordSize)
     {
         string root = NewTemporaryDirectory();
         try
         {
-            var store = new DirectoryNativeDatStore(root, Identity);
+            var store = new DirectoryNativeDatStore(root, Identity with { NumberedGfxRecordSize = recordSize });
             int callScript = Table.ByLabel("call-script")!.Value;
             Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
             [
@@ -261,13 +291,13 @@ public class NumberedSaveVmTests
                 (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
                 (0x2, Array.Empty<Operand>()),
             ], []), 0x99);
-            byte[] opaqueRecord = NativeGfxRecord(3);
+            byte[] opaqueRecord = NativeGfxRecord(3, recordSize);
             BinaryPrimitives.WriteInt32LittleEndian(opaqueRecord.AsSpan(0x68), 0x12345678);
             NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
             [
                 new NativeSavedScriptFrame(-1, 0x88, [], 8, 0),
                 new NativeSavedScriptFrame(0, 0x89, [], -1, -1),
-            ]) with
+            ], recordSize) with
             {
                 GfxObjects = [new NativeSavedGfxObject(100, opaqueRecord)],
             };
@@ -296,6 +326,9 @@ public class NumberedSaveVmTests
             Assert.Equal(
                 0x12345678,
                 ReadGfxField(Assert.Single(state.GfxObjects).Record, 0x68));
+            Assert.Equal(recordSize, state.GraphicsRecordSize);
+            if (recordSize == 0x2e4)
+                Assert.Equal(opaqueRecord[0x2d4..], Assert.Single(state.GfxObjects).Record[0x2d4..]);
 
             Script reloader = WithPackedId(ScriptAssembler.Assemble(Table, "RELOADER.BIN",
             [
@@ -534,9 +567,9 @@ public class NumberedSaveVmTests
         => BinaryPrimitives.ReadInt32LittleEndian(
             state.SurfaceRecords.AsSpan(slot * 20 + offset));
 
-    private static byte[] NativeGfxRecord(int sourceSlot)
+    private static byte[] NativeGfxRecord(int sourceSlot, int recordSize = NativeGfxSaveLayout.BaseRecordSize)
     {
-        byte[] result = new byte[NativeNumberedSaveState.GfxRecordSize];
+        byte[] result = new byte[recordSize];
         void Write(int offset, int value)
             => BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(offset), value);
         Write(0, 1);
@@ -545,8 +578,8 @@ public class NumberedSaveVmTests
         Write(0x0c, 2);
         Write(0x10, 31);
         Write(0x14, 42);
-        Write(0x24, 50);
-        Write(0x28, 60);
+        Write(0x24, BitConverter.SingleToInt32Bits(50));
+        Write(0x28, BitConverter.SingleToInt32Bits(60));
         Write(0x60, -1);
         Write(0x64, -1);
         foreach (int matrixOffset in new[] { 0x6c, 0xac, 0xec, 0x12c, 0x16c, 0x1ac })
@@ -557,6 +590,13 @@ public class NumberedSaveVmTests
             Write(matrixOffset + 0x3c, BitConverter.SingleToInt32Bits(1));
         }
         Write(0x240, -1);
+        if (recordSize == 0x2e4)
+        {
+            Write(0x2d4, BitConverter.SingleToInt32Bits(0.25f));
+            Write(0x2d8, BitConverter.SingleToInt32Bits(-0.5f));
+            Write(0x2dc, BitConverter.SingleToInt32Bits(1));
+            Write(0x2e0, BitConverter.SingleToInt32Bits(0.75f));
+        }
         return result;
     }
 

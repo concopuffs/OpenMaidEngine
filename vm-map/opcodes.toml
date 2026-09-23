@@ -5553,12 +5553,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "query-gfx-field?"
 category = "draw"
-summary = "0x216 (out)(idx) — handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). The generic instruction length is 5 dwords. A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table."
+summary = "(out)(surface_slot) - return the packed resource id in the surface record, or -1 for an empty/created surface. Legacy mnemonic query-gfx-field? is retained for compatibility."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x42a0f0; reads ctx+0x46d14[operand2 * 0x14], writes operand1 via FUN_00425fb0(1,·)."
+evidence = "SYS4422 handler 0x42a0f0 reads EngineCtx+0x46d14 + slot*0x14; SYS4433 handler 0x42b010 reads EngineCtx+0x4af9c + slot*0x14. These are surface-record resource words, not an independent object-field table. Native gfx_surface_load_asset@0x477c40 maintains the SYS4422 record; initial/blank records use -1. Installed Kamidori loose BTL.BIN@0x30e0 queries old slot 0xc2+side, then @0x319d reloads the returned id into transition slot 0x2b+side after replacing the primary texture."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5567,7 +5567,7 @@ observed_types = ["g-int", "l-int"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "idx"
+role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
 
 [[opcode]]
@@ -10889,7 +10889,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = [
-  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, text resource rebuild, glyph measurement, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. SYS4422 has no installed handler in this slot." }
+  { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, text resource rebuild, glyph measurement, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. Live ADV worker adv_text_append_horizontal_glyph_records@0x45b710 uses MS Gothic reference CP932 0x8c83 gmCellIncX/Y at text-manager+0x313e8/+0x313ea for nonzero-mode overflow and horizontal advance: single-byte codes use half X, double-byte codes full X. Record bottom uses requested font size plus effect Y for nonzero render mode, independently of the overflow metric. SYS4422 has no installed handler in this slot." }
 ]
 
 [[opcode]]

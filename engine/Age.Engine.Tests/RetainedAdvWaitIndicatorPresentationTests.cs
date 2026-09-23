@@ -60,6 +60,30 @@ public class RetainedAdvWaitIndicatorPresentationTests
         Assert.False(presentation.Update(gfx, 48, visible: false));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RebuiltProjectionErasesPreviousMarkerBeforeNextLine(bool republish)
+    {
+        var gfx = new GfxState();
+        var previous = new RetainedAdvWaitIndicatorPresentation(Config, Binding, 0, 430);
+        previous.Update(gfx, 96, visible: true);
+        var next = new RetainedAdvWaitIndicatorPresentation(
+            Config, Binding, 0, 430, anchorOffsetX: 75, anchorOffsetY: 20);
+
+        Assert.False(next.IsPublished);
+        Assert.True(republish
+            ? next.Republish(gfx, 0, visible: false)
+            : next.Update(gfx, 0, visible: false));
+        Assert.Null(gfx.TryGet(Binding.WaitIndicatorObjectHandle));
+        Assert.False(next.Update(gfx, 0, visible: false));
+
+        Assert.True(next.Update(gfx, 0, visible: true));
+        Assert.Equal(460, Assert.Single(gfx.SnapshotVisibleObjects()).DstX);
+        Assert.True(next.Update(gfx, 48, visible: true));
+        Assert.Equal(30, Assert.Single(gfx.SnapshotVisibleObjects()).SrcX);
+    }
+
     [Fact]
     public void RepublishRestoresAHandleErasedByScript()
     {

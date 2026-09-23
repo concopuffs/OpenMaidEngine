@@ -78,8 +78,10 @@ public sealed class GamePersistencePolicyTests
 
             Assert.NotEqual(himegari.ProfileRoot, kamidori.ProfileRoot);
             Assert.True(himegari.WritesEnabled);
-            Assert.False(kamidori.WritesEnabled);
-            Assert.Null(kamidori.CreateNativeDatStore());
+            Assert.True(kamidori.WritesEnabled);
+            Assert.NotNull(kamidori.CreateNativeDatStore());
+            Assert.Equal(0x2e4, kamidori.NativeIdentity.NumberedGfxRecordSize);
+            Assert.Equal(0x2d4, himegari.NativeIdentity.NumberedGfxRecordSize);
 
             var himegariStore = new DirectoryNativeDatStore(
                 himegari.NativePaths.SaveDirectory, himegari.NativeIdentity);

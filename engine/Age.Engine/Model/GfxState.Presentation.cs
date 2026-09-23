@@ -600,6 +600,7 @@ public sealed partial class GfxState
                 var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, r.RotationTarget,
                     r.RotationDelayMs, r.RotationDurationMs, r.OneShotStartMs,
                     ref r.RotationChannelEnabled, nowMs);
+                r.EvaluatedRotationCache = RotationCache(rangeRotation);
                 var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, r.TranslationTarget,
                     r.TranslationDelayMs, r.TranslationDurationMs, r.OneShotStartMs,
                     ref r.TranslationEnabled, nowMs);
@@ -713,6 +714,7 @@ public sealed partial class GfxState
                 var rotation = SampleRotationChannel(ref o.RotationCurrent, o.RotationTarget,
                                                      o.RotationDelayMs, o.RotationDurationMs,
                                                      o.OneShotStartMs, ref o.RotationChannelEnabled, nowMs);
+                o.EvaluatedRotationCache = RotationCache(rotation);
                 var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
                                                       o.TranslationDelayMs, o.TranslationDurationMs,
                                                       o.OneShotStartMs, ref o.TranslationEnabled, nowMs);

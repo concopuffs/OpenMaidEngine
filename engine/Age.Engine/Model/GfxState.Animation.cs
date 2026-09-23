@@ -146,6 +146,7 @@ public sealed partial class GfxState
         if (o.RotationChannelEnabled)
         {
             o.RotationCurrent = o.RotationTarget;
+            o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
             o.RotationDelayMs = 0;
             o.RotationDurationMs = 0;
             o.RotationChannelEnabled = false;
@@ -179,6 +180,7 @@ public sealed partial class GfxState
         {
             var o = GetOrCreate(handle);
             o.RotationCurrent = (axis.X, axis.Y, axis.Z, angleDegrees);
+            o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
         }
     }
 
@@ -439,6 +441,10 @@ public sealed partial class GfxState
                 current.Y + (target.Y - current.Y) * t,
                 current.Z + (target.Z - current.Z) * t);
     }
+
+    private static (double X, double Y, double Z, double Radians) RotationCache(
+        (double X, double Y, double Z, double Angle) rotation)
+        => (rotation.X, rotation.Y, rotation.Z, rotation.Angle * Math.PI / 180.0);
 
     private static (double X, double Y, double Z, double Angle) SampleRotationChannel(
         ref (double X, double Y, double Z, double Angle) current,

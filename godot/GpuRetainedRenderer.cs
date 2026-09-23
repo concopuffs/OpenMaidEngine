@@ -28,6 +28,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
     private readonly CanvasItemMaterial _additiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
     private readonly ImageTexture _whiteTexture;
     private readonly Shader _lerpShader;
+    private PerformanceFrameLog? _perf;
     private int _used;
     private int _textureUploads;
     private long _textureUploadTicks;
@@ -63,8 +64,9 @@ internal sealed class GpuRetainedRenderer : IDisposable
         };
     }
 
-    public void BeginFrame(bool preserveExistingLayers)
+    public void BeginFrame(bool preserveExistingLayers, PerformanceFrameLog? perf = null)
     {
+        _perf = perf;
         if (!preserveExistingLayers) _used = 0;
         _textureUploads = 0;
         _textureUploadTicks = 0;
@@ -80,7 +82,13 @@ internal sealed class GpuRetainedRenderer : IDisposable
         int clippedHeight = Math.Min(height, source.Height - srcY);
         if (srcX < 0 || srcY < 0 || clippedWidth <= 0 || clippedHeight <= 0) return false;
 
+        long started = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long allocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         var texture = ResolveTexture(source, assetId, colorKey, dynamic, dynamicKey);
+        _perf?.RecordGpuTextureLookup(PerformanceFrameLog.Timestamp() - started,
+            PerformanceFrameLog.AllocatedBytes() - allocated);
+        started = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        allocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         var item = NextItem();
         item.Texture = texture;
         item.RegionEnabled = true;
@@ -89,12 +97,16 @@ internal sealed class GpuRetainedRenderer : IDisposable
         item.Modulate = Modulation(tint, opacity, multiplyTint);
         item.Material = ResolveMaterial(tint, tintStrength, multiplyTint, blend);
         item.Visible = true;
+        _perf?.RecordGpuSpriteUpdate(PerformanceFrameLog.Timestamp() - started,
+            PerformanceFrameLog.AllocatedBytes() - allocated);
         return true;
     }
 
     public bool DrawFill(int width, int height, Affine2D localToDest, long tint, float opacity)
     {
         if (width <= 0 || height <= 0 || opacity <= 0) return false;
+        long started = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long allocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         var item = NextItem();
         item.Texture = _whiteTexture;
         item.RegionEnabled = false;
@@ -105,6 +117,8 @@ internal sealed class GpuRetainedRenderer : IDisposable
         item.Modulate = Modulation(tint, opacity, multiplyTint: true);
         item.Material = _alphaMaterial;
         item.Visible = true;
+        _perf?.RecordGpuSpriteUpdate(PerformanceFrameLog.Timestamp() - started,
+            PerformanceFrameLog.AllocatedBytes() - allocated);
         return true;
     }
 

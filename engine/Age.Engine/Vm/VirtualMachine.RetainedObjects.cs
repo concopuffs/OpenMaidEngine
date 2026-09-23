@@ -18,7 +18,7 @@ public sealed partial class VirtualMachine
                         $"-> QuerySlot={Gfx.QuerySlot(h)} objectPresent={Gfx.TryGet(h) != null}");
                 }
                 Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
-            case "query-gfx-field?":    // 0x216 (out)(idx)
+            case "query-gfx-field?":    // 0x216 (out)(surface slot) -> packed resource id or -1
                 Write(a[0], Gfx.QueryField(Read(a[1]))); return pc + 1;
             case "get-gfx-geom3?":      // 0x218 (handle)(outA)(outB)(outC) <- V18
             {

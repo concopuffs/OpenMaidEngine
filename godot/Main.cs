@@ -37,6 +37,16 @@ public partial class Main : Godot.Control
     private Sys4ScriptProvider? _scripts;
     private readonly Age.Engine.Hosting.FrameClock _clock = new();
     private GodotTraceSink _trace = null!;
+
+    private void ReportAssetResolutionWarning(string message)
+    {
+        var snapshot = _trace?.Snapshot();
+        if (snapshot != null)
+            message += $" [script={snapshot.CurrentScript}@0x{snapshot.CurrentOffset:x}, " +
+                $"opcode=0x{snapshot.CurrentOpcode:x}, stack={string.Join(" > ", snapshot.CallStack)}]";
+        GD.PushWarning(message);
+    }
+
     private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
     private string? _histFile;
     private Age.Engine.Model.OpcodeTable? _table;
@@ -353,9 +363,9 @@ public partial class Main : Godot.Control
         _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
-            ? new ResourceMap(scripts.Catalog, trackedAssetStore, GD.PushWarning,
+            ? new ResourceMap(scripts.Catalog, trackedAssetStore, ReportAssetResolutionWarning,
                               assetOptions.AllowBmpAsAgf)
-            : new ResourceMap(catalog, _assetStore, GD.PushWarning,
+            : new ResourceMap(catalog, _assetStore, ReportAssetResolutionWarning,
                               assetOptions.AllowBmpAsAgf);
         IGlyphMaskRasterizer? surfaceTextRasterizer = null;
         PortableTextRenderingPolicy? portableTextPolicy = null;

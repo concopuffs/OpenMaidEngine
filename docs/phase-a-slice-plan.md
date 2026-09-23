@@ -4181,3 +4181,76 @@ composition.
 **Next:** investigate the highest-use remaining auto-shaped row table, the stride-10 table at
 `G[0x3ebe]` (21 references across CALCREVISE, CHMENU, DRAWTIP, GAMECLEAR, GAMESTART, IMPROVE, and
 TUNE).
+
+
+### Kamidori FIELD compositor regression: blur-source scanning (2026-09-21)
+
+Same native SAVE00 capture `build/perf/run-20260921-220048-876.csv` contains 204
+FIELD.BIN frames. Median recomposition is 30.35 ms; targeted counters attribute
+27.95 ms and 798,752 allocated bytes to blur-source scanning, versus 0.86 ms for
+transforms, 0.67 ms for sprite updates, and 0.06 ms for GPU texture-cache lookup.
+This reproduces the earlier 30.33 ms recomposition baseline and identifies the
+CPU hotspot rather than a texture-upload bottleneck.
+
+`Main.Compositor` previously scanned the whole snapshot for each ordinary object
+through an `IReadOnlyList` enumerator. It now collects only blur-bearing objects
+once per composition pass into a reused list, then checks those ranges per object.
+Indexed collection avoids interface-enumerator boxing; a scene with no blur ranges
+has no inner scan. GPU and software paths retain the same range containment and
+blur-placeholder exemption rules. Each pass rebuilds the list, including separate
+source/target screen-transition passes. Profiling includes collection cost.
+
+Validation: Debug Godot build and 31 selected transition/profiler tests pass.
+User confirmed 100 FPS in FIELD after the fix. Post-fix percentile capture and
+specific active-blur visual comparison remain unmeasured.
+
+
+### Kamidori ADV stale wait marker (2026-09-21)
+
+Preparing a new retained text run rebuilds the wait-indicator projection (including
+its last-glyph anchor). If this occurs before the presentation service hides the
+previous marker, the new instance starts with PublishedFrame=-1 while the old
+retained handle remains live. Its hidden Update/Republish previously returned early,
+leaving the old unanimated marker visible during reveal. Both hidden paths now
+check the actual designated retained handle as well as local publication state,
+erasing a predecessor's marker even when the replacement has not published yet.
+Regression coverage models publish, projection replacement, hidden update/republish,
+then next-wait positioning and animation. All 8 indicator tests and the Debug Godot
+build pass; user confirmed the live ADV marker fix on 2026-09-21.
+
+User also confirmed FIELD now displays 100 FPS after the blur-source scan fix above.
+This is live FPS-counter acceptance; no post-fix percentile capture is asserted.
+
+
+### Kamidori translated P002 missing second line (2026-09-21)
+
+Normal-startup diagnostic capture at SYSTEM4 P002 / SC0000@0xd6a proves first
+show-text@0xd5d wraps once from y=28 to y=60. Explicit end-text-line@0xd62 adds
+32 pixels; show-text@0xd65 starts at y=92 against bottom=113 and renders zero of
+61 requested glyphs. Layout bounds are x=63..773, y starting at 28, font Gothic
+22, line spacing 10. P001 shows the same defect. This is layout rejection, not
+missing script execution or GPU publication.
+
+The stored SYS4433 AspectMode was unused by retained layout. Nonzero-mode layout
+now follows the native reference-glyph rules decoded in `engine-re.md`. A Windows
+GDI regression reproduces the old first-line wrap/second-line rejection using the
+captured P002 strings and bounds, then verifies both complete lines fit under
+aspect mode 1. User confirmed the live text fix on 2026-09-22. Native per-glyph font
+calibration is separate follow-up work; do not claim full aspect-mode raster parity.
+
+Validation: Debug Godot build passes; the GDI regression explicitly reproduces
+the former wrap/rejection before checking the corrected layout.
+Full managed validation: all 704 tests pass.
+
+
+### Kamidori BTL old-texture query correction (2026-09-22)
+
+Enhanced warning located the invalid resource load at loose BTL.BIN@0x319d.
+The producer was 0x216@0x30e0, querying old surface 0xc2+side before replacement.
+The port's unused field table always returned zero; native handlers confirm the
+query reads the ordinary surface-record resource id. QueryField now uses shared
+surface state and returns -1 for missing/created slots. A lifecycle regression
+covers BTL-style old/new texture copying, retained-object clearing, persistence
+snapshot restore, blank creation, release, and scene reset. Debug Godot build,
+40 selected graphics/save/reset tests, and EngineCtx builder tests pass. User
+confirmed battle entry works after the fix on 2026-09-22. Native evidence: `engine-re.md`.

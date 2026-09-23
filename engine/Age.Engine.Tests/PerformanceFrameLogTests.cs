@@ -27,6 +27,11 @@ public class PerformanceFrameLogTests
                 log.RecordGpuLayer(40, 20, new Affine2D(1, 0, 0, 1, 12, 13),
                                    800, 600, dynamic: true, BlendKind.Additive);
                 log.RecordGpu(drawItems: 2, textureUploads: 1, textureUploadTicks: 10);
+                log.RecordGpuBlurScan(System.Diagnostics.Stopwatch.Frequency / 1000, 1);
+                log.RecordGpuTransform(System.Diagnostics.Stopwatch.Frequency / 1000, 2);
+                log.RecordGpuObjectLookup(System.Diagnostics.Stopwatch.Frequency / 1000, 3);
+                log.RecordGpuTextureLookup(System.Diagnostics.Stopwatch.Frequency / 1000, 4);
+                log.RecordGpuSpriteUpdate(System.Diagnostics.Stopwatch.Frequency / 1000, 5);
                 log.RecordFillLayer();
                 log.RecordSkippedLayer();
                 log.EndRecomposite();
@@ -41,6 +46,16 @@ public class PerformanceFrameLogTests
             string[] row = lines[1].Split(',');
             Assert.Equal(header.Length, row.Length);
             Assert.Equal("frame", header[0]);
+            Assert.Equal("1.0000", row[Array.IndexOf(header, "gpu_blur_scan_ms")]);
+            Assert.Equal("1", row[Array.IndexOf(header, "gpu_blur_scan_allocated_bytes")]);
+            Assert.Equal("1.0000", row[Array.IndexOf(header, "gpu_transform_ms")]);
+            Assert.Equal("2", row[Array.IndexOf(header, "gpu_transform_allocated_bytes")]);
+            Assert.Equal("1.0000", row[Array.IndexOf(header, "gpu_object_lookup_ms")]);
+            Assert.Equal("3", row[Array.IndexOf(header, "gpu_object_lookup_allocated_bytes")]);
+            Assert.Equal("1.0000", row[Array.IndexOf(header, "gpu_texture_lookup_ms")]);
+            Assert.Equal("4", row[Array.IndexOf(header, "gpu_texture_lookup_allocated_bytes")]);
+            Assert.Equal("1.0000", row[Array.IndexOf(header, "gpu_sprite_update_ms")]);
+            Assert.Equal("5", row[Array.IndexOf(header, "gpu_sprite_update_allocated_bytes")]);
             Assert.Equal("17", row[0]);
             Assert.Equal("1", row[Array.IndexOf(header, "recomposited")]);
             Assert.Equal("1", row[Array.IndexOf(header, "render_backend")]);

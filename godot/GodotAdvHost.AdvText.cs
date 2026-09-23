@@ -224,6 +224,25 @@ public sealed partial class GodotAdvHost
                 run.Style),
             requests);
 
+        _timeline?.Event("adv-text-layout-result", new()
+        {
+            ["layout"] = binding.LayoutSlot,
+            ["text"] = run.Text,
+            ["cursor_x"] = run.Layout.CursorX,
+            ["cursor_y"] = run.Layout.CursorY,
+            ["right"] = run.Layout.Right,
+            ["bottom"] = run.Layout.Bottom,
+            ["font"] = run.Style.FontFace,
+            ["font_size"] = run.Style.PrimaryFontSize,
+            ["line_spacing"] = run.Style.LineSpacing,
+            ["requested_glyphs"] = requests.Count,
+            ["rendered_glyphs"] = rendered.ConsumedGlyphs,
+            ["wrapped_lines"] = rendered.WrappedLines,
+            ["vertical_overflow"] = rendered.StoppedOnVerticalOverflow,
+            ["result_cursor_x"] = rendered.CursorX,
+            ["result_cursor_y"] = rendered.CursorY,
+        });
+
         lock (_textLock)
         {
             if (!_retainedTextLayouts.TryGetValue(

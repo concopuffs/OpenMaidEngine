@@ -51,7 +51,9 @@ public sealed class RetainedAdvWaitIndicatorPresentation
         ArgumentNullException.ThrowIfNull(gfx);
         if (!visible)
         {
-            if (!IsPublished) return false;
+            // A rebuilt layout/anchor projection may inherit a still-live marker from
+            // its predecessor even though this instance has not published a frame.
+            if (!IsPublished && gfx.TryGet(Binding.WaitIndicatorObjectHandle) == null) return false;
             Erase(gfx);
             return true;
         }
@@ -68,7 +70,9 @@ public sealed class RetainedAdvWaitIndicatorPresentation
         ArgumentNullException.ThrowIfNull(gfx);
         if (!visible)
         {
-            if (!IsPublished) return false;
+            // A rebuilt layout/anchor projection may inherit a still-live marker from
+            // its predecessor even though this instance has not published a frame.
+            if (!IsPublished && gfx.TryGet(Binding.WaitIndicatorObjectHandle) == null) return false;
             Erase(gfx);
             return true;
         }

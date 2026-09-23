@@ -54,13 +54,13 @@ public sealed class GameProfileSelectionTests
         Assert.Equal(["SYS4433"], kamidori.ScriptRevisions);
         Assert.Equal("SYSTEM4.BIN", kamidori.NaturalBootScript);
         Assert.Equal("kamidori", kamidori.PersistenceNamespace);
-        Assert.False(kamidori.PersistenceWritesEnabled);
+        Assert.True(kamidori.PersistenceWritesEnabled);
         Assert.Equal(320, kamidori.Persistence.ExpectedPackedSaveVersion);
         Assert.Equal(0x46333334u, kamidori.Persistence.SharedCompatibilityId);
         Assert.Equal(0x46333334u, kamidori.Persistence.NumberedCompatibilityId);
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
-        Assert.Contains("0x2e4", kamidori.Persistence.ReadOnlyReason);
+        Assert.Null(kamidori.Persistence.ReadOnlyReason);
         Assert.Empty(kamidori.Runtime.ExternalGlobalSeeds);
         Assert.Null(kamidori.Runtime.SceneEntryCoroutineGateAddress);
         Assert.Null(kamidori.DirectSceneDiagnostics);
@@ -81,12 +81,12 @@ public sealed class GameProfileSelectionTests
         Assert.False(externalGlobals.ContainsKey(0x62425));
         Assert.Null(kamidori.DirectSceneDiagnostics);
         Assert.Null(kamidori.DebugSceneLaunch);
-        Assert.False(kamidori.PersistenceWritesEnabled);
+        Assert.True(kamidori.PersistenceWritesEnabled);
     }
 
     [Theory]
     [InlineData("S4IC422", "姫狩りダンジョンマイスター", "himegari", true)]
-    [InlineData("S4IC433", "神採りアルケミーマイスター", "kamidori", false)]
+    [InlineData("S4IC433", "神採りアルケミーマイスター", "kamidori", true)]
     public void AutomaticSelectionRequiresOneExactIdentityMatch(
         string revision, string title, string expectedProfile, bool writesEnabled)
     {

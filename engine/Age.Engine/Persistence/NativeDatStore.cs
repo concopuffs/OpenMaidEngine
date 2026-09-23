@@ -9,7 +9,8 @@ public sealed record NativeSaveIdentity(
     int SaveVersion1,
     int SaveVersion2,
     uint? NumberedCompatibilityId = null,
-    NativeSaveBankDimensions? BankDimensions = null)
+    NativeSaveBankDimensions? BankDimensions = null,
+    int NumberedGfxRecordSize = NativeGfxSaveLayout.BaseRecordSize)
 {
     public uint EffectiveNumberedCompatibilityId => NumberedCompatibilityId ?? CompatibilityId;
 

@@ -10,6 +10,7 @@ public partial class Main
     private ImageTexture _screenTex = null!;
     private GpuRetainedRenderer _gpuRenderer = null!;
     private bool _useGpuBackend = true;
+    private readonly List<RenderObject> _blurSources = new();
     // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
     // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
     private byte[] _screenPixels = [];
@@ -73,21 +74,39 @@ public partial class Main
                                                presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
         }
         _perf?.BeginRecomposite(screenTransition: false);
-        _gpuRenderer.BeginFrame(publicationPolicy.AppendGpuLayers);
+        _gpuRenderer.BeginFrame(publicationPolicy.AppendGpuLayers, _perf);
+        long blurIndexStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long blurIndexAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+        CollectBlurSources(_visibleSnapshot);
+        _perf?.RecordGpuBlurScan(PerformanceFrameLog.Timestamp() - blurIndexStarted,
+            PerformanceFrameLog.AllocatedBytes() - blurIndexAllocated);
         foreach (var v in _visibleSnapshot)
         {
             _perf?.RecordObject(v.TimeVarying);
-            if (v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
-                IsBlurSource(_visibleSnapshot, v.Handle))
+            long workStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            long workAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+            bool blurSource = v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
+                IsBlurSource(v.Handle);
+            _perf?.RecordGpuBlurScan(PerformanceFrameLog.Timestamp() - workStarted,
+                PerformanceFrameLog.AllocatedBytes() - workAllocated);
+            if (blurSource)
             {
                 _perf?.RecordSkippedLayer();
                 continue;
             }
+            workStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            workAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             var affine = Transform2DMath.Build(v.Transform, v.Rotation, v.ScaleCycle, v.TranslationCycle)
                 .FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
+            _perf?.RecordGpuTransform(PerformanceFrameLog.Timestamp() - workStarted,
+                PerformanceFrameLog.AllocatedBytes() - workAllocated);
             float opacity = v.Alpha / 255f;
+            workStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            workAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             var rawObject = _vm.Gfx.TryGet(v.Handle);
+            _perf?.RecordGpuObjectLookup(PerformanceFrameLog.Timestamp() - workStarted,
+                PerformanceFrameLog.AllocatedBytes() - workAllocated);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             var texture = rawObject != null
                 ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
@@ -234,9 +253,22 @@ public partial class Main
         return drawn;
     }
 
-    private static bool IsBlurSource(IReadOnlyList<RenderObject> visible, long handle)
+    // Rebuild for each snapshot: effect lifetime and source ranges can change between passes.
+    // Index iteration also avoids boxing List<RenderObject>'s large enumerator through IReadOnlyList.
+    private void CollectBlurSources(IReadOnlyList<RenderObject> visible)
     {
-        foreach (RenderObject item in visible)
+        _blurSources.Clear();
+        for (int i = 0; i < visible.Count; i++)
+        {
+            var item = visible[i];
+            if (item.DirectionalBlurTransition != null || item.RadialBlurTransition != null)
+                _blurSources.Add(item);
+        }
+    }
+
+    private bool IsBlurSource(long handle)
+    {
+        foreach (RenderObject item in _blurSources)
             if ((item.DirectionalBlurTransition is { } directional && directional.Contains(handle)) ||
                 (item.RadialBlurTransition is { } radial && radial.Contains(handle))) return true;
         return false;
@@ -416,12 +448,13 @@ public partial class Main
         float globalOpacity,
         System.Collections.Generic.Dictionary<long, string>? decisions)
     {
+        CollectBlurSources(visible);
         int z = 0;
         foreach (var v in visible)   // interpolate at the retained-presentation clock
         {
             _perf?.RecordObject(v.TimeVarying);
             if (v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
-                IsBlurSource(visible, v.Handle))
+                IsBlurSource(v.Handle))
             {
                 _perf?.RecordSkippedLayer();
                 if (decisions != null) decisions[v.Handle] = "SKIP(blur source range)";

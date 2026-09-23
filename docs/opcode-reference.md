@@ -431,7 +431,7 @@ Republish snapshots the global reveal index, clamps only to the selected layout'
 - **handler bindings:** `SYS4433` -> `age-vm-switch/0x2db` (evidence-confirmed)
 - **summary:** (mode) - select the SYS4433 glyph aspect/metric mode and rebuild the primary font resources.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=SYS4433 handler, text resource rebuild, glyph measurement, and natural startup. op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. SYS4422 has no installed handler in this slot.
+- **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x2db`; scope=SYS4433 handler, text resource rebuild, glyph measurement, and natural startup. op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. Live ADV worker adv_text_append_horizontal_glyph_records@0x45b710 uses MS Gothic reference CP932 0x8c83 gmCellIncX/Y at text-manager+0x313e8/+0x313ea for nonzero-mode overflow and horizontal advance: single-byte codes use half X, double-byte codes full X. Record bottom uses requested font size plus effect Y for nonzero render mode, independently of the overflow metric. SYS4422 has no installed handler in this slot.
 
 ### 0x2dc `get-font-family-count` (get-font-family-count, argc 1)
 - **observed by:** kamidori (SYS4433)
@@ -1853,9 +1853,9 @@ Both-found swaps every object field, including surface binding, geometry, color,
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x216` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x216` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** 0x216 (out)(idx) — handler gfx_op_0x216_query_table46d14 @0x42a0f0: out = *(ctx+0x46d14 + idx*0x14). The generic instruction length is 5 dwords. A per-object field query over a stride-0x14 table. See docs/engine-re.md gfx op-contract table.
+- **summary:** (out)(surface_slot) - return the packed resource id in the surface record, or -1 for an empty/created surface. Legacy mnemonic query-gfx-field? is retained for compatibility.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x216`; scope=Himegari SYS4422. Ghidra handler 0x42a0f0; reads ctx+0x46d14[operand2 * 0x14], writes operand1 via FUN_00425fb0(1,·).
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x216`; scope=Himegari SYS4422. SYS4422 handler 0x42a0f0 reads EngineCtx+0x46d14 + slot*0x14; SYS4433 handler 0x42b010 reads EngineCtx+0x4af9c + slot*0x14. These are surface-record resource words, not an independent object-field table. Native gfx_surface_load_asset@0x477c40 maintains the SYS4422 record; initial/blank records use -1. Installed Kamidori loose BTL.BIN@0x30e0 queries old slot 0xc2+side, then @0x319d reloads the returned id into transition slot 0x2b+side after replacing the primary texture.
 
 ### 0x217 `set-gfx-geom3` (set-gfx-geom3, argc 4)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

@@ -29,12 +29,13 @@ public sealed record NativeNumberedSaveState(
     long RangeTransformFirst,
     int RangeTransformCount,
     byte[] RangeTransformRecord,
-    bool LegacyTightGfxLayout = false)
+    bool LegacyTightGfxLayout = false,
+    int GraphicsRecordSize = NativeGfxSaveLayout.BaseRecordSize)
 {
     public const int SoundEffectChannelCount = 10;
     public const int ResourceRecordsSize = 300 * 4;
     public const int SurfaceRecordsSize = 20_000;
-    public const int GfxRecordSize = 0x2d4;
+    public const int GfxRecordSize = NativeGfxSaveLayout.BaseRecordSize;
 }
 
 /// <summary>AGE SaveVersion1=3 numbered-save logical payload.</summary>
@@ -44,17 +45,13 @@ public static class NativeNumberedSaveCodec
     private const int FrameSize = 0x414;
     private const int FixedSuffixSize = 0x414;
     private const int FrameReturnCapacity = 256;
-    private const int GfxAllocationDwords = 0x2d8;
-    private const int GfxConstantDwords = 0x2e1;
-    // AGE stores a byte-sized 0x2d4 object record at the front of a 0x2d4-DWORD region.
-    // The handle consumes one preceding DWORD, so consecutive entries start 0x2d5 DWORDs apart.
-    private const int GfxEntryStrideBytes = (1 + NativeNumberedSaveState.GfxRecordSize) * 4;
     private static readonly Encoding NativeEncoding = CreateNativeEncoding();
 
     public static byte[] Encode(NativeNumberedSaveState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         ValidateState(state);
+        NativeGfxSaveLayout layout = NativeGfxSaveLayout.FromRecordSize(state.GraphicsRecordSize);
 
         int cutoff = state.Frames.Count - 1;
         byte[] strings = EncodeStrings(state.StringGlobals);
@@ -64,7 +61,7 @@ public static class NativeNumberedSaveCodec
             + state.PointerGlobals.Count + state.PointerStrings.Count + state.LocalPointerScratch.Count);
         int totalDwords = checked(
             cutoff * 0x105 + 0x53ea + bankDwords + stringDwords
-            + GfxConstantDwords + state.GfxObjects.Count * GfxAllocationDwords);
+            + layout.AllocationConstantDwords + state.GfxObjects.Count * layout.AllocationDwordsPerObject);
         byte[] payload = new byte[checked((totalDwords - 2) * 4)];
 
         WriteInt(payload, 0, cutoff);
@@ -100,14 +97,14 @@ public static class NativeNumberedSaveCodec
         WriteIntList(payload, at, state.LocalPointerScratch);
         at += state.LocalPointerScratch.Count * 4;
 
-        WriteInt(payload, at, NativeNumberedSaveState.GfxRecordSize);
+        WriteInt(payload, at, layout.RecordSize);
         WriteInt(payload, at + 4, state.GfxObjects.Count);
         at += 8;
         foreach (NativeSavedGfxObject gfx in state.GfxObjects)
         {
             WriteInt(payload, at, unchecked((int)gfx.Handle));
             gfx.Record.CopyTo(payload, at + 4);
-            at += GfxEntryStrideBytes;
+            at += layout.EntryStrideBytes;
         }
         WriteInt(payload, at, unchecked((int)state.RangeTransformFirst));
         WriteInt(payload, at + 4, state.RangeTransformCount);
@@ -115,7 +112,7 @@ public static class NativeNumberedSaveCodec
         return payload;
     }
 
-    public static NativeNumberedSaveState Decode(ReadOnlySpan<byte> payload)
+    public static NativeNumberedSaveState Decode(ReadOnlySpan<byte> payload, int? expectedGfxRecordSize = null)
     {
         if (payload.Length < 0x5718)
             throw new InvalidDataException("Numbered-save layout 3 payload is truncated.");
@@ -155,21 +152,26 @@ public static class NativeNumberedSaveCodec
 
         int gfxRecordSize = ReadNonNegative(payload, at, "gfx record size");
         int gfxCount = ReadNonNegative(payload, at + 4, "gfx object count");
-        if (gfxRecordSize != NativeNumberedSaveState.GfxRecordSize)
-            throw new InvalidDataException($"Unsupported native gfx record size 0x{gfxRecordSize:x}.");
+        NativeGfxSaveLayout layout = NativeGfxSaveLayout.FromRecordSize(gfxRecordSize);
+        if (expectedGfxRecordSize is { } expected && gfxRecordSize != expected)
+            throw new InvalidDataException(
+                $"Native gfx record size mismatch: expected 0x{expected:x}, got 0x{gfxRecordSize:x}.");
         at += 8;
         int objectsAt = at;
         (NativeSavedGfxObject[] objects, int afterObjects) =
-            ReadGfxObjects(payload, objectsAt, gfxCount, GfxEntryStrideBytes);
+            ReadGfxObjects(payload, objectsAt, gfxCount, layout.EntryStrideBytes, gfxRecordSize);
         bool legacyTightGfxLayout = false;
         // Compatibility for experimental files written by the port before the native DWORD stride was
         // understood. A native retained-object map cannot contain duplicate handles.
-        if (objects.Select(item => item.Handle).Distinct().Count() != objects.Length)
+        if (gfxRecordSize == NativeGfxSaveLayout.BaseRecordSize
+            && objects.Select(item => item.Handle).Distinct().Count() != objects.Length)
         {
             (objects, afterObjects) =
-                ReadGfxObjects(payload, objectsAt, gfxCount, 4 + gfxRecordSize);
+                ReadGfxObjects(payload, objectsAt, gfxCount, 4 + gfxRecordSize, gfxRecordSize);
             legacyTightGfxLayout = true;
         }
+        if (objects.Select(item => item.Handle).Distinct().Count() != objects.Length)
+            throw new InvalidDataException("Numbered-save graphics contains duplicate handles.");
         at = afterObjects;
         Require(payload, at, 8 + gfxRecordSize, "numbered-save range transform");
         long rangeFirst = ReadInt(payload, at);
@@ -179,28 +181,30 @@ public static class NativeNumberedSaveCodec
         return new NativeNumberedSaveState(
             ReadInt(payload, 4), ReadInt(payload, 8), soundEffects, resources, surfaces, frames,
             integers, floats, strings, pointers, pointerStrings, localPointerScratch, objects,
-            rangeFirst, rangeCount, rangeRecord, legacyTightGfxLayout);
+            rangeFirst, rangeCount, rangeRecord, legacyTightGfxLayout, gfxRecordSize);
     }
 
     private static (NativeSavedGfxObject[] Objects, int After) ReadGfxObjects(
-        ReadOnlySpan<byte> payload, int offset, int count, int strideBytes)
+        ReadOnlySpan<byte> payload, int offset, int count, int strideBytes, int recordSize)
     {
+        Require(payload, offset, checked(count * strideBytes), "numbered-save gfx entries");
         var objects = new NativeSavedGfxObject[count];
         int at = offset;
         for (int i = 0; i < objects.Length; i++)
         {
-            Require(payload, at, 4 + NativeNumberedSaveState.GfxRecordSize,
+            Require(payload, at, 4 + recordSize,
                 "numbered-save gfx object");
             long handle = ReadInt(payload, at);
             objects[i] = new NativeSavedGfxObject(
                 handle,
-                payload.Slice(at + 4, NativeNumberedSaveState.GfxRecordSize).ToArray());
+                payload.Slice(at + 4, recordSize).ToArray());
             at = checked(at + strideBytes);
         }
         return (objects, at);
     }
 
-    public static NativeNumberedSaveState Empty(IReadOnlyList<NativeSavedScriptFrame> frames)
+    public static NativeNumberedSaveState Empty(IReadOnlyList<NativeSavedScriptFrame> frames,
+        int gfxRecordSize = NativeGfxSaveLayout.BaseRecordSize)
         => new(
             0, 0, new int[NativeNumberedSaveState.SoundEffectChannelCount],
             new byte[NativeNumberedSaveState.ResourceRecordsSize],
@@ -208,7 +212,8 @@ public static class NativeNumberedSaveCodec
             frames, Array.Empty<int>(), Array.Empty<int>(), Array.Empty<string>(),
             Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(),
             Array.Empty<NativeSavedGfxObject>(), 0, 0,
-            new byte[NativeNumberedSaveState.GfxRecordSize]);
+            new byte[NativeGfxSaveLayout.FromRecordSize(gfxRecordSize).RecordSize],
+            GraphicsRecordSize: gfxRecordSize);
 
     private static byte[] EmptySurfaceRecords()
     {
@@ -281,9 +286,10 @@ public static class NativeNumberedSaveCodec
             throw new InvalidDataException("Numbered-save resource table must be 1,200 bytes.");
         if (state.SurfaceRecords.Length != NativeNumberedSaveState.SurfaceRecordsSize)
             throw new InvalidDataException("Numbered-save surface table must be 20,000 bytes.");
-        if (state.RangeTransformRecord.Length != NativeNumberedSaveState.GfxRecordSize
-            || state.GfxObjects.Any(item => item.Record.Length != NativeNumberedSaveState.GfxRecordSize))
-            throw new InvalidDataException("Numbered-save gfx records must be 0x2d4 bytes.");
+        int recordSize = NativeGfxSaveLayout.FromRecordSize(state.GraphicsRecordSize).RecordSize;
+        if (state.RangeTransformRecord.Length != recordSize
+            || state.GfxObjects.Any(item => item.Record.Length != recordSize))
+            throw new InvalidDataException($"Numbered-save gfx records must be 0x{recordSize:x} bytes.");
     }
 
     private static int[] ReadInts(ReadOnlySpan<byte> source, int offset, int count)

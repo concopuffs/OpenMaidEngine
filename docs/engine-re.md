@@ -2635,6 +2635,30 @@ native defaults, writes row-vector translation matrices correctly, and retains t
 behind the semantic object so still-unnamed fields survive native load/save cycles. The `/v2` serializer
 and deserializer comments record the corrected stride and overwrite behavior.
 
+### Kamidori numbered-save graphics extension (2026-09-21)
+
+The SYS4433 image at `/kamidori/SYS4433/range_00400000.bin` now has the following persistence functions
+named and annotated:
+
+| Function | Address | Evidence |
+|---|---|---|
+| `context_state_serialize` | `0x40d1e0` | Layout-3 graphics size, sparse write stride, range record, and allocation term |
+| `save_data_deserialize_and_begin_restore` | `0x40faa0` | Reads declared byte size, initializes each record, copies it, then advances a DWORD cursor by the byte-size value |
+| `gfx_object_init_default` | `0x478a40` | Common-prefix defaults and initialization of the appended rotation cache |
+| `gfx_object_evaluate_one_shot` | `0x479170` | Produces the cached evaluated axis/radian angle and consumes it in a display-mode-specific rotation rebuild |
+
+The initializer and evaluator establish that the larger record is a tail extension, not a wholesale
+shift of the existing fields. During one-shot rotation evaluation, the native code writes the evaluated
+axis and converted radian angle into that tail. When `gfx_owner+0xb61c == 0`, display mode is 2, and the
+source slot is 20 through 29, it rebuilds the matrix from those cached values. Consequently, merely
+accepting the larger byte count and truncating or blindly zero-filling the extension is not a complete
+implementation. The loader's initialization before copying does not rescue a malformed full-size record:
+the copy overwrites the initialized bytes.
+
+The exact byte layout, implementation status, installed-save roundtrips, and acceptance limits live in
+[SYS4 format notes](sys4-format-notes.md#kamidori-320-layout). The native findings are implemented in the
+shared codecs, with profile-selected framing rather than separate game-specific save opcode handlers.
+
 ### Opcode `0xae` continues numbered-save stack restoration (2026-07-20)
 
 Opcode `0xae` is the load-side rendezvous paired with serialized script-frame state. Its handler,
@@ -4629,3 +4653,47 @@ concrete combat discrepancies observed in that run rather than from movement sea
   state supplied via `--boot`. CGs render (screenshot-confirmed). See the op `0x215` finding + "The render
   drift's SECOND half" above. The then-remaining `AE*` blend and cold-anchor work is resolved by the later
   blend, geometry, animation, and retained-presentation sections.
+
+
+### SYS4433 live ADV aspect-mode layout metrics (2026-09-21)
+
+`adv_text_append_horizontal_glyph_records@0x45b710` branches on text-manager
+`+0x313d0` (opcode `0x2db`). For nonzero mode it replaces the ordinary GDI text
+extent overflow check with cursor X plus reference `gmCellIncX / (3-byteLength)`
+and cursor Y plus reference `gmCellIncY`. The signed shorts live at `+0x313e8`
+and `+0x313ea`, within baseline GLYPHMETRICS at `+0x313d8`. Record right and next
+cursor X use the same half/full reference advance. Record bottom is cursor Y plus
+requested font size, plus effect Y when render mode is nonzero. Thus overflow
+height and the published glyph rectangle height are distinct.
+
+`text_rebuild_reference_gothic_metrics@0x44fe00` and
+`text_measure_reference_gothic_glyph@0x44ff60` measure CP932 `0x8c83` (激) using
+ＭＳ ゴシック, negative requested size, negative half-width, and current weight.
+The port now uses that reference for nonzero-mode retained layout instead of
+selected-font glyph advances/extents. Mode-zero behavior stays unchanged.
+
+Font realization is a separate native layer: `text_create_calibrated_single_byte_font@0x451b70`
+selects `text_calibrate_mode1_glyph_font@0x451340` or
+`text_calibrate_mode2_glyph_font@0x451910`; these consult natural font metrics and
+reference glyph geometry. This change implements the proven layout rule, not full
+per-glyph font calibration or display-aspect scaling. The named functions and
+findings are annotated and saved in the SYS4433 Ghidra image. Opcode evidence lives
+in `vm-map/opcodes.toml`; regression/results are in `phase-a-slice-plan.md`.
+
+
+### Surface resource query 0x216 and Kamidori battle transition (2026-09-22)
+
+The legacy mnemonic `query-gfx-field?` actually queries a surface's resource id.
+`op_0x216_query_surface_resource@0x42a0f0` (SYS4422) reads the inline record word at
+ctx+0x46d14+slot*0x14; SYS4433's corresponding handler is 0x42b010, with base
+ctx+0x4af9c. This supersedes the earlier per-object/independent-table interpretation.
+The existing native surface-record lifetime findings above identify its producers.
+
+Installed loose Kamidori BTL.BIN@0x30e0 stores the old resource from slot 0xc2+side
+in local0xfda. After replacing that surface at 0x3188, 0x319d loads the saved id
+into slot 0x2b+side, queries its dimensions, and uses it in the transition.
+The port's never-populated independent query table returned zero, incorrectly
+selecting SYSTEM4.BIN. QueryField now reads the existing surface state under its
+lock, returning -1 for missing/created slots. No asset warning is suppressed.
+Mode-1 raw-load bookkeeping and failed host decode state remain separate existing
+surface-model limitations; this change addresses the ordinary 0x1f9 battle path.

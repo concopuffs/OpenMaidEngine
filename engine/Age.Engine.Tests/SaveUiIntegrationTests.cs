@@ -13,6 +13,26 @@ public class SaveUiIntegrationTests
     private sealed class InstalledGameplayPollReachedException : Exception;
     private sealed class InstalledRootReloadReachedException(string message) : Exception(message);
 
+    private sealed class KamidoriRestoreSink(string terminalScript) : ITraceSink
+    {
+        public bool TracingSteps => true;
+        public bool TerminalRendezvous;
+        public int? ResumedOffset;
+        private int? _terminalDepth;
+        public void Emit(in TraceEvent item)
+        {
+            if (item.Kind == TraceEventKind.FrameEnter && item.Cause == FrameCause.SaveRestore
+                && item.Name == terminalScript) _terminalDepth = item.Depth;
+            if (item.Kind != TraceEventKind.Step || item.Depth != _terminalDepth) return;
+            if (TerminalRendezvous)
+            {
+                ResumedOffset = item.Ins!.Offset;
+                throw new InstalledResumeReachedException();
+            }
+            if (item.Opcode == 0xae) TerminalRendezvous = true;
+        }
+    }
+
     private sealed class StopAtFirstMenuPollHost : RecordingHost
     {
         public override void Sleep(long duration)
@@ -317,6 +337,57 @@ public class SaveUiIntegrationTests
             $"saved={string.Join(", ", numbered.Frames.Select((frame, index) =>
                 $"{index}:0x{frame.ScriptId:x}/resume={frame.ResumeIndex}/call={frame.CallTargetIndex}"))}; " +
             $"frames={string.Join(", ", state.Frames)}");
+    }
+
+    [Theory]
+    [Trait("Profile", "kamidori")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InstalledKamidoriSaveResumesNativeAndTranslatedScripts(bool translation)
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string saveRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Eushully", "神採りアルケミーマイスター", "SAVE");
+        Assert.True(File.Exists(Path.Combine(saveRoot, "SAVE00.DAT")));
+        string temporaryRoot = NewTemporaryDirectory();
+        try
+        {
+            foreach (string name in new[] { "SAVE00.DAT", "SAVE.DAT", "RT.DAT" })
+                if (File.Exists(Path.Combine(saveRoot, name)))
+                    File.Copy(Path.Combine(saveRoot, name), Path.Combine(temporaryRoot, name));
+            var identity = Age.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!
+                .Persistence.CreateExpectedNativeIdentity();
+            var store = new DirectoryNativeDatStore(temporaryRoot, identity);
+            var numbered = NativeNumberedSaveCodec.Decode(store.LoadNumberedFile(0)!.Document.Payload, 0x2e4);
+            OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+            var catalog = Sys4AssetCatalog.Load(Path.Combine(gameRoot, "SYS4INI.BIN"));
+            var assets = new Sys4AssetStore(catalog, gameRoot,
+                translation ? [Path.Combine(gameRoot, "patch"), gameRoot] : [gameRoot]);
+            var scripts = new Sys4ScriptProvider(table, catalog, assets);
+            NativeSavedScriptFrame terminal = numbered.Frames[^1];
+            Script terminalScript = scripts.GetById(terminal.ScriptId)!;
+            var sink = new KamidoriRestoreSink(terminalScript.Name);
+            Script loader = WithPackedId(ScriptAssembler.Assemble(table, "LOAD_TEST.BIN",
+                [(0x1a1, [new Operand(9, 0), new Operand(0, 0)]), (0x2, [])], []), uint.MaxValue);
+            var shared = new SharedProfile();
+            shared.Load(store);
+            var vm = new VirtualMachine(loader, table, new RecordingHost(),
+                new VmOptions(MaxSteps: 1_000_000), scripts, sink,
+                sharedProfile: shared, nativeDatStore: store);
+            Exception? outcome = Record.Exception(() => vm.Run());
+            Assert.True(outcome is InstalledResumeReachedException,
+                $"outcome={outcome}; halt={vm.HaltReason}; steps={vm.Steps}; terminal={terminalScript.Name}");
+            Assert.True(sink.TerminalRendezvous);
+            int expectedOffset = terminal.ResumeIndex >= 0
+                ? terminalScript.ReadMessageOffsets[terminal.ResumeIndex]
+                : terminalScript.Instructions[Array.FindIndex(terminalScript.Instructions.ToArray(),
+                    ins => ins.Opcode == 0xae) + 1].Offset;
+            Assert.Equal(expectedOffset, sink.ResumedOffset);
+        }
+        finally
+        {
+            Directory.Delete(temporaryRoot, recursive: true);
+        }
     }
 
     private static Script WithPackedId(Script source, uint packedId)

@@ -549,6 +549,8 @@ it authoritatively selects the `kamidori` profile and install root while still a
 under `.AGF` catalog names. `run-godot.cmd -Kamidori -TranslationPatch` is the convenience spelling for
 Kamidori's installed `patch/` overlay plus that BMP compatibility option; neither behavior is inferred from
 the game profile. `-FpsCounter` forwards `--fps-counter` to display a low-overhead live FPS/frame-time overlay.
+For an immediate native Vulkan startup crash involving injected overlay DLLs, see the tested
+[Windows overlay diagnosis and process-local workaround](platform-portability.md#windows-vulkan-startup-and-injected-overlays).
 `run-godot.ps1 -Doctor` prints the resolved repository, Godot, game root, ordered overlays,
 BMP compatibility, requested profile/probe state, .NET, and Python prerequisites without building or
 launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe` requires it and forces the
@@ -772,3 +774,44 @@ already exist. Prefer additions that produce reusable, offset-keyed evidence ove
 |---|---|
 | `probe_*.py` (`probe_header`, `probe_leads`, `probe_refs`, `probe_tables`, `probe_tags`, `probe_types`, `probe_xref`) | Container/opcode format-RE probes used to reverse the format originally. Kept for reproducibility; not part of the normal workflow. |
 | `pack_check.py` | Checks whether `AGE.EXE` is packed (it is: entropy-8 code sections, zeroed IAT). `SYS4AB.BIN` is NOT a separate image — it's `XOR-0xFF(AGE.EXE)` byte-for-byte (0x2c header + XOR payload). The unpacked engine exists only in memory → dump it with `frida/dump_engine.py`. |
+
+### GPU compositor phase counters (2026-09-21)
+
+`-PerfLog` additionally appends `gpu_blur_scan_ms`, `gpu_transform_ms`,
+`gpu_object_lookup_ms`, `gpu_texture_lookup_ms`, and `gpu_sprite_update_ms`, each
+paired with a matching `gpu_<phase>_allocated_bytes` column. These are summed
+CPU wall times and current-thread managed allocations, enabled only during profiling.
+Blur scanning (including once-per-pass blur-range collection), transform construction
+(including range transforms), and object lookup
+cover the main GPU object loop; nested effect expansion is not included in those
+three counters. Texture lookup and sprite updates cover all renderer texture/fill
+submissions, including effect-generated draws. Sprite updates include pooled-item
+acquisition, material selection and property assignments; final unused-item hiding
+is outside that counter. Texture lookup includes cache misses/preparation/uploads,
+so its time overlaps the existing upload counter. These counters are subsets of
+recomposition, not additional time to add to it, and do not measure GPU execution.
+
+For FIELD comparison, reload the same save, repeat idle/scroll/selection intervals,
+and close normally to flush the CSV. Compare against the unmodified baseline as
+fine-grained timing itself introduces some profiling overhead.
+
+### ADV layout rejection diagnostics
+
+`-StartupDiagnostics` includes `adv-text-layout-result` events in
+`build/validation/title-newgame/timeline.jsonl`. Each show-text run records its
+layout, text, starting/ending cursor, right/bottom bounds, font/size/line spacing,
+requested/rendered glyph counts, wrapped-line count, and vertical-overflow stop.
+Use these to distinguish layout truncation from retained publication problems.
+The events are emitted only when timeline logging is enabled. Reproduce through
+normal startup: direct SC0000 launch may lack the game's required layout setup.
+
+### Asset warning script coordinates
+
+Normal Godot `[asset-resolution]` warnings now append the current script/offset,
+opcode, and script call stack when VM tracing has initialized. ResourceMap still
+deduplicates by the original asset error, so the first occurrence is reported.
+For a repeatable failure, restart normally and copy the complete first warning;
+no timeline capture is needed to identify its caller. These coordinates describe
+the current VM state; main-thread render-resolution warnings may occur after the
+original resource binding, whereas synchronous set-texture warnings identify its
+executing instruction.
