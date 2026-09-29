@@ -523,13 +523,13 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "div"
-category = "unknown"
-summary = ""
+category = "compute"
+summary = "(out)(dividend)(divisor) — signed integer quotient truncated toward zero (native IDIV); the VM returns 0 for a zero divisor."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x53_handler@0x4265c0 reads operands 2 and 3, CDQ+IDIV, and writes EAX to operand 1 (no zero-divisor guard). Floored division was an early-VM assumption; see 0x54 for the Kamidori SETTOOLBOX consequence. 2026-09-28."
 
 [[opcode.semantics.args]]
 i = 1
@@ -554,13 +554,13 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "mod"
-category = "unknown"
-summary = ""
+category = "compute"
+summary = "(out)(dividend)(divisor) — signed integer remainder with the dividend's sign (native IDIV EDX), not a floored modulo; the VM returns 0 for a zero divisor."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x54_handler@0x426600 reads operands 2 and 3, CDQ+IDIV, and writes EDX to operand 1, so -1 mod 18 = -1. Kamidori SETTOOLBOX@0x61 sizes the last item page as ((count-1) mod 18)+1; a floored remainder (17) made every empty inventory category show 18 zero-id entries. 2026-09-28."
 
 [[opcode.semantics.args]]
 i = 1

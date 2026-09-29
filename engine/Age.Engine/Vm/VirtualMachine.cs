@@ -402,8 +402,9 @@ public sealed partial class VirtualMachine
         => GlobalStringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
     private long ReadGlobal(int k) => ExternalGlobals.TryGetValue(k, out var v) ? v : Gi(Globals, k);
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
-    private static long PyDiv(long a, long b) { if (b == 0) return 0; long q = a / b, r = a % b; if (r != 0 && (r < 0) != (b < 0)) q--; return q; }
-    private static long PyMod(long a, long b) { if (b == 0) return 0; long r = a % b; if (r != 0 && (r < 0) != (b < 0)) r += b; return r; }
+    // Ops 0x53/0x54 are native CDQ+IDIV: truncate toward zero, remainder takes the dividend's sign.
+    private static long NativeDiv(long a, long b) => b == 0 ? 0 : a / b;
+    private static long NativeMod(long a, long b) => b == 0 ? 0 : a % b;
 
     private static bool IsStr(Operand o) => o.Type is T_STR or T_GSTR or T_GSTRPTR or T_LSTR or T_LSTRPTR;
     private static bool SameOperand(Operand a, Operand b) => a.Type == b.Type && a.Value == b.Value;

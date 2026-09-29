@@ -31,6 +31,39 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.All(Enumerable.Range(0x2e49, 3), address => Assert.Equal(0, vm.Globals[address]));
     }
 
+    // Native 0x53/0x54 are CDQ+IDIV: the quotient truncates toward zero and the remainder takes the
+    // dividend's sign. Kamidori SETTOOLBOX computes an empty category's page length as ((0-1) mod 18)+1,
+    // which must be 0; a floored remainder (17) fills a full page with zero-id items.
+    [Theory]
+    [InlineData(-1, 18, 0, -1)]
+    [InlineData(-19, 18, -1, -1)]
+    [InlineData(7, -2, -3, 1)]
+    [InlineData(-7, -2, 3, -1)]
+    [InlineData(35, 18, 1, 17)]
+    public void DivAndMod_TruncateTowardZeroLikeNativeIdiv(long dividend, long divisor, long quotient, long remainder)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        // Script immediates are non-negative; negate through `sub dst 0 x` as the game scripts do.
+        (int, Operand[]) Load(int local, long value) => value < 0
+            ? (0x51, new[] { new Operand(LocalInt, local), new Operand(Imm, 0), new Operand(Imm, -value) })
+            : (0x55, new[] { new Operand(LocalInt, local), new Operand(Imm, value) });
+        var ops = new List<(int, Operand[])>
+        {
+            Load(1, dividend),
+            Load(2, divisor),
+            (0x53, new[] { new Operand(GlobalInt, 0x100), new Operand(LocalInt, 1), new Operand(LocalInt, 2) }),
+            (0x54, new[] { new Operand(GlobalInt, 0x101), new Operand(LocalInt, 1), new Operand(LocalInt, 2) }),
+            (0x2, Array.Empty<Operand>()),
+        };
+
+        var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "DIV_MOD", ops, Array.Empty<string>()), table,
+                                    new RecordingHost());
+        vm.Run();
+
+        Assert.Equal(quotient, vm.Globals[0x100]);
+        Assert.Equal(remainder, vm.Globals[0x101]);
+    }
+
     [Fact]
     public void RandomModulo_WritesAValueInsideTheNativeRange()
     {

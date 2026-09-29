@@ -689,6 +689,26 @@ The setter replaces the single pending request, marks it active, and clears its 
 
 ## compute
 
+### 0x53 `div` (div, argc 3)
+- **observed by:** himegari (SYS4422), kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4422` -> `age-vm-switch/0x53` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x53` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (out)(dividend)(divisor) — signed integer quotient truncated toward zero (native IDIV); the VM returns 0 for a zero divisor.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x53`; scope=Himegari SYS4422. Ghidra /v2: op_0x53_handler@0x4265c0 reads operands 2 and 3, CDQ+IDIV, and writes EAX to operand 1 (no zero-divisor guard). Floored division was an early-VM assumption; see 0x54 for the Kamidori SETTOOLBOX consequence. 2026-09-28.
+
+### 0x54 `mod` (mod, argc 3)
+- **observed by:** himegari (SYS4422), kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4422` -> `age-vm-switch/0x54` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x54` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (out)(dividend)(divisor) — signed integer remainder with the dividend's sign (native IDIV EDX), not a floored modulo; the VM returns 0 for a zero divisor.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x54`; scope=Himegari SYS4422. Ghidra /v2: op_0x54_handler@0x426600 reads operands 2 and 3, CDQ+IDIV, and writes EDX to operand 1, so -1 mod 18 = -1. Kamidori SETTOOLBOX@0x61 sizes the last item page as ((count-1) mod 18)+1; a floored remainder (17) made every empty inventory category show 18 zero-id entries. 2026-09-28.
+
 ### 0x60 `random-modulo` (u0041A270, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -3243,24 +3263,6 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **semantic status:** catalog-only
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x52` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x52` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x53 `div` (div, argc 3)
-- **observed by:** himegari (SYS4422), kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** yes
-- **handler bindings:** `SYS4422` -> `age-vm-switch/0x53` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x53` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** —
-- **grounding:** source=kelebek, confidence=med
-
-### 0x54 `mod` (mod, argc 3)
-- **observed by:** himegari (SYS4422), kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** yes
-- **handler bindings:** `SYS4422` -> `age-vm-switch/0x54` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x54` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** —
 - **grounding:** source=kelebek, confidence=med
 

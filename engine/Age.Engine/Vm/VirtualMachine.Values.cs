@@ -13,8 +13,8 @@ public sealed partial class VirtualMachine
             case "add": Write(a[0], Read(a[1]) + Read(a[2])); return pc + 1;
             case "sub": Write(a[0], Read(a[1]) - Read(a[2])); return pc + 1;
             case "mul": Write(a[0], Read(a[1]) * Read(a[2])); return pc + 1;
-            case "div": Write(a[0], PyDiv(Read(a[1]), Read(a[2]))); return pc + 1;
-            case "mod": Write(a[0], PyMod(Read(a[1]), Read(a[2]))); return pc + 1;
+            case "div": Write(a[0], NativeDiv(Read(a[1]), Read(a[2]))); return pc + 1;
+            case "mod": Write(a[0], NativeMod(Read(a[1]), Read(a[2]))); return pc + 1;
             case "and": Write(a[0], Read(a[1]) & Read(a[2])); return pc + 1;
             case "or":  Write(a[0], Read(a[1]) | Read(a[2])); return pc + 1;
             case "sar": Write(a[0], Read(a[1]) >> (int)(Read(a[2]) & 31)); return pc + 1;
