@@ -54,7 +54,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
     │   ├── build-windows-x64.sh               Linux-hosted Windows cross-export/package pipeline
     │   ├── dotnet_publish_proxy.py            guarded low-memory Godot export-time publish staging
-    │   ├── publish_gitea_release.py           guarded/retry-safe native Gitea release promotion
+    │   ├── publish_github_release.py          guarded/retry-safe draft-first GitHub release promotion
     │   ├── verify_windows_native.py           static AMD64 PE/native-bundle contract verifier
     │   ├── bootstrap-godot-linux-x64.sh       repo-local Godot 4.7 Linux editor/template bootstrap
     │   ├── godot-linux-x64.json               immutable Godot editor/template source + SHA-256 manifest
@@ -64,7 +64,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── test_install_godot_templates.py, test_package_linux_x64.py,
     │   │   test_package_windows_x64.py,
     │   │   test_dotnet_publish_proxy.py,
-    │   │   test_publish_gitea_release.py,
+    │   │   test_publish_github_release.py,
     │   │   test_release_workflow.py,
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)

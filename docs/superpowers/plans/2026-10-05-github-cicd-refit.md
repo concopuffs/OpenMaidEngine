@@ -1,7 +1,7 @@
 # GitHub CI/CD refit
 
-**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Step 1
-complete 2026-10-05 (first hosted run green).
+**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–2
+complete 2026-10-05; Step 3 implemented locally.
 
 **Supersedes:** an uncommitted 2026-09-30 dual-host mirror plan, abandoned and deleted when the project moved
 its single home to GitHub; its still-relevant findings are folded into §1 below.
@@ -244,6 +244,18 @@ re-run against a complete published release, refusal on an incomplete published 
 the token never appears in a subprocess argument list.
 
 **Gate:** the new test module and `--level core` are green.
+
+**Result (2026-10-05, local):** `publish_github_release.py` and `test_publish_github_release.py` renamed with
+`git mv`; `validate.py` `CORE_TESTS` updated. All ten artifact/evidence validation functions are unchanged
+(AST-identical to the Gitea tool). `target_commitish` question resolved empirically: the web-UI deps release
+reports `target_commitish == "develop"`, so the tool never trusts it; it resolves the tag via
+`GET /git/ref/tags/{tag}` (dereferencing annotated tags; confirmed live that `v0.3.3` resolves to its commit)
+and requires equality with `--target` before touching any release. Flow: published+complete → idempotent
+success; published+incomplete → refused; otherwise find-or-create the single draft → delete non-`uploaded`
+placeholders → upload missing → verify exact set/sizes/state → `PATCH draft=false, make_latest=true` → re-validate.
+12 tests (4 adapted originals + 8 new) pass, including the token-off-argv check; core gate green.
+`tools-reference.md` and `PROJECT-STRUCTURE.md` updated. The legacy `.gitea` release workflow still names the
+old script; Step 4 moves and rewrites it. The live GitHub API path is first exercised by Step 4's throwaway tag.
 
 ### Step 4 — Release builds and promotion on GitHub
 

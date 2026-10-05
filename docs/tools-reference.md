@@ -77,21 +77,28 @@ Only a successful `v*` tag run after both platform jobs enables the dependent pr
 two verified workflow artifacts into separate directories rather than rebuilding, checks out only the release
 tool, and receives job-local `releases: write` plus `contents: read`; branch and manual runs skip the job and
 never receive release authority. The built-in `secrets.GITEA_TOKEN` calls the native Gitea API, so no personal
-token or third-party release action is required. `publish_gitea_release.py` validates the version-like tag, both
-exact clean-build commit/target records, both external archive hashes, matching metadata/ledgers inside each
-archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import verification. It then generates one
-`RELEASE-SHA256SUMS` and publishes exactly three assets: the Linux `.tar.gz`, Windows `.zip`, and combined
-checksums. Detailed evidence remains inside each archive and in retained workflow artifacts. A retry resumes a
-matching partial release and uploads only missing files; it refuses mismatched releases, unexpected assets, or
-same-name/different-size collisions instead of editing, deleting, or overwriting them. The hosted develop run at
+token or third-party release action is required. (That wiring is the legacy Gitea workflow; it moves to
+`.github/workflows/` in step 4 of the GitHub CI/CD refit.) The promoter is now `publish_github_release.py`. It
+validates the version-like tag, both exact clean-build commit/target records, both external archive hashes,
+matching metadata/ledgers inside each archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import
+verification, then generates one `RELEASE-SHA256SUMS`. Before touching any release it resolves the tag through
+GitHub's git-ref API (dereferencing annotated tags) and requires that commit to equal `--target`; GitHub's
+`target_commitish` is not trusted because it can name a branch. It then creates a **draft** release (or resumes the
+single matching draft — drafts are invisible to GitHub's release-by-tag lookup, so they are found in the release
+list; more than one is refused), uploads only missing assets, deletes and re-uploads any placeholder left by an
+interrupted upload (asset `state` other than `uploaded`, drafts only), verifies the exact three-asset set with sizes
+and `uploaded` state, and only then publishes. A published release is never modified: an exact, complete one is an
+idempotent success; anything else is refused. Mismatched release metadata, unexpected assets, and
+same-name/different-size collisions are refused rather than edited or overwritten. Draft-first publication keeps
+releases compatible with GitHub's immutable-releases setting. The hosted develop run at
 `d657c63` completed both artifact jobs and skipped tag promotion as required on 2026-08-03. The subsequent
 `v0.2.0` tag at `93d8236` completed both builds and published exactly the two archives plus
 `RELEASE-SHA256SUMS`, accepting the promotion route end to end.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `publish_gitea_release.py` | Tag-only, retry-safe promotion of paired verified Linux/Windows workflow artifacts through Gitea's native release API. Revalidates both archives/evidence sets, writes combined release checksums, and exposes exactly three public assets. Requires `GITEA_TOKEN`; the token is passed to upload `curl` through standard input rather than its argument list. | `publish_gitea_release.py --server <url> --repository <owner/name> --tag <v...> --target <sha> --linux-artifact-directory <dir> --windows-artifact-directory <dir> --output-directory <dir>` | two verified downloaded workflow artifacts + tag context → matching Gitea release with Linux archive, Windows archive, and `RELEASE-SHA256SUMS` |
-| `test_publish_gitea_release.py` | Pure synthetic paired-artifact/archive validation, three-asset creation, retry/resume, collision, unexpected-asset, and mismatch regressions. | `test_publish_gitea_release.py` | temporary files only |
+| `publish_github_release.py` | Tag-only, retry-safe promotion of paired verified Linux/Windows workflow artifacts to a GitHub release. Revalidates both archives/evidence sets, checks the tag's commit via the git-ref API, writes combined release checksums, and publishes exactly three assets through a draft → upload → verify → publish flow. Requires `GITHUB_TOKEN` (`contents: write`); the token is passed to the upload `curl` through standard input rather than its argument list. | `publish_github_release.py --repository <owner/name> --tag <v...> --target <sha> --linux-artifact-directory <dir> --windows-artifact-directory <dir> --output-directory <dir>` | two verified downloaded workflow artifacts + tag context → published GitHub release with Linux archive, Windows archive, and `RELEASE-SHA256SUMS` |
+| `test_publish_github_release.py` | Pure synthetic paired-artifact/archive validation plus a GitHub-faithful fake API: draft creation then publish-after-verify, draft resume uploading only missing assets, interrupted-upload placeholder replacement, idempotent completed release, refusal of incomplete published releases, tag/target mismatch, multiple drafts, metadata/collision/unexpected-asset refusals, annotated-tag dereferencing, and the token never appearing in the upload command line. | `test_publish_github_release.py` | temporary files only |
 | `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, and promotion's dependency/download of both successful artifacts. | `test_release_workflow.py` | `.gitea/workflows/linux-release-build.yml` → assertions only |
 
 ## Optional local binary tools

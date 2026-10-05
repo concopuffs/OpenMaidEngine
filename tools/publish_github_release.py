@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate paired platform artifacts and promote three assets to Gitea."""
+"""Validate paired platform artifacts and promote three assets to a GitHub release."""
 from __future__ import annotations
 
 import argparse
@@ -47,28 +47,37 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+\Z")
 MAX_EVIDENCE_SIZE = 1024 * 1024
 
 
+API_URL = "https://api.github.com"
+UPLOADS_URL = "https://uploads.github.com"
+API_VERSION = "2022-11-28"
+
+
 class ReleaseApi(Protocol):
+    def tag_commit(self, tag: str) -> str: ...
+
     def get_release(self, tag: str) -> dict[str, Any] | None: ...
+
+    def find_draft_releases(self, tag: str) -> list[dict[str, Any]]: ...
 
     def create_release(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def list_assets(self, release_id: int) -> list[dict[str, Any]]: ...
 
+    def delete_asset(self, asset_id: int) -> None: ...
 
-class GiteaApi:
-    def __init__(self, server: str, repository: str, token: str) -> None:
-        parsed = urllib.parse.urlsplit(server)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError(f"invalid Gitea server URL: {server}")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("Gitea server URL must not contain credentials, a query, or a fragment")
+    def publish_release(self, release_id: int) -> dict[str, Any]: ...
+
+
+class GithubApi:
+    def __init__(self, repository: str, token: str) -> None:
         parts = repository.split("/")
         if len(parts) != 2 or not all(parts):
             raise ValueError(f"repository must be owner/name: {repository}")
         if not TOKEN_PATTERN.fullmatch(token):
-            raise ValueError("GITEA_TOKEN is missing or malformed")
+            raise ValueError("GITHUB_TOKEN is missing or malformed")
         owner, name = (urllib.parse.quote(part, safe="") for part in parts)
-        self.base_url = f"{server.rstrip('/')}/api/v1/repos/{owner}/{name}"
+        self.base_url = f"{API_URL}/repos/{owner}/{name}"
+        self.uploads_url = f"{UPLOADS_URL}/repos/{owner}/{name}"
         self.token = token
 
     def _request(
@@ -85,55 +94,112 @@ class GiteaApi:
             data=data,
             method=method,
             headers={
-                "Accept": "application/json",
-                "Authorization": f"token {self.token}",
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json",
                 "User-Agent": "OpenMaidEngine-release-promotion",
+                "X-GitHub-Api-Version": API_VERSION,
             },
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                return json.load(response)
+                body = response.read()
         except urllib.error.HTTPError as error:
             if allow_not_found and error.code == 404:
                 return None
             detail = error.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Gitea API {method} {path} failed ({error.code}): {detail}") from error
+            raise RuntimeError(f"GitHub API {method} {path} failed ({error.code}): {detail}") from error
+        if not body:
+            return None
+        return json.loads(body)
+
+    def tag_commit(self, tag: str) -> str:
+        result = self._request(
+            "GET",
+            "/git/ref/tags/" + urllib.parse.quote(tag, safe=""),
+            allow_not_found=True,
+        )
+        if result is None:
+            raise ValueError(f"release tag does not exist on GitHub: {tag}")
+        target = result.get("object") if isinstance(result, dict) else None
+        for _ in range(4):
+            if not isinstance(target, dict):
+                break
+            kind, sha = target.get("type"), target.get("sha")
+            if not isinstance(sha, str):
+                break
+            if kind == "commit":
+                return sha
+            if kind != "tag":
+                break
+            annotated = self._request("GET", f"/git/tags/{sha}")
+            target = annotated.get("object") if isinstance(annotated, dict) else None
+        raise RuntimeError(f"GitHub tag does not resolve to a commit: {tag}")
 
     def get_release(self, tag: str) -> dict[str, Any] | None:
+        # GitHub returns only published releases here; drafts are found by find_draft_releases.
         result = self._request(
             "GET",
             "/releases/tags/" + urllib.parse.quote(tag, safe=""),
             allow_not_found=True,
         )
-        assert result is None or isinstance(result, dict)
+        if result is not None and not isinstance(result, dict):
+            raise RuntimeError("GitHub release-by-tag response was not an object")
         return result
+
+    def find_draft_releases(self, tag: str) -> list[dict[str, Any]]:
+        result = self._request("GET", "/releases?per_page=100")
+        if not isinstance(result, list):
+            raise RuntimeError("GitHub release list response was not an array")
+        return [
+            release
+            for release in result
+            if isinstance(release, dict)
+            and release.get("draft") is True
+            and release.get("tag_name") == tag
+        ]
 
     def create_release(self, payload: dict[str, Any]) -> dict[str, Any]:
         result = self._request("POST", "/releases", payload=payload)
         if not isinstance(result, dict):
-            raise RuntimeError("Gitea create-release response was not an object")
+            raise RuntimeError("GitHub create-release response was not an object")
         return result
 
     def list_assets(self, release_id: int) -> list[dict[str, Any]]:
-        result = self._request("GET", f"/releases/{release_id}/assets")
+        result = self._request("GET", f"/releases/{release_id}/assets?per_page=100")
         if not isinstance(result, list):
-            raise RuntimeError("Gitea release-assets response was not an array")
+            raise RuntimeError("GitHub release-assets response was not an array")
+        return result
+
+    def delete_asset(self, asset_id: int) -> None:
+        self._request("DELETE", f"/releases/assets/{asset_id}")
+
+    def publish_release(self, release_id: int) -> dict[str, Any]:
+        result = self._request(
+            "PATCH",
+            f"/releases/{release_id}",
+            payload={"draft": False, "make_latest": "true"},
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("GitHub publish-release response was not an object")
         return result
 
     def upload_asset(self, release_id: int, asset: Path) -> dict[str, Any]:
         url = (
-            f"{self.base_url}/releases/{release_id}/assets?"
+            f"{self.uploads_url}/releases/{release_id}/assets?"
             + urllib.parse.urlencode({"name": asset.name})
         )
+        # The token travels on stdin, never in the process argument list.
         curl_config = (
-            f'header = "Authorization: token {self.token}"\n'
-            'header = "Accept: application/json"\n'
+            f'header = "Authorization: Bearer {self.token}"\n'
+            'header = "Accept: application/vnd.github+json"\n'
+            f'header = "X-GitHub-Api-Version: {API_VERSION}"\n'
+            'header = "Content-Type: application/octet-stream"\n'
         )
         process = subprocess.run(
             [
                 "curl", "--config", "-", "--fail-with-body", "--silent", "--show-error",
-                "--request", "POST", "--form", f"attachment=@{asset}", url,
+                "--request", "POST", "--data-binary", f"@{asset}", url,
             ],
             input=curl_config,
             text=True,
@@ -144,15 +210,15 @@ class GiteaApi:
         )
         if process.returncode != 0:
             raise RuntimeError(
-                f"Gitea asset upload failed for {asset.name}: "
+                f"GitHub asset upload failed for {asset.name}: "
                 f"{process.stderr.strip()} {process.stdout.strip()}".strip()
             )
         try:
             result = json.loads(process.stdout)
         except json.JSONDecodeError as error:
-            raise RuntimeError(f"Gitea asset upload returned invalid JSON for {asset.name}") from error
+            raise RuntimeError(f"GitHub asset upload returned invalid JSON for {asset.name}") from error
         if not isinstance(result, dict):
-            raise RuntimeError(f"Gitea asset upload response was not an object for {asset.name}")
+            raise RuntimeError(f"GitHub asset upload response was not an object for {asset.name}")
         return result
 
 
@@ -375,12 +441,11 @@ def prepare_release_assets(
     return [linux[LINUX_ARCHIVE], windows[WINDOWS_ARCHIVE], checksum_path]
 
 
-def _validate_release(release: dict[str, Any], tag: str, target: str, title: str) -> int:
+def _validate_release(release: dict[str, Any], tag: str, title: str, *, draft: bool) -> int:
     expected = {
         "tag_name": tag,
-        "target_commitish": target,
         "name": title,
-        "draft": False,
+        "draft": draft,
         "prerelease": False,
     }
     mismatches = {
@@ -389,11 +454,32 @@ def _validate_release(release: dict[str, Any], tag: str, target: str, title: str
         if release.get(key) != value
     }
     if mismatches:
-        raise ValueError(f"existing Gitea release does not match this promotion: {mismatches}")
+        raise ValueError(f"existing GitHub release does not match this promotion: {mismatches}")
     release_id = release.get("id")
     if not isinstance(release_id, int) or release_id <= 0:
-        raise ValueError("Gitea release has no valid numeric id")
+        raise ValueError("GitHub release has no valid numeric id")
     return release_id
+
+
+def _asset_index(assets: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    for asset in assets:
+        name = asset.get("name")
+        if isinstance(name, str):
+            if name in indexed:
+                raise ValueError(f"GitHub release has duplicate asset names: {name}")
+            indexed[name] = asset
+    return indexed
+
+
+def _require_exact_assets(assets: list[dict[str, Any]], sizes: dict[str, int], label: str) -> None:
+    indexed = _asset_index(assets)
+    if set(indexed) != EXPECTED_RELEASE_ASSETS:
+        raise RuntimeError(f"{label} does not hold exactly the verified assets: {sorted(indexed)}")
+    for name, size in sizes.items():
+        asset = indexed[name]
+        if asset.get("size") != size or asset.get("state") != "uploaded":
+            raise RuntimeError(f"{label} asset verification failed: {name}")
 
 
 def promote_release(
@@ -410,9 +496,26 @@ def promote_release(
     )
     if {asset.name for asset in assets} != EXPECTED_RELEASE_ASSETS:
         raise RuntimeError("prepared release asset set is invalid")
+    # target_commitish is not trustworthy on GitHub (it can name a branch), so check the tag itself.
+    tag_commit = api.tag_commit(tag)
+    if tag_commit != target:
+        raise ValueError(f"release tag {tag} points at {tag_commit}, not the promoted target {target}")
+    sizes = {asset.name: asset.stat().st_size for asset in assets}
     title = f"Open Maid Engine {tag}"
-    release = api.get_release(tag)
-    if release is None:
+
+    published = api.get_release(tag)
+    if published is not None:
+        # A published release cannot be repaired without unpublishing; accept only a completed re-run.
+        release_id = _validate_release(published, tag, title, draft=False)
+        _require_exact_assets(api.list_assets(release_id), sizes, "published GitHub release")
+        return published
+
+    drafts = api.find_draft_releases(tag)
+    if len(drafts) > 1:
+        raise ValueError(f"more than one draft GitHub release exists for {tag}")
+    if drafts:
+        release = drafts[0]
+    else:
         release = api.create_release({
             "tag_name": tag,
             "target_commitish": target,
@@ -423,46 +526,43 @@ def promote_release(
                 "passed structural AMD64 PE, payload, ABI export, and FFmpeg import verification without "
                 "executing the EXE. Each archive contains its detailed build metadata and payload ledger."
             ),
-            "draft": False,
+            "draft": True,
             "prerelease": False,
         })
-    release_id = _validate_release(release, tag, target, title)
+    release_id = _validate_release(release, tag, title, draft=True)
 
-    existing_assets: dict[str, dict[str, Any]] = {}
-    for existing in api.list_assets(release_id):
-        name = existing.get("name")
-        if isinstance(name, str):
-            if name in existing_assets:
-                raise ValueError(f"Gitea release has duplicate asset names: {name}")
-            existing_assets[name] = existing
+    existing_assets = _asset_index(api.list_assets(release_id))
     unexpected = sorted(set(existing_assets) - EXPECTED_RELEASE_ASSETS)
     if unexpected:
-        raise ValueError("Gitea release has unexpected assets: " + ", ".join(unexpected))
+        raise ValueError("GitHub release has unexpected assets: " + ", ".join(unexpected))
 
     for asset in assets:
         existing = existing_assets.get(asset.name)
+        if existing is not None and existing.get("state") != "uploaded":
+            # An interrupted upload leaves a placeholder that blocks the name; drafts can safely drop it.
+            asset_id = existing.get("id")
+            if not isinstance(asset_id, int) or asset_id <= 0:
+                raise ValueError(f"incomplete release asset has no valid numeric id: {asset.name}")
+            api.delete_asset(asset_id)
+            existing = None
         if existing is not None:
-            if existing.get("size") != asset.stat().st_size:
+            if existing.get("size") != sizes[asset.name]:
                 raise ValueError(
                     f"existing release asset differs in size and will not be overwritten: {asset.name}"
                 )
             continue
         uploaded = upload(release_id, asset)
-        if uploaded.get("name") != asset.name or uploaded.get("size") != asset.stat().st_size:
-            raise RuntimeError(f"Gitea reported an unexpected uploaded asset: {asset.name}")
+        if uploaded.get("name") != asset.name or uploaded.get("size") != sizes[asset.name]:
+            raise RuntimeError(f"GitHub reported an unexpected uploaded asset: {asset.name}")
 
-    final_assets = {asset.get("name"): asset for asset in api.list_assets(release_id)}
-    if set(final_assets) != EXPECTED_RELEASE_ASSETS:
-        raise RuntimeError(f"release asset verification failed: {sorted(final_assets)}")
-    for asset in assets:
-        if final_assets[asset.name].get("size") != asset.stat().st_size:
-            raise RuntimeError(f"release asset verification failed: {asset.name}")
+    _require_exact_assets(api.list_assets(release_id), sizes, "draft GitHub release")
+    release = api.publish_release(release_id)
+    _validate_release(release, tag, title, draft=False)
     return release
 
 
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--server", required=True)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--target", required=True)
@@ -471,8 +571,8 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--output-directory", required=True, type=Path)
     args = parser.parse_args(arguments)
 
-    token = os.environ.get("GITEA_TOKEN", "")
-    api = GiteaApi(args.server, args.repository, token)
+    token = os.environ.get("GITHUB_TOKEN", "")
+    api = GithubApi(args.repository, token)
     release = promote_release(
         api,
         api.upload_asset,
@@ -482,7 +582,7 @@ def main(arguments: list[str] | None = None) -> int:
         args.windows_artifact_directory,
         args.output_directory,
     )
-    print(f"Gitea release ready: {release.get('html_url', args.tag)}")
+    print(f"GitHub release ready: {release.get('html_url', args.tag)}")
     return 0
 
 
