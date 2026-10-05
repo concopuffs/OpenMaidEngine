@@ -3,7 +3,7 @@
   "release_tag": "autobuild-2026-08-17-13-05",
   "mirror_version": "btbn-autobuild-2026-08-17-13-05",
   "archive": "ffmpeg-n8.1.2-44-g7c533d0f86-win64-lgpl-shared-8.1.zip",
-  "url": "https://git.orfl.xyz/api/packages/conco/generic/ome-ffmpeg-sdk/btbn-autobuild-2026-08-17-13-05/ffmpeg-n8.1.2-44-g7c533d0f86-win64-lgpl-shared-8.1.zip",
+  "url": "https://github.com/concopuffs/OpenMaidEngine/releases/download/deps-ffmpeg-btbn-autobuild-2026-08-17-13-05/ffmpeg-n8.1.2-44-g7c533d0f86-win64-lgpl-shared-8.1.zip",
   "upstream_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-17-13-05/ffmpeg-n8.1.2-44-g7c533d0f86-win64-lgpl-shared-8.1.zip",
   "size": 70837934,
   "sha256": "681b9ca6d8f9be1e01d8873ad16f8a632f8a22b9653f1044837de6d5979b0fd6",

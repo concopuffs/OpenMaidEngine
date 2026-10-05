@@ -307,12 +307,16 @@ send either the `step-limit` console block or the generated JSON.
 ## Native FFmpeg movie shim (Windows and Linux x64)
 
 The target-specific dependency manifests pin dated LGPL shared FFmpeg archives by exact byte size and SHA-256.
-Their primary URLs use the anonymously readable, immutable `conco/ome-ffmpeg-sdk` generic package on the project
-Gitea server; `upstream_url` records the original BtbN release location for provenance. BtbN prunes older dated
-autobuild releases, so bootstraps do not depend on those upstream URLs remaining live. Uploading a different file
-under an existing Gitea package version is forbidden; a dependency change requires a new version plus a paired
-manifest update and full native/movie validation. Bootstrap downloads remove partial files on HTTP failure before
-validating the complete archive. Windows development can use PowerShell/MSVC. Linux-hosted builds use Bash with
+Their `url` is an asset of this repository's GitHub release `deps-ffmpeg-<mirror_version>` (currently
+`deps-ffmpeg-btbn-autobuild-2026-08-17-13-05`), which carries both platform archives; the tag deliberately does not
+start with `v`, so it can never trigger the release workflow. `upstream_url` records the original BtbN release
+location for provenance. BtbN prunes older dated autobuild releases, so bootstraps do not depend on those upstream
+URLs remaining live. Replacing an asset on an existing `deps-ffmpeg-*` release is forbidden; a dependency change
+requires a new `mirror_version` and release, a paired manifest update, and full native/movie validation.
+`test_release_workflow.py` asserts each `url` is exactly the release-download URL derived from `mirror_version`
+and `archive`. Bootstrap downloads remove partial files on HTTP failure before validating the complete archive;
+the Bash bootstraps therefore need curl 7.83 or newer (`--remove-on-error`), which Ubuntu 24.04 provides and
+Ubuntu 20.04's 7.68 does not. Windows development can use PowerShell/MSVC. Linux-hosted builds use Bash with
 Python 3, curl, MinGW-w64/binutils for the Windows target, a native C compiler/binutils for Linux, and the ordinary
 archive/core utilities available.
 

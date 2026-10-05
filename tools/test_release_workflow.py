@@ -54,13 +54,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertRegex(manifest["release_tag"], r"^autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$")
             self.assertNotEqual("latest", manifest["release_tag"])
             self.assertEqual(f"btbn-{manifest['release_tag']}", manifest["mirror_version"])
-            self.assertTrue(
-                manifest["url"].startswith(
-                    "https://git.orfl.xyz/api/packages/conco/generic/ome-ffmpeg-sdk/"
-                )
+            self.assertEqual(
+                "https://github.com/concopuffs/OpenMaidEngine/releases/download/"
+                f"deps-ffmpeg-{manifest['mirror_version']}/{manifest['archive']}",
+                manifest["url"],
             )
-            self.assertIn(f"/{manifest['mirror_version']}/", manifest["url"])
-            self.assertTrue(manifest["url"].endswith("/" + manifest["archive"]))
             self.assertTrue(
                 manifest["upstream_url"].startswith(
                     "https://github.com/BtbN/FFmpeg-Builds/releases/download/"

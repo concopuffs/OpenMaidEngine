@@ -1,7 +1,7 @@
 # GitHub CI/CD refit
 
 **Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Step 1
-implemented locally 2026-10-05 (awaiting first hosted run).
+complete 2026-10-05 (first hosted run green).
 
 **Supersedes:** an uncommitted 2026-09-30 dual-host mirror plan, abandoned and deleted when the project moved
 its single home to GitHub; its still-relevant findings are folded into §1 below.
@@ -159,8 +159,9 @@ table above. Pins: `actions/checkout` v4.4.0 `11d5960a…`, `actions/setup-pytho
 `actions/setup-dotnet` v4.3.1 `67a3573c…`, `actions/upload-artifact` v4.6.2 `ea165f8d…` (resolved from each
 action's own tags). `actionlint` 1.7.12 (checksum-verified release binary): clean. Local `--level core`: green.
 `tools-reference.md`, `PROJECT-STRUCTURE.md`, and `platform-portability.md` now describe the GitHub gate.
-**Pending:** the first hosted run on GitHub (needs the commit pushed), and Step 0's settings, which are
-GitHub-UI-only.
+**Hosted (2026-10-05):** committed as `5d429b2` and pushed with tags `v0.1.0`–`v0.3.3` (Q4; no releases).
+The first GitHub run, Actions run 37381034592, passed every step in under a minute on the hosted runner.
+Step 0 settings confirmed by the user. **Step 1 is complete.**
 
 ### Step 2 — Re-host the FFmpeg SDK
 
@@ -180,6 +181,23 @@ GitHub-UI-only.
 **Gate:** all three bootstraps (`bootstrap-linux-x64.sh`, `bootstrap-win64.sh`, `bootstrap-win64.ps1`) download
 and verify from the new URL on a clean `build/downloads/`; `--level core` green; local Linux and Windows
 artifact builds complete under WSL. Nothing in the tree still names `git.orfl.xyz` except historical docs.
+
+**Result (2026-10-05, local):** the user created release `deps-ffmpeg-btbn-autobuild-2026-08-17-13-05` in the
+web UI with both pinned archives (not marked latest, not immutable). Fresh anonymous downloads of both assets
+match the manifests' size and SHA-256 exactly. Both manifests' `url` now point at that release (all other fields
+byte-identical); `test_release_workflow.py` now asserts the exact derived URL instead of a host prefix plus a
+`/{mirror_version}/` segment (the new path segment is `deps-ffmpeg-{mirror_version}`, which the old segment
+check could not match); the Godot template downloader's User-Agent names the GitHub repository. From an empty
+`build/downloads/` in a scratch copy, `bootstrap-win64.ps1` (Windows PowerShell 5.1) and both Bash bootstraps
+(WSL) downloaded, verified, and extracted successfully. **Environment finding:** the Bash bootstraps' `curl
+--remove-on-error` needs curl ≥ 7.83; this machine's WSL Ubuntu 20.04 (7.68) and Git Bash (7.69) lack it, so the
+Bash runs used a test-only PATH shim that dropped that one flag; `ubuntu-24.04` (Q3) ships curl 8.x. Local WSL
+artifact builds are unaffected because the archives are byte-identical and already cached; Step 4's first hosted
+build exercises the real download. Core gate green. `tools-reference.md` and `platform-portability.md` updated.
+**Open (Q1 licensing):** `THIRD_PARTY_NOTICES.md` has no FFmpeg section, and the deps release carries the BtbN
+archives' bundled license text but no pointer to corresponding source; `platform-portability.md` already states
+that release artifacts must carry the matching FFmpeg source/configuration and notices. Needs a decision before
+the first `v*` release.
 
 ### Step 3 — Release tool for GitHub
 
