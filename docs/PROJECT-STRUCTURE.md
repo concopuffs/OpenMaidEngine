@@ -38,8 +38,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
-    ├── .gitea/workflows/core-validation.yml  read-only Ubuntu source-only core gate for the private Gitea remote
-    ├── .gitea/workflows/linux-release-build.yml
+    ├── .github/workflows/core-validation.yml read-only, SHA-pinned Ubuntu 24.04 source-only core gate (GitHub Actions)
+    ├── .github/dependabot.yml                weekly grouped GitHub Actions pin bumps against develop
+    ├── .gitea/workflows/linux-release-build.yml   (legacy; moves to .github/ in the CI/CD refit)
     │                                       independent Linux/Windows x64 artifact jobs plus Linux-only tag promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,

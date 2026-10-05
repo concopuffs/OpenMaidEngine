@@ -46,18 +46,19 @@ py -3.11 -X utf8 tools/validate.py --level workspace --profile himegari
 py -3.11 -X utf8 tools/validate.py --level workspace --profile kamidori
 ```
 
-The hosted wrapper is `.gitea/workflows/core-validation.yml`. It matches the target server's demonstrated
-`ubuntu-latest`, `actions/checkout@v4`, `actions/setup-dotnet@v4`, and
-`christopherhx/gitea-upload-artifact@v4` baseline, adds Python 3.11, and runs only `--level core`. A standalone
-source-only repository under an arbitrary directory name passes that exact driver without sibling game or
-extracted data. Repository discovery uses tracked marker files rather than requiring the checkout directory to
-be named `age-reimpl`. The workflow has no secrets, private corpus, Godot runtime, cache, packaging, or deployment
-access; failure logs are retained for seven days. The private remote's default and tracked development branch is
-`develop`; pushes and pull requests targeting it select the gate. The rewritten repository is published there,
-and the first actual Linux/Gitea core run succeeded on 2026-08-03 before the later source-history sanitation;
-its tree-equivalent rewritten commit is `524ea74`. The hosted gate also succeeded on the sanitized lineage at
-`d673652` on 2026-08-03. The same driver now owns the constrained-memory .NET environment rather than relying on
-workflow-only settings, so local and hosted core/workspace runs share the Roslyn memory contract.
+The hosted wrapper is `.github/workflows/core-validation.yml` (GitHub Actions). One read-only job on the pinned
+`ubuntu-24.04` image provisions Python 3.11 and the SDK selected by `global.json`, reports both, and runs only
+`--level core`. Every action is pinned to a full commit SHA with its release in a trailing comment;
+`.github/dependabot.yml` proposes weekly grouped pin bumps against `develop`. A standalone source-only repository
+under an arbitrary directory name passes that exact driver without sibling game or extracted data. Repository
+discovery uses tracked marker files rather than requiring the checkout directory to be named `age-reimpl`. The
+workflow has no secrets, private corpus, Godot runtime, cache, packaging, or deployment access; checkout does not
+persist credentials, and failure logs are retained for seven days. `develop` is the default and tracked
+development branch; pushes and pull requests targeting it, plus manual dispatch, select the gate (`pull_request`,
+never `pull_request_target`). The same driver owns the constrained-memory .NET environment rather than relying on
+workflow-only settings, so local and hosted core/workspace runs share the Roslyn memory contract. The gate ran on
+the former Gitea host from 2026-08-03 until the 2026-10 move to GitHub; that history is recorded in
+`docs/remake-architecture-and-roadmap.md`.
 
 The artifact wrapper is `.gitea/workflows/linux-release-build.yml`. It runs independently from the fast core
 gate on `develop` pushes, manual dispatch, and `v*` tag pushes. Independent Linux and Windows jobs use the same
