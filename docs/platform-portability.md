@@ -52,40 +52,43 @@ project license, third-party notices, build provenance, and a complete SHA-256 l
 passes an asset-independent headless gate before packaging success is reported: the embedded 548-opcode table
 loads and the project-owned shim resolves its local FFmpeg libraries at ABI 3. This proves artifact assembly and
 native loading without weakening the separate installed-game/font/render/audio acceptance gates. A local Ubuntu
-20.04 WSL proof passed using isolated Python 3.11/.NET 8.0.408 toolchains; the eventual Gitea job can provide those
-through its existing setup actions.
+20.04 WSL proof passed using isolated Python 3.11/.NET 8.0.408 toolchains; the hosted job provides those through
+its pinned setup actions.
 
-The hosted artifact wrapper is now `.gitea/workflows/linux-release-build.yml`. It invokes that exact local
-command on `develop`, manual dispatch, and `v*` tags while the independent source-only core workflow remains the
-fast integration gate. The cache key is derived from both immutable dependency manifests and has no broad restore
-prefix; cached archives/templates are still size/hash checked by their owning bootstrap before use. A successful
-job retains the archive, external build/checksum manifests, and smoke log for 30 days. It has only read access to
-repository contents and does not use private data, secrets, registry credentials, or release-write permission.
-The first hosted execution reached Godot's managed publish but was killed with status 137. Local stage-level
-measurement reproduced the pressure: the resident Godot export peaks at 772,476 KiB and an isolated managed
-publish peaks at 223,764 KiB, so nesting the latter under the former can cross a roughly 1 GiB runner cgroup.
-The build now serializes those peaks: it creates the exact self-contained publish first with compiler/build
-servers disabled, lets the real Godot export consume a strictly validated one-assembly proxy publish, and stages
-the complete external managed payload only after Godot exits. The complete revised path passes locally, including
-payload verification and the packaged opcode/FFmpeg smoke gate. The hosted retry at `400f431` then completed
-successfully on 2026-08-03, accepting the mitigation and the complete build/smoke/artifact-upload path on the
-target runner. The workflow reports both host memory and cgroup limits for future diagnostics.
+The hosted artifact wrapper is `.github/workflows/release-build.yml` on GitHub Actions' pinned `ubuntu-24.04` image
+(until 2026-10-05 it ran as `.gitea/workflows/linux-release-build.yml` on the former Gitea host, where the
+acceptance runs recorded below took place). It invokes that exact local command on `develop`, manual dispatch, and
+`v*` tags while the independent source-only core workflow remains the fast integration gate. The cache key is
+derived from both immutable dependency manifests and has no broad restore prefix; cached archives/templates are
+still size/hash checked by their owning bootstrap before use. A successful job retains the archive, external
+build/checksum manifests, and smoke log for 30 days. It has only read access to repository contents and does not use
+private data, secrets, registry credentials, or release-write permission. The first hosted execution reached Godot's
+managed publish but was killed with status 137. Local stage-level measurement reproduced the pressure: the resident
+Godot export peaks at 772,476 KiB and an isolated managed publish peaks at 223,764 KiB, so nesting the latter under
+the former can cross a roughly 1 GiB runner cgroup. The build now serializes those peaks: it creates the exact
+self-contained publish first with compiler/build servers disabled, lets the real Godot export consume a strictly
+validated one-assembly proxy publish, and stages the complete external managed payload only after Godot exits. The
+complete revised path passes locally, including payload verification and the packaged opcode/FFmpeg smoke gate. The
+hosted retry at `400f431` then completed successfully on 2026-08-03, accepting the mitigation and the complete
+build/smoke/artifact-upload path on the target runner. The workflow reports both host memory and cgroup limits for
+future diagnostics.
 
-Tag-only release promotion is now part of the same workflow without changing that build trust boundary. The
-build job always retains read-only contents permission and uploads one flat five-file artifact: the archive, its
-external SHA-256, build metadata, payload checksum ledger, and smoke log. A dependent job
-runs only after a successful `v*` tag build, downloads that exact artifact without rebuilding, and receives
-job-local `releases: write`. It uses the built-in Gitea job token with the native 1.25 release/attachment API;
-branch and manual runs never receive release authority, and no personal secret or third-party release action is
-introduced. Promotion rechecks the clean source commit, archive checksum, and accepted smoke result after
-artifact download. It is retry-safe but fail-closed: a matching partial release can receive missing assets,
-while mismatched release identity or a same-name/different-size asset is never edited, deleted, or overwritten.
-The first hosted develop run containing promotion completed successfully at `f0f5f12` on 2026-08-03 and Gitea
-reported the tag-only job as skipped, accepting the non-tag permission boundary. The remaining acceptance gate
-was a deliberate first version tag and inspection of its five release attachments. That gate passed with the
-lightweight `v0.1.0` tag at `5fe3cd6` on 2026-08-03: the tag build and promotion job completed successfully, and
-the Gitea release carries the archive, archive checksum, build metadata, payload ledger, and smoke log. The Linux
-CI/CD path is therefore accepted end to end.
+Tag-only release promotion is now part of the same workflow without changing that build trust boundary. The build
+job always retains read-only contents permission and uploads one flat five-file artifact: the archive, its external
+SHA-256, build metadata, payload checksum ledger, and smoke log. A dependent job runs only after a successful `v*`
+tag build, downloads that exact artifact without rebuilding, and is the only job granted `contents: write` (which
+covers releases on GitHub). It uses the run's built-in `github.token` with the GitHub Releases API; branch and
+manual runs never receive write authority, and no personal secret or third-party release action is introduced.
+Promotion rechecks the clean source commit, archive checksum, and accepted smoke result after artifact download, and
+confirms through the git-ref API that the tag names that commit. It is retry-safe but fail-closed: assets are
+uploaded to a draft that is published only after the exact asset set verifies, an interrupted draft resumes with
+only its missing assets, and a published release, a mismatched release identity, or a same-name/different-size asset
+is never edited, deleted, or overwritten. On the former Gitea host, the first hosted develop run containing
+promotion completed successfully at `f0f5f12` on 2026-08-03 and reported the tag-only job as skipped, accepting the
+non-tag permission boundary. The remaining acceptance gate was a deliberate first version tag and inspection of its
+five release attachments. That gate passed with the lightweight `v0.1.0` tag at `5fe3cd6` on 2026-08-03: the tag
+build and promotion job completed successfully, and that Gitea release carries the archive, archive checksum, build
+metadata, payload ledger, and smoke log. The Linux CI/CD path is therefore accepted end to end.
 
 ## Windows x64 CI/CD artifact
 
@@ -145,25 +148,24 @@ release authority. Source-only workflow regressions pin those rules and preserve
 platform artifact jobs completed and the tag-only promotion job was skipped. The Windows hosted artifact path is
 therefore accepted; dual-platform promotion is the remaining CI/CD slice.
 
-Dual-platform promotion was implemented on 2026-08-03. The tag-only job now requires both successful build jobs
-and downloads their retained artifacts into separate directories without rebuilding. The release helper rechecks
-both external archive hashes, exact clean tag-commit metadata and target RID, matching build metadata/payload
-ledgers inside each archive, Linux's accepted dynamic package smoke, and Windows's complete static AMD64/ABI/
-import report. It creates or resumes only a matching release, rejects unexpected or colliding assets, and exposes
-exactly two distributable archives:
-`OME-linux-x64.tar.gz` and `OME-windows-x64.zip`. A third small
-`RELEASE-SHA256SUMS` attachment will authenticate both archives while keeping the release below Gitea's observed
-five-attachment boundary; detailed build metadata, payload ledgers, and logs remain inside each archive and in
-the retained workflow artifacts. The release notes will state that Linux received the dynamic package smoke and
-Windows received structural cross-target verification only. Source-only paired creation/resume/refusal tests
-pass. The hosted develop run at `d657c63` completed both platform builds and correctly skipped tag promotion on
-2026-08-03, accepting the paired non-tag path. Its core job initially failed before checkout on a transient
-runner DNS lookup for GitHub, then passed unchanged on retry; this was infrastructure availability rather than a
-validation failure. The lightweight `v0.2.0` tag at `93d8236` then completed both platform jobs and promotion on
-2026-08-03. That historical release retains its then-current `OpenMaidEngine-Himegari-*` archive names; future
-builds and releases use the `OME-*` names above. The resulting Gitea release exposes exactly the Linux archive,
-Windows archive, and `RELEASE-SHA256SUMS`, accepting the dual-platform CI/CD path end to end; `v0.1.0` remains
-unchanged.
+Dual-platform promotion was implemented on 2026-08-03. The tag-only job now requires both successful build jobs and
+downloads their retained artifacts into separate directories without rebuilding. The release helper rechecks both
+external archive hashes, exact clean tag-commit metadata and target RID, matching build metadata/payload ledgers
+inside each archive, Linux's accepted dynamic package smoke, and Windows's complete static AMD64/ABI/ import report.
+It creates or resumes only a matching release, rejects unexpected or colliding assets, and exposes exactly two
+distributable archives: `OME-linux-x64.tar.gz` and `OME-windows-x64.zip`. A third small `RELEASE-SHA256SUMS`
+attachment authenticates both archives (the three-asset shape was originally chosen to stay below the former Gitea
+host's observed five-attachment boundary and is kept unchanged on GitHub); detailed build metadata, payload ledgers,
+and logs remain inside each archive and in the retained workflow artifacts. The release notes will state that Linux
+received the dynamic package smoke and Windows received structural cross-target verification only. Source-only
+paired creation/resume/refusal tests pass. The hosted develop run at `d657c63` completed both platform builds and
+correctly skipped tag promotion on 2026-08-03, accepting the paired non-tag path. Its core job initially failed
+before checkout on a transient runner DNS lookup for GitHub, then passed unchanged on retry; this was infrastructure
+availability rather than a validation failure. The lightweight `v0.2.0` tag at `93d8236` then completed both
+platform jobs and promotion on 2026-08-03. That historical release retains its then-current
+`OpenMaidEngine-Himegari-*` archive names; future builds and releases use the `OME-*` names above. The resulting
+Gitea release exposed exactly the Linux archive, Windows archive, and `RELEASE-SHA256SUMS`, accepting the
+dual-platform CI/CD path end to end; `v0.1.0` remains unchanged.
 
 Code signing, an installer, Windows-on-Linux execution, and retroactively modifying the accepted Linux-only
 `v0.1.0` release are outside this effort. A future signing slice can use `osslsigncode` and protected credentials

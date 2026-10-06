@@ -1,7 +1,7 @@
 # GitHub CI/CD refit
 
-**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–2
-complete 2026-10-05; Step 3 implemented locally.
+**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–3
+complete 2026-10-05; Step 4 implemented locally (hosted gates pending).
 
 **Supersedes:** an uncommitted 2026-09-30 dual-host mirror plan, abandoned and deleted when the project moved
 its single home to GitHub; its still-relevant findings are folded into §1 below.
@@ -296,6 +296,21 @@ assert the publish job is tag-gated, holds `contents: write`, uses `github.token
 2. A throwaway tag (e.g. `v0.0.1-ci.1`) produces a published release with exactly the three assets, and
    `RELEASE-SHA256SUMS` matches both downloaded archives. Then delete that release and tag.
 3. Re-running the promotion job on the same tag is a no-op success (idempotence on GitHub).
+
+**Result (2026-10-05, local):** `git mv .gitea/workflows/linux-release-build.yml .github/workflows/release-build.yml`;
+`.gitea/` no longer exists. A line diff against the Gitea file shows exactly the substitution table: `github.*`
+contexts, `ubuntu-24.04` on all three jobs, every action SHA-pinned (adds `actions/cache` v4.3.0 `0057852b…` and
+`actions/download-artifact` v4.3.0 `d3f86a10…` to the Step 1 pins), the official upload/download artifact actions,
+`contents: write` replacing the Gitea-only `releases: write` on the publish job alone, `github.token` as
+`GITHUB_TOKEN`, and `publish_github_release.py` without `--server`. The planned extra publish-job
+`git rev-parse` tag check was dropped as redundant: Step 3's tool already verifies the tag's commit against
+`--target` through the GitHub API, which is stronger than a check against the runner's own checkout.
+`test_release_workflow.py` now reads the new path, asserts the GitHub publish wiring and that build jobs hold no
+write permission or token, forbids `secrets.` anywhere in the file, and gains a cross-workflow policy test (full-SHA
+pins with version comments, `ubuntu-24.04` only, no `pull_request_target`, no `.gitea/`). `actionlint` clean on both
+workflows; 8 policy tests and the core gate green. `tools-reference.md`, `PROJECT-STRUCTURE.md`,
+`platform-portability.md` (Gitea-era acceptance history kept and labelled as such), and workspace `AGENTS.md`
+updated. **Pending:** hosted gates 1–3 (develop push build, throwaway-tag release, idempotent re-run).
 
 ### Step 5 — Remove Gitea remnants and close out docs
 

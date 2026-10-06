@@ -40,8 +40,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                         tracked source and generated references use canonical LF
     ├── .github/workflows/core-validation.yml read-only, SHA-pinned Ubuntu 24.04 source-only core gate (GitHub Actions)
     ├── .github/dependabot.yml                weekly grouped GitHub Actions pin bumps against develop
-    ├── .gitea/workflows/linux-release-build.yml   (legacy; moves to .github/ in the CI/CD refit)
-    │                                       independent Linux/Windows x64 artifact jobs plus Linux-only tag promotion
+    ├── .github/workflows/release-build.yml   SHA-pinned Ubuntu 24.04 Linux/Windows x64 artifact jobs + tag-only promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
     │                                          PATH, and the selected profile's conventional sibling install;

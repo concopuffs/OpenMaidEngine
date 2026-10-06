@@ -12,13 +12,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-builds-${{ gitea.ref }}
+  group: release-builds-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   linux-release:
     name: Linux x64 artifact
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -27,23 +27,23 @@ jobs:
       PYTHONUTF8: "1"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
           architecture: x64
 
       - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
 
       - name: Restore immutable Linux inputs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             build/downloads/Godot_*_mono_linux_x86_64.zip
@@ -77,18 +77,18 @@ jobs:
           sha256sum OME-linux-x64.tar.gz > OME-linux-x64.tar.gz.sha256
 
       - name: Upload verified Linux package
-        uses: christopherhx/gitea-upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: OME-linux-x64-${{ gitea.sha }}
+          name: OME-linux-x64-${{ github.sha }}
           path: build/workflow-artifact/*
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload failure logs
         if: failure()
-        uses: christopherhx/gitea-upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: linux-release-failure-${{ gitea.run_id }}-${{ gitea.run_attempt }}
+          name: linux-release-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/package/package-smoke.log
             build/validation/**
@@ -97,7 +97,7 @@ jobs:
 
   windows-release:
     name: Windows x64 artifact
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -107,18 +107,18 @@ jobs:
       MINGW_CC: x86_64-w64-mingw32-gcc-posix
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
           architecture: x64
 
       - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
 
@@ -129,7 +129,7 @@ jobs:
             gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
 
       - name: Restore immutable Windows inputs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             build/downloads/Godot_*_mono_linux_x86_64.zip
@@ -163,18 +163,18 @@ jobs:
           sha256sum OME-windows-x64.zip > OME-windows-x64.zip.sha256
 
       - name: Upload verified Windows package
-        uses: christopherhx/gitea-upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: OME-windows-x64-${{ gitea.sha }}
+          name: OME-windows-x64-${{ github.sha }}
           path: build/workflow-artifact-windows/*
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload failure evidence
         if: failure()
-        uses: christopherhx/gitea-upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: windows-release-failure-${{ gitea.run_id }}-${{ gitea.run_attempt }}
+          name: windows-release-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/native/win-x64/verification.json
             build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json
@@ -183,50 +183,48 @@ jobs:
           retention-days: 7
 
   publish-release:
-    name: Publish tagged Gitea release
-    if: startsWith(gitea.ref, 'refs/tags/v')
+    name: Publish tagged GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - linux-release
       - windows-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
-      contents: read
-      # Gitea 1.25 granular scope; GitHub-oriented actionlint does not model it.
-      releases: write
+      # Releases are part of contents on GitHub; only this tag-gated job can write.
+      contents: write
     steps:
       - name: Check out release tooling
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
           architecture: x64
 
       - name: Download verified Linux artifact
-        uses: christopherhx/gitea-download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: OME-linux-x64-${{ gitea.sha }}
+          name: OME-linux-x64-${{ github.sha }}
           path: build/release-assets/linux
 
       - name: Download verified Windows artifact
-        uses: christopherhx/gitea-download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: OME-windows-x64-${{ gitea.sha }}
+          name: OME-windows-x64-${{ github.sha }}
           path: build/release-assets/windows
 
-      - name: Create or resume Gitea release
+      - name: Create or resume GitHub release
         env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -X utf8 tools/publish_gitea_release.py \
-            --server "${{ gitea.server_url }}" \
-            --repository "${{ gitea.repository }}" \
-            --tag "${{ gitea.ref_name }}" \
-            --target "${{ gitea.sha }}" \
+          python -X utf8 tools/publish_github_release.py \
+            --repository "${{ github.repository }}" \
+            --tag "${{ github.ref_name }}" \
+            --target "${{ github.sha }}" \
             --linux-artifact-directory build/release-assets/linux \
             --windows-artifact-directory build/release-assets/windows \
             --output-directory build/release-assets/prepared

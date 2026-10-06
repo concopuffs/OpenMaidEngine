@@ -60,46 +60,44 @@ workflow-only settings, so local and hosted core/workspace runs share the Roslyn
 the former Gitea host from 2026-08-03 until the 2026-10 move to GitHub; that history is recorded in
 `docs/remake-architecture-and-roadmap.md`.
 
-The artifact wrapper is `.gitea/workflows/linux-release-build.yml`. It runs independently from the fast core
-gate on `develop` pushes, manual dispatch, and `v*` tag pushes. Independent Linux and Windows jobs use the same
-Python 3.11 and `global.json` .NET setup actions and call their locally accepted build commands unchanged. The
-Windows job adds Ubuntu's MinGW-w64 GCC/binutils and never installs Wine. Each job has its own manifest-keyed
-`actions/cache@v4` entry with no prefix fallback: shared Linux Godot editor plus only that target's hash-verified
-FFmpeg archive and selectively installed release template. Linux uploads its `.tar.gz`, external SHA-256,
-`BUILD-INFO.json`, `SHA256SUMS`, and dynamic package-smoke log. Windows uploads its ZIP, external SHA-256,
-`BUILD-INFO.json`, `SHA256SUMS`, and `WINDOWS-VERIFICATION.json`; it does not execute the EXE. Both artifacts are
-retained for 30 days and failures retain bounded evidence for seven days. Both build jobs inherit read-only
-repository permission and have no secrets, private game corpus, or release/package publication authority. The
-first hosted dual-job develop run at `9d3ab30` succeeded on 2026-08-03: both platform artifacts completed and
-the tag-only promotion job was skipped. This accepts the Windows artifact job and its non-tag authority boundary.
+The artifact wrapper is `.github/workflows/release-build.yml` (GitHub Actions). It runs independently from the
+fast core gate on `develop` pushes, manual dispatch, and `v*` tag pushes. Independent Linux and Windows jobs on the
+pinned `ubuntu-24.04` image use the same Python 3.11 and `global.json` .NET setup actions and call their locally
+accepted build commands unchanged. The Windows job adds Ubuntu's MinGW-w64 GCC/binutils and never installs Wine.
+Each job has its own manifest-keyed `actions/cache` entry with no prefix fallback: shared Linux Godot editor plus
+only that target's hash-verified FFmpeg archive and selectively installed release template. Linux uploads its
+`.tar.gz`, external SHA-256, `BUILD-INFO.json`, `SHA256SUMS`, and dynamic package-smoke log. Windows uploads its
+ZIP, external SHA-256, `BUILD-INFO.json`, `SHA256SUMS`, and `WINDOWS-VERIFICATION.json`; it does not execute the
+EXE. Both artifacts are retained for 30 days and failures retain bounded evidence for seven days. Both build jobs
+inherit the workflow's read-only `contents: read` permission and have no secrets, token, private game corpus, or
+release publication authority. Every action is pinned to a full commit SHA, as in the core gate.
 
 Only a successful `v*` tag run after both platform jobs enables the dependent promotion job. It downloads the
 two verified workflow artifacts into separate directories rather than rebuilding, checks out only the release
-tool, and receives job-local `releases: write` plus `contents: read`; branch and manual runs skip the job and
-never receive release authority. The built-in `secrets.GITEA_TOKEN` calls the native Gitea API, so no personal
-token or third-party release action is required. (That wiring is the legacy Gitea workflow; it moves to
-`.github/workflows/` in step 4 of the GitHub CI/CD refit.) The promoter is now `publish_github_release.py`. It
-validates the version-like tag, both exact clean-build commit/target records, both external archive hashes,
-matching metadata/ledgers inside each archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import
+tool, and is the only job granted `contents: write` (which covers releases on GitHub); branch and manual runs
+skip it and never receive write authority. It passes the run's built-in `github.token` as `GITHUB_TOKEN`, so no
+personal token or third-party release action is required. `publish_github_release.py` validates the
+version-like tag, both exact clean-build commit/target records, both external archive hashes, matching
+metadata/ledgers inside each archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import
 verification, then generates one `RELEASE-SHA256SUMS`. Before touching any release it resolves the tag through
 GitHub's git-ref API (dereferencing annotated tags) and requires that commit to equal `--target`; GitHub's
-`target_commitish` is not trusted because it can name a branch. It then creates a **draft** release (or resumes the
-single matching draft — drafts are invisible to GitHub's release-by-tag lookup, so they are found in the release
-list; more than one is refused), uploads only missing assets, deletes and re-uploads any placeholder left by an
-interrupted upload (asset `state` other than `uploaded`, drafts only), verifies the exact three-asset set with sizes
-and `uploaded` state, and only then publishes. A published release is never modified: an exact, complete one is an
-idempotent success; anything else is refused. Mismatched release metadata, unexpected assets, and
-same-name/different-size collisions are refused rather than edited or overwritten. Draft-first publication keeps
-releases compatible with GitHub's immutable-releases setting. The hosted develop run at
-`d657c63` completed both artifact jobs and skipped tag promotion as required on 2026-08-03. The subsequent
-`v0.2.0` tag at `93d8236` completed both builds and published exactly the two archives plus
-`RELEASE-SHA256SUMS`, accepting the promotion route end to end.
+`target_commitish` is not trusted because it can name a branch. It then creates a **draft** release (or resumes
+the single matching draft — drafts are invisible to GitHub's release-by-tag lookup, so they are found in the
+release list; more than one is refused), uploads only missing assets, deletes and re-uploads any placeholder left
+by an interrupted upload (asset `state` other than `uploaded`, drafts only), verifies the exact three-asset set
+with sizes and `uploaded` state, and only then publishes and marks the release latest. A published release is
+never modified: an exact, complete one is an idempotent success; anything else is refused. Mismatched release
+metadata, unexpected assets, and same-name/different-size collisions are refused rather than edited or
+overwritten. Draft-first publication keeps releases compatible with GitHub's immutable-releases setting. The
+artifact and promotion route ran on the former Gitea host from 2026-08-03 (first dual-job run, `v0.2.0`
+acceptance) until the 2026-10 move to GitHub; that history is recorded in
+`docs/remake-architecture-and-roadmap.md`.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `publish_github_release.py` | Tag-only, retry-safe promotion of paired verified Linux/Windows workflow artifacts to a GitHub release. Revalidates both archives/evidence sets, checks the tag's commit via the git-ref API, writes combined release checksums, and publishes exactly three assets through a draft → upload → verify → publish flow. Requires `GITHUB_TOKEN` (`contents: write`); the token is passed to the upload `curl` through standard input rather than its argument list. | `publish_github_release.py --repository <owner/name> --tag <v...> --target <sha> --linux-artifact-directory <dir> --windows-artifact-directory <dir> --output-directory <dir>` | two verified downloaded workflow artifacts + tag context → published GitHub release with Linux archive, Windows archive, and `RELEASE-SHA256SUMS` |
 | `test_publish_github_release.py` | Pure synthetic paired-artifact/archive validation plus a GitHub-faithful fake API: draft creation then publish-after-verify, draft resume uploading only missing assets, interrupted-upload placeholder replacement, idempotent completed release, refusal of incomplete published releases, tag/target mismatch, multiple drafts, metadata/collision/unexpected-asset refusals, annotated-tag dereferencing, and the token never appearing in the upload command line. | `test_publish_github_release.py` | temporary files only |
-| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, and promotion's dependency/download of both successful artifacts. | `test_release_workflow.py` | `.gitea/workflows/linux-release-build.yml` → assertions only |
+| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, promotion's tag gate, sole `contents: write` grant, `github.token` use, and dependency/download of both successful artifacts; the FFmpeg manifests' exact GitHub release URLs; and, across every `.github/workflows/*.yml`, full-SHA action pins with version comments, the pinned `ubuntu-24.04` runner, no `pull_request_target`, and no `.gitea/` directory. | `test_release_workflow.py` | `.github/workflows/*.yml`, FFmpeg manifests, Godot project files → assertions only |
 
 ## Optional local binary tools
 

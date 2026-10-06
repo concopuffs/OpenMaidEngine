@@ -8,7 +8,8 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parent.parent
-WORKFLOW = REPO / ".gitea/workflows/linux-release-build.yml"
+WORKFLOW = REPO / ".github/workflows/release-build.yml"
+WORKFLOW_DIRECTORY = REPO / ".github/workflows"
 EXPORT_PRESETS = REPO / "godot/export_presets.cfg"
 GODOT_PROJECT = REPO / "godot/project.godot"
 MANAGED_PROJECT = REPO / "godot/OME.csproj"
@@ -114,12 +115,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_build_jobs_are_linux_hosted_read_only_and_target_separate(self) -> None:
         self.assertRegex(self.text, r"(?m)^permissions:\n  contents: read$")
-        self.assertIn("runs-on: ubuntu-latest", self.linux)
+        self.assertIn("runs-on: ubuntu-24.04", self.linux)
         self.assertIn("run: ./tools/build-linux-x64.sh", self.linux)
-        self.assertIn("runs-on: ubuntu-latest", self.windows)
+        self.assertIn("runs-on: ubuntu-24.04", self.windows)
         self.assertIn("run: ./tools/build-windows-x64.sh", self.windows)
-        self.assertNotIn("releases: write", self.linux + self.windows)
-        self.assertNotIn("secrets.", self.linux + self.windows)
+        self.assertNotIn("contents: write", self.linux + self.windows)
+        self.assertNotIn("secrets.", self.text)
+        self.assertNotIn("GITHUB_TOKEN", self.linux + self.windows)
 
     def test_windows_job_provisions_and_caches_only_its_cross_inputs(self) -> None:
         self.assertRegex(
@@ -148,20 +150,41 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("retention-days: 30", self.windows)
 
     def test_tag_promotion_requires_and_downloads_both_platform_artifacts(self) -> None:
-        self.assertIn("if: startsWith(gitea.ref, 'refs/tags/v')", self.publish)
+        self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", self.publish)
         self.assertRegex(
             self.publish,
             r"(?m)^    needs:\n      - linux-release\n      - windows-release$",
         )
-        self.assertIn("releases: write", self.publish)
-        self.assertIn("OME-linux-x64-${{ gitea.sha }}", self.publish)
-        self.assertIn("OME-windows-x64-${{ gitea.sha }}", self.publish)
+        self.assertRegex(self.publish, r"(?m)^    permissions:\n(?:      #.*\n)*      contents: write$")
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", self.publish)
+        self.assertIn("tools/publish_github_release.py", self.publish)
+        self.assertIn('--tag "${{ github.ref_name }}"', self.publish)
+        self.assertIn('--target "${{ github.sha }}"', self.publish)
+        self.assertNotIn("--server", self.publish)
+        self.assertIn("OME-linux-x64-${{ github.sha }}", self.publish)
+        self.assertIn("OME-windows-x64-${{ github.sha }}", self.publish)
         self.assertIn("path: build/release-assets/linux", self.publish)
         self.assertIn("path: build/release-assets/windows", self.publish)
         self.assertIn("--linux-artifact-directory build/release-assets/linux", self.publish)
         self.assertIn("--windows-artifact-directory build/release-assets/windows", self.publish)
         self.assertIn("--output-directory build/release-assets/prepared", self.publish)
         self.assertNotIn("--asset", self.publish)
+
+    def test_all_workflows_pin_actions_and_runner_image(self) -> None:
+        workflows = sorted(WORKFLOW_DIRECTORY.glob("*.yml"))
+        self.assertIn(WORKFLOW, workflows)
+        self.assertFalse((REPO / ".gitea").exists())
+        for workflow in workflows:
+            text = workflow.read_text(encoding="utf-8")
+            uses = re.findall(r"(?m)^\s*(?:- )?uses:\s*(\S+)(.*)$", text)
+            self.assertTrue(uses, workflow.name)
+            for action, comment in uses:
+                self.assertRegex(action, r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$", workflow.name)
+                self.assertRegex(comment, r"^ # v\d+\.\d+\.\d+$", f"{workflow.name}: {action}")
+            runners = re.findall(r"(?m)^\s*runs-on:\s*(\S+)\s*$", text)
+            self.assertTrue(runners, workflow.name)
+            self.assertEqual({"ubuntu-24.04"}, set(runners), workflow.name)
+            self.assertNotIn("pull_request_target", text)
 
 
 if __name__ == "__main__":
