@@ -64,6 +64,8 @@ for runtime in "${runtime_libraries[@]}"; do
     cp -- "$source_library" "$output_directory/$runtime"
 done
 cp -- "$sdk_root/LICENSE.txt" "$output_directory/FFmpeg-LICENSE.txt"
+python3 "$script_dir/write_ffmpeg_source_notice.py" "$script_dir/dependency-win64.json" "$sdk_root" \
+    "$output_directory/FFmpeg-SOURCE.txt"
 
 python3 -X utf8 "$repo_root/tools/verify_windows_native.py" \
     "$output_directory" \

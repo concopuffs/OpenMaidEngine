@@ -218,6 +218,12 @@ class PublishGithubReleaseTests(unittest.TestCase):
             self.assertEqual(TARGET, api.created_payload["target_commitish"])
             self.assertEqual(TITLE, api.created_payload["name"])
             self.assertIn("Windows archive", api.created_payload["body"])
+            body = api.created_payload["body"]
+            manifest = json.loads(publish_github_release.FFMPEG_MANIFEST.read_text(encoding="utf-8"))
+            self.assertIn(f"[FFmpeg](https://ffmpeg.org/) {manifest['ffmpeg_version']}", body)
+            self.assertIn("LGPL version 2.1 or later", body)
+            self.assertIn(manifest["source_url"], body)
+            self.assertIn(manifest["source_sha256"], body)
             self.assertEqual(
                 publish_github_release.EXPECTED_RELEASE_ASSETS,
                 {asset["name"] for asset in api.assets},
@@ -335,6 +341,19 @@ class PublishGithubReleaseTests(unittest.TestCase):
                 publish_github_release.prepare_release_assets(
                     TAG, TARGET, linux, windows, prepared
                 )
+
+
+class FfmpegReleaseNoticeTests(unittest.TestCase):
+    def test_refuses_an_incomplete_or_relicensed_manifest(self) -> None:
+        manifest = json.loads(publish_github_release.FFMPEG_MANIFEST.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "dependency.json"
+            path.write_text(json.dumps({**manifest, "source_url": ""}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_url"):
+                publish_github_release.ffmpeg_release_notice(path)
+            path.write_text(json.dumps({**manifest, "license": "LGPL-3.0-or-later"}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unexpected FFmpeg license"):
+                publish_github_release.ffmpeg_release_notice(path)
 
 
 class GithubApiTests(unittest.TestCase):

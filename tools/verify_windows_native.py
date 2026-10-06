@@ -20,7 +20,7 @@ RUNTIME_DLLS = (
     "swscale-9.dll",
     "swresample-6.dll",
 )
-REQUIRED_FILES = (SHIM, *RUNTIME_DLLS, "FFmpeg-LICENSE.txt")
+REQUIRED_FILES = (SHIM, *RUNTIME_DLLS, "FFmpeg-LICENSE.txt", "FFmpeg-SOURCE.txt")
 REQUIRED_EXPORTS = frozenset({
     "age_movie_abi_version",
     "age_movie_open",

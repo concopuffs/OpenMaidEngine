@@ -34,6 +34,7 @@ def create_bundle(root: Path) -> Path:
     for name in (verify_windows_native.SHIM, *verify_windows_native.RUNTIME_DLLS):
         write_pe(root / name)
     (root / "FFmpeg-LICENSE.txt").write_text("LGPL\n", encoding="utf-8")
+    (root / "FFmpeg-SOURCE.txt").write_text("source\n", encoding="utf-8")
     return root
 
 

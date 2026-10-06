@@ -40,4 +40,6 @@ foreach ($runtime in @('avformat-62.dll', 'avcodec-62.dll', 'avutil-60.dll', 'sw
     Copy-Item -LiteralPath (Join-Path $bin $runtime) -Destination $OutputDirectory -Force
 }
 Copy-Item -LiteralPath (Join-Path $SdkRoot 'LICENSE.txt') -Destination (Join-Path $OutputDirectory 'FFmpeg-LICENSE.txt') -Force
+& py -3.11 -X utf8 (Join-Path $PSScriptRoot 'write_ffmpeg_source_notice.py') (Join-Path $PSScriptRoot 'dependency-win64.json') $SdkRoot (Join-Path $OutputDirectory 'FFmpeg-SOURCE.txt')
+if ($LASTEXITCODE -ne 0) { throw "FFmpeg-SOURCE.txt generation failed with exit code $LASTEXITCODE" }
 Write-Output $dll

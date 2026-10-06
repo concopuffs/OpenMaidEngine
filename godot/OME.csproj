@@ -29,6 +29,10 @@
           Link="FFmpeg-LICENSE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(AgeNativeDirectory)\FFmpeg-SOURCE.txt"
+          Link="FFmpeg-SOURCE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(AgeNativeRid)' == 'linux-x64' and Exists('$(AgeNativeDirectory)\libage_movie_ffmpeg.so')">
     <None Include="$(AgeNativeDirectory)\*.so*"
@@ -37,6 +41,10 @@
           CopyToPublishDirectory="PreserveNewest" />
     <None Include="$(AgeNativeDirectory)\FFmpeg-LICENSE.txt"
           Link="FFmpeg-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(AgeNativeDirectory)\FFmpeg-SOURCE.txt"
+          Link="FFmpeg-SOURCE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

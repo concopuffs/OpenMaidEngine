@@ -37,6 +37,7 @@ CORE_TESTS = (
     "test_publish_github_release.py",
     "test_release_workflow.py",
     "test_verify_windows_native.py",
+    "test_write_ffmpeg_source_notice.py",
     "test_diff_optrace.py",
     "test_engine_ctx.py",
     "test_ghidra_handler_map.py",

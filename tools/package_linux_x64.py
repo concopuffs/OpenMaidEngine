@@ -30,6 +30,7 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/libswscale.so.9",
     f"{MANAGED_DIRECTORY}/libswresample.so.6",
     f"{MANAGED_DIRECTORY}/FFmpeg-LICENSE.txt",
+    f"{MANAGED_DIRECTORY}/FFmpeg-SOURCE.txt",
 )
 FORBIDDEN_FILES = (
     f"{MANAGED_DIRECTORY}/Age.Engine.Text.Windows.dll",

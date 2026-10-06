@@ -20,6 +20,9 @@ from typing import Any, Callable, Protocol
 import verify_windows_native
 
 
+FFMPEG_MANIFEST = Path(__file__).resolve().parent.parent / "native/age_movie_ffmpeg/dependency-linux-x64.json"
+
+
 LINUX_ARCHIVE = "OME-linux-x64.tar.gz"
 WINDOWS_ARCHIVE = "OME-windows-x64.zip"
 RELEASE_CHECKSUMS = "RELEASE-SHA256SUMS"
@@ -482,6 +485,22 @@ def _require_exact_assets(assets: list[dict[str, Any]], sizes: dict[str, int], l
             raise RuntimeError(f"{label} asset verification failed: {name}")
 
 
+def ffmpeg_release_notice(manifest_path: Path = FFMPEG_MANIFEST) -> str:
+    """FFmpeg attribution and source pointer for every release description (FFmpeg compliance checklist item 9)."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for field in ("ffmpeg_version", "license", "source_url", "source_sha256"):
+        if not manifest.get(field):
+            raise ValueError(f"FFmpeg manifest lacks {field}: {manifest_path}")
+    if manifest["license"] != "LGPL-2.1-or-later":
+        raise ValueError(f"unexpected FFmpeg license in {manifest_path}: {manifest['license']}")
+    return (
+        f"This software uses code of [FFmpeg](https://ffmpeg.org/) {manifest['ffmpeg_version']}, licensed under the "
+        "LGPL version 2.1 or later and dynamically linked as unmodified shared libraries. Its exact source is "
+        f"available at {manifest['source_url']} (SHA-256 `{manifest['source_sha256']}`); each archive's "
+        "`FFmpeg-SOURCE.txt` records the build configuration."
+    )
+
+
 def promote_release(
     api: ReleaseApi,
     upload: Callable[[int, Path], dict[str, Any]],
@@ -524,7 +543,8 @@ def promote_release(
                 "Automated Linux and Windows x64 release built from `" + target + "`.\n\n"
                 "The Linux archive passed the dynamic opcode/FFmpeg package smoke. The Windows archive "
                 "passed structural AMD64 PE, payload, ABI export, and FFmpeg import verification without "
-                "executing the EXE. Each archive contains its detailed build metadata and payload ledger."
+                "executing the EXE. Each archive contains its detailed build metadata and payload ledger.\n\n"
+                + ffmpeg_release_notice()
             ),
             "draft": True,
             "prerelease": False,

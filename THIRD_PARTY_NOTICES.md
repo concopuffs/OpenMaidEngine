@@ -5,6 +5,18 @@ project. It does not license Eushully game assets or code, and no original game 
 this repository. The repository's MIT license covers authored project work only; material identified below
 remains subject to its own terms or is acknowledged as prior research rather than relicensed here.
 
+## FFmpeg
+
+Release packages include [FFmpeg](https://ffmpeg.org/) 8.1.3 shared libraries (`libavformat`, `libavcodec`,
+`libavutil`, `libswscale`, `libswresample`), licensed under the GNU Lesser General Public License version 2.1 or
+later. The project does not own FFmpeg. The libraries are built unmodified from the official release tarball by
+`native/age_movie_ffmpeg/build-ffmpeg-sdk.sh`, configured without GPL, nonfree, version-3, or external-library
+components, and the movie shim links them dynamically. The exact source tarball, both platform SDKs, and their
+build configurations are published together on this repository's `deps-ffmpeg-ome-8.1.3-mpeg1-r1` release; the
+pinned source and configure flags are recorded in `native/age_movie_ffmpeg/ffmpeg-source.json`. Every package
+ships the license as `FFmpeg-LICENSE.txt` and the source location and configure line as `FFmpeg-SOURCE.txt` beside
+the libraries. The source repository itself contains no FFmpeg code.
+
 ## Eushully-Decompiler research
 
 Early SYS4 instruction decoding and the initial opcode ABI/catalog were informed by Kelebek's public

@@ -124,7 +124,7 @@ cp -- "$source_tree/$license_file" "$install_root/LICENSE.txt"
 compiler="$(if [[ "$target" == win64 ]]; then x86_64-w64-mingw32-gcc --version; else ${CC:-cc} --version; fi | head -n 1)"
 build_config="$install_root/BUILD-CONFIG.txt"
 {
-    echo "FFmpeg $version — Open Maid Engine minimal LGPL build ($target, $mirror_version)"
+    echo "FFmpeg $version - Open Maid Engine minimal LGPL build ($target, $mirror_version)"
     echo
     echo "Source: $source_url"
     echo "Source SHA-256: $source_sha256 ($source_size bytes)"

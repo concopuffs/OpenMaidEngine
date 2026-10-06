@@ -10,6 +10,10 @@ original game data into this repository.
 The repository's authored work is available under the [MIT License](LICENSE). That grant does not cover
 Eushully game files or override the separate terms recorded for third-party material.
 
+Movie playback uses [FFmpeg](https://ffmpeg.org/), licensed under the LGPL version 2.1 or later and shipped in
+release packages as unmodified, dynamically linked shared libraries; see
+[Third-party notices](THIRD_PARTY_NOTICES.md#ffmpeg) for its source and build details.
+
 ## Start here
 
 Prerequisites for the current Windows development workflow are Python 3.11, the .NET 8 SDK, Godot 4.7

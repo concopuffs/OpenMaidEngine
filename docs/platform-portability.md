@@ -281,6 +281,27 @@ dynamically links `libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `l
 must carry the matching FFmpeg source/configuration and notices required by FFmpeg's [license
 checklist](https://ffmpeg.org/legal.html).
 
+**FFmpeg license checklist walk-through (2026-10-06).** Each item of <https://ffmpeg.org/legal.html> against the
+project-built SDK and the release packages:
+
+| # | Item | Status |
+|---|---|---|
+| 1 | No `--enable-gpl` / `--enable-nonfree` | Met — neither flag (nor `--enable-version3`) is configured; `test_release_workflow.py` forbids all three. |
+| 2 | Dynamic linking | Met — the shim links the five shared libraries; the packagers and `verify_windows_native.py` require them as separate files. |
+| 3 | Distribute FFmpeg's source | Met — the exact tarball is an asset of `deps-ffmpeg-ome-8.1.3-mpeg1-r1`; every package's `FFmpeg-SOURCE.txt` and every release description point to it. |
+| 4 | Source corresponds exactly | Met — the build verifies the pinned size and SHA-256 and builds the tarball unmodified; the hosted copy carries the same hash. |
+| 5 | Provide `changes.diff` | Met — there are no changes; `BUILD-CONFIG.txt` states that the diff would be empty. |
+| 6 | Explain how it was compiled | Met — `BUILD-CONFIG.txt` (configure line, compiler, glibc ceiling or DLL imports) ships in the SDK, on the release, and inside `FFmpeg-SOURCE.txt`. |
+| 7 | Tarball or zip | Met — the official `.tar.xz` release tarball. |
+| 8 | Host source beside the binary | Met — the source and the binaries are both hosted on this repository's GitHub releases. |
+| 9 | Attribution on download pages | Met — `publish_github_release.py` appends the FFmpeg credit and source link to every `v*` release description; the deps release states the license. |
+| 10 | Mention FFmpeg in the "about box" | Met as far as applicable — the program has no about screen; `README.md` credits FFmpeg and every package ships `FFmpeg-SOURCE.txt`. Any future credits/about screen must name FFmpeg. |
+| 11–14 | EULA wording | Not applicable — no EULA; the MIT-licensed project neither claims FFmpeg nor prohibits reverse engineering. |
+| 15 | Spell "FFmpeg" correctly | Met — `test_write_ffmpeg_source_notice.py` rejects misspellings in the generated notice. |
+| 16 | Do not rename the DLLs | Met — FFmpeg's own names (`avcodec-62.dll`, `libavcodec.so.62`, …). |
+| 17 | Repeat for LGPL external libraries | Not applicable — `--disable-autodetect` and no `--enable-lib*`: no external library is compiled in. |
+| 18 | No GPL libraries | Met — no external libraries at all. |
+
 The boundary has two layers:
 
 1. A small native `age_movie` ABI owns all FFmpeg objects and version-sensitive calls. It accepts a borrowed

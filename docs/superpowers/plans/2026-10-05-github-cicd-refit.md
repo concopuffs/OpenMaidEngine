@@ -538,6 +538,16 @@ run. Remaining: 6.5 compliance surface, 6.6 retire BtbN.
   its test.
 - Record the checklist walk-through, items 1–18, in `docs/platform-portability.md`.
 
+**Result (2026-10-06, branch `ffmpeg-sdk`):** `write_ffmpeg_source_notice.py` (called by all three native build
+scripts) writes `FFmpeg-SOURCE.txt` beside `FFmpeg-LICENSE.txt` from the manifest and the SDK's `BUILD-CONFIG.txt`;
+`OME.csproj` stages it for both targets, and the Linux packager and `verify_windows_native.py` (hence the Windows
+packager) now require it. A local bootstrap → MSVC build produced it from the real r1 SDK. `publish_github_release.py`
+appends the FFmpeg credit, license, and source link to every release description (`ffmpeg_release_notice`, which
+refuses an incomplete or relicensed manifest). `THIRD_PARTY_NOTICES.md` has an FFmpeg section and `README.md` an
+FFmpeg credit; `platform-portability.md` records the 18-item walk-through (all met or not applicable: no EULA, no
+about screen, no external libraries). Future SDK revisions write an ASCII hyphen in `BUILD-CONFIG.txt` (r1's em dash
+displays as mojibake in Windows PowerShell 5.1). New `test_write_ffmpeg_source_notice.py` in `CORE_TESTS`.
+
 #### 6.6 — Retire the BtbN build
 
 After 6.3 lands and 6.4 passes: delete the `deps-ffmpeg-btbn-autobuild-2026-08-17-13-05` release and tag (web UI,

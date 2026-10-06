@@ -64,7 +64,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── test_install_godot_templates.py, test_package_linux_x64.py,
     │   │   test_package_windows_x64.py,
     │   │   test_dotnet_publish_proxy.py,
-    │   │   test_publish_github_release.py,
+    │   │   test_publish_github_release.py, test_write_ffmpeg_source_notice.py,
     │   │   test_release_workflow.py,
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
     │   ├── sys4load.py                         loader + disassembler (opcode-decoding)
@@ -162,7 +162,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
     │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;
-    │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK
+    │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK;
+    │                                       write_ffmpeg_source_notice.py emits each bundle's FFmpeg-SOURCE.txt
     │                                       (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
