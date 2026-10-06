@@ -330,6 +330,18 @@ but only decodes Layer II audio and explicitly ignores program-stream PTS in its
 FFmpeg covers the complete installed codec set and leaves the mod/profile boundary open without selecting a
 different decoder per effect.
 
+**Cross-profile codec inventory (2026-10-06).** A header-level scan of every catalog asset that begins with an MPEG
+pack header, regardless of extension, re-confirmed Himegari exactly (213 `.AGF` streams: 184 video-only, 25 MPEG-1
+Layer I, 4 Layer II, all 44.1 kHz stereo) and inventoried Kamidori for the first time: 280 `.MPG`-named streams, all
+MPEG-1 system streams with MPEG-1 video (including the four 1024x576 titles, which carry no MPEG-2 extension
+start codes), with 248 Layer II, 20 Layer I, and 12 video-only. Neither corpus contains MPEG-2 video, an MPEG-2
+pack header, Layer III, or private/AC-3/LPCM streams. The complete decoder requirement for both supported profiles
+is therefore the MPEG program-stream demuxer, the MPEG-1 video decoder, and the MPEG-1 Layer I/II audio decoders
+(plus the matching parsers, `swscale`, and `swresample`) — the component set for the project-built FFmpeg in step 6
+of `docs/superpowers/plans/2026-10-05-github-cicd-refit.md`. Enabling any other format later means enabling another
+of FFmpeg's internal decoders. The installed-movie gate currently discovers only `.AGF`-named assets, so it does not
+yet cover Kamidori's `.MPG` corpus.
+
 ABI v2 and MPEG audio playback landed on 2026-07-25. The expanded installed-corpus gate passes all 213 assets:
 184 remain strictly video-only and all 29 audio-bearing streams decode to finite 44.1 kHz stereo PCM with
 monotonic timestamps and clean EOF/teardown. The gate decoded 17,537 audio blocks / 18,185,856 stereo PCM

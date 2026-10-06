@@ -396,16 +396,29 @@ internal decoder, never an external library.
 
 **Gate:** inventory recorded in `docs/platform-portability.md`; component list final.
 
+**Result (2026-10-06):** a throwaway header-level probe (scratch, not committed) built on the engine's
+`Sys4AssetCatalog`/`Sys4AssetStore` scanned every catalog asset starting with an MPEG pack header, regardless of
+extension. Himegari: 13,287 assets → 213 `.AGF` streams, exactly matching the movie gate (184 video-only, 25 Layer I,
+4 Layer II). Kamidori (`patch/` over the base install): 20,126 assets → 280 `.MPG` streams, all MPEG-1 system streams
+with MPEG-1 video (the four 1024x576 titles included), 248 Layer II, 20 Layer I, 12 video-only. No MPEG-2 video,
+MPEG-2 packs, Layer III, or private/AC-3/LPCM streams in either corpus. Only the movie shim and its consumers
+(`FfmpegMovieDecoder`, the movie corpus gate, the package smoke) use FFmpeg. **Final component set:** demuxer
+`mpegps`; decoders `mpeg1video`, `mp1`, `mp1float`, `mp2`, `mp2float`; parsers `mpegvideo`, `mpegaudio`; libraries
+`avformat`, `avcodec`, `avutil`, `swscale`, `swresample`. `mpeg2video` and the `mp3` decoders are dropped from the
+provisional default because no supported title uses them. **New 6.4 prerequisite:** the movie gate discovers only
+`.AGF`-named assets and is hard-wired to Himegari's game directory, so it must learn to discover by pack header and
+take a profile/game root before it can cover Kamidori.
+
 #### 6.1 — Build script
 
 Add `native/age_movie_ffmpeg/build-ffmpeg-sdk.sh <linux-x64|win64>` plus a pinned source manifest
 `native/age_movie_ffmpeg/ffmpeg-source.json` (official release tarball URL from `ffmpeg.org/releases/`, its size
 and SHA-256, and the detached `.asc` signature, verified against FFmpeg's published release-signing key).
 
-- Configure (illustrative; 6.0 finalizes the component list):
+- Configure (component list final per 6.0):
   `--enable-shared --disable-static --disable-everything --disable-autodetect --disable-programs --disable-doc
   --disable-network --disable-avdevice --disable-avfilter --enable-demuxer=mpegps
-  --enable-decoder=mpeg1video,mpeg2video,mp1,mp1float,mp2,mp2float,mp3,mp3float
+  --enable-decoder=mpeg1video,mp1,mp1float,mp2,mp2float
   --enable-parser=mpegvideo,mpegaudio`. Never `--enable-gpl`, `--enable-nonfree`, or `--enable-version3`.
 - **Linux:** build inside a `manylinux_2_28` (glibc 2.28) container so the libraries satisfy the glibc baseline.
 - **Windows:** cross-compile with the MinGW-w64 toolchain already used by the release workflow
@@ -450,8 +463,9 @@ other workflows (the policy test covers it automatically). The tag must not star
 
 - CI release build on `develop`: Linux package smoke (`opcodes=548 ffmpeg-abi=3`) passes; Windows structural
   verification passes.
-- Local installed-movie gate (`tools/movie-corpus-gate`) decodes every title in every inventoried corpus (213
-  Himegari titles plus Kamidori) with zero failures, video and audio.
+- Extend `tools/movie-corpus-gate` to discover streams by MPEG pack header (not only `.AGF` names) and to take a
+  profile/game root, then decode every title in both corpora (213 Himegari + 280 Kamidori) with zero failures,
+  video and audio, against both the BtbN build (baseline) and the new build.
 - Record the package-size change.
 
 #### 6.5 — Compliance surface
