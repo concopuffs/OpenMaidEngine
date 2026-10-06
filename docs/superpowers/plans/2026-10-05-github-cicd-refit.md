@@ -462,6 +462,18 @@ builds and the Himegari gate passes **213/213**; a field-by-field comparison wit
 on every non-timing field (dimensions, frame counts/rates, timestamps, changed-frame counts, audio counts/signal),
 and total decode time fell from 9.1 s to 7.7 s. Remaining for 6.4: extend the gate for Kamidori's `.MPG` corpus.
 
+**6.2 done (2026-10-06):** `ffmpeg-sdk` was fast-forwarded into `develop` (`5dd28ee`) because GitHub offers
+`workflow_dispatch` only for workflows on the default branch. The dispatched run 37405153746 built both SDKs and
+drafted `deps-ffmpeg-ome-8.1.3-mpeg1-r1`, which the user reviewed and published (not latest by choice; GitHub still
+reports it as latest because no `v*` release exists yet). Seven assets: both SDK archives with `.sha256` files,
+`ffmpeg-8.1.3.tar.xz`, and both `BUILD-CONFIG` files; tag → `5dd28ee`. Public-URL verification: the source tarball
+matches the pin (size and SHA-256), both archives match their `.sha256`, and against the locally tested `2fc2127`
+build the Linux SDK is **byte-identical** (reproducible). The Windows SDK differs only in five DLLs, each in exactly
+three PE fields — COFF `TimeDateStamp` (offset 136), optional-header `CheckSum` (216), and the export-directory
+timestamp — which MinGW's linker stamps per build; all 153 other members are identical. Documented as the allowed
+non-reproducible field; the next SDK revision should add `--extra-ldflags=-Wl,--no-insert-timestamp` to make the
+Windows SDK byte-reproducible too.
+
 #### 6.3 — Switch the manifests, bootstraps, and tests
 
 - Manifests: new `mirror_version`, `archive`, `url`, `size`, `sha256`, `ffmpeg_version`; `provider` becomes the
