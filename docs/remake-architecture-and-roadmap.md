@@ -458,6 +458,52 @@ Runtime constraints are part of the contract:
   access is absent unless the user explicitly grants it.
 - Version the API and generated editor type stubs independently of game profiles.
 
+#### Game-specific surfaces ship as a per-game base mod
+
+The engine provides only game-agnostic surfaces: `maid.vm`, `maid.hooks`, `maid.state`, `maid.log` and
+the host services. The game-specific surfaces (`maid.game`, and named `maid.events` such as
+`kamidori.unit.on_level_up`) do not live in engine code. For each supported game the project ships a
+first-party **base mod** that builds them from the generic API. For example, `game.units[3]` could be a
+record proxy over the unit tables reached through `maid.vm`. Other mods then depend on it (for example
+`kamidori-base >= 1.2`).
+
+This keeps the engine free of per-game logic: a new game needs a new base mod, not new engine code. The
+only exception remains SYS revision behaviour established from the native engine. It also exercises the
+low-level API on real use. If a base mod cannot build its surfaces from `maid.vm` and friends, that is a
+gap in the generic API. The capabilities split naturally. The first-party base mod is granted `maid.vm`.
+Ordinary mods can consume only the named surface. Game revisions and fingerprints are versioned in the
+base mod.
+
+Constraints that keep this compatible with §3.4–3.5:
+
+- **Generate layout and write behaviour by hand.** The per-game global registries
+  (`vm-map/globals.toml`, `vm-map/globals-<profile>.toml`) already hold names, types, shapes and row
+  columns. The base mod's address/layout tables should be generated from them like other derived
+  artifacts, not restated by hand. Only behaviour is hand-written.
+- **Keep definitions declarative.** Field mappings, named patch points and selectors stay declarative
+  data that the loader validates against fingerprints before mod code runs. Lua supplies behaviour
+  only. Defining them imperatively in Lua would move everything built on them into the "unknown/opaque"
+  interaction class, losing conflict detection and attribution of reads and writes to named state.
+- **Prefer the game's own scripts for writes.** Many logical fields are not single cells. A unit's HP can
+  mean its definition, persistent per-character state keyed by a canonical character id, or the current
+  battle-slot value. Writes carry invariants such as stat caps and recomputation after equipment
+  changes. Where the game has a script for a mutation, the base mod should call it (for example
+  `game.give_item` over the game's add-item script) rather than poke memory.
+- **Share code across games as a content library, not engine code.** Games built on the same engine
+  family share structure: name-keyed record tables, row tables with named columns, and append-layered
+  data. A shared Lua library of record and row-table proxies can serve several base mods without
+  per-game duplication.
+- **Measure hot paths before optimizing.** Proxy access crosses the Lua/VM boundary on every read.
+  Per-frame or per-damage handlers may later need cached handles or bulk reads.
+
+The engine-side requirements this implies are all game-agnostic:
+
+- typed global access and watches;
+- script invocation by script identity;
+- declarative site/selector hooks with `before`/`after`/`override`;
+- namespaced mod state;
+- mod dependencies and capability grants.
+
 ### 3.9 Load-bearing prerequisites already identified
 
 - **Global-var map** — named state access, selector captures and semantic events all depend on knowing
