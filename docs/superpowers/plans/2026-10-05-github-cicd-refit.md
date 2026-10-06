@@ -489,6 +489,22 @@ Windows SDK byte-reproducible too.
 
 **Gate:** all three bootstraps download and verify from a clean `build/downloads/`; core gate green.
 
+**Result (2026-10-06, branch `ffmpeg-sdk`):** both manifests now point at `deps-ffmpeg-ome-8.1.3-mpeg1-r1`
+(Linux 1,435,416 bytes `099fa322…`, Windows 2,180,965 bytes `3143eb98…`, each recomputed from the downloaded asset and
+equal to the release's `.sha256`), with `provider`, `ffmpeg_version` (`8.1.3`), `sha256`, and `minimum_glibc`
+retained because the packagers copy them into `BUILD-INFO.json`; added `license`, `source_archive`, `source_url`,
+`source_sha256`, `upstream_url` (ffmpeg.org); dropped the unread BtbN fields (`release_tag`, `ffmpeg_commit`,
+`variant`, `minimum_linux_kernel`). All three bootstraps drop the `ffmpeg[.exe]` requirement and compare
+`FFMPEG_VERSION` from `include/libavutil/ffversion.h` with `ffmpeg_version` exactly; from an empty downloads
+directory all three passed, and a deliberately wrong manifest version is rejected. The release workflow's cache
+globs were renamed to `ome-ffmpeg-*-…` (the old `ffmpeg-*-…-lgpl-shared-*` globs would have silently stopped
+caching). `test_release_workflow.py`'s manifest test now checks both manifests against `ffmpeg-source.json`, the
+LGPL-2.1 license and forbidden configure flags, a 500 KB–10 MB size band, and the `ffversion.h` bootstraps.
+`tools-reference.md` (FFmpeg section plus a new `build-ffmpeg-sdk.sh` row), `platform-portability.md`, and
+`PROJECT-STRUCTURE.md` updated. Core gate green (one rerun: `Transform2DMathTests.ValueMatrixBuild_DoesNotAllocatePerObject`
+failed once with 6,720 unexpected bytes and passes in isolation — a pre-existing intermittent allocation test,
+unrelated). Next: the 6.4 CI release build with the new SDK.
+
 #### 6.4 — Acceptance
 
 - CI release build on `develop`: Linux package smoke (`opcodes=548 ffmpeg-abi=3`) passes; Windows structural

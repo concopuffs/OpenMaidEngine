@@ -1,15 +1,15 @@
 {
-  "provider": "BtbN/FFmpeg-Builds",
-  "release_tag": "autobuild-2026-08-17-13-05",
-  "mirror_version": "btbn-autobuild-2026-08-17-13-05",
-  "archive": "ffmpeg-n8.1.2-44-g7c533d0f86-linux64-lgpl-shared-8.1.tar.xz",
-  "url": "https://github.com/concopuffs/OpenMaidEngine/releases/download/deps-ffmpeg-btbn-autobuild-2026-08-17-13-05/ffmpeg-n8.1.2-44-g7c533d0f86-linux64-lgpl-shared-8.1.tar.xz",
-  "upstream_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-17-13-05/ffmpeg-n8.1.2-44-g7c533d0f86-linux64-lgpl-shared-8.1.tar.xz",
-  "size": 56931952,
-  "sha256": "194dc8d525ac8cea5a5ff2e6fd44754747e69af5a766e7a6727cce363bd65de6",
-  "ffmpeg_version": "n8.1.2-44-g7c533d0f86-20260817",
-  "ffmpeg_commit": "7c533d0f86",
-  "variant": "linux64 LGPL shared 8.1",
-  "minimum_glibc": "2.28",
-  "minimum_linux_kernel": "4.18"
+  "provider": "Open Maid Engine minimal FFmpeg build",
+  "mirror_version": "ome-8.1.3-mpeg1-r1",
+  "archive": "ome-ffmpeg-8.1.3-mpeg1-r1-linux-x64-lgpl-shared.tar.xz",
+  "url": "https://github.com/concopuffs/OpenMaidEngine/releases/download/deps-ffmpeg-ome-8.1.3-mpeg1-r1/ome-ffmpeg-8.1.3-mpeg1-r1-linux-x64-lgpl-shared.tar.xz",
+  "size": 1435416,
+  "sha256": "099fa32285d901ac300e104ed1f83621e52a270cdf373048caf4e41c8ea21745",
+  "ffmpeg_version": "8.1.3",
+  "license": "LGPL-2.1-or-later",
+  "source_archive": "ffmpeg-8.1.3.tar.xz",
+  "source_url": "https://github.com/concopuffs/OpenMaidEngine/releases/download/deps-ffmpeg-ome-8.1.3-mpeg1-r1/ffmpeg-8.1.3.tar.xz",
+  "source_sha256": "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3",
+  "upstream_url": "https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz",
+  "minimum_glibc": "2.28"
 }

@@ -40,9 +40,11 @@ $sdkRoot = $extractRoot
 if (-not (Test-Path -LiteralPath (Join-Path $sdkRoot 'include\libavformat\avformat.h'))) {
     throw "Pinned FFmpeg SDK was not found at $sdkRoot"
 }
-$reported = & (Join-Path $sdkRoot 'bin\ffmpeg.exe') -version | Select-Object -First 1
-$expectedVersion = $manifest.ffmpeg_version -replace '-\d{8}$', ''
-if ($reported -notlike "*$expectedVersion*" ) {
-    throw "Unexpected FFmpeg build: $reported"
+# The SDK ships no programs; its installed version header is the authoritative version.
+$versionHeader = Join-Path $sdkRoot 'include\libavutil\ffversion.h'
+$match = Select-String -LiteralPath $versionHeader -Pattern '^#define FFMPEG_VERSION "(.*)"$' | Select-Object -First 1
+$reported = if ($match) { $match.Matches[0].Groups[1].Value } else { 'unknown' }
+if ($reported -ne $manifest.ffmpeg_version) {
+    throw "Unexpected FFmpeg build: $reported (expected $($manifest.ffmpeg_version))"
 }
 Write-Output $sdkRoot

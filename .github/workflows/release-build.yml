@@ -47,7 +47,7 @@ jobs:
         with:
           path: |
             build/downloads/Godot_*_mono_linux_x86_64.zip
-            build/downloads/ffmpeg-*-linux64-lgpl-shared-*.tar.xz
+            build/downloads/ome-ffmpeg-*-linux-x64-lgpl-shared.tar.xz
             build/toolchains/godot-*/xdg-data/godot/export_templates/*/linux_release.x86_64
           key: linux-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/age_movie_ffmpeg/dependency-linux-x64.json') }}
 
@@ -133,7 +133,7 @@ jobs:
         with:
           path: |
             build/downloads/Godot_*_mono_linux_x86_64.zip
-            build/downloads/ffmpeg-*-win64-lgpl-shared-*.zip
+            build/downloads/ome-ffmpeg-*-win64-lgpl-shared.zip
             build/toolchains/godot-*/xdg-data/godot/export_templates/*/windows_release_x86_64.exe
           key: windows-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/age_movie_ffmpeg/dependency-win64.json') }}
 

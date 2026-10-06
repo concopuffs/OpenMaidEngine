@@ -21,6 +21,8 @@ LINUX_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-linux-x64.jso
 WINDOWS_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-win64.json"
 LINUX_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-linux-x64.sh"
 WINDOWS_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-win64.sh"
+WINDOWS_FFMPEG_BOOTSTRAP_PS1 = REPO / "native/age_movie_ffmpeg/bootstrap-win64.ps1"
+FFMPEG_SOURCE_MANIFEST = REPO / "native/age_movie_ffmpeg/ffmpeg-source.json"
 
 
 def job(text: str, name: str, next_name: str | None) -> str:
@@ -44,36 +46,54 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.windows_build = WINDOWS_BUILD.read_text(encoding="utf-8")
         cls.windows_hosted_export = WINDOWS_HOSTED_EXPORT.read_text(encoding="utf-8")
 
-    def test_ffmpeg_inputs_are_dated_size_and_hash_pinned(self) -> None:
-        manifests = [
-            json.loads(LINUX_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
-            json.loads(WINDOWS_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
+    def test_ffmpeg_inputs_are_the_pinned_minimal_lgpl_build(self) -> None:
+        source = json.loads(FFMPEG_SOURCE_MANIFEST.read_text(encoding="utf-8"))
+        manifests = {
+            "linux-x64": json.loads(LINUX_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
+            "win64": json.loads(WINDOWS_FFMPEG_MANIFEST.read_text(encoding="utf-8")),
+        }
+        release = (
+            "https://github.com/concopuffs/OpenMaidEngine/releases/download/"
+            f"deps-ffmpeg-{source['mirror_version']}"
+        )
+        self.assertRegex(source["mirror_version"], r"^ome-\d+\.\d+\.\d+-mpeg1-r\d+$")
+        self.assertEqual(f"ome-{source['version']}-mpeg1-r{source['sdk_revision']}", source["mirror_version"])
+        self.assertEqual(f"https://ffmpeg.org/releases/{source['archive']}", source["url"])
+        self.assertRegex(source["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual("LGPL-2.1-or-later", source["license"])
+        flags = source["configure_flags"] + [
+            flag for target_flags in source["target_configure_flags"].values() for flag in target_flags
         ]
-        self.assertEqual(1, len({manifest["release_tag"] for manifest in manifests}))
-        self.assertEqual(1, len({manifest["mirror_version"] for manifest in manifests}))
-        for manifest in manifests:
-            self.assertRegex(manifest["release_tag"], r"^autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$")
-            self.assertNotEqual("latest", manifest["release_tag"])
-            self.assertEqual(f"btbn-{manifest['release_tag']}", manifest["mirror_version"])
-            self.assertEqual(
-                "https://github.com/concopuffs/OpenMaidEngine/releases/download/"
-                f"deps-ffmpeg-{manifest['mirror_version']}/{manifest['archive']}",
-                manifest["url"],
-            )
-            self.assertTrue(
-                manifest["upstream_url"].startswith(
-                    "https://github.com/BtbN/FFmpeg-Builds/releases/download/"
-                )
-            )
-            self.assertIn(f"/{manifest['release_tag']}/", manifest["upstream_url"])
-            self.assertTrue(manifest["upstream_url"].endswith("/" + manifest["archive"]))
-            self.assertIn(manifest["ffmpeg_commit"], manifest["archive"])
-            self.assertGreater(manifest["size"], 50_000_000)
+        for required in ("--disable-everything", "--disable-autodetect", "--disable-programs", "--enable-shared"):
+            self.assertIn(required, flags)
+        for forbidden in ("--enable-gpl", "--enable-nonfree", "--enable-version3"):
+            self.assertNotIn(forbidden, flags)
+        for target, manifest in manifests.items():
+            extension = "tar.xz" if target == "linux-x64" else "zip"
+            archive = f"ome-ffmpeg-{source['mirror_version'].removeprefix('ome-')}-{target}-lgpl-shared.{extension}"
+            self.assertEqual(source["mirror_version"], manifest["mirror_version"])
+            self.assertEqual(archive, manifest["archive"])
+            self.assertEqual(f"{release}/{archive}", manifest["url"])
+            self.assertEqual(source["version"], manifest["ffmpeg_version"])
+            self.assertEqual(source["license"], manifest["license"])
+            self.assertEqual(source["archive"], manifest["source_archive"])
+            self.assertEqual(f"{release}/{source['archive']}", manifest["source_url"])
+            self.assertEqual(source["sha256"], manifest["source_sha256"])
+            self.assertEqual(source["url"], manifest["upstream_url"])
             self.assertRegex(manifest["sha256"], r"^[0-9a-f]{64}$")
+            # A floor catches a truncated upload; the ceiling catches an accidental full FFmpeg build.
+            self.assertGreater(manifest["size"], 500_000)
+            self.assertLess(manifest["size"], 10_000_000)
+        self.assertEqual("2.28", manifests["linux-x64"]["minimum_glibc"])
+        for bootstrap in (LINUX_FFMPEG_BOOTSTRAP, WINDOWS_FFMPEG_BOOTSTRAP, WINDOWS_FFMPEG_BOOTSTRAP_PS1):
+            bootstrap_text = bootstrap.read_text(encoding="utf-8")
+            self.assertIn("ffversion.h", bootstrap_text)
+            self.assertNotIn("ffmpeg.exe", bootstrap_text)
+            self.assertNotIn("bin/ffmpeg", bootstrap_text)
         for bootstrap in (LINUX_FFMPEG_BOOTSTRAP, WINDOWS_FFMPEG_BOOTSTRAP):
-            text = bootstrap.read_text(encoding="utf-8")
-            self.assertIn("manifest_value size", text)
-            self.assertIn("--remove-on-error", text)
+            bootstrap_text = bootstrap.read_text(encoding="utf-8")
+            self.assertIn("manifest_value size", bootstrap_text)
+            self.assertIn("--remove-on-error", bootstrap_text)
 
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
@@ -129,7 +149,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             r"gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64",
         )
         self.assertIn("binutils-mingw-w64-x86-64", self.windows)
-        self.assertIn("ffmpeg-*-win64-lgpl-shared-*.zip", self.windows)
+        self.assertIn("ome-ffmpeg-*-win64-lgpl-shared.zip", self.windows)
+        self.assertIn("ome-ffmpeg-*-linux-x64-lgpl-shared.tar.xz", self.linux)
         self.assertIn("windows_release_x86_64.exe", self.windows)
         self.assertIn("dependency-win64.json", self.windows)
         self.assertNotIn("linux_release.x86_64", self.windows)

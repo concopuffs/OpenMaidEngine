@@ -50,8 +50,8 @@ fi
 
 for required in \
     "$sdk_root/include/libavformat/avformat.h" \
+    "$sdk_root/include/libavutil/ffversion.h" \
     "$sdk_root/lib/libavformat.so" \
-    "$sdk_root/bin/ffmpeg" \
     "$sdk_root/LICENSE.txt"; do
     if [[ ! -e "$required" ]]; then
         echo "FFmpeg SDK file was not found after extraction: $required" >&2
@@ -59,12 +59,10 @@ for required in \
     fi
 done
 
-reported="$(LD_LIBRARY_PATH="$sdk_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$sdk_root/bin/ffmpeg" -version)"
-reported="${reported%%$'\n'*}"
-version_without_date="${expected_version%-????????}"
-if [[ "$reported" != *"$version_without_date"* ]]; then
-    echo "unexpected FFmpeg build: $reported" >&2
+# The SDK ships no programs; its installed version header is the authoritative version.
+reported="$(sed -n 's/^#define FFMPEG_VERSION "\(.*\)"$/\1/p' "$sdk_root/include/libavutil/ffversion.h")"
+if [[ "$reported" != "$expected_version" ]]; then
+    echo "unexpected FFmpeg build: ${reported:-unknown} (expected $expected_version)" >&2
     exit 1
 fi
 

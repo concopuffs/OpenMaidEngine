@@ -311,28 +311,37 @@ send either the `step-limit` console block or the generated JSON.
 
 ## Native FFmpeg movie shim (Windows and Linux x64)
 
-The target-specific dependency manifests pin dated LGPL shared FFmpeg archives by exact byte size and SHA-256.
-Their `url` is an asset of this repository's GitHub release `deps-ffmpeg-<mirror_version>` (currently
-`deps-ffmpeg-btbn-autobuild-2026-08-17-13-05`), which carries both platform archives; the tag deliberately does not
-start with `v`, so it can never trigger the release workflow. `upstream_url` records the original BtbN release
-location for provenance. BtbN prunes older dated autobuild releases, so bootstraps do not depend on those upstream
-URLs remaining live. Replacing an asset on an existing `deps-ffmpeg-*` release is forbidden; a dependency change
-requires a new `mirror_version` and release, a paired manifest update, and full native/movie validation.
-`test_release_workflow.py` asserts each `url` is exactly the release-download URL derived from `mirror_version`
-and `archive`. Bootstrap downloads remove partial files on HTTP failure before validating the complete archive;
-the Bash bootstraps therefore need curl 7.83 or newer (`--remove-on-error`), which Ubuntu 24.04 provides and
-Ubuntu 20.04's 7.68 does not. Windows development can use PowerShell/MSVC. Linux-hosted builds use Bash with
-Python 3, curl, MinGW-w64/binutils for the Windows target, a native C compiler/binutils for Linux, and the ordinary
-archive/core utilities available.
+The target-specific dependency manifests pin the project-built minimal FFmpeg SDK by exact byte size and SHA-256.
+`native/age_movie_ffmpeg/build-ffmpeg-sdk.sh` produces that SDK from the official FFmpeg release tarball pinned in
+`ffmpeg-source.json` (size, SHA-256, signing-key fingerprint, the configure flags, and the SDK revision), unmodified,
+with only the MPEG-1 components both supported profiles need; see `docs/platform-portability.md` for the component
+set and rationale. `.github/workflows/ffmpeg-sdk.yml` runs the script — Linux inside a digest-pinned
+`manylinux_2_28` container so the libraries stay within the glibc 2.28 baseline, Windows as a MinGW cross-build —
+on every change to the script, the source pin, or the workflow, uploading artifacts only. A manual dispatch with
+`publish` ticked additionally drafts the GitHub release `deps-ffmpeg-<mirror_version>` (currently
+`deps-ffmpeg-ome-8.1.3-mpeg1-r1`) with both SDK archives and their `.sha256` files, the exact source tarball, and
+both `BUILD-CONFIG` files; a maintainer reviews and publishes it. The tag deliberately does not start with `v`, so it
+never triggers the release workflow. Each manifest's `url` is an asset of that release, `source_url`/`source_sha256`
+name the hosted source tarball, and `upstream_url` the ffmpeg.org original. Replacing an asset on an existing
+`deps-ffmpeg-*` release is forbidden; a dependency change requires a new `sdk_revision`/`mirror_version`, a new
+release, a paired manifest update, and the installed-movie gate for both profiles. `test_release_workflow.py`
+asserts the manifests against `ffmpeg-source.json` (derived URLs, names, version, license, a 500 KB–10 MB size band
+that catches an accidental full build) and forbids `--enable-gpl`, `--enable-nonfree`, and `--enable-version3`. The
+SDK ships no programs, so all three bootstraps verify the version from `include/libavutil/ffversion.h`. Bootstrap
+downloads remove partial files on HTTP failure before validating the complete archive; the Bash bootstraps therefore
+need curl 7.83 or newer (`--remove-on-error`), which Ubuntu 24.04 provides and Ubuntu 20.04's 7.68 does not. Windows
+development can use PowerShell/MSVC. Linux-hosted builds use Bash with Python 3, curl, MinGW-w64/binutils for the
+Windows target, a native C compiler/binutils for Linux, and the ordinary archive/core utilities available.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, size/hash-check, extract, and version-check the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
+| `native/age_movie_ffmpeg/build-ffmpeg-sdk.sh` | Build the minimal LGPL FFmpeg SDK for one target from the pinned, size/SHA-256-checked release tarball with exactly the `ffmpeg-source.json` configure flags and a fixed `/ome-ffmpeg` prefix; enforce the glibc baseline (Linux) or system-only DLL imports (Windows); write `BUILD-CONFIG.txt`; pack a deterministic SDK archive (regular files before symlinks) plus `.sha256`. Linux must run in a glibc-2.28 environment. | `native/age_movie_ffmpeg/build-ffmpeg-sdk.sh <linux-x64\|win64> [output-dir]` | `ffmpeg-source.json`, `dependency-linux-x64.json` (`minimum_glibc`), downloaded source → `build/ffmpeg-sdk-work/<target>/` (disposable), `<output>/ome-ffmpeg-*-<target>-lgpl-shared.{tar.xz,zip}` + `.sha256` + `BUILD-CONFIG-<target>.txt` |
+| `native/age_movie_ffmpeg/bootstrap-win64.ps1` | Download, size/hash-check, extract, and version-check (`ffversion.h`) the pinned FFmpeg SDK. Returns the resolved SDK root. | `.\\native\\age_movie_ffmpeg\\bootstrap-win64.ps1 [-Destination <dir>]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-win64.ps1` | Discover the MSVC x64 toolchain, build `age_movie_ffmpeg.dll`, and stage its exact shared-library/license dependencies. | `.\\native\\age_movie_ffmpeg\\build-win64.ps1 -SdkRoot <bootstrap-output> [-OutputDirectory <dir>]` | C ABI source + FFmpeg SDK → disposable `build/native/win-x64/` by default |
-| `native/age_movie_ffmpeg/bootstrap-win64.sh` | Download, size/SHA-256-check, and extract the exact pinned Windows FFmpeg SDK, including its MinGW import libraries. Prints the resolved SDK root. | `native/age_movie_ffmpeg/bootstrap-win64.sh [destination]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
+| `native/age_movie_ffmpeg/bootstrap-win64.sh` | Download, size/SHA-256-check, extract, and version-check (`ffversion.h`) the exact pinned Windows FFmpeg SDK, including its MinGW import libraries. Prints the resolved SDK root. | `native/age_movie_ffmpeg/bootstrap-win64.sh [destination]` | `dependency-win64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-win64.sh` | Cross-build the AMD64 PE shim with MinGW, stage exactly five FFmpeg DLLs and the license, and run the static native-bundle contract gate. `MINGW_CC` and `MINGW_OBJDUMP` may override the standard tool names. | `sdk_root="$(native/age_movie_ffmpeg/bootstrap-win64.sh)"` then `native/age_movie_ffmpeg/build-win64.sh "$sdk_root" [output-directory]` | C ABI source + Windows FFmpeg SDK → disposable `build/native/win-x64/` by default, including `verification.json` |
 | `tools/verify_windows_native.py` | Without executing Windows code, require the exact native bundle, AMD64 PE architecture, all seven ABI exports and five FFmpeg imports, and no Cygwin/MSYS compatibility runtime. Optionally writes the machine-readable verification report used by later packaging. | `python3 -X utf8 tools/verify_windows_native.py <bundle> [--objdump <MinGW-objdump>] [--report <json>]` | disposable Windows native bundle → stdout and optional JSON report |
-| `native/age_movie_ffmpeg/bootstrap-linux-x64.sh` | Download, size/SHA-256-check, extract, and version-check the pinned Linux x64 FFmpeg SDK. Prints the resolved SDK root. | `native/age_movie_ffmpeg/bootstrap-linux-x64.sh [destination]` | `dependency-linux-x64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
+| `native/age_movie_ffmpeg/bootstrap-linux-x64.sh` | Download, size/SHA-256-check, extract, and version-check (`ffversion.h`) the pinned Linux x64 FFmpeg SDK. Prints the resolved SDK root. | `native/age_movie_ffmpeg/bootstrap-linux-x64.sh [destination]` | `dependency-linux-x64.json`, network/archive cache → disposable `build/downloads/`, `build/ffmpeg-sdk/` |
 | `native/age_movie_ffmpeg/build-linux-x64.sh` | Build the ELF64 x86-64 shim; stage the five exact FFmpeg SONAME libraries and license; reject stale `.so` files, unresolved/nonlocal FFmpeg dependencies, a missing `$ORIGIN` runpath, or a glibc requirement newer than the pinned 2.28 baseline. | `sdk_root="$(native/age_movie_ffmpeg/bootstrap-linux-x64.sh)"` then `native/age_movie_ffmpeg/build-linux-x64.sh "$sdk_root" [output-directory]` | C ABI source + FFmpeg SDK → disposable `build/native/linux-x64/` by default |
 | `tools/movie-corpus-gate` | Discover every MPEG program stream in a game's catalog by its MPEG pack header, whatever the asset name (Himegari stores movies under `.AGF` names, Kamidori under `.MPG`; placeholder records are skipped), mounting every `*.AAI` append catalog beside `SYS4INI.BIN`; decode every video frame and, when present, every audio block through the unpaced FFmpeg session; validate independent sequence dimensions, metadata, RGBA size, stereo finite PCM, monotonic video/audio timestamps, EOF, timeout, and teardown; then emit a per-asset JSON report. Audio fields include sample rate/channels, block and PCM-frame counts, first/last PTS, signal presence, and decode time. `--game-root` selects the install (default: the Himegari install) and repeatable `--overlay-root` mounts loose overlays ahead of it exactly as the runtime launcher does. Expected counts: 213 for Himegari, 280 for Kamidori (with `--overlay-root patch`). Exit 0 means the expected corpus count and every asset passed; exit 1 is a gate failure; exit 2 means the native shim or the game's `SYS4INI.BIN` is absent. | `dotnet run --project tools/movie-corpus-gate -- --output build/movie-corpus-ffmpeg.json --expected-count 213 --max-item-ms 30000` · Kamidori: `... --game-root ../Kamidori --overlay-root patch --expected-count 280` · optional `--native-dir <dir>` | `SYS4INI.BIN` + `*.AAI` + loose/overlay/ALF VFS assets + staged FFmpeg shim → stdout progress + disposable report JSON |
 

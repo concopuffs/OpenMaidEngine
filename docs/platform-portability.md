@@ -94,8 +94,8 @@ metadata, payload ledger, and smoke log. The Linux CI/CD path is therefore accep
 
 The Windows artifact will be cross-built on the existing Linux runner; neither a Windows runner nor Wine is part
 of its build contract. The .NET SDK publishes `win-x64`, the Linux Godot editor exports through the pinned Windows
-x86-64 template, and MinGW-w64 compiles the one project-owned native component. The pinned BtbN Windows FFmpeg
-SDK already carries the required headers, runtime DLLs, and MinGW `.dll.a` import libraries. The conditional
+x86-64 template, and MinGW-w64 compiles the one project-owned native component. The pinned project-built Windows
+FFmpeg SDK carries the required headers, runtime DLLs, MinGW `.dll.a` and MSVC `.lib` import libraries. The conditional
 `Age.Engine.Text.Windows` project contains managed P/Invoke declarations and therefore compiles on Linux without
 loading GDI. Wine would add only an execution test, which is explicitly outside the requested CI gate.
 
@@ -263,18 +263,23 @@ VM op 0x236 (non-modal) / op 0x20f (modal) / op 0x24d (green-mask transition)
   -> timestamped stereo float PCM -> per-playback AudioStreamGenerator
 ```
 
-Everything before and after the selected decoder is portable. The replacement decision is an in-process
-FFmpeg backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. FFmpeg
-`n8.1.2-44-g7c533d0f86` is pinned by immutable project-mirror URL, exact byte size, and SHA-256 in each target
-manifest under `native/age_movie_ffmpeg/`. This repository's public GitHub release
-`deps-ffmpeg-btbn-autobuild-2026-08-17-13-05` holds both platform archives (re-hosted 2026-10-05 from the verified
-copies; both downloads re-checked against the pinned size and SHA-256); each manifest also retains the original
-BtbN release URL as provenance. This removes hosted builds from BtbN's dated-autobuild retention window. Changing
-either pin requires a new `deps-ffmpeg-*` release and a rerun of the complete installed-movie gate. The shim
-dynamically links an LGPL build made without GPL or nonfree components and uses
-`libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `libswresample`. Release artifacts must carry
-the matching FFmpeg source/configuration and notices required by FFmpeg's
-[license checklist](https://ffmpeg.org/legal.html).
+Everything before and after the selected decoder is portable. The replacement decision is an in-process FFmpeg
+backend behind a project-owned C ABI, not raw FFmpeg structs in Godot/C# and not a subprocess. Since 2026-10-06 the
+shim links a **project-built minimal FFmpeg 8.1.3** (step 6 of
+`docs/superpowers/plans/2026-10-05-github-cicd-refit.md`): `build-ffmpeg-sdk.sh` builds the official,
+signature-checked release tarball pinned in `ffmpeg-source.json`, unmodified, with every component disabled except
+the MPEG program-stream demuxer, the raw `mpegvideo` demuxer that labels PES video during probing, the MPEG-1 video
+and Layer I/II audio decoders, their parsers, `swscale`, and `swresample` — no external libraries, no programs, LGPL
+version 2.1 or later. Each target manifest pins its SDK by exact URL, byte size, and SHA-256; this repository's
+release `deps-ffmpeg-ome-8.1.3-mpeg1-r1` holds both SDKs, the exact source tarball they were built from, and each
+target's `BUILD-CONFIG.txt` (configure line and toolchain). The Linux SDK rebuilds byte-identically; the Windows SDK
+differs between builds only in the PE timestamps and checksums MinGW stamps at link time. The five runtime libraries
+total about 4.3 MB, against 109 MB for the previous BtbN `lgpl-shared` build (FFmpeg `n8.1.2-44-g7c533d0f86` plus
+about 50 bundled external libraries under LGPL v3), which the project used until 2026-10-06. Changing the pin
+requires a new `deps-ffmpeg-*` release and a rerun of the complete installed-movie gate for both profiles. The shim
+dynamically links `libavformat`, `libavcodec`, `libavutil`, `libswscale`, and `libswresample`. Release artifacts
+must carry the matching FFmpeg source/configuration and notices required by FFmpeg's [license
+checklist](https://ffmpeg.org/legal.html).
 
 The boundary has two layers:
 
@@ -407,14 +412,15 @@ DirectShow; the user subsequently confirmed both opening movies work in normal w
 was deleted after the later synchronized-audio gate. Full export/source-offer packaging, Linux Godot runtime
 smoke coverage, and macOS native builds remain outstanding.
 
-The Linux-x64 bundle landed on 2026-07-31 from the matching pinned BtbN LGPL shared build. Its bootstrap verifies
-the immutable archive hash and reported FFmpeg commit; its build emits an ELF64 x86-64 ABI v3 shim plus only the
-five required SONAME libraries and license under disposable `build/native/linux-x64`. The shim records
-`RUNPATH=$ORIGIN`, every FFmpeg dependency resolves beside it, and the bundle's newest required glibc symbol is
-2.28, matching the provider baseline enforced by the build script. A self-contained Linux corpus-gate executable
-under Ubuntu 20.04 decoded all 213 installed payloads with 0 failures in 10.696 seconds. A zero-warning
-`ExportRelease` Linux-target assembly build staged the shim, five libraries, and license beside `OME.dll`
-without the Windows GDI assembly or DLLs.
+The Linux-x64 bundle landed on 2026-07-31 from the matching pinned BtbN LGPL shared build. Its bootstrap verified
+the immutable archive hash and reported FFmpeg commit (since 2026-10-06 it verifies the project-built SDK's hash and
+the version in `include/libavutil/ffversion.h`, because that SDK ships no programs); its build emits an ELF64 x86-64
+ABI v3 shim plus only the five required SONAME libraries and license under disposable `build/native/linux-x64`. The
+shim records `RUNPATH=$ORIGIN`, every FFmpeg dependency resolves beside it, and the bundle's newest required glibc
+symbol is 2.28, matching the provider baseline enforced by the build script. A self-contained Linux corpus-gate
+executable under Ubuntu 20.04 decoded all 213 installed payloads with 0 failures in 10.696 seconds. A zero-warning
+`ExportRelease` Linux-target assembly build staged the shim, five libraries, and license beside `OME.dll` without
+the Windows GDI assembly or DLLs.
 
 The Godot Linux-x64 artifact pipeline landed the same day. `godot/export_presets.cfg` and the .NET-export-required
 `godot/OME.sln` are committed; `tools/export-linux-x64.ps1` replaces only its exact disposable output,

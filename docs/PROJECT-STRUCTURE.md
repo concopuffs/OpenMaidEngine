@@ -40,6 +40,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                         tracked source and generated references use canonical LF
     ├── .github/workflows/core-validation.yml read-only, SHA-pinned Ubuntu 24.04 source-only core gate (GitHub Actions)
     ├── .github/dependabot.yml                weekly grouped GitHub Actions pin bumps against develop
+    ├── .github/workflows/ffmpeg-sdk.yml      builds the minimal FFmpeg SDKs; dispatch drafts the deps-ffmpeg release
     ├── .github/workflows/release-build.yml   SHA-pinned Ubuntu 24.04 Linux/Windows x64 artifact jobs + tag-only promotion
     ├── run-godot.ps1 / run-godot.cmd         tracked development launcher + Windows wrapper;
     │                                          resolves Godot/game-root from parameters, environment,
@@ -160,7 +161,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
-    │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts
+    │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;
+    │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK
     │                                       (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine

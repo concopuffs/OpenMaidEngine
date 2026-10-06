@@ -22,6 +22,7 @@ archive="$(manifest_value archive)"
 url="$(manifest_value url)"
 expected_hash="$(manifest_value sha256)"
 expected_size="$(manifest_value size)"
+expected_version="$(manifest_value ffmpeg_version)"
 archive_root="${archive%.zip}"
 download_directory="$repo_root/build/downloads"
 archive_path="$download_directory/$archive"
@@ -49,17 +50,24 @@ fi
 
 for required in \
     "$sdk_root/include/libavformat/avformat.h" \
+    "$sdk_root/include/libavutil/ffversion.h" \
     "$sdk_root/lib/libavformat.dll.a" \
     "$sdk_root/lib/libavcodec.dll.a" \
     "$sdk_root/lib/libavutil.dll.a" \
     "$sdk_root/lib/libswscale.dll.a" \
     "$sdk_root/lib/libswresample.dll.a" \
-    "$sdk_root/bin/ffmpeg.exe" \
     "$sdk_root/LICENSE.txt"; do
     if [[ ! -e "$required" ]]; then
         echo "FFmpeg SDK file was not found after extraction: $required" >&2
         exit 1
     fi
 done
+
+# The SDK ships no programs; its installed version header is the authoritative version.
+reported="$(sed -n 's/^#define FFMPEG_VERSION "\(.*\)"$/\1/p' "$sdk_root/include/libavutil/ffversion.h")"
+if [[ "$reported" != "$expected_version" ]]; then
+    echo "unexpected FFmpeg build: ${reported:-unknown} (expected $expected_version)" >&2
+    exit 1
+fi
 
 printf '%s\n' "$sdk_root"
