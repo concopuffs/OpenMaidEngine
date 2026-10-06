@@ -2,6 +2,10 @@ name: FFmpeg SDK
 
 on:
   push:
+    # A branch filter keeps tag pushes out: GitHub cannot apply path filters to tags, so without it every
+    # release tag would rebuild the SDKs.
+    branches:
+      - "**"
     paths:
       - native/age_movie_ffmpeg/build-ffmpeg-sdk.sh
       - native/age_movie_ffmpeg/ffmpeg-source.json

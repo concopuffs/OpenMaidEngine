@@ -318,7 +318,8 @@ The target-specific dependency manifests pin the project-built minimal FFmpeg SD
 with only the MPEG-1 components both supported profiles need; see `docs/platform-portability.md` for the component
 set and rationale. `.github/workflows/ffmpeg-sdk.yml` runs the script — Linux inside a digest-pinned
 `manylinux_2_28` container so the libraries stay within the glibc 2.28 baseline, Windows as a MinGW cross-build —
-on every change to the script, the source pin, or the workflow, uploading artifacts only. A manual dispatch with
+on every branch push that changes the script, the source pin, or the workflow (never on tag pushes), uploading
+artifacts only. A manual dispatch with
 `publish` ticked additionally drafts the GitHub release `deps-ffmpeg-<mirror_version>` (currently
 `deps-ffmpeg-ome-8.1.3-mpeg1-r1`) with both SDK archives and their `.sha256` files, the exact source tarball, and
 both `BUILD-CONFIG` files; a maintainer reviews and publishes it. The tag deliberately does not start with `v`, so it
