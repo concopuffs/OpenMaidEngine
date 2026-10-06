@@ -22,7 +22,7 @@
     "--disable-debug",
     "--disable-static",
     "--enable-shared",
-    "--enable-demuxer=mpegps",
+    "--enable-demuxer=mpegps,mpegvideo",
     "--enable-decoder=mpeg1video,mp1,mp1float,mp2,mp2float",
     "--enable-parser=mpegvideo,mpegaudio"
   ],

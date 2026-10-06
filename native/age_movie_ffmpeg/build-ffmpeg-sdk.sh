@@ -100,7 +100,7 @@ if [[ "$target" == linux-x64 ]]; then
         exit 1
     fi
     platform_report="glibc symbol ceiling: $highest_glibc (baseline $minimum_glibc)"
-    rm -rf -- "$install_root/lib/pkgconfig"
+    rm -rf -- "$install_root/lib/pkgconfig" "$install_root/share"
 else
     objdump_tool="x86_64-w64-mingw32-objdump"
     command -v "$objdump_tool" >/dev/null || { echo "required command was not found: $objdump_tool" >&2; exit 1; }
@@ -115,6 +115,8 @@ else
     fi
     platform_report="DLL imports: $(tr '\n' ' ' <<< "$imports")"
     rm -rf -- "$install_root/lib/pkgconfig" "$install_root/share"
+    # FFmpeg installs the MSVC import libraries beside the DLLs; the SDK layout keeps them in lib/.
+    mv -- "$install_root"/bin/*.lib "$install_root/lib/"
 fi
 
 # 5. SDK layout + provenance.
@@ -146,7 +148,9 @@ import zipfile
 from pathlib import Path
 
 root, output, name, target = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
-entries = sorted(path for path in root.rglob("*") if path.is_file() or path.is_symlink())
+# Regular files first, then symlinks, so extractors that cannot create dangling links (e.g. on Windows) succeed.
+entries = sorted(path for path in root.rglob("*") if path.is_file() and not path.is_symlink())
+entries += sorted(path for path in root.rglob("*") if path.is_symlink())
 EPOCH = 0
 if target == "linux-x64":
     archive = output / f"{name}.tar.xz"
