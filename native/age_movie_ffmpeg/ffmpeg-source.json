@@ -1,0 +1,43 @@
+{
+  "name": "FFmpeg",
+  "version": "8.1.3",
+  "archive": "ffmpeg-8.1.3.tar.xz",
+  "url": "https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz",
+  "size": 11732036,
+  "sha256": "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3",
+  "signature_url": "https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz.asc",
+  "signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+  "license": "LGPL-2.1-or-later",
+  "license_file": "COPYING.LGPLv2.1",
+  "sdk_revision": 1,
+  "mirror_version": "ome-8.1.3-mpeg1-r1",
+  "configure_flags": [
+    "--disable-everything",
+    "--disable-autodetect",
+    "--disable-programs",
+    "--disable-doc",
+    "--disable-network",
+    "--disable-avdevice",
+    "--disable-avfilter",
+    "--disable-debug",
+    "--disable-static",
+    "--enable-shared",
+    "--enable-demuxer=mpegps",
+    "--enable-decoder=mpeg1video,mp1,mp1float,mp2,mp2float",
+    "--enable-parser=mpegvideo,mpegaudio"
+  ],
+  "target_configure_flags": {
+    "linux-x64": [
+      "--arch=x86_64",
+      "--target-os=linux",
+      "--enable-pthreads"
+    ],
+    "win64": [
+      "--arch=x86_64",
+      "--target-os=mingw32",
+      "--cross-prefix=x86_64-w64-mingw32-",
+      "--enable-w32threads",
+      "--disable-pthreads"
+    ]
+  }
+}

@@ -1,0 +1,148 @@
+name: FFmpeg SDK
+
+on:
+  push:
+    paths:
+      - native/age_movie_ffmpeg/build-ffmpeg-sdk.sh
+      - native/age_movie_ffmpeg/ffmpeg-source.json
+      - .github/workflows/ffmpeg-sdk.yml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Create a draft deps-ffmpeg release from this run's SDKs
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-sdk:
+    name: Linux x64 FFmpeg SDK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # glibc 2.28 userland so the libraries meet the dependency manifest's minimum_glibc.
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.03-1@sha256:39df0042d5cc900b085aa25a0659368b42a0006c54c474299b785b44c1b4ff82
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          dnf install -y nasm || dnf --enablerepo=powertools install -y nasm
+          echo "/opt/python/cp311-cp311/bin" >> "$GITHUB_PATH"
+
+      - name: Report toolchain
+        run: |
+          python3 --version
+          cc --version | head -n 1
+          nasm -v
+          ldd --version | head -n 1
+
+      - name: Build SDK
+        run: ./native/age_movie_ffmpeg/build-ffmpeg-sdk.sh linux-x64 build/ffmpeg-sdk-dist
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffmpeg-sdk-linux-x64-${{ github.sha }}
+          path: build/ffmpeg-sdk-dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-sdk:
+    name: Windows x64 FFmpeg SDK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install MinGW cross-toolchain
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 nasm make
+
+      - name: Report toolchain
+        run: |
+          python3 --version
+          x86_64-w64-mingw32-gcc --version | head -n 1
+          nasm -v
+
+      - name: Build SDK
+        run: ./native/age_movie_ffmpeg/build-ffmpeg-sdk.sh win64 build/ffmpeg-sdk-dist
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffmpeg-sdk-win64-${{ github.sha }}
+          path: build/ffmpeg-sdk-dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    name: Draft deps-ffmpeg release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs:
+      - linux-sdk
+      - windows-sdk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Only this manually dispatched job can write; it creates a draft for human review.
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download Linux SDK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ffmpeg-sdk-linux-x64-${{ github.sha }}
+          path: build/release
+
+      - name: Download Windows SDK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ffmpeg-sdk-win64-${{ github.sha }}
+          path: build/release
+
+      - name: Fetch and verify the exact source tarball
+        run: |
+          read -r archive url size sha256 < <(python3 -c 'import json; d = json.load(open("native/age_movie_ffmpeg/ffmpeg-source.json")); print(d["archive"], d["url"], d["size"], d["sha256"])')
+          curl --fail --location --retry 3 --output "build/release/$archive" "$url"
+          test "$(wc -c < "build/release/$archive")" = "$size"
+          echo "$sha256  build/release/$archive" | sha256sum --check
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mirror_version="$(python3 -c 'import json; print(json.load(open("native/age_movie_ffmpeg/ffmpeg-source.json"))["mirror_version"])')"
+          tag="deps-ffmpeg-$mirror_version"
+          {
+            echo "Project-built minimal FFmpeg SDK ($mirror_version) for the movie shim."
+            echo
+            echo "This release contains FFmpeg, licensed under the LGPL version 2.1 or later. The exact,"
+            echo "unmodified source tarball it was built from is attached; each SDK's BUILD-CONFIG.txt records"
+            echo "the configure line and toolchain."
+            echo
+            cat build/release/BUILD-CONFIG-linux-x64.txt
+            echo
+            cat build/release/BUILD-CONFIG-win64.txt
+          } > build/release-notes.md
+          gh release create "$tag" --repo "${{ github.repository }}" --draft --latest=false \
+            --target "${{ github.sha }}" --title "FFmpeg SDK ($mirror_version)" \
+            --notes-file build/release-notes.md build/release/*
