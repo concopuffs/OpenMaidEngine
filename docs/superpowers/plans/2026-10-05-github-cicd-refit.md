@@ -1,7 +1,7 @@
 # GitHub CI/CD refit
 
-**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–3
-complete 2026-10-05; Step 4 implemented locally (hosted gates pending).
+**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–4
+complete 2026-10-06 (all hosted gates passed); Step 5 closeout and Step 6 (minimal FFmpeg build) remaining.
 
 **Supersedes:** an uncommitted 2026-09-30 dual-host mirror plan, abandoned and deleted when the project moved
 its single home to GitHub; its still-relevant findings are folded into §1 below.
@@ -194,7 +194,7 @@ check could not match); the Godot template downloader's User-Agent names the Git
 Bash runs used a test-only PATH shim that dropped that one flag; `ubuntu-24.04` (Q3) ships curl 8.x. Local WSL
 artifact builds are unaffected because the archives are byte-identical and already cached; Step 4's first hosted
 build exercises the real download. Core gate green. `tools-reference.md` and `platform-portability.md` updated.
-**Open (Q1 licensing):** `THIRD_PARTY_NOTICES.md` has no FFmpeg section, and the deps release carries the BtbN
+**Q1 licensing (resolved by Step 6, decided 2026-10-06):** `THIRD_PARTY_NOTICES.md` has no FFmpeg section, and the deps release carries the BtbN
 archives' bundled license text but no pointer to corresponding source; `platform-portability.md` already states
 that release artifacts must carry the matching FFmpeg source/configuration and notices. Needs a decision before
 the first `v*` release.
@@ -310,7 +310,21 @@ write permission or token, forbids `secrets.` anywhere in the file, and gains a 
 pins with version comments, `ubuntu-24.04` only, no `pull_request_target`, no `.gitea/`). `actionlint` clean on both
 workflows; 8 policy tests and the core gate green. `tools-reference.md`, `PROJECT-STRUCTURE.md`,
 `platform-portability.md` (Gitea-era acceptance history kept and labelled as such), and workspace `AGENTS.md`
-updated. **Pending:** hosted gates 1–3 (develop push build, throwaway-tag release, idempotent re-run).
+updated.
+
+**Hosted (2026-10-05/06):** a staging mistake first pushed `c0d0ee5` containing only the file move (unported
+Gitea content): GitHub rejected that workflow without running any job, and its core run failed on the stale test
+path — no build, token, or release was involved. The actual port followed as `98b5fb6` (staging verified complete
+before commit). Gate 1: run 37394252157 on `develop` built both platform artifacts (Linux 110.7 MB, Windows
+118.6 MB, 30-day retention) in about 1.5 minutes each and skipped promotion; core gate green. This was also the
+first real FFmpeg download from the GitHub deps release and the first run on `ubuntu-24.04` (glibc guard and curl
+requirement both satisfied). Gate 2: lightweight tag `v0.0.1-ci.1` at `98b5fb6` → run 37394520769 published
+"Open Maid Engine v0.0.1-ci.1" (not draft/prerelease) with exactly `OME-linux-x64.tar.gz` (111,053,979 bytes),
+`OME-windows-x64.zip` (118,966,136 bytes), and `RELEASE-SHA256SUMS`; fresh downloads match the checksums, the tag
+resolves to `98b5fb6`, and both archives' `BUILD-INFO.json` record `source_commit` `98b5fb6` with
+`source_dirty: false`. Gate 3: the user re-ran only the publish job (attempt 2; build results carried over); it
+succeeded and the release id, publish time, and all three asset ids/sizes/timestamps were unchanged. **Step 4 is
+complete.** Cleanup: the throwaway release (deleted by the user in the web UI) and tag (deleted afterwards).
 
 ### Step 5 — Remove Gitea remnants and close out docs
 
@@ -333,11 +347,141 @@ updated. **Pending:** hosted gates 1–3 (develop push build, throwaway-tag rele
 **Gate:** `git grep -i gitea` finds only historical roadmap/plan text and the frozen remote's mention in
 `AGENTS.md`; no doc names a path that does not exist; the canonical-documents map is still accurate.
 
+### Step 6 — Replace the BtbN FFmpeg build with a minimal, project-built FFmpeg
+
+**Decided 2026-10-06 (option B).** Supersedes the open Q1 licensing note.
+
+**Why.** The shipped FFmpeg libraries come from BtbN's `lgpl-shared` build: FFmpeg plus ~50 external libraries
+compiled into the same DLLs/shared objects, configured `--enable-version3` (LGPL v3). Measured 2026-10-06 from the
+released Windows package: the five runtime libraries are 109.4 MB, 36% of the 300.9 MB unpacked package. Against
+FFmpeg's own compliance checklist (<https://ffmpeg.org/legal.html>) the packages meet items 1–2, 15–16 and 18 (no
+`--enable-gpl`/`--enable-nonfree`, dynamic linking, unrenamed libraries, no x264/x265) but not items 3–8 (no source
+distributed, no exact correspondence, no configure line, source not hosted beside the binaries) or item 17 (the
+same duties for every LGPL library compiled in — e.g. LAME, GMP, FriBidi, libbluray, libssh, soxr, TwoLAME,
+OpenAL Soft — and the many BSD/MIT/Apache components' notice requirements are not met either). Item 9–10
+attribution is also missing. Re-hosting the BtbN archives on this repository's `deps-ffmpeg-*` release carries the
+same gaps.
+
+The engine needs very little of that: FFmpeg is consumed only by the movie shim (`native/age_movie_ffmpeg/`,
+`FfmpegMovieDecoder`, the movie corpus gate, and the package smoke). All 213 installed Himegari movies are MPEG-1
+program streams with MPEG-1 video, 29 with MPEG audio. Kamidori also uses MPEG program streams (1024×576 startup
+streams); its video profile is not yet inventoried.
+
+**Target.** A project-built FFmpeg with every component disabled except what the supported corpora need and no
+external libraries. The result is plain FFmpeg under LGPL v2.1-or-later; compliance reduces to the exact source
+tarball, its configure line, and notices, all hosted on the same `deps-ffmpeg-*` release as the binaries.
+
+**Constraints carried over unchanged:**
+
+- Stay on the FFmpeg 8.1 release branch so the sonames/DLL names the shim, build scripts and
+  `verify_windows_native.py` expect stay the same (`avformat-62`, `avcodec-62`, `avutil-60`, `swscale-9`,
+  `swresample-6`). The shim's API use (avformat/avcodec decode, custom `AVIOContext`, `sws_scale`, `swr_*`) needs
+  no new FFmpeg features.
+- Linux libraries must not require a glibc newer than the manifest's `minimum_glibc` (2.28); the existing guard in
+  `build-linux-x64.sh` enforces it.
+- Windows DLLs must import only Windows system DLLs and each other — no `libwinpthread-1.dll`, `libgcc_s_*`, or
+  MSYS/Cygwin runtimes.
+- Every download stays pinned by exact size + SHA-256, and dependency changes stay "new release, never replace".
+
+#### 6.0 — Inventory the codec set
+
+Run the movie corpus scan over every supported profile's installed corpus (Himegari is known; Kamidori is not) and
+record container, video codec/profile, and audio codec per title. Confirm nothing outside the shim loads FFmpeg.
+
+**Default component set, adjusted by the inventory:** demuxer `mpegps`; decoders `mpeg1video`, `mpeg2video`, `mp1`,
+`mp1float`, `mp2`, `mp2float`, `mp3`, `mp3float` (the float/fixed pairs are cheap and avoid depending on decoder
+registration order); parsers `mpegvideo`, `mpegaudio`; libraries `avformat`, `avcodec`, `avutil`, `swscale`,
+`swresample`. Every one is an internal LGPL decoder — adding a format later for mods means enabling another
+internal decoder, never an external library.
+
+**Gate:** inventory recorded in `docs/platform-portability.md`; component list final.
+
+#### 6.1 — Build script
+
+Add `native/age_movie_ffmpeg/build-ffmpeg-sdk.sh <linux-x64|win64>` plus a pinned source manifest
+`native/age_movie_ffmpeg/ffmpeg-source.json` (official release tarball URL from `ffmpeg.org/releases/`, its size
+and SHA-256, and the detached `.asc` signature, verified against FFmpeg's published release-signing key).
+
+- Configure (illustrative; 6.0 finalizes the component list):
+  `--enable-shared --disable-static --disable-everything --disable-autodetect --disable-programs --disable-doc
+  --disable-network --disable-avdevice --disable-avfilter --enable-demuxer=mpegps
+  --enable-decoder=mpeg1video,mpeg2video,mp1,mp1float,mp2,mp2float,mp3,mp3float
+  --enable-parser=mpegvideo,mpegaudio`. Never `--enable-gpl`, `--enable-nonfree`, or `--enable-version3`.
+- **Linux:** build inside a `manylinux_2_28` (glibc 2.28) container so the libraries satisfy the glibc baseline.
+- **Windows:** cross-compile with the MinGW-w64 toolchain already used by the release workflow
+  (`--target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32-`), native Win32 threads, then check the
+  DLLs' imports.
+- Output the same SDK layout the bootstraps already consume: `include/`, `lib/` (`*.so` on Linux; `*.dll.a`
+  import libraries on Windows), `bin/` (Windows DLLs), `LICENSE.txt` (FFmpeg's `COPYING.LGPLv2.1`), plus a new
+  `BUILD-CONFIG.txt` with the exact configure line, FFmpeg version, and toolchain versions. Strip symbols; pack
+  deterministically.
+- Alongside each SDK archive, publish the **exact** source tarball used, unmodified, with `BUILD-CONFIG.txt`
+  (checklist items 3–7: no patches, so `changes.diff` is empty and is stated as such).
+
+**Gate:** both targets build from a clean checkout; Linux libraries pass the glibc guard; Windows DLL imports are
+system-only; the archives are byte-reproducible across two runs (or the non-reproducible fields are documented).
+
+#### 6.2 — SDK workflow
+
+Add `.github/workflows/ffmpeg-sdk.yml`, `workflow_dispatch` only, inputs `mirror_version` (e.g.
+`ome-ffmpeg-8.1.x-mpeg-1`). Two read-only build jobs run the script; a final job — the only one with
+`contents: write` — creates a **draft** release `deps-ffmpeg-<mirror_version>` carrying both SDK archives, the
+source tarball, and `BUILD-CONFIG.txt`. The maintainer reviews and publishes it. Same pinning/runner policy as the
+other workflows (the policy test covers it automatically). The tag must not start with `v`.
+
+**Gate:** a dispatch produces the draft release; its assets verify against locally rebuilt archives.
+
+#### 6.3 — Switch the manifests, bootstraps, and tests
+
+- Manifests: new `mirror_version`, `archive`, `url`, `size`, `sha256`, `ffmpeg_version`; `provider` becomes the
+  project build; `upstream_url` points at the official FFmpeg source tarball; add `source_archive`/`source_sha256`
+  for the hosted tarball; drop BtbN-specific fields (`release_tag`, `ffmpeg_commit`, `variant` naming).
+- Bootstraps (`.sh` ×2, `.ps1`): drop the `bin/ffmpeg[.exe]` requirement (no programs are built); check the version
+  from `include/libavutil/ffversion.h` instead of running `ffmpeg -version`.
+- `build-linux-x64.sh` / `build-win64.sh`: unchanged runtime library lists if 8.1 sonames hold; keep copying
+  `LICENSE.txt` as `FFmpeg-LICENSE.txt`.
+- `tools/test_release_workflow.py`: replace the BtbN assertions (autobuild tag pattern, `btbn-` mirror version,
+  BtbN `upstream_url`, commit-in-archive-name, >50 MB size floor) with the new schema, a size **ceiling** that
+  catches an accidental full build, and the derived release URL.
+
+**Gate:** all three bootstraps download and verify from a clean `build/downloads/`; core gate green.
+
+#### 6.4 — Acceptance
+
+- CI release build on `develop`: Linux package smoke (`opcodes=548 ffmpeg-abi=3`) passes; Windows structural
+  verification passes.
+- Local installed-movie gate (`tools/movie-corpus-gate`) decodes every title in every inventoried corpus (213
+  Himegari titles plus Kamidori) with zero failures, video and audio.
+- Record the package-size change.
+
+#### 6.5 — Compliance surface
+
+- Each package ships `FFmpeg-LICENSE.txt` (LGPL v2.1) and a new `FFmpeg-SOURCE.txt`: FFmpeg version, configure
+  line, "unmodified", and the exact URL + SHA-256 of the source tarball on the `deps-ffmpeg-*` release.
+- `THIRD_PARTY_NOTICES.md`: an FFmpeg section (license, version, where the source is, dynamic linking, unmodified).
+- `README.md`: an FFmpeg credit (checklist item 10 — there is no in-game about box).
+- `publish_github_release.py`: the release body adds the FFmpeg attribution and the source link (item 9); update
+  its test.
+- Record the checklist walk-through, items 1–18, in `docs/platform-portability.md`.
+
+#### 6.6 — Retire the BtbN build
+
+After 6.3 lands and 6.4 passes: delete the `deps-ffmpeg-btbn-autobuild-2026-08-17-13-05` release and tag (web UI,
+then `git push origin --delete`), update `docs/platform-portability.md` and `docs/tools-reference.md` (provenance,
+size, license), and record the change in the roadmap.
+
+**Step 6 gate:** no build input or shipped file derives from the BtbN build; `git grep -i btbn` finds only
+historical text; the FFmpeg checklist walk-through has no open item. **No real `v*` release is published before
+Step 6 is complete.**
+
 ---
 
 ## 4. Sequencing
 
 Q2, Q3, Q6 → Step 0 → Step 1 → (Q1) Step 2 → (Q5) Step 3 → (Q4 tags pushed) Step 4 → Step 5.
+
+Step 6 (decided 2026-10-06) follows Step 4 and can run alongside Step 5's closeout: 6.0 → 6.1 → 6.2 → 6.3 →
+6.4 → 6.5 → 6.6. The first real `v*` release waits for Step 6.
 
 Step 1 is independent of everything after it and gives GitHub CI immediately. Steps 2 and 3 can proceed in
 either order or in parallel; Step 4 needs both.
@@ -345,7 +489,9 @@ either order or in parallel; Step 4 needs both.
 ## 5. Non-targets
 
 - Keeping anything working on Gitea, or a shared/templated multi-host workflow.
-- Changing build scripts, package layout, artifact names, or the three-asset contract.
+- In Steps 1–5: changing build scripts, package layout, artifact names, or the three-asset contract. (Step 6
+  deliberately changes the FFmpeg bootstraps and adds `FFmpeg-SOURCE.txt` to each package; artifact names and
+  the three-asset contract stay unchanged.)
 - Backfilling GitHub releases for `v0.1.0`–`v0.3.3`.
 - Native Windows runners, code signing, installers, or a Windows execution smoke (the Windows artifact stays
   structurally verified on Linux, as today).
@@ -356,4 +502,5 @@ either order or in parallel; Step 4 needs both.
 A push to `develop` runs the core gate and both artifact builds on GitHub; pushing a `v*` tag publishes a GitHub
 release with exactly `OME-linux-x64.tar.gz`, `OME-windows-x64.zip`, and `RELEASE-SHA256SUMS`, all verified;
 every build input resolves from GitHub or the upstream projects' own hosts; and the repository contains no live
-Gitea coupling.
+Gitea coupling. Every shipped FFmpeg binary is the project's minimal LGPL v2.1 build, with its exact source,
+configure line, and notices published beside it (Step 6).
