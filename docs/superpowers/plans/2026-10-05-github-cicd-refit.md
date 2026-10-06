@@ -486,6 +486,14 @@ and total decode time fell from 9.1 s to 7.7 s. Remaining for 6.4: extend the ga
   video and audio, against both the BtbN build (baseline) and the new build.
 - Record the package-size change.
 
+**Progress (2026-10-06):** the gate prerequisite is done on `ffmpeg-sdk`: `MovieCorpusDiscovery` selects by MPEG
+pack header (any name, placeholders skipped; new unit test), and the gate takes `--game-root` plus the runtime's
+`--overlay-root` (`AssetLaunchOptions`), defaulting to the previous Himegari behaviour. Local Windows results with the
+`2fc2127` minimal SDK vs the BtbN baseline: Himegari 213/213 both, Kamidori 280/280 both (`--game-root ../Kamidori
+--overlay-root patch`), identical on every non-timing field in both corpora. Remaining for 6.4: the CI release build
+(Linux package smoke and Windows verification) with the new SDK, which needs 6.3's manifest switch first, and the
+package-size record.
+
 #### 6.5 — Compliance surface
 
 - Each package ships `FFmpeg-LICENSE.txt` (LGPL v2.1) and a new `FFmpeg-SOURCE.txt`: FFmpeg version, configure

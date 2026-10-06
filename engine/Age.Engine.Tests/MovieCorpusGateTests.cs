@@ -120,6 +120,51 @@ public class MovieCorpusGateTests
         Assert.True(item.AudioHasSignal);
     }
 
+    [Fact]
+    public void DiscoverySelectsMoviesByPackHeaderRegardlessOfName()
+    {
+        byte[] movie = SyntheticPayload(16, 16);
+        var store = new NamedStore(new Dictionary<string, byte[]>
+        {
+            ["OPENING.MPG"] = movie,
+            ["EFFECT.AGF"] = movie,
+            ["STILL.AGF"] = "ACIF"u8.ToArray(),
+            ["VOICE.OGG"] = "OggS"u8.ToArray(),
+            ["SHORT.MPG"] = [0, 0, 1],
+            ["PLACEHOLDER.MPG"] = movie,
+        });
+        PackedAssetEntry[] assets =
+        [
+            Packed(1, "OPENING.MPG"),
+            Packed(2, "EFFECT.AGF"),
+            Packed(3, "STILL.AGF"),
+            Packed(4, "VOICE.OGG"),
+            Packed(5, "SHORT.MPG"),
+            new(6, new AssetEntry("PLACEHOLDER.MPG", "DATA1.ALF", 0, movie.Length, IsPlaceholder: true)),
+        ];
+
+        IReadOnlyList<PackedAssetEntry> found = MovieCorpusDiscovery.DiscoverMpegMovies(assets, store);
+
+        Assert.Equal(["OPENING.MPG", "EFFECT.AGF"], found.Select(packed => packed.Asset.Name));
+        Assert.DoesNotContain("PLACEHOLDER.MPG", store.Opened);
+    }
+
+    private static PackedAssetEntry Packed(long packedId, string name)
+        => new(packedId, new AssetEntry(name, "DATA1.ALF", 0, 0));
+
+    private sealed class NamedStore(Dictionary<string, byte[]> payloads) : IAssetStore
+    {
+        public List<string> Opened { get; } = [];
+
+        public Stream Open(AssetEntry entry)
+        {
+            Opened.Add(entry.Name);
+            return new MemoryStream(payloads[entry.Name], writable: false);
+        }
+
+        public byte[] ReadAll(AssetEntry entry) => payloads[entry.Name];
+    }
+
     private static byte[] SyntheticPayload(int width, int height) =>
     [
         0, 0, 1, 0xba,

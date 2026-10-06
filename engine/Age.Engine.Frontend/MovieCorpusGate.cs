@@ -53,12 +53,18 @@ internal static class MovieCorpusDiscovery
 
     public static IReadOnlyList<PackedAssetEntry> DiscoverMpegMovies(
         Sys4AssetCatalog catalog, IAssetStore store)
+        => DiscoverMpegMovies(catalog.EnumerateAssets(), store);
+
+    /// <summary>Selects movies by their MPEG pack header rather than their name: Himegari stores them under
+    /// <c>.AGF</c> names (shared with still images) and Kamidori under <c>.MPG</c> names.</summary>
+    public static IReadOnlyList<PackedAssetEntry> DiscoverMpegMovies(
+        IEnumerable<PackedAssetEntry> assets, IAssetStore store)
     {
         var movies = new List<PackedAssetEntry>();
         Span<byte> signature = stackalloc byte[4];
-        foreach (var packed in catalog.EnumerateAssets())
+        foreach (var packed in assets)
         {
-            if (!packed.Asset.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase)) continue;
+            if (packed.Asset.IsPlaceholder) continue;
             using Stream stream = store.Open(packed.Asset);
             int length = 0;
             while (length < signature.Length)

@@ -339,8 +339,11 @@ pack header, Layer III, or private/AC-3/LPCM streams. The complete decoder requi
 is therefore the MPEG program-stream demuxer, the MPEG-1 video decoder, and the MPEG-1 Layer I/II audio decoders
 (plus the matching parsers, `swscale`, and `swresample`) — the component set for the project-built FFmpeg in step 6
 of `docs/superpowers/plans/2026-10-05-github-cicd-refit.md`. Enabling any other format later means enabling another
-of FFmpeg's internal decoders. The installed-movie gate currently discovers only `.AGF`-named assets, so it does not
-yet cover Kamidori's `.MPG` corpus.
+of FFmpeg's internal decoders. The installed-movie gate now discovers movies by pack header and takes
+`--game-root`/`--overlay-root`, so it covers both corpora: on 2026-10-06 the BtbN build and the project-built minimal
+FFmpeg (step 6) each passed Himegari 213/213 and Kamidori 280/280, with identical results on every non-timing field
+(dimensions, frame counts and rates, timestamps, changed-frame counts, and audio counts/signal; 268 Kamidori titles
+carry audio, 19 of them silent).
 
 ABI v2 and MPEG audio playback landed on 2026-07-25. The expanded installed-corpus gate passes all 213 assets:
 184 remain strictly video-only and all 29 audio-bearing streams decode to finite 44.1 kHz stereo PCM with
