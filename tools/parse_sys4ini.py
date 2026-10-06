@@ -229,6 +229,20 @@ def main() -> int:
     # name-resolution.md #1 needed (confirmed via native-RE, see docs/engine-re.md). sys4load reads
     # it to annotate `call-script 0x1ab =ADDITEM`.
     cs = {str(f["raw_index"]): f["name"] for f in index["files"]}
+    # Append catalogs: a nonzero high byte selects the AAI mounted at that selector (AAI header
+    # 0x108) and the low 24 bits index its table (docs/asset-resolution-re.md). As in the native
+    # mount loop, a later catalog with the same selector replaces the earlier one.
+    appends: dict[int, dict] = {}
+    for catalog_path in sorted(paths.GAME_DIR.glob("*.AAI")):
+        header = catalog_path.read_bytes()[:0x10C]
+        if len(header) < 0x10C or header[:4] != b"S4AC":
+            continue
+        selector = int.from_bytes(header[0x108:0x10C], "little")
+        if 0 < selector < 0x80:
+            appends[selector] = parse(catalog_path)
+    for selector, catalog in sorted(appends.items()):
+        for f in catalog["files"]:
+            cs[str((selector << 24) | f["raw_index"])] = f["name"]
     cs_out = paths.BUILD / "callscript-names.json"
     cs_out.write_text(json.dumps(cs, ensure_ascii=False, indent=0), encoding="utf-8")
     print(f"-> {cs_out.relative_to(paths.REPO)} ({len(cs)} ids)")

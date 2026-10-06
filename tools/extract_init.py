@@ -858,6 +858,18 @@ def resolve(name: str) -> Path:
     raise SystemExit(f"not found: {name}.BIN")
 
 
+def resolve_append(name: str, selector: int) -> Path:
+    """Resolve an append catalog's literal `$n$NAME` record: loose root first, then extracted."""
+    record = f"${selector}${name}.BIN"
+    candidates = [paths.EXTRACTED / f"APPEND{selector:02d}" / record]
+    if paths.CONTEXT.trusts_loose_append_overrides:
+        candidates.insert(0, paths.GAME_DIR / record)
+    for cand in candidates:
+        if cand.exists():
+            return cand
+    raise SystemExit(f"not found: {record}")
+
+
 def load_packed_script(packed_id: int) -> sys4load.Sys4Script:
     """Load one selector-keyed AAI script by its native packed resource id."""
     if not 0 <= packed_id <= 0xFFFFFFFF:
@@ -1060,7 +1072,9 @@ def detect_mode(scr):
         and ins.args[0] == (T_GLOBAL_STRING, CLASS_CHANGE_TITLE_OUT)
         for ins in scr.instructions
     )
-    if has_class_change_title and len(_class_change_guards(scr)) >= 4:
+    # The rules and banked detectors key on Himegari global addresses.
+    himegari = paths.CONTEXT.profile_id == "himegari"
+    if himegari and has_class_change_title and len(_class_change_guards(scr)) >= 4:
         return "rules"
     if has_str and len(_mixed_guards(scr)) >= 4:
         return "mixed"
@@ -1068,7 +1082,7 @@ def detect_mode(scr):
         return "name"
     if _paired_parallel_writes(scr):
         return "dispatch"
-    if _routine_bank_writes(scr):
+    if himegari and _routine_bank_writes(scr):
         return "banked"
     n_footer = ops.count(COPY_LOCAL_ARRAY)
     n_int = ops.count(MOV) + ops.count(COPY_TO_GLOBAL)
@@ -1420,9 +1434,13 @@ def _record_table_cell(destination, record_id):
         if 0 <= column < stride:
             matches.append((base, stride, column))
     if len(matches) > 1:
-        raise ValueError(
-            f"ambiguous record-table destination 0x{destination:x} for id {record_id}: {matches}"
-        )
+        # A large flat 2D bank can incidentally cover another table's row. The narrowest
+        # consumer-observed row is the specific owner; equal strides stay ambiguous.
+        matches.sort(key=lambda match: match[1])
+        if matches[0][1] == matches[1][1]:
+            raise ValueError(
+                f"ambiguous record-table destination 0x{destination:x} for id {record_id}: {matches}"
+            )
     return matches[0] if matches else None
 
 
@@ -6889,7 +6907,8 @@ def write_data_index(data_dir: Path) -> None:
         "",
         "The JSON files in this directory are generated from SYS4 `*INIT` scripts. Raw global-array",
         "bases remain available in every record; confirmed field meanings live in",
-        "`vm-map/globals.toml` and the generated `docs/global-reference.md`.",
+        f"`vm-map/{paths.CONTEXT.globals_toml.name}` and the generated "
+        f"`docs/{paths.CONTEXT.global_reference_doc.name}`.",
         "",
         "| file | mode | records | messages | scalar/array fields | strings | buffer cells | footer arrays | record columns |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -6918,7 +6937,8 @@ def write_data_index(data_dir: Path) -> None:
         "and bytecode dispatch offset separately from the",
         "short description stored by the INIT script.",
         "Top-level `field_semantics` maps raw array/row-column keys to canonical machine-readable",
-        "names from `vm-map/globals.toml`; each record's generated `semantic_fields` is the joined",
+        f"names from `vm-map/{paths.CONTEXT.globals_toml.name}`; each record's generated "
+        "`semantic_fields` is the joined",
         "name-keyed convenience view. Complete footer copies expose their row values there while",
         "raw keys and footer metadata remain intact as bytecode provenance.",
         "",
@@ -7024,13 +7044,71 @@ def write_data_index(data_dir: Path) -> None:
         "direct-consumer evidence.",
         "",
     ]
+    if paths.CONTEXT.profile_id != "himegari":
+        # The dedicated-schema paragraphs describe Himegari's specializations only.
+        lines = lines[:lines.index(
+            "ILINIT's dedicated condition schema exposes thirteen authored condition ids in the"
+        )]
+        lines += [
+            f"Profile `{paths.CONTEXT.profile_id}` specializations live in its own module "
+            "(see `profile_specializations()` in tools/extract_init.py). `APPENDnn-<TABLE>.json`",
+            "files hold one append layer each (`--append nn`); they are not merged runtime images.",
+            "Use `tools/init_table_profile.py <TABLE> --build` to generate value/population and",
+            "direct-consumer evidence.",
+            "",
+        ]
     (data_dir / "README.md").write_text("\n".join(lines), encoding="utf8")
+
+
+def profile_specializations() -> dict:
+    """Table-specific extractors and forced modes for the selected game profile.
+
+    Specialized schemas hard-code one game's global addresses and authored counts, so a
+    profile only receives its own. Unlisted tables fall back to the shared shape modes.
+    """
+    if paths.CONTEXT.profile_id == "kamidori":
+        import init_kamidori
+        return init_kamidori.specializations()
+    if paths.CONTEXT.profile_id != "himegari":
+        return {"forced_modes": {}, "extractors": {}}
+    return {
+        "forced_modes": {
+            # TRINIT's six-column sparse string matrix is not the generic
+            # one-name-per-record layout expected by name-mode auto-detection.
+            "TRINIT": "name",
+            # CDINIT's selector branches look like one fragmented numeric table
+            # to the generic parallel-array detector.
+            "CDINIT": "numeric",
+        },
+        "extractors": {
+            ("name", "VIINIT"): extract_vocabulary,
+            ("name", "CNINIT"): extract_character_names,
+            ("name", "CIINIT"): extract_character_profiles,
+            ("name", "MAINIT"): extract_magic_actions,
+            ("name", "ILINIT"): extract_condition_definitions,
+            ("name", "AFINIT"): extract_affinity_definitions,
+            ("name", "CTINIT"): extract_name_entry_palette,
+            ("numeric", "CGINIT"): extract_gallery_definitions,
+            ("numeric", "ALINIT"): extract_alchemy_recipes,
+            ("numeric", "CVINIT"): extract_voice_configuration,
+            ("name", "LAINIT"): extract_terrain_definitions,
+            ("name", "TRINIT"): extract_training_actions,
+            ("name", "CDINIT2"): extract_card_definitions,
+            ("numeric", "CDINIT"): extract_card_generation_lists,
+            ("numeric", "BTANINIT"): extract_battle_effect_definitions,
+            ("numeric", "BTANINIT2"): extract_battle_animations,
+            ("name", "STINIT2"): extract_stage_definitions,
+            ("numeric", "SPINIT"): extract_h_scene_gallery,
+            ("footer", "MPINIT"): extract_map_terrain_atlas,
+        },
+    }
 
 
 def main() -> int:
     argv = []
     mode_arg = None
     packed_id = None
+    append_selector = None
     index = 1
     while index < len(sys.argv):
         arg = sys.argv[index]
@@ -7038,6 +7116,12 @@ def main() -> int:
             if index + 1 >= len(sys.argv):
                 raise SystemExit("--mode requires a value")
             mode_arg = sys.argv[index + 1]
+            index += 2
+            continue
+        if arg == "--append":
+            if index + 1 >= len(sys.argv):
+                raise SystemExit("--append requires a selector")
+            append_selector = int(sys.argv[index + 1], 0)
             index += 2
             continue
         if arg == "--packed-id":
@@ -7054,31 +7138,30 @@ def main() -> int:
         raise SystemExit(__doc__)
     name = argv[0].upper().removesuffix(".BIN")
     try:
-        default_outname = (
-            f"APPEND{(packed_id >> 24) & 0xff:02d}-{name}"
-            if packed_id is not None else name
-        )
+        if packed_id is not None:
+            default_outname = f"APPEND{(packed_id >> 24) & 0xff:02d}-{name}"
+        elif append_selector is not None:
+            default_outname = f"APPEND{append_selector:02d}-{name}"
+        else:
+            default_outname = name
         outname = normalize_outname(argv[1]) if len(argv) > 1 else default_outname
     except ValueError as error:
         raise SystemExit(str(error)) from error
     try:
-        scr = (
-            load_packed_script(packed_id)
-            if packed_id is not None else sys4load.load(resolve(name))
-        )
+        if packed_id is not None:
+            scr = load_packed_script(packed_id)
+        elif append_selector is not None:
+            scr = sys4load.load(resolve_append(name, append_selector))
+        else:
+            scr = sys4load.load(resolve(name))
     except (FileNotFoundError, ValueError) as error:
         raise SystemExit(str(error)) from error
 
+    specializations = profile_specializations()
     if mode_arg is not None:
         mode = mode_arg
-    elif name == "TRINIT":
-        # TRINIT's six-column sparse string matrix is not the generic
-        # one-name-per-record layout expected by name-mode auto-detection.
-        mode = "name"
-    elif name == "CDINIT":
-        # CDINIT's selector branches look like one fragmented numeric table
-        # to the generic parallel-array detector.
-        mode = "numeric"
+    elif name in specializations.get("forced_modes", {}):
+        mode = specializations["forced_modes"][name]
     else:
         mode = detect_mode(scr)
     extractor = {
@@ -7090,55 +7173,22 @@ def main() -> int:
         "dispatch": extract_dispatch,
         "banked": extract_banked,
     }[mode]
-    if mode == "name" and name == "VIINIT":
-        extractor = extract_vocabulary
-    elif mode == "name" and name == "CNINIT":
-        extractor = extract_character_names
-    elif mode == "name" and name == "CIINIT":
-        extractor = extract_character_profiles
-    elif mode == "name" and name == "MAINIT":
-        extractor = extract_magic_actions
-    elif mode == "name" and name == "ILINIT":
-        extractor = extract_condition_definitions
-    elif mode == "name" and name == "AFINIT":
-        extractor = extract_affinity_definitions
-    elif mode == "name" and name == "CTINIT":
-        extractor = extract_name_entry_palette
-    elif mode == "numeric" and name == "CGINIT":
-        extractor = extract_gallery_definitions
-    elif mode == "numeric" and name == "ALINIT":
-        extractor = extract_alchemy_recipes
-    elif mode == "numeric" and name == "CVINIT":
-        extractor = extract_voice_configuration
-    elif mode == "name" and name == "LAINIT":
-        extractor = extract_terrain_definitions
-    elif mode == "name" and name == "TRINIT":
-        extractor = extract_training_actions
-    elif mode == "name" and name == "CDINIT2":
-        extractor = extract_card_definitions
-    elif mode == "numeric" and name == "CDINIT":
-        extractor = extract_card_generation_lists
-    elif mode == "numeric" and name == "BTANINIT":
-        extractor = extract_battle_effect_definitions
-    elif mode == "numeric" and name == "BTANINIT2":
-        extractor = extract_battle_animations
-    elif mode == "name" and name == "STINIT2":
-        extractor = extract_stage_definitions
-    elif mode == "numeric" and name == "SPINIT":
-        extractor = extract_h_scene_gallery
-    elif mode == "footer" and name == "MPINIT":
-        extractor = extract_map_terrain_atlas
-    if packed_id is not None and name == "EBINIT":
+    extractor = specializations["extractors"].get((mode, name), extractor)
+    fragment = packed_id is not None or append_selector is not None
+    if fragment and mode == "name" and name == "EBINIT":
         _, layout_hint = extract_name(sys4load.load(resolve("EBINIT")))
         layout_hint["source"] = "EBINIT.BIN"
         recs, meta = extract_name(scr, layout_hint)
     else:
         recs, meta = extractor(scr)
-    if packed_id is None and mode == "name" and name in MESSAGE_TABLES:
+    if mode == "name" and name in MESSAGE_TABLES and packed_id is None:
         message_name = MESSAGE_TABLES[name]
-        meta["message_table"] = join_messages(
-            recs, sys4load.load(extract_message_table.resolve(message_name))
-        )
+        if append_selector is not None:
+            message_name = f"${append_selector}${message_name}"
+        if f"{message_name}.BIN" in paths.scripts():
+            meta["message_table"] = join_messages(
+                recs, sys4load.load(extract_message_table.resolve(message_name))
+            )
 
     cols = sorted({c for r in recs for c in r.get("fields", {})}, key=lambda h: int(h, 16))
     semantics = {
@@ -7146,7 +7196,8 @@ def main() -> int:
         **field_semantics(recs, meta.get("array_layouts")),
     }
     attach_semantic_fields(recs, semantics)
-    if mode == "mixed" and name == "STINIT":
+    if (mode == "mixed" and name == "STINIT"
+            and paths.CONTEXT.profile_id == "himegari"):
         meta["object_definition_table"] = "OBINIT"
         attach_stage_object_placements(recs)
         attach_stage_enemy_spawns(recs)
@@ -7156,6 +7207,8 @@ def main() -> int:
            "field_semantics": semantics, "records": recs}
     if packed_id is not None:
         out["packed_id"] = f"0x{packed_id:08x}"
+    if append_selector is not None:
+        out["append_selector"] = append_selector
     outpath = paths.BUILD / "data" / f"{outname}.json"
     outpath.parent.mkdir(parents=True, exist_ok=True)
     outpath.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -7166,7 +7219,7 @@ def main() -> int:
               if mode == "banked"
               else f", {len(cols)} field-columns" if mode != "footer" else ""
           )
-          + f" -> build/data/{outname}.json")
+          + f" -> {outpath.relative_to(paths.REPO).as_posix()}")
     for r in recs[:4]:
         if mode == "footer":
             print(f"  id {r['id']:>4}  {r['global_addr']} <- footer {r['footer_off']} "

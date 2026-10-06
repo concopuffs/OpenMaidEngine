@@ -1,5 +1,5 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
-# Global Variable Reference (generated)
+# Global Variable Reference — himegari (generated)
 
 3756 globals (447 curated, 3309 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
@@ -3798,4 +3798,3 @@
 | `0x1561d8` | — | low | auto-shape | mainit-field? |
 | `0x15a75b` | — | med | auto-shape | record-table[stride 21] |
 | `0x15a785` | — | med | auto-shape | record-table[stride 3] |
-

@@ -193,12 +193,13 @@ def profile_rules(data: dict) -> dict:
     return {
         "unit_count": len({record["unit_id"] for record in records}),
         "titled_rule_count": sum(bool(record.get("title")) for record in records),
+        # Himegari omits the key for level-independent rules; Kamidori stores null.
         "level_independent_rule_count": sum(
-            "minimum_level" not in record for record in records
+            record.get("minimum_level") is None for record in records
         ),
         "minimum_levels": dict(sorted(collections.Counter(
             str(record["minimum_level"])
-            for record in records if "minimum_level" in record
+            for record in records if record.get("minimum_level") is not None
         ).items(), key=lambda item: int(item[0]))),
         "class_change_slot_indices": dict(sorted(collections.Counter(
             str(record["class_change_slot_index"])

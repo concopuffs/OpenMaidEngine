@@ -29,6 +29,13 @@ _CONVENTIONAL_GAME_ROOTS = {
     "himegari": WORKSPACE / "Himegari_Game",
     "kamidori": WORKSPACE / "Kamidori",
 }
+# Profiles whose installed root carries loose `$n$` append-record replacements that are NOT
+# authored game data. Kamidori's install has the English fan translation's `$n$*.bin` script
+# replacements beside AGE.EXE (all 92 differ from APPENDnn.ALF and carry English text, while the
+# Japanese non-`$` root overrides are official updates). Data tooling reads those records from the
+# pristine extracted append catalogs instead. The runtime still mounts them as native AGE would.
+_UNTRUSTED_LOOSE_APPEND_OVERRIDES = {"kamidori"}
+
 _CONVENTIONAL_EXTRACTED_ROOTS = {
     "himegari": WORKSPACE / "extracted",
     "kamidori": WORKSPACE / "extracted-kamidori",
@@ -67,6 +74,25 @@ class ToolContext:
     @property
     def data1(self) -> Path:
         return self.extracted_root / "DATA1"
+
+    @property
+    def trusts_loose_append_overrides(self) -> bool:
+        return self.profile_id not in _UNTRUSTED_LOOSE_APPEND_OVERRIDES
+
+    @property
+    def globals_toml(self) -> Path:
+        """Hand-edited global registry for this game (global addresses are per game)."""
+        name = "globals.toml" if self.profile_id == "himegari" else f"globals-{self.profile_id}.toml"
+        return VM_MAP / name
+
+    @property
+    def global_reference_doc(self) -> Path:
+        """Generated human reference for this game's global registry."""
+        name = (
+            "global-reference.md" if self.profile_id == "himegari"
+            else f"global-reference-{self.profile_id}.md"
+        )
+        return REPO / "docs" / name
 
     @property
     def sys4ini(self) -> Path:
@@ -155,15 +181,22 @@ def add_self_to_syspath() -> None:
 def scripts(context: ToolContext | None = None) -> dict[str, Path]:
     """Legacy extracted/loose script map; catalog-aware scanners use ``script_corpus``.
 
-    Loose files shadow extracted DATA1 copies. This compatibility view cannot represent
-    archive-only or append scripts, so new corpus tooling must not use it.
+    Loose files shadow extracted DATA1 copies. Extracted append catalogs
+    (``<extracted>/APPENDnn/``) contribute their literal ``$n$`` record names, which loose
+    ``$n$`` files shadow in turn unless the profile marks them untrusted (see
+    ``_UNTRUSTED_LOOSE_APPEND_OVERRIDES``). Archive-only scripts are not represented.
     """
     selected = context or CONTEXT
     files: dict[str, Path] = {}
     if selected.data1.is_dir():
         for path in sorted(selected.data1.glob("*.BIN")):
             files[path.name.upper()] = path
+    for append_dir in sorted(selected.extracted_root.glob("APPEND[0-9][0-9]")):
+        for path in sorted(append_dir.glob("*.BIN")):
+            files[path.name.upper()] = path
     if selected.game_root.is_dir():
         for path in sorted(selected.game_root.glob("*.BIN")):
+            if path.name.startswith("$") and not selected.trusts_loose_append_overrides:
+                continue
             files[path.name.upper()] = path
     return files

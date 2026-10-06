@@ -9,8 +9,9 @@ written back into the game folder.
 Workspace root: `S:\Game Hacking\Eushully\Himegari\`
 
 The conventional read-only install roots are `Himegari_Game/` and `Kamidori/`. Himegari's legacy
-extracted archive tree is `extracted/`; Kamidori onboarding does not require one because production
-catalog scans read its archives directly. Additional extracted roots may be selected explicitly.
+extracted archive tree is `extracted/`; Kamidori's is `extracted-kamidori/` (needed by the Python
+data-table tooling; production catalog scans read archives directly). Additional extracted roots may be
+selected explicitly.
 
 ```
 S:\Game Hacking\Eushully\Himegari\           ← workspace root
@@ -29,6 +30,18 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │   │                                          ~3.9 GB, regenerable with a local archive extractor.
 │   └── DATA1/ … DATA5/                         DATA1 = 481 .BIN scripts (the corpus we parse)
 │                                               + AGF/BMP/WAV in the others.
+│
+├── Kamidori/                                ← SOURCE — Kamidori install (read-only). Its root also carries
+│                                               the English fan translation (`patch/`, translated AGE.EXE,
+│                                               and 92 loose `$n$*.bin` append replacements; see
+│                                               docs/asset-resolution-re.md). Non-`$` root .BIN = official updates.
+│
+├── extracted-kamidori/                      ← DERIVED — Kamidori archives (~4.5 GB), regenerable with
+│   │                                          `bin/BinExtractALF.exe SYS4INI.BIN <dir>` / `APPENDnn.AAI <dir>`.
+│   ├── DATA1/ … DATA5/                         DATA1 = 542 base .BIN scripts + AGF/WAV/CUR
+│   ├── APPEND01/ … APPEND03/                   append catalogs, literal `$n$NAME` record names
+│   └── pristine-root/                          hard-link view of Kamidori/ minus the translation's `$n$`
+│                                               files; game root for tools/init_image.py
 │
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
@@ -72,14 +85,15 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> derived runtime/reference views
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
     │   ├── age_opcode_semantics.py             GENERATED investigated semantic-name view (do not hand-edit)
-    │   ├── globals_build.py                    generator/linter: vm-map/globals.toml (+auto map) -> build/globals.json, docs/global-reference.md
+    │   ├── globals_build.py                    generator/linter: vm-map/globals[-<profile>].toml (+auto map) -> build/globals.json, docs/global-reference[-<profile>].md
     │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/story-flags-candidates.json; --bootstrap
     │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/scjump-decisions.* ; --verify (VM cross-check)
     │   ├── test_globals.py, test_opcodes.py    unit tests for the globals / opcode tooling
     │   ├── vm0.py                              headless Python VM (Phase A0); `--test` = RECOVER unit test
     │   ├── extract_phase2.py                   batch: disasm + text + data extraction
-    │   ├── extract_init.py, extract_message_table.py, global_map.py …
-    │   │                                       *INIT / ID-dispatched message parsers,
+    │   ├── extract_init.py (+ init_kamidori*.py), init_image.py, extract_message_table.py, global_map.py …
+    │   │                                       *INIT / ID-dispatched message parsers (Kamidori
+    │   │                                       specializations: init_kamidori_<domain>.py),
     │   │                                       global-var map builder
     │   ├── validate_opcode_table*.py           decode-coverage validators
     │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
@@ -92,8 +106,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── vm-map/                               VM / reverse-engineering reference artifacts
     │   ├── opcodes.toml                        ★ CANONICAL opcode reference (hand-edited: ABI + semantics
     │   │                                        + provenance + depends_on). Single source of truth for opcodes.
-    │   ├── globals.toml                        ★ CANONICAL global-variable registry (hand-edited: name + category
+    │   ├── globals.toml                        ★ CANONICAL Himegari global-variable registry (hand-edited: name + category
     │   │                                        + value_domain + provenance). Single source of truth for globals/story-flags.
+    │   ├── globals-kamidori.toml               ★ CANONICAL Kamidori global registry (same schema; addresses are per game)
     │   └── opcode-leads.json, small-script-listings.md
     │
     ├── docs/                                 all documentation
@@ -112,6 +127,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── script-inventory.md                 what the 481 scripts are
     │   ├── opcode-reference.md                 GENERATED from opcodes.toml (human-readable opcode reference)
     │   ├── global-reference.md                 GENERATED from globals.toml (human-readable global registry)
+    │   ├── global-reference-kamidori.md        GENERATED from globals-kamidori.toml
+    │   ├── kamidori-data-tables.md             Kamidori *INIT data tables: layering, layouts, semantics
     │   ├── scjump-progression.md               SCJUMP progression decode + SCINIT decision→scene registry
     │   └── engine-re.md                        native-engine RE (Ghidra+MCP): dispatch table, decompiled ops
     │
@@ -350,9 +367,10 @@ have no repository output tree and write their automatic maps below
   (`docs/opcode-reference.md`), and union/per-profile coverage. `--lint` also checks profile/revision/evidence
   references, dangling deps, confidence ceilings, and vocabulary.
   Both Python modules are generated and must not be hand-edited.
-- **Global-variable knowledge is edited ONLY in `vm-map/globals.toml`** (name + category + value_domain +
-  provenance). Run `tools/globals_build.py --build` to regenerate `build/globals.json` (sys4load labels) and
-  `docs/global-reference.md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries
+- **Global-variable knowledge is edited ONLY in the profile's registry** — `vm-map/globals.toml` for
+  Himegari, `vm-map/globals-<profile>.toml` for any other game (name + category + value_domain +
+  provenance). Run `tools/globals_build.py [--profile ID] --build` to regenerate that profile's
+  `build/globals.json` (sys4load labels) and `docs/global-reference[-<profile>].md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries
   override the auto shape map (`build/global-var-map.json`). Discover story-flag candidates with `tools/story_flags.py`.
 - **Encoding:** all generated text is UTF-8 (source strings are cp932/Shift-JIS, decoded on
   extraction). Run Python as `py -3.11 -X utf8`.

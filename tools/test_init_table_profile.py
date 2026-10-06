@@ -100,6 +100,11 @@ def main() -> int:
     assert rule_summary["minimum_levels"] == {"50": 1}
     assert rule_summary["class_change_slot_indices"] == {"0": 1, "1": 1}
     assert rule_summary["skill_award_count"] == 1
+    # Kamidori's rule extractor stores null rather than omitting the key.
+    rule_fixture["records"].append({"id": 3, "unit_id": 5, "title": "", "minimum_level": None})
+    null_summary = profile.profile_rules(rule_fixture)
+    assert null_summary["level_independent_rule_count"] == 2
+    assert null_summary["minimum_levels"] == {"50": 1}
 
     dispatch_fixture = {
         "table": "DISPATCH",

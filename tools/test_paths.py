@@ -53,6 +53,49 @@ class ToolContextTests(unittest.TestCase):
         self.assertTrue(himegari.game_build.is_relative_to(himegari.shared_build / "games"))
         self.assertTrue(kamidori.game_build.is_relative_to(kamidori.shared_build / "games"))
 
+    def test_global_registries_are_per_game(self) -> None:
+        himegari = paths.ToolContext.resolve("himegari", environ={})
+        kamidori = paths.ToolContext.resolve("kamidori", environ={})
+        self.assertEqual(paths.VM_MAP / "globals.toml", himegari.globals_toml)
+        self.assertEqual(paths.REPO / "docs/global-reference.md", himegari.global_reference_doc)
+        self.assertEqual(paths.VM_MAP / "globals-kamidori.toml", kamidori.globals_toml)
+        self.assertEqual(
+            paths.REPO / "docs/global-reference-kamidori.md", kamidori.global_reference_doc
+        )
+
+    def _script_layout(self, root: Path) -> None:
+        (root / "game").mkdir()
+        (root / "extract" / "DATA1").mkdir(parents=True)
+        (root / "extract" / "APPEND01").mkdir()
+        (root / "extract" / "DATA1" / "EBINIT.BIN").write_bytes(b"archive")
+        (root / "extract" / "DATA1" / "ITINIT.BIN").write_bytes(b"archive")
+        (root / "extract" / "APPEND01" / "$1$EBINIT.BIN").write_bytes(b"append")
+        (root / "game" / "ITINIT.BIN").write_bytes(b"official update")
+        (root / "game" / "$1$EBINIT.bin").write_bytes(b"loose append")
+
+    def test_scripts_include_append_catalogs_with_trusted_loose_shadowing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._script_layout(root)
+            context = paths.ToolContext.resolve("himegari", root / "game", root / "extract", {})
+            scripts = paths.scripts(context)
+            self.assertEqual(root.resolve() / "extract/DATA1/EBINIT.BIN", scripts["EBINIT.BIN"])
+            self.assertEqual(root.resolve() / "game/ITINIT.BIN", scripts["ITINIT.BIN"])
+            self.assertEqual(root.resolve() / "game/$1$EBINIT.bin", scripts["$1$EBINIT.BIN"])
+
+    def test_untrusted_loose_append_replacements_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._script_layout(root)
+            context = paths.ToolContext.resolve("kamidori", root / "game", root / "extract", {})
+            self.assertFalse(context.trusts_loose_append_overrides)
+            scripts = paths.scripts(context)
+            self.assertEqual(
+                root.resolve() / "extract/APPEND01/$1$EBINIT.BIN", scripts["$1$EBINIT.BIN"]
+            )
+            # Non-`$` loose files remain authored overrides for every profile.
+            self.assertEqual(root.resolve() / "game/ITINIT.BIN", scripts["ITINIT.BIN"])
+
 
 if __name__ == "__main__":
     unittest.main()

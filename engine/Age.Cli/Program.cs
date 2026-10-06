@@ -251,6 +251,59 @@ if (args[0] == "gfx")
     return 0;
 }
 
+if (args[0] == "init-image")
+{
+    // init-image <out.json> <SCRIPT.BIN...> — run data-table scripts in order through one session and
+    // record each script's global-bank delta (new or changed cells). Names match catalog records
+    // exactly, so append fragments are addressed by their literal `$n$NAME.BIN` record names.
+    // tools/init_image.py drives this and projects the deltas through the profile's global registry.
+    if (args.Length < 3) { Console.WriteLine("usage: init-image <out.json> <SCRIPT.BIN...>"); return 1; }
+    string output = args[1];
+    var byName = provider.Catalog.EnumerateScripts()
+        .GroupBy(entry => entry.Asset.Name, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.Last().PackedId, StringComparer.OrdinalIgnoreCase);
+    var session = new GameSession();
+    var steps = new List<object>();
+    var initOptions = new VmOptions(HaltAtWaitForInput: false);
+    foreach (string name in args.Skip(2).Where(a => a.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)))
+    {
+        if (!byName.TryGetValue(name, out long packedId))
+        {
+            Console.Error.WriteLine($"not in catalog: {name}");
+            return 2;
+        }
+        Script script = provider.GetById(packedId)
+                        ?? throw new InvalidOperationException($"not a script: {name}");
+        var ints = new Dictionary<int, long>(session.Globals);
+        var strings = new Dictionary<int, string>(session.GlobalStrings);
+        var result = session.RunScene(script, table, new CaptureHost(), initOptions, provider);
+        var intDelta = session.Globals
+            .Where(kv => !ints.TryGetValue(kv.Key, out long old) || old != kv.Value)
+            .OrderBy(kv => kv.Key)
+            .ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
+        var stringDelta = session.GlobalStrings
+            .Where(kv => !strings.TryGetValue(kv.Key, out string? old) || old != kv.Value)
+            .OrderBy(kv => kv.Key)
+            .ToDictionary(kv => kv.Key.ToString(), kv => kv.Value);
+        steps.Add(new
+        {
+            script = name,
+            packed_id = $"0x{packedId:x}",
+            halt = result.Halt,
+            steps = result.Steps,
+            ints = intDelta,
+            strings = stringDelta,
+        });
+        Console.WriteLine($"  {name,-16} 0x{packedId:x8} {result.Steps,8} steps (halt: {result.Halt}) " +
+                          $"{intDelta.Count,7} int / {stringDelta.Count,5} string cells");
+    }
+    File.WriteAllText(output, JsonSerializer.Serialize(
+        new { profile = selectedProfile.Profile.Id, game_root = gameRoot, scripts = steps },
+        new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+    Console.WriteLine($"[init-image] {steps.Count} scripts -> {output}");
+    return 0;
+}
+
 if (args[0] == "play")
 {
     // play [--boot] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global

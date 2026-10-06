@@ -2354,6 +2354,46 @@ def test_field_semantics() -> None:
     )
 
 
+def test_profile_specializations() -> None:
+    himegari = extract_init.profile_specializations()
+    check(himegari["extractors"][("name", "VIINIT")] is extract_init.extract_vocabulary,
+          "himegari keeps its table-specific extractors")
+    check(himegari["forced_modes"] == {"TRINIT": "name", "CDINIT": "numeric"},
+          "himegari keeps its forced modes")
+    original = paths.CONTEXT
+    try:
+        paths.CONTEXT = paths.ToolContext.resolve("kamidori", environ={})
+        kamidori = extract_init.profile_specializations()
+        himegari_functions = set(himegari["extractors"].values())
+        check(not himegari_functions & set(kamidori["extractors"].values()),
+              "kamidori never receives Himegari address-bound extractors")
+        check(kamidori["extractors"][("name", "VIINIT")].__module__
+              == "init_kamidori_progression",
+              "kamidori VIINIT uses its own fixed-layout extractor")
+        check(all(callable(fn) for fn in kamidori["extractors"].values()),
+              "kamidori specializations are callables")
+    finally:
+        paths.CONTEXT = original
+
+
+def test_record_table_overlap_prefers_narrowest_row() -> None:
+    original = extract_init._known_record_tables
+    try:
+        extract_init._known_record_tables = lambda: ((0x100000, 10000), (0x200000, 5))
+        destination = 0x200000 + 24 * 5 + 4
+        cell = extract_init._record_table_cell(destination, 24)
+        check(cell == (0x200000, 5, 4),
+              "an incidental wide 2D bank loses to the narrow row table it covers")
+        extract_init._known_record_tables = lambda: ((0x1000, 5), (0x1001, 5))
+        try:
+            extract_init._record_table_cell(0x1000 + 5 + 3, 1)
+            check(False, "equal-stride overlaps remain ambiguous")
+        except ValueError:
+            check(True, "equal-stride overlaps remain ambiguous")
+    finally:
+        extract_init._known_record_tables = original
+
+
 if __name__ == "__main__":
     test_real_name_tables()
     test_append_ebinit_fragment()
@@ -2386,6 +2426,8 @@ if __name__ == "__main__":
     test_map_terrain_atlas()
     test_condition_definitions()
     test_field_semantics()
+    test_profile_specializations()
+    test_record_table_overlap_prefers_narrowest_row()
     if FAILS:
         raise SystemExit(f"{len(FAILS)} failed checks")
     print("all extract_init checks passed")

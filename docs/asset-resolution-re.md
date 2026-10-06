@@ -291,6 +291,19 @@ official 2,126,378-instruction corpus. The +34,948 executed corpus instructions 
 not evidence of a different opcode set. Diagnostic JSON records the selected overlay roots and BMP option so
 these measurements remain distinguishable from the official K4/K6 snapshot.
 
+**The translation also replaced root-loose append records (found 2026-10-06).** Separately from `patch/`, the
+installed Kamidori root holds 92 loose `$n$*.bin` scripts (`$1$`, `$2$`, `$3$` append-record basenames). Every one
+differs from its `APPENDnn.ALF` record and carries English text where the archive copy is Japanese (for example
+`$3$EBINIT.bin` names unit 1 "Wilfred Dion"; the archive copy names him ウィルフレド・ディオン). The installer's
+`Backup/` holds `.bak` originals for eleven of them, consistent with it adding the rest outright. Because append
+records resolve loose-basename-first inside their selected catalog (above), both native AGE and the port load
+these English append scripts even without `--overlay-root patch`. The non-`$` root `.BIN` overrides are different:
+they are Japanese, differ from `DATA1.ALF`, and none is in `Backup/`, so they are treated as the official update's
+authored files. Data tooling therefore excludes the root `$n$` files for the Kamidori profile
+(`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`) and reads append records from `extracted-kamidori/APPENDnn/`;
+`tools/init_image.py` runs the VM against a hard-link view of the install without them. The runtime is unchanged
+— it still mounts them, as native AGE would.
+
 ### Proposed layers
 
 1. **Catalog + read-only ALF store (VFS-A DONE).** `Sys4AssetCatalog` parses SYS4INI at runtime while preserving all 13208 raw records

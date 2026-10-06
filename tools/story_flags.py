@@ -4,7 +4,7 @@ branch conditions (comparisons / jcc), gathers evidence, classifies candidates, 
 ranked review surface. 100% static -- no runtime, no sweep. See
 docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
   (no flag)     -> build/story-flags-candidates.json
-  --bootstrap   append skeleton [[global]] entries to vm-map/globals.toml (Task 5)"""
+  --bootstrap   append skeleton [[global]] entries to the profile registry (vm-map/globals[-<profile>].toml) (Task 5)"""
 from __future__ import annotations
 import os, sys, re, json, argparse, collections
 from pathlib import Path
@@ -149,7 +149,7 @@ def skeleton_toml(ev: dict) -> str:
 
 
 def bootstrap(cands: dict[int, dict], toml_path=None) -> int:
-    toml_path = Path(toml_path) if toml_path else (paths.VM_MAP / "globals.toml")
+    toml_path = Path(toml_path) if toml_path else paths.CONTEXT.globals_toml
     present = set(_gb.load_toml(toml_path)[0]) if toml_path.exists() else set()
     # Seed only high-signal candidates worth hand-curating: story-flag / choice-output at med
     # confidence that are NOT near-universal ADV-chrome (those 297-scene globals are engine
