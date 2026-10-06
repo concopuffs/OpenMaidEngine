@@ -1175,6 +1175,23 @@ do not mix mechanical moves with semantic changes.
    mutation of `v0.1.0` remain
    out of scope.
 
+   **GitHub becomes the single home; CI/CD refit (2026-10-05/06):** the project moved its only repository home to
+   GitHub (`concopuffs/OpenMaidEngine`); the former Gitea host is frozen and no longer kept in sync. The refit
+   (`docs/superpowers/plans/2026-10-05-github-cicd-refit.md`) replaced each Gitea piece rather than duplicating it.
+   The core gate returns as `.github/workflows/core-validation.yml`; the release workflow is
+   `.github/workflows/release-build.yml`; every action is pinned to a full commit SHA, kept current by Dependabot,
+   and every job runs on the pinned `ubuntu-24.04` image. `publish_github_release.py` replaces the Gitea promoter
+   with the same artifact validation, checks the tag's commit through the git-ref API (GitHub's `target_commitish`
+   can name a branch), and publishes draft-first. A throwaway tag proved the release path end to end, including an
+   idempotent re-run, and `v0.1.0`–`v0.3.3` were pushed as tags without GitHub releases. The same refit replaced the
+   BtbN `lgpl-shared` FFmpeg (about 50 bundled external libraries under LGPL v3, without the source or notices
+   FFmpeg's license checklist requires) with a project-built minimal FFmpeg 8.1.3: MPEG-1 video and Layer I/II audio
+   only, LGPL 2.1 or later, built unmodified from the pinned release tarball in CI, and published with its exact
+   source on `deps-ffmpeg-ome-8.1.3-mpeg1-r1`. A header-level inventory showed both supported profiles need only
+   those components, and the extended movie gate decoded Himegari 213/213 and Kamidori 280/280 identically to the
+   previous build. Release packages shrank by 37% (Windows) and 43% (Linux) and now ship `FFmpeg-SOURCE.txt`;
+   every release description credits FFmpeg and links its source.
+
 **Not cleanup targets:** generated `build/` output, the two intentional solution files, historical
 `docs/superpowers/` plans/specifications, and fidelity-specific complexity that is directly covered by the
 native ABI. Reorganization is successful when ownership and reproduction become clearer, not when the raw

@@ -1,7 +1,7 @@
 # GitHub CI/CD refit
 
-**Status:** in progress. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 1–4
-complete 2026-10-06 (all hosted gates passed); Step 5 closeout and Step 6 (minimal FFmpeg build) remaining.
+**Status:** complete. Written 2026-10-05; Q1–Q6 decided 2026-10-05 (all recommendations accepted); Steps 0–6
+complete 2026-10-06.
 
 **Supersedes:** an uncommitted 2026-09-30 dual-host mirror plan, abandoned and deleted when the project moved
 its single home to GitHub; its still-relevant findings are folded into §1 below.
@@ -553,6 +553,12 @@ displays as mojibake in Windows PowerShell 5.1). New `test_write_ffmpeg_source_n
 After 6.3 lands and 6.4 passes: delete the `deps-ffmpeg-btbn-autobuild-2026-08-17-13-05` release and tag (web UI,
 then `git push origin --delete`), update `docs/platform-portability.md` and `docs/tools-reference.md` (provenance,
 size, license), and record the change in the roadmap.
+
+**Result (2026-10-06):** the 6.5 packaging change passed the CI release build on `develop` (`a2e1663`, run
+37408662889; both packagers require `FFmpeg-SOURCE.txt`, so its presence in both packages is enforced). The user
+deleted the BtbN deps release in the web UI and the tag was deleted from GitHub. `git grep -i btbn` now finds only
+historical text (this plan and three dated mentions in `platform-portability.md`). The roadmap carries a dated
+entry for the GitHub move and refit, which also completes Step 5's roadmap item. **Step 6 is complete.**
 
 **Step 6 gate:** no build input or shipped file derives from the BtbN build; `git grep -i btbn` finds only
 historical text; the FFmpeg checklist walk-through has no open item. **No real `v*` release is published before
