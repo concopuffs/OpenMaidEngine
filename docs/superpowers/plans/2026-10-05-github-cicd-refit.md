@@ -444,6 +444,24 @@ other workflows (the policy test covers it automatically). The tag must not star
 
 **Gate:** a dispatch produces the draft release; its assets verify against locally rebuilt archives.
 
+**Progress (2026-10-06, branch `ffmpeg-sdk`):** 6.1/6.2 landed as `build-ffmpeg-sdk.sh`, `ffmpeg-source.json`
+(FFmpeg 8.1.3 release tarball, 11,732,036 bytes, SHA-256 `7138d28c…`, signature verified against release key
+`FCF986EA15E6E293A5644F10B4322F04D67658D8`; library majors avcodec/avformat 62, avutil 60, swscale 9, swresample 6
+unchanged) and `.github/workflows/ffmpeg-sdk.yml` (Linux in digest-pinned `manylinux_2_28_x86_64:2026.10.03-1`,
+Windows via MinGW cross; draft release only on dispatch). First CI build (`1fcec7c`) succeeded: glibc ceiling exactly
+2.28, Windows DLL imports only `kernel32`/`msvcrt`/`bcrypt` plus each other, both libraries report "LGPL version 2.1
+or later", and loading the DLLs lists exactly decoders `mp1 mp1float mp2 mp2float mpeg1video`, demuxer `mpeg`, two
+parsers, no encoders/muxers. Five runtime libraries ≈4.3 MB vs BtbN's 109 MB. **But the movie gate failed 0/213**
+("unknown codec"): `mpeg.c` leaves PES video unlabelled and requests a content probe, which maps the raw
+`mpegvideo` **demuxer's** probe to MPEG-2 video (`demux.c:125`); the `mpegvideo` parser then relabels it MPEG-1
+(`mpegvideo_parser.c:150`). Fix `2fc2127`: `--enable-demuxer=mpegps,mpegvideo` (probe only; decoder set
+unchanged), plus MSVC `.lib` files moved into `lib/` (FFmpeg installs them beside the DLLs), Linux example sources
+dropped, and regular files archived before symlinks (Windows extraction). With the `2fc2127` Windows SDK (Edge's
+SmartScreen blocked the artifact download; Defender history and explicit scans found no threat), the MSVC shim
+builds and the Himegari gate passes **213/213**; a field-by-field comparison with the BtbN baseline is identical
+on every non-timing field (dimensions, frame counts/rates, timestamps, changed-frame counts, audio counts/signal),
+and total decode time fell from 9.1 s to 7.7 s. Remaining for 6.4: extend the gate for Kamidori's `.MPG` corpus.
+
 #### 6.3 — Switch the manifests, bootstraps, and tests
 
 - Manifests: new `mirror_version`, `archive`, `url`, `size`, `sha256`, `ffmpeg_version`; `provider` becomes the
