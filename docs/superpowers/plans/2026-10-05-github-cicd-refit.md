@@ -522,6 +522,12 @@ pack header (any name, placeholders skipped; new unit test), and the gate takes 
 (Linux package smoke and Windows verification) with the new SDK, which needs 6.3's manifest switch first, and the
 package-size record.
 
+**6.4 complete (2026-10-06):** `develop` fast-forwarded to `8375707`; run 37407034610 built both packages with the
+minimal SDK — the Linux package smoke and the Windows structural verification passed, promotion skipped as a
+branch push — and core validation passed. Package size (compressed workflow artifacts, same pipeline): Windows
+118,573,087 → 74,694,712 bytes (−37%), Linux 110,721,271 → 63,618,061 bytes (−43%), against the `98b5fb6` BtbN-based
+run. Remaining: 6.5 compliance surface, 6.6 retire BtbN.
+
 #### 6.5 — Compliance surface
 
 - Each package ships `FFmpeg-LICENSE.txt` (LGPL v2.1) and a new `FFmpeg-SOURCE.txt`: FFmpeg version, configure
