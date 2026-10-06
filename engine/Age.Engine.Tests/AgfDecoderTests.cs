@@ -148,6 +148,95 @@ public class AgfDecoderTests
         public byte[] ReadAll(AssetEntry entry) => bytes;
     }
 
+    [Fact]
+    public void ExplicitCompatibilityDecodesBottomUpEightBitPalettedBmpWithDeclaredColorCount()
+    {
+        // Width 3 pads each 8-bit row to 4 bytes; bottom-up storage lists the lower row first.
+        byte[] palette = Palette(3, (255, 0, 0), (0, 255, 0), (0, 0, 255));
+        byte[] bottomUp = [2, 1, 0, 0xEE, 0, 1, 2, 0xEE];
+        byte[] bmp = BuildPalettedBmp(3, 2, 8, topDown: false, palette, declaredColors: 3, bottomUp);
+
+        var image = AgfDecoder.Decode(bmp, "EIGHT.AGF", allowBmpAsAgf: true);
+
+        Assert.Equal(3, image.Width);
+        Assert.Equal(2, image.Height);
+        Assert.Equal(new byte[]
+        {
+            255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+            0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255,
+        }, image.Pixels);
+    }
+
+    [Fact]
+    public void DecodesTopDownFourBitPalettedBmpWithImplicitFullPalette()
+    {
+        // Nibbles are high-first: 0x12 is indices 1 then 2; the third pixel is 0x3_ and its low nibble is padding.
+        byte[] palette = Palette(16, (0, 0, 0), (10, 20, 30), (40, 50, 60), (70, 80, 90));
+        byte[] pixels = [0x12, 0x30, 0, 0];
+        byte[] bmp = BuildPalettedBmp(3, 1, 4, topDown: true, palette, declaredColors: 0, pixels);
+
+        var image = BmpDecoder.Decode(bmp, "FOUR.BMP");
+
+        Assert.Equal(new byte[] { 10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255 }, image.Pixels);
+    }
+
+    [Fact]
+    public void DecodesOneBitPalettedBmpMostSignificantBitFirstAcrossBytes()
+    {
+        byte[] palette = Palette(2, (0, 0, 0), (255, 255, 255));
+        byte[] pixels = [0b1010_0000, 0b1000_0000, 0, 0];
+        byte[] bmp = BuildPalettedBmp(9, 1, 1, topDown: true, palette, declaredColors: 0, pixels);
+
+        var image = BmpDecoder.Decode(bmp, "ONE.BMP");
+
+        byte[] expected = [255, 0, 255, 0, 0, 0, 0, 0, 255];
+        Assert.Equal(expected, Enumerable.Range(0, 9).Select(x => image.Pixels[x * 4]).ToArray());
+        Assert.All(Enumerable.Range(0, 9), x => Assert.Equal(255, image.Pixels[x * 4 + 3]));
+    }
+
+    [Fact]
+    public void RejectsMalformedPalettedBmps()
+    {
+        byte[] palette = Palette(2, (1, 2, 3), (4, 5, 6));
+
+        byte[] outOfRange = BuildPalettedBmp(1, 1, 8, topDown: true, palette, declaredColors: 2, [2, 0, 0, 0]);
+        Assert.Contains("palette index 2 of 2",
+            Assert.Throws<InvalidDataException>(() => BmpDecoder.Decode(outOfRange, "INDEX.BMP")).Message);
+
+        byte[] truncated = BuildPalettedBmp(1, 1, 8, topDown: true, palette, declaredColors: 2, [0, 0, 0, 0]);
+        Put32(truncated, 10, 14 + 40 + 4);
+        Assert.Contains("palette is truncated",
+            Assert.Throws<InvalidDataException>(() => BmpDecoder.Decode(truncated, "SHORT.BMP")).Message);
+
+        byte[] oversized = BuildPalettedBmp(1, 1, 1, topDown: true, palette, declaredColors: 3, [0, 0, 0, 0]);
+        Assert.Contains("invalid BMP palette size 3",
+            Assert.Throws<InvalidDataException>(() => BmpDecoder.Decode(oversized, "MANY.BMP")).Message);
+
+        byte[] sixteenBit = BuildBmp(1, 1, 16, topDown: true, [0, 0, 0, 0]);
+        Assert.Contains("unsupported BMP depth 16",
+            Assert.Throws<InvalidDataException>(() => BmpDecoder.Decode(sixteenBit, "HIGH.BMP")).Message);
+    }
+
+    private static byte[] BuildPalettedBmp(int width, int height, int bitsPerPixel, bool topDown,
+                                           byte[] palette, int declaredColors, byte[] pixels)
+    {
+        int pixelOffset = 14 + 40 + palette.Length;
+        var file = new byte[pixelOffset + pixels.Length];
+        "BM"u8.CopyTo(file);
+        Put32(file, 2, file.Length);
+        Put32(file, 10, pixelOffset);
+        Put32(file, 14, 40);
+        Put32(file, 18, width);
+        Put32(file, 22, topDown ? -height : height);
+        Put16(file, 26, 1);
+        Put16(file, 28, bitsPerPixel);
+        Put32(file, 34, pixels.Length);
+        Put32(file, 46, declaredColors);
+        palette.CopyTo(file, 14 + 40);
+        pixels.CopyTo(file, pixelOffset);
+        return file;
+    }
+
     private static byte[] Palette(params (byte R, byte G, byte B)[] colors) => Palette(16, colors);
 
     private static byte[] BuildBmp(

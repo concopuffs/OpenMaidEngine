@@ -3,7 +3,8 @@ using Age.Engine.Model;
 
 namespace Age.Engine.Sys4;
 
-/// <summary>Strict decoder for the uncompressed Windows BMP payloads used by loose AGE overrides.</summary>
+/// <summary>Strict decoder for the uncompressed (BI_RGB) Windows BMP payloads used by loose AGE overrides:
+/// 1/4/8-bit paletted, 24-bit, and 32-bit with straight alpha.</summary>
 public static class BmpDecoder
 {
     private const int FileHeaderSize = 14;
@@ -27,11 +28,29 @@ public static class BmpDecoder
         if (U16(file, 26, name) != 1)
             throw new InvalidDataException($"{name}: BMP plane count must be one");
         int sourceBpp = U16(file, 28, name);
-        if (sourceBpp is not (24 or 32))
+        if (sourceBpp is not (1 or 4 or 8 or 24 or 32))
             throw new InvalidDataException($"{name}: unsupported BMP depth {sourceBpp}");
         int compression = I32(file, 30, name);
         if (compression != 0)
             throw new InvalidDataException($"{name}: unsupported BMP compression {compression}");
+
+        // Paletted BI_RGB images carry a BGRX color table immediately after the info header; biClrUsed == 0
+        // means the full 2^bpp entries. Paletted pixels have no alpha and decode opaque, like 24-bit pixels.
+        ReadOnlySpan<byte> palette = default;
+        int paletteColors = 0;
+        if (sourceBpp <= 8)
+        {
+            int declaredColors = I32(file, 46, name);
+            int maximumColors = 1 << sourceBpp;
+            if (declaredColors < 0 || declaredColors > maximumColors)
+                throw new InvalidDataException($"{name}: invalid BMP palette size {declaredColors}");
+            paletteColors = declaredColors == 0 ? maximumColors : declaredColors;
+            int paletteOffset = FileHeaderSize + headerSize;
+            int paletteLength = paletteColors * 4;
+            if (paletteOffset > pixelOffset - paletteLength || pixelOffset > file.Length)
+                throw new InvalidDataException($"{name}: BMP palette is truncated");
+            palette = file.Slice(paletteOffset, paletteLength);
+        }
 
         long rowBits = checked((long)width * sourceBpp);
         int sourceStride = checked((int)(((rowBits + 31) / 32) * 4));
@@ -50,6 +69,26 @@ public static class BmpDecoder
             int sourceY = topDown ? y : height - 1 - y;
             int source = checked(pixelOffset + sourceY * sourceStride);
             int destination = checked(y * width * 4);
+            if (sourceBpp <= 8)
+            {
+                ReadOnlySpan<byte> row = file.Slice(source, sourceStride);
+                int mask = (1 << sourceBpp) - 1;
+                for (int x = 0; x < width; x++, destination += 4)
+                {
+                    // Sub-byte pixels are packed most-significant bits first.
+                    int bit = x * sourceBpp;
+                    int index = (row[bit >> 3] >> (8 - sourceBpp - (bit & 7))) & mask;
+                    if (index >= paletteColors)
+                        throw new InvalidDataException(
+                            $"{name}: BMP pixel ({x}, {y}) uses palette index {index} of {paletteColors}");
+                    int entry = index * 4;
+                    rgba[destination] = palette[entry + 2];
+                    rgba[destination + 1] = palette[entry + 1];
+                    rgba[destination + 2] = palette[entry];
+                    rgba[destination + 3] = 255;
+                }
+                continue;
+            }
             for (int x = 0; x < width; x++, source += bytesPerPixel, destination += 4)
             {
                 rgba[destination] = file[source + 2];

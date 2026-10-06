@@ -603,8 +603,8 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   preserving the first position. Missing/non-directory roots fail startup. Nothing auto-mounts `patch/` or
   otherwise infers a translation from a profile.
 - `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
-  uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible 24-bit
-  opaque or 32-bit straight-alpha `BI_RGB`, including top-down images and padded rows. Without this option,
+  uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible `BI_RGB` at
+  1/4/8-bit paletted (opaque), 24-bit opaque, or 32-bit straight alpha, including top-down images and padded rows. Without this option,
   such a payload fails with an actionable diagnostic; ordinary `ACGF` decoding is unchanged. This is an
   asset-format compatibility option, not an opcode or SYS-revision handler.
 - `--profile <id>` — authoritatively select an embedded game profile (`himegari` or `kamidori`). Omit it for

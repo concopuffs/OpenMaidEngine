@@ -272,9 +272,13 @@ Support landed on 2026-08-19 at the general asset boundary, without changing opc
 patch to the Kamidori profile. Godot and asset-aware CLI commands accept repeatable, ordered
 `--overlay-root <directory>` options; relative values resolve against the selected game root, selected roots
 precede the ordinary game root, and archive ranges remain the final fallback. `--allow-bmp-as-agf` separately
-opts into `BM` payload detection for `.AGF` records. The decoder accepts the overlay's uncompressed 24/32-bit
-`BITMAPINFOHEADER` images, row padding and either row direction, preserving the fourth byte of 32-bit overlay
-pixels as straight alpha. Without the option, a BMP-under-AGF payload remains a clear failure rather than a
+opts into `BM` payload detection for `.AGF` records. The decoder accepts the overlay's uncompressed (`BI_RGB`)
+`BITMAPINFOHEADER` images at 1, 4, 8, 24, and 32 bits, row padding and either row direction, preserving the fourth
+byte of 32-bit overlay pixels as straight alpha. Paletted 1/4/8-bit images read the BGRX color table after the info
+header (`biClrUsed`, or the full 2^bpp entries when zero), unpack sub-byte pixels most-significant bits first, and
+decode opaque; a color table that does not fit before the pixel data or a pixel index beyond it is rejected
+(added 2026-10-06 after a user report; the installed translation patch itself ships only 24/32-bit overrides,
+while 8-bit images in the game data are AGF and were already supported). Without the option, a BMP-under-AGF payload remains a clear failure rather than a
 silent compatibility expansion. The local `-Kamidori -TranslationPatch` launcher switch merely expands to
 `patch/` plus this codec option; generic launch arguments remain available independently.
 
