@@ -2,6 +2,7 @@ using Age.Engine.Model;
 using Age.Script.Abi;
 using Age.Script.Ir;
 using Age.Script.Layout;
+using Age.Script.Modules;
 using Age.Script.Syntax;
 
 namespace Age.Script.Compile;
@@ -34,11 +35,12 @@ public static class OmsCompiler
     public static bool IsTerminator(int opcode) => opcode is Ret or Exit or Jmp or Resume or ThrowExit;
     private const uint NoTarget = 0xFFFFFFFF;
 
+    /// <param name="modules">Resolves <c>use</c> module names, such as <c>himegari.globals</c>.</param>
     public static IrScript Compile(ScriptUnit unit, string abiId, OpcodeTable? table = null, OmsLayout? layout = null,
-                                   IntrinsicCatalog? intrinsics = null)
+                                   IntrinsicCatalog? intrinsics = null, Func<string, GameModule?>? modules = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        var generator = new CodeGenerator(table, intrinsics, layout);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules);
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         return generator.Build(unit.Name, abiId);
@@ -46,8 +48,21 @@ public static class OmsCompiler
 
     private sealed record Occurrence(IrDataItem Item, SourceSpan Span);
 
-    private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout)
+    /// <summary>A declared name for a storage cell or array, from <c>global</c>/<c>local</c> or a used module.</summary>
+    private sealed record Declared(RawStorage Cell, IReadOnlyList<int> Dimensions, IReadOnlyDictionary<string, int> Columns);
+
+    private static readonly Dictionary<(string Type, bool Local), string> BankOfDeclaration = new()
     {
+        [("int", false)] = "G", [("float", false)] = "GF", [("str", false)] = "GS",
+        [("int", true)] = "L", [("float", true)] = "LF", [("str", true)] = "LS",
+    };
+
+    private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout,
+                                       Func<string, GameModule?>? modules)
+    {
+        private readonly Dictionary<string, Declared> _names = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, uint> _constants = new(StringComparer.Ordinal);
+        private readonly List<GameModule> _used = new();
         private readonly List<IrInstruction> _code = new();
         private readonly List<Occurrence> _occurrences = new();
         private readonly Dictionary<string, int> _labels = new(StringComparer.Ordinal);
@@ -77,12 +92,83 @@ public static class OmsCompiler
         public void EmitAll(IReadOnlyList<Statement> statements)
         {
             CollectUserLabels(statements);
-            long highest = -1;
+            var highest = new Dictionary<string, long>(StringComparer.Ordinal);
             foreach (RawOperand operand in OperandsOf(statements))
-                if (operand is RawStorage { Bank: "L" } local) highest = Math.Max(highest, local.Index);
-            _tempBase = layout?.TempBase ?? (uint)(highest + 1);
+                if (operand is RawStorage { Bank: "L" or "LF" or "LS" } local)
+                    highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
+            Declare(statements, highest);
+            _tempBase = layout?.TempBase ?? (uint)(highest.GetValueOrDefault("L", -1) + 1);
             foreach (Statement statement in statements) Emit(statement);
         }
+
+        /// <summary>Collects <c>use</c>, <c>const</c>, <c>global</c> and <c>local</c> declarations (spec §5.2). Pinned
+        /// locals count as named slots; unpinned locals take slots above every local the source names, so the
+        /// temporary pool stays above them.</summary>
+        private void Declare(IReadOnlyList<Statement> statements, Dictionary<string, long> highest)
+        {
+            var declarations = new List<Statement>();
+            var pending = new Stack<IReadOnlyList<Statement>>();
+            pending.Push(statements);
+            while (pending.Count > 0)
+                foreach (Statement statement in pending.Pop())
+                    switch (statement)
+                    {
+                        case UseStatement or ConstStatement or StorageDeclaration: declarations.Add(statement); break;
+                        case SubStatement sub: pending.Push(sub.Body); break;
+                        case AtomicStatement atomic: pending.Push(atomic.Body); break;
+                    }
+            foreach (Statement statement in declarations)
+                if (statement is UseStatement use)
+                {
+                    GameModule module = modules?.Invoke(use.Module)
+                        ?? throw new OmsCompileException(use.Span, $"unknown module '{use.Module}'");
+                    _used.Add(module);
+                    foreach (GlobalSymbol symbol in module.Symbols)
+                        _names[symbol.Name] = new Declared(
+                            new RawStorage(use.Span, StorageBanks.BankByType[symbol.Type], symbol.Address),
+                            symbol.Dimensions, symbol.Columns);
+                }
+            var user = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Statement statement in declarations)
+            {
+                switch (statement)
+                {
+                    case ConstStatement constant:
+                        if (!user.Add(constant.Name) || _userLabels.Contains(constant.Name))
+                            throw new OmsCompileException(constant.Span, $"'{constant.Name}' is declared twice");
+                        _constants[constant.Name] = constant.Value;
+                        _names.Remove(constant.Name);
+                        break;
+                    case StorageDeclaration declaration:
+                    {
+                        if (!user.Add(declaration.Name) || _userLabels.Contains(declaration.Name))
+                            throw new OmsCompileException(declaration.Span, $"'{declaration.Name}' is declared twice");
+                        string bank = BankOfDeclaration[(declaration.Type, declaration.Local)];
+                        long size = declaration.Dimensions.Aggregate(1L, (product, dimension) => product * dimension);
+                        uint index;
+                        if (declaration.Address is uint pinned)
+                        {
+                            index = pinned;
+                            if (declaration.Local)
+                                highest[bank] = Math.Max(highest.GetValueOrDefault(bank, -1), pinned + Math.Max(size, 1) - 1);
+                        }
+                        else
+                        {
+                            if (declaration.Dimensions.Contains(0))
+                                throw new OmsCompileException(declaration.Span, $"local '{declaration.Name}' needs a known size or an @ slot");
+                            long next = highest.GetValueOrDefault(bank, -1) + 1;
+                            index = (uint)next;
+                            highest[bank] = next + size - 1;
+                        }
+                        _names[declaration.Name] = new Declared(new RawStorage(declaration.Span, bank, index),
+                            declaration.Dimensions, declaration.Columns);
+                        break;
+                    }
+                }
+            }
+        }
+
+        private Declared? Name(string name) => _names.TryGetValue(name, out Declared? declared) ? declared : null;
 
         /// <summary>Every raw operand written in the statements, for the canonical pool base.</summary>
         private static IEnumerable<RawOperand> OperandsOf(IEnumerable<Statement> statements)
@@ -97,6 +183,9 @@ public static class OmsCompiler
                         if (raw is RawTyped typed) pending.Push(typed.Inner);
                         break;
                     case OperandExpr atom: pending.Push(atom.Operand); break;
+                    case NamedElementExpr named:
+                        foreach (Expr index in named.Indices) pending.Push(index);
+                        break;
                     case ElementExpr element:
                         pending.Push(element.Base);
                         if (element.Stride != null) pending.Push(element.Stride);
@@ -262,7 +351,7 @@ public static class OmsCompiler
                     Add(Exit, []);
                     break;
                 case RunStatement run:
-                    Lower(new LInstruction(CallScript, [ToL(run.Script)]), run.Span);
+                    Lower(new LInstruction(CallScript, [ScriptOperand(run.Script) ?? ToL(run.Script)]), run.Span);
                     break;
                 case NoteStatement note:
                     Add(Comment, [Atom(note.Value, "a note")]);
@@ -278,6 +367,8 @@ public static class OmsCompiler
                     break;
                 case ResumeStatement:
                     Add(Resume, []);
+                    break;
+                case UseStatement or ConstStatement or StorageDeclaration:
                     break;
                 default:
                     throw new OmsCompileException(statement.Span, $"{statement.GetType().Name} is not supported yet");
@@ -382,6 +473,8 @@ public static class OmsCompiler
             {
                 case OperandExpr atom:
                     return new LLeaf(Operand(atom.Operand));
+                case NamedElementExpr named:
+                    return NamedElement(named);
                 case ElementExpr element:
                 {
                     IrOperand cell = Operand(element.Base);
@@ -416,6 +509,48 @@ public static class OmsCompiler
             }
         }
 
+        /// <summary><c>run NAME</c> or <c>run "NAME"</c>: a catalog script from a used scripts module.</summary>
+        private LLeaf? ScriptOperand(Expr script)
+        {
+            string? name = script switch
+            {
+                OperandExpr { Operand: RawLabelRef label } when !(_parameters?.ContainsKey(label.Name) ?? false) => label.Name,
+                OperandExpr { Operand: RawString text } => text.Text,
+                _ => null,
+            };
+            if (name == null) return null;
+            foreach (GameModule module in _used)
+                if (module.TryGetScript(name, out uint id)) return new LLeaf(IrOperand.Literal(0, id));
+            if (script is OperandExpr { Operand: RawString })
+                throw new OmsCompileException(script.Span, $"unknown script \"{name}\"; use the game's scripts module");
+            return null;
+        }
+
+        /// <summary><c>name[i]</c>, <c>name[r][c]</c> or <c>name[r].column</c> against the name's declared shape.</summary>
+        private LExpr NamedElement(NamedElementExpr named)
+        {
+            Declared declared = Name(named.Name)
+                ?? throw new OmsCompileException(named.Span, $"'{named.Name}' is not a declared array");
+            IrOperand cell = Operand(declared.Cell);
+            int pointer = cell.Type switch { 0x3 or 0x9 => 0xC, 0x4 or 0xA => 0xD, _ => 0xE };
+            IReadOnlyList<int> shape = declared.Dimensions;
+            LLeaf Immediate(int value) => new(IrOperand.Literal(0, (uint)value));
+            if (named.Column != null)
+            {
+                if (shape.Count != 2 || named.Indices.Count != 1)
+                    throw new OmsCompileException(named.Span, $"'{named.Name}[row].{named.Column}' needs a [rows][columns] table and one index");
+                if (!declared.Columns.TryGetValue(named.Column, out int column))
+                    throw new OmsCompileException(named.Span, $"'{named.Name}' has no column '{named.Column}'");
+                return new LElement(cell, [ToL(named.Indices[0]), Immediate(shape[1]), Immediate(column)], pointer);
+            }
+            if (shape.Count == 1 && named.Indices.Count == 1)
+                return new LElement(cell, [ToL(named.Indices[0])], pointer);
+            if (shape.Count == 2 && named.Indices.Count == 2)
+                return new LElement(cell, [ToL(named.Indices[0]), Immediate(shape[1]), ToL(named.Indices[1])], pointer);
+            throw new OmsCompileException(named.Span,
+                $"'{named.Name}' is declared with {shape.Count} dimensions, not {named.Indices.Count}");
+        }
+
         private static bool IsBoolean(Expr expression)
             => expression is BinaryExpr { Op: "==" or "!=" or "<" or "<=" or ">" or ">=" or "&&" or "||" }
                    or UnaryExpr { Op: "!" };
@@ -425,8 +560,9 @@ public static class OmsCompiler
 
         /// <summary>An assignable operand: a storage cell or an element.</summary>
         private LExpr LValue(Expr expression)
-            => expression is OperandExpr { Operand: RawStorage } or ElementExpr
-               || expression is OperandExpr { Operand: RawLabelRef name } && _parameters?.ContainsKey(name.Name) == true
+            => expression is OperandExpr { Operand: RawStorage } or ElementExpr or NamedElementExpr
+               || expression is OperandExpr { Operand: RawLabelRef name }
+                  && (_parameters?.ContainsKey(name.Name) == true || Name(name.Name) != null)
                 ? ToL(expression)
                 : throw new OmsCompileException(expression.Span, "only a storage cell, a parameter or an element can be assigned");
 
@@ -595,6 +731,10 @@ public static class OmsCompiler
                     return IrOperand.Literal(StorageBanks.TypeByBank[storage.Bank], storage.Index);
                 case RawLabelRef label when _parameters != null && _parameters.TryGetValue(label.Name, out RawStorage? cell):
                     return Operand(cell);
+                case RawLabelRef label when _constants.TryGetValue(label.Name, out uint value):
+                    return IrOperand.Literal(0, value);
+                case RawLabelRef label when Name(label.Name) is { } declared:
+                    return Operand(declared.Cell);
                 case RawLabelRef label:
                     return LabelOperand(label.Name, label.Span);
                 case RawString text:

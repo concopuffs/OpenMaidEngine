@@ -176,7 +176,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
     │                                       compiler, expression lowering, temporary allocator and canonical
     │                                       layout rules (Compile/), layout sidecar
-    │                                       (Layout/), raw and core decompilers (Text/); referenced by Age.Cli and the tests,
+    │                                       (Layout/), generated game modules (Modules/), raw and core decompilers (Text/); referenced by Age.Cli and the tests,
     │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,

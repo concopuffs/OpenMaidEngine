@@ -3,6 +3,7 @@ using Age.Script.Abi;
 using Age.Script.Compile;
 using Age.Script.Ir;
 using Age.Script.Layout;
+using Age.Script.Modules;
 using Age.Script.Syntax;
 
 namespace Age.Script.Text;
@@ -25,20 +26,27 @@ public static class OmsCoreDecompiler
     private static readonly Dictionary<int, string> BinaryOperators =
         OmsCompiler.BinaryOpcodes.ToDictionary(pair => pair.Value, pair => pair.Key);
 
+    /// <param name="modules">Game modules whose names replace registry cells and script ids (decompiler step 6);
+    /// the source begins with <c>use</c> of each module it relies on.</param>
     public static OmsDecompilation Decompile(IrScript script, string abiId, IntrinsicCatalog intrinsics, bool fold = true,
-                                             Action<OmsFoldRecord>? observe = null, StringBuilder? dump = null)
+                                             Action<OmsFoldRecord>? observe = null, StringBuilder? dump = null,
+                                             IReadOnlyList<GameModule>? modules = null)
     {
         ArgumentNullException.ThrowIfNull(script);
         var folding = new Folding(script.Code, intrinsics, fold, observe);
-        var context = new Context(script, intrinsics, folding);
+        var context = new Context(script, intrinsics, folding, modules ?? []);
         List<Node> top = context.CarveSubs(context.Structure(0, script.Code.Count, null));
+        var body = new StringBuilder();
+        context.CollectLabels(top, null);
+        context.Print(body, top, script.Code.Count, ownsEnd: true, depth: 1, null, skipLabel: -1);
+        if (dump != null) context.Dump(dump, top, "");
         var text = new StringBuilder();
         text.Append("oms 1\n");
         text.Append("script ").Append(OmsRawDecompiler.Quote(script.Name)).Append('\n');
+        foreach (GameModule module in modules ?? [])
+            if (context.UsedModules.Contains(module)) text.Append("use ").Append(module.Name).Append('\n');
         if (script.Code.Count > 0) text.Append('\n');
-        context.CollectLabels(top, null);
-        context.Print(text, top, script.Code.Count, ownsEnd: true, depth: 1, null, skipLabel: -1);
-        if (dump != null) context.Dump(dump, top, "");
+        text.Append(body);
         OmsLayout layout = OmsRawDecompiler.BuildLayout(script, abiId);
         if (folding.UsesIntTemps && context.MaxExplicitLocal + 1 != folding.PoolBase) layout.TempBase = folding.PoolBase;
         if (folding.RefSwap) layout.RefSwap = true;
@@ -541,7 +549,7 @@ public static class OmsCoreDecompiler
     /// <summary>A loop's break and continue destinations (instruction indices).</summary>
     private sealed record Loop(int Break, int Continue, Loop? Outer);
 
-    private sealed class Context(IrScript script, IntrinsicCatalog intrinsics, Folding folding)
+    private sealed class Context(IrScript script, IntrinsicCatalog intrinsics, Folding folding, IReadOnlyList<GameModule> modules)
     {
         private readonly List<IrInstruction> _code = script.Code;
         private readonly HashSet<int> _labels = new();
@@ -1110,7 +1118,41 @@ public static class OmsCoreDecompiler
             if (ownsEnd && _labels.Contains(end)) PrintLabel(text, end, depth);
         }
 
+        /// <summary>The modules whose names were printed (the source then needs their <c>use</c>).</summary>
+        public HashSet<GameModule> UsedModules { get; } = new();
+
         private string Atom(IrOperand operand)
+            => Named(operand) is { } symbol ? symbol.Name : RawAtom(operand);
+
+        /// <summary>The registry name of a global cell; marks its module used.</summary>
+        private GlobalSymbol? Named(IrOperand operand)
+        {
+            if (operand.Kind != IrOperandKind.Literal || operand.Type is not (0x3 or 0x4 or 0x5)) return null;
+            foreach (GameModule module in modules)
+                if (module.TryGet(operand.Type, operand.Value, out GlobalSymbol symbol))
+                {
+                    UsedModules.Add(module);
+                    return symbol;
+                }
+            return null;
+        }
+
+        /// <summary><c>NAME</c>, or <c>"NAME"</c> when the catalog name is not an identifier, for a script id.</summary>
+        private string? ScriptName(IrOperand operand)
+        {
+            if (operand is not { Kind: IrOperandKind.Literal, Type: 0 }) return null;
+            foreach (GameModule module in modules)
+                if (module.TryGetScript(operand.Value, out string name))
+                {
+                    UsedModules.Add(module);
+                    return System.Text.RegularExpressions.Regex.IsMatch(name, "^[A-Za-z_][A-Za-z0-9_]*$")
+                           && !IntrinsicCatalog.Keywords.Contains(name)
+                        ? name : OmsRawDecompiler.Quote(name);
+                }
+            return null;
+        }
+
+        private string RawAtom(IrOperand operand)
         {
             if (operand is { Kind: IrOperandKind.Literal, Type: 0x9 } && operand.Value > MaxExplicitLocal)
                 MaxExplicitLocal = operand.Value;
@@ -1165,7 +1207,7 @@ public static class OmsCoreDecompiler
             switch (instruction.Opcode)
             {
                 case OmsCompiler.CallScript when operands.Count == 1 && operands[0].Kind == IrOperandKind.Literal:
-                    return $"run {Expression(arguments[0], 0)}";
+                    return $"run {(arguments[0] is LLeaf leaf ? ScriptName(leaf.Operand) : null) ?? Expression(arguments[0], 0)}";
                 case OmsCompiler.Comment when operands.Count == 1 && operands[0].Kind != IrOperandKind.CodeLabel:
                     return $"note {Atom(operands[0])}";
                 case OmsCompiler.Call when operands.Count == 1 && operands[0].Kind == IrOperandKind.Literal:
@@ -1213,6 +1255,37 @@ public static class OmsCoreDecompiler
             _ => 9,
         };
 
+        private string? NamedElementOf(LElement element)
+        {
+            if (element.Base.Kind != IrOperandKind.Literal || element.Base.Type is not (0x3 or 0x4 or 0x5)) return null;
+            foreach (GameModule module in modules)
+                if (module.TryGet(element.Base.Type, element.Base.Value, out GlobalSymbol symbol))
+                {
+                    if (NamedElement(element, symbol) is not { } named) return null;
+                    UsedModules.Add(module);
+                    return named;
+                }
+            return null;
+        }
+
+        /// <summary>The named form of an element, when the symbol's declared shape lowers to exactly this lookup:
+        /// <c>name[i]</c> for a one-dimensional array, <c>name[r][c]</c> or <c>name[r].column</c> for a table whose row
+        /// width is the lookup's immediate stride.</summary>
+        private string? NamedElement(LElement element, GlobalSymbol symbol)
+        {
+            IReadOnlyList<int> shape = symbol.Dimensions;
+            if (element.Indices.Count == 1)
+                return shape.Count == 1 ? $"{symbol.Name}[{Expression(element.Indices[0], 0)}]" : null;
+            if (shape.Count != 2 || element.Indices[1] is not LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } stride }
+                || stride.Value != (uint)shape[1])
+                return null;
+            string row = Expression(element.Indices[0], 0);
+            if (element.Indices[2] is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } column }
+                && column.Value < int.MaxValue && symbol.ColumnName((int)column.Value) is { } columnName)
+                return $"{symbol.Name}[{row}].{columnName}";
+            return $"{symbol.Name}[{row}][{Expression(element.Indices[2], 0)}]";
+        }
+
         private static bool IsComparison(int opcode) => opcode is >= 0x5A and <= 0x5F;
 
         /// <summary>A node whose value is always 0 or 1: comparisons, and and/or of such nodes.</summary>
@@ -1229,7 +1302,8 @@ public static class OmsCoreDecompiler
                     return Atom(leaf.Operand);
                 case LElement element:
                 {
-                    string @base = Atom(element.Base);
+                    if (NamedElementOf(element) is { } named) return named;
+                    string @base = RawAtom(element.Base);
                     if (element.Indices.Count == 1) return $"{@base}[{Expression(element.Indices[0], 0)}]";
                     string stride = Expression(element.Indices[1], 0);
                     return $"{@base[..^1]}:{stride}][{Expression(element.Indices[0], 0)}][{Expression(element.Indices[2], 0)}]";

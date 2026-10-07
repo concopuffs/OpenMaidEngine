@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference — himegari (generated)
 
-3756 globals (447 curated, 3309 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+3759 globals (448 curated, 3311 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
 
 ## choice-output
 
@@ -62,7 +62,7 @@
 | `0x2e49` | character_voice_suppressed | high | investigation | Base of the per-character voice enable/suppress settings. INITCONFIG zero-fills all 13 cells and registers each with the shared profile service; LOADCONFIG restores them. CONFIG indexes the table to preview a character voice and write 0/1. ROOM reads cell 0 before assigning its selected greeter's greeting/farewell voice ids, so the port's former scalar interpretation of zero-int-range (writing 13 into the base cell) suppressed those voices on every natural boot. This names the script-visible setting array without choosing a persistence backend for op 0x1a2/0x1a3. |
 | `0x3239` | adv_layer_surface_slots | high | investigation | Shared ADV graphics-layer surface-slot registry. Scene setup initializes the three banks. The CG loader uses the primary slot for a fresh retained object, alternates between columns zero and one when replacing an already-bound layer, and uses column two for the transition/crossfade surface and cleanup. The corpus has 2,657 table-base accesses across 309 scripts. Columns: 0=primary_surface_slot, 1=alternate_surface_slot, 2=transition_surface_slot. |
 | `0x329e` | adv_layer_movie_stop_time_ms | high | investigation | Per-ADV-layer movie stop positions. The common movie-layer loader writes opcode 0x23f's stop time immediately after opcode 0x236 opens the graph. CALLBACK_LOAD passes stop_time_ms-1 to opcode 0x241 so a numbered load reconstructs the movie layer at its terminal frame; this is not a separately sampled live playback cursor. |
-| `0x453b` | training_action_text | high | investigation | TRINIT's six-string row for each of 21 training/sexual-magic actions. TRAIN renders columns 0..2 for the action description and cost/reward summary, or columns 3..5 for the unmet-condition hint. Columns: 0=description_line_1, 1=description_line_2, 2=description_line_3, 3=locked_hint_line_1, 4=locked_hint_line_2, 5=locked_hint_line_3. |
+| `GS 0x453b` | training_action_text | high | investigation | TRINIT's six-string row for each of 21 training/sexual-magic actions. TRAIN renders columns 0..2 for the action description and cost/reward summary, or columns 3..5 for the unmet-condition hint. Columns: 0=description_line_1, 1=description_line_2, 2=description_line_3, 3=locked_hint_line_1, 4=locked_hint_line_2, 5=locked_hint_line_3. |
 | `0x65ce` | skill_acquired_flags | high | investigation | Persistent acquired-skill flags. ADDSKILL sets the selected skill after resolving the unit's equipped-skill slots; FORT checks the flag before granting a skill; CHMENU combines it with skill_change_catalog_eligible to build the available skill-change catalog. |
 | `0x673c` | party_slot_flags | high | investigation | Per-party-slot state flags for slots 0..99. UNITECH creates the initial unit by setting slot 2 to 0x13; CALCARR counts slots whose flags intersect 0x6, and CHMENU includes slots with bit 1 set. Exact meanings of the remaining bits are not yet classified. |
 | `0x67a0` | party_slot_character_id | high | investigation | Character/unit definition id stored for each party slot. UNITECH writes character id 2 into initial slot 2 on a natural New Game; CHMENU reads this table for every active party_slot_flags entry when constructing its roster. |
@@ -355,10 +355,11 @@
 | `0x15a1e0` | character_profile_portrait_x_offsets | high | investigation | INFOCH adds the selected cell to the centered portrait x coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
 | `0x15a244` | character_profile_portrait_y_offsets | high | investigation | INFOCH adds the selected cell to the bottom-aligned portrait y coordinate. The 100-cell spacing to the adjacent CIINIT arrays and the direct indexed reader establish the reserved per-profile placement column. |
 | `0x15a2a9` | glossary_topic_unlock_seen_decision_ids | high | investigation | VIINIT's three unlock prerequisites per glossary topic. INFOVO subtracts one from each positive value and exposes the topic when any referenced scene_decision_seen_flags cell is set; debug modes expose the same populated topics unconditionally. Columns: 0=unlock_seen_decision_1, 1=unlock_seen_decision_2, 2=unlock_seen_decision_3. |
-| `0x2e2` | — | low | auto-shape | array |
+| `GS 0x2e2` | — | low | auto-shape | array |
 | `0x69e` | — | low | auto-shape | array |
-| `0x6fe` | — | low | auto-shape | array |
-| `0x712` | — | low | auto-shape | array |
+| `GS 0x6fe` | — | low | auto-shape | array |
+| `GS 0x712` | — | low | auto-shape | array |
+| `0x7e5` | — | low | auto-shape | array |
 | `0x3276` | — | low | auto-shape | array |
 | `0x328a` | — | low | auto-shape | array |
 | `0x32b2` | — | low | auto-shape | array |
@@ -504,341 +505,342 @@
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
-| `0xd2` | save_slot_location_names | high | investigation | SAVE and SELSTAGE snapshot the current location label into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa for the row's location field. |
-| `0x1a4` | save_slot_protagonist_names | high | investigation | SAVE and SELSTAGE snapshot the active familiar's display name into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa beside the portrait. |
-| `0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
-| `0x315` | unit_story_display_names | high | investigation | CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTORY draw the selected speaker's value, DEBUGADV uses it for its scripted speaker previews, and INPUTNAME rejects a player-entered familiar name that collides with any populated row. The table intentionally leaves Lily's form ids 2..4 empty. |
-| `0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
-| `0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
-| `0x25fa` | condition_level_names | high | investigation | ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved. Columns: 0=level_1, 1=level_2, 2=level_3, 3=level_4, 4=level_5. |
-| `0x2690` | attack_element_names | high | investigation | AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 11=resistance_1, 12=resistance_2, 13=resistance_3, 14=resistance_4, 15=resistance_5, 16=resistance_6, 17=resistance_7. |
-| `0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
-| `0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
-| `0x26b5` | terrain_type_names | high | investigation | LAINIT's terrain vocabulary. MPINIT's atlas cells contain terrain ids 0..19; the named ids distinguish passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room variants. |
-| `0x26d3` | terrain_effect_descriptions | high | investigation | LAINIT's player-facing terrain effect summary indexed by terrain id. FIELD shows it beneath the selected tile's terrain name; each populated string exactly describes that row of terrain_combat_stat_deltas. |
-| `0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
-| `0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
-| `0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
-| `0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
-| `0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
-| `0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
-| `0x27bd` | stage_display_names | high | investigation | FORT and SELSTAGE enumerate this sparse catalog and render the selected title, while FIELD copies the active title into its shared display buffer. STINIT2 reserves 1,000 ids even though the shipped rows end at 170. |
-| `0x2ba5` | stage_description_lines | high | investigation | SELSTAGE multiplies stage_clear_state by three and renders the corresponding three-column half of the selected STINIT2 row. The explicit 1,000-by-6 geometry prevents these strings from being mistaken for additional stage records. Columns: 0=uncleared_line_1, 1=uncleared_line_2, 2=uncleared_line_3, 3=cleared_line_1, 4=cleared_line_2, 5=cleared_line_3. |
-| `0x4315` | card_definition_names | high | investigation | Card names populated by CDINIT2. FIELD indexes this table with current_card_id when presenting the card selected from CDINIT's weighted generation list. |
-| `0x4379` | card_definition_result_messages | high | investigation | Short player-facing result text paired with card_definition_names. FIELD displays the selected card's row after applying its CDINIT2 effect. |
-| `0x43dd` | name_entry_character_palette | high | investigation | INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer. |
-| `0x45b9` | magic_action_names | high | investigation | MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry. |
-| `0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
-| `0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
-| `0x276` | — | med | auto-shape | string-table (written by SC0130) |
-| `0x277` | — | med | auto-shape | string-table (written by SC0130) |
-| `0x278` | — | med | auto-shape | string-table (written by FIELD) |
-| `0x279` | — | med | auto-shape | string-table (written by INPUTNAME) |
-| `0x27a` | — | med | auto-shape | string-table (written by READY) |
-| `0x27c` | — | med | auto-shape | string-table (written by READY) |
-| `0x27d` | — | med | auto-shape | string-table (written by READY) |
-| `0x316` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x317` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x318` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x319` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x31a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x31b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x31c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x31d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x31e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x31f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x320` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x321` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x322` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x323` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x324` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x325` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x326` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x327` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x328` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x329` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x32f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x330` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x331` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x332` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x333` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x334` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x335` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x336` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x337` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x338` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x339` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x33f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x340` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x341` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x342` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x343` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x344` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x345` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x346` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x348` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x349` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x34b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x34c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x34e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x34f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x350` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x351` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x352` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x353` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x354` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x355` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x356` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x357` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x358` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x359` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x35f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x360` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x361` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x362` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x363` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x364` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x365` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x36f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x370` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x371` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x372` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x373` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x374` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x37f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x381` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x382` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x383` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x384` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x385` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x387` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x388` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x389` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x38a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x38c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x38d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x38e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x38f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x390` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x391` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x392` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x393` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x394` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x395` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x396` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x397` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x398` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x399` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x39a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x39c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x39d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x39e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x39f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3a0` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3a1` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3a2` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3a3` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3a4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3aa` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x3ab` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x3ac` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0x3dd` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3de` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3df` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3e0` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3e2` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3e3` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3e4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3ec` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3ed` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3ee` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3ef` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f0` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f1` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f6` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f7` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f8` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3f9` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3fa` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x3fb` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x400` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x405` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x40f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x414` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x419` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x41e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x423` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x424` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x425` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x428` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x441` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x442` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x446` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x447` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x44b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x450` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x455` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x456` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x45a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x473` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x478` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x479` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x47d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x482` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4a5` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4a6` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4aa` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4ab` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4af` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4b4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4d7` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4dc` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4dd` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4de` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4e1` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x4e6` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x509` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x50a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x50e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x50f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x510` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x511` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x513` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x514` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x518` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x51d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x51e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x522` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x56d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x572` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x577` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x57c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x581` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x59f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5a4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5a5` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5ae` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5af` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5b3` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5b4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5b5` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5b6` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5bd` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5d1` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5d6` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5db` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5e0` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5e5` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5ea` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5ef` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x5f4` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x603` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x608` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x609` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x60a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x60b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x635` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x636` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x637` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x638` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x639` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x63f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x640` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x641` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x642` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x643` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x644` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x645` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x646` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x647` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x648` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x649` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x64f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x650` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x651` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x652` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x653` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x654` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x655` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x656` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x657` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x658` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x667` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x668` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x669` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66b` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66c` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66d` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66e` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x66f` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x670` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x671` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x672` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x673` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x674` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x675` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x676` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x677` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x678` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x679` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x67a` | — | med | auto-shape | string-table (written by CNINIT) |
-| `0x7da` | — | med | auto-shape | string-table (written by SC0100) |
-| `0x849` | — | med | auto-shape | string-table (written by SAVE) |
-| `0x84b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x84c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x84d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x84e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x84f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x850` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x851` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x852` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x853` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x854` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x855` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x856` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x857` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x858` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x859` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x85f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x860` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x861` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x862` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x0` | save_slot_chapter_titles | high | investigation | SAVE and SELSTAGE snapshot the current chapter/title into this shared SAVE.DAT-selected string bank. SAVE.BIN restores the indexed cell with op 0x1aa and draws it at the top of each populated row; it is not stored in the numbered DAT header. |
+| `GS 0xd2` | save_slot_location_names | high | investigation | SAVE and SELSTAGE snapshot the current location label into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa for the row's location field. |
+| `GS 0x1a4` | save_slot_protagonist_names | high | investigation | SAVE and SELSTAGE snapshot the active familiar's display name into this shared SAVE.DAT-selected string bank. SAVE.BIN restores it with op 0x1aa beside the portrait. |
+| `GS 0x27e` | unit_class_titles | high | investigation | Persistent per-unit class/title string table. CALCCC writes the selected class_change_title_output into the current unit's cell; character and status presentation scripts read the resulting title. |
+| `GS 0x315` | unit_story_display_names | high | investigation | CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTORY draw the selected speaker's value, DEBUGADV uses it for its scripted speaker previews, and INPUTNAME rejects a player-entered familiar name that collides with any populated row. The table intentionally leaves Lily's form ids 2..4 empty. |
+| `GS 0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
+| `GS 0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
+| `GS 0x25fa` | condition_level_names | high | investigation | ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved. Columns: 0=level_1, 1=level_2, 2=level_3, 3=level_4, 4=level_5. |
+| `GS 0x2690` | attack_element_names | high | investigation | AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 11=resistance_1, 12=resistance_2, 13=resistance_3, 14=resistance_4, 15=resistance_5, 16=resistance_6, 17=resistance_7. |
+| `GS 0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
+| `GS 0x26b4` | class_change_title_output | high | investigation | CCINIT writes the title selected by each eligible class-change rule. CALCCC copies it to unit_class_titles for a successful promotion, and ADDEXP includes the same string in the level-up notification. |
+| `GS 0x26b5` | terrain_type_names | high | investigation | LAINIT's terrain vocabulary. MPINIT's atlas cells contain terrain ids 0..19; the named ids distinguish passages, rooms, hidden spaces, bases, water, openings, altars, lava, and themed room variants. |
+| `GS 0x26d3` | terrain_effect_descriptions | high | investigation | LAINIT's player-facing terrain effect summary indexed by terrain id. FIELD shows it beneath the selected tile's terrain name; each populated string exactly describes that row of terrain_combat_stat_deltas. |
+| `GS 0x26f1` | object_type_names | high | investigation | OBINIT writes the authoritative object names. FIELD, SETOBJ, and DRAWOBJ use STINIT's object type id to select these definitions; extract_init joins the names to stage object placements. |
+| `GS 0x2755` | object_type_descriptions | high | investigation | OBINIT writes the short object descriptions displayed by the field object-information path. extract_init joins populated descriptions to STINIT object placements by type id. |
+| `GS 0x27b9` | stage_victory_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the victory-condition section, and FIELD copies it into the current mission-condition display. |
+| `GS 0x27ba` | stage_victory_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_victory_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `GS 0x27bb` | stage_defeat_condition_1 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders this line first in the defeat-condition section, and FIELD copies it into the current mission-condition display. |
+| `GS 0x27bc` | stage_defeat_condition_2 | high | investigation | STINIT writes one value for each of its 74 stage records. AIM renders nonempty values after stage_defeat_condition_1, and FIELD copies the slot into the current mission-condition display. |
+| `GS 0x27bd` | stage_display_names | high | investigation | FORT and SELSTAGE enumerate this sparse catalog and render the selected title, while FIELD copies the active title into its shared display buffer. STINIT2 reserves 1,000 ids even though the shipped rows end at 170. |
+| `GS 0x2ba5` | stage_description_lines | high | investigation | SELSTAGE multiplies stage_clear_state by three and renders the corresponding three-column half of the selected STINIT2 row. The explicit 1,000-by-6 geometry prevents these strings from being mistaken for additional stage records. Columns: 0=uncleared_line_1, 1=uncleared_line_2, 2=uncleared_line_3, 3=cleared_line_1, 4=cleared_line_2, 5=cleared_line_3. |
+| `GS 0x4315` | card_definition_names | high | investigation | Card names populated by CDINIT2. FIELD indexes this table with current_card_id when presenting the card selected from CDINIT's weighted generation list. |
+| `GS 0x4379` | card_definition_result_messages | high | investigation | Short player-facing result text paired with card_definition_names. FIELD displays the selected card's row after applying its CDINIT2 effect. |
+| `GS 0x43dd` | name_entry_character_palette | high | investigation | INPUTNAME's five 70-cell character pages: row 0 hiragana, row 1 katakana, row 2 full-width Latin letters, row 3 Arabic/Kanji/Roman/circled numerals, and row 4 symbols. Cursor slots 70..74 select the page; selecting a populated cell copies it into the seven-character name buffer. |
+| `GS 0x45b9` | magic_action_names | high | investigation | MAINIT's one-based action-name array: eleven shipped records occupy ids 1..11 in a reserved 30-cell span. MAGIC, STUDY, and EVOLVE render the selected entry. |
+| `GS 0x45d7` | character_profile_names | high | investigation | CIINIT writes the character-information screen's 24 display names. INFOCH lists them by profile id, masks unrevealed rows, and uses the same id to select the backing unit metadata and CIMES biography. |
+| `GS 0x463b` | glossary_topic_titles | high | investigation | VIINIT writes the sparse glossary title table. INFOVO renders the selected title, and extract_init joins all 65 populated ids to VIMES's full help text. |
+| `GS 0x276` | — | med | auto-shape | string-table (written by SC0130) |
+| `GS 0x277` | — | med | auto-shape | string-table (written by SC0130) |
+| `GS 0x278` | — | med | auto-shape | string-table (written by FIELD) |
+| `GS 0x279` | — | med | auto-shape | string-table (written by INPUTNAME) |
+| `GS 0x27a` | — | med | auto-shape | string-table (written by READY) |
+| `GS 0x27c` | — | med | auto-shape | string-table (written by READY) |
+| `GS 0x27d` | — | med | auto-shape | string-table (written by READY) |
+| `GS 0x316` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x317` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x318` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x319` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x31a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x31b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x31c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x31d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x31e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x31f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x320` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x321` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x322` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x323` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x324` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x325` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x326` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x327` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x328` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x329` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x32f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x330` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x331` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x332` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x333` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x334` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x335` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x336` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x337` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x338` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x339` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x33f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x340` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x341` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x342` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x343` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x344` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x345` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x346` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x348` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x349` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x34b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x34c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x34e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x34f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x350` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x351` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x352` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x353` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x354` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x355` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x356` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x357` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x358` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x359` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x35f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x360` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x361` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x362` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x363` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x364` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x365` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x36f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x370` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x371` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x372` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x373` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x374` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x37f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x381` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x382` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x383` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x384` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x385` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x387` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x388` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x389` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x38a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x38c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x38d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x38e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x38f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x390` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x391` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x392` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x393` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x394` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x395` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x396` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x397` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x398` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x399` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x39a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x39c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x39d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x39e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x39f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3a0` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3a1` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3a2` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3a3` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3a4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3aa` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x3ab` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x3ac` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0x3dd` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3de` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3df` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3e0` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3e2` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3e3` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3e4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3ec` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3ed` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3ee` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3ef` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f0` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f1` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f6` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f7` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f8` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3f9` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3fa` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x3fb` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x400` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x405` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x40f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x414` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x419` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x41e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x423` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x424` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x425` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x428` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x441` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x442` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x446` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x447` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x44b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x450` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x455` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x456` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x45a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x473` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x478` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x479` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x47d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x482` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4a5` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4a6` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4aa` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4ab` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4af` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4b4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4d7` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4dc` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4dd` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4de` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4e1` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x4e6` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x509` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x50a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x50e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x50f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x510` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x511` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x513` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x514` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x518` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x51d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x51e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x522` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x56d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x572` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x577` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x57c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x581` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x59f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5a4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5a5` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5ae` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5af` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5b3` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5b4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5b5` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5b6` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5bd` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5d1` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5d6` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5db` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5e0` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5e5` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5ea` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5ef` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x5f4` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x603` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x608` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x609` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x60a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x60b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x635` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x636` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x637` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x638` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x639` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x63f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x640` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x641` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x642` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x643` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x644` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x645` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x646` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x647` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x648` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x649` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x64f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x650` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x651` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x652` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x653` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x654` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x655` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x656` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x657` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x658` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x667` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x668` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x669` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66b` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66c` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66d` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66e` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x66f` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x670` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x671` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x672` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x673` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x674` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x675` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x676` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x677` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x678` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x679` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x67a` | — | med | auto-shape | string-table (written by CNINIT) |
+| `GS 0x7da` | — | med | auto-shape | string-table (written by SC0100) |
+| `GS 0x849` | — | med | auto-shape | string-table (written by SAVE) |
+| `GS 0x84b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x84c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x84d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x84e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x84f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x850` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x851` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x852` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x853` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x854` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x855` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x856` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x857` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x858` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x859` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x85f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x860` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x861` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x862` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x863` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x864` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x865` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -941,19 +943,19 @@
 | `0x8df` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x8e0` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x8e1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x912` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x913` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x914` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x915` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x912` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x913` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x914` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x915` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x917` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x918` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x919` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x921` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x922` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x923` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x924` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x925` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x926` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x921` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x922` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x923` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x924` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x925` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x926` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x92b` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x92c` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0x92d` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -1004,9 +1006,9 @@
 | `0xa46` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xa48` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xa49` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xa4d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xa52` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xa53` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xa4d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xa52` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xa53` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xaa2` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xaa7` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xaac` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -1031,35 +1033,35 @@
 | `0xb24` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xb29` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xb38` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb3d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb3e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb3f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb40` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb6f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb70` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb71` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb72` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb73` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb74` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb75` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb76` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb77` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb78` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb79` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb7f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb80` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb81` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xb82` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb3d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb3e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb3f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb40` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb6f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb70` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb71` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb72` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb73` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb74` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb75` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb76` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb77` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb78` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb79` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb7f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb80` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb81` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xb82` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xb83` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xb84` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xb85` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -1091,30 +1093,30 @@
 | `0xbad` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xbae` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xbaf` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc33` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc34` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0xc35` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0xc36` | — | med | auto-shape | string-table (written by GAMESTART) |
-| `0xc37` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc38` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc39` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc3f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc40` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc41` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc42` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc43` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc44` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc45` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc46` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc47` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc48` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc49` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xc4a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc33` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc34` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0xc35` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0xc36` | — | med | auto-shape | string-table (written by GAMESTART) |
+| `GS 0xc37` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc38` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc39` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc3f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc40` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc41` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc42` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc43` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc44` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc45` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc46` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc47` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc48` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc49` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xc4a` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xc4b` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xc4c` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xc4d` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -1254,28 +1256,28 @@
 | `0xd6d` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd72` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd73` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xd77` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xd77` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd90` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd95` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd96` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd9a` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xd9f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdc2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdc2` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xdc3` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xdc7` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xdc8` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xdcc` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xdd1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdf4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdf9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdfa` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdfb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xdfe` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe03` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe26` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe27` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdf4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdf9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdfa` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdfb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xdfe` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe03` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe26` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe27` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe2b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe2c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe2c` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe2d` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe2e` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe30` | — | med | auto-shape | string-table (written by EBINIT) |
@@ -1283,2440 +1285,2440 @@
 | `0xe35` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe3a` | — | med | auto-shape | string-table (written by EBINIT) |
 | `0xe3b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe3f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe8a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe8f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe94` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe99` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xe9e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xebc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xec1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xec2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xecb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xecc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xed0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xed1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xed2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xed3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xeda` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xeee` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xef3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xef8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xefd` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf02` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf07` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf0c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf11` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf20` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf25` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf26` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf27` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf28` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf52` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf53` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf54` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf55` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf56` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf57` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf58` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf59` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf5f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf60` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf61` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf62` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf63` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf64` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf65` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf66` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf67` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf68` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf69` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf6f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf70` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf71` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf72` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf73` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf74` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf75` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf84` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf85` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf86` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf87` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf88` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf89` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf8f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf90` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf91` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf92` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf93` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf94` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf95` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf96` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0xf97` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x101b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x101c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x101d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x101e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x101f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1020` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1021` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1022` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1023` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1024` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1025` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1026` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1027` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1028` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1029` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x102f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1030` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1031` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1032` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1033` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1034` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1035` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1041` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1042` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1043` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1044` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1045` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1046` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x104d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x104e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1050` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1051` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1052` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1053` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1054` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1055` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1056` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1057` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1058` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1059` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x105f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1060` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1061` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1062` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1063` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1064` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1065` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1066` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1067` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1068` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1069` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x106a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1079` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x107f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1080` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1081` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1082` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1083` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1084` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1086` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1087` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1088` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1089` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x108a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x108c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x108d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x108e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x108f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1091` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1092` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1093` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1094` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1095` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1096` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1097` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1098` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1099` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x109f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a7` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10a9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10af` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10b0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10b1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e7` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10e9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10f6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10fb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10fc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10fd` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10fe` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x10ff` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1100` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1105` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x110a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1114` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1119` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x111e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1123` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1128` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1129` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x112a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x112d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1146` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1147` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x114b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x114c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1150` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1155` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x115a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x115b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x115f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1178` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x117d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x117e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1182` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1187` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11aa` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11ab` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11af` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11b0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11b4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11b9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11dc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11e1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11e2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11e3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11e6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x11eb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x120e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x120f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1213` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1214` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1215` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1216` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1218` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1219` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x121d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1222` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1223` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1227` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1272` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1277` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x127c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1281` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1286` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12a4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12a9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12aa` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12b3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12b4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12b8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12b9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12ba` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12bb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12c2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12d6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12db` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12e0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12e5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12ea` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12ef` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12f4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x12f9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1308` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x130d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x130e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x130f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1310` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x133f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1340` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1341` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1342` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1343` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1344` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1345` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1346` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1347` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1348` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1349` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x134f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1350` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1351` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1352` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1353` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1354` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1355` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1356` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1357` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1358` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1359` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x135a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x135b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x135c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x135d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x136c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x136d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x136e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x136f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1370` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1371` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1372` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1373` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1374` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1375` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1376` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1377` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1378` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1379` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x137f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1592` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1593` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1596` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1597` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x159c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x159d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x159e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x159f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15a0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15a1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15b9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15ba` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c7` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15c9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15ca` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15cb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15cc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15cd` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15ce` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x15d8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1600` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1601` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x160a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x160b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1614` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1615` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x161e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x161f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1620` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1621` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1622` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1623` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1628` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1629` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x165a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x165b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x165c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1664` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1665` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1666` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1667` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x166e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x166f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1678` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1679` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1682` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1684` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16be` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16bf` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16c8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16c9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16ca` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16cb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16d2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16dc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x16dd` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1722` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1723` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1724` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1725` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x172c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x172d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x172e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x172f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1736` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1737` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1740` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1786` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1787` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1790` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1792` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1793` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1794` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1795` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17ea` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17eb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17ec` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17ed` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17f4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17f8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17fe` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x17ff` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1800` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1801` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1808` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1809` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1812` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1814` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x18d0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x18d1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1916` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1917` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1920` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1921` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1922` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1923` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1934` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1935` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1936` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1937` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x193e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x193f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1940` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1941` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1942` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1943` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1944` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1945` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1952` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1953` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x197a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a44` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a45` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a46` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a47` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a48` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a49` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a4a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a4b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a56` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a57` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a58` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a5a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a5b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a5c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a5d` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a5e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a62` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a63` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a66` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a67` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a6e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a6f` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a70` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a72` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a73` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a74` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a76` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a77` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a78` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a79` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a7a` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a7b` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a7c` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a7e` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a80` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a81` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a82` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a83` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a84` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a85` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a86` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a87` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1a88` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aa6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aa7` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aa8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aaa` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aab` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aac` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aad` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aae` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aaf` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab1` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab2` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab3` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab7` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ab9` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aba` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1abb` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1abe` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1abf` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ac0` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ac4` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ac5` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ac6` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1ac8` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1aca` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1acc` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1acd` | — | med | auto-shape | string-table (written by EBINIT) |
-| `0x1bd3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bd9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bda` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bdb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bdc` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bde` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bdf` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1be9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bea` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1beb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bec` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bed` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bf9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bfa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bfb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1bfc` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c05` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c06` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c08` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c09` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c0f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c10` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c11` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c12` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c13` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c14` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c15` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c16` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c17` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c18` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c19` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c1f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c20` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c21` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c22` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c2d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c2e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c2f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c37` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c38` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c39` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c3a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c3c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c3d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c3e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c3f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c40` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c43` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c45` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c47` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c48` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c49` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c4a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c4b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c9b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c9d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1c9f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ca0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1caa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cab` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cae` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1caf` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cb0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cb2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cb5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cbf` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cc0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cc2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cc3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cc5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cc7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cca` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cd0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cd1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cd5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cd7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cd9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cdf` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ce3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ce4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ce6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ce9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cea` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1ceb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cee` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cef` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cf1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cf8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cfa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cfc` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1cff` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d01` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d03` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d04` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d0e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d10` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d12` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d13` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d14` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d17` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d19` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d20` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d22` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d25` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d27` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d29` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d2a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d2b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d2d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d36` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d39` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d4f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d51` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d54` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d5e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d5f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d61` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d62` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d63` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d66` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d68` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d6b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d6f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d72` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d75` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d77` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d78` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d79` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d7a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d7b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d7c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d84` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d85` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d86` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d87` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d88` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d89` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d8f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d90` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d91` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d92` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d93` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d94` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d95` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d96` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d97` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d98` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d99` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d9a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d9b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d9d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d9e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1d9f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1da9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1daa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1dab` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db5` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1db7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1dc7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1dc9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1dcb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e32` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e34` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e35` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e37` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e38` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e39` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e3a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e3b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e3e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e40` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e41` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e43` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e45` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e46` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e47` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e4a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e4b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e4c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e4e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e4f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e51` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e53` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e54` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e55` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e56` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e57` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e58` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e5b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e5c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e5d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e5e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e5f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e8f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e90` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e92` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e93` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e94` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e95` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e96` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e97` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e98` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1e99` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f57` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f58` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f59` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f5f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f60` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f61` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f62` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f63` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f64` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f68` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f69` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f6f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f70` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f71` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f72` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f73` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f74` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f75` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f76` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f77` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f78` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f79` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f7f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f80` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x1f81` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x201f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2020` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2021` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2022` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2024` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2025` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2026` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2027` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2028` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x202b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x202d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x202f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2030` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2031` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2032` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2033` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2083` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2085` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2087` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2088` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2092` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2093` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2096` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2097` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2098` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x209a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x209d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20a7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20a8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20aa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20ab` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20ad` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20af` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20b2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20b8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20b9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20bd` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20bf` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20c1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20c7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20cb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20cc` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20ce` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20d9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20e0` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20e2` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20e4` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20e7` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20e9` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20eb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20ec` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20f6` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20f8` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20fa` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20fb` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20fc` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x20ff` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2101` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2108` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x210a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x210d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x210f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2111` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2112` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2113` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2115` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x211e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2121` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2137` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2139` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x213c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2146` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2147` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2149` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x214a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x214b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x214e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2150` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2153` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2157` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x215a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x215d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x215f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2160` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2161` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2162` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2163` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2164` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x216c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x216d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x216e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x216f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2170` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2171` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2172` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2173` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2174` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2175` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2176` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2177` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2178` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2179` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x217f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2180` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2181` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2182` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2183` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2185` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2186` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2187` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2188` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x218a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x218b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x218c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x218d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x218e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2190` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2191` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2192` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2193` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x219f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x21af` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x21b1` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x21b3` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2277` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2278` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x227f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2280` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2281` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x233f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2340` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2341` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2342` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2343` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2344` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2345` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2346` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2347` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2348` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2349` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x234a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x234b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x234c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2350` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2351` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2352` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2353` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2354` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2355` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2356` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2357` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2358` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2359` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235b` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235c` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235d` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235e` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x235f` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2360` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2361` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2362` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2363` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2364` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2365` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2366` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2367` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2368` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x2369` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x23a3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23a4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23a5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23a6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23ad` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23b7` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23b8` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23b9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23ba` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23bb` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23bd` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23be` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23bf` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c7` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c8` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23c9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23ca` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23cb` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23cc` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23cd` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23ce` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23cf` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x23d5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2407` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2408` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2409` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x240f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2410` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2411` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2412` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2413` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2414` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2415` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2416` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2417` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2418` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2419` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x241f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2420` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2421` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2422` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2423` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2424` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2425` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2426` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2427` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2428` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2429` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x242f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2430` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2432` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2438` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2439` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x243f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2440` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2441` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2442` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2443` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2469` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x246f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2470` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2471` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2472` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2473` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2474` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2475` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2476` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x247d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x247e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2480` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2481` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2483` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2484` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2485` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2486` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2487` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2488` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2489` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x248a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x248c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x248d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x248e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x248f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2490` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2491` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2492` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2494` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2495` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2496` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2497` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2498` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2499` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x249a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x249b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24cf` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24d0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24d1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24d2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24d9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e7` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24e9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ea` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24eb` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ec` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ed` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ee` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ef` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f7` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f8` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24f9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24fa` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24fb` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24fc` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24fd` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24fe` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x24ff` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2500` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2501` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2533` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2534` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2535` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2536` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2537` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2538` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2539` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x253f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2540` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2541` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2542` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2543` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2544` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2545` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2546` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2547` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2548` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2549` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x254f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2550` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2551` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2552` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2553` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2554` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2555` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2556` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2557` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2558` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2559` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x255a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x255b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x255c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x255e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2564` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2565` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2566` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2567` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2568` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2569` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x256f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2597` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2598` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x2599` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259a` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259b` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259c` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259d` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259e` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x259f` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25a0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25a1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25a2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25a9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25aa` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25ac` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25ad` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25af` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b8` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25b9` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25ba` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25bb` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25bc` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25bd` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25be` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c0` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c1` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c2` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c3` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c4` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c5` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c6` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25c7` | — | med | auto-shape | string-table (written by SKINIT) |
-| `0x25ff` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2604` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2605` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2606` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2607` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2608` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2609` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260a` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260b` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260c` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260d` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260e` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x260f` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2610` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2611` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2612` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2613` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2614` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2615` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2616` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2617` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2618` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2619` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261a` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261b` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261c` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261d` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261e` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x261f` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2620` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2621` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2622` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2623` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2624` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2625` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2626` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2627` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2628` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2629` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262a` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262b` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262c` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262d` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262e` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x262f` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2630` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2631` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2632` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2633` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2634` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2635` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x263b` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x263c` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x263d` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x263e` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x263f` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2640` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2641` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2642` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2643` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2644` | — | med | auto-shape | string-table (written by ILINIT) |
-| `0x2691` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2692` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2693` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2694` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2695` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2696` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2697` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x2698` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x269b` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x269c` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x269d` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x269e` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x269f` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a0` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a1` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a5` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a6` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a7` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a8` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26a9` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26aa` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26ab` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26ac` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26ad` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26ae` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26af` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26b0` | — | med | auto-shape | string-table (written by AFINIT) |
-| `0x26b6` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26b7` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26b8` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26b9` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26bc` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26bd` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26be` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26bf` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c0` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c1` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c2` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c3` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c4` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c5` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c6` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c7` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26c8` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26d7` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26da` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26db` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26dd` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26de` | — | med | auto-shape | string-table (written by LAINIT) |
-| `0x26f2` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f3` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f4` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f5` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f6` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f7` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f8` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26f9` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26fa` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26fb` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26fc` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26fd` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26fe` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x26ff` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2700` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2701` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2702` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2703` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2704` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2705` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2706` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2707` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2708` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2709` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270a` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270b` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270c` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270d` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270e` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x270f` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2710` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2711` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2712` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2713` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2714` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2715` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2716` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2717` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2718` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2719` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271a` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271b` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271c` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271d` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271e` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x271f` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2756` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2757` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2758` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2759` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x275a` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x275b` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x275e` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x275f` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2761` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2762` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2763` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2764` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2765` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2766` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2767` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2768` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2769` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276a` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276b` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276c` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276d` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276e` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x276f` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2770` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2771` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2772` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2773` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2774` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2775` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2776` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2779` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x277a` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2782` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x2783` | — | med | auto-shape | string-table (written by OBINIT) |
-| `0x27be` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27bf` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27c0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27c8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27c9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27ca` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27cc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27cd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27d8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27dc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27dd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27de` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27df` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27e9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27ea` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27eb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27f5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27fa` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27fb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27fc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x27fd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2804` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2805` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x280e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x280f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2810` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2816` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2818` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2819` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x281f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2822` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2823` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2824` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2825` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2826` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2827` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2828` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2829` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x282a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x285d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x285e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x285f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2860` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2861` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2862` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2863` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2864` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2865` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2866` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2867` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bab` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bac` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bae` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2baf` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bb8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bba` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bbb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2be7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2be8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bea` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bed` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bee` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bf0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bf3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bf4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bf6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2bff` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c00` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c02` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c05` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c06` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c08` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c23` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c24` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c25` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c26` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c27` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c29` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c2a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c2c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c2d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c2f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c30` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c32` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c35` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c36` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c38` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c39` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c3b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c3c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c3e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c3f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c41` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c42` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c44` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c47` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c48` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c4a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c4b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c5f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c60` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c62` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c65` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c66` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c67` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c68` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c6b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c6c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c6d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c6e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c71` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c72` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c73` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c74` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c77` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c78` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c79` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c7a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c7d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c7e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c7f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c80` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c83` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c84` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c86` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c89` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c8a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c8b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c8c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c8d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c8f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c90` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c92` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c93` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c9b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c9c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2c9e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ca9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2caa` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cad` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cae` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cb9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cba` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cbc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cbd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cd7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cd8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cda` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cdd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cde` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ce0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ce3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ce4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ce6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ce9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cea` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cec` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cef` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2cf9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d13` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d14` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d16` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d17` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d19` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d1a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d1c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d1f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d20` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d22` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d25` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d26` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d28` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d29` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d4f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d50` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d52` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d55` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d56` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d58` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d8b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d8c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d8e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d91` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d92` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d93` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d94` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d97` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d98` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d99` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2d9a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dbb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dbc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dbe` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dbf` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dc7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dc8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dc9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dca` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dcd` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dce` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dcf` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dd9` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dda` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ddb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ddc` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ddf` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de7` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2de8` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2deb` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dec` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2ded` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2dee` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2df1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2df2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2df3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2df4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e03` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e04` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e06` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e07` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e09` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e0f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e10` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e12` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e13` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e15` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e16` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e17` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e18` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e19` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e1f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e20` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e21` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e22` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e23` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e24` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e25` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e26` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e27` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e28` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e2a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e2b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e2d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e2e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e30` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e31` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e33` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e34` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e35` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e36` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e37` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2e38` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f65` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f66` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f67` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f68` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f6b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f6c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f6d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f6e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f71` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f72` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f74` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f77` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f78` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f79` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f7a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f7d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f7e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f7f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f80` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f83` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f84` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f85` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f86` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f89` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f8a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f8b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f8c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f8f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f90` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f91` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f92` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f95` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f96` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f97` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f98` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f99` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9a` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9b` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9c` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9d` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9e` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2f9f` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa0` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa1` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa2` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa3` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa4` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa5` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x2fa6` | — | med | auto-shape | string-table (written by STINIT2) |
-| `0x4316` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4317` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4318` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4319` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x431f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4320` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4321` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4322` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4323` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4324` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4325` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4326` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4327` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4328` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4329` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x432f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4330` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4331` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4332` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4333` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4334` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4335` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4336` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4337` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4338` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4339` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x433f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4340` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4341` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4342` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4343` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4344` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4345` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4346` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4347` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4348` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4349` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x434f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4350` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4351` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4352` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4353` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4354` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4355` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4356` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4357` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4358` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4359` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x435f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4360` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4361` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4362` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4363` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4364` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4365` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4366` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x437f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4380` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4381` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4382` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4383` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4384` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4385` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4386` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4387` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4388` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4389` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x438f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4390` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4391` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4392` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4393` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4394` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4395` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4396` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4397` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4398` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x4399` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439a` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439b` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439c` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439d` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439e` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x439f` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a0` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a1` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a2` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a3` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a4` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a5` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a6` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a7` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a8` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43a9` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43aa` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ab` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ac` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ad` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ae` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43af` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b0` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b1` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b2` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b3` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b4` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b5` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b6` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b7` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b8` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43b9` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ba` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43bb` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43bc` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43bd` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43be` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43bf` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c0` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c1` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c2` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c3` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c4` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c5` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c6` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c7` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c8` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43c9` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43ca` | — | med | auto-shape | string-table (written by CDINIT2) |
-| `0x43de` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43df` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e0` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e1` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e2` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e3` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e4` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e7` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e8` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43e9` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43ea` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43eb` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43ec` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43ed` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43ef` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f1` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f2` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f3` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f4` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f7` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f8` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43f9` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43fa` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43fb` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43fc` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43fd` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43fe` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x43ff` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4400` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4401` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4403` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4405` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4406` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4407` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4408` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4409` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x440f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4410` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4411` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4412` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4413` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4414` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4415` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4416` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4417` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4418` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4423` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4424` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4425` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4426` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4427` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4428` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4429` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x442f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4430` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4431` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4432` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4433` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4435` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4437` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4438` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4439` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x443f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4440` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4441` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4442` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4443` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4444` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4445` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4446` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4447` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4449` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x444b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x444c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x444d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x444e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x444f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4450` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4451` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4452` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4453` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4454` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4455` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4456` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4457` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4458` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4459` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x445a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x445b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x445c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x445d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x445e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4469` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x446f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4470` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4471` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4472` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4473` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4474` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4475` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4476` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4477` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4478` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4479` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x447f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4480` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4481` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4482` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4487` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4488` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4489` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x448f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4490` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4491` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4492` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4493` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4494` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4495` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4496` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4497` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4498` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4499` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x449f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44a0` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44af` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b0` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b1` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b2` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b3` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b4` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b7` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b8` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44b9` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44ba` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44bb` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44bc` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44bd` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44be` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44bf` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c0` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c1` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c2` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c3` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c4` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c7` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c8` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44c9` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44ca` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44cb` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44cc` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44cd` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44ce` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44cf` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d0` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d1` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d2` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d3` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d4` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44d6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44f5` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44f6` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44f7` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44f8` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44f9` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44fa` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44fb` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44fc` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44fd` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44fe` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x44ff` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4500` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4501` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4502` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4503` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4504` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4505` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4506` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4507` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4508` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4509` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x450f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4510` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4511` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4512` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4513` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4514` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4515` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4516` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4517` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4518` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4519` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x451f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4520` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4521` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4522` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4523` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4524` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4525` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4526` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4527` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4528` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4529` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452a` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452b` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452c` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452d` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452e` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x452f` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4530` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4531` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4532` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4533` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4534` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4535` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4536` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4537` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4538` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x4539` | — | med | auto-shape | string-table (written by CTINIT) |
-| `0x453c` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4541` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4542` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4544` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4545` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4546` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4547` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4548` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x454a` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x454b` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x454d` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x454e` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x454f` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4550` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4553` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4554` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4556` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4557` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4559` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x455a` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x455c` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x455f` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4560` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4562` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4565` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4566` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x456b` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x456c` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x456e` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4571` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4572` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4574` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4575` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4577` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4578` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x457a` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x457b` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x457d` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x457e` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4580` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4581` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4583` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4584` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4586` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4589` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x458a` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x458c` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x458d` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x458f` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4590` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4595` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4596` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4597` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x4598` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x459b` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x459c` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x459d` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x459e` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x459f` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a1` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a2` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a4` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a5` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a7` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45a8` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45aa` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45ab` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45ad` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45ae` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45b0` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45b3` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45b4` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45b6` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45b7` | — | med | auto-shape | string-table (written by TRINIT) |
-| `0x45ba` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45bb` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45bc` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45bd` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45be` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45bf` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45c0` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45c1` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45c2` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45c3` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45c4` | — | med | auto-shape | string-table (written by MAINIT) |
-| `0x45d8` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45d9` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45da` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45db` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45dc` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45dd` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45de` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45df` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e0` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e1` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e2` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e3` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e4` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e5` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e6` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e7` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e8` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45e9` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45ea` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45eb` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45ec` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45ed` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45ee` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x45ef` | — | med | auto-shape | string-table (written by CIINIT) |
-| `0x463c` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x463d` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x463e` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x463f` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4640` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4641` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4642` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4643` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4644` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4645` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4646` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4647` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4648` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4649` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464a` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464b` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464c` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464d` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464e` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x464f` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4650` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4651` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4652` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4653` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4654` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4655` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4656` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4657` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4658` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4659` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465a` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465b` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465c` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465d` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465e` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x465f` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x466d` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x466e` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x466f` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4670` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4671` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4672` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4673` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4681` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4682` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4683` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4684` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4685` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4686` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4687` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x4688` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x469f` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a0` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a1` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a2` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a3` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a4` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a5` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a6` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a7` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a8` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46a9` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46aa` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46ab` | — | med | auto-shape | string-table (written by VIINIT) |
-| `0x46b3` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0xe3f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe8a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe8f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe94` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe99` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xe9e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xebc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xec1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xec2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xecb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xecc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xed0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xed1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xed2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xed3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xeda` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xeee` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xef3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xef8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xefd` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf02` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf07` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf0c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf11` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf20` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf25` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf26` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf27` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf28` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf52` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf53` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf54` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf55` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf56` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf57` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf58` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf59` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf5f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf60` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf61` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf62` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf63` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf64` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf65` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf66` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf67` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf68` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf69` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf6f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf70` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf71` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf72` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf73` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf74` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf75` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf84` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf85` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf86` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf87` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf88` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf89` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf8f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf90` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf91` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf92` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf93` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf94` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf95` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf96` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0xf97` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x101b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x101c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x101d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x101e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x101f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1020` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1021` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1022` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1023` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1024` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1025` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1026` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1027` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1028` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1029` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x102f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1030` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1031` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1032` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1033` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1034` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1035` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1041` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1042` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1043` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1044` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1045` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1046` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x104d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x104e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1050` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1051` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1052` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1053` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1054` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1055` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1056` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1057` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1058` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1059` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x105f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1060` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1061` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1062` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1063` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1064` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1065` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1066` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1067` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1068` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1069` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x106a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1079` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x107f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1080` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1081` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1082` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1083` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1084` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1086` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1087` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1088` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1089` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x108a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x108c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x108d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x108e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x108f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1091` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1092` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1093` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1094` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1095` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1096` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1097` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1098` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1099` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x109f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a7` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10a9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10af` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10b0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10b1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e7` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10e9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10f6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10fb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10fc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10fd` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10fe` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x10ff` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1100` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1105` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x110a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1114` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1119` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x111e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1123` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1128` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1129` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x112a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x112d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1146` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1147` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x114b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x114c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1150` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1155` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x115a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x115b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x115f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1178` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x117d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x117e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1182` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1187` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11aa` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11ab` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11af` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11b0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11b4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11b9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11dc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11e1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11e2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11e3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11e6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x11eb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x120e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x120f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1213` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1214` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1215` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1216` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1218` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1219` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x121d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1222` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1223` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1227` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1272` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1277` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x127c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1281` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1286` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12a4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12a9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12aa` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12b3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12b4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12b8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12b9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12ba` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12bb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12c2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12d6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12db` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12e0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12e5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12ea` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12ef` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12f4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x12f9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1308` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x130d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x130e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x130f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1310` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x133f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1340` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1341` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1342` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1343` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1344` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1345` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1346` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1347` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1348` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1349` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x134f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1350` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1351` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1352` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1353` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1354` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1355` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1356` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1357` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1358` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1359` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x135a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x135b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x135c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x135d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x136c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x136d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x136e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x136f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1370` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1371` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1372` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1373` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1374` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1375` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1376` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1377` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1378` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1379` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x137f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1592` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1593` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1596` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1597` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x159c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x159d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x159e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x159f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15a0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15a1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15b9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15ba` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c7` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15c9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15ca` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15cb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15cc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15cd` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15ce` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x15d8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1600` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1601` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x160a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x160b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1614` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1615` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x161e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x161f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1620` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1621` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1622` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1623` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1628` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1629` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x165a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x165b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x165c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1664` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1665` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1666` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1667` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x166e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x166f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1678` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1679` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1682` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1684` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16be` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16bf` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16c8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16c9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16ca` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16cb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16d2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16dc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x16dd` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1722` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1723` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1724` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1725` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x172c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x172d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x172e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x172f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1736` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1737` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1740` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1786` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1787` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1790` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1792` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1793` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1794` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1795` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17ea` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17eb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17ec` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17ed` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17f4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17f8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17fe` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x17ff` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1800` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1801` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1808` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1809` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1812` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1814` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x18d0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x18d1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1916` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1917` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1920` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1921` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1922` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1923` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1934` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1935` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1936` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1937` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x193e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x193f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1940` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1941` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1942` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1943` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1944` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1945` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1952` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1953` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x197a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a44` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a45` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a46` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a47` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a48` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a49` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a4a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a4b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a56` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a57` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a58` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a5a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a5b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a5c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a5d` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a5e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a62` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a63` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a66` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a67` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a6e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a6f` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a70` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a72` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a73` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a74` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a76` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a77` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a78` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a79` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a7a` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a7b` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a7c` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a7e` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a80` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a81` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a82` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a83` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a84` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a85` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a86` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a87` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1a88` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aa6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aa7` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aa8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aaa` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aab` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aac` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aad` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aae` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aaf` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab1` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab2` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab3` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab7` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ab9` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aba` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1abb` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1abe` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1abf` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ac0` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ac4` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ac5` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ac6` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1ac8` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1aca` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1acc` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1acd` | — | med | auto-shape | string-table (written by EBINIT) |
+| `GS 0x1bd3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bd9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bda` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bdb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bdc` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bde` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bdf` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1be9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bea` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1beb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bec` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bed` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bf9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bfa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bfb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1bfc` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c05` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c06` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c08` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c09` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c0f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c10` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c11` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c12` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c13` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c14` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c15` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c16` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c17` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c18` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c19` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c1f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c20` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c21` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c22` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c2d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c2e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c2f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c37` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c38` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c39` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c3a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c3c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c3d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c3e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c3f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c40` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c43` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c45` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c47` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c48` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c49` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c4a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c4b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c9b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c9d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1c9f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ca0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1caa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cab` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cae` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1caf` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cb0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cb2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cb5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cbf` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cc0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cc2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cc3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cc5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cc7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cca` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cd0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cd1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cd5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cd7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cd9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cdf` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ce3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ce4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ce6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ce9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cea` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1ceb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cee` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cef` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cf1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cf8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cfa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cfc` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1cff` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d01` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d03` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d04` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d0e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d10` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d12` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d13` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d14` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d17` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d19` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d20` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d22` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d25` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d27` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d29` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d2a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d2b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d2d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d36` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d39` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d4f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d51` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d54` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d5e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d5f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d61` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d62` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d63` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d66` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d68` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d6b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d6f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d72` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d75` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d77` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d78` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d79` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d7a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d7b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d7c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d84` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d85` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d86` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d87` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d88` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d89` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d8f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d90` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d91` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d92` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d93` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d94` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d95` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d96` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d97` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d98` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d99` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d9a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d9b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d9d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d9e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1d9f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1da9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1daa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1dab` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db5` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1db7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1dc7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1dc9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1dcb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e32` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e34` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e35` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e37` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e38` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e39` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e3a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e3b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e3e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e40` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e41` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e43` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e45` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e46` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e47` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e4a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e4b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e4c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e4e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e4f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e51` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e53` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e54` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e55` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e56` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e57` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e58` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e5b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e5c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e5d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e5e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e5f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e8f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e90` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e92` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e93` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e94` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e95` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e96` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e97` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e98` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1e99` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f57` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f58` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f59` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f5f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f60` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f61` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f62` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f63` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f64` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f68` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f69` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f6f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f70` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f71` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f72` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f73` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f74` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f75` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f76` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f77` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f78` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f79` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f7f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f80` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x1f81` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x201f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2020` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2021` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2022` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2024` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2025` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2026` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2027` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2028` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x202b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x202d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x202f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2030` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2031` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2032` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2033` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2083` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2085` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2087` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2088` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2092` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2093` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2096` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2097` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2098` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x209a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x209d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20a7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20a8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20aa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20ab` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20ad` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20af` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20b2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20b8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20b9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20bd` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20bf` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20c1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20c7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20cb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20cc` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20ce` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20d9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20e0` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20e2` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20e4` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20e7` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20e9` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20eb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20ec` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20f6` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20f8` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20fa` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20fb` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20fc` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x20ff` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2101` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2108` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x210a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x210d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x210f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2111` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2112` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2113` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2115` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x211e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2121` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2137` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2139` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x213c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2146` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2147` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2149` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x214a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x214b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x214e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2150` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2153` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2157` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x215a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x215d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x215f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2160` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2161` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2162` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2163` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2164` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x216c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x216d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x216e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x216f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2170` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2171` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2172` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2173` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2174` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2175` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2176` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2177` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2178` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2179` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x217f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2180` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2181` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2182` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2183` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2185` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2186` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2187` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2188` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x218a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x218b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x218c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x218d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x218e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2190` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2191` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2192` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2193` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x219f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x21af` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x21b1` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x21b3` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2277` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2278` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x227f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2280` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2281` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x233f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2340` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2341` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2342` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2343` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2344` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2345` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2346` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2347` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2348` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2349` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x234a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x234b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x234c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2350` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2351` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2352` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2353` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2354` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2355` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2356` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2357` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2358` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2359` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235a` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235b` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235c` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235d` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235e` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x235f` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2360` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2361` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2362` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2363` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2364` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2365` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2366` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2367` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2368` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x2369` | — | med | auto-shape | string-table (written by ITINIT) |
+| `GS 0x23a3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23a4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23a5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23a6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23ad` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23b7` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23b8` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23b9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23ba` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23bb` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23bd` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23be` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23bf` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c7` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c8` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23c9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23ca` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23cb` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23cc` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23cd` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23ce` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23cf` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x23d5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2407` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2408` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2409` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x240f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2410` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2411` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2412` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2413` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2414` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2415` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2416` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2417` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2418` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2419` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x241f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2420` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2421` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2422` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2423` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2424` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2425` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2426` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2427` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2428` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2429` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x242f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2430` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2432` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2438` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2439` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x243f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2440` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2441` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2442` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2443` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2469` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x246f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2470` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2471` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2472` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2473` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2474` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2475` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2476` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x247d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x247e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2480` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2481` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2483` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2484` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2485` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2486` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2487` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2488` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2489` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x248a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x248c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x248d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x248e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x248f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2490` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2491` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2492` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2494` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2495` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2496` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2497` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2498` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2499` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x249a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x249b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24cf` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24d0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24d1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24d2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24d9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e7` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24e9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ea` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24eb` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ec` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ed` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ee` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ef` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f7` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f8` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24f9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24fa` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24fb` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24fc` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24fd` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24fe` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x24ff` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2500` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2501` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2533` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2534` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2535` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2536` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2537` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2538` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2539` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x253f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2540` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2541` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2542` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2543` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2544` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2545` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2546` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2547` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2548` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2549` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x254f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2550` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2551` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2552` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2553` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2554` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2555` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2556` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2557` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2558` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2559` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x255a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x255b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x255c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x255e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2564` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2565` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2566` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2567` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2568` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2569` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x256f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2597` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2598` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x2599` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259a` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259b` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259c` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259d` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259e` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x259f` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25a0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25a1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25a2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25a9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25aa` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25ac` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25ad` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25af` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b8` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25b9` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25ba` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25bb` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25bc` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25bd` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25be` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c0` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c1` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c2` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c3` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c4` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c5` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c6` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25c7` | — | med | auto-shape | string-table (written by SKINIT) |
+| `GS 0x25ff` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2604` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2605` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2606` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2607` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2608` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2609` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260a` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260b` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260c` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260d` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260e` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x260f` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2610` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2611` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2612` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2613` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2614` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2615` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2616` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2617` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2618` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2619` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261a` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261b` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261c` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261d` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261e` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x261f` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2620` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2621` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2622` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2623` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2624` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2625` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2626` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2627` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2628` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2629` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262a` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262b` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262c` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262d` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262e` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x262f` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2630` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2631` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2632` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2633` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2634` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2635` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x263b` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x263c` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x263d` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x263e` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x263f` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2640` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2641` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2642` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2643` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2644` | — | med | auto-shape | string-table (written by ILINIT) |
+| `GS 0x2691` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2692` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2693` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2694` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2695` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2696` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2697` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x2698` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x269b` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x269c` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x269d` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x269e` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x269f` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a0` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a1` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a5` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a6` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a7` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a8` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26a9` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26aa` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26ab` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26ac` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26ad` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26ae` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26af` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26b0` | — | med | auto-shape | string-table (written by AFINIT) |
+| `GS 0x26b6` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26b7` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26b8` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26b9` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26bc` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26bd` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26be` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26bf` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c0` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c1` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c2` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c3` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c4` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c5` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c6` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c7` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26c8` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26d7` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26da` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26db` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26dd` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26de` | — | med | auto-shape | string-table (written by LAINIT) |
+| `GS 0x26f2` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f3` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f4` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f5` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f6` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f7` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f8` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26f9` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26fa` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26fb` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26fc` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26fd` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26fe` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x26ff` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2700` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2701` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2702` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2703` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2704` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2705` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2706` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2707` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2708` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2709` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270a` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270b` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270c` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270d` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270e` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x270f` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2710` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2711` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2712` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2713` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2714` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2715` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2716` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2717` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2718` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2719` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271a` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271b` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271c` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271d` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271e` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x271f` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2756` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2757` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2758` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2759` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x275a` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x275b` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x275e` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x275f` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2761` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2762` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2763` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2764` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2765` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2766` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2767` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2768` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2769` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276a` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276b` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276c` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276d` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276e` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x276f` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2770` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2771` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2772` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2773` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2774` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2775` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2776` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2779` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x277a` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2782` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x2783` | — | med | auto-shape | string-table (written by OBINIT) |
+| `GS 0x27be` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27bf` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27c0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27c8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27c9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27ca` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27cc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27cd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27d8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27dc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27dd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27de` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27df` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27e9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27ea` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27eb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27f5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27fa` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27fb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27fc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x27fd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2804` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2805` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x280e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x280f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2810` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2816` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2818` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2819` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x281f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2822` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2823` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2824` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2825` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2826` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2827` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2828` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2829` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x282a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x285d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x285e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x285f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2860` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2861` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2862` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2863` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2864` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2865` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2866` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2867` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bab` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bac` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bae` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2baf` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bb8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bba` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bbb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2be7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2be8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bea` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bed` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bee` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bf0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bf3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bf4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bf6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2bff` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c00` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c02` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c05` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c06` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c08` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c23` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c24` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c25` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c26` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c27` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c29` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c2a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c2c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c2d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c2f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c30` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c32` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c35` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c36` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c38` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c39` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c3b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c3c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c3e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c3f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c41` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c42` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c44` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c47` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c48` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c4a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c4b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c5f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c60` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c62` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c65` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c66` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c67` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c68` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c6b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c6c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c6d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c6e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c71` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c72` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c73` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c74` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c77` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c78` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c79` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c7a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c7d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c7e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c7f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c80` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c83` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c84` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c86` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c89` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c8a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c8b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c8c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c8d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c8f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c90` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c92` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c93` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c9b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c9c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2c9e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ca9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2caa` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cad` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cae` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cb9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cba` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cbc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cbd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cd7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cd8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cda` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cdd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cde` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ce0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ce3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ce4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ce6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ce9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cea` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cec` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cef` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2cf9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d13` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d14` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d16` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d17` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d19` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d1a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d1c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d1f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d20` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d22` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d25` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d26` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d28` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d29` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d4f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d50` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d52` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d55` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d56` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d58` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d8b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d8c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d8e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d91` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d92` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d93` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d94` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d97` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d98` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d99` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2d9a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dbb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dbc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dbe` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dbf` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dc7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dc8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dc9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dca` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dcd` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dce` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dcf` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dd9` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dda` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ddb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ddc` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ddf` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de7` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2de8` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2deb` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dec` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2ded` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2dee` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2df1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2df2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2df3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2df4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e03` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e04` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e06` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e07` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e09` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e0f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e10` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e12` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e13` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e15` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e16` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e17` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e18` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e19` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e1f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e20` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e21` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e22` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e23` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e24` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e25` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e26` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e27` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e28` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e2a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e2b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e2d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e2e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e30` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e31` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e33` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e34` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e35` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e36` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e37` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2e38` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f65` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f66` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f67` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f68` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f6b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f6c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f6d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f6e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f71` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f72` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f74` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f77` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f78` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f79` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f7a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f7d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f7e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f7f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f80` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f83` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f84` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f85` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f86` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f89` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f8a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f8b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f8c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f8f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f90` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f91` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f92` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f95` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f96` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f97` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f98` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f99` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9a` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9b` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9c` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9d` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9e` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2f9f` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa0` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa1` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa2` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa3` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa4` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa5` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x2fa6` | — | med | auto-shape | string-table (written by STINIT2) |
+| `GS 0x4316` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4317` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4318` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4319` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x431f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4320` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4321` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4322` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4323` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4324` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4325` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4326` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4327` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4328` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4329` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x432f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4330` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4331` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4332` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4333` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4334` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4335` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4336` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4337` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4338` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4339` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x433f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4340` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4341` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4342` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4343` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4344` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4345` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4346` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4347` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4348` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4349` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x434f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4350` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4351` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4352` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4353` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4354` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4355` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4356` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4357` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4358` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4359` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x435f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4360` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4361` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4362` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4363` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4364` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4365` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4366` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x437f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4380` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4381` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4382` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4383` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4384` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4385` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4386` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4387` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4388` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4389` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x438f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4390` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4391` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4392` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4393` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4394` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4395` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4396` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4397` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4398` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x4399` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439a` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439b` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439c` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439d` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439e` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x439f` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a0` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a1` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a2` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a3` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a4` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a5` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a6` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a7` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a8` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43a9` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43aa` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ab` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ac` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ad` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ae` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43af` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b0` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b1` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b2` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b3` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b4` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b5` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b6` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b7` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b8` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43b9` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ba` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43bb` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43bc` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43bd` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43be` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43bf` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c0` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c1` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c2` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c3` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c4` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c5` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c6` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c7` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c8` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43c9` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43ca` | — | med | auto-shape | string-table (written by CDINIT2) |
+| `GS 0x43de` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43df` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e0` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e1` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e2` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e3` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e4` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e7` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e8` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43e9` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43ea` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43eb` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43ec` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43ed` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43ef` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f1` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f2` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f3` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f4` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f7` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f8` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43f9` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43fa` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43fb` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43fc` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43fd` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43fe` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x43ff` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4400` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4401` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4403` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4405` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4406` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4407` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4408` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4409` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x440f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4410` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4411` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4412` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4413` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4414` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4415` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4416` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4417` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4418` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4423` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4424` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4425` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4426` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4427` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4428` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4429` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x442f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4430` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4431` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4432` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4433` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4435` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4437` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4438` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4439` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x443f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4440` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4441` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4442` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4443` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4444` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4445` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4446` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4447` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4449` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x444b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x444c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x444d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x444e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x444f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4450` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4451` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4452` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4453` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4454` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4455` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4456` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4457` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4458` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4459` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x445a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x445b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x445c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x445d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x445e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4469` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x446f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4470` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4471` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4472` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4473` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4474` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4475` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4476` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4477` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4478` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4479` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x447f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4480` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4481` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4482` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4487` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4488` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4489` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x448f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4490` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4491` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4492` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4493` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4494` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4495` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4496` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4497` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4498` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4499` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x449f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44a0` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44af` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b0` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b1` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b2` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b3` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b4` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b7` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b8` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44b9` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44ba` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44bb` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44bc` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44bd` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44be` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44bf` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c0` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c1` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c2` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c3` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c4` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c7` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c8` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44c9` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44ca` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44cb` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44cc` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44cd` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44ce` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44cf` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d0` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d1` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d2` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d3` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d4` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44d6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44f5` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44f6` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44f7` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44f8` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44f9` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44fa` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44fb` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44fc` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44fd` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44fe` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x44ff` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4500` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4501` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4502` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4503` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4504` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4505` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4506` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4507` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4508` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4509` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x450f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4510` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4511` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4512` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4513` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4514` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4515` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4516` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4517` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4518` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4519` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x451f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4520` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4521` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4522` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4523` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4524` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4525` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4526` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4527` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4528` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4529` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452a` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452b` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452c` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452d` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452e` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x452f` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4530` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4531` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4532` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4533` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4534` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4535` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4536` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4537` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4538` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x4539` | — | med | auto-shape | string-table (written by CTINIT) |
+| `GS 0x453c` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4541` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4542` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4544` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4545` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4546` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4547` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4548` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x454a` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x454b` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x454d` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x454e` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x454f` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4550` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4553` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4554` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4556` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4557` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4559` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x455a` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x455c` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x455f` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4560` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4562` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4565` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4566` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x456b` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x456c` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x456e` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4571` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4572` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4574` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4575` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4577` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4578` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x457a` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x457b` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x457d` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x457e` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4580` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4581` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4583` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4584` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4586` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4589` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x458a` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x458c` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x458d` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x458f` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4590` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4595` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4596` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4597` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x4598` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x459b` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x459c` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x459d` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x459e` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x459f` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a1` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a2` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a4` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a5` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a7` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45a8` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45aa` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45ab` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45ad` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45ae` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45b0` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45b3` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45b4` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45b6` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45b7` | — | med | auto-shape | string-table (written by TRINIT) |
+| `GS 0x45ba` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45bb` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45bc` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45bd` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45be` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45bf` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45c0` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45c1` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45c2` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45c3` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45c4` | — | med | auto-shape | string-table (written by MAINIT) |
+| `GS 0x45d8` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45d9` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45da` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45db` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45dc` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45dd` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45de` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45df` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e0` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e1` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e2` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e3` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e4` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e5` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e6` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e7` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e8` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45e9` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45ea` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45eb` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45ec` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45ed` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45ee` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x45ef` | — | med | auto-shape | string-table (written by CIINIT) |
+| `GS 0x463c` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x463d` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x463e` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x463f` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4640` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4641` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4642` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4643` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4644` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4645` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4646` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4647` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4648` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4649` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464a` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464b` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464c` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464d` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464e` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x464f` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4650` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4651` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4652` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4653` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4654` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4655` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4656` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4657` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4658` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4659` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465a` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465b` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465c` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465d` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465e` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x465f` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x466d` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x466e` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x466f` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4670` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4671` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4672` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4673` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4681` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4682` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4683` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4684` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4685` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4686` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4687` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x4688` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x469f` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a0` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a1` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a2` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a3` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a4` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a5` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a6` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a7` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a8` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46a9` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46aa` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46ab` | — | med | auto-shape | string-table (written by VIINIT) |
+| `GS 0x46b3` | — | med | auto-shape | string-table (written by VIINIT) |
 
 ## ui-toggle
 
@@ -3751,17 +3753,18 @@
 | `0x15261c` | battle_hit_result | high | investigation | CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path. |
 | `0x15261d` | battle_hp_delta | high | investigation | CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling. |
 | `0x15261e` | battle_actor_hp_recovery | high | investigation | CALCDMG's actor-side HP recovery output. Absorb (SKINIT skill 40) contributes half of positive battle_hp_delta with a minimum of one, and the target's HP-absorption condition can add its level-scaled amount capped at the damage dealt. BTL adds the result to the actor's current HP, renders the green recovery number, and clamps the resource through the ordinary post-battle path. |
-| `0x84a` | — | high | auto-shape | unit-name-table |
-| `0xc32` | — | high | auto-shape | unit-desc-table |
-| `0x101a` | — | high | auto-shape | unit-desc1-table |
+| `GS 0x84a` | — | high | auto-shape | unit-name-table |
+| `GS 0xc32` | — | high | auto-shape | unit-desc-table |
+| `GS 0x101a` | — | high | auto-shape | unit-desc1-table |
 | `0x14ca` | — | high | auto-shape | unit-desc2-table |
 | `0x14cb` | — | high | auto-shape | unit-desc3-table |
-| `0x1bd2` | — | high | auto-shape | item-name-table |
-| `0x1fba` | — | high | auto-shape | item-desc-table |
-| `0x23a2` | — | high | auto-shape | skill-name-table |
-| `0x24ce` | — | high | auto-shape | skill-desc-table |
+| `GS 0x1bd2` | — | high | auto-shape | item-name-table |
+| `GS 0x1fba` | — | high | auto-shape | item-desc-table |
+| `GS 0x23a2` | — | high | auto-shape | skill-name-table |
+| `GS 0x24ce` | — | high | auto-shape | skill-desc-table |
 | `0x32f0` | — | med | auto-shape | current-entity-index? |
 | `0x3ebe` | — | med | auto-shape | record-table[stride 10] |
+| `0x45b9` | — | high | auto-shape | mainit-name-table |
 | `0x7e54` | — | med | auto-shape | record-table[stride 50] |
 | `0x4e3d7` | — | med | auto-shape | record-table[stride 14] |
 | `0x53a2b` | — | med | auto-shape | record-table[stride 20] |

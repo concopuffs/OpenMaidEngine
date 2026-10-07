@@ -133,3 +133,18 @@ public sealed record SubStatement(SourceSpan Span, string Name, IReadOnlyList<Su
 
 /// <summary><c>resume</c>: the coroutine resume point, op 0x7c.</summary>
 public sealed record ResumeStatement(SourceSpan Span) : Statement(Span);
+
+/// <summary><c>use himegari.globals</c>: import a module's names (spec §3.2).</summary>
+public sealed record UseStatement(SourceSpan Span, string Module) : Statement(Span);
+
+/// <summary><c>const NAME = value</c>: an integer substituted wherever the name appears (spec §5.2).</summary>
+public sealed record ConstStatement(SourceSpan Span, string Name, uint Value) : Statement(Span);
+
+/// <summary><c>global int name[r][c] @ 0x6f70 { column: index }</c> or <c>local int name @ 0x1</c> (spec §5.2): a name
+/// for a storage cell or array. A local without <c>@</c> gets a slot above every local the source names.</summary>
+public sealed record StorageDeclaration(SourceSpan Span, bool Local, string Type, string Name, IReadOnlyList<int> Dimensions,
+                                        uint? Address, IReadOnlyDictionary<string, int> Columns) : Statement(Span);
+
+/// <summary>A named array element: <c>name[i]</c>, <c>name[r][c]</c> or the row-table column <c>name[r].column</c>.</summary>
+public sealed record NamedElementExpr(SourceSpan Span, string Name, IReadOnlyList<Expr> Indices, string? Column)
+    : Expr(Span);

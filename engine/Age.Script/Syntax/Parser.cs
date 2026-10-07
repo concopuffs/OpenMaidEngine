@@ -119,6 +119,23 @@ public sealed class Parser
             case "resume":
                 Next();
                 return Finish(new ResumeStatement(token.Span));
+            case "use":
+            {
+                Next();
+                var path = new List<string> { Expect(TokenKind.Identifier).Text };
+                while (Accept(TokenKind.Punct, ".")) path.Add(Expect(TokenKind.Identifier).Text);
+                return Finish(new UseStatement(token.Span, string.Join(".", path)));
+            }
+            case "const":
+            {
+                Next();
+                string name = Expect(TokenKind.Identifier).Text;
+                Expect(TokenKind.Punct, "=");
+                return Finish(new ConstStatement(token.Span, name, ParseSignedInteger()));
+            }
+            case "global" or "local" when Peek(1).Kind == TokenKind.Identifier:
+                Next();
+                return Finish(ParseDeclaration(token));
             case "for":
             {
                 Next();
@@ -181,6 +198,61 @@ public sealed class Parser
         return new SubStatement(keyword.Span, name.Text, parameters, result, ParseBlock(), coroutine);
     }
 
+    /// <summary><c>type name[dims] [@ address] [{ column: index, … }]</c> after <c>global</c> or <c>local</c>.</summary>
+    private Statement ParseDeclaration(Token keyword)
+    {
+        Token type = Expect(TokenKind.Identifier);
+        if (type.Text is not ("int" or "str" or "float"))
+            throw new OmsSyntaxException(type.Span, $"expected int, str or float, found {type}");
+        string name = Expect(TokenKind.Identifier).Text;
+        var dimensions = new List<int>();
+        while (Accept(TokenKind.Punct, "["))
+        {
+            // Only the leading dimension may be open (name[][27]): an array of unknown length.
+            if (dimensions.Count == 0 && Accept(TokenKind.Punct, "]")) { dimensions.Add(0); continue; }
+            dimensions.Add((int)Expect(TokenKind.Integer).Integer);
+            Expect(TokenKind.Punct, "]");
+        }
+        uint? address = Accept(TokenKind.Punct, "@") ? Expect(TokenKind.Integer).Integer : null;
+        var columns = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (Accept(TokenKind.Punct, "{"))
+        {
+            SkipNewlines();
+            while (!Accept(TokenKind.Punct, "}"))
+            {
+                Token column = Expect(TokenKind.Identifier);
+                Expect(TokenKind.Punct, ":");
+                if (!columns.TryAdd(column.Text, (int)Expect(TokenKind.Integer).Integer))
+                    throw new OmsSyntaxException(column.Span, $"column '{column.Text}' is named twice");
+                Accept(TokenKind.Punct, ",");
+                SkipNewlines();
+            }
+            if (dimensions.Count != 2) throw new OmsSyntaxException(keyword.Span, "named columns need a [rows][columns] table");
+        }
+        if (keyword.Text == "global" && address == null)
+            throw new OmsSyntaxException(keyword.Span, "a global needs its cell: @ address");
+        return new StorageDeclaration(keyword.Span, keyword.Text == "local", type.Text, name, dimensions, address, columns);
+    }
+
+    /// <summary>A named operand: a bare name, or a named element <c>name[i]</c>, <c>name[r][c]</c>, <c>name[r].col</c>.</summary>
+    private Expr ParseNamed()
+    {
+        Token name = Expect(TokenKind.Identifier);
+        if (!Peek().Is(TokenKind.Punct, "[")) return new OperandExpr(name.Span, new RawLabelRef(name.Span, name.Text));
+        var indices = new List<Expr>();
+        while (Accept(TokenKind.Punct, "["))
+        {
+            indices.Add(ParseExpression());
+            Expect(TokenKind.Punct, "]");
+        }
+        string? column = Accept(TokenKind.Punct, ".") ? Expect(TokenKind.Identifier).Text : null;
+        return new NamedElementExpr(name.Span, name.Text, indices, column);
+    }
+
+    private bool StartsNamed()
+        => Peek().Kind == TokenKind.Identifier && !StorageBanks.TypeByBank.ContainsKey(Peek().Text)
+           && Peek().Text is not ("type" or "data" or "float") && Peek(1).Is(TokenKind.Punct, "[");
+
     private RawStorage ParseCell()
         => ParseRawOperand() as RawStorage ?? throw new OmsSyntaxException(Peek().Span, "expected a storage cell");
 
@@ -190,10 +262,10 @@ public sealed class Parser
         Token token = Peek();
         bool storage = StorageBanks.TypeByBank.ContainsKey(token.Text) && Peek(1).Is(TokenKind.Punct, "[");
         bool named = token.Kind == TokenKind.Identifier && !storage && Peek(1).Kind == TokenKind.Punct
-                     && (Peek(1).Text == "=" || CompoundOperators.Contains(Peek(1).Text));
+                     && (Peek(1).Text is "=" or "[" || CompoundOperators.Contains(Peek(1).Text));
         if (storage || named)
         {
-            Expr target = storage ? ParseStorageOrElement() : new OperandExpr(token.Span, new RawLabelRef(token.Span, Next().Text));
+            Expr target = storage ? ParseStorageOrElement() : ParseNamed();
             Token op = Next();
             if (op.Is(TokenKind.Punct, "="))
             {
@@ -350,6 +422,7 @@ public sealed class Parser
         if (token.Kind == TokenKind.Identifier && StorageBanks.TypeByBank.ContainsKey(token.Text)
             && Peek(1).Is(TokenKind.Punct, "["))
             return ParseStorageOrElement();
+        if (StartsNamed()) return ParseNamed();
         if (token.Is(TokenKind.Punct, "&") && Peek(1).Kind == TokenKind.Identifier)
         {
             Next();

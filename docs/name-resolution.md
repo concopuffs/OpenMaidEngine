@@ -70,10 +70,14 @@ a selected global cell and is unrelated to dispatch. See `docs/scjump-progressio
 
 ## #2 — The global-variable map (naming the data)
 
-**What it is.** The VM has one flat **global memory bank**; the bytecode addresses it by raw
-offset (`global-int 0x152616`, `global-int 0x52383`). Each offset is a specific piece of game
-state (a unit's HP, the current-unit index, a stat table). The map we want is
-`offset → (name, type, structure)`.
+**What it is.** The VM has typed **global banks** (integer, float, string and reference cells, each
+with its own address space); the bytecode addresses a cell by raw offset within its bank
+(`global-int 0x152616`, `global-int 0x52383`), so integer `0x0` and string `0x0` are different
+globals. Each offset is a specific piece of game state (a unit's HP, the current-unit index, a stat
+table). The map we want is `(bank, offset) → (name, type, structure)`; the registry's type implies the
+bank, and `globals_build.py` keys entries that way. Open Maid Script consumes the result as the
+generated `<profile>.globals` module, so decompiled source reads by these names
+(`docs/superpowers/specs/2026-10-06-open-maid-script-design.md` §3.2).
 
 **Why it's opaque.** No symbol table exists anywhere; meaning lives in how AGE.EXE and the
 scripts *use* each global. Nothing declares "0x152616 is the current unit."

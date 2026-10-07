@@ -2,6 +2,8 @@
 # Generated artifacts (build/globals.json, docs/global-reference.md) come from this file via
 # tools/globals_build.py --build. Do not edit those. Skeletons are appended by
 # tools/story_flags.py --bootstrap; enrich each entry as we investigate.
+# The type implies the bank: `string...` entries are string-bank cells (GS), everything else integer cells (G).
+# The two banks have separate address spaces, so G 0x0 and GS 0x0 are different globals.
 # See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
 [meta]
 note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
@@ -2677,17 +2679,6 @@ category = "story-flag"
 type = "int"
 value_domain = "one of {1, 2, 4, 6}"
 usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [1, 2, 4, 6]; writers=['DEBUGMAP.BIN', 'DEBUGMAP2.BIN', 'DEBUGMAP3.BIN', 'GAMESTART.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
-
-[[global]]
-address = "0x2052e"
-name = ""
-category = "story-flag"
-type = "int"
-value_domain = "one of {0, 1, 2, 3}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0, 1, 2, 3]; writers=['FIELD.BIN']."
 source = "auto-shape"
 confidence = "med"
 depends_on = []

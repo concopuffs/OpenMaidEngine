@@ -1,6 +1,7 @@
 # vm-map/globals-kamidori.toml -- CANONICAL living global-variable registry for Kamidori
 # (神採りアルケミーマイスター, SYS4433; hand-edited). Global addresses are per game, so this is
-# separate from Himegari's vm-map/globals.toml; the schema is identical.
+# separate from Himegari's vm-map/globals.toml; the schema is identical (the type implies the bank:
+# `string...` entries are string-bank cells, everything else integer cells).
 # Generated artifacts (build/games/kamidori/globals.json, docs/global-reference-kamidori.md) come from
 # this file via `tools/globals_build.py --profile kamidori --build`. Do not edit those.
 [meta]

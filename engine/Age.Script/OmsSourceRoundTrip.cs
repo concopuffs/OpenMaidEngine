@@ -3,6 +3,7 @@ using Age.Script.Abi;
 using Age.Script.Compile;
 using Age.Script.Ir;
 using Age.Script.Layout;
+using Age.Script.Modules;
 using Age.Script.Syntax;
 using Age.Script.Text;
 
@@ -32,7 +33,7 @@ public static class OmsSourceRoundTrip
 
     public static OmsSourceRoundTripReport Run(
         IEnumerable<(string Name, long PackedId, Func<byte[]> Read)> scripts,
-        OpcodeTable table, OpcodeContracts contracts, string level = RawLevel)
+        OpcodeTable table, OpcodeContracts contracts, string level = RawLevel, IReadOnlyList<GameModule>? modules = null)
     {
         if (level is not (RawLevel or CoreLevel)) throw new ArgumentException($"unknown level {level}", nameof(level));
         var intrinsics = new IntrinsicCatalog(table, contracts);
@@ -47,7 +48,7 @@ public static class OmsSourceRoundTrip
             {
                 byte[] original = read();
                 byte[] rebuilt = RoundTrip(original, name, table, contracts, intrinsics, level, out OmsDecompilation decompiled,
-                                           out int instructionCount);
+                                           out int instructionCount, modules);
                 instructions += instructionCount;
                 rawStatements += CountRawStatements(decompiled.Source);
                 folded += decompiled.FoldedInstructions;
@@ -88,16 +89,17 @@ public static class OmsSourceRoundTrip
     /// <summary>One script through a source level: decode, decompile, serialize the sidecar, parse, compile, encode.</summary>
     public static byte[] RoundTrip(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
                                    IntrinsicCatalog intrinsics, string level, out OmsDecompilation decompiled,
-                                   out int instructions)
+                                   out int instructions, IReadOnlyList<GameModule>? modules = null)
     {
         IrScript ir = IrDecoder.Decode(original, table, contracts, name);
         instructions = ir.Code.Count;
         decompiled = level == CoreLevel
-            ? OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics)
+            ? OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules)
             : OmsRawDecompiler.Decompile(ir, table.AbiId);
         OmsLayout layout = OmsLayout.FromJson(decompiled.Layout.ToJson());
         ScriptUnit unit = Parser.ParseScript(decompiled.Source, name);
-        IrScript compiled = OmsCompiler.Compile(unit, table.AbiId, table, layout, intrinsics);
+        IrScript compiled = OmsCompiler.Compile(unit, table.AbiId, table, layout, intrinsics,
+            name => modules?.FirstOrDefault(module => module.Name == name));
         return IrEncoder.Encode(compiled);
     }
 

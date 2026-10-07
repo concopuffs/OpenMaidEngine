@@ -115,6 +115,11 @@ A unit imports modules with `use`. Three kinds of module exist:
 - **Generated game modules** (`himegari.globals`, `himegari.scripts`, and their Kamidori counterparts): every
   named global from `vm-map/globals[-<profile>].toml`, with type, shape and columns, plus every catalog script.
   Also generated.
+  - `<profile>.globals` is read from the registry view's bank-keyed `cells` index. A `string…` type is a
+    string-bank cell; an open leading dimension (`int[][27]`) is an array of unknown length. Unnamed entries and
+    entries with an unknown type are left out.
+  - `<profile>.scripts` maps each catalog script's file stem to its packed id: `run RECOVER`, or
+    `run "$1$SC2600"` when the stem is not an identifier.
 - **Prelude and library modules** (`himegari.adv`, `kamidori.adv`, shared libraries): hand-written OMS shipped
   in the per-game base mod (roadmap §3.8).
 
@@ -181,8 +186,21 @@ local int pinned @ 0x1                     // explicit slot, used by decompiled 
 **Constants are substituted.** `const` values are substituted and never folded (§7.4), because the original
 compiler performs no constant folding.
 
+**Shapes and slots.**
+
+- Arrays may leave their leading dimension open: `global int grid[][27] @ 0xb8d86`.
+- A row table names its columns in a block: `global int unit_stats[100][14] @ 0x6f70 { hp: 0, max_fs: 13 }`.
+  Then `unit_stats[i].max_fs` is `lookup-array-2d` with stride 14 and column 13, and `unit_stats[i][2]` reaches
+  an unnamed column.
+- A local with `@` is pinned to its slot. A local without `@` takes the next slots above every local the source
+  names (including pinned ones), and the temporary pool starts above those.
+- Names resolve in the order: sub parameters, `const`, declared or imported names, then labels.
+
 **Decompiled names.** Decompiled code names unnamed storage `G[0x1234]`, `GS[0x315]`, `L[0x5]` and so on, and
-names registry globals by their registry names.
+names registry globals by their registry names. An element is named only when the declared shape lowers to the
+same lookup: `name[i]` for a one-dimensional array, `name[r][c]` or `name[r].column` when the lookup's immediate
+stride is the declared row width. Any other view of a named array keeps the raw base, such as
+`G[0x6f70:0x7][r][c]`.
 
 ## 6. Statements and expressions
 
@@ -596,6 +614,7 @@ contracts.
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
+| 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |
 

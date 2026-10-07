@@ -5,6 +5,7 @@ using Age.Script.Abi;
 using Age.Script.Compile;
 using Age.Script.Ir;
 using Age.Script.Layout;
+using Age.Script.Modules;
 using Age.Script.Syntax;
 using Age.Script.Text;
 using Xunit;
@@ -52,8 +53,23 @@ public class OmsCoreTests
 
     private static readonly IntrinsicCatalog Intrinsics = new(Table, Contracts);
 
+    /// <summary>A small generated-style module: a scalar, a 1-D array, a row table with named columns, an open
+    /// row table and a string cell sharing address 0x0 with an integer one (separate banks).</summary>
+    private static readonly GameModule Globals = new("test.globals",
+    [
+        new GlobalSymbol("flow_request", 0x3, 0x0, [], new Dictionary<string, int>()),
+        new GlobalSymbol("chapter_titles", 0x5, 0x0, [210], new Dictionary<string, int>()),
+        new GlobalSymbol("unit_level", 0x3, 0x6930, [445], new Dictionary<string, int>()),
+        new GlobalSymbol("unit_stats", 0x3, 0x6f70, [100, 14], new Dictionary<string, int> { ["hp"] = 0, ["max_fs"] = 13 }),
+        new GlobalSymbol("range_grid", 0x3, 0xb8d86, [0, 27], new Dictionary<string, int>()),
+    ]);
+
+    private static readonly GameModule Scripts = GameModule.Scripts("test",
+        [("RECOVER.BIN", 0x329d), ("$1$SC2600.BIN", 0x01000005)]);
+
     private static IrScript Compile(string body, OmsLayout? layout = null)
-        => OmsCompiler.Compile(Parser.ParseScript("script \"T.BIN\"\n" + body, "t.oms"), Abi, Table, layout, Intrinsics);
+        => OmsCompiler.Compile(Parser.ParseScript("script \"T.BIN\"\n" + body, "t.oms"), Abi, Table, layout, Intrinsics,
+            module => module == Globals.Name ? Globals : module == Scripts.Name ? Scripts : null);
 
     private static string Shape(IrScript script)
         => string.Join(" ", script.Code.Select(i => i.Opcode.ToString("x") + "("
@@ -64,10 +80,10 @@ public class OmsCoreTests
                 _ => o.Value == None ? "-1" : $"{o.Type:x}:{o.Value:x}",
             })) + ")"));
 
-    private static (byte[] First, byte[] Second, OmsDecompilation Decompiled) RoundTrip(byte[] first)
+    private static (byte[] First, byte[] Second, OmsDecompilation Decompiled) RoundTrip(byte[] first, GameModule? globals = null)
     {
         byte[] second = OmsSourceRoundTrip.RoundTrip(first, "T.BIN", Table, Contracts, Intrinsics,
-            OmsSourceRoundTrip.CoreLevel, out OmsDecompilation decompiled, out _);
+            OmsSourceRoundTrip.CoreLevel, out OmsDecompilation decompiled, out _, globals == null ? null : [globals]);
         return (first, second, decompiled);
     }
 
@@ -414,6 +430,95 @@ public class OmsCoreTests
         Assert.Contains(expected, error.Message);
     }
 
+    [Fact]
+    public void DeclarationsNameCellsArraysAndRowTables()
+    {
+        IrScript script = Compile("""
+            use test.globals
+            const MAX = 99
+            global int counter @ 0x500
+            global str label @ 0x12
+            global int grid[][8] @ 0x900
+            local int pinned @ 0x3
+            local int i
+            local int buf[2]
+            i = MAX
+            unit_level[i] = counter
+            unit_stats[i].max_fs += 1
+            counter = unit_stats[i][2] + grid[i][pinned]
+            buf[1] = flow_request
+            label = chapter_titles[i]
+            exit
+            """);
+        // pinned is L[3], so i takes L[4] and buf L[5..6]; the temporary pool starts at L[7].
+        Assert.Equal("55(9:4,0:63) "
+                     + "61(c:0,3:6930,9:4) 55(c:0,3:500) "
+                     + "12c(c:0,3:6f70,9:4,0:e,0:d) 12c(c:1,3:6f70,9:4,0:e,0:d) 50(c:0,c:1,0:1) "
+                     + "12c(c:0,3:6f70,9:4,0:e,0:2) 12c(c:1,3:900,9:4,0:8,9:3) 50(3:500,c:0,c:1) "
+                     + "61(c:0,9:5,0:1) 55(c:0,3:0) "
+                     + "61(e:0,5:0,9:4) 55(5:12,e:0) 2()", Shape(script));
+    }
+
+    [Fact]
+    public void DecompiledRegistryCellsPrintByNameAndRecompileIdentically()
+    {
+        IrScript compiled = Compile("""
+            use test.globals
+            flow_request = unit_level[L[1]] + unit_stats[L[1]].max_fs + unit_stats[L[2]][0x3]
+            GS[0x5] = chapter_titles[L[1]]
+            G[0x6935] = range_grid[L[1]][L[2]] + G[0x6f70:0x7][L[1]][L[2]] + G[0x6930:0x2][L[1]][L[2]]
+            exit
+            """);
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled), Globals);
+        Assert.Equal(first, second);
+        string source = decompiled.Source;
+        Assert.Contains("\nuse test.globals\n", source);
+        Assert.Contains("flow_request = unit_level[L[0x1]] + unit_stats[L[0x1]].max_fs + unit_stats[L[0x2]][0x3]", source);
+        Assert.Contains("GS[0x5] = chapter_titles[L[0x1]]", source);
+        // Shapes the declaration cannot express stay raw: another row width, or a 2-D view of a 1-D array.
+        Assert.Contains("G[0x6935] = range_grid[L[0x1]][L[0x2]] + G[0x6f70:0x7][L[0x1]][L[0x2]] + G[0x6930:0x2][L[0x1]][L[0x2]]", source);
+    }
+
+    [Fact]
+    public void ScriptsRunByCatalogName()
+    {
+        IrScript compiled = Compile("""
+            use test.scripts
+            run RECOVER
+            run "$1$SC2600"
+            run 0x7
+            exit
+            """);
+        Assert.Equal("3(0:329d) 3(0:1000005) 3(0:7) 2()", Shape(compiled));
+        byte[] first = IrEncoder.Encode(compiled);
+        byte[] second = OmsSourceRoundTrip.RoundTrip(first, "T.BIN", Table, Contracts, Intrinsics,
+            OmsSourceRoundTrip.CoreLevel, out OmsDecompilation decompiled, out _, [Scripts]);
+        Assert.Equal(first, second);
+        Assert.Contains("use test.scripts\n", decompiled.Source);
+        Assert.Contains("    run RECOVER\n    run \"$1$SC2600\"\n    run 0x7\n", decompiled.Source);
+        var error = Assert.Throws<OmsCompileException>(() => Compile("use test.scripts\nrun \"NOPE\"\n"));
+        Assert.Contains("unknown script \"NOPE\"", error.Message);
+    }
+
+    [Theory]
+    [InlineData("use nowhere.globals\nexit\n", "unknown module 'nowhere.globals'")]
+    [InlineData("L[1] = missing[2]\n", "'missing' is not a declared array")]
+    [InlineData("use test.globals\nL[1] = unit_level[1][2]\n", "'unit_level' is declared with 1 dimensions, not 2")]
+    [InlineData("use test.globals\nL[1] = unit_stats[1].mp\n", "'unit_stats' has no column 'mp'")]
+    [InlineData("const A = 1\nconst A = 2\n", "'A' is declared twice")]
+    public void DeclarationErrorsNameTheProblem(string body, string expected)
+    {
+        var error = Assert.Throws<OmsCompileException>(() => Compile(body));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void AGlobalNeedsItsCell()
+    {
+        var error = Assert.Throws<OmsSyntaxException>(() => Compile("global int x\n"));
+        Assert.Contains("a global needs its cell", error.Message);
+    }
+
     [Theory]
     [InlineData("lookup_array(LP[1], G[1], G[2])\n", "is written; mark it 'out'")]
     [InlineData("show_text(out L[1], \"x\")\n", "is not written; remove 'out'")]
@@ -455,11 +560,15 @@ public class OmsCoreTests
         Assert.True(File.Exists(sys4Ini), $"install not found at {gameRoot}");
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
         var store = new Sys4AssetStore(catalog, gameRoot, gameRoot);
+        string profile = abiId == "SYS4422" ? "himegari" : "kamidori";
+        Assert.True(File.Exists(Paths.GlobalsJson(profile)), $"run globals_build.py --build for {profile}");
         OmsSourceRoundTripReport report = OmsSourceRoundTrip.Run(
             catalog.EnumerateScripts().Select(packed =>
                 (packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => store.ReadAll(packed.Asset)))),
             OpcodeTableJson.Load(Paths.OpcodesJson, abiId), OpcodeContracts.Load(Paths.OpcodesJson),
-            OmsSourceRoundTrip.CoreLevel);
+            OmsSourceRoundTrip.CoreLevel,
+            [GameModule.LoadGlobals(profile, Paths.GlobalsJson(profile)),
+             GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId)))]);
         Assert.Empty(report.Failures);
         Assert.Equal(report.Scripts, report.Identical);
         Assert.Equal(0, report.RawStatements);

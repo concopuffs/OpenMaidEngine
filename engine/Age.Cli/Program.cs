@@ -55,6 +55,20 @@ if (args.Contains("oms-residue"))
     return 0;
 }
 
+// The profile's generated OMS modules: <profile>.globals (globals_build.py --build; absent until generated) and
+// <profile>.scripts (the mounted catalog). --no-names decompiles without them.
+List<Age.Script.Modules.GameModule> OmsModules()
+{
+    var omsModules = new List<Age.Script.Modules.GameModule>();
+    if (args.Contains("--no-names")) return omsModules;
+    string profileId = selectedProfile.Profile.Id;
+    if (File.Exists(Paths.GlobalsJson(profileId)))
+        omsModules.Add(Age.Script.Modules.GameModule.LoadGlobals(profileId, Paths.GlobalsJson(profileId)));
+    omsModules.Add(Age.Script.Modules.GameModule.Scripts(profileId,
+        catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId))));
+    return omsModules;
+}
+
 if (args.Contains("oms-temps"))
 {
     OmsInspect.TemporaryResidue(
@@ -72,7 +86,7 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
     Age.Script.OmsSourceRoundTripReport source = Age.Script.OmsSourceRoundTrip.Run(
         catalog.EnumerateScripts().Select(packed => (
             packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
-        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), sourceLevel);
+        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), sourceLevel, OmsModules());
     if (OptionValue("--output") is { } sourceOutput)
     {
         string? directory = Path.GetDirectoryName(Path.GetFullPath(sourceOutput));
@@ -113,12 +127,13 @@ if (args.Contains("oms-decompile"))
     // Print one catalog script as OMS source (and its sidecar when non-empty), or write every script to a directory.
     var omsContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
     var omsIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, omsContracts);
+    var omsModules = OmsModules();
     Age.Script.Text.OmsDecompilation DecompileEntry(PackedAssetEntry packed)
     {
         var decoded = Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(packed.Asset), table, omsContracts, packed.Asset.Name);
         return OptionValue("--level") is "raw"
             ? Age.Script.Text.OmsRawDecompiler.Decompile(decoded, table.AbiId)
-            : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics);
+            : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics, modules: omsModules);
     }
     void WriteDecompilation(Age.Script.Text.OmsDecompilation decompiled, string path)
     {

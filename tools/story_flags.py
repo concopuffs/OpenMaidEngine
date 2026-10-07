@@ -150,7 +150,8 @@ def skeleton_toml(ev: dict) -> str:
 
 def bootstrap(cands: dict[int, dict], toml_path=None) -> int:
     toml_path = Path(toml_path) if toml_path else paths.CONTEXT.globals_toml
-    present = set(_gb.load_toml(toml_path)[0]) if toml_path.exists() else set()
+    present = ({addr for bank, addr in _gb.load_toml(toml_path)[0] if bank == "G"}
+               if toml_path.exists() else set())
     # Seed only high-signal candidates worth hand-curating: story-flag / choice-output at med
     # confidence that are NOT near-universal ADV-chrome (those 297-scene globals are engine
     # scratch, not story state). The low-confidence long tail stays in the candidates JSON.
