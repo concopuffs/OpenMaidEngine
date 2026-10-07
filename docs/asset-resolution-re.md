@@ -567,7 +567,11 @@ through `0x01xxxxxx`; direct base-name lookup deliberately does not see append r
 
 ### Deliberate non-goals
 
-- Writing/repacking ALF or AAI; loose overrides already provide the native mod/translation workflow.
+- Repacking the installed ALF or AAI; loose overrides already provide the native mod/translation workflow. New
+  append catalogs are a different matter: `Sys4AppendCatalogWriter` writes a fresh `APPENDnn.AAI` with an LZSS
+  directory, the expanded size repeated at `0x10c`/`0x110` as in APPEND01, and the base title. Its paired
+  `APPENDnn.ALF` concatenates the files from offset 0. Native AGE mounts it beside APPEND01 and runs its record 0
+  at INIT2 (OMS gate 6).
 - AGF/MPEG encoding. Runtime MPEG decode and synchronized movie audio now live behind the portable FFmpeg
   boundary documented in `docs/platform-portability.md`; authoring or repacking those streams remains out of scope.
 - A generalized multi-mod dependency manager. Start with native game-root loose overrides; configurable

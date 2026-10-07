@@ -1,0 +1,7 @@
+oms 1
+// Gate 6 (spec §12): record 1 of the generated append catalog, a new script the edited SC0000 calls by packed id
+// (run 0x2000001). It leaves a message in a second unused string cell.
+script "$2$OMSHELLO.BIN"
+
+    GS[0x1401] = set_string("【OMS】SC0000から追加カタログの新しいスクリプトを呼び出した。")
+    exit

@@ -104,6 +104,52 @@ if (args.Contains("oms-compile"))
     }
 }
 
+if (args.Contains("oms-append"))
+{
+    // Spec §9.3: compile OMS scripts into a new S4AC append catalog for the selected profile. Each --script is one
+    // record, in order; record 0 is the script native op 0x143 runs at INIT2. A script's name is its `script "..."`
+    // name, conventionally `$<selector>$NAME.BIN`; record n is packed id (selector << 24) | n.
+    int selector = int.TryParse(OptionValue("--selector"), out int chosen) ? chosen
+        : throw new ArgumentException("--selector N (1..127, not a mounted selector) is required");
+    if (catalog.AppendPacks.ContainsKey(selector))
+        throw new ArgumentException($"selector {selector} is already mounted by the install");
+    string outputDirectory = OptionValue("--output-dir") ?? throw new ArgumentException("--output-dir DIR is required");
+    var sources = args.Select((arg, k) => (arg, k)).Where(pair => pair.arg == "--script" && pair.k + 1 < args.Length)
+        .Select(pair => args[pair.k + 1]).ToList();
+    if (sources.Count == 0) throw new ArgumentException("at least one --script FILE.oms is required");
+    var appendModules = OmsModules();
+    var appendIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson));
+    var records = new List<Sys4AppendCatalogWriter.File>();
+    try
+    {
+        foreach (string source in sources)
+        {
+            var warnings = new List<Age.Script.Compile.OmsWarning>();
+            var unit = Age.Script.Syntax.Parser.ParseScript(File.ReadAllText(source), source);
+            var compiled = Age.Script.Compile.OmsCompiler.Compile(unit, table.AbiId, table, null, appendIntrinsics,
+                name => appendModules.FirstOrDefault(module => module.Name == name), warnings);
+            foreach (var warning in warnings) Console.Error.WriteLine(warning);
+            records.Add(new Sys4AppendCatalogWriter.File(unit.Name, Age.Script.Ir.IrEncoder.Encode(compiled)));
+        }
+    }
+    catch (Exception error) when (error is Age.Script.Syntax.OmsSyntaxException or Age.Script.Compile.OmsCompileException
+                                      or InvalidDataException)
+    {
+        Console.Error.WriteLine($"error: {error.Message}");
+        return 1;
+    }
+    string archiveName = $"APPEND{selector:00}.ALF";
+    string appendMagic = ("S4AC" + catalog.Magic[4..]).PadRight(8);
+    var (catalogBytes, archiveBytes) = Sys4AppendCatalogWriter.Write(appendMagic, catalog.Title, selector, archiveName, records);
+    Directory.CreateDirectory(outputDirectory);
+    File.WriteAllBytes(Path.Combine(outputDirectory, $"APPEND{selector:00}.AAI"), catalogBytes);
+    File.WriteAllBytes(Path.Combine(outputDirectory, archiveName), archiveBytes);
+    for (int k = 0; k < records.Count; k++)
+        Console.WriteLine($"  0x{(selector << 24) | k:x8} {records[k].Name} ({records[k].Bytes.Length} bytes)");
+    Console.WriteLine($"oms-append: selector {selector}, {records.Count} scripts -> {outputDirectory}");
+    return 0;
+}
+
 if (args.Contains("oms-rebuild"))
 {
     // Open Maid Script gate 3: canonical rebuild (no sidecar) must be VM-trace-equivalent on the scenes.
@@ -567,7 +613,7 @@ if (args[0] == "init-image")
 
 if (args[0] == "play")
 {
-    // play [--boot] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global
+    // play [--boot] [--show N] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global
     // state across them (optional up-front seeds). --boot first runs the data-table *INIT scripts so scenes
     // see the real skill/item/unit/etc. state. The state substrate for cross-scene flow; headless.
     // The *INIT boot set — all run clean (halt: exit) and populate the game's data tables into globals.
@@ -604,6 +650,9 @@ if (args[0] == "play")
         var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
+        // --show N prints each scene's first N emitted lines.
+        foreach (var line in r.Emitted.Take(int.TryParse(StateArg("--show"), out int shown) ? shown : 0))
+            Console.WriteLine($"      [{line.Script} 0x{line.Offset:x}] {line.Text}");
     }
     trace.Report();
     Console.WriteLine($"total: {totalLines} lines across {scenes.Count} scene(s); {session.Globals.Count} globals carried");

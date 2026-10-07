@@ -500,9 +500,14 @@ Registry globals resolve to fixed addresses. Linker-allocated globals:
 
 ### 9.3 New scripts under `native`
 
-The linker emits a selector-scoped append catalog (`S4AC`) naming the mod's scripts, and the scripts ship as loose
-files beside it. Op `0x143` runs each mounted catalog's record 0 at INIT2, which gives a native mod an entry point.
-A synthetic catalog has not yet been tested under native AGE (§12, gate 6).
+The linker emits a selector-scoped append catalog (`S4AC`) naming the mod's scripts. Op `0x143` runs each mounted
+catalog's record 0 at INIT2, which gives a native mod an entry point. Other code reaches record `n` by packed id
+`(selector << 24) | n`.
+
+`Age.Cli oms-append` compiles the scripts and writes `APPENDnn.AAI` with its paired `APPENDnn.ALF`, which holds
+the script bytes concatenated, as in the installed APPEND01. It takes the base catalog's title and magic family and
+refuses a selector the install already mounts. Native AGE mounted such a catalog, ran its record 0 at boot and ran
+its record 1 by packed id (gate 6).
 
 ### 9.4 Extension opcodes (`extended` only)
 
@@ -664,7 +669,7 @@ port's VM tests and native traces.
 | Allocator state carried across statements | the gate 2 temporary residue (§16) | the labelling rule and the per-script reference order are recorded (format notes); the remaining overrides show references held through `if` bodies and LP0/LP1 order flips, to be modelled if the residue matters |
 | Library placement policy (where shared library helpers sit physically) | resolved 2026-10-07 | the compiler links library subs after the script, breadth first in order of first reference, `@guard` subs behind an `exit` (§6.3); subs a script keeps elsewhere (Himegari's scene-header hotspot handlers) are placed by the sidecar |
 | Free global cells inside the saved prefix | native `saved global` | array extents from registry/INIT data plus runtime write captures; base mod publishes free ranges |
-| Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
+| Save behavior with generated append catalogs | §9.3 | native acceptance itself passed in gate 6; saving and loading inside a scene a generated catalog supplies is untested |
 | Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
 | Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
 | Code-address immediates outside code-target positions | resolved 2026-10-07 | the decoder relabels immediates that meet a registry `code-address` value (§9.5); the scene loop's `G[0x6c3] = 0x45e` decompiles as `&label_45e`, so edits and sidecar-free rebuilds that move code keep it right |
@@ -709,6 +714,7 @@ contracts.
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
 | 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.7M / 38.1M steps) with the same text, halts and final state on a simulated clock. Scenes run with the profile's VM compatibility facts, as the runtime runs them, so the ADV scene-entry coroutine (op 0x140) executes. `--level idiomatic` checks sidecar-free idiomatic rebuilds the same way, comparing positions by relocation key; it passes on all 297 / 279 scenes. A negative control (decoder code-value pass disabled) diverges at SC0000's labeled yield |
 | 4. Fixed point | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core --fixed-point`: decompiling each canonical rebuild and recompiling it is byte-identical for 520/520 and 732/732; 506 / 713 of them need no sidecar at all, and the rest need only temporary pins (named locals interleaved with the original's temporaries); workspace tests `OmsCoreTests.Installed*CanonicalRebuildIsAFixedPoint` |
+| 6. Native AGE (Himegari) | **passed 2026-10-07** | In a scratch copy built by `tools/native_scratch.py` (archives hard-linked, every other file copied; the pristine install verified unchanged afterwards), native `AGE.EXE` ran: SC0000 decompiled to idiomatic source, given three new pages and compiled without its sidecar, as a loose-file override; and a generated `APPEND02` catalog (`oms-append`, selector 2) whose record 0 ran at boot through op 0x143 and whose record 1 the edited scene called by packed id. The three new pages showed with the scene's CG and music, and play continued normally through the original opening to the first MPEG movie. The port shows the same lines (`Age.Cli play INIT2.BIN SC0000.BIN --show N` against the scratch copy). Sources: `oms/examples/himegari-gate6/` |
 | 5. Idiomatic level (Himegari prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 520/520 byte-identical with `oms/himegari/adv.oms` and 0 abandoned lifts. 9,256 library subs are recognized (the 32 scene-library subs), and 24,297 of 26,667 ADV pages lift to dialogue lines. Lift coverage is 998,654 instructions, **65.6%** of the corpus. Source shrinks from 44.7 MB (core) to 18.8 MB. With `--fixed-point`, idiomatic rebuilds are still 520/520 identical and 506 need no sidecar. The 307 scene sidecars that keep the header handlers' place hold `library` entries. Workspace tests `OmsCoreTests.InstalledHimegari*Idiomatic*`. Kamidori has no prelude yet |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |

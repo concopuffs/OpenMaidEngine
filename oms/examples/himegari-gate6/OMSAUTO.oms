@@ -1,0 +1,7 @@
+oms 1
+// Gate 6 (spec §12): record 0 of a generated append catalog. Native op 0x143 runs it at INIT2, during boot.
+// It leaves a message in a string cell no shipped script uses; the edited SC0000 shows it.
+script "$2$OMSAUTO.BIN"
+
+    GS[0x1400] = set_string("【OMS】起動時、追加カタログの自動実行スクリプトが動いた。")
+    exit

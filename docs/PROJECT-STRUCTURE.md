@@ -92,6 +92,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── vm0.py                              headless Python VM (Phase A0); `--test` = RECOVER unit test
     │   ├── extract_phase2.py                   batch: disasm + text + data extraction
     │   ├── extract_init.py (+ init_kamidori*.py), init_image.py, extract_message_table.py, global_map.py …
+    │   ├── native_scratch.py                  gate-6 scratch install (hard-linked archives) + pristine check
     │   │                                       *INIT / ID-dispatched message parsers (Kamidori
     │   │                                       specializations: init_kamidori_<domain>.py),
     │   │                                       global-var map builder
@@ -114,7 +115,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── oms/<profile>/*.oms                   hand-written Open Maid Script source modules (preludes): `module
     │   │                                       <profile>.<name>` units of declarations, templates and library
     │   │                                       subs that the compiler links and the idiomatic decompiler lifts
-    │   └── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
+    │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
+    │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/)
     │
     ├── docs/                                 all documentation
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
