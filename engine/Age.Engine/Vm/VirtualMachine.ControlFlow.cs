@@ -12,7 +12,16 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "jmp": return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
-            case "call": _cur.CallStack.Add(pc + 1); return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
+            case "call":
+            {
+                // A direct call names its target; `call *v` calls the code offset the variable holds. A value that is
+                // no instruction's offset calls nothing, and pushes no return address.
+                long target = a[0].Type == T_IMM ? a[0].Value : Read(a[0]);
+                if (target is < 0 or > int.MaxValue || !_cur.Script.IndexByOffset.TryGetValue((int)target, out int callee))
+                    return pc + 1;
+                _cur.CallStack.Add(pc + 1);
+                return callee;
+            }
             case "ret":
                 if (_cur.CallStack.Count > 0) { int r = _cur.CallStack[^1]; _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1); return r; }
                 return FRAME_RETURN;    // empty intra-call stack => return from the script frame
@@ -71,17 +80,18 @@ public sealed partial class VirtualMachine
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc));
                     return pc + 1;
                 }
-                if (!TryGetAdvYieldTerminal(pc, a[0], out long terminal))
+                if (!TryGetAdvYieldTerminal(pc, a[0], out long terminal, out string? problem))
                 {
-                    HaltReason ??= $"coroutine-yield-pattern@0x{ins.Offset:x}";
+                    HaltReason ??= problem ?? $"coroutine-yield-pattern@0x{ins.Offset:x}";
                     return HALT;
                 }
 
                 int visits = _cur.CoroutineYieldVisits.GetValueOrDefault(pc);
                 _cur.CoroutineYieldVisits[pc] = visits + 1;
-                // First visit must enter setup even if out retained this same terminal from a prior scene.
-                // Every later visit returns the script-encoded terminal and exits the bounded loop.
-                Write(a[0], visits == 0 ? (terminal == 0 ? 1 : 0) : terminal);
+                // First visit must enter setup even if out retained this same terminal from a prior scene: it returns
+                // -1, which no instruction has, so the setup's `call *out` calls nothing. Every later visit returns
+                // the scene loop head and exits the bounded loop.
+                Write(a[0], visits == 0 ? -1 : terminal);
                 return pc + 1;
             }
             default:

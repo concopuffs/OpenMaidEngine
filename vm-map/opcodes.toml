@@ -1727,7 +1727,7 @@ confirm_by = ""
 
 [[opcode.semantics.args]]
 i = 1
-role = "local code target (word offset within current script)"
+role = "local code target (word offset within current script); a variable operand is read for the offset (`call *G[0x6be]` in every ADV scene's setup)"
 observed_types = ["imm", "g-int"]
 access = ["read"]
 
@@ -3293,7 +3293,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "coroutine-label-yield"
 category = "control"
-summary = "(out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls AGERC host command 8 through g_pfnAgercHostCallback(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal; do not emulate the service dialog. See engine-re.md §Scene-coroutine framework."
+summary = "(out)(name_str)(sub_str)(in) — scene-coroutine LOOP ITERATOR / labeled yield. Handler copies name/sub strings + the int operand and calls AGERC host command 8 through g_pfnAgercHostCallback(8, ctx[0x54fe8], &{name,sub,in}); writes the returned PC-like value to operand 1. In SC0000 label_462 'ループ開始' (@0x46d): `out=G[0x6be]=LABEL('J',G[0x6be])`; loop runs the intro-setup body (incl. call label_125bd = slot-table fill G[0x3239..0x324e]=4..11) and jmps back until out==G[0x6c3] (a per-scene exit-PC immediate) → mov aba5c 0 → content. The gate G[0xaba5c]==1 that opens this loop is NATIVE scene-entry state (no script sets it to 1). PORT = HOST-MODEL IMPLEMENTED: synthesize the ADV scene-entry gate, run the LABEL/J setup body once, then return the structurally discovered per-scene terminal (the scene loop head: the nearest call followed by exit before the yield; the script's terminal immediate must name it, or the VM halts with coroutine-yield-terminal); do not emulate the service dialog. See engine-re.md §Scene-coroutine framework."
 noop_headless = false
 source = "investigation"
 confidence = "med"
@@ -3302,9 +3302,10 @@ evidence = "Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+ty
 
 [[opcode.semantics.args]]
 i = 1
-role = "out: returned label/resume PC (SC0000 G[0x6be])"
+role = "out: returned label/resume PC (SC0000 G[0x6be]); every ADV scene compares it with an immediate that is its loop head's code offset (144 Himegari, 269 Kamidori), so the decoder relabels that immediate"
 observed_types = ["g-int"]
 access = ["write"]
+value = "code-address"
 
 [[opcode.semantics.args]]
 i = 2

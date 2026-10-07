@@ -11,11 +11,12 @@ using Age.Script.Syntax;
 using Age.Script.Text;
 
 /// <summary>
-/// Open Maid Script gate 3, canonical rebuild (spec §12): every catalog script is decompiled to core source and
-/// compiled back without its sidecar, then each scene runs on the original and on the rebuilt catalog from the same
-/// baseline. Instructions keep their code offsets under a canonical rebuild (only temporaries, data order and header
-/// counts move), so the executed (depth, opcode, pc) sequences, frame names, emitted text, halt reasons and final
-/// session states must all match.
+/// Open Maid Script gate 3, canonical rebuild (spec §12): every catalog script is decompiled and compiled back without
+/// its sidecar, then each scene runs on the original and on the rebuilt catalog from the same baseline. The executed
+/// (depth, opcode, position) sequences, frame names, emitted text, halt reasons and final session states must match.
+/// At the core level instructions keep their code offsets (only temporaries, data order and header counts move). At
+/// the idiomatic level linking moves library subs, so positions compare by relocation key, and a global that holds a
+/// code position may differ in value when both values name the same instruction.
 /// </summary>
 internal static class OmsRebuildCheck
 {
@@ -86,17 +87,29 @@ internal static class OmsRebuildCheck
 
     public static int Run(Sys4AssetCatalog catalog, IAssetStore store, OpcodeTable table, OpcodeContracts contracts,
                           IReadOnlyList<GameModule> modules, IReadOnlyList<string> scenes,
-                          IReadOnlyList<string> bootScripts, VmOptions options, int limit)
+                          IReadOnlyList<string> bootScripts, VmOptions options, int limit,
+                          VmCompatibilityContext compatibility, bool idiomatic = false)
     {
         var intrinsics = new IntrinsicCatalog(table, contracts);
+        OmsIdioms? idioms = idiomatic ? OmsIdioms.Build(modules, table.AbiId, intrinsics) : null;
+        var relocations = new Dictionary<string, Age.Script.OmsRelocation>(StringComparer.OrdinalIgnoreCase);
         int rebuilt = 0, unchanged = 0;
         var failures = new List<string>();
         byte[] Rebuild(AssetEntry entry, byte[] original)
         {
             try
             {
-                byte[] bytes = Age.Script.OmsSourceRoundTrip.CanonicalRebuild(original, entry.Name, table, contracts,
-                    intrinsics, modules);
+                byte[] bytes;
+                if (idioms != null)
+                {
+                    Age.Script.OmsRelocation relocation = Age.Script.OmsSourceRoundTrip.IdiomaticRebuild(original, entry.Name,
+                        table, contracts, intrinsics, modules, idioms);
+                    relocations[entry.Name] = relocation;
+                    bytes = relocation.Rebuilt;
+                }
+                else
+                    bytes = Age.Script.OmsSourceRoundTrip.CanonicalRebuild(original, entry.Name, table, contracts,
+                        intrinsics, modules);
                 if (bytes.AsSpan().SequenceEqual(original)) unchanged++; else rebuilt++;
                 return bytes;
             }
@@ -116,12 +129,14 @@ internal static class OmsRebuildCheck
         {
             var session = new GameSession();
             foreach (string name in bootScripts)
-                session.RunScene(provider.RequireByName(name), table, new SimulatedClockHost(), options, provider);
+                session.RunScene(provider.RequireByName(name), table, new SimulatedClockHost(), options, provider,
+                    compatibility: compatibility);
             return session.ToJson();
         }
         string originalBaseline = Baseline(originalProvider), rebuiltBaseline = Baseline(rebuiltProvider);
         var divergent = new List<string>();
-        if (originalBaseline != rebuiltBaseline) divergent.Add("boot baseline: final states differ");
+        if (StateDifference(originalBaseline, rebuiltBaseline, null) is { } bootDifference)
+            divergent.Add($"boot baseline: {bootDifference}");
 
         long steps = 0;
         int lines = 0;
@@ -132,20 +147,20 @@ internal static class OmsRebuildCheck
                 var session = GameSession.FromJson(baseline);
                 var recorder = new StepRecorder();
                 SceneResult result = session.RunScene(provider.RequireByName(scene), table, new SimulatedClockHost(), options,
-                    provider, recorder);
+                    provider, recorder, compatibility);
                 return (recorder, result, session.ToJson());
             }
             var a = Play(originalProvider, originalBaseline);
             var b = Play(rebuiltProvider, rebuiltBaseline);
             steps += a.Trace.Events.Count;
             lines += a.Result.Emitted.Count;
-            string? why = Compare(a.Trace, b.Trace)
+            string? why = Compare(a.Trace, b.Trace, relocations)
                 ?? (a.Result.Halt != b.Result.Halt ? $"halt {a.Result.Halt} vs {b.Result.Halt}" : null)
                 // Emitted lines carry their string's data offset, which a canonical data layout moves.
                 ?? (!a.Result.Emitted.Select(line => (line.Text, line.Script))
                         .SequenceEqual(b.Result.Emitted.Select(line => (line.Text, line.Script)))
                     ? "emitted text differs" : null)
-                ?? (a.State != b.State ? "final state differs" : null);
+                ?? StateDifference(a.State, b.State, relocations.GetValueOrDefault(scene));
             if (why != null) divergent.Add($"{scene}: {why}");
         }
         Console.WriteLine($"oms-rebuild: scripts rebuilt={rebuilt} byte-identical={unchanged} failed={failures.Count} "
@@ -156,13 +171,45 @@ internal static class OmsRebuildCheck
         return failures.Count == 0 && divergent.Count == 0 ? 0 : 1;
     }
 
-    private static string? Compare(StepRecorder a, StepRecorder b)
+    private static string? Compare(StepRecorder a, StepRecorder b, Dictionary<string, Age.Script.OmsRelocation> relocations)
     {
+        // A step's position compares by relocation key when its script was relocated, by pc otherwise.
+        (long Step, long Position) Key(StepRecorder recorder, int k, bool rebuilt)
+        {
+            long value = recorder.Events[k];
+            if (value < 0 || !relocations.TryGetValue(recorder.Scripts[k], out Age.Script.OmsRelocation? relocation))
+                return (value, 0);
+            long[] keys = rebuilt ? relocation.RebuiltKeys : relocation.OriginalKeys;
+            int pc = (int)(value & 0xfffffff);
+            return pc < keys.Length ? (value & ~0xfffffffL, keys[pc]) : (value, -1);
+        }
         int limit = Math.Min(a.Events.Count, b.Events.Count);
         for (int k = 0; k < limit; k++)
-            if (a.Events[k] != b.Events[k])
+            if (a.Events[k] != b.Events[k] && (a.Scripts[k] != b.Scripts[k] || Key(a, k, false) != Key(b, k, true)))
                 return $"trace diverges at event {k} in {a.Scripts[k]}: {Describe(a, a.Events[k])} vs {Describe(b, b.Events[k])}";
         return a.Events.Count != b.Events.Count ? $"trace lengths {a.Events.Count} vs {b.Events.Count}" : null;
+    }
+
+    private sealed record StateSnapshot(Dictionary<string, long> Globals, Dictionary<string, string> Strings);
+
+    /// <summary>Why two final session states differ, or null. A global holding a code position of the relocated scene
+    /// may differ in value when both values name the same instruction.</summary>
+    private static string? StateDifference(string original, string rebuilt, Age.Script.OmsRelocation? relocation)
+    {
+        if (original == rebuilt) return null;
+        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        StateSnapshot? a = System.Text.Json.JsonSerializer.Deserialize<StateSnapshot>(original, options);
+        StateSnapshot? b = System.Text.Json.JsonSerializer.Deserialize<StateSnapshot>(rebuilt, options);
+        if (a == null || b == null) return "final state differs";
+        if (!a.Strings.OrderBy(pair => pair.Key).SequenceEqual(b.Strings.OrderBy(pair => pair.Key)))
+            return "final string state differs";
+        foreach (string cell in a.Globals.Keys.Union(b.Globals.Keys))
+        {
+            long x = a.Globals.GetValueOrDefault(cell), y = b.Globals.GetValueOrDefault(cell);
+            if (x != y && relocation?.SamePosition(x, y) != true)
+                return $"final state differs at global {cell}: {x} vs {y}";
+        }
+        return null;
     }
 
     private static string Describe(StepRecorder recorder, long value)

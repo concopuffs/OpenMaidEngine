@@ -750,6 +750,13 @@ its script's own temporary pool (`L[0x0]` in 309 scenes, `L[0x13e3d]` in `FIELD`
 `oms/himegari/adv.oms` declares both groups. The compiler links library subs in this order and models the guard as
 `@guard sub` (spec §6.3).
 
+**Code positions held as numbers.** Besides code-target operands, one idiom stores a code offset as an ordinary
+immediate. Every ADV scene's loop compares op 0x140's returned PC with a constant:
+`mov G[0x6c3], 0x45e; eq t, G[0x6c3], G[0x6be]`. The constant is always the offset of the scene loop head, a `call`
+followed by `exit` (144 / 269 scenes, Himegari / Kamidori). Op 0x140's output is the only operand the registry marks
+as a code address (`value = "code-address"`), and these comparisons are every place its value meets an immediate. The
+decoder turns such immediates into labels (`Ir/IrCodeValues.cs`), so they relocate when code moves.
+
 **Constants are never folded.**
 
 - **No negative immediates.** No negative number is ever encoded as an immediate; the only `0xffffffff`

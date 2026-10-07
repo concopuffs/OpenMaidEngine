@@ -35,6 +35,9 @@ The design follows the four principles decided in roadmap §3.3.
   - Every construct has one canonical lowering, chosen to match Eushully's own compiler.
   - Library templates compiled with placeholder parameters become the decompiler's patterns, so authoring a
     construct also teaches the decompiler to recover it.
+  - The source carries all meaning. The layout sidecar only restores the original bytes and original site
+    identity. Compiling without it must behave identically, at every level. A layout-dependent value that the
+    decompiler prints as a plain number is a decompiler bug (§9.5).
 - **P4 — Fragments are first-class.** Compiling against an existing script's environment is a core mode, not an
   afterthought.
 
@@ -327,7 +330,8 @@ because decompiled code keeps labels for entries that cannot be blocks (shared o
 
 **Code addresses as values.** `&name`, where `name` is a label, `sub` or coroutine, is an `int` expression holding
 that code offset. The encoder relocates it like any code target. `call *expr` is an indirect local call through an
-integer value.
+integer value. Decompiled code prints a code position held as data as `&label` wherever the decoder proves it is one
+(§9.5).
 
 **Templates** (`inline name(params) { … }`) expand in place at each use, written like a call: `twice(2, L[0])`.
 
@@ -512,6 +516,19 @@ Every instruction of a decompiled original keeps its original site:
 `(profile, catalog identity, base fingerprint, original dword offset)`. The sidecar carries these identities, so
 edits and fragments can refer to original sites stably (roadmap §3.4).
 
+Site identity is for referring to original code. It must never decide behavior. Two rules keep code positions out of
+plain numbers:
+
+- **Code positions held as data are labels.** The registry marks operands whose value is a code position
+  (`value = "code-address"`; op 0x140's returned PC). The decoder follows such a value through `mov` and
+  `eq`/`ne` inside a basic block. An immediate it meets there becomes a label, printed `&label`, so it relocates
+  with the code. Every ADV scene's loop exit test is this shape: `G[0x6c3] = &loop_head; if G[0x6c3] == G[0x6be]`
+  (144 Himegari / 269 Kamidori scenes). A proven code value that is not an instruction start stays a number and
+  is counted.
+- **The runtime finds sites by role, not offset.** The port's labeled-yield model derives the loop head from the
+  code and halts when the script's terminal names something else. Its one site-specific quirk (SC0000's intro
+  movie surface) is keyed by the movie it plays, not its offset.
+
 ## 10. Fragments and patches
 
 ```
@@ -554,7 +571,8 @@ The pipeline runs in eight steps:
    - `core`: structured, no templates;
    - `idiomatic`: templates and libraries.
 8. **Write the sidecar**: original sites, data order, unreferenced dwords, slot pins, library placement, and raw
-   CP932 bytes wherever decode-then-encode differs.
+   CP932 bytes wherever decode-then-encode differs. Nothing in it changes behavior (P3): gate 3 runs every scene
+   without it, at the core and idiomatic levels.
 
 The idiomatic level (`Age.Cli oms-decompile --level idiomatic`) implements steps 4 and 5 as follows.
 
@@ -649,7 +667,7 @@ port's VM tests and native traces.
 | Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
 | Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
 | Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
-| Code-address immediates outside code-target positions | relocation of decompiled code edited at core level, and sidecar-free idiomatic rebuilds of ADV scenes | only `&label` and template parameters of code kind relocate; a decompiled `mov G[0x6c3] 0x45e` stays a number until the scene prologue template lifts it, so edits that move code before it belong at the idiomatic level. An idiomatic rebuild without its sidecar links the scene-header handlers after the script, which moves the code that immediate names: such rebuilds are byte-stable (gate 4) but not yet semantically valid for ADV scenes |
+| Code-address immediates outside code-target positions | resolved 2026-10-07 | the decoder relabels immediates that meet a registry `code-address` value (§9.5); the scene loop's `G[0x6c3] = 0x45e` decompiles as `&label_45e`, so edits and sidecar-free rebuilds that move code keep it right |
 | Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
 
 ## 14. Language evolution
@@ -689,7 +707,7 @@ contracts.
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
-| 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.6M / 38.1M steps) with the same text, halts and final state on a simulated clock |
+| 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.7M / 38.1M steps) with the same text, halts and final state on a simulated clock. Scenes run with the profile's VM compatibility facts, as the runtime runs them, so the ADV scene-entry coroutine (op 0x140) executes. `--level idiomatic` checks sidecar-free idiomatic rebuilds the same way, comparing positions by relocation key; it passes on all 297 / 279 scenes. A negative control (decoder code-value pass disabled) diverges at SC0000's labeled yield |
 | 4. Fixed point | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core --fixed-point`: decompiling each canonical rebuild and recompiling it is byte-identical for 520/520 and 732/732; 506 / 713 of them need no sidecar at all, and the rest need only temporary pins (named locals interleaved with the original's temporaries); workspace tests `OmsCoreTests.Installed*CanonicalRebuildIsAFixedPoint` |
 | 5. Idiomatic level (Himegari prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 520/520 byte-identical with `oms/himegari/adv.oms` and 0 abandoned lifts. 9,256 library subs are recognized (the 32 scene-library subs), and 24,297 of 26,667 ADV pages lift to dialogue lines. Lift coverage is 998,654 instructions, **65.6%** of the corpus. Source shrinks from 44.7 MB (core) to 18.8 MB. With `--fixed-point`, idiomatic rebuilds are still 520/520 identical and 506 need no sidecar. The 307 scene sidecars that keep the header handlers' place hold `library` entries. Workspace tests `OmsCoreTests.InstalledHimegari*Idiomatic*`. Kamidori has no prelude yet |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
@@ -700,6 +718,7 @@ Gate-1 residue, reported by `Age.Cli oms-residue`:
 
 - **Labels resolved:** 241,972 / 403,429 code-target operands become labels. The only code-target operands left
   literal are the indirect calls `call G[0x6be]` / `call G[0x4f8]` (144 / 269), whose operand is a variable.
+  Another 144 / 269 immediates are code positions held as data (§9.5) and become labels too.
 - **Data:** every data operand resolves to a typed item (39,004 / 78,211 strings and 5,487 / 13,576 inline
   arrays).
   - The last unresolved item was Kamidori `ITMES.BIN`'s `　ぐろｰぶによる基本攻撃`. Its half-width katakana was

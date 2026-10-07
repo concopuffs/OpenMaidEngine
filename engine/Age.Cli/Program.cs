@@ -124,7 +124,11 @@ if (args.Contains("oms-rebuild"))
     }
     return OmsRebuildCheck.Run(catalog, assetStore, table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
         OmsModules(), rebuildScenes, bootScripts, new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait")),
-        int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30);
+        int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30,
+        // The profile's runtime facts, as the Godot runtime passes them (the ADV scene-entry gate among them).
+        new VmCompatibilityContext(selectedProfile.Profile.Id, selectedProfile.Profile.EngineAbiId,
+            selectedProfile.ProbeMode, selectedProfile.Profile.Runtime.SceneEntryCoroutineGateAddress),
+        idiomatic: OptionValue("--level") == "idiomatic");
 }
 
 if (args.Contains("oms-temps"))

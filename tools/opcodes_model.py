@@ -21,6 +21,11 @@ EVIDENCE_METHODS = {
 # engine enters by pushing the waiting PC (ends in `ret`), or a coroutine handler (ends in op 0x7c).
 CODE_TARGET_KINDS = ("transfer", "call", "callback", "coroutine")
 
+# What an operand's value means beyond its access (spec §9.5): `code-address` marks a code position held as data, such
+# as the PC op 0x140 returns. The decoder turns an immediate that data flow proves to be one into a label, so the
+# position relocates instead of surviving as a number.
+VALUE_KINDS = ("code-address",)
+
 ACCESS_KINDS = (
     "read",            # value read (immediates, variables and reference targets)
     "read-float",      # value read as a float (integer forms are converted)
@@ -405,6 +410,11 @@ def _operand_access_errors(model: Model, oc: Opcode, tag: str) -> list[str]:
         by_index[index] = arg
         if "access" in arg and "access_by_abi" in arg:
             errors.append(f"{arg_tag}: use access or access_by_abi, not both")
+        if "value" in arg:
+            if arg["value"] not in VALUE_KINDS:
+                errors.append(f"{arg_tag}: value must be one of {list(VALUE_KINDS)}")
+            elif index in oc.code_target_args:
+                errors.append(f"{arg_tag}: a code-target operand is already a code position; drop its value")
         lists = [("access", arg["access"])] if "access" in arg else []
         for abi, kinds in arg.get("access_by_abi", {}).items():
             if abi not in model.abi_layers:

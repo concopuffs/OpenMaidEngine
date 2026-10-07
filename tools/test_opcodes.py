@@ -238,6 +238,12 @@ def test_operand_access_lint():
     check(any("not both" in m for m in e), "access and access_by_abi are exclusive")
     e, w = M.lint(M.load(write_tmp(_with_access(5, 'access = ["write"]\n'))))
     check(any("code-target operand 5 is not read" in m for m in e), "code targets must be read")
+    valued = M.load(write_tmp(_with_access(2, 'access = ["read"]\nvalue = "code-address"\n')))
+    check(M.lint(valued)[0] == [], "a code-address value on a data operand is clean")
+    e, w = M.lint(M.load(write_tmp(_with_access(2, 'access = ["read"]\nvalue = "pointer"\n'))))
+    check(any("value must be one of ['code-address']" in m for m in e), "value kinds are linted")
+    e, w = M.lint(M.load(write_tmp(_with_access(5, 'access = ["read"]\nvalue = "code-address"\n'))))
+    check(any("already a code position" in m for m in e), "code-target operands take no value kind")
     e, w = M.lint(M.load(write_tmp(_with_access(
         7, 'access = ["read"]\n[[opcode.semantics.args]]\ni = 8\naccess = ["read"]\n'))))
     check(any("operand 8: index outside argc 7" in m for m in e), "operand indices stay within argc")

@@ -797,6 +797,59 @@ public class OmsCoreTests
     }
 
     [Fact]
+    public void CodePositionsHeldAsNumbersDecodeAsLabelsAndRelocateWhenCodeMoves()
+    {
+        // op 0x140 returns a code position (registry value "code-address"); the scene loop compares it with the
+        // loop head's offset, which the original compiler wrote as a plain number.
+        var table = new OpcodeTable(new Dictionary<int, (string, int)>
+        {
+            [0x02] = ("exit", 0), [0x55] = ("mov", 2), [0x5a] = ("eq", 3), [0x8c] = ("jmp", 1), [0xa0] = ("jcc", 3),
+            [0x140] = ("u0041F9C0", 4),
+        }, Abi);
+        var contracts = OpcodeContracts.FromParts(
+            new Dictionary<int, int[]> { [0x8c] = [1], [0xa0] = [2, 3] },
+            new Dictionary<(int, int), string[]>
+            {
+                [(0x140, 1)] = ["write"], [(0x140, 2)] = ["read-string"], [(0x140, 3)] = ["read-string"],
+                [(0x140, 4)] = ["read"],
+            },
+            new Dictionary<int, string> { [0x140] = "coroutine-label-yield" },
+            new Dictionary<int, string> { [0x8c] = "transfer", [0xa0] = "transfer" },
+            [(0x140, 1)]);
+        var intrinsics = new IntrinsicCatalog(table, contracts);
+        IrScript Build(string body) => OmsCompiler.Compile(Parser.ParseScript("script \"T.BIN\"\n" + body, "t.oms"), Abi,
+            table, null, intrinsics);
+        // Writing the immediate as a number reproduces the original form; 0x9 is also an instruction start (the
+        // first mov) but nothing compares it with a code value.
+        byte[] original = IrEncoder.Encode(Build("""
+            G[0x6be] = coroutine_label_yield("LABEL", "J", G[0x6be])
+            G[0x6c3] = 0x22
+            if G[0x6c3] == G[0x6be] goto done
+            G[0x10] = 0x9
+            done:
+            exit
+            G[0x11] = 0x1
+            exit
+            """));
+        IrScript decoded = IrDecoder.Decode(original, table, contracts, "T.BIN", out int literal);
+        Assert.Equal(0, literal);
+        Assert.Equal(IrOperand.Label(0, 6), decoded.Code[1].Operands[1]);   // 0x22 is instruction 6, `G[0x11] = 1`
+        Assert.Equal(IrOperand.Literal(0, 9), decoded.Code[4].Operands[1]);
+        Assert.Equal(original, IrEncoder.Encode(decoded));
+
+        OmsDecompilation source = OmsCoreDecompiler.Decompile(decoded, Abi, intrinsics);
+        Assert.Contains("    G[0x6c3] = &label_22\n", source.Source);
+        Assert.Contains("    G[0x10] = 0x9\n", source.Source);
+        Assert.Contains("\nlabel_22:\n", source.Source);
+        // An edit that inserts code before the loop head moves it; the compiled immediate follows.
+        IrScript edited = OmsCompiler.Compile(Parser.ParseScript(source.Source.Replace(
+            "\n\n", "\n\n    G[0x20] = 0x1\n"), "t.oms"), Abi, table, null, intrinsics);
+        IrScript redecoded = IrDecoder.Decode(IrEncoder.Encode(edited), table, contracts, "T.BIN", out _);
+        Assert.Equal(IrOperand.Label(0, 7), redecoded.Code[2].Operands[1]);
+        Assert.Equal(0x27, redecoded.Code[7].OriginalOffset);
+    }
+
+    [Fact]
     public void IndexAddressedLocalArraysAreDeclaredToKeepTheirFrame()
     {
         // L[3] is an array whose upper elements only a computed index reaches; the original pool started at L[8].

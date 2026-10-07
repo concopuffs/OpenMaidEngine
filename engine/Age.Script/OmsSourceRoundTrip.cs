@@ -31,6 +31,21 @@ public sealed record OmsSourceRoundTripReport(
     public bool Passed => Failures.Count == 0 && Identical == Scripts;
 }
 
+/// <summary>
+/// An idiomatic canonical rebuild with each instruction's relocation key on both sides. Linking without the sidecar
+/// moves library subs, so positions are compared by key: a library sub's name and offset inside it, or otherwise the
+/// instruction's ordinal among the script's own (non-library) instructions, which keep their order.
+/// </summary>
+public sealed record OmsRelocation(byte[] Rebuilt, long[] OriginalKeys, long[] RebuiltKeys,
+                                   IReadOnlyDictionary<int, int> OriginalIndexByOffset,
+                                   IReadOnlyDictionary<int, int> RebuiltIndexByOffset)
+{
+    /// <summary>Whether two code offsets, one in the original and one in the rebuild, name the same instruction.</summary>
+    public bool SamePosition(long original, long rebuilt)
+        => OriginalIndexByOffset.TryGetValue((int)original, out int a) && RebuiltIndexByOffset.TryGetValue((int)rebuilt, out int b)
+           && OriginalKeys[a] == RebuiltKeys[b];
+}
+
 public static class OmsSourceRoundTrip
 {
     public const string RawLevel = "raw", CoreLevel = "core", IdiomaticLevel = "idiomatic";
@@ -117,6 +132,52 @@ public static class OmsSourceRoundTrip
         IrScript compiled = OmsCompiler.Compile(Parser.ParseScript(source.Source, name), table.AbiId, table, layout: null,
             intrinsics, module => modules?.FirstOrDefault(candidate => candidate.Name == module));
         return IrEncoder.Encode(compiled);
+    }
+
+    /// <summary>Gate 3 at the idiomatic level: idiomatic source compiled without its sidecar, with the relocation keys
+    /// of the original (the same source compiled with its sidecar, which must reproduce the original) and the
+    /// rebuild.</summary>
+    public static OmsRelocation IdiomaticRebuild(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
+                                                 IntrinsicCatalog intrinsics, IReadOnlyList<GameModule> modules,
+                                                 OmsIdioms idioms)
+    {
+        IrScript ir = IrDecoder.Decode(original, table, contracts, name);
+        OmsDecompilation source = OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules, idioms: idioms);
+        ScriptUnit unit = Parser.ParseScript(source.Source, name);
+        GameModule? Resolve(string module) => modules.FirstOrDefault(candidate => candidate.Name == module);
+        OmsImage placed = OmsCompiler.CompileImage(unit, table.AbiId, table, OmsLayout.FromJson(source.Layout.ToJson()),
+            intrinsics, Resolve, linkAll: false);
+        if (!IrEncoder.Encode(placed.Script).AsSpan().SequenceEqual(original))
+            throw new InvalidDataException($"{name}: idiomatic source with its sidecar does not reproduce the original");
+        OmsImage canonical = OmsCompiler.CompileImage(unit, table.AbiId, table, null, intrinsics, Resolve, linkAll: false);
+        var ids = new Dictionary<string, long>(StringComparer.Ordinal);
+        return new OmsRelocation(IrEncoder.Encode(canonical.Script), Keys(placed, ids), Keys(canonical, ids),
+            IndexByOffset(placed.Script), IndexByOffset(canonical.Script));
+    }
+
+    private static long[] Keys(OmsImage image, Dictionary<string, long> ids)
+    {
+        var keys = new long[image.Script.Code.Count];
+        var inLibrary = new bool[keys.Length];
+        foreach (OmsLinkedSub sub in image.Library)
+        {
+            if (!ids.TryGetValue(sub.Name, out long id)) ids[sub.Name] = id = ids.Count + 1;
+            for (int k = sub.Start; k < sub.End; k++)
+            {
+                keys[k] = id << 32 | (uint)(k - sub.Start);
+                inLibrary[k] = true;
+            }
+        }
+        for (int k = 0, ordinal = 0; k < keys.Length; k++)
+            if (!inLibrary[k]) keys[k] = ordinal++;
+        return keys;
+    }
+
+    private static Dictionary<int, int> IndexByOffset(IrScript script)
+    {
+        var map = new Dictionary<int, int>(script.Code.Count);
+        for (int k = 0, offset = 0; k < script.Code.Count; offset += script.Code[k].SizeInDwords, k++) map[offset] = k;
+        return map;
     }
 
     /// <summary>One script through a source level: decode, decompile, serialize the sidecar, parse, compile, encode.</summary>

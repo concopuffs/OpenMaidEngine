@@ -8,7 +8,8 @@ namespace Age.Script.Ir;
 /// Decodes SYS4 script bytes into the intermediate form. Framing follows <see cref="Sys4Loader"/>: instructions run
 /// from offset 0 until the first referenced string or op-0x64 array, the data area runs to F8, and T1/T2/T3 follow.
 /// Code-target operands become instruction labels and data operands become data-item references wherever they
-/// resolve exactly; anything else stays literal, so <see cref="IrEncoder"/> reproduces the input byte for byte.
+/// resolve exactly, and so do immediates that data flow proves to be code positions (<see cref="IrCodeValues"/>);
+/// anything else stays literal, so <see cref="IrEncoder"/> reproduces the input byte for byte.
 /// </summary>
 public static class IrDecoder
 {
@@ -16,6 +17,11 @@ public static class IrDecoder
     private const uint NoTarget = 0xFFFFFFFF;
 
     public static IrScript Decode(byte[] bytes, OpcodeTable table, OpcodeContracts contracts, string name = "")
+        => Decode(bytes, table, contracts, name, out _);
+
+    /// <param name="literalCodeValues">Proven code values that are not an instruction start and stay literal.</param>
+    public static IrScript Decode(byte[] bytes, OpcodeTable table, OpcodeContracts contracts, string name,
+                                  out int literalCodeValues)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length < IrScript.HeaderSize || bytes.Length % 4 != 0)
@@ -130,6 +136,7 @@ public static class IrDecoder
             }
             code.Add(new IrInstruction(op, operands, offset));
         }
+        literalCodeValues = IrCodeValues.Resolve(code, indexByOffset, contracts, table.AbiId);
 
         // Tables: derived when they equal the canonical site lists, otherwise explicit.
         uint[] t1 = Slice(body, dataEnd, t1Count), t2 = Slice(body, t2Offset, t2Count), t3 = Slice(body, t3Offset, t3Count);

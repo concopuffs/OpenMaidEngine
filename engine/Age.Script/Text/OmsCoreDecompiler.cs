@@ -1623,14 +1623,19 @@ public static class OmsCoreDecompiler
                 && intrinsics.TryGet(instruction.Opcode, out Intrinsic intrinsic) && intrinsic.Argc == operands.Count
                 && !IntrinsicCatalog.Keywords.Contains(intrinsic.Name))
             {
+                // Code-target operands name their sub or label bare; any other code position is a value (&label).
+                string Argument(LExpr argument, int k)
+                    => argument is LLeaf { Operand.Kind: IrOperandKind.CodeLabel } code
+                       && intrinsics.Contracts.IsCodeTarget(instruction.Opcode, k + 1)
+                        ? Atom(code.Operand) : Expression(argument, 0);
                 // x = f(args) when the only written operand is operand 1 (spec §6.3).
                 if (intrinsic.HasContract && intrinsic.OutOperands.Count == 1 && intrinsic.OutOperands.Contains(1)
                     && (arguments[0] is LElement || arguments[0] is LLeaf { Operand.Kind: IrOperandKind.Literal } first
                         && StorageBanks.BankByType.ContainsKey(first.Operand.Type)))
                     return $"{Expression(arguments[0], 0)} = {intrinsic.Name}("
-                           + string.Join(", ", arguments.Skip(1).Select(argument => Expression(argument, 0))) + ")";
+                           + string.Join(", ", arguments.Skip(1).Select((argument, k) => Argument(argument, k + 1))) + ")";
                 var text = arguments.Select((argument, k) =>
-                    (intrinsic.HasContract && intrinsic.OutOperands.Contains(k + 1) ? "out " : "") + Expression(argument, 0));
+                    (intrinsic.HasContract && intrinsic.OutOperands.Contains(k + 1) ? "out " : "") + Argument(argument, k));
                 return $"{intrinsic.Name}({string.Join(", ", text)})";
             }
             return "@op(0x" + instruction.Opcode.ToString("x") + string.Concat(operands.Select(o => ", " + Atom(o))) + ")";
@@ -1706,6 +1711,8 @@ public static class OmsCoreDecompiler
         {
             switch (expression)
             {
+                case LLeaf { Operand.Kind: IrOperandKind.CodeLabel } code:
+                    return "&" + Atom(code.Operand);   // a code position held as a value (spec §6.3)
                 case LLeaf leaf:
                     return Atom(leaf.Operand);
                 case LElement element:

@@ -15,6 +15,7 @@ public sealed class OpcodeContracts
     private readonly Dictionary<int, string> _semanticNames;
     private readonly Dictionary<int, string> _codeTargetKinds;
     private readonly Dictionary<int, HashSet<string>> _observedRevisions = new();
+    private readonly HashSet<(int Opcode, int Operand)> _codeValues = new();
 
     private OpcodeContracts(
         Dictionary<int, HashSet<int>> codeTargets,
@@ -50,6 +51,7 @@ public sealed class OpcodeContracts
         var names = new Dictionary<int, string>();
         var kinds = new Dictionary<int, string>();
         var observed = new Dictionary<int, HashSet<string>>();
+        var codeValues = new HashSet<(int, int)>();
         foreach (JsonElement entry in doc.RootElement.GetProperty("opcodes").EnumerateArray())
         {
             int op = Convert.ToInt32(entry.GetProperty("op").GetString(), 16);
@@ -81,10 +83,13 @@ public sealed class OpcodeContracts
                 }
                 if (common != null || byAbi != null)
                     access[(op, index.GetInt32())] = new OperandAccess(common, byAbi);
+                if (arg.TryGetProperty("value", out JsonElement value) && value.GetString() == "code-address")
+                    codeValues.Add((op, index.GetInt32()));
             }
         }
         var contracts = new OpcodeContracts(codeTargets, access, names, kinds);
         foreach (var (op, revisions) in observed) contracts._observedRevisions[op] = revisions;
+        contracts._codeValues.UnionWith(codeValues);
         return contracts;
     }
 
@@ -93,11 +98,16 @@ public sealed class OpcodeContracts
         IReadOnlyDictionary<int, int[]> codeTargets,
         IReadOnlyDictionary<(int Opcode, int Operand), string[]> access,
         IReadOnlyDictionary<int, string> semanticNames,
-        IReadOnlyDictionary<int, string>? codeTargetKinds = null)
-        => new(codeTargets.ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet()),
-               access.ToDictionary(pair => (pair.Key.Opcode, pair.Key.Operand), pair => new OperandAccess(pair.Value, null)),
-               semanticNames.ToDictionary(pair => pair.Key, pair => pair.Value),
-               codeTargetKinds?.ToDictionary(pair => pair.Key, pair => pair.Value));
+        IReadOnlyDictionary<int, string>? codeTargetKinds = null,
+        IEnumerable<(int Opcode, int Operand)>? codeValues = null)
+    {
+        var contracts = new OpcodeContracts(codeTargets.ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet()),
+            access.ToDictionary(pair => (pair.Key.Opcode, pair.Key.Operand), pair => new OperandAccess(pair.Value, null)),
+            semanticNames.ToDictionary(pair => pair.Key, pair => pair.Value),
+            codeTargetKinds?.ToDictionary(pair => pair.Key, pair => pair.Value));
+        contracts._codeValues.UnionWith(codeValues ?? []);
+        return contracts;
+    }
 
     /// <summary>Whether the one-based operand position holds a code offset.</summary>
     public bool IsCodeTarget(int opcode, int operand)
@@ -112,6 +122,10 @@ public sealed class OpcodeContracts
     public bool IsObserved(int opcode, string abiId)
         => _observedRevisions.Count == 0
            || _observedRevisions.TryGetValue(opcode, out HashSet<string>? revisions) && revisions.Contains(abiId);
+
+    /// <summary>Whether the one-based operand's value is a code position held as data (registry
+    /// <c>value = "code-address"</c>), such as the PC op 0x140 writes.</summary>
+    public bool IsCodeValue(int opcode, int operand) => _codeValues.Contains((opcode, operand));
 
     /// <summary>The native access kinds of a one-based operand under an engine ABI, if recorded.</summary>
     public IReadOnlyList<string>? Access(int opcode, int operand, string abiId)

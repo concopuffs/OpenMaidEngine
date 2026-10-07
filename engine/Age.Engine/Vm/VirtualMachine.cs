@@ -415,9 +415,14 @@ public sealed partial class VirtualMachine
            && script.GetString((int)ins.Args[1].Value) == "LABEL"
            && script.GetString((int)ins.Args[2].Value) == "J";
 
-    private bool TryGetAdvYieldTerminal(int pc, Operand output, out long terminal)
+    /// <summary>The ADV labeled yield's terminal is the scene loop head: the nearest <c>call</c> followed by
+    /// <c>exit</c> before the yield. The script's own terminal immediate (the <c>mov</c> after the yield, compared
+    /// with the output) must name that instruction. A stale immediate, left by code that moved without relocating it,
+    /// is reported in <paramref name="problem"/>, never echoed back as if the service had returned it.</summary>
+    private bool TryGetAdvYieldTerminal(int pc, Operand output, out long terminal, out string? problem)
     {
         terminal = 0;
+        problem = null;
         if (pc + 2 >= _cur.Script.Instructions.Count) return false;
         var setTerminal = _cur.Script.Instructions[pc + 1];
         var compare = _cur.Script.Instructions[pc + 2];
@@ -431,7 +436,21 @@ public sealed partial class VirtualMachine
             (SameOperand(compare.Args[1], terminalOperand) && SameOperand(compare.Args[2], output))
             || (SameOperand(compare.Args[2], terminalOperand) && SameOperand(compare.Args[1], output));
         if (!comparesTerminalToOutput) return false;
-        terminal = Read(setTerminal.Args[1]);
+
+        var instructions = _cur.Script.Instructions;
+        int head = -1;
+        for (int k = pc - 1; k > 0 && head < 0; k--)
+            if (_t.Label(instructions[k].Opcode) == "exit" && _t.Label(instructions[k - 1].Opcode) == "call")
+                head = k - 1;
+        long immediate = Read(setTerminal.Args[1]);
+        if (head < 0 || immediate != instructions[head].Offset)
+        {
+            problem = head < 0
+                ? $"coroutine-yield-terminal@0x{instructions[pc].Offset:x}: no scene loop head precedes the yield"
+                : $"coroutine-yield-terminal@0x{instructions[pc].Offset:x}: terminal 0x{immediate:x} is not the scene loop head 0x{instructions[head].Offset:x}";
+            return false;
+        }
+        terminal = instructions[head].Offset;
         return true;
     }
 

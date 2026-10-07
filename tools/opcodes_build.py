@@ -390,7 +390,8 @@ def _operand_access_md(oc: M.Opcode) -> str:
         else:
             continue
         target = f" ({oc.code_target_kind} target)" if arg.get("i") in oc.code_target_args else ""
-        parts.append(f"`{arg.get('i')}` {kinds}{target}")
+        value = f" ({arg['value']})" if arg.get("value") else ""
+        parts.append(f"`{arg.get('i')}` {kinds}{target}{value}")
     return " · ".join(parts)
 
 def emit_reference_md(

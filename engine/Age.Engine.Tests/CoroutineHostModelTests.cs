@@ -27,15 +27,18 @@ public class CoroutineHostModelTests
         Strings = new Dictionary<int, string> { [0x1000] = "LABEL", [0x1001] = "J" },
     };
 
-    [Fact]
-    public void AdvLabeledYieldRunsSetupExactlyOnceThenUsesStructuralTerminal()
+    /// <summary>The ADV scene loop: the entry gate jumps over the loop head (a call followed by exit) into the
+    /// labeled-yield block, whose terminal immediate names the loop head.</summary>
+    private static Script SceneLoop(int terminalImmediate, int setupCount, int slot, int observed)
     {
-        const int output = 0x6be, terminal = 0x6c3, setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
-        var script = Script(
+        const int output = 0x6be, terminal = 0x6c3;
+        return Script(
             Ins(0x00, Op("eq"), new(T_LINT, 0), new(T_GINT, SceneEntryGate), new(T_IMM, 1)),
             Ins(0x07, Op("jcc"), new(T_LINT, 0), new(T_IMM, 0x20), new(T_IMM, 0x80)),
+            Ins(0x10, Op("call"), new Operand(T_IMM, 0x80)),
+            Ins(0x13, Op("exit")),
             Ins(0x20, 0x140, new(T_GINT, output), new(T_STR, 0x1000), new(T_STR, 0x1001), new(T_GINT, output)),
-            Ins(0x29, Op("mov"), new(T_GINT, terminal), new(T_IMM, 0x77)),
+            Ins(0x29, Op("mov"), new(T_GINT, terminal), new(T_IMM, terminalImmediate)),
             Ins(0x2e, Op("eq"), new(T_LINT, 1), new(T_GINT, terminal), new(T_GINT, output)),
             Ins(0x35, Op("jcc"), new(T_LINT, 1), new(T_IMM, 0x60), new(T_IMM, 0x40)),
             Ins(0x40, Op("add"), new(T_GINT, setupCount), new(T_GINT, setupCount), new(T_IMM, 1)),
@@ -45,20 +48,36 @@ public class CoroutineHostModelTests
             Ins(0x65, Op("jmp"), new Operand(T_IMM, 0x80)),
             Ins(0x80, Op("mov"), new(T_GINT, observed), new(T_GINT, slot)),
             Ins(0x85, Op("exit")));
+    }
 
+    [Fact]
+    public void AdvLabeledYieldRunsSetupExactlyOnceThenUsesStructuralTerminal()
+    {
+        const int output = 0x6be, setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
         var sink = new RecordingTraceSink { TracingSteps = true };
         var vm = new VirtualMachine(
-            script, Table, new CaptureHost(), sink: sink,
+            SceneLoop(0x10, setupCount, slot, observed), Table, new CaptureHost(), sink: sink,
             compatibility: HimegariCompatibility);
-        vm.Globals[output] = 0x77; // stale value from a previous scene: already equal to this scene's terminal
+        vm.Globals[output] = 0x10; // stale value from a previous scene: already equal to this scene's terminal
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(1, vm.Globals[setupCount]);
         Assert.Equal(4, vm.Globals[observed]);
         Assert.Equal(0, vm.Globals[SceneEntryGate]);
-        Assert.Equal(0x77, vm.Globals[output]);
+        Assert.Equal(0x10, vm.Globals[output]);
         Assert.Equal(2, sink.Events.Count(e => e.Kind == TraceEventKind.Step && e.Opcode == 0x140));
+    }
+
+    [Fact]
+    public void AStaleTerminalImmediateHaltsInsteadOfBeingEchoed()
+    {
+        // The loop head is at 0x10, but the script still says 0x77: its code moved without relocating the immediate.
+        var vm = new VirtualMachine(
+            SceneLoop(0x77, 0x7000, 0x7001, 0x7002), Table, new CaptureHost(), compatibility: HimegariCompatibility);
+        vm.Run();
+
+        Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x77 is not the scene loop head 0x10", vm.HaltReason);
     }
 
     [Fact]

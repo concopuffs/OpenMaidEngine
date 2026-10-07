@@ -803,6 +803,22 @@ saved handler PCs as frame metadata; op `0x7c` is a host-scheduler marker becaus
 service-boundary suspension and retained presentation. `TITLE.BIN`'s unrelated `"BIN","SC????.BIN"` service remains
 stubbed. The real video-service timing remains intentionally unmodeled.
 
+**The terminal is the scene loop head (2026-10-07).** The terminal immediate is the code offset of the scene loop head:
+the `call` (SCJUMP dispatch) and `exit` pair that the entry gate jumps over. That holds in all 144 Himegari and 269
+Kamidori scenes; 32 Kamidori scenes spell the service `"ABEL",""`, which the port does not model yet. The host model
+now finds the loop head itself, as the nearest `call` followed by `exit` before the yield, and returns that. The
+script's immediate must name the same instruction; otherwise the VM halts with `coroutine-yield-terminal@…`. Echoing
+the immediate would hide a script whose code moved without relocating it, which native AGE would not survive. The Open
+Maid Script decoder relabels this immediate as a code position (`G[0x6c3] = &label`, registry
+`value = "code-address"`), so recompiled scenes keep it correct.
+
+The same relocation work exposed a port bug in the setup's `call *G[0x6be]`. The port's `call` took the operand's
+cell number (`0x6be`) as the target instead of reading the cell. That was a silent no-op wherever `0x6be` is not an
+instruction offset, and a jump into unrelated code wherever it is. `call *v` now calls the offset the variable holds.
+A value that is no instruction's offset calls nothing and pushes no return address. The first labeled-yield visit
+returns -1, so the setup's indirect call stays the no-op the validated model relied on. Native AGERC's first return
+value remains unknown.
+
 **Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
 (resource `0x37`). SC0000 already contains the correct teardown, but the port's wrong `0x215` query
 returned -1 and skipped it. The corrected source-slot query now reaches `0x1f7(handle,10)` object erasure

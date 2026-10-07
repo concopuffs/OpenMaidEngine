@@ -116,6 +116,7 @@ class GatePlanTests(unittest.TestCase):
         self.assertLess(core, workspace)
         self.assertIn("catalog-corpus-scan", workspace)
         self.assertIn("engine-workspace-tests", workspace)
+        self.assertIn("oms-idiomatic-rebuild", workspace)   # Himegari has source modules in oms/himegari
         self.assertNotIn("godot-selftest", workspace)
         installed = next(
             gate for gate in validate.build_gate_plan("workspace")
@@ -140,6 +141,7 @@ class GatePlanTests(unittest.TestCase):
             )
         keys = {gate.key for gate in plan}
         self.assertIn("catalog-corpus-scan", keys)
+        self.assertNotIn("oms-idiomatic-rebuild", keys)   # no Kamidori prelude yet
         self.assertNotIn("globals-build", keys)
         self.assertNotIn("python-test_extract_init", keys)
         self.assertNotIn("vm0-recover", keys)
