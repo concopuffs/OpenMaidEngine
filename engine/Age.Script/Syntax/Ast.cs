@@ -37,3 +37,72 @@ public sealed record RawLabelRef(SourceSpan Span, string Name) : RawOperand(Span
 
 /// <summary><c>type(tag, operand)</c>: any other type tag around an integer, label or data operand.</summary>
 public sealed record RawTyped(SourceSpan Span, int Type, RawOperand Inner) : RawOperand(Span);
+
+// ---------------------------------------------------------------------------------------------- expressions
+
+public abstract record Expr(SourceSpan Span);
+
+/// <summary>An operand atom: literal, storage cell, string/array literal, label or typed form.</summary>
+public sealed record OperandExpr(SourceSpan Span, RawOperand Operand) : Expr(Span);
+
+/// <summary><c>left op right</c> with a C-style binary operator.</summary>
+public sealed record BinaryExpr(SourceSpan Span, string Op, Expr Left, Expr Right) : Expr(Span);
+
+/// <summary><c>op operand</c> with <c>-</c>, <c>!</c> or <c>~</c>.</summary>
+public sealed record UnaryExpr(SourceSpan Span, string Op, Expr Operand) : Expr(Span);
+
+// ---------------------------------------------------------------------------------------------- statements
+
+/// <summary><c>target = value</c>; the target is a storage operand.</summary>
+public sealed record AssignStatement(SourceSpan Span, RawOperand Target, Expr Value) : Statement(Span);
+
+/// <summary>An intrinsic argument; <see cref="Out"/> marks an operand the intrinsic writes (spec §6.3).</summary>
+public sealed record CallArgument(Expr Value, bool Out);
+
+/// <summary><c>name(args)</c>: an intrinsic, or a local subroutine/label called with no arguments.</summary>
+public sealed record CallStatement(SourceSpan Span, string Name, IReadOnlyList<CallArgument> Arguments) : Statement(Span);
+
+public enum JumpKind { Label, Break, Continue }
+
+/// <summary>A jump destination: a named label or the innermost loop's exit/continue point.</summary>
+public sealed record JumpTarget(JumpKind Kind, string? Label = null)
+{
+    public override string ToString() => Kind switch
+    {
+        JumpKind.Break => "break",
+        JumpKind.Continue => "continue",
+        _ => $"goto {Label}",
+    };
+}
+
+/// <summary><c>goto L</c>, <c>break</c> or <c>continue</c>.</summary>
+public sealed record JumpStatement(SourceSpan Span, JumpTarget Target) : Statement(Span);
+
+/// <summary><c>if [!]c goto/break/continue [else goto …]</c>: one jcc (spec §7.1).</summary>
+public sealed record ConditionalJumpStatement(
+    SourceSpan Span, Expr Condition, bool Negated, JumpTarget Target, JumpTarget? Else) : Statement(Span);
+
+public sealed record IfStatement(SourceSpan Span, Expr Condition, IReadOnlyList<Statement> Then,
+                                 IReadOnlyList<Statement>? Else) : Statement(Span);
+
+/// <summary><c>loop { … }</c>: an unconditional loop closed by a backward jmp.</summary>
+public sealed record LoopStatement(SourceSpan Span, IReadOnlyList<Statement> Body) : Statement(Span);
+
+public sealed record WhileStatement(SourceSpan Span, Expr Condition, IReadOnlyList<Statement> Body) : Statement(Span);
+
+public sealed record DoWhileStatement(SourceSpan Span, IReadOnlyList<Statement> Body, Expr Condition) : Statement(Span);
+
+public sealed record AtomicStatement(SourceSpan Span, IReadOnlyList<Statement> Body) : Statement(Span);
+
+public sealed record ReturnStatement(SourceSpan Span) : Statement(Span);
+
+public sealed record ExitStatement(SourceSpan Span) : Statement(Span);
+
+/// <summary><c>run script</c>: call-script with a catalog id or an integer variable.</summary>
+public sealed record RunStatement(SourceSpan Span, Expr Script) : Statement(Span);
+
+/// <summary><c>note "text"</c>: the compiled comment, op 0x1a7 (any operand form; the engine ignores it).</summary>
+public sealed record NoteStatement(SourceSpan Span, Expr Value) : Statement(Span);
+
+/// <summary><c>call *v</c>: an indirect local call through an integer value (spec §6.3).</summary>
+public sealed record IndirectCallStatement(SourceSpan Span, Expr Target) : Statement(Span);

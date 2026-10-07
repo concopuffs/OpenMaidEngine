@@ -55,13 +55,13 @@ if (args.Contains("oms-residue"))
     return 0;
 }
 
-if (args.Contains("oms-roundtrip") && OptionValue("--level") is "raw")
+if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
 {
     // Open Maid Script gate 2 at the raw level: bytes -> OMS source + sidecar -> bytes.
     Age.Script.OmsSourceRoundTripReport source = Age.Script.OmsSourceRoundTrip.Run(
         catalog.EnumerateScripts().Select(packed => (
             packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
-        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson));
+        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), sourceLevel);
     if (OptionValue("--output") is { } sourceOutput)
     {
         string? directory = Path.GetDirectoryName(Path.GetFullPath(sourceOutput));
@@ -77,6 +77,8 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is "raw")
             empty_sidecars = source.EmptySidecars,
             sidecar_field_use = source.SidecarFieldUse,
             source_bytes = source.SourceBytes,
+            instructions = source.Instructions,
+            raw_statements = source.RawStatements,
             failures = source.Failures,
         }, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
     }
@@ -84,7 +86,8 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is "raw")
         $"oms-roundtrip: profile={selectedProfile.Profile.Id} abi={table.AbiId} level={source.Level} "
         + $"scripts={source.Scripts} identical={source.Identical} empty-sidecars={source.EmptySidecars} "
         + $"sidecar-fields={string.Join(",", source.SidecarFieldUse.Select(pair => $"{pair.Key}:{pair.Value}"))} "
-        + $"source-bytes={source.SourceBytes} failures={source.Failures.Count}");
+        + $"source-bytes={source.SourceBytes} instructions={source.Instructions} raw-statements={source.RawStatements} "
+        + $"failures={source.Failures.Count}");
     foreach (Age.Script.Ir.IrRoundTripFailure failure in source.Failures.Take(20))
         Console.Error.WriteLine($"  0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
     return source.Passed ? 0 : 1;
@@ -97,9 +100,12 @@ if (args.Contains("oms-decompile"))
     PackedAssetEntry entry = catalog.EnumerateScripts().FirstOrDefault(packed =>
         string.Equals(packed.Asset.Name, scriptName, StringComparison.OrdinalIgnoreCase))
         ?? throw new ArgumentException($"no catalog script named {scriptName}");
-    var decompiledScript = Age.Script.Text.OmsRawDecompiler.Decompile(
-        Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(entry.Asset), table,
-            Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), entry.Asset.Name), table.AbiId);
+    var omsContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
+    var decodedScript = Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(entry.Asset), table, omsContracts, entry.Asset.Name);
+    var decompiledScript = OptionValue("--level") is "raw"
+        ? Age.Script.Text.OmsRawDecompiler.Decompile(decodedScript, table.AbiId)
+        : Age.Script.Text.OmsCoreDecompiler.Decompile(decodedScript, table.AbiId,
+            new Age.Script.Abi.IntrinsicCatalog(table, omsContracts));
     if (OptionValue("--output") is { } decompileOutput)
     {
         File.WriteAllText(decompileOutput, decompiledScript.Source);

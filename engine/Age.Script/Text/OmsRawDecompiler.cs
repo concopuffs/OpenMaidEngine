@@ -44,7 +44,8 @@ public static class OmsRawDecompiler
         return new OmsDecompilation(text.ToString(), BuildLayout(script, abiId));
     }
 
-    private static string Operand(IrOperand operand, IrScript script, Func<int, string> labelName)
+    /// <summary>Formats one operand in the explicit raw forms of spec §6.2 (shared by every decompiler level).</summary>
+    public static string Operand(IrOperand operand, IrScript script, Func<int, string> labelName)
     {
         string body;
         int defaultType;
@@ -101,7 +102,8 @@ public static class OmsRawDecompiler
         return quoted.Append('"').ToString();
     }
 
-    private static OmsLayout BuildLayout(IrScript script, string abiId)
+    /// <summary>The sidecar for an IR script: only the facts a canonical compile would not reproduce.</summary>
+    public static OmsLayout BuildLayout(IrScript script, string abiId)
     {
         var layout = new OmsLayout();
         if (!script.Magic.AsSpan().SequenceEqual(OmsCanonical.MagicFor(abiId)))

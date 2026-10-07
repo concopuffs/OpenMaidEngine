@@ -211,19 +211,21 @@ Three rules govern evaluation:
 x = expr            x += expr   (and the other compound forms)
 if c { … } else if c2 { … } else { … }
 while c { … }
+loop { … }                          // unconditional loop closed by a backward jmp
 do { … } while c
 for init; c; step { … }
 switch x { case 0: … case 1, 2: … default: … }
 break   continue
 label:              goto label
 if c goto label                     // the original language's conditional goto: one jcc c, L, -1
+if !c goto label                    // the negated form: jcc c, -1, L (also break / continue)
 if c goto a else goto b             // jcc c, a, b
 atomic { … }                        // statement block 0x1f4/0x1f5
 name(args)                          // local subroutine, template or intrinsic call
 run SCRIPTNAME(args)                // cross-script call (call-script)
 return                              // ret
 exit                                // exit
-note "text"                         // 0x1a7
+note "text"                         // 0x1a7 (any single operand; the engine ignores it)
 @op(0x249, 0x2ae2, L[4], L[0x397])  // raw instruction escape with explicit operand forms
 ```
 
@@ -286,12 +288,15 @@ round-trip without a sidecar.
 | Construct | Lowering |
 |---|---|
 | `if c {T}` | eval `c` → t; `jcc t, -1, end`; T; `end:` |
+| `if !c {T}` | eval; `jcc t, end, -1`; T; `end:` (the negation flips the branch sense) |
 | `if c {T} else {E}` | eval; `jcc t, -1, else`; T; `jmp end`; `else:` E; `end:` |
-| `else if` | nested `if` in the else block (same bytes) |
+| `else if` | nested `if` in the else block (same bytes): every arm's `jmp` targets the chain's one end |
 | `while c {B}` | `head:` eval; `jcc t, -1, end`; B; `jmp head`; `end:` |
+| `loop {B}` | `head:` B; `jmp head`; `end:` (the corpus's `while` loops evaluate their condition inside the body, so they lift as `loop` with `if !c break` until expressions fold, stage C2) |
 | `for i; c; s {B}` | i; `jmp cond`; `inc:` s; `cond:` eval; `jcc t, -1, end`; B; `jmp inc`; `end:` |
-| `do {B} while c` | `head:` B; eval; `jcc t, head, -1` (inferred from the 20 / 12 backward jump-if-true forms; confirm in gate 2) |
+| `do {B} while c` | `head:` B; eval; `jcc t, head, -1` (the 20 / 12 backward jump-if-true forms; confirmed by the core round trip) |
 | `if c goto L` | eval; `jcc t, L, -1` |
+| `if !c goto L` | eval; `jcc t, -1, L` |
 | `if c goto A else goto B` | eval; `jcc t, A, B` |
 | `if c { goto L }` | eval; `jcc t, -1, skip`; `jmp L`; `skip:` |
 | `switch` | `0xa1`, one `0xa2` per case, `0xa3` with the default; bodies follow as labels (from opcode semantics and samples such as `BTL`; the census does not yet measure switch layout) |
@@ -554,7 +559,8 @@ contracts.
 |---|---|---|
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
-| 2. Core level | not started | structured lifting with per-statement recompile verification, raw `@op` fallback |
+| 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
+| 2. Core level, stage C2 (expressions) | not started | fold temporaries into expressions only where recompiling reproduces the original allocator's choices (§7.2) |
 
 Gate-1 residue, reported by `Age.Cli oms-residue`:
 
@@ -567,6 +573,19 @@ Gate-1 residue, reported by `Age.Cli oms-residue`:
     text at runtime.
   - Both decoders now accept the single-byte katakana range 0xA1–0xDF.
 - **Unreferenced data:** 660 / 3,492 dwords are preserved as raw items.
+
+Core stage C1 lifts three-address code into structured statements: `if`/`else if`/`else`, `loop`, `do … while`,
+`atomic`, `break`/`continue`, conditional gotos, intrinsic calls with `out`, `run`, `note`, `return`/`exit` and
+`call *v`. Assignments stay single operations, so temporaries are still visible. Two structuring rules keep the
+round trip exact:
+
+- **Shared joins stay flat.** An `if` whose then-body ends in `jmp end` lifts as an `if … else` only when the
+  join is private to the chain: no forward transfer outside the chain's own arm jumps targets it. Otherwise the
+  arm prints as `if c { …; goto L }`. Backward jumps to the join (a loop starting there) do not count. Long
+  dispatch ladders such as `SCJUMP` and `ITMES` therefore stay flat gotos, as their original source evidently
+  was.
+- **Iterative chains.** `else if` chains are parsed, lowered and printed iteratively, because the corpus has
+  chains thousands of arms deep.
 
 Raw-level sidecar use:
 

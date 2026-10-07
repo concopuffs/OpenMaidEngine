@@ -172,10 +172,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       profile-owned state, identity, and serialized bank dimensions
     │   ├── Age.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
-    │                                       open-maid-script-design.md): operand contracts (Abi/), intermediate
+    │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
     │                                       compiler and canonical layout rules (Compile/), layout sidecar
-    │                                       (Layout/), decompilers (Text/); referenced by Age.Cli and the tests,
+    │                                       (Layout/), raw and core decompilers (Text/); referenced by Age.Cli and the tests,
     │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
@@ -204,7 +204,8 @@ global/progression maps, native engine dumps, traces, page maps, coverage report
 boundary, not just a naming convention; tools resolve it from the selected immutable profile context.
 `engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
-`Age.Script` intermediate-form round trip as `oms-roundtrip` (with `oms-residue` for its literal leftovers).
+`Age.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers) and single-script
+source as `oms-decompile`.
 
 The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
 `export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below
