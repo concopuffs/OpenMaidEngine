@@ -29,7 +29,7 @@ public static class Sys4StringCodec
         while (i < s.Length)
         {
             byte b = s[i];
-            if (b >= 0x20 && b <= 0x7E) { i++; chars++; }
+            if ((b >= 0x20 && b <= 0x7E) || (b >= 0xA1 && b <= 0xDF)) { i++; chars++; }   // ASCII, half-width katakana
             else if ((b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xEA))
             {
                 if (i + 1 < s.Length && s[i + 1] >= 0x40 && s[i + 1] <= 0xFC && s[i + 1] != 0x7F) { i += 2; chars++; }

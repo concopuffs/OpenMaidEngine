@@ -84,6 +84,10 @@ This section states the semantic model; the citations hold the evidence.
   (`0xa1`–`0xa3`).
 - Callbacks are local subroutines that the engine enters by pushing the waiting PC.
 - Coroutine handlers end at `0x7c` instead of `ret`.
+- Code offsets are also ordinary integer values:
+  - `call` accepts a variable operand: `call G[0x6be]` calls a stored offset (144 Himegari, 269 Kamidori sites);
+  - scene prologues store their exit label as a plain immediate (`mov G[0x6c3] 0x45e`) and compare it with the
+    host label iterator's result (op `0x140`).
 
 **Statement blocks.** `0x1f4`/`0x1f5` make one command atomic for presentation, delayed starts and queued
 launches. No control transfer crosses a block boundary.
@@ -266,6 +270,10 @@ when a recursive call passes bound parameters. A result can be bound the same wa
 - operands that take coroutine handlers require a `coroutine name { … }` body, which must end in `resume`
   (op `0x7c`).
 
+**Code addresses as values.** `&name`, where `name` is a label, `sub` or coroutine, is an `int` expression holding
+that code offset. The encoder relocates it like any code target. `call *expr` is an indirect local call through an
+integer value.
+
 ## 7. Canonical lowering
 
 The canonical lowering is the layout Eushully's compiler produced. Each row below comes from
@@ -288,6 +296,8 @@ round-trip without a sidecar.
 | `switch` | `0xa1`, one `0xa2` per case, `0xa3` with the default; bodies follow as labels (from opcode semantics and samples such as `BTL`; the census does not yet measure switch layout) |
 | `break` / `continue` | `jmp` to the loop end / increment-or-head |
 | `atomic {B}` | `0x1f4`; B; `0x1f5` |
+| `x = &L` | `mov x <offset of L>`, an immediate the encoder relocates |
+| `call *v` | `call v` with a variable operand |
 
 Conditions that are plain variables are used directly (`jcc var, …`). Otherwise the condition is evaluated into
 the statement's first temporary.
@@ -505,6 +515,7 @@ port's VM tests and native traces.
 | Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
 | Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
 | Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
+| Code-address immediates outside code-target positions | relocation of decompiled code edited at core level | only `&label` and template parameters of code kind relocate; a decompiled `mov G[0x6c3] 0x45e` stays a number until the scene prologue template lifts it, so edits that move code before it belong at the idiomatic level |
 | Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
 
 ## 14. Language evolution
@@ -535,3 +546,21 @@ The build follows roadmap step 10 and the gates in order: encoder/decoder, core 
 Himegari prelude, native validation, then the Kamidori prelude. The Python tools stay as analysis and as
 independent oracles. `compiler_census.py` describes the lowering target, and `operand_access.py` derives the
 contracts.
+
+## 16. Implementation status
+
+| Gate | Status | Evidence |
+|---|---|---|
+| 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
+
+Gate-1 residue, reported by `Age.Cli oms-residue`:
+
+- **Labels resolved:** 241,972 / 403,429 code-target operands become labels. The only code-target operands left
+  literal are the indirect calls `call G[0x6be]` / `call G[0x4f8]` (144 / 269), whose operand is a variable.
+- **Data:** every data operand resolves to a typed item (39,004 / 78,211 strings and 5,487 / 13,576 inline
+  arrays).
+  - The last unresolved item was Kamidori `ITMES.BIN`'s `　ぐろｰぶによる基本攻撃`. Its half-width katakana was
+    rejected by the shared string decoder (`Sys4StringCodec`, and `sys4load` in Python), which also blanked that
+    text at runtime.
+  - Both decoders now accept the single-byte katakana range 0xA1–0xDF.
+- **Unreferenced data:** 660 / 3,492 dwords are preserved as raw items.

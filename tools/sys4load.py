@@ -196,11 +196,11 @@ def _decode_string(dwords, start, limit=4096):
     s = bytes(raw).split(b"\0")[0]
     if len(s) < 1:
         return "", 1
-    # strict cp932 shape: ascii-printable or valid 2-byte lead+trail
+    # strict cp932 shape: ascii-printable, half-width katakana, or valid 2-byte lead+trail
     i, chars = 0, 0
     while i < len(s):
         b = s[i]
-        if 0x20 <= b <= 0x7E:
+        if 0x20 <= b <= 0x7E or 0xA1 <= b <= 0xDF:   # ASCII or half-width katakana
             i += 1
             chars += 1
         elif 0x81 <= b <= 0x9F or 0xE0 <= b <= 0xEA:

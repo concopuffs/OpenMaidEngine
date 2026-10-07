@@ -45,6 +45,63 @@ Script ScriptByName(string name) => provider.RequireByName(name);
 // --trace-ops <csv> (only these mnemonics/hex, tagged with their script), --trace-histogram (op +
 // call-site execution counts, dumped after the run), --trace-file <path> (write to a file, else console).
 
+if (args.Contains("oms-residue"))
+{
+    OmsInspect.LiteralResidue(
+        catalog.EnumerateScripts().Select(packed => (
+            packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
+        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+        int.TryParse(OptionValue("--limit"), out int residueLimit) ? residueLimit : 12);
+    return 0;
+}
+
+if (args.Contains("oms-roundtrip"))
+{
+    // Open Maid Script gate 1: every catalog script -> intermediate form -> bytes, compared byte for byte.
+    var contracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
+    Age.Script.Ir.IrRoundTripReport roundTrip = Age.Script.Ir.IrRoundTrip.Run(
+        catalog.EnumerateScripts().Select(packed => (
+            packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
+        table, contracts);
+    var roundTripReport = new
+    {
+        profile_id = selectedProfile.Profile.Id,
+        engine_abi_id = table.AbiId,
+        scripts = roundTrip.Scripts,
+        identical = roundTrip.Identical,
+        passed = roundTrip.Passed,
+        instructions = roundTrip.Instructions,
+        label_operands = roundTrip.LabelOperands,
+        literal_code_targets = roundTrip.LiteralCodeTargets,
+        data_ref_operands = roundTrip.DataRefOperands,
+        data_items = roundTrip.DataItems,
+        referenced_raw_items = roundTrip.ReferencedRawItems,
+        unreferenced_raw_dwords = roundTrip.UnreferencedRawDwords,
+        explicit_table_scripts = roundTrip.ExplicitTableScripts,
+        failures = roundTrip.Failures,
+    };
+    if (OptionValue("--output") is { } roundTripOutput)
+    {
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(roundTripOutput));
+        if (directory != null) Directory.CreateDirectory(directory);
+        File.WriteAllText(roundTripOutput, JsonSerializer.Serialize(roundTripReport, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        }));
+    }
+    Console.WriteLine(
+        $"oms-roundtrip: profile={selectedProfile.Profile.Id} abi={table.AbiId} scripts={roundTrip.Scripts} "
+        + $"identical={roundTrip.Identical} labels={roundTrip.LabelOperands} "
+        + $"literal-code-targets={roundTrip.LiteralCodeTargets} data-refs={roundTrip.DataRefOperands} "
+        + $"items={string.Join(",", roundTrip.DataItems.Select(pair => $"{pair.Key}:{pair.Value}"))} "
+        + $"referenced-raw={roundTrip.ReferencedRawItems} unreferenced-raw-dwords={roundTrip.UnreferencedRawDwords} "
+        + $"explicit-tables={roundTrip.ExplicitTableScripts} failures={roundTrip.Failures.Count}");
+    foreach (Age.Script.Ir.IrRoundTripFailure failure in roundTrip.Failures.Take(20))
+        Console.Error.WriteLine($"  0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
+    return roundTrip.Passed ? 0 : 1;
+}
+
 if (args.Contains("catalog-scan"))
 {
     Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
