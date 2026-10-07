@@ -681,7 +681,9 @@ memory-cookie transform.
 ## Compiler-emitted structure and layout regularities (2026-10-06)
 
 Eushully's original compiler left a consistent fingerprint. These facts constrain any tool that reassembles or
-compiles scripts. Counts cover the 481 Himegari base scripts and the 732 Kamidori catalog scripts (base + appends).
+compiles scripts. Every count below is reproduced by `tools/compiler_census.py`
+(`build/games/<profile>/compiler-census.json`). The counts cover the 481 Himegari base scripts and the 732
+Kamidori catalog scripts (base + appends). Pairs are written Himegari / Kamidori.
 
 **Tables.** T1, T2 and T3 can always be derived from the code: every `0x71`, `0x03` and `0x8f` instruction, in
 code order. They match in 481/481 and 732/732 scripts, so a compiler can generate them rather than carry them.
@@ -689,11 +691,11 @@ code order. They match in 481/481 and 732/732 scripts, so a compiler can generat
 **Inline data.**
 
 - **No string sharing.** No string is shared between references: each type-2 operand points at its own copy, and
-  180 Himegari and 331 Kamidori scripts store identical text more than once.
+  180 / 331 scripts store identical text more than once.
 - **Usually first-use order.** Strings and op-`0x64` blobs normally follow the order of their first reference.
-  The exceptions are 36 Himegari and 42 Kamidori scripts.
-- **Unreferenced data.** 91 Himegari and 263 Kamidori scripts carry dwords in the data area that no operand
-  references, for example a lone empty string in `FIELD.BIN`.
+  The exceptions are 36 / 42 scripts.
+- **Unreferenced data.** 91 / 263 scripts carry dwords in the data area that no operand references, for example a
+  lone empty string in `FIELD.BIN`.
 - **Consequence for reassembly.** Byte-exact reassembly must preserve order and unreferenced data. A canonical
   rebuild does not need them.
 
@@ -710,31 +712,76 @@ code order. They match in 481/481 and 732/732 scripts, so a compiler can generat
 **What each kind of code reference points at.** These follow from the corpus and from how the engine dispatches
 callbacks (`docs/engine-re.md`, "VM value, array and call semantics"):
 
-- **Local-call targets** (`0x8f`) are subroutine bodies that reach `ret`.
-- **Callback targets** are subroutine bodies that reach `ret`. This covers hotspot (`0x90` 5–7), mouse (`0xcc`),
-  joystick (`0xfb`) and timed (`0xd4`) callbacks.
-- **Coroutine handlers** registered by `0x7b` end at `coroutine-resume` (`0x7c`).
+- **Local-call targets** (`0x8f`) are subroutine bodies that reach `ret`: 72,792 of 72,794, and 172,729 of 172,729.
+- **Callback targets** are subroutine bodies that reach `ret`: 5,952 / 7,502. 322 Kamidori callbacks can also reach
+  `exit`. This covers hotspot (`0x90` 5–7), mouse (`0xcc`), joystick (`0xfb`) and timed (`0xd4`) callbacks.
+- **Coroutine handlers** registered by `0x7b` end at `coroutine-resume` (`0x7c`) in every case (3,848 / 1,814
+  operands).
 - **Value-switch targets** (`0xa2`) are ordinary labels inside the enclosing flow.
 
-**Negative constants.** No negative number is ever encoded as an immediate. The compiler materializes it with
-`sub tmp 0 n` (19,899 Himegari and 36,623 Kamidori sites), so a byte-faithful compiler must do the same.
+**Negative constants.** No negative number is ever encoded as an immediate; the only `0xffffffff` immediates are
+code-target sentinels. The compiler materializes negatives with `sub tmp 0 n`: 19,899 / 36,623 sites, mostly `-1`
+and `-1000`. A byte-faithful compiler must do the same.
 
-**Control-flow shapes.** Of the 117,540 Himegari `jcc` instructions, 114,722 are "jump forward when false" with no
-true target, the canonical `if`/`while` lowering. 2,578 jump forward when true. The remaining 240 carry both targets
-or jump backward; Kamidori has the same profile. Loops branch back with `jmp`.
+**Control-flow shapes.** The census classifies every `jcc` by the source construct its layout implies:
 
-**Statement blocks.** Statement blocks (`0x1f4`/`0x1f5`) are balanced in every script, nest at most two deep, and
-are never crossed by a branch. They wrap macro expansions, chiefly the ADV line template. Their runtime effect is
-atomic deferral (`docs/engine-re.md`, "Statement blocks").
+| Shape | Lowering | Himegari | Kamidori |
+|---|---|---:|---:|
+| `if` | `jcc c, -1, end`; body | 80,192 | 66,291 |
+| `if`/`else` | `jcc c, -1, else`; then; `jmp end`; else | 31,659 | 63,439 |
+| `for` | init; `jmp cond`; inc; cond; `jcc c, -1, end`; body; `jmp inc` | 2,495 | 7,034 |
+| `while` | cond; `jcc c, -1, end`; body; `jmp cond` | 376 | 697 |
+| conditional goto | `jcc c, L, -1` | 2,578 | 3,707 |
+| conditional goto/else | `jcc c, A, B` | 211 | 88 |
+| backward forms | `jcc c, L, -1` or `jcc c, -1, L` with `L` behind | 29 | 17 |
+
+So 97.6% / 97.3% of branches are structured `if`/`else`/`for`/`while`. The conditional-goto forms are an explicit
+statement in the original language, for example `L: if input goto handler; sleep 1; goto L`.
+
+A braced `if (c) { goto L; }` is a different spelling. It lowers to a false-skip around a `jmp` and occurs
+21 / 836 times; Kamidori uses it for guard chains such as `CSINIT`. A faithful compiler therefore keeps both
+spellings distinct.
+
+`&&`/`||` normally appear as `and`/`or` of fully evaluated comparisons (in Himegari, 4,585 `and` and 1,234 `or`
+results feed a `jcc` directly). Nested `if`s that share an end label produce exactly the same code as a short-circuit `&&`.
+
+**Local banks and temporaries.**
+
+- **One spare slot per bank.** Each header local-bank count (F0–F5) equals the highest index the code uses plus 2,
+  leaving one spare slot. This holds for 2,881 of the 2,886 script/bank pairs in Himegari and 4,374 of 4,392 in
+  Kamidori. The exceptions are local arrays whose upper elements are reached only by computed index.
+- **The top integer slot is never used.** Slot `F0−1` is unused in all 449 / 594 scripts that use integer locals.
+- **Temporary pool.** Compiler temporaries form a pool just below that slot, reused statement by statement.
+  Named locals and local arrays sit at the bottom of the bank. The `jcc` condition temporary is usually the pool's
+  base: Himegari puts it at `F0−5` in 260 scripts, Kamidori at `F0−7` in 294. The pool size therefore varies by
+  compiler revision and script, and the exact rule belongs to the encoder's round-trip work.
+
+**Statement blocks.** Statement blocks (`0x1f4`/`0x1f5`) are balanced in every script and nest at most two deep.
+No control transfer (`jmp`, `jcc`, switch case or jump) crosses a block boundary: 0 of 156,275 / 221,359 edges.
+Code references (callback and coroutine registrations) often point outside the block that registers them. Blocks
+wrap macro expansions, chiefly the ADV line template. Their runtime effect is atomic deferral (`docs/engine-re.md`,
+"Statement blocks").
 
 **Comments.** Op `0x1a7` is a compiled source comment that the engine ignores.
 
 **Shared helper subroutines.** Identical local subroutine bodies recur across scripts, which means the original
-source included shared routines into each script that used them:
+source included shared routines into each script that used them. The census fingerprints the code reachable from
+each call target, independent of position:
 
-- Himegari has 219 bodies shared by more than one script; 18 of them appear in 50 or more scripts, and the largest
-  are 110 instructions. 329 of 481 scripts contain at least one.
-- Kamidori has 414 shared bodies; 363 of 732 scripts contain at least one.
+| | Himegari | Kamidori |
+|---|---:|---:|
+| distinct bodies | 1,965 | 2,782 |
+| shared by more than one script | 219 | 413 |
+| shared by 50 or more scripts | 18 | 18 |
+| largest shared body (instructions) | 125 | 127 |
+| scripts containing a shared body | 329 | 361 |
+
+The most widely shared Himegari bodies form the ADV include present in about 300 scenes:
+
+- the five-button control-strip and key-hotspot registration;
+- the chrome redraw (base strip, Auto and Skip indicators);
+- the eight-layer refresh;
+- the line helpers.
 
 ## Patch-override caveat (re-confirmed)
 
