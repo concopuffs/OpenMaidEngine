@@ -283,7 +283,7 @@ AGE has a compiled fallback, but the shipped game's logical resolution is data-d
 at `0x413860` initializes `EngineCtx.screen_w/screen_h` to `640x480`, and
 `engine_settings_register_defaults@0x46be30` independently registers `set:WinX=640` and
 `set:WinY=480`. During `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0`, the loader advances past
-the archive/file directory and VM-bank metadata into the remaining SYS4INI data, then calls
+the archive/file directory and its 0x90-byte metadata block into the remaining SYS4INI data, then calls
 `engine_apply_sys4ini_settings@0x4056d0`. That routine loads the serialized settings through the engine
 settings service and copies `set:WinX`/`set:WinY` into the two context fields before surfaces and the main
 window are created.
@@ -304,8 +304,9 @@ their native behavior and current port relevance.
 The startup order is:
 
 1. `engine_settings_register_defaults@0x46be30` creates AGE's generic registry.
-2. `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` parses the asset directory and VM-bank metadata,
-   then passes the remaining length-delimited settings record to
+2. `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` reads the 300-byte file header into
+   `ctx+0xa0bb8` (the global bank dimensions, see `sys4-format-notes.md`), parses the asset directory and
+   its 0x90-byte metadata block, then passes the remaining length-delimited settings record to
    `EngineCtx::engine_apply_sys4ini_settings@0x4056d0`.
 3. `engine_settings_import_sys4ini_pairs@0x46da80` reads the pair count followed by NUL-terminated CP932
    key/value strings, matches external names case-insensitively, and inserts their canonical typed keys.
@@ -4811,10 +4812,13 @@ departure.
   above the prefix are rebuilt at boot and never saved.
 - **Consequence for native mods.** State that must survive a save under native AGE therefore has to occupy unused
   cells inside the prefix.
-- **Size source still unknown.** The port carries these sizes as validated per-profile `bankDimensions`. The native
-  source of the sizes (`ctx+0xa0ccc`…`0xa0ce0` for the full banks and `ctx+0xa0ca8`… for the saved prefix) is not
-  yet traced. It is neither a SYS4INI settings key nor the 0x90-byte VM metadata block. That block is a small
-  sequential table (Himegari `0, 34, 1…28, 1×5, 29`) whose meaning is also open.
+- **Sizes come from the SYS4INI file header.** The loader reads the first 300 header bytes into `ctx+0xa0bb8`.
+  The saved-prefix counts are header `+0xf0`, mirrored at `ctx+0xa0ca8`. The full bank sizes are header `+0x114`,
+  mirrored at `ctx+0xa0ccc` and copied to `bank_size_*` for allocation. See `sys4-format-notes.md`,
+  "SYS4INI file header". The port's per-profile `bankDimensions` equal the saved-prefix counts, and a workspace
+  test now checks this. The persistent/non-persistent split is therefore a toolchain declaration. A native mod
+  needing more persistent cells could in principle raise the header prefix, since loads replace only the counted
+  prefix, but that is untested.
 
 **New scripts under native AGE.** Mounted `*.AAI` append catalogs (see "S4AC append catalogs") already provide the
 mechanism:

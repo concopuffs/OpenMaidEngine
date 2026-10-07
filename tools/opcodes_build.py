@@ -117,7 +117,7 @@ def bootstrap(toml_path: Path, *, corpus_scan=None, catalog_model: M.Model | Non
         blocks.append(skeleton_toml(op, label, argc, argtypes[op]))
     if not toml_path.exists():
         toml_path.parent.mkdir(parents=True, exist_ok=True)
-        toml_path.write_text(META_TOML + "\n", encoding="utf-8")
+        toml_path.write_text(META_TOML + "\n", encoding="utf-8", newline="\n")
     with toml_path.open("a", encoding="utf-8") as f:
         f.write("\n".join(blocks))
     print(f"bootstrap: {len(used)} used opcodes; appended {len(blocks)} new skeletons -> {toml_path}")
@@ -133,7 +133,7 @@ def bootstrap_age(toml_path: Path, *, catalog_model: M.Model | None = None) -> N
     ]
     if not toml_path.exists():
         toml_path.parent.mkdir(parents=True, exist_ok=True)
-        toml_path.write_text(META_TOML + "\n", encoding="utf-8")
+        toml_path.write_text(META_TOML + "\n", encoding="utf-8", newline="\n")
     with toml_path.open("a", encoding="utf-8") as f:
         f.write("\n".join(blocks))
     print(f"bootstrap-age: {len(catalog.opcodes)} catalog opcodes; "
@@ -555,26 +555,26 @@ def main(argv=None):
                 print("error:", m)
             return 1
         runtime_implemented = load_runtime_coverage()
-        (paths.REPO / "tools" / "age_opcodes.py").write_text(emit_runtime_py(model), encoding="utf-8")
+        (paths.REPO / "tools" / "age_opcodes.py").write_text(emit_runtime_py(model), encoding="utf-8", newline="\n")
         (paths.REPO / "tools" / "age_opcode_semantics.py").write_text(
-            emit_semantics_py(model), encoding="utf-8"
+            emit_semantics_py(model), encoding="utf-8", newline="\n"
         )
         print("build: wrote tools/age_opcodes.py, tools/age_opcode_semantics.py")
         paths.SHARED_BUILD.mkdir(parents=True, exist_ok=True)
         (paths.SHARED_BUILD / "opcodes.json").write_text(
-            emit_json(model, runtime_implemented), encoding="utf-8"
+            emit_json(model, runtime_implemented), encoding="utf-8", newline="\n"
         )
         (paths.REPO / "docs" / "opcode-reference.md").write_text(
-            emit_reference_md(model, runtime_implemented), encoding="utf-8"
+            emit_reference_md(model, runtime_implemented), encoding="utf-8", newline="\n"
         )
         (paths.SHARED_BUILD / "opcode-coverage.md").write_text(
-            emit_coverage_md(model, runtime_implemented), encoding="utf-8"
+            emit_coverage_md(model, runtime_implemented), encoding="utf-8", newline="\n"
         )
         for profile_id in model.observations:
             game_build = paths.ToolContext.resolve(profile_id, environ={}).game_build
             game_build.mkdir(parents=True, exist_ok=True)
             (game_build / "opcode-coverage.md").write_text(
-                emit_coverage_md(model, runtime_implemented, profile_id), encoding="utf-8"
+                emit_coverage_md(model, runtime_implemented, profile_id), encoding="utf-8", newline="\n"
             )
         print("build: wrote shared opcode views plus build/games/<profile-id>/opcode-coverage.md")
         return 0

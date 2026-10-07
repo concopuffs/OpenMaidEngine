@@ -169,8 +169,8 @@ def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
         return 1
     merged = merge(curated, auto)
     paths.BUILD.mkdir(parents=True, exist_ok=True)
-    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta), encoding="utf-8")
-    REFERENCE_DOC.write_text(emit_reference_md(merged), encoding="utf-8")
+    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta), encoding="utf-8", newline="\n")
+    REFERENCE_DOC.write_text(emit_reference_md(merged), encoding="utf-8", newline="\n")
     print(f"build: {len(merged)} globals -> {(paths.BUILD / 'globals.json').relative_to(paths.REPO)}, "
           f"{REFERENCE_DOC.relative_to(paths.REPO)}")
     return 0

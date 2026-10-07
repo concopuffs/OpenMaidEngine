@@ -54,6 +54,12 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x51b7c` | `anim_clock_duration` | `int` | global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it |
 | `0x51b80` | `gfx_animation_service_flags` | `uint` | retained_gfx_manager+0xb56c service flags; bit 1 suppresses op 0x243 force-complete/clock-reset request |
 | `0x52bd4` | `surfaces` | `void*` | surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate |
+| `0x53c7c` | `bank_size_int_globals` | `int` | live integer globals bank size used to allocate the VM bank (copied from sys4ini_int_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
+| `0x53c80` | `bank_size_float_globals` | `int` | live float globals bank size used to allocate the VM bank (copied from sys4ini_float_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
+| `0x53c84` | `bank_size_string_globals` | `int` | live string globals bank size used to allocate the VM bank (copied from sys4ini_string_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
+| `0x53c88` | `bank_size_int_pointer_globals` | `int` | live integer-pointer globals bank size used to allocate the VM bank (copied from sys4ini_int_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
+| `0x53c8c` | `bank_size_string_pointer_globals` | `int` | live string-pointer globals bank size used to allocate the VM bank (copied from sys4ini_string_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
+| `0x53c90` | `bank_size_local_pointer_scratch` | `int` | live local pointer scratch bank size used to allocate the VM bank (copied from sys4ini_local_pointer_scratch_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0) |
 | `0x53d14` | `cur_ctx_index` | `uint` | current script-context index (curCtx); indexes 0x78-byte coroutine/frame records |
 | `0x53d24` | `save_load_stack_restore_active` | `int` | set while a deserialized numbered-save script stack is being reconstructed; op 0xae restores saved frame PCs/contexts and clears it at the terminal saved context |
 | `0x53d28` | `frame_codebase` | `void*` | current frame codebase (PC = codebase + off*4) |
@@ -132,9 +138,21 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x9f278` | `mounted_aai_catalog_selector_1` | `void*` | selector-one cell and op 0x143 scan start; subsequent dwords are selector 2..255 |
 | `0xa0b84` | `current_bgm_track_id` | `int` | direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it |
 | `0xa0b8c` | `current_bgm_start_mode` | `int` | logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero |
-| `0xa0cc0` | `screen_w` | `int` | logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800) |
-| `0xa0cc4` | `screen_h` | `int` | logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600) |
-| `0xa0cc8` | `screen_bpp` | `int` | screen bpp (8) |
+| `0xa0ca8` | `sys4ini_saved_int_globals_count` | `int` | SYS4INI header +0xf0 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the integer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 402459/1037327 |
+| `0xa0cac` | `sys4ini_saved_float_globals_count` | `int` | SYS4INI header +0xf4 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the float globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1 |
+| `0xa0cb0` | `sys4ini_saved_string_globals_count` | `int` | SYS4INI header +0xf8 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 789/802 |
+| `0xa0cb4` | `sys4ini_saved_int_pointer_globals_count` | `int` | SYS4INI header +0xfc (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the integer-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1 |
+| `0xa0cb8` | `sys4ini_saved_string_pointer_globals_count` | `int` | SYS4INI header +0x100 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1 |
+| `0xa0cbc` | `sys4ini_saved_local_pointer_scratch_count` | `int` | SYS4INI header +0x104 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the local pointer scratch bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1 |
+| `0xa0cc0` | `screen_w` | `int` | logical screen width; constructor/default registry uses 640 and the SYS4INI header +0x108 copy also holds 640, then the SYS4INI SCREENX setting overrides it (Himegari 800) |
+| `0xa0cc4` | `screen_h` | `int` | logical screen height; constructor/default registry uses 480 and the SYS4INI header +0x10c copy also holds 480, then the SYS4INI SCREENY setting overrides it (Himegari 600) |
+| `0xa0cc8` | `screen_bpp` | `int` | screen bpp; SYS4INI header +0x110 copy holds 16 in both Himegari and Kamidori |
+| `0xa0ccc` | `sys4ini_int_globals_count` | `int` | SYS4INI header +0x114: full integer globals bank size, copied to bank_size_int_globals; Himegari/Kamidori 1419442/4014849 |
+| `0xa0cd0` | `sys4ini_float_globals_count` | `int` | SYS4INI header +0x118: full float globals bank size, copied to bank_size_float_globals; Himegari/Kamidori 2/2 |
+| `0xa0cd4` | `sys4ini_string_globals_count` | `int` | SYS4INI header +0x11c: full string globals bank size, copied to bank_size_string_globals; Himegari/Kamidori 18180/55284 |
+| `0xa0cd8` | `sys4ini_int_pointer_globals_count` | `int` | SYS4INI header +0x120: full integer-pointer globals bank size, copied to bank_size_int_pointer_globals; Himegari/Kamidori 2/2 |
+| `0xa0cdc` | `sys4ini_string_pointer_globals_count` | `int` | SYS4INI header +0x124: full string-pointer globals bank size, copied to bank_size_string_pointer_globals; Himegari/Kamidori 2/2 |
+| `0xa0ce0` | `sys4ini_local_pointer_scratch_count` | `int` | SYS4INI header +0x128: full local pointer scratch bank size, copied to bank_size_local_pointer_scratch; Himegari/Kamidori 2/2 |
 | `0xa0ce4` | `run_state_flags` | `uint` | interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward) |
 | `0xa0ce8` | `timed_callback_abort_signal` | `int` | scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured |
 | `0xa0d10` | `system_menu_actions_enabled` | `int` | op 0x142 replaces this AGERC/IAGEService reentrancy guard; scene reset defaults it to 1, while CONFIG brackets its scripted settings UI with 0 then 1 |

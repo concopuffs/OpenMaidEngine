@@ -242,6 +242,36 @@ name = "surfaces"
 type = "void*"
 note = "surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate"
 [[field]]
+offset = 0x53c7c
+name = "bank_size_int_globals"
+type = "int"
+note = "live integer globals bank size used to allocate the VM bank (copied from sys4ini_int_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
+offset = 0x53c80
+name = "bank_size_float_globals"
+type = "int"
+note = "live float globals bank size used to allocate the VM bank (copied from sys4ini_float_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
+offset = 0x53c84
+name = "bank_size_string_globals"
+type = "int"
+note = "live string globals bank size used to allocate the VM bank (copied from sys4ini_string_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
+offset = 0x53c88
+name = "bank_size_int_pointer_globals"
+type = "int"
+note = "live integer-pointer globals bank size used to allocate the VM bank (copied from sys4ini_int_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
+offset = 0x53c8c
+name = "bank_size_string_pointer_globals"
+type = "int"
+note = "live string-pointer globals bank size used to allocate the VM bank (copied from sys4ini_string_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
+offset = 0x53c90
+name = "bank_size_local_pointer_scratch"
+type = "int"
+note = "live local pointer scratch bank size used to allocate the VM bank (copied from sys4ini_local_pointer_scratch_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0)"
+[[field]]
 offset = 0x53d14
 name = "cur_ctx_index"
 type = "uint"
@@ -632,20 +662,80 @@ name = "current_bgm_start_mode"
 type = "int"
 note = "logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero"
 [[field]]
+offset = 0xa0ca8
+name = "sys4ini_saved_int_globals_count"
+type = "int"
+note = "SYS4INI header +0xf0 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the integer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 402459/1037327"
+[[field]]
+offset = 0xa0cac
+name = "sys4ini_saved_float_globals_count"
+type = "int"
+note = "SYS4INI header +0xf4 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the float globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+[[field]]
+offset = 0xa0cb0
+name = "sys4ini_saved_string_globals_count"
+type = "int"
+note = "SYS4INI header +0xf8 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 789/802"
+[[field]]
+offset = 0xa0cb4
+name = "sys4ini_saved_int_pointer_globals_count"
+type = "int"
+note = "SYS4INI header +0xfc (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the integer-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+[[field]]
+offset = 0xa0cb8
+name = "sys4ini_saved_string_pointer_globals_count"
+type = "int"
+note = "SYS4INI header +0x100 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+[[field]]
+offset = 0xa0cbc
+name = "sys4ini_saved_local_pointer_scratch_count"
+type = "int"
+note = "SYS4INI header +0x104 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the local pointer scratch bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+[[field]]
 offset = 0xa0cc0
 name = "screen_w"
 type = "int"
-note = "logical screen width; constructor/default registry uses 640, then the SYS4INI SCREENX setting overrides it (Himegari 800)"
+note = "logical screen width; constructor/default registry uses 640 and the SYS4INI header +0x108 copy also holds 640, then the SYS4INI SCREENX setting overrides it (Himegari 800)"
 [[field]]
 offset = 0xa0cc4
 name = "screen_h"
 type = "int"
-note = "logical screen height; constructor/default registry uses 480, then the SYS4INI SCREENY setting overrides it (Himegari 600)"
+note = "logical screen height; constructor/default registry uses 480 and the SYS4INI header +0x10c copy also holds 480, then the SYS4INI SCREENY setting overrides it (Himegari 600)"
 [[field]]
 offset = 0xa0cc8
 name = "screen_bpp"
 type = "int"
-note = "screen bpp (8)"
+note = "screen bpp; SYS4INI header +0x110 copy holds 16 in both Himegari and Kamidori"
+[[field]]
+offset = 0xa0ccc
+name = "sys4ini_int_globals_count"
+type = "int"
+note = "SYS4INI header +0x114: full integer globals bank size, copied to bank_size_int_globals; Himegari/Kamidori 1419442/4014849"
+[[field]]
+offset = 0xa0cd0
+name = "sys4ini_float_globals_count"
+type = "int"
+note = "SYS4INI header +0x118: full float globals bank size, copied to bank_size_float_globals; Himegari/Kamidori 2/2"
+[[field]]
+offset = 0xa0cd4
+name = "sys4ini_string_globals_count"
+type = "int"
+note = "SYS4INI header +0x11c: full string globals bank size, copied to bank_size_string_globals; Himegari/Kamidori 18180/55284"
+[[field]]
+offset = 0xa0cd8
+name = "sys4ini_int_pointer_globals_count"
+type = "int"
+note = "SYS4INI header +0x120: full integer-pointer globals bank size, copied to bank_size_int_pointer_globals; Himegari/Kamidori 2/2"
+[[field]]
+offset = 0xa0cdc
+name = "sys4ini_string_pointer_globals_count"
+type = "int"
+note = "SYS4INI header +0x124: full string-pointer globals bank size, copied to bank_size_string_pointer_globals; Himegari/Kamidori 2/2"
+[[field]]
+offset = 0xa0ce0
+name = "sys4ini_local_pointer_scratch_count"
+type = "int"
+note = "SYS4INI header +0x128: full local pointer scratch bank size, copied to bank_size_local_pointer_scratch; Himegari/Kamidori 2/2"
 [[field]]
 offset = 0xa0ce4
 name = "run_state_flags"

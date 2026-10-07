@@ -104,8 +104,8 @@ def main():
         return 0
     if "--build" in sys.argv[1:]:
         (REPO / "build" / "engine-ctx.json").write_text(
-            json.dumps(emit_json(model), indent=2) + "\n", encoding="utf-8")
-        (REPO / "docs" / "engine-ctx-reference.md").write_text(emit_reference_md(model), encoding="utf-8")
+            json.dumps(emit_json(model), indent=2) + "\n", encoding="utf-8", newline="\n")
+        (REPO / "docs" / "engine-ctx-reference.md").write_text(emit_reference_md(model), encoding="utf-8", newline="\n")
         print(f"built {len(model['fields'])} fields -> build/engine-ctx.json + docs/engine-ctx-reference.md")
         return 0
     print(__doc__)

@@ -226,6 +226,29 @@ public sealed class GameProfileSelectionTests
         Assert.True(selected.IdentityMatched);
     }
 
+    /// <summary>The numbered-save bank prefix is SYS4INI header data (+0xf0..+0x104), which
+    /// engine_load_sys4ini_and_mount_append_catalogs reads into ctx+0xa0bb8; the profile copy must match.</summary>
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData("Himegari_Game")]
+    [InlineData("Kamidori")]
+    public void InstalledSys4IniHeaderDeclaresProfileSaveBankDimensions(string directory)
+    {
+        string path = Path.Combine(Paths.Workspace, directory, "SYS4INI.BIN");
+        Assert.True(File.Exists(path), $"installed-data profile gate requires {path}");
+        byte[] header = File.ReadAllBytes(path).AsSpan(0, 0x12c).ToArray();
+        int[] savedPrefix = Enumerable.Range(0, 6)
+            .Select(k => BitConverter.ToInt32(header, 0xf0 + 4 * k)).ToArray();
+        int[] fullBanks = Enumerable.Range(0, 6)
+            .Select(k => BitConverter.ToInt32(header, 0x114 + 4 * k)).ToArray();
+
+        SelectedGameProfile selected = GameProfileSelection.Resolve(
+            [], GameCatalogIdentity.ReadSys4IniHeader(path));
+
+        Assert.Equal(selected.Profile.Persistence.BankDimensions.ToArray(), savedPrefix);
+        Assert.All(Enumerable.Range(0, 6), k => Assert.True(fullBanks[k] >= savedPrefix[k]));
+    }
+
     private static GameProfileManifest SyntheticProfile(string id, GameCatalogIdentity identity)
         => new(
             id,

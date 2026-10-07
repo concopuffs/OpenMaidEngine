@@ -19,7 +19,7 @@ per format.
 ## SYS4INI directory and per-game settings trailer — CONFIRMED
 
 `SYS4INI.BIN` is not only the asset catalog. Its `S4IC` LZSS stream begins with the archive names and
-80-byte file records documented in `asset-resolution-re.md`, then continues with VM-bank metadata and a
+80-byte file records documented in `asset-resolution-re.md`, then continues with a 0x90-byte metadata block and a
 NUL-delimited per-game engine-settings trailer. `tools/parse_sys4ini.py` currently consumes only the
 directory prefix; the C# runtime catalog continues through the trailer and exposes the ordered pairs.
 
@@ -96,6 +96,35 @@ permissive than AGE's fixed registry so unimplemented keys in another profile re
 `Sys4LogicalCanvas` is the first semantic projection: `SCREENX` and `SCREENY` fall back independently to
 AGE's registered `640x480` defaults when absent or nonpositive/nonnumeric, while unsafe RGBA allocations
 are rejected before presentation construction. Append `S4AC` catalogs do not own startup settings.
+
+### SYS4INI file header: VM bank dimensions — CONFIRMED (2026-10-06)
+
+The global-bank dimensions live in the **uncompressed file header**, not in the LZSS stream.
+`engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` reads the first 300 (`0x12c`) bytes of
+`SYS4INI.BIN` verbatim into `EngineCtx+0xa0bb8`, so header offset `N` is `ctx+0xa0bb8+N`:
+
+| Header offset | Field | Himegari | Kamidori |
+|---|---|---:|---:|
+| `+0xf0` … `+0x104` | saved-prefix counts: integer, float, string, integer-pointer, string-pointer, local-pointer scratch | 402459, 1, 789, 1, 1, 1 | 1037327, 1, 802, 1, 1, 1 |
+| `+0x108`, `+0x10c`, `+0x110` | default screen width, height, bpp (before `SCREENX`/`SCREENY` override) | 640, 480, 16 | 640, 480, 16 |
+| `+0x114` … `+0x128` | full bank sizes in the same order | 1419442, 2, 18180, 2, 2, 2 | 4014849, 2, 55284, 2, 2, 2 |
+
+**Bank allocation.** The loader copies the full sizes to `bank_size_*` (`ctx+0x53c7c` …) and allocates the
+VM banks from them. Every global address in the corpora falls below its full bank size; for example Himegari
+`0x152616` is below `0x15a8b2`.
+
+**Saved prefix.** Numbered layout-3 saves serialize exactly the saved-prefix counts. These are the six
+"mutable-prefix lengths" described under "Numbered `SAVE%02d.DAT`", which the port carries as the profile's
+`bankDimensions`. A workspace test asserts the two agree for both games.
+
+**What the split means.** The persistent/non-persistent split is therefore a declaration made by Eushully's
+toolchain:
+
+- cells below the prefix are game state that saves keep;
+- cells above it hold initialization tables that are rebuilt at boot.
+
+The 0x90-byte block between the asset directory and the settings trailer is a different, still-unexplained
+table. In Himegari it reads `0, 34, 1 … 28, 1, 1, 1, 1, 1, 29`.
 
 ### Native `SYS4REG.INI` engine options — CONFIRMED
 
