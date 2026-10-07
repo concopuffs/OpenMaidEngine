@@ -719,9 +719,17 @@ callbacks (`docs/engine-re.md`, "VM value, array and call semantics"):
   operands).
 - **Value-switch targets** (`0xa2`) are ordinary labels inside the enclosing flow.
 
-**Negative constants.** No negative number is ever encoded as an immediate; the only `0xffffffff` immediates are
-code-target sentinels. The compiler materializes negatives with `sub tmp 0 n`: 19,899 / 36,623 sites, mostly `-1`
-and `-1000`. A byte-faithful compiler must do the same.
+**Constants are never folded.**
+
+- **No negative immediates.** No negative number is ever encoded as an immediate; the only `0xffffffff`
+  immediates are code-target sentinels. The compiler materializes negatives with `sub tmp 0 n`: 19,899 / 36,623
+  sites, mostly `-1` and `-1000`.
+- **Constant arithmetic runs at runtime.** More generally, the original compiler performs no constant folding.
+  50,395 of 203,874 Himegari (and 63,689 of 244,290 Kamidori) arithmetic or comparison instructions take two
+  constant operands. Examples are the ADV nameplate cursor `sub tmp 100 25` and `add tmp 0x11170 1` for a
+  surface id. Even comparisons of two constants appear (1,090 / 4,075).
+- **Consequence.** Named constants were substituted textually and computed at runtime. A byte-faithful compiler
+  must lower constant expressions literally and leave folding to an explicit optimization mode.
 
 **Control-flow shapes.** The census classifies every `jcc` by the source construct its layout implies:
 

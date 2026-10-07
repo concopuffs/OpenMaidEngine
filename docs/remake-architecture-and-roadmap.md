@@ -160,7 +160,8 @@ than an attempt to replace Lua as a general-purpose language. It compiles to AGE
 #### Decided language architecture (2026-10-06)
 
 The following principles, decided on 2026-10-06, supersede the earlier plan to design the idiomatic surface
-last. The complete language spec is written next, under `docs/superpowers/specs/`, before any compiler code.
+last. The complete language spec is `docs/superpowers/specs/2026-10-06-open-maid-script-design.md` (draft for
+review); no compiler code is written before it is accepted.
 
 1. **Open Maid Script means exactly what the AGE VM means.** The core covers the following and nothing else:
    - typed globals and per-script locals, with compiler temporaries

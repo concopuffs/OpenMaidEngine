@@ -1,0 +1,537 @@
+# Open Maid Script — language and toolchain design
+
+**Date:** 2026-10-06
+**Status:** draft for review. No compiler code has been written against it.
+**Home in the canonical map:** this file is the language design. Direction and phase ordering stay in
+`docs/remake-architecture-and-roadmap.md` §3.3 ("Decided language architecture") and §3.10. Bytecode facts stay
+in `docs/sys4-format-notes.md` ("Compiler-emitted structure"). Native semantics stay in `docs/engine-re.md`
+("VM operand accessors", "Statement blocks", "VM value, array and call semantics"). Opcode contracts stay in
+`vm-map/opcodes.toml`. This spec cites those homes and does not restate their evidence.
+
+## 1. Purpose and principles
+
+Open Maid Script (OMS) is a scripting language that compiles to AGE bytecode and decompiles back from it. It must
+serve three uses without changing its grammar later:
+
+1. **Authoring:** writing new scenes and logic that run under Open Maid Engine and, where possible, under the
+   native `AGE.EXE`.
+2. **Editing:** decompiling original scripts, changing them and recompiling.
+3. **Patching:** compiling fragments that attach to a pristine original script without replacing it.
+
+The design follows the four principles decided in roadmap §3.3.
+
+- **P1 — The semantics are the VM's semantics.**
+  - The core language describes exactly the AGE VM: storage banks, references, three-address arithmetic,
+    structured flow, local subroutines, cross-script calls, code references, statement blocks, inline data and
+    comments.
+  - Everything the VM can express is expressible, and nothing else is.
+  - The grammar defined here is the whole grammar.
+- **P2 — Growth is data or library, never grammar.** New capability arrives only through four channels:
+  - intrinsics generated per engine ABI from `vm-map/opcodes.toml`;
+  - symbols generated from the global registries and script catalogs;
+  - libraries written in OMS itself (preludes);
+  - targets (`native`, `extended`).
+- **P3 — One language, two directions.**
+  - Every construct has one canonical lowering, chosen to match Eushully's own compiler.
+  - Library templates compiled with placeholder parameters become the decompiler's patterns, so authoring a
+    construct also teaches the decompiler to recover it.
+- **P4 — Fragments are first-class.** Compiling against an existing script's environment is a core mode, not an
+  afterthought.
+
+Non-goals:
+
+- host-side event handlers (Lua, roadmap §3.8);
+- heap data structures, closures or value-returning functions (the VM has none);
+- translation and text replacement, which belong to declarative text tables;
+- recovering Eushully's original source names or spelling.
+
+## 2. Execution model (what the language describes)
+
+This section states the semantic model; the citations hold the evidence.
+
+**Storage.** Storage is organized in typed banks:
+
+- **Global banks:** integer, float, string, integer reference and string reference cells. Their dimensions are
+  declared in the SYS4INI file header (`sys4-format-notes.md`, "SYS4INI file header").
+- **Saved prefix:** each global bank has a saved prefix. Cells below it persist in numbered saves; cells above
+  it are rebuilt at boot.
+- **Local banks:** each script frame has six local banks (integer, float, string, integer reference, float
+  reference and string reference). Local subroutines share their script's frame.
+
+**Values.**
+
+- Arithmetic is int32 and wraps.
+- `div`/`mod` truncate toward zero with no zero guard.
+- Comparisons are signed and yield 0 or 1.
+- Shifts use `n & 31`.
+- Generic reads truncate floats and parse strings with `atol`.
+- Reading a number as a string yields full-width CP932 digits.
+- SYS4433 adds float-typed operand positions.
+
+`engine-re.md`, "VM value, array and call semantics", holds the evidence.
+
+**References.** A reference variable is bound to one storage cell:
+
+- `lookup-array` and `lookup-array-2d` bind `base[i]` and `base[row*stride+col]`;
+- `take-address` aliases a variable or another reference's target;
+- reads and writes through a reference reach the bound cell;
+- no bounds are checked.
+
+**Control.**
+
+- `jcc` has a true and a false target, where `-1` means fall through.
+- `jmp`, `call`/`ret` (a 256-entry per-frame return stack), `call-script`, `exit`, and value switches
+  (`0xa1`–`0xa3`).
+- Callbacks are local subroutines that the engine enters by pushing the waiting PC.
+- Coroutine handlers end at `0x7c` instead of `ret`.
+
+**Statement blocks.** `0x1f4`/`0x1f5` make one command atomic for presentation, delayed starts and queued
+launches. No control transfer crosses a block boundary.
+
+**Operand contracts.** Each opcode operand has a native access kind recorded in `opcodes.toml`: read,
+read-float, read-string, write, write-string, write-float, bind, address, string-cell, ref-slot, cell or ignored.
+These kinds are the type system's ground truth.
+
+## 3. Compilation units, modules and targets
+
+### 3.1 Units
+
+| Unit | Source | Output |
+|---|---|---|
+| Script | one `.oms` file beginning `script <name>` | one SYS4 script (`.BIN`) plus an optional layout sidecar |
+| Module | one `.oms` file beginning `module <path>` | no bytecode of its own: declarations, templates, library subroutines |
+| Fragment | one `.oms` file beginning `patch <script>` | a transform plan against a fingerprinted base script (§10) |
+
+### 3.2 Modules and generated symbols
+
+A unit imports modules with `use`. Three kinds of module exist:
+
+- **Generated ABI modules** (`abi.sys4422`, `abi.sys4433`): one intrinsic per opcode installed in that ABI, with
+  operand contracts. They are generated from `opcodes.toml`, never written by hand.
+- **Generated game modules** (`himegari.globals`, `himegari.scripts`, and their Kamidori counterparts): every
+  named global from `vm-map/globals[-<profile>].toml`, with type, shape and columns, plus every catalog script.
+  Also generated.
+- **Prelude and library modules** (`himegari.adv`, `kamidori.adv`, shared libraries): hand-written OMS shipped
+  in the per-game base mod (roadmap §3.8).
+
+### 3.3 Targets
+
+A compilation target is the triple `(profile, ABI, mode)`. The profile supplies:
+
+- the catalog and the bank dimensions (from the SYS4INI header);
+- the global registry and the prelude;
+- the ABI.
+
+| Mode | Opcodes allowed | New scripts | New globals |
+|---|---|---|---|
+| `native` | opcodes installed in the target ABI's dispatch table that have a registry access contract | an append catalog generated with a mod selector (§9.3) | linker-allocated free cells; persistent ones must sit inside the saved prefix (§9.2) |
+| `extended` | the above plus engine extension opcodes (§9.4) | virtual script identities owned by the engine | engine-owned, namespaced mod state |
+
+An opcode installed in the ABI but never observed in the game's corpus is allowed, with a warning. A construct
+that needs `extended` is a compile error under `native`.
+
+## 4. Lexical structure
+
+- **Encoding.** Source is UTF-8. Every string literal must be encodable in CP932; anything else is a compile
+  error that names the character.
+- **Comments.** `// …` and `/* … */` are source comments and emit nothing. `note "…"` is a statement that emits
+  op `0x1a7`, the compiled comment. The decompiler renders every `0x1a7` as `note`, so Eushully's own
+  annotations survive.
+- **Identifiers.** Unicode letters, digits and `_`; they may not start with a digit. Keywords are reserved.
+- **Literals.**
+  - integers: decimal, `0x` hex or `0b` binary, with an optional leading `-`;
+  - floats such as `1.5`;
+  - strings in `"…"` with `\"`, `\\` and `\n` escapes;
+  - integer arrays `[a, b, …]`, allowed only where an inline array is legal.
+- **Statement termination.** A newline ends a statement unless the line ends inside brackets or with a binary
+  operator. `;` may also separate statements.
+
+## 5. Declarations and types
+
+### 5.1 Types
+
+| Type | Meaning | Storage forms |
+|---|---|---|
+| `int` | int32 | global/local integer cell, immediate |
+| `float` | IEEE single | global/local float cell, float immediate |
+| `str` | CP932 string | global/local string cell, inline literal |
+| `ref int`, `ref float`, `ref str` | reference variable | global/local pointer cells (types 6, 0xc, 0xd, 8, 0xe) |
+| `int[n]`, `int[r][c]`, `str[n]` | fixed arrays | contiguous cells; used through element access or as an `address` operand |
+
+There are no user-defined record types. Generated game modules may expose row tables as arrays with named
+columns, written `units[id].level`. This lowers to `lookup-array-2d` with the registry's stride and column.
+
+### 5.2 Declarations
+
+```
+const MAX_LEVEL = 99                       // substituted textually; never storage
+global int current_unit_id @ 0x66715       // bind a name to a fixed cell
+global int unit_level[445] @ 0x6930        // fixed array
+saved global int my_counter                // linker-allocated, must persist (native: inside the saved prefix)
+global int scratch                         // linker-allocated, need not persist
+local int i                                // frame slot chosen by the canonical allocator
+local int buf[8]                           // local array
+local int pinned @ 0x1                     // explicit slot, used by decompiled code in preserve mode
+```
+
+**Constants are substituted.** `const` values are substituted and never folded (§7.4), because the original
+compiler performs no constant folding.
+
+**Decompiled names.** Decompiled code names unnamed storage `G[0x1234]`, `GS[0x315]`, `L[0x5]` and so on, and
+names registry globals by their registry names.
+
+## 6. Statements and expressions
+
+### 6.1 Expressions
+
+- **Arithmetic and bitwise:** `+ - * / % & | << >>` (arithmetic right shift).
+- **Comparisons:** `== != < <= > >=`.
+- **Logical:** `! && ||`.
+- **Unary:** `-` and `~`.
+- **Operands:** element access `a[i]` and `a[r][c]`, column access `t[i].col`, and intrinsic calls with one
+  output (§6.3).
+
+Three rules govern evaluation:
+
+- **No side effects.** Expressions have none, because the VM has no value-returning calls. Evaluation order is
+  therefore unobservable.
+- **`&&`/`||` evaluate both sides.** They produce 0/1 from `and`/`or` of normalized booleans, which is what the
+  original code does. Use nested `if`s when the second operand must be guarded, for example against division by
+  zero.
+- **Synthesized operators.** `~`, `^`, unary `-` and `!` have no native opcode. They are synthesized
+  (`sub 0 x`, `eq x 0`, and so on) and documented as such.
+
+### 6.2 Statements
+
+```
+x = expr            x += expr   (and the other compound forms)
+if c { … } else if c2 { … } else { … }
+while c { … }
+do { … } while c
+for init; c; step { … }
+switch x { case 0: … case 1, 2: … default: … }
+break   continue
+label:              goto label
+if c goto label                     // the original language's conditional goto: one jcc c, L, -1
+if c goto a else goto b             // jcc c, a, b
+atomic { … }                        // statement block 0x1f4/0x1f5
+name(args)                          // local subroutine, template or intrinsic call
+run SCRIPTNAME(args)                // cross-script call (call-script)
+return                              // ret
+exit                                // exit
+note "text"                         // 0x1a7
+@op(0x249, 0x2ae2, L[4], L[0x397])  // raw instruction escape with explicit operand forms
+```
+
+**Conditional gotos.** `if c goto L` and `if c { goto L }` are distinct statements with distinct lowerings. The
+corpus uses both.
+
+**Atomic blocks.** `atomic` blocks are lexical. A transfer out of or into one is a compile error. So is `return`
+or `exit` inside one, except in decompiled raw code.
+
+**Raw instructions.** In `@op` the operand forms are written explicitly:
+
+- literals, `float 1.5` and `"text"`;
+- `G[a]`, `GF[a]`, `GS[a]`, `GP[a]`, `GSP[a]` for global cells;
+- `L[a]`, `LF[a]`, `LS[a]`, `LP[a]`, `LFP[a]`, `LSP[a]` for local cells;
+- `type(0x800b, v)` for any other type tag.
+
+The escape represents every instruction the VM accepts, including unknown opcodes.
+
+### 6.3 Calls and parameters
+
+**Intrinsics.** Intrinsic arguments are positional and checked against the operand access contracts (§8.1).
+Operands the intrinsic writes are passed as lvalues with `out`: `get_cursor_virtual(out x, out y)`. When an
+intrinsic has exactly one write-class operand and it is operand 1, `x = f(args)` is accepted sugar.
+
+**Local subroutines** (`sub name { … }`) have no native parameters. OMS supports *bound parameters*, which
+reproduce the original idiom of assigning agreed cells before a call:
+
+```
+sub adv_load_layer(layer: adv_gfx_layer_index, resource: adv_gfx_resource_id) { … }
+adv_load_layer(1, 0x23)        // lowers to: mov layer 1; mov resource 0x23; call adv_load_layer
+```
+
+A parameter is bound to a declared storage cell, global or local, so recursion overwrites it. The compiler warns
+when a recursive call passes bound parameters. A result can be bound the same way:
+`sub f(x: a) -> result_cell`, and `y = f(3)` then adds a copy of `result_cell` into `y` after the call.
+
+**Cross-script calls.** `run` uses the same binding. A game module declares
+`extern script ADDEXP(unit: current_unit_id)`, and `run ADDEXP(5)` assigns the parameter and emits `call-script`.
+
+**Code references.** Subroutine names are code references wherever an operand's contract is a code target:
+`register_hotspot_callbacks(x, y, w, h, on_enter, on_exit, on_click)`. Their kinds are checked:
+
+- operands that take callbacks require a `sub`;
+- operands that take coroutine handlers require a `coroutine name { … }` body, which must end in `resume`
+  (op `0x7c`).
+
+## 7. Canonical lowering
+
+The canonical lowering is the layout Eushully's compiler produced. Each row below comes from
+`tools/compiler_census.py` and the format notes. Matching the original's lowering is what makes ordinary code
+round-trip without a sidecar.
+
+### 7.1 Control flow
+
+| Construct | Lowering |
+|---|---|
+| `if c {T}` | eval `c` → t; `jcc t, -1, end`; T; `end:` |
+| `if c {T} else {E}` | eval; `jcc t, -1, else`; T; `jmp end`; `else:` E; `end:` |
+| `else if` | nested `if` in the else block (same bytes) |
+| `while c {B}` | `head:` eval; `jcc t, -1, end`; B; `jmp head`; `end:` |
+| `for i; c; s {B}` | i; `jmp cond`; `inc:` s; `cond:` eval; `jcc t, -1, end`; B; `jmp inc`; `end:` |
+| `do {B} while c` | `head:` B; eval; `jcc t, head, -1` (inferred from the 20 / 12 backward jump-if-true forms; confirm in gate 2) |
+| `if c goto L` | eval; `jcc t, L, -1` |
+| `if c goto A else goto B` | eval; `jcc t, A, B` |
+| `if c { goto L }` | eval; `jcc t, -1, skip`; `jmp L`; `skip:` |
+| `switch` | `0xa1`, one `0xa2` per case, `0xa3` with the default; bodies follow as labels (from opcode semantics and samples such as `BTL`; the census does not yet measure switch layout) |
+| `break` / `continue` | `jmp` to the loop end / increment-or-head |
+| `atomic {B}` | `0x1f4`; B; `0x1f5` |
+
+Conditions that are plain variables are used directly (`jcc var, …`). Otherwise the condition is evaluated into
+the statement's first temporary.
+
+### 7.2 Expressions and temporaries
+
+- **Three-address code.** An assignment whose right-hand side is one operation writes straight to its
+  destination (`x = a + b` → `add x a b`). Deeper expressions go through temporaries.
+- **Temporary pools.** Integer temporaries come from a pool just below the spare top slot of the integer bank,
+  reused statement by statement. Reference temporaries come from the local reference bank; their placement is
+  not yet measured.
+- **The canonical allocator** must reproduce the original's choices. Himegari's condition temporary is usually
+  `F0−5` and Kamidori's `F0−7`, so the allocator is fixed per ABI revision by round-trip measurement (§12, gate 2).
+- **Element access** lowers to `lookup-array` or `lookup-array-2d` into a reference temporary, which is then used
+  as the operand. Assigning through an element binds the reference, then `mov`s through it.
+
+### 7.3 Header local counts
+
+Each local bank count is the highest slot used plus 2, so every bank has one spare slot. This holds in all but a
+few dozen script/bank pairs, which are covered by the sidecar.
+
+### 7.4 Constants
+
+- No folding. `const` names and literal arithmetic compile literally: `100 - 25` emits `sub t 100 25`.
+- A negative literal `-n` emits `sub t 0 n`.
+- An optional `--fold` flag (rebuild mode only) may fold, but never in preserve mode or canonical output.
+
+### 7.5 Data and tables
+
+- **Strings and arrays.** Each string reference gets its own copy, placed after the code in first-reference
+  order. Inline integer arrays (`local int t[5] = [4, 0, 5, 0, 538]` → op `0x64`) interleave in the same order.
+- **Tables.** T1, T2 and T3 are derived from the code: the `0x71`, `0x03` and `0x8f` sites in order.
+
+## 8. Static checking
+
+### 8.1 Operand contracts
+
+Each argument is checked against the access kind of its operand position under the target ABI:
+
+| Access kind | Accepted argument |
+|---|---|
+| `read` | int or float expression, or a string literal (warning: parsed with `atol`) |
+| `read-float` | numeric expression |
+| `read-string` | any value; numbers become full-width digits (warning on implicit int→text) |
+| `write` / `write-float` | int or float lvalue |
+| `write-string` | str lvalue |
+| `bind` | a `ref` variable |
+| `address` | a storage lvalue, such as an array base, span or variable |
+| `cell` | a global int lvalue or `ref int` |
+| `string-cell` | a global str lvalue or `ref str`; local strings are rejected, matching the native throw |
+| `ref-slot` | a `ref` variable (global or local integer reference) |
+| code target | a `sub`, `coroutine`, label or `-1` as the contract requires |
+| `ignored` | any operand; only `note` uses it |
+
+### 8.2 Other errors and warnings
+
+**Errors:**
+
+- unknown symbol;
+- an opcode not installed in the target ABI;
+- an extended-only construct under `native`;
+- a transfer crossing an `atomic` boundary;
+- `coroutine` without `resume`;
+- text not encodable in CP932;
+- an inline array outside a legal position;
+- local-call nesting deeper than the 256-entry return stack, when statically provable (a warning when it
+  cannot be proven).
+
+**Warnings:**
+
+- implicit string↔number conversion;
+- division by a constant zero;
+- recursion with bound parameters;
+- an opcode never observed in the game's corpus;
+- an `atomic` body containing a wait.
+
+## 9. Linking and identity
+
+### 9.1 Scripts
+
+`run NAME` resolves NAME in the target catalog: SYS4INI, then the mounted `*.AAI` catalogs in selector order
+(`engine-re.md`, "S4AC append catalogs"). The packed id `selector << 24 | index` is what `call-script` encodes.
+
+### 9.2 Globals
+
+Registry globals resolve to fixed addresses. Linker-allocated globals:
+
+- **under `native`:** allocated from free cells the profile declares. `saved` globals must fall inside the SYS4INI
+  saved prefix. Finding free cells is a per-game base-mod responsibility, and the evidence for it is still open
+  (§13);
+- **under `extended`:** stored in engine-owned, namespaced mod state reached through extension intrinsics. They
+  never alias native banks.
+
+### 9.3 New scripts under `native`
+
+The linker emits a selector-scoped append catalog (`S4AC`) naming the mod's scripts, and the scripts ship as loose
+files beside it. Op `0x143` runs each mounted catalog's record 0 at INIT2, which gives a native mod an entry point.
+A synthetic catalog has not yet been tested under native AGE (§12, gate 6).
+
+### 9.4 Extension opcodes (`extended` only)
+
+Engine-owned opcodes live at `0x10000` and above, well outside the native 0x400-slot dispatch table and the
+catalog. They are declared in an extension registry with the same schema as `opcodes.toml`, including access
+contracts, and reach OMS as an `abi.ome` module. This is the only way the language gains host capability.
+
+### 9.5 Site identity
+
+Every instruction of a decompiled original keeps its original site:
+`(profile, catalog identity, base fingerprint, original dword offset)`. The sidecar carries these identities, so
+edits and fragments can refer to original sites stably (roadmap §3.4).
+
+## 10. Fragments and patches
+
+```
+patch ADDEXP fingerprint "sha256:…" {
+    after site himegari.experience.after_calculation {
+        exp_gain *= 2
+    }
+    replace operand site 0x4f1 #2 with 10
+}
+```
+
+How a fragment compiles:
+
+- **Environment.** It compiles against the decompiled base. Base locals, labels and globals are visible by their
+  decompiled or registry names. New locals are appended (the bank counts grow), and temporaries follow the base
+  pool rules.
+- **Output.** The result is a transform plan made of insertions and operand or region replacements, anchored to
+  original sites. It contains no byte offsets.
+- **Application.** The OMP loader applies plans and detects conflicts (roadmap §3.5–3.6). The compiler only
+  guarantees that each plan is valid against the fingerprinted base.
+
+## 11. Decompilation (the reverse direction)
+
+The pipeline runs in eight steps:
+
+1. **Decode** to the intermediate form: instructions with symbolic labels, strings and inline arrays.
+2. **Build** the control-flow graph.
+3. **Structure** it using the canonical shapes of §7.1. Irreducible or unmatched flow stays as labels and `goto`.
+4. **Recognize library subroutines** by position-independent body fingerprints (the census fingerprint). Calls
+   are renamed and the bodies are removed from the source; their placement is recorded in the sidecar.
+5. **Lift templates.** Every template in the imported modules is compiled once per `static if` branch, with
+   typed placeholder parameters, into an instruction pattern. Labels and temporaries are pattern variables.
+   Matching uses normalized instructions; when several patterns match, longest wins, then declaration order.
+   A lift is accepted only if recompiling the lifted statement in place reproduces the consumed instructions,
+   temporaries included.
+6. **Name** storage from the registry, scripts from the catalog, and constants from prelude enums where a
+   template declares them.
+7. **Emit** source at the requested level:
+   - `raw`: every instruction as `@op`;
+   - `core`: structured, no templates;
+   - `idiomatic`: templates and libraries.
+8. **Write the sidecar**: original sites, data order, unreferenced dwords, slot pins, library placement, and raw
+   CP932 bytes wherever decode-then-encode differs.
+
+### 11.1 Template rules that keep lifting certifiable
+
+- A template parameter of kind `text`, `const` or storage must appear in the expansion in a recoverable position.
+  A parameter used only by `static if` selects which pattern applies.
+- Expansions may contain `atomic` blocks, library calls and intrinsics, but no bare `goto` out of the template.
+- At module build time, two templates whose patterns can match the same instruction sequence are an error,
+  unless one is strictly longer.
+
+### 11.2 Dialogue statements
+
+One statement form has a prelude-bound meaning: an optional speaker, a string literal, and optional named
+arguments.
+
+```
+"――かつて、戦いがあった。"
+mao "「まおーさま、だいじょうぶ？」" (voice: 0x34e)
+```
+
+A prelude marks one template `@dialogue`, for example `inline line(speaker: const = none, voice: const = none,
+text: text)`. The speaker identifier resolves to a prelude constant.
+
+The Himegari prelude's `line` template is to reproduce the decoded ADV line expansion:
+
+- the voice-state reset block;
+- the speaker nameplate block, or the line-prologue library call;
+- the `mute_next_voice` branches before `play_voice`;
+- `show_text`, `end_text_line`, `wait_for_input`, `end_text_line`;
+- `reset_adv_text_layout`.
+
+Decompiling `SC0000` with that prelude should then yield lines like those above.
+
+## 12. Validation gates
+
+Each gate must pass on the complete Himegari and Kamidori corpora before the next phase starts:
+
+1. **Encoder/decoder:** intermediate-form round trip is byte-identical for every script.
+2. **Core level:** `BIN → OMS(core) → BIN` is byte-identical, with sidecar use counted and published.
+   - The canonical allocator is tuned per ABI until the sidecar records no temporary-slot overrides beyond a
+     published residue.
+3. **Canonical rebuild:** compiling without the sidecar yields valid scripts that are VM-trace-equivalent to the
+   originals on the port's regression scenes.
+4. **Fixed point:** `OMS → BIN → OMS → BIN` is byte-identical for compiler-generated code.
+5. **Idiomatic level:** lift coverage, as the percentage of instructions inside accepted template or library
+   lifts, is published per prelude. Every accepted lift recompiles exactly by construction.
+6. **Native AGE:**
+   - an edited scene runs as a loose-file override;
+   - a new script runs from a generated append catalog;
+   - both are tested in a hard-linked scratch copy of the install, never the pristine game directory.
+
+Byte identity proves the encoding, not the semantics. Semantic trust still comes from the operand contracts, the
+port's VM tests and native traces.
+
+## 13. Open questions
+
+| Question | Blocks | Plan |
+|---|---|---|
+| Exact temporary-allocation rule per ABI | gate 2 residue | measure during gate 2; record the rule in the format notes |
+| Library placement policy (where helpers sit physically) | canonical rebuild layout | census of helper offsets relative to script end and first use |
+| Free global cells inside the saved prefix | native `saved global` | array extents from registry/INIT data plus runtime write captures; base mod publishes free ranges |
+| Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
+| Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
+| Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
+| Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
+
+## 14. Language evolution
+
+- **Version declaration.** Every unit may declare `oms 1` (the default).
+- **What changes grammar:** only a new language version. That requires a spec revision, and the compiler keeps
+  accepting older versions.
+- **Data changes, no version bump:** new opcode contracts, extension opcodes and game registries regenerate
+  their modules.
+- **Library changes, no version bump:** new idioms are prelude templates. Because templates also feed the
+  decompiler, a new template can only add lifts. It can never change the bytes of existing code.
+
+## 15. Implementation outline
+
+The implementation is a C# library (`Age.Script`) beside `Sys4Loader`, exposed as `Age.Cli oms compile |
+decompile | roundtrip`, so the engine can compile fragments at mod-load time. Its stages:
+
+- lexer, parser and syntax tree;
+- binder over the generated modules;
+- checker (§8);
+- template expander;
+- lowerer to the intermediate form;
+- allocator;
+- encoder, which writes the layout, data, tables, header counts and sidecar;
+- decoder, CFG, structurer, library and template lifter, and printer.
+
+The build follows roadmap step 10 and the gates in order: encoder/decoder, core language, structurer, templates,
+Himegari prelude, native validation, then the Kamidori prelude. The Python tools stay as analysis and as
+independent oracles. `compiler_census.py` describes the lowering target, and `operand_access.py` derives the
+contracts.

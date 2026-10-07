@@ -11,7 +11,7 @@ Sections:
   blocks     statement blocks (0x1f4/0x1f5): balance, nesting, branch edges crossing a boundary
   code_refs  how call / callback / coroutine / switch targets terminate
   locals     header local-bank counts versus the highest index used; temporary-pool position
-  constants  negative immediates and the `sub tmp 0 n` idiom
+  constants  negative immediates, the `sub tmp 0 n` idiom, and unfolded constant arithmetic
   helpers    local subroutine bodies shared verbatim across scripts (statically linked library)
 
 Usage:
@@ -34,6 +34,7 @@ NONE = 0xFFFFFFFF
 OP_EXIT, OP_RET, OP_CALL_SCRIPT, OP_JMP, OP_CALL = 0x2, 0x5, 0x3, 0x8C, 0x8F
 OP_JCC, OP_SWITCH_CASE, OP_SWITCH_JUMP, OP_RESUME = 0xA0, 0xA2, 0xA3, 0x7C
 OP_T1, OP_BLOCK_BEGIN, OP_BLOCK_END, OP_SUB, OP_ARRAY = 0x71, 0x1F4, 0x1F5, 0x51, 0x64
+BINARY_OPS = frozenset(range(0x50, 0x60)) - {0x55}    # add..gre (dst, a, b); 0x55 is mov
 LOCAL_BANK_TYPES = {0: 0x9, 1: 0xA, 2: 0xB, 3: 0xC, 4: 0xD, 5: 0xE}   # header field -> operand type
 CALLBACK_SITES = {0x90: (5, 6, 7), 0xCC: (2,), 0xFB: (2,), 0xD4: (3, 4)}
 TRANSFER_OPS = {OP_JMP, OP_JCC, OP_SWITCH_CASE, OP_SWITCH_JUMP}     # control transfers
@@ -280,6 +281,10 @@ def census(scripts: dict[str, object]) -> dict:
             for a, (t, v) in enumerate(i.args):
                 if t == 0 and v >= 0x80000000 and a + 1 not in CODE_TARGET_ARGS.get(i.opcode, ()):
                     out["constants"]["negative_immediates"] += 1
+            if i.opcode in BINARY_OPS:
+                out["constants"]["binary_ops"] += 1
+                if i.args[1][0] == 0 and i.args[2][0] == 0:
+                    out["constants"]["binary_ops_on_two_constants"] += 1
             if i.opcode == OP_SUB and i.args[1] == (0, 0) and i.args[2][0] == 0:
                 out["constants"]["sub_zero_idiom"] += 1
                 out["negative_constant_magnitudes"][i.args[2][1]] += 1
